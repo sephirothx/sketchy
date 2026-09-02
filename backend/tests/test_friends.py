@@ -259,19 +259,35 @@ async def test_you_cannot_accept_your_own_request():
 
 
 async def test_a_block_placed_after_the_request_still_wins():
-    """Or it is a block that did not hold."""
+    """Or it is a block that did not hold.
+
+    Reached only by inserting the block behind the router, which deletes the
+    friendship as it writes one - so an accept after a real block finds no row
+    at all. The branch is kept for the second way to block somebody will add,
+    which is why its announcement is pinned here too.
+    """
     factory, engine = await create_test_db()
+    told: list[str] = []
+
+    async def announce(user_id: str) -> None:
+        told.append(user_id)
+
     try:
-        service = FriendService(factory)
+        service = FriendService(factory, announce=announce)
         ada = await make_account(factory, "Ada")
         bob = await make_account(factory, "Bob")
         await service.request(ada, bob)
         await block(factory, bob, ada)
+        told.clear()
 
         assert await service.accept(bob, ada) == FriendshipOutcome.IGNORED
         assert not await service.are_friends(ada, bob)
         row = await row_for(factory, ada, bob)
         assert row.status == FriendshipState.DECLINED.value
+        # The row moved, so both lists did. What Ada sees is her outgoing
+        # request going away, which is what an ordinary decline looks like -
+        # so this says nothing a decline does not say already.
+        assert sorted(told) == sorted([str(ada), str(bob)])
     finally:
         await engine.dispose()
 

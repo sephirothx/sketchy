@@ -425,7 +425,19 @@ class FriendService:
                 outcome = await self._accept_in(session, user_id, other_id, low, high)
         # Announced after the commit, never inside it: a notification for a row
         # that rolled back is worse than one that never arrived.
-        if outcome == FriendshipOutcome.ACCEPTED:
+        #
+        # Both outcomes that write the row, not just the happy one. An accept
+        # into a block tombstones the row as declined and answers `IGNORED`,
+        # which is still a change to both lists. No path reaches that today -
+        # blocking deletes the friendship in the same transaction, so an
+        # accept afterwards finds no row and answers `UNCHANGED` - and that is
+        # exactly why it is worth getting right: the branch is kept for a
+        # second way to block that does not delete, and the announcement has
+        # to already be correct when somebody adds one. It discloses nothing
+        # either. What the requester sees is their outgoing request going
+        # away, which is what an ordinary decline looks like, and an ordinary
+        # decline already announces to both.
+        if outcome in (FriendshipOutcome.ACCEPTED, FriendshipOutcome.IGNORED):
             # The person who asked has been waiting; this account's own other
             # tabs are still showing the request as incoming, with buttons to
             # answer something that is already answered.
