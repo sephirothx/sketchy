@@ -333,30 +333,36 @@ async def wired(monkeypatch):
         await engine.dispose()
 
 
-async def test_every_change_to_somebody_elses_list_reaches_them(wired):
-    """Add, accept, decline and unfriend all move the other person's list."""
+async def test_every_change_to_either_list_reaches_both_accounts(wired):
+    """Add, accept, decline and unfriend all move both people's lists.
+
+    Including the caller's. The REST answer refreshes the tab that made the
+    call and nothing else; every other socket of that account learns about it
+    the same way the counterparty does, or not at all.
+    """
     new_client, told = wired
     ada_http, bob_http = new_client(), new_client()
     ada = await register(ada_http, "Ada")
     bob = await register(bob_http, "Bob")
+    both = sorted([ada["id"], bob["id"]])
 
     await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    assert told.told == [bob["id"]]
+    assert sorted(told.told) == both
 
     told.told.clear()
     await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
-    assert told.told == [ada["id"]]
+    assert sorted(told.told) == both
 
     # Unfriending takes it off the other person's list too.
     told.told.clear()
     await ada_http.delete(f"/api/users/me/friends/{bob['id']}")
-    assert told.told == [bob["id"]]
+    assert sorted(told.told) == both
 
     # And so does declining a request.
     await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
     told.told.clear()
     await bob_http.delete(f"/api/users/me/friends/{ada['id']}")
-    assert told.told == [ada["id"]]
+    assert sorted(told.told) == both
 
 
 async def test_nothing_is_said_when_nothing_moved(wired):

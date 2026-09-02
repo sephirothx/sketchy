@@ -777,25 +777,31 @@ async def test_every_write_announces_itself_and_no_no_op_does():
         bob = await make_account(factory, "Bob")
         guest = await make_account(factory, "Guesty", guest=True)
 
+        # Everyone whose list moved, which always includes the account that
+        # did it: the event is delivered per account, and a player with a
+        # second lobby open has no other way to hear about their own write.
         await service.request(ada, bob)
-        assert told == [str(bob)]
+        assert sorted(told) == sorted([str(ada), str(bob)])
 
         told.clear()
         await service.accept(bob, ada)
-        assert told == [str(ada)], "the person who asked was not told"
+        assert str(ada) in told, "the person who asked was not told"
+        assert str(bob) in told, "the account that accepted was not told"
 
         told.clear()
         await service.remove(ada, bob)
-        assert told == [str(bob)], "unfriending said nothing"
+        assert sorted(told) == sorted([str(ada), str(bob)]), "unfriending said nothing"
 
         # A refusal is a change to the asker's list too.
         told.clear()
         await service.request(bob, ada)
         told.clear()
         await service.remove(ada, bob)
-        assert told == [str(bob)]
+        assert sorted(told) == sorted([str(ada), str(bob)])
 
-        # And nothing that wrote nothing says anything.
+        # And nothing that wrote nothing says anything - to anybody, the
+        # caller included. A request quietly dropped must not become
+        # detectable by the asker's own other tabs waking up.
         told.clear()
         await service.request(ada, guest)
         await service.remove(ada, guest)
