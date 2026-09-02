@@ -11,6 +11,7 @@ from typing import AsyncIterator, Iterable, Iterator, TYPE_CHECKING
 import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app import correlation
 from app.repositories.interfaces import (
     GameHistoryRepository,
     UserRepository,
@@ -126,6 +127,12 @@ class HandlerContext:
         """
 
         async def guarded(sid, *args):
+            # Every line logged underneath names the socket, the command and
+            # a fresh id for this one invocation, the way a request does.
+            # Task-local: python-socketio runs each handler in its own task.
+            correlation.socket_sid.set(sid)
+            correlation.socket_event.set(command)
+            correlation.request_id.set(correlation.new_request_id())
             # Before parsing, before authorization, before any mutation: a
             # refused command must cost nothing but the check itself.
             budget = self.command_budgets.for_command(command)

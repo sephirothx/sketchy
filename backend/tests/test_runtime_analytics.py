@@ -24,6 +24,7 @@ from app.services.runtime_metrics import (
     purge_expired_events,
 )
 from app.auth.mail import queue_email
+from app.request_timing import RequestTimingMiddleware
 from app.domain_values import EmailTemplate
 from app.services.queue_depths import QueueDepths
 from app.services.readiness import LoopHealth, ReadinessProbe
@@ -46,17 +47,21 @@ async def env(monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    # Outermost, as in main.py: it is what gives the request the id the
+    # audit ledger and the log lines share.
+    app.add_middleware(RequestTimingMiddleware, telemetry=Telemetry())
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
     # Fresh signal stores rather than the process's, so nothing another test
     # (or this test module's own imports) recorded leaks into an assertion.
     INJECTED["readiness"] = ReadinessProbe(factory)
     INJECTED["telemetry"] = Telemetry()
+    INJECTED["queues"] = QueueDepths(factory, cache_seconds=0.0)
     app.include_router(
         create_operations_router(
             factory,
             readiness=INJECTED["readiness"],
             telemetry=INJECTED["telemetry"],
-            queue_depths=QueueDepths(factory, cache_seconds=0.0),
+            queue_depths=INJECTED["queues"],
             mail_sweep_seconds=30.0,
         )
     )
@@ -583,3 +588,53 @@ async def test_the_scrape_carries_every_new_family(env, monkeypatch):
         assert needle in text, needle
     # SQLite keeps no pool count, and the family is absent rather than zero.
     assert "sketchy_db_pool_" not in text
+
+
+async def test_the_ledger_row_and_the_response_share_one_request_id(env):
+    """One id, quoted by the client, in the response, and on the audit row."""
+    new_client, factory = env
+    admin, subject = new_client(), new_client()
+    operator = await register(admin, "Watcher")
+    watched = await register(subject, "Watched")
+    await promote(factory, operator["id"])
+
+    # No header sent: the id is the one the middleware minted, which the
+    # ledger can only know by reading the request's context rather than
+    # minting a second one of its own.
+    response = await admin.get(f"/api/admin/players/{watched['id']}/activity")
+
+    minted = response.headers["x-request-id"]
+    async with factory() as session:
+        event = await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "admin.player_activity_viewed")
+        )
+        assert event.request_id == minted
+
+
+async def test_a_database_outage_costs_the_scrape_only_the_queue_family(env, monkeypatch):
+    """The scrape is read *during* an outage; it must not go down with the database."""
+    import asyncio
+
+    from app.api import operations
+
+    new_client, _ = env
+    monkeypatch.setenv("METRICS_TOKEN", "scrape-me")
+    depths: QueueDepths = INJECTED["queues"]  # type: ignore[assignment]
+
+    async def refused():
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(depths, "_query", refused)
+    response = await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})
+    assert response.status_code == 200
+    assert "sketchy_event_loop_lag_seconds" in response.text
+    assert "sketchy_mail_outbox_pending" not in response.text
+
+    async def hung():
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(depths, "_query", hung)
+    monkeypatch.setattr(operations, "QUEUE_SCRAPE_TIMEOUT_SECONDS", 0.05)
+    response = await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})
+    assert response.status_code == 200
+    assert "sketchy_mail_outbox_pending" not in response.text

@@ -1,4 +1,4 @@
-"""Count and time every HTTP request, by the route it matched.
+"""Count, time and name every HTTP request, by the route it matched.
 
 Nothing measured the REST surface before: a slow endpoint or a burst of 500s
 was visible only to the player it happened to. This wraps the whole
@@ -14,14 +14,23 @@ The label is the route *template* (`/api/rooms/{room_id}`), never the path,
 so the number of series cannot grow with the number of rooms. FastAPI writes
 the matched route into the scope during routing, which is why the label is
 read after the application returns and not before.
+
+It is also where a request gets its identity. An `X-Request-ID` the caller
+supplied is accepted if it is a UUID and minted otherwise, set as the
+correlation context for everything underneath, echoed on the response so a
+client can quote it, and written into the one access line this middleware
+logs per request - which is what replaces uvicorn's access log.
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 from time import perf_counter
 
+from app import correlation
 from app.services.telemetry import (
     HTTP_OUTCOME_ABORTED,
+    PROBE_ROUTES,
     STATIC_ROUTE,
     UNROUTED_ROUTE,
     Telemetry,
@@ -30,6 +39,9 @@ from app.services.telemetry import (
 
 
 STATIC_PREFIX = "/assets/"
+RESPONSE_HEADER = b"x-request-id"
+
+access_log = logging.getLogger("sketchy.http")
 
 
 def route_label(scope) -> str:
@@ -40,6 +52,13 @@ def route_label(scope) -> str:
         return path
     raw = scope.get("path", "")
     return STATIC_ROUTE if raw.startswith(STATIC_PREFIX) or raw == "/" else UNROUTED_ROUTE
+
+
+def _supplied_request_id(scope) -> str | None:
+    for name, value in scope.get("headers") or ():
+        if name.lower() == correlation.REQUEST_ID_HEADER.encode():
+            return correlation.accepted_request_id(value)
+    return None
 
 
 class RequestTimingMiddleware:
@@ -55,12 +74,22 @@ class RequestTimingMiddleware:
         store = self._telemetry
         status = 0
         started = perf_counter()
+        request_id = _supplied_request_id(scope) or correlation.new_request_id()
+        token = correlation.request_id.set(request_id)
         store.in_flight += 1
 
         async def send_wrapper(message) -> None:
             nonlocal status
             if message["type"] == "http.response.start":
                 status = message["status"]
+                # Echoed so a client or a proxy can quote the id our logs use.
+                headers = [
+                    (name, value)
+                    for name, value in message.get("headers", [])
+                    if name.lower() != RESPONSE_HEADER
+                ]
+                headers.append((RESPONSE_HEADER, request_id.encode("ascii")))
+                message = {**message, "headers": headers}
             await send(message)
 
         try:
@@ -77,9 +106,39 @@ class RequestTimingMiddleware:
             raise
         finally:
             store.in_flight -= 1
-            store.http_request(
-                scope.get("method", "GET"),
-                route_label(scope),
-                status or HTTP_OUTCOME_ABORTED,
-                perf_counter() - started,
-            )
+            elapsed = perf_counter() - started
+            method = scope.get("method", "GET")
+            route = route_label(scope)
+            store.http_request(method, route, status or HTTP_OUTCOME_ABORTED, elapsed)
+            _log_access(method, route, scope.get("path", ""), status, elapsed, request_id)
+            correlation.request_id.reset(token)
+
+
+def _log_access(
+    method: str, route: str, path: str, status: int | str, elapsed: float, request_id: str
+) -> None:
+    """One line per request, at a level that keeps the probes out of the way.
+
+    A load balancer asking `/api/ready` every second and a browser fetching
+    forty static files per page load would otherwise be most of the log;
+    they are written at DEBUG, everything else at INFO.
+    """
+    quiet = route in PROBE_ROUTES or route == STATIC_ROUTE
+    access_log.log(
+        logging.DEBUG if quiet else logging.INFO,
+        "%s %s -> %s in %.1fms",
+        method,
+        route,
+        status or HTTP_OUTCOME_ABORTED,
+        elapsed * 1000.0,
+        extra={
+            "request_id": request_id,
+            "fields": {
+                "method": method,
+                "route": route,
+                "path": path,
+                "status": status or HTTP_OUTCOME_ABORTED,
+                "ms": round(elapsed * 1000.0, 1),
+            },
+        },
+    )

@@ -10,6 +10,7 @@ import socket
 import uvicorn
 
 from app.deployment import shutdown_drain_seconds
+from app.logging_config import configure_logging
 from app.main import shutdown_coordinator, sio
 
 
@@ -72,11 +73,18 @@ def _boolean_environment(name: str, default: bool) -> bool:
 
 def run() -> None:
     shutdown_drain_seconds()
+    # Before uvicorn says anything: with its own logging config switched off
+    # its lines take the application's shape - JSON in production - and the
+    # access log is the one line per request the timing middleware writes,
+    # which carries the request id and the route template.
+    configure_logging()
     config = uvicorn.Config(
         "app.main:app",
         host=os.getenv("HOST", "127.0.0.1"),
         port=int(os.getenv("PORT", "8000")),
         log_level=os.getenv("LOG_LEVEL", "info"),
+        log_config=None,
+        access_log=False,
         proxy_headers=_boolean_environment("PROXY_HEADERS", True),
         forwarded_allow_ips=os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1"),
         # This bound begins after the application drain. Leave enough time for

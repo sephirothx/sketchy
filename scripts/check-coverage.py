@@ -91,6 +91,11 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     "app/services/telemetry.py": (91.0, 78.0),
     "app/request_timing.py": (93.0, 98.0),
     "app/services/queue_depths.py": (98.0, 98.0),
+    # What every log line is stamped with, and what is redacted from it: an
+    # untested branch here is a secret in a log store or a line nobody can
+    # tie to its request.
+    "app/logging_config.py": (97.0, 94.0),
+    "app/correlation.py": (95.0, 78.0),
     # Room-code allocation: a collision is two rooms sharing an identity.
     "app/services/room_codes.py": (98.0, 98.0),
     # Who is online: a ledger, so an unbalanced path is an account listed as

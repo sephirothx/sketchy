@@ -13,7 +13,9 @@ looking is itself on the record.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
+import logging
 from uuid import UUID
 import os
 
@@ -47,6 +49,9 @@ from app.services.telemetry import (
     labelled_gauge_lines,
     telemetry as default_telemetry,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def _scrape_token() -> str:
@@ -91,7 +96,33 @@ def _loop_lines(loops: dict[str, dict[str, object]]) -> list[str]:
     ]
 
 
-def _queue_lines(queues: QueueSnapshot) -> list[str]:
+# The scrape is what an operator reads *during* a database outage, so the one
+# query in it must neither fail the scrape nor hold it open.
+QUEUE_SCRAPE_TIMEOUT_SECONDS = 2.0
+
+
+async def _queue_depths_for_scrape(queues: QueueDepths) -> QueueSnapshot | None:
+    """The queue depths if the database answers promptly, else nothing.
+
+    Every other series in the scrape is process memory. This is the only one
+    that costs a query, and a scrape that returned 500 because the database
+    was down would take the loop lag, the error rates and the pool gauges
+    down with it - at exactly the moment they are being asked for. So the
+    family is omitted, the way the pool gauges are omitted for a pool that
+    keeps no count, and the outage shows in `sketchy_db_ready` instead.
+    """
+    try:
+        return await asyncio.wait_for(queues.read(), timeout=QUEUE_SCRAPE_TIMEOUT_SECONDS)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("queue depths left out of the scrape", exc_info=True)
+        return None
+
+
+def _queue_lines(queues: QueueSnapshot | None) -> list[str]:
+    if queues is None:
+        return []
     return [
         *gauge_lines(
             "sketchy_mail_outbox_pending",
@@ -283,7 +314,7 @@ def create_operations_router(
             *_prometheus_lines(),
             *store.prometheus_lines(),
             *_loop_lines(loop_snapshot()),
-            *_queue_lines(await queues.read()),
+            *_queue_lines(await _queue_depths_for_scrape(queues)),
         ]
         database = database_readiness()
         if database is not None:
