@@ -1017,7 +1017,7 @@ replaced, not echoed.
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
 | `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
-| `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs |
+| `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status |
 | `GET` | `/api/auth/data-exports/{export_id}/download` | The artifact. Owner-only; v1 exports expire after 7 days |
 | `DELETE` | `/api/auth/account` | Password required for a registered account |

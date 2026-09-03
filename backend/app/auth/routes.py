@@ -12,14 +12,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth.account_data import (
     AccountDataError,
+    ExportNotYetAllowed,
     anonymize_account,
     create_data_export,
     decode_export_artifact,
     export_status_payload,
     get_data_export,
     list_data_exports,
+    next_export_allowed_at,
     process_data_export,
 )
+from app.domain_values import DataExportStatus
 from app.auth.middleware import (
     clear_session_cookie,
     is_secure_request,
@@ -641,6 +644,17 @@ def create_auth_router(
         user = await require_user(request)
         try:
             job = await create_data_export(session_factory, user_id=user.id)
+        except ExportNotYetAllowed as error:
+            # Too soon, not wrong: 429 with the date, so the client can say
+            # when rather than only that (R-PRIV-12).
+            headers = {}
+            if error.retry_at is not None:
+                headers["Retry-After"] = str(
+                    max(0, int((error.retry_at - datetime.now(timezone.utc)).total_seconds()))
+                )
+            raise HTTPException(
+                status_code=429, detail=str(error), headers=headers
+            ) from error
         except AccountDataError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         background_tasks.add_task(
@@ -652,7 +666,18 @@ def create_auth_router(
     async def data_exports(request: Request):
         user = await require_user(request)
         jobs = await list_data_exports(session_factory, user_id=user.id)
-        return {"exports": [export_status_payload(job) for job in jobs]}
+        # The newest non-failed job is what the interval is measured from; the
+        # client uses this to say when the next export is allowed instead of
+        # offering a button that will be refused.
+        counted = next(
+            (job for job in jobs if job.status != DataExportStatus.FAILED.value),
+            None,
+        )
+        next_at, _ = next_export_allowed_at(counted, datetime.now(timezone.utc))
+        return {
+            "exports": [export_status_payload(job) for job in jobs],
+            "nextRequestAt": next_at.isoformat() if next_at else None,
+        }
 
     @router.get("/data-exports/{export_id}")
     async def data_export_status(export_id: str, request: Request):

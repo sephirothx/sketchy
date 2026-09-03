@@ -21,14 +21,17 @@ function exportLabel(job: DataExportJob): string {
 
 /**
  * Requesting and downloading a copy of everything Sketchy holds about you
- * (R-PRIV-01). Deleting the account used to live at the bottom of this
- * dialog, which is where an irreversible act is least expected; it has a row
- * and a dialog of its own in Settings now.
+ * (R-PRIV-01). One a week (R-PRIV-12): building one walks every game the
+ * account played, so the button says when the next is allowed rather than
+ * offering a request the server will refuse. Deleting the account used to
+ * live at the bottom of this dialog, which is where an irreversible act is
+ * least expected; it has a row and a dialog of its own in Settings now.
  */
 export function AccountDataDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const [exports, setExports] = useState<DataExportJob[]>([]);
+  const [nextRequestAt, setNextRequestAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +42,9 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     let active = true;
     void fetchDataExports()
       .then((result) => {
-        if (active) setExports(result.exports);
+        if (!active) return;
+        setExports(result.exports);
+        setNextRequestAt(result.nextRequestAt);
       })
       .catch((failure) => {
         if (active) {
@@ -61,7 +66,10 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     if (!hasWork) return;
     const timer = window.setInterval(() => {
       void fetchDataExports()
-        .then((result) => setExports(result.exports))
+        .then((result) => {
+          setExports(result.exports);
+          setNextRequestAt(result.nextRequestAt);
+        })
         .catch(() => {});
     }, 1_000);
     return () => window.clearInterval(timer);
@@ -73,6 +81,8 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     try {
       const job = await requestDataExport();
       setExports((items) => [job, ...items.filter((item) => item.id !== job.id)]);
+      const refreshed = await fetchDataExports().catch(() => null);
+      if (refreshed) setNextRequestAt(refreshed.nextRequestAt);
     } catch (failure) {
       setError(
         failure instanceof ApiError
@@ -83,6 +93,14 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       setRequesting(false);
     }
   }
+
+  // Still in the future, and not merely "a job is live" - that case has no
+  // date, and the job list already shows it being prepared.
+  const waitUntil =
+    nextRequestAt && new Date(nextRequestAt).getTime() > Date.now()
+      ? new Date(nextRequestAt)
+      : null;
+  const canRequest = !loading && !requesting && !hasWork && !waitUntil;
 
   return (
     <div
@@ -108,7 +126,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
         <section className="account-data-section" aria-labelledby={`${titleId}-exports`}>
           <div className="account-data-heading-row">
             <h4 id={`${titleId}-exports`}>Data exports</h4>
-            <button type="button" onClick={() => void startExport()} disabled={requesting}>
+            <button type="button" onClick={() => void startExport()} disabled={!canRequest}>
               {requesting ? "Requesting…" : "Request export"}
             </button>
           </div>
@@ -133,7 +151,10 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           )}
-          <p className="account-data-note">Ready exports expire after seven days.</p>
+          <p className="account-data-note">
+            One export a week; ready exports expire after seven days.
+            {waitUntil && ` You can request another on ${waitUntil.toLocaleDateString()}.`}
+          </p>
         </section>
 
         <div className="account-data-actions">

@@ -17,9 +17,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.account_data import (
+    EXPORT_INTERVAL,
     AccountDataError,
     anonymize_account,
     create_data_export,
+    ExportNotYetAllowed,
     process_pending_data_exports,
 )
 from app.auth.routes import create_auth_router
@@ -912,6 +914,51 @@ async def test_deletion_erases_drawings_made_under_a_merged_identity(env):
 # suite drove these through the HTTP surface, which never asks for an account
 # that is not there - so the guards that make these functions safe to call with
 # an unverified id had never been taken.
+
+
+async def test_a_second_export_within_a_week_is_refused_with_the_date(env):
+    """R-PRIV-12: a right to a copy is not a right to a fresh copy per click."""
+    http, _, _, factory = env
+    registered = await register(http, "Collector")
+    first, _ = await request_ready_export(http)
+
+    again = await http.post("/api/auth/data-exports")
+    assert again.status_code == 429
+    assert "request another on" in again.json()["detail"]
+    assert int(again.headers["retry-after"]) > 6 * 24 * 3600
+
+    listed = await http.get("/api/auth/data-exports")
+    next_at = datetime.fromisoformat(listed.json()["nextRequestAt"])
+    created = datetime.fromisoformat(first["createdAt"])
+    assert next_at - created == EXPORT_INTERVAL
+
+    # A week later the interval has passed and a new one is accepted.
+    later = datetime.now(timezone.utc) + EXPORT_INTERVAL + timedelta(seconds=1)
+    job = await create_data_export(factory, user_id=registered["id"], now=later)
+    assert job.status == DataExportStatus.PENDING.value
+
+
+async def test_an_export_still_being_built_blocks_another(env):
+    http, _, _, factory = env
+    registered = await register(http, "Impatient")
+    await create_data_export(factory, user_id=registered["id"])
+    with pytest.raises(ExportNotYetAllowed, match="already being prepared") as refused:
+        await create_data_export(factory, user_id=registered["id"])
+    assert refused.value.retry_at is None
+    listed = await http.get("/api/auth/data-exports")
+    assert listed.json()["nextRequestAt"] is None
+
+
+async def test_a_failed_export_does_not_count_against_the_week(env):
+    http, _, _, factory = env
+    registered = await register(http, "Unlucky")
+    job = await create_data_export(factory, user_id=registered["id"])
+    async with factory() as session:
+        stored = await session.get(DataExport, job.id)
+        stored.status = DataExportStatus.FAILED.value
+        await session.commit()
+    retry = await http.post("/api/auth/data-exports")
+    assert retry.status_code == 202
 
 
 async def test_an_export_cannot_be_requested_for_an_account_that_is_not_there(env):

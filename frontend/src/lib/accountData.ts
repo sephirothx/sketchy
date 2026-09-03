@@ -18,7 +18,11 @@ export function requestDataExport(): Promise<DataExportJob> {
   return apiRequest("/api/auth/data-exports", { method: "POST" });
 }
 
-export function fetchDataExports(): Promise<{ exports: DataExportJob[] }> {
+/** `nextRequestAt` is when another export may be asked for; null means now. */
+export function fetchDataExports(): Promise<{
+  exports: DataExportJob[];
+  nextRequestAt: string | null;
+}> {
   return apiRequest("/api/auth/data-exports");
 }
 

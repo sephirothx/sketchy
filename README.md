@@ -820,7 +820,10 @@ session payloads. Registered preferences are read from server-side settings;
 guest preferences stay local and are supplied only to the live seat.
 
 Every guest or registered player can request an export from **Settings →
-Account → Your data**.
+Account → Your data**, at most once a week: building one walks every game the
+account played, so a request too soon is refused with the date the next one is
+accepted, a failed build does not count, and the dialog disables the control
+and names the date rather than offer a request that will be refused.
 An export request creates a durable asynchronous job and produces a private,
 versioned JSON document containing that player's account fields, linked guest
 identities, session metadata, game seats, drawn turns, correct guesses, and

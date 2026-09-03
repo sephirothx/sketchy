@@ -416,6 +416,7 @@ claim that an arbitrary host will sustain it.
 | **R-PRIV-08** | Historical names, colors, and guest/registered state MUST remain as other players saw them. Ordinary profile edits MUST NOT rewrite them. Username and avatar are not rendered by finished-game history and MUST NOT be copied into it. |
 | **R-PRIV-09** | Avatars MUST NOT hotlink arbitrary third-party URLs; only a key from the deployment-hosted catalog may be stored. |
 | **R-PRIV-10** | Anonymous retention MUST be based on `last_active_at` — deliberately separate from page-load/login time and ordinary profile writes — MUST be bounded per run, MUST preview by default, and MUST record aggregate audit evidence when applied. |
+| **R-PRIV-12** | Export requests MUST be spaced: at most one per account per **7 days**, never two live at once, and a **failed** build MUST NOT count. Building an export walks every game the account ever played, so an account with thousands of them is a real cost, and R-PRIV-01's right to a copy is not a right to a fresh copy on every click. The rule MUST be enforced where the job is written, so a second way in cannot be given a weaker one; a refusal MUST say **when** the next request is accepted (`429`, `Retry-After`, and `nextRequestAt` on the listing), so the interface can disable the control and name the date rather than offer a request that will be refused. |
 | **R-PRIV-11** | A stale guest's session MUST be removed with the account, so an old cookie provisions a new guest rather than resurrecting retained data. |
 
 ---
