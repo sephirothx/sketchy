@@ -157,15 +157,16 @@
 
 /* ------------------------------------------------------------- the rows */
 
-/* Rows, not boxes: a pane is one list with hairlines between rows. A caption
-   marks a run of rows only where a longer list needs scanning; a box around
-   one switch was chrome without content. */
 .settings-group {
-  padding: 0 4px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 0 16px 2px;
+  margin-bottom: 8px;
 }
 
-.settings-group + .settings-group {
-  margin-top: 18px;
+.settings-tab-content > .settings-group:last-child {
+  margin-bottom: 0;
 }
 
 .settings-group-head {
@@ -173,16 +174,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 0 2px;
+  padding: 8px 0 0;
 }
 
 .settings-group-head h4 {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
   margin: 0;
-  text-transform: uppercase;
 }
 
 .settings-group-hint {
@@ -197,11 +197,10 @@
 .settings-row {
   display: grid;
   gap: 10px;
-  padding: 11px 0;
+  padding: 9px 0;
   border-top: 1px solid var(--line);
 }
 
-.settings-group > .settings-row:first-child,
 .settings-group-head + .settings-row,
 .settings-group-hint + .settings-row {
   border-top: 0;
@@ -837,6 +836,6 @@
   }
 
   .settings-group {
-    padding-inline: 0;
+    padding-inline: 12px;
   }
 }
