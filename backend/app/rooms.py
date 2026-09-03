@@ -72,14 +72,15 @@ def nearest_drawing_seconds(value: int) -> int:
     return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
 
 
-# The twelve colours a registered player may wear on their name. The same list
+# The thirteen colours a registered player may wear on their name. The same list
 # lives in the client as NAME_COLOR_PALETTE (frontend/src/store/settingsStore.ts);
 # the swatches there are the only interface that can choose one, and the rule
 # below is what stops a modified client choosing anything else (#571).
 #
 # Every entry clears NAME_COLOR_MIN_CONTRAST against both NAME_COLOR_SURFACES -
 # tests/test_name_color.py proves it - so the palette and the rule cannot
-# disagree. Hues are spread so no two neighbours read as the same colour, and
+# disagree. Hues are spread so no two neighbours read as the same colour (brown
+# shares orange's hue but not its saturation), and
 # the set deliberately includes light ones (yellow, sky, pink) that only clear
 # a low floor on the white panel: readable, not AA, is the bar.
 NAME_COLORS: tuple[str, ...] = (
@@ -95,6 +96,7 @@ NAME_COLORS: tuple[str, ...] = (
     "#a855f7",  # purple
     "#d946ef",  # magenta
     "#f472b6",  # pink
+    "#a0522d",  # brown
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 

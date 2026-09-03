@@ -796,7 +796,7 @@ forgotten it — the change signs every other device out), signed-in devices,
 the data export, and deleting the account, which is its own dialog with the
 password and a typed `DELETE` rather than the bottom of the data export.
 
-A registered player's **name color** is one of twelve palette swatches. The
+A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the
 player-list panel of both themes, a floor that refuses a colour which vanishes
 on one of them rather than a reading grade — on every path that writes one, so a modified

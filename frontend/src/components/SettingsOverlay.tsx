@@ -94,6 +94,7 @@ const NAME_COLOR_NAMES: Record<(typeof NAME_COLOR_PALETTE)[number], string> = {
   "#a855f7": "Purple",
   "#d946ef": "Magenta",
   "#f472b6": "Pink",
+  "#a0522d": "Brown",
 };
 
 const ACTION_ICONS: Record<keyof KeyBindings, ReactNode> = {

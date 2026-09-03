@@ -71,13 +71,21 @@ def test_a_readable_colour_outside_the_palette_is_still_accepted():
 
 
 def test_no_two_palette_colours_are_near_duplicates():
-    """Twelve swatches are only worth having if each is a different choice."""
-    def hue(color: str) -> float:
+    """Thirteen swatches are only worth having if each is a different choice.
+
+    Two colours are the same choice when they share a hue *and* a saturation:
+    brown sits on orange's hue but at half its saturation, and reads as brown.
+    """
+    def hls(color: str) -> tuple[float, float, float]:
         red, green, blue = (int(color[i : i + 2], 16) / 255 for i in (1, 3, 5))
-        return colorsys.rgb_to_hls(red, green, blue)[0] * 360
+        hue, lightness, saturation = colorsys.rgb_to_hls(red, green, blue)
+        return hue * 360, lightness, saturation
 
     for index, first in enumerate(NAME_COLORS):
         for second in NAME_COLORS[index + 1 :]:
-            apart = abs(hue(first) - hue(second))
+            (hue_a, _, sat_a), (hue_b, _, sat_b) = hls(first), hls(second)
+            apart = abs(hue_a - hue_b)
             apart = min(apart, 360 - apart)
-            assert apart >= 15, f"{first} and {second} are {apart:.0f} degrees apart"
+            assert apart >= 15 or abs(sat_a - sat_b) >= 0.3, (
+                f"{first} and {second} are {apart:.0f} degrees apart at similar saturation"
+            )

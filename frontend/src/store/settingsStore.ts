@@ -41,7 +41,7 @@ export const DEFAULT_THEME: AppTheme = "system";
 export const DEFAULT_VOLUME = 0.7;
 
 /**
- * The twelve colours a registered player may wear on their name.
+ * The thirteen colours a registered player may wear on their name.
  *
  * The same list as `NAME_COLORS` in backend/app/rooms.py, which is the one
  * that counts: the server refuses anything that vanishes on either theme's
@@ -62,6 +62,7 @@ export const NAME_COLOR_PALETTE = [
   "#a855f7",
   "#d946ef",
   "#f472b6",
+  "#a0522d",
 ] as const;
 
 export function isPaletteColor(value: string | null | undefined): boolean {
