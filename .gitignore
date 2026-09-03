@@ -55,8 +55,6 @@ Thumbs.db
 .agents/
 .cursor/
 .claude/
-AGENTS.md
-CLAUDE.md
 
 # --- Local ignored files ---
 .ignored/

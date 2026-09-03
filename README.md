@@ -1037,6 +1037,8 @@ scripts/
   brand/            Logo and icon sources, and the scripts that raster them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
+AGENTS.md         Repository instructions: what to read, what to check, the invariants
+CLAUDE.md         Pointer to AGENTS.md, so Claude Code reads the same rules
 ```
 
 ## Getting started
