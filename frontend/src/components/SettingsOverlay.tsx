@@ -200,23 +200,29 @@ function ToggleRow({
   );
 }
 
+/**
+ * A run of rows. The caption is optional and used only where it helps scan
+ * a longer list - Account's three groups - not as a box around one switch.
+ */
 function Group({
   title,
   hint,
   action,
   children,
 }: {
-  title: string;
+  title?: string;
   hint?: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="settings-group">
-      <div className="settings-group-head">
-        <h4>{title}</h4>
-        {action}
-      </div>
+      {(title || action) && (
+        <div className="settings-group-head">
+          {title && <h4>{title}</h4>}
+          {action}
+        </div>
+      )}
       {hint && <p className="settings-group-hint">{hint}</p>}
       {children}
     </section>
@@ -692,7 +698,7 @@ function AppearancePane() {
 
   return (
     <>
-      <Group title="Theme">
+      <Group>
         <Row label="Color scheme" stacked hint="Applies the moment you pick it.">
           <div className="theme-cards" role="group" aria-label="Theme">
             {THEME_OPTIONS.map((option) => (
@@ -720,18 +726,14 @@ function AppearancePane() {
             ))}
           </div>
         </Row>
-      </Group>
-      {/* A fact about the player rather than a taste, so it is not a theme
-          option: its own group, worded as what it says about you. */}
-      <Group title="Accessibility">
+        {/* A fact about the player rather than a taste, so it is worded as
+            what it says about you rather than offered as a theme option. */}
         <ToggleRow
           label="I have trouble telling colors apart"
           hint="Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own."
           checked={colorblindSafeColors}
           onChange={chooseColorblindSafe}
         />
-      </Group>
-      <Group title="The canvas">
         <Row
           label="Brush cursor"
           hint="A crosshair is precise at the point; an outline shows how wide the stroke will be."
@@ -760,7 +762,7 @@ function SoundPane() {
 
   return (
     <>
-      <Group title="Sound">
+      <Group>
         <ToggleRow
           label="Sound effects"
           hint="Chimes for a correct guess, the start of a round, the last ten seconds, and players coming and going."
@@ -795,8 +797,6 @@ function SoundPane() {
             </span>
           </Row>
         )}
-      </Group>
-      <Group title="Effects">
         <ToggleRow
           label="Confetti"
           hint="A burst when you guess right, and again for the winner at the end of a game."
