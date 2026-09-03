@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -16,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
+import app.auth.account_data as account_data_module
 from app.auth.account_data import (
     EXPORT_INTERVAL,
     AccountDataError,
@@ -947,6 +949,42 @@ async def test_an_export_still_being_built_blocks_another(env):
     assert refused.value.retry_at is None
     listed = await http.get("/api/auth/data-exports")
     assert listed.json()["nextRequestAt"] is None
+
+
+async def test_two_live_exports_for_one_account_cannot_exist(env):
+    """R-PRIV-12's "never two live at once" is held by the database, so two
+    requests arriving in the same instant cannot both get past a check."""
+    http, _, _, factory = env
+    registered = await register(http, "Twice")
+    first = await create_data_export(factory, user_id=registered["id"])
+    async with factory() as session:
+        session.add(
+            DataExport(
+                id=generate_uuid(),
+                user_id=UUID(registered["id"]),
+                status=DataExportStatus.PENDING.value,
+                schema_version=first.schema_version,
+                created_at=first.created_at,
+                expires_at=first.expires_at,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+
+async def test_a_request_that_loses_the_race_is_refused_like_a_late_one(env, monkeypatch):
+    """If the check saw nothing live but the insert collides, the caller is
+    told the same thing as a caller who read the live job a moment earlier."""
+    http, _, _, factory = env
+    registered = await register(http, "Racer")
+    await create_data_export(factory, user_id=registered["id"])
+
+    async def nothing_live(session, db_user_id):
+        return None
+
+    monkeypatch.setattr(account_data_module, "latest_counted_export", nothing_live)
+    with pytest.raises(ExportNotYetAllowed, match="already being prepared"):
+        await create_data_export(factory, user_id=registered["id"])
 
 
 async def test_a_failed_export_does_not_count_against_the_week(env):

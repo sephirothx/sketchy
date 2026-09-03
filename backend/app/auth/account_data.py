@@ -12,6 +12,7 @@ import logging
 from uuid import UUID
 
 from sqlalchemy import delete, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -197,7 +198,13 @@ async def create_data_export(
     db_user_id = _entity_id(user_id)
     async with session_factory() as session:
         async with session.begin():
-            user = await session.get(User, db_user_id)
+            # The account row is the lock: on PostgreSQL two requests arriving
+            # together queue here, so the second reads the first's job. SQLite
+            # ignores row locks (R-RATE-01), which is why the unique index
+            # below is what actually holds the line.
+            user = await session.scalar(
+                select(User).where(User.id == db_user_id).with_for_update()
+            )
             if user is None or user.state == AccountState.DELETED.value:
                 raise AccountDataError("account not found")
             await session.execute(
@@ -236,6 +243,16 @@ async def create_data_export(
                     },
                 )
             )
+            try:
+                await session.flush()
+            except IntegrityError as error:
+                # `uq_data_exports_one_live_per_user`: a request that arrived
+                # in the same instant got there first. Same answer as if it
+                # had been read a moment earlier.
+                raise ExportNotYetAllowed(
+                    "An export is already being prepared. Wait for it to finish.",
+                    retry_at=None,
+                ) from error
         return job
 
 

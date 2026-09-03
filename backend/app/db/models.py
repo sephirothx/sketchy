@@ -1586,6 +1586,17 @@ class DataExport(Base):
             name="ck_data_exports_artifact_encoding_present",
         ),
         Index("ix_data_exports_user_created_at", "user_id", "created_at"),
+        # One live export per account (R-PRIV-12), held by the database rather
+        # than by a check the writer makes: two requests arriving together can
+        # both read "nothing live" and both insert, and only a constraint sees
+        # them at once.
+        Index(
+            "uq_data_exports_one_live_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'processing')"),
+            sqlite_where=text("status IN ('pending', 'processing')"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

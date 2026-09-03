@@ -408,6 +408,13 @@ rather than a migration, the same rule `canvas_storage` applies to drawings.
 says how to read itself, and a row with no document claims no encoding. The download
 endpoint decodes and serves the JSON bytes without reparsing them.
 
+`uq_data_exports_one_live_per_user` is a partial unique index on `user_id` where the
+status is `pending` or `processing`: one live job per account (R-PRIV-12), held by the
+database because two requests arriving together can each read "nothing live" and only
+a constraint sees them at once. The writer also locks the account row, which serialises
+the pair on PostgreSQL; SQLite ignores row locks, so the index is what holds the line
+there. The weekly interval is checked in the writer against the newest non-failed job.
+
 Expired jobs are purged at startup and hourly. Before that sweep existed, an expired
 row was removed only when its owner requested another export or a worker re-processed
 the job — so a document that was generated and never collected outlived its seven-day

@@ -181,9 +181,12 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
             await dialog.get_by_role(
                 "switch", name="I have trouble telling colors apart"
             ).check()
+            await dialog.get_by_role("group", name="Time format").get_by_role(
+                "button", name="24-hour"
+            ).click()
             cursor = dialog.get_by_role("group", name="Brush cursor style")
             # Immediately-applied rows are merged into one write, so waiting for
-            # the request the last change triggers is waiting for all three.
+            # the request the last change triggers is waiting for all four.
             async with first_page.expect_response(
                 lambda response: "/api/users/me/settings" in response.url
                 and response.request.method == "PATCH"
@@ -211,12 +214,14 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                         theme: localStorage.getItem('sketchy_theme'),
                         cursor: localStorage.getItem('sketchy_brushcursor'),
                         colors: localStorage.getItem('sketchy_colorblindsafecolors'),
+                        clock: localStorage.getItem('sketchy_timeformat'),
                     })"""
                 )
                 assert stored == {
                     "theme": "dark",
                     "cursor": "circle",
                     "colors": "true",
+                    "clock": "24h",
                 }
                 # Retired settings leave no key behind to be resurrected.
                 retired = await fresh_page.evaluate(
@@ -239,6 +244,10 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                 )
                 assert await cursor_synced.get_by_role(
                     "button", name="Outline"
+                ).get_attribute("aria-pressed") == "true"
+                clock_synced = fresh_dialog.get_by_role("group", name="Time format")
+                assert await clock_synced.get_by_role(
+                    "button", name="24-hour"
                 ).get_attribute("aria-pressed") == "true"
             finally:
                 await fresh_device.close()
