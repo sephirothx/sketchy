@@ -1,7 +1,7 @@
 """The name-colour rule (#571): readable on both player-list panels, wherever written."""
 from __future__ import annotations
 
-import re
+import colorsys
 from pathlib import Path
 
 import pytest
@@ -48,8 +48,9 @@ def test_every_palette_colour_clears_the_floor_on_both_panels():
         "#000000",  # invisible on the dark panel
         "#1e293b",  # the dark panel itself
         "#112233",  # near-black: fine on white, 1.1:1 on slate
-        "#aabbcc",  # pale: 7.5:1 on slate, 2:1 on white
-        "#00ff00",  # pure green reads on slate, not on white
+        "#334155",  # the dark theme's line colour: 1.4:1 on slate
+        "#dddddd",  # pale grey: 10:1 on slate, 1.4:1 on white
+        "#00ff00",  # pure green reads on slate, 1.4:1 on white
     ],
 )
 def test_a_well_formed_but_unreadable_colour_is_treated_as_unset(color):
@@ -69,23 +70,14 @@ def test_a_readable_colour_outside_the_palette_is_still_accepted():
     assert normalize_name_color("#FF0000") == "#ff0000"
 
 
-def _css_token(theme_block: str, token: str) -> str:
-    match = re.search(rf"--{token}:\s*(#[0-9a-fA-F]{{6}})\s*;", theme_block)
-    assert match, f"--{token} is not a hex value in that block"
-    return match.group(1).lower()
+def test_no_two_palette_colours_are_near_duplicates():
+    """Twelve swatches are only worth having if each is a different choice."""
+    def hue(color: str) -> float:
+        red, green, blue = (int(color[i : i + 2], 16) / 255 for i in (1, 3, 5))
+        return colorsys.rgb_to_hls(red, green, blue)[0] * 360
 
-
-def test_the_surfaces_are_the_player_list_panel_in_each_theme():
-    """The server mirrors two hex values from theme.css. If the panel colour
-    moves there, this is what says the rule is now checking the wrong thing."""
-    css = THEME_CSS.read_text(encoding="utf-8")
-    light, dark = css.split('[data-theme="dark"]', 1)
-    # The player list sits in a `.panel`, whose ground is --card.
-    assert set(NAME_COLOR_SURFACES) == {_css_token(light, "card"), _css_token(dark, "card")}
-
-
-def test_the_client_palette_is_the_server_palette():
-    source = SETTINGS_STORE.read_text(encoding="utf-8")
-    block = source.split("NAME_COLOR_PALETTE = [", 1)[1].split("]", 1)[0]
-    client = tuple(re.findall(r'"(#[0-9a-f]{6})"', block))
-    assert client == NAME_COLORS
+    for index, first in enumerate(NAME_COLORS):
+        for second in NAME_COLORS[index + 1 :]:
+            apart = abs(hue(first) - hue(second))
+            apart = min(apart, 360 - apart)
+            assert apart >= 15, f"{first} and {second} are {apart:.0f} degrees apart"

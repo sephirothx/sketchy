@@ -573,7 +573,7 @@ interrupting for.
 The **Email** row in **Settings → Account** is where an address is added,
 replaced or simply looked at. The weekly reminder is a prompt and nothing more;
 a prompt somebody has dismissed is not a place to go back to, so the row is
-always there. It shows the address masked (`s***o@e***e.com`) beside a
+always there. It shows the address masked one dot per letter (`s•••••o@e•••••e.com`) beside a
 **Verified** or **Not verified** mark, with a control to reveal it in full; the
 dialog behind it says what the account already has - a verified address, one
 waiting to be verified, or, on a deployment with no SMTP configured, that a lost
@@ -796,9 +796,10 @@ forgotten it — the change signs every other device out), signed-in devices,
 the data export, and deleting the account, which is its own dialog with the
 password and a typed `DELETE` rather than the bottom of the data export.
 
-A registered player's **name color** is one of nine palette swatches. The
-server holds the rule the palette was drawn to — at least 3:1 against the
-player-list panel of both themes — on every path that writes one, so a modified
+A registered player's **name color** is one of twelve palette swatches. The
+server holds the rule the palette was drawn to — at least 1.8:1 against the
+player-list panel of both themes, a floor that refuses a colour which vanishes
+on one of them rather than a reading grade — on every path that writes one, so a modified
 client cannot produce an unreadable name; a value that fails is treated as
 unset and re-rolled. Guests play in grey, which is what marks a name as
 unclaimed.

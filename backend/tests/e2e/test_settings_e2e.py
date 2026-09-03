@@ -112,13 +112,13 @@ async def test_settings_apply_as_they_change_without_a_save():
             stored_name_color = await page.evaluate(
                 "() => localStorage.getItem('sketchy_namecolor')"
             )
-            assert stored_name_color == "#139288"
+            assert stored_name_color == "#0d9488"
 
             # And it reaches the room without a save and without reconnecting.
             await page.wait_for_function(
                 """() => {
                     const name = document.querySelector('.player-name .colored-player-name');
-                    return name && getComputedStyle(name).color === 'rgb(19, 146, 136)';
+                    return name && getComputedStyle(name).color === 'rgb(13, 148, 136)';
                 }"""
             )
 
@@ -277,7 +277,9 @@ async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
             assert "masked" not in shown, f"the local part is still readable in {shown!r}"
             assert "example" not in shown, f"the domain label is still readable in {shown!r}"
             assert shown.endswith(".com"), shown
-            assert "*" in shown, shown
+            assert "\u2022" in shown, shown
+            # One dot per hidden letter: the shape and length survive.
+            assert len(shown) == len("masked@example.com"), shown
             # An address nobody has verified cannot recover the account, and
             # the row says so as a symbol and two words, not only a sentence.
             status = dialog.locator(".settings-email-status")
@@ -288,7 +290,7 @@ async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
             await dialog.get_by_role("button", name="Show the full address").click()
             assert await dialog.locator(".settings-email").inner_text() == "masked@example.com"
             await dialog.get_by_role("button", name="Hide the full address").click()
-            assert "*" in await dialog.locator(".settings-email").inner_text()
+            assert "\u2022" in await dialog.locator(".settings-email").inner_text()
         finally:
             await context.close()
             await browser.close()

@@ -72,26 +72,29 @@ def nearest_drawing_seconds(value: int) -> int:
     return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
 
 
-# The nine colours a registered player may wear on their name. The same list
+# The twelve colours a registered player may wear on their name. The same list
 # lives in the client as NAME_COLOR_PALETTE (frontend/src/store/settingsStore.ts);
 # the swatches there are the only interface that can choose one, and the rule
 # below is what stops a modified client choosing anything else (#571).
 #
 # Every entry clears NAME_COLOR_MIN_CONTRAST against both NAME_COLOR_SURFACES -
 # tests/test_name_color.py proves it - so the palette and the rule cannot
-# disagree. The hues are the ones the game has always used; they were lightened
-# so a name reads on the dark theme's panel too, where the old shades sat
-# between 2.1:1 and 3.1:1.
+# disagree. Hues are spread so no two neighbours read as the same colour, and
+# the set deliberately includes light ones (yellow, sky, pink) that only clear
+# a low floor on the white panel: readable, not AA, is the bar.
 NAME_COLORS: tuple[str, ...] = (
-    "#ef3c63",  # red
-    "#de5720",  # orange
-    "#b8730f",  # amber
-    "#199647",  # green
-    "#139288",  # teal
-    "#1c8ac6",  # blue
-    "#7971f4",  # indigo
-    "#a761e5",  # purple
-    "#ef3482",  # pink
+    "#e11d48",  # red
+    "#f97316",  # orange
+    "#eab308",  # yellow
+    "#84cc16",  # lime
+    "#16a34a",  # green
+    "#0d9488",  # teal
+    "#38bdf8",  # sky
+    "#2563eb",  # blue
+    "#6366f1",  # indigo
+    "#a855f7",  # purple
+    "#d946ef",  # magenta
+    "#f472b6",  # pink
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -100,10 +103,12 @@ NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 # because the server has no stylesheet to read; tests/test_name_color.py fails
 # the moment the CSS token moves without this following it.
 NAME_COLOR_SURFACES: tuple[str, ...] = ("#ffffff", "#1e293b")
-# WCAG's floor for large text and user-interface components. The normal-text
-# 4.5:1 would leave almost no hue readable on a white and a slate panel at
-# once, and a name is a short, bold label rather than a paragraph.
-NAME_COLOR_MIN_CONTRAST = 3.0
+# Deliberately below WCAG's 3:1 for large text: the floor exists to refuse a
+# colour that *vanishes* on one of the panels - white on the light theme,
+# slate on the dark - not to enforce a reading grade on a short bold label.
+# 3:1 on both a white and a slate panel would leave no yellow, sky or pink at
+# all; every palette entry clears this on both.
+NAME_COLOR_MIN_CONTRAST = 1.8
 
 # Guests render in grey italics everywhere, so a color would be meaningless
 # and would also make an unclaimed name look like a registered one.

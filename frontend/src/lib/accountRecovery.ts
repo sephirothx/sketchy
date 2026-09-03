@@ -31,10 +31,12 @@ export function emailLooksUsable(value: string): boolean {
  * recognises it. A one-character segment has no middle, so it goes entirely -
  * keeping it would be keeping the whole thing.
  */
+const HIDDEN = "\u2022";
+
 function maskSegment(segment: string): string {
-  if (segment.length <= 1) return "*";
-  if (segment.length === 2) return `${segment[0]}*`;
-  return `${segment[0]}***${segment[segment.length - 1]}`;
+  if (segment.length <= 1) return HIDDEN;
+  if (segment.length === 2) return `${segment[0]}${HIDDEN}`;
+  return `${segment[0]}${HIDDEN.repeat(segment.length - 2)}${segment[segment.length - 1]}`;
 }
 
 /**
@@ -42,10 +44,10 @@ function maskSegment(segment: string): string {
  *
  * Settings is opened in rooms with other people looking at the screen, and
  * the address is the one value on it worth copying down. So it is printed with
- * its middle removed - `s***o@e***e.com` - enough to recognise which address
- * it is, not enough for somebody reading over a shoulder to write it down. The
- * top-level domain survives because it identifies nobody and makes the shape
- * read as an address.
+ * its middle hidden one dot per letter - `s•••••o@e•••••e.com` - enough to
+ * recognise which address it is by shape and length, not enough for somebody
+ * reading over a shoulder to write it down. The top-level domain survives
+ * because it identifies nobody and makes the shape read as an address.
  *
  * Presentation only. The wire, the confirmation link and any typed correction
  * use the real value; a reveal control shows it in full on request.

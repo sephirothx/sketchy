@@ -263,7 +263,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `update_room_settings` | `UpdateRoomSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_custom_prompts` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_recap_drawing` | `RecapDrawingPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
-| `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — `nameColor` must be a `#rrggbb` that reads at 3:1 on both themes' player-list panel (R-ACCT-08); anything else answers `{ ok: false, error: "Invalid player name color" }`, and a guest's colour is always refused |
+| `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — `nameColor` must be a `#rrggbb` that reads at 1.8:1 on both themes' player-list panel (R-ACCT-08); anything else answers `{ ok: false, error: "Invalid player name color" }`, and a guest's colour is always refused |
 | `rename_player` | `RenamePlayerPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `become_player` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `session_ping` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |

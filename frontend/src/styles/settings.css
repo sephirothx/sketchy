@@ -28,7 +28,7 @@
 
 .settings-overlay {
   align-items: center;
-  padding: 24px;
+  padding: 16px;
   /* Above the email reminder (1090), a note that can wait and that would
      otherwise sit across the sheet's header on a phone; below the connection
      (1100) and deploy (1150) banners, which are worth interrupting for. */
@@ -41,8 +41,9 @@
   flex-direction: column;
   max-width: 940px;
   width: 100%;
-  max-height: min(90dvh, 880px);
-  padding: 20px 24px 24px;
+  /* As tall as the viewport allows, so the pane scrolls only when it must. */
+  max-height: calc(100dvh - 32px);
+  padding: 14px 22px 14px;
   border-radius: 16px;
   text-align: left;
   overflow: hidden;
@@ -53,8 +54,8 @@
   justify-content: space-between;
   align-items: center;
   border-bottom: 1.5px solid var(--line);
-  padding-bottom: 12px;
-  margin-bottom: 16px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
   flex: 0 0 auto;
 }
 
@@ -157,8 +158,12 @@
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
-  padding: 4px 16px 6px;
-  margin-bottom: 14px;
+  padding: 0 16px 2px;
+  margin-bottom: 8px;
+}
+
+.settings-tab-content > .settings-group:last-child {
+  margin-bottom: 0;
 }
 
 .settings-group-head {
@@ -166,7 +171,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0 2px;
+  padding: 8px 0 0;
 }
 
 .settings-group-head h4 {
@@ -189,7 +194,7 @@
 .settings-row {
   display: grid;
   gap: 10px;
-  padding: 12px 0;
+  padding: 9px 0;
   border-top: 1px solid var(--line);
 }
 
@@ -199,9 +204,12 @@
 }
 
 @media (min-width: 640px) {
+  /* The control takes what it needs and the label gets the rest, so a
+     reason - or a revealed address - has the room to stay on one line. */
   .settings-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+    column-gap: 20px;
   }
 
   .settings-row.is-stacked {
@@ -245,6 +253,7 @@
 
 .settings-row-control input[type="search"],
 .settings-row-control input[type="text"] {
+  width: 200px;
   background: var(--field);
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -255,6 +264,7 @@
   min-height: 38px;
   min-width: 0;
   flex: 1 1 140px;
+  max-width: 100%;
 }
 
 .settings-row-error {
@@ -326,11 +336,12 @@
    a * is unmistakably a *. The state rides beside it as a symbol as well as
    a word: whether the account can be recovered should not depend on
    reading a sentence. */
+/* Inline, not flex: the mark follows the address like the next word, so it
+   stays on the address's last line instead of dropping under it whenever the
+   revealed value is long. */
 .settings-email-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: inline;
+  line-height: 2;
 }
 
 .settings-email {
@@ -338,11 +349,14 @@
   font-size: 12.5px;
   letter-spacing: 0.01em;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .settings-email-reveal {
   display: inline-grid;
   place-items: center;
+  vertical-align: middle;
+  margin: 0 6px;
   width: 26px;
   height: 26px;
   border: 1px solid var(--line-strong);
@@ -368,6 +382,7 @@
   font-size: 11.5px;
   font-weight: 800;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .settings-email-status.is-verified {
@@ -391,8 +406,8 @@
   background: var(--success-soft);
   border: 1px solid var(--success);
   border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
 }
 
 .settings-notice > svg {
@@ -422,10 +437,10 @@
   background: var(--primary-soft);
   border: 1px solid var(--primary-edge-soft);
   border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .settings-guest-card b {
@@ -584,9 +599,9 @@
   align-items: center;
   display: flex;
   gap: 12px;
-  max-width: 340px;
+  width: 340px;
+  max-width: 100%;
   min-width: 0;
-  width: 100%;
 }
 
 .settings-volume-control input[type="range"] {
@@ -681,8 +696,8 @@
 .keybindings-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 0 10px;
+  gap: 6px;
+  padding: 4px 0 8px;
 }
 
 .keybinding-row {
@@ -693,7 +708,7 @@
   background: var(--well);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .keybinding-icon {

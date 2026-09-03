@@ -41,24 +41,27 @@ export const DEFAULT_THEME: AppTheme = "system";
 export const DEFAULT_VOLUME = 0.7;
 
 /**
- * The nine colours a registered player may wear on their name.
+ * The twelve colours a registered player may wear on their name.
  *
  * The same list as `NAME_COLORS` in backend/app/rooms.py, which is the one
- * that counts: the server refuses anything that does not read on both the
- * light and the dark player list (#571), and every entry here was chosen to.
- * The swatches in Settings are the only control that picks one, so the
- * interface cannot produce an unreadable name in the first place.
+ * that counts: the server refuses anything that vanishes on either theme's
+ * player list (#571), and every entry here was chosen to clear that. The
+ * swatches in Settings are the only control that picks one, so the interface
+ * cannot produce an unreadable name in the first place.
  */
 export const NAME_COLOR_PALETTE = [
-  "#ef3c63",
-  "#de5720",
-  "#b8730f",
-  "#199647",
-  "#139288",
-  "#1c8ac6",
-  "#7971f4",
-  "#a761e5",
-  "#ef3482",
+  "#e11d48",
+  "#f97316",
+  "#eab308",
+  "#84cc16",
+  "#16a34a",
+  "#0d9488",
+  "#38bdf8",
+  "#2563eb",
+  "#6366f1",
+  "#a855f7",
+  "#d946ef",
+  "#f472b6",
 ] as const;
 
 export function isPaletteColor(value: string | null | undefined): boolean {

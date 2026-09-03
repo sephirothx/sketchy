@@ -35,7 +35,7 @@ test("a confirmed address is described as the way back in, masked", () => {
 
   // Recognisable to its owner, not readable over their shoulder: this
   // sentence rides a banner across every screen (R-SET-08).
-  assert.match(message, /p\*\*\*r@e\*\*\*e\.com/);
+  assert.match(message, /p••••r@e•••••e\.com/);
   assert.ok(!message.includes("player@example.com"));
 });
 
@@ -48,7 +48,7 @@ test("an unconfirmed address says plainly that it does not count yet", () => {
     deliveryConfigured: true,
   });
 
-  assert.match(message, /p\*\*\*g@e\*\*\*e\.com/);
+  assert.match(message, /p•••••g@e•••••e\.com/);
   assert.ok(!message.includes("pending@example.com"));
   assert.match(message, /no way back in/);
 });
@@ -77,7 +77,7 @@ test("someone who already has an address is told what it is, not asked to add on
     deliveryConfigured: true,
   });
 
-  assert.match(message, /recover this account through p\*\*\*r@e\*\*\*e\.com/);
+  assert.match(message, /recover this account through p••••r@e•••••e\.com/);
 });
 
 const due = {
@@ -127,17 +127,19 @@ test("an account that is already set up is left alone", () => {
   );
 });
 
-test("an address is shown to its owner with its middle removed", () => {
-  assert.equal(maskEmail("stefano@example.com"), "s***o@e***e.com");
-  assert.equal(maskEmail("jo@example.co.uk"), "j*@e***e.co.uk");
-  assert.equal(maskEmail("a@b.io"), "*@*.io");
+test("an address is shown to its owner with one dot per hidden letter", () => {
+  assert.equal(maskEmail("stefano@example.com"), "s•••••o@e•••••e.com");
+  assert.equal(maskEmail("jo@example.co.uk"), "j•@e•••••e.co.uk");
+  assert.equal(maskEmail("a@b.io"), "•@•.io");
+  // The length is kept, so the owner can tell their addresses apart.
+  assert.equal(maskEmail("stefano@example.com").length, "stefano@example.com".length);
 });
 
 test("masking keeps the shape of anything that is not quite an address", () => {
   // No @, a trailing @, or a domain with no dot: still never printed whole.
-  assert.equal(maskEmail("nonsense"), "n***e");
-  assert.equal(maskEmail("trailing@"), "t***@");
-  assert.equal(maskEmail("someone@localhost"), "s***e@l***t");
+  assert.equal(maskEmail("nonsense"), "n••••••e");
+  assert.equal(maskEmail("trailing@"), "t•••••••@");
+  assert.equal(maskEmail("someone@localhost"), "s•••••e@l•••••••t");
 });
 
 test("masking reveals neither the local part nor the domain label", () => {

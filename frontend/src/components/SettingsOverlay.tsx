@@ -82,15 +82,18 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
 
 /** The palette, with a name a screen reader can say instead of a hex. */
 const NAME_COLOR_NAMES: Record<(typeof NAME_COLOR_PALETTE)[number], string> = {
-  "#ef3c63": "Red",
-  "#de5720": "Orange",
-  "#b8730f": "Amber",
-  "#199647": "Green",
-  "#139288": "Teal",
-  "#1c8ac6": "Blue",
-  "#7971f4": "Indigo",
-  "#a761e5": "Purple",
-  "#ef3482": "Pink",
+  "#e11d48": "Red",
+  "#f97316": "Orange",
+  "#eab308": "Yellow",
+  "#84cc16": "Lime",
+  "#16a34a": "Green",
+  "#0d9488": "Teal",
+  "#38bdf8": "Sky",
+  "#2563eb": "Blue",
+  "#6366f1": "Indigo",
+  "#a855f7": "Purple",
+  "#d946ef": "Magenta",
+  "#f472b6": "Pink",
 };
 
 const ACTION_ICONS: Record<keyof KeyBindings, ReactNode> = {
