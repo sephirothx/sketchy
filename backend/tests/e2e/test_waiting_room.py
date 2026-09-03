@@ -1,6 +1,7 @@
 import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
+    open_room_menu,
     close_room_settings,
     open_room_settings,
     open_settings_section,
@@ -123,7 +124,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             assert not await player_page.is_visible('.room-settings-editor')
             # A guest gets the summary, not a way in.
             assert await player_page.locator(
-                'button.waiting-settings-row'
+                '.waiting-settings-edit-button'
             ).count() == 0
 
             await host_page.wait_for_selector('text=LobbyPlayer')
@@ -166,6 +167,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await waiting_chat_input.press("Enter")
             await host_page.wait_for_selector('text=Hello from the lobby')
 
+            await open_room_menu(player_page)
             await player_page.click(".game-header-afk-button")
             await host_page.wait_for_selector('.player-row.is-afk:has-text("LobbyPlayer")')
             assert await host_page.is_disabled('.waiting-start-button')

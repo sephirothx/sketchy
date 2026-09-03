@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_room_menu, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -46,10 +46,16 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Player toggles AFK in Browser 2
+            await open_room_menu(page2)
             await page2.click(".game-header-afk-button")
 
-            # Verify the AFK pill reflects the pressed state
-            await page2.wait_for_selector('.game-header-afk-button[aria-pressed="true"]')
+            # The row reflects the state the next time the menu opens: a
+            # checked item in the desktop dropdown, a pressed one in the sheet.
+            await open_room_menu(page2)
+            await page2.wait_for_selector(
+                '.game-header-afk-button[aria-checked="true"], .game-header-afk-button[aria-pressed="true"]'
+            )
+            await page2.keyboard.press("Escape")
 
             # Step 5: Player closes Browser 2 context
             await context2.close()

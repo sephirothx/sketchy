@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, leave_room, room_code as get_room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -64,7 +64,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             drawer_page = host_page if await host_page.query_selector('.prompt-choices') else player_page
             guesser_page = player_page if drawer_page == host_page else host_page
 
-            await drawer_page.click('.game-header-leave-button')
+            await leave_room(drawer_page)
             dialog = drawer_page.locator('[role="alertdialog"]')
             assert await dialog.is_visible()
             assert "Leave during your turn?" in await dialog.inner_text()
@@ -84,10 +84,10 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             await drawer_page.keyboard.press("Escape")
             await drawer_page.wait_for_selector('[role="alertdialog"]', state="hidden")
             assert await drawer_page.evaluate(
-                "() => document.activeElement?.classList.contains('game-header-leave-button')"
+                "() => document.activeElement?.classList.contains('room-menu-button')"
             )
 
-            await guesser_page.click('.game-header-leave-button')
+            await leave_room(guesser_page)
             generic_dialog = guesser_page.locator('[role="alertdialog"]')
             assert "Leave active game?" in await generic_dialog.inner_text()
             assert "give up your place" in await generic_dialog.inner_text()
@@ -125,7 +125,7 @@ async def test_waiting_room_leave_remains_immediate():
 
             room_code = await get_room_code(page)
             await page.evaluate("window.__sentSocketFrames = []")
-            await page.click('.game-header-leave-button')
+            await leave_room(page)
             await page.wait_for_url(f"{BASE_URL}/")
             assert not await page.is_visible('[role="alertdialog"]')
             await page.wait_for_timeout(100)

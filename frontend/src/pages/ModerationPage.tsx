@@ -248,7 +248,7 @@ export function ModerationPage() {
 
   return (
     <main className="ops-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader page="Moderation" />
 
       {error && (
         <p className="auth-error" role="alert">

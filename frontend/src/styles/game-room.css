@@ -5,159 +5,23 @@
   padding: 16px;
 }
 
-.game-header {
-  display: grid;
-  /* minmax(0, 1fr) lets the side tracks shrink below min-content, so the
-     middle status slot stays truly centered even beside a long room name. */
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
-  min-height: 44px;
-}
-
-.game-header-start {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  grid-column: 1;
-}
-
-.game-header-room-name {
-  font-weight: 800;
-  font-size: 16px;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Pinned to column 3 so an empty status slot (waiting room, game end)
-   can't pull the actions into the middle track. */
-.game-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  grid-column: 3;
-  justify-self: end;
-  flex-wrap: nowrap;
-}
-
-.game-header-divider {
-  width: 1.5px;
-  height: 22px;
-  background: var(--line);
-  margin: 0 3px;
-  flex: none;
-}
-
-/* AFK is a toggle pill: quiet until pressed, warm while away. */
-.game-header-afk-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  padding: 7px 13px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--muted);
-  min-height: 38px;
-  cursor: pointer;
-}
-
-.game-header-afk-button.is-afk {
-  background: var(--warning-soft);
-  border-color: var(--warning-edge);
-  color: var(--warning);
-}
-
-.game-header-restart-button {
-  position: relative;
-}
-
-.game-header-restart-count {
-  font-size: 11px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.game-header-save-button {
-  flex: 0 0 auto;
-}
-
-/* The phone's status band: room code, round + countdown ring, and one way in
-   to everything else. What it replaces lined up eight icon buttons in a 44px
-   strip, with a red Leave one thumb-width from Settings. */
-.game-header-mobile {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  grid-template-columns: none;
-  margin-bottom: 8px;
-  min-height: 56px;
-}
-
-.game-header-mobile .game-header-status {
-  display: flex;
-  flex: 1 1 auto;
-  grid-column: auto;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.game-header-menu-button {
-  flex: 0 0 auto;
-  min-height: 44px;
-  min-width: 44px;
-}
-
-.game-header-mark {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-/* The code is the one thing here that has to stay readable, so the mark is
-   what gives ground first when the room name and the round chip crowd it. */
-@media (max-width: 380px) {
-  .game-header-mark {
-    display: none;
-  }
-}
-
-/* The code pill doubles as the invite-copy control. */
-.room-copy-button {
-  background: var(--card);
-  color: var(--muted);
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-  transition: all 0.15s ease;
-}
-
-.room-copy-button svg {
-  color: var(--faint);
-}
-
-.room-copy-button:hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-
 @media (max-width: 600px) {
+  .waiting-rules-head {
+    flex-direction: column;
+  }
+
+  .waiting-rules-grid {
+    gap: 6px;
+  }
+
+  .rule-tile {
+    padding: 10px 10px;
+  }
+
+  .rule-tile dd {
+    font-size: 17px;
+  }
+
   .waiting-start-card {
     align-items: stretch;
     flex-direction: column;
@@ -167,33 +31,6 @@
   .custom-prompts-apply { width: 100%; }
   .waiting-card { padding: 16px; }
   .waiting-room-actions { justify-content: flex-start; width: 100%; }
-}
-
-@media (max-width: 480px) {
-  .game-header {
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  .game-header-actions {
-    gap: 4px;
-  }
-
-  .game-header-room-name {
-    display: none;
-  }
-
-  .header-action-label {
-    display: none;
-  }
-
-  .game-header-afk-button {
-    padding: 7px 9px;
-  }
-
-  .room-copy-button {
-    padding: 6px 8px;
-  }
 }
 
 .restart-vote-banner {
@@ -410,8 +247,7 @@
   color: var(--danger);
 }
 
-.restart-vote-actions button:focus-visible,
-.game-header-restart-button:focus-visible {
+.restart-vote-actions button:focus-visible {
   outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
@@ -596,38 +432,107 @@
 /* ── The settings line ───────────────────────────────────────────────────
    One row that opens the editor, where eight chips used to restate what the
    host chose a minute ago. */
-.waiting-settings-row {
-  align-items: center;
-  display: flex;
-  font: inherit;
+/* The room's settings card: a one-line summary, then the same six facts the
+   lobby card and the invite page show, as tiles. */
+.waiting-rules {
+  display: grid;
   gap: 12px;
-  justify-content: space-between;
-  min-height: 58px;
-  text-align: left;
-  width: 100%;
 }
 
-button.waiting-settings-row { cursor: pointer; }
+.waiting-rules-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
 
-button.waiting-settings-row:hover { border-color: var(--line-strong); }
-
-.waiting-settings-summary {
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.35;
+.waiting-rules-title {
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
-.waiting-settings-edit {
+.waiting-rules-title h2 {
+  font-size: 19px;
+}
+
+.waiting-rules-host {
+  color: var(--faint);
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding-top: 4px;
+}
+
+.waiting-settings-summary {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0;
+  min-width: 0;
+}
+
+.waiting-rules-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.rule-tile {
+  background: var(--well);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.rule-tile dt {
+  align-items: center;
+  color: var(--faint);
+  display: inline-flex;
+  font-size: 11.5px;
+  font-weight: 800;
+  gap: 6px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rule-tile dd {
+  color: var(--ink);
+  display: grid;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  gap: 2px;
+  line-height: 1.15;
+  margin: 0;
+  min-width: 0;
+}
+
+.rule-tile dd small {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.waiting-rules-prompts {
   align-items: center;
   color: var(--muted);
-  display: inline-flex;
-  flex: none;
+  display: flex;
   font-size: 13px;
-  font-weight: 800;
-  gap: 4px;
+  font-weight: 700;
+  gap: 8px;
+  margin: 0;
 }
+
+.waiting-rules-prompts svg { color: var(--faint); flex: none; }
 
 .waiting-ready-count { background: var(--well); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 4px 11px; white-space: nowrap; }
 .waiting-ready-count.is-ready { background: var(--success-soft); border-color: transparent; color: var(--success-ink); }
@@ -765,12 +670,13 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   min-height: 42px;
 }
 
+/* One title style for every panel, in the room as in the lobby: the display
+   face in title case, with the count or the action beside it. */
 .room-panel-heading h2 {
   color: var(--ink);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
   margin: 0;
 }
 
@@ -1588,7 +1494,6 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   display: flex;
   align-items: center;
   gap: 10px;
-  grid-column: 2;
 }
 
 .prompt-display {

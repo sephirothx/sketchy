@@ -367,7 +367,7 @@ export function ProfilePage() {
   if (!userId) {
     return (
       <div className="profile-page">
-        <AppHeader backLabel="Back to lobby" />
+        <AppHeader page="Profile" />
         <p className="profile-note">
           {hasResolved ? "There is no player with that profile." : "Loading…"}
         </p>
@@ -449,7 +449,7 @@ function ProfileView({ userId }: { userId: string }) {
 
   return (
     <div className="profile-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader page="Profile" />
 
       {!subject && !error && <p className="profile-note">Loading…</p>}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}

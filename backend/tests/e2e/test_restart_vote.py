@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings
+from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_menu, open_room_settings
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
@@ -67,6 +67,7 @@ async def test_players_approve_restart_without_losing_room_context():
             await player_page.wait_for_selector(".game-layout")
             await third_page.wait_for_selector(".game-layout")
 
+            await open_room_menu(host_page)
             await host_page.click(".game-header-restart-button")
             host_vote = host_page.get_by_test_id("restart-vote-banner")
             player_vote = player_page.get_by_test_id("restart-vote-banner")
@@ -143,6 +144,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await host_page.wait_for_selector(".game-layout")
             await player_page.wait_for_selector(".game-layout")
 
+            await open_room_menu(host_page)
             await host_page.click(".game-header-restart-button")
             player_vote = player_page.get_by_test_id("restart-vote-banner")
             await player_vote.wait_for()
@@ -157,11 +159,14 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await host_page.wait_for_selector(
                 '[data-testid="restart-vote-banner"]', state="detached"
             )
+            # The cooldown is read where the action lives: in the room menu.
+            await open_room_menu(host_page)
             restart_button = host_page.locator(".game-header-restart-button")
             assert await restart_button.is_disabled()
             assert "Restart vote available in" in (
                 await restart_button.get_attribute("aria-label") or ""
             )
+            await host_page.keyboard.press("Escape")
             assert await host_page.is_visible(
                 "canvas.drawing-canvas, .prompt-choices, [data-testid=choosing-prompt-status]"
             )

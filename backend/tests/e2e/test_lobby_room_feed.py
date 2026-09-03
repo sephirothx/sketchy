@@ -11,7 +11,7 @@ every other test's rooms are in the same list.
 """
 import pytest
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import leave_room, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -54,7 +54,7 @@ async def test_a_room_opening_and_closing_reaches_a_lobby_nobody_touched():
             # The host *leaves* rather than closing the browser: a dropped
             # socket keeps its seat for the R-CONN-01 grace, so the room would
             # still be there, correctly, for another half minute.
-            await host.click(".game-header-leave-button")
+            await leave_room(host)
             await host.wait_for_selector(".lobby-rooms-panel")
             await expect(card).to_have_count(0, timeout=SETTLE_MS)
         finally:

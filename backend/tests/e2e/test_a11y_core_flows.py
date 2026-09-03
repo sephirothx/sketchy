@@ -9,7 +9,7 @@ from app.db.models import User
 from app.domain_values import UserRole
 
 from tests.e2e.a11y import assert_no_axe_violations
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, leave_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -175,7 +175,7 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         await assert_no_axe_violations(drawer_page, "drawing")
         await assert_no_axe_violations(guesser_page, "guessing")
 
-        await drawer_page.click(".game-header-leave-button")
+        await leave_room(drawer_page)
         dialog = drawer_page.locator('[role="alertdialog"]')
         await dialog.wait_for()
         await assert_no_axe_violations(drawer_page, "leave confirmation")

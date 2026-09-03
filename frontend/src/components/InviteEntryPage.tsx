@@ -47,7 +47,7 @@ export function InviteEntryPage({ code }: { code: string }) {
 
   return (
     <div className="invite-entry-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader page="Join a room" />
 
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">

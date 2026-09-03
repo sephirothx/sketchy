@@ -6,12 +6,12 @@ import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { loadRecapDrawing } from "../lib/recapDrawings";
 import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
-import { AccountMenu } from "../components/AccountMenu";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
-import { RoomMenuSheet } from "../components/RoomMenuSheet";
+import { RoomMenuDropdown, RoomMenuSheet } from "../components/RoomMenuSheet";
+import { AppHeader } from "../components/AppHeader";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import {
   ConnectedRoomChatPanel,
@@ -20,21 +20,12 @@ import {
   GameplayRegion,
 } from "../components/GameRoomRegions";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import {
-  CopyIcon,
-  DotsIcon,
-  Wordmark,
-  DownloadIcon,
-  GearIcon,
-  LeaveIcon,
-  MoonIcon,
-  RoundsIcon,
-} from "../components/icons";
+import { DotsIcon } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { recordRender } from "../lib/renderDiagnostics";
 import type { AckResponse } from "../types";
 
@@ -139,6 +130,32 @@ export function ActiveGameRoom({ code }: { code: string }) {
       socket.off("session_superseded", onSuperseded);
     };
   }, [clearSession, navigate, normalizedCode, notify, reset, setExitingRoom]);
+
+  async function handleCopyCode() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(normalizedCode);
+      notify("Room code copied.", "success", 2500);
+    } catch {
+      notify("Couldn’t copy the code. It is in the address bar.", "error");
+    }
+  }
+
+  // The OS share sheet where there is one, the clipboard everywhere else. A
+  // cancelled share is not a failure and must not fall through to a copy the
+  // player did not ask for.
+  async function handleShareInvite() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: roomName, text: `Join my Sketchy room: ${normalizedCode}`, url });
+        return;
+      } catch (error) {
+        if ((error as DOMException)?.name === "AbortError") return;
+      }
+    }
+    await handleCopyLink();
+  }
 
   function performLeave() {
     exitingRoomRef.current = true;
@@ -282,6 +299,23 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setHighlightsOpen(false);
   }
 
+  const roomMenuActions = {
+    code,
+    isPlaying: roomView === "playing",
+    isAfk,
+    canProposeRestart: canProposeRestart && !restartVote,
+    restartBusy,
+    restartCooldownSeconds,
+    onShareInvite: () => void handleShareInvite(),
+    onCopyCode: () => void handleCopyCode(),
+    onOpenPlayers: () => setPlayersSheetOpen(true),
+    onToggleAfk: handleToggleAfk,
+    onSaveImage: () => canvasRef.current?.saveImage(),
+    onOpenSettings: () => openSettings(),
+    onProposeRestart: () => void handleProposeRestart(),
+    onLeave: handleLeave,
+  };
+
   return (
     <div
       className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}`}
@@ -300,29 +334,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
           }}
         />
       )}
-      {isMobile ? (
-        /* Phone status band: what the room is, how long is left, and one way
-           in to everything else. The eight-icon strip this replaces put a red
-           Leave a thumb-width from Settings; those live in the ⋯ sheet now. */
-        <header className="game-header game-header-mobile">
-          {/* The mark earns its place even here: this is the only screen a
-              player is on for ten minutes at a stretch, and it is what says
-              which game they are in when they come back to the tab. */}
-          <span className="game-header-mark" aria-hidden="true">
-            <Wordmark size={22} />
-          </span>
-          <button
-            type="button"
-            className="room-copy-button"
-            data-room-code={code}
-            onClick={() => void handleCopyLink()}
-            aria-label="Copy the room invite link"
-            title="Click to copy room invite link"
-          >
-            <span>{code}</span>
-            <CopyIcon size={13} />
-          </button>
-          <GameHeaderStatus />
+      <AppHeader
+        room={{ name: roomName || "Room", code, onCopyLink: () => void handleCopyLink() }}
+        center={<GameHeaderStatus />}
+        phone={isMobile}
+        action={isMobile ? (
           <button
             type="button"
             className="btn btn-icon game-header-menu-button"
@@ -334,91 +350,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
           >
             <DotsIcon size={18} />
           </button>
-        </header>
-      ) : (
-        <header className="game-header">
-          <div className="game-header-start">
-            {roomName && <span className="game-header-room-name">{roomName}</span>}
-            <button
-              type="button"
-              className="room-copy-button"
-              data-room-code={code}
-              onClick={() => void handleCopyLink()}
-              title="Click to copy room invite link"
-            >
-              <span>{code}</span>
-              <CopyIcon size={13} />
-            </button>
-          </div>
-          <GameHeaderStatus />
-          <div className="game-header-actions">
-            {roomView === "playing" && canProposeRestart && !restartVote && (
-              <button
-                type="button"
-                className="btn btn-icon btn-compact game-header-restart-button"
-                disabled={restartBusy || restartCooldownSeconds > 0}
-                onClick={() => void handleProposeRestart()}
-                aria-label={restartCooldownSeconds > 0
-                  ? `Restart vote available in ${restartCooldownSeconds} seconds`
-                  : "Propose restarting the game"}
-                title={restartCooldownSeconds > 0
-                  ? `Restart vote available in ${restartCooldownSeconds}s`
-                  : "Propose a vote to restart the game"}
-              >
-                <RoundsIcon size={16} />
-                {restartCooldownSeconds > 0 && (
-                  <span className="game-header-restart-count" aria-hidden="true">
-                    {restartCooldownSeconds}
-                  </span>
-                )}
-              </button>
-            )}
-            <AccountMenu compact />
-            <button
-              type="button"
-              className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
-              aria-pressed={isAfk}
-              onClick={handleToggleAfk}
-              aria-label={isAfk ? "Back from AFK" : "Go AFK"}
-              title={isAfk ? "Back from AFK" : "Go AFK"}
-            >
-              <MoonIcon size={14} />
-              <span className="header-action-label">AFK</span>
-            </button>
-            {roomView === "playing" && (
-              <button
-                type="button"
-                className="btn btn-icon btn-compact save-image-button game-header-save-button"
-                onClick={() => canvasRef.current?.saveImage()}
-                aria-label="Save image"
-                title="Save drawn image to file"
-              >
-                <DownloadIcon size={16} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-icon btn-compact header-settings-button"
-              onClick={() => openSettings()}
-              title="Player settings"
-              aria-label="Player settings"
-            >
-              <GearIcon size={16} />
-            </button>
-            <span className="game-header-divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="btn btn-danger-ghost btn-compact game-header-leave-button"
-              onClick={handleLeave}
-              aria-label="Leave room"
-              title="Leave room"
-            >
-              <LeaveIcon size={14} />
-              <span className="header-action-label">Leave</span>
-            </button>
-          </div>
-        </header>
-      )}
+        ) : (
+          <RoomMenuDropdown {...roomMenuActions} />
+        )}
+      />
 
       {roomView === "playing" && restartVote && (
         <RestartVoteBanner
@@ -454,21 +389,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       )}
 
       {roomMenuOpen && (
-        <RoomMenuSheet
-          isPlaying={roomView === "playing"}
-          isAfk={isAfk}
-          canProposeRestart={canProposeRestart && !restartVote}
-          restartBusy={restartBusy}
-          restartCooldownSeconds={restartCooldownSeconds}
-          onDismiss={() => setRoomMenuOpen(false)}
-          onCopyLink={() => void handleCopyLink()}
-          onOpenPlayers={() => setPlayersSheetOpen(true)}
-          onToggleAfk={handleToggleAfk}
-          onSaveImage={() => canvasRef.current?.saveImage()}
-          onOpenSettings={() => openSettings()}
-          onProposeRestart={() => void handleProposeRestart()}
-          onLeave={handleLeave}
-        />
+        <RoomMenuSheet onDismiss={() => setRoomMenuOpen(false)} {...roomMenuActions} />
       )}
 
       <RoomShell

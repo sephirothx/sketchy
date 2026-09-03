@@ -152,7 +152,7 @@ export function BugReportsPage() {
 
   return (
     <main className="ops-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader page="Bug reports" />
 
       {error && <p className="auth-error" role="alert">{error}</p>}
 

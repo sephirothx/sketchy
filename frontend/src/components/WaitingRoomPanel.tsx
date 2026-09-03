@@ -4,10 +4,10 @@ import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
+import { BrushIcon, BulbIcon, ClockIcon, CopyIcon, LinkIcon, ListIcon, PlusIcon, RoundsIcon, SlidersIcon, TrophyIcon, UsersIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
-import { hintLabelFor } from "../lib/roomSetup";
+import { HINT_OPTIONS, SCORING_OPTIONS, hintLabelFor, scoringLabelFor } from "../lib/roomSetup";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -113,15 +113,33 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       : props.promptListSlugs && props.promptListSlugs.length > 1
         ? `${props.promptListSlugs.length} curated prompt lists`
         : null;
+  // The one-line summary above the tiles: what a game here is like, in the
+  // words the lobby card uses. Prompts and drawing rules have their own
+  // places on the card, so they are not repeated here.
   const settingsFacts = [
     `${props.rounds} ${props.rounds === 1 ? "round" : "rounds"}`,
     `${props.drawingSeconds}s`,
     hintLabelFor(props.hintMode, props.hideMaskedPrompt),
     props.scoringMode === "none" ? "No scoring" : null,
-    promptsValue,
-    describeDrawingRules(props.allowedTools, props.colorMode),
-    props.spectatorsSeePrompt ? "Spectators see the prompt" : null,
   ].filter((fact): fact is string => Boolean(fact));
+  const seatsFree = Math.max(0, props.maxPlayers - activePlayers.length);
+  // The same rough estimate the create page shows: every player draws once
+  // per round, and a turn is the drawing time plus choosing and results.
+  const estimateMinutes = Math.max(
+    1,
+    Math.round((Math.max(2, activePlayers.length) * props.rounds * (props.drawingSeconds + 24)) / 60),
+  );
+  const scoringDescription = SCORING_OPTIONS.find((option) => option.value === props.scoringMode)?.description ?? "";
+  const hintDescription = props.hideMaskedPrompt
+    ? "Blanks are hidden, so there is nothing to reveal."
+    : HINT_OPTIONS.find((option) => option.value === props.hintMode)?.description ?? "";
+  // Null when the room restricts nothing: the defaults are worth no words.
+  const drawingRules = describeDrawingRules(props.allowedTools, props.colorMode);
+  const listCount = props.promptListSlugs?.length ?? 0;
+  const promptsLine = [
+    promptsValue ?? `${listCount} curated prompt ${listCount === 1 ? "list" : "lists"}`,
+    props.spectatorsSeePrompt ? "spectators see the prompt" : null,
+  ].filter(Boolean).join(" · ");
 
 
   return (
@@ -212,38 +230,73 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </ul>
       </section>}
 
-      {/* One line, and a way in. Eight chips restating what the host chose a
-          minute ago spent 250px saying it twice. */}
-      {isHost ? (
-        <button
-          type="button"
-          className="waiting-card waiting-settings-row"
-          onClick={() => setSettingsOpen(true)}
-        >
-          <span className="waiting-settings-summary">
-            {settingsFacts.map((fact, index) => (
-              <Fragment key={fact}>
-                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                <span>{fact}</span>
-              </Fragment>
-            ))}
-          </span>
-          <span className="waiting-settings-edit">
-            Edit <ChevronRightIcon size={16} />
-          </span>
-        </button>
-      ) : (
-        <p className="waiting-card waiting-settings-row is-static">
-          <span className="waiting-settings-summary">
-            {settingsFacts.map((fact, index) => (
-              <Fragment key={fact}>
-                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                <span>{fact}</span>
-              </Fragment>
-            ))}
-          </span>
+      {/* The room's settings, for everyone: the same six facts the lobby card
+          and the invite page show, as tiles readable from across the table,
+          with the one-line summary above them. The host has the way in; a
+          guest sees whose settings they are. */}
+      <section
+        className="waiting-card waiting-rules waiting-settings-row"
+        aria-labelledby="waiting-rules-title"
+      >
+        <div className="waiting-rules-head">
+          <div className="waiting-rules-title">
+            <h2 id="waiting-rules-title">Room rules</h2>
+            <p className="waiting-settings-summary">
+              {settingsFacts.map((fact, index) => (
+                <Fragment key={fact}>
+                  {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
+                  <span>{fact}</span>
+                </Fragment>
+              ))}
+            </p>
+          </div>
+          {isHost ? (
+            <Button
+              variant="secondary"
+              compact
+              className="waiting-settings-edit-button"
+              iconLeft={<SlidersIcon size={15} />}
+              onClick={() => setSettingsOpen(true)}
+            >
+              Edit room rules
+            </Button>
+          ) : host ? (
+            <span className="waiting-rules-host">
+              <span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span> sets these
+            </span>
+          ) : null}
+        </div>
+        <dl className="waiting-rules-grid">
+          <div className="rule-tile">
+            <dt><UsersIcon size={12} />Players</dt>
+            <dd>{activePlayers.length} of {props.maxPlayers}<small>{seatsFree === 0 ? "the room is full" : `${seatsFree} ${seatsFree === 1 ? "seat" : "seats"} free`}</small></dd>
+          </div>
+          <div className="rule-tile">
+            <dt><RoundsIcon size={12} />Rounds</dt>
+            <dd>{props.rounds}<small>everyone draws {props.rounds === 1 ? "once" : `${props.rounds} times`}</small></dd>
+          </div>
+          <div className="rule-tile">
+            <dt><ClockIcon size={12} />Drawing time</dt>
+            <dd>{props.drawingSeconds}s<small>about {estimateMinutes} min with {Math.max(2, activePlayers.length)}</small></dd>
+          </div>
+          <div className="rule-tile">
+            <dt><TrophyIcon size={12} />Scoring</dt>
+            <dd>{scoringLabelFor(props.scoringMode)}<small>{scoringDescription}</small></dd>
+          </div>
+          <div className="rule-tile">
+            <dt><BulbIcon size={12} />Hints</dt>
+            <dd>{hintLabelFor(props.hintMode, props.hideMaskedPrompt)}<small>{hintDescription}</small></dd>
+          </div>
+          <div className="rule-tile">
+            <dt><BrushIcon size={12} />Drawing rules</dt>
+            <dd>{drawingRules ?? "All tools"}<small>{drawingRules ? "" : "all colors"}</small></dd>
+          </div>
+        </dl>
+        <p className="waiting-rules-prompts">
+          <ListIcon size={13} />
+          <span>{promptsLine}</span>
         </p>
-      )}
+      </section>
 
       {/* Players get a read-only look at the prompts; the host has the editor
           itself, and spectators are kept away from spoilers. */}
@@ -275,7 +328,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             {props.startError && <p className="waiting-start-error">{props.startError}</p>}
             <button
               type="button"
-              className="btn btn-success btn-big waiting-start-button"
+              className="btn btn-warm btn-big waiting-start-button"
               disabled={!canStart || props.startBusy}
               onClick={props.onStart}
               title={canStart ? undefined : startBlockedReason}
