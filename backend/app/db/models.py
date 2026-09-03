@@ -40,6 +40,7 @@ from app.domain_values import (
     EMAIL_TEMPLATES,
     ACCOUNT_STATES,
     BRUSH_CURSOR_STYLES,
+    TIME_FORMATS,
     BUG_REPORT_AREAS,
     BUG_REPORT_SCREENSHOT_STATUSES,
     BUG_REPORT_SEVERITIES,
@@ -86,6 +87,7 @@ from app.domain_values import (
     ReportStatus,
     TurnEndReason,
     UserRole,
+    TimeFormat,
     UserTheme,
 )
 from app.identifiers import generate_uuid7
@@ -393,6 +395,7 @@ class UserSettings(Base):
         _values_check(
             "brush_cursor", BRUSH_CURSOR_STYLES, "ck_user_settings_brush_cursor"
         ),
+        _values_check("time_format", TIME_FORMATS, "ck_user_settings_time_format"),
         CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
             name="ck_user_settings_volume",
@@ -441,6 +444,14 @@ class UserSettings(Base):
     )
     colorblind_safe_colors: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
+    )
+    # How clocks read to this player (#577): the device's own convention, or
+    # a 12- or 24-hour clock regardless of it.
+    time_format: Mapped[str] = mapped_column(
+        String(8),
+        default=TimeFormat.SYSTEM.value,
+        server_default=TimeFormat.SYSTEM.value,
+        nullable=False,
     )
     # When the account was last told it has no way back in. Stored per account
     # rather than in the browser so the reminder does not restart on every new

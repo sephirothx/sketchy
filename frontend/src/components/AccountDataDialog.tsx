@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import {
@@ -7,9 +8,8 @@ import {
 } from "../lib/accountData";
 import { ApiError } from "../lib/api";
 
-function dateLabel(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+function dateLabel(value: string, dateTime: (date: Date) => string): string {
+  return dateTime(new Date(value));
 }
 
 function exportLabel(job: DataExportJob): string {
@@ -30,6 +30,7 @@ function exportLabel(job: DataExportJob): string {
 export function AccountDataDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  const { dateTime, date } = useClock();
   const [exports, setExports] = useState<DataExportJob[]>([]);
   const [nextRequestAt, setNextRequestAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +139,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
                   <span>
                     <strong>{exportLabel(job)}</strong>
                     <small>
-                      Requested {dateLabel(job.createdAt)} · format v{job.schemaVersion}
+                      Requested {dateLabel(job.createdAt, dateTime)} · format v{job.schemaVersion}
                     </small>
                   </span>
                   {job.downloadUrl && (
@@ -150,7 +151,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
           )}
           <p className="account-data-note">
             One export a week; ready exports expire after seven days.
-            {waitUntil && ` You can request another on ${waitUntil.toLocaleDateString()}.`}
+            {waitUntil && ` You can request another on ${date(waitUntil)}.`}
           </p>
         </section>
 

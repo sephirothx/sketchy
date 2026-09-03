@@ -352,7 +352,8 @@ plus all of its aliases; the guest's sessions are revoked during the merge.
 ### `user_settings`
 Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE) ·
 `theme` · `sound_effects` · `confetti_effects` · `sound_effects_volume` (0.0–1.0) ·
-`brush_cursor` (`crosshair \| circle`) · `key_bindings` (JSON) ·
+`brush_cursor` (`crosshair \| circle`) · `time_format` (`system \| 12h \| 24h`) ·
+`key_bindings` (JSON) ·
 `colorblind_safe_colors` · `email_reminder_last_shown_at` · timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete

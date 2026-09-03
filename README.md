@@ -770,7 +770,8 @@ losing a player. Account history and statistics resolve the account plus all
 of its guest aliases; the guest's sessions are revoked during the merge.
 
 Registered players' **Player settings** follow them across devices. Theme,
-sound and confetti switches, volume, brush cursor, keyboard shortcuts, and the
+time format (the device's convention, or a 12- or 24-hour clock), sound and
+confetti switches, volume, brush cursor, keyboard shortcuts, and the
 colorblind-safe color preference live in `user_settings` and are read or
 partially updated through `GET`/`PATCH /api/users/me/settings`. Values are
 bounded at the API and database layers; keyboard shortcuts must describe the

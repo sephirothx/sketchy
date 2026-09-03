@@ -296,7 +296,7 @@ claim that an arbitrary host will sustain it.
 
 | # | Requirement |
 | --- | --- |
-| **R-SET-01** | Registered players' settings MUST follow them across devices: theme, sound and confetti switches, volume, brush cursor, keyboard shortcuts, and the colorblind-safe preference. |
+| **R-SET-01** | Registered players' settings MUST follow them across devices: theme, time format (`system`, `12h`, `24h`, with `system` — the device's own convention — as the default), sound and confetti switches, volume, brush cursor, keyboard shortcuts, and the colorblind-safe preference. Every clock and date-time a player is shown MUST go through one formatter that honours the time format, so the preference means one thing everywhere. |
 | **R-SET-02** | Values MUST be bounded at both the API and database layers (key bindings must describe the complete supported action set). |
 | **R-SET-03** | Guests keep settings in browser local storage only. Creating an account MUST copy that browser's settings **exactly once**; logging in later makes the account copy authoritative. |
 | **R-SET-04** | Settings already stored in a browser MUST NOT be renamed — they MUST be migrated on load. A setting that is **retired** MUST have its stored key cleared, in the same module: nothing reads it, so leaving it there hands a data export a field the document no longer has and lets a value nobody can see come back. [`store/settingsMigrations.ts`](../frontend/src/store/settingsMigrations.ts) |

@@ -67,6 +67,7 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         "brushCursor": "circle",
         "keyBindings": {**DEFAULT_KEY_BINDINGS, "brush": ["b"]},
         "colorblindSafeColors": True,
+        "timeFormat": "24h",
     }
     registered = await http.post(
         "/api/auth/register",
@@ -126,6 +127,7 @@ async def test_registration_seed_never_overwrites_existing_settings(env):
         {"volume": -0.01},
         {"volume": 1.01},
         {"brushCursor": "dot"},
+        {"timeFormat": "13h"},
         {"keyBindings": {"brush": ["b"]}},
     ],
 )

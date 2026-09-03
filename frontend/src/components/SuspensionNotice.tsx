@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api";
@@ -18,6 +19,7 @@ things. The notice cannot be dismissed - there is nothing behind it to go back
 to - and signing out is the only way on, which is where they were headed
 anyway. */
 export function SuspensionNotice() {
+  const { timeFormat, dateTime } = useClock();
   const [suspension, setSuspension] = useState<Suspension | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -74,7 +76,7 @@ export function SuspensionNotice() {
         {suspension.reason && (
           <p className="modal-body suspension-reason">{suspension.reason}</p>
         )}
-        <p className="modal-body">{suspensionDuration(suspension)}</p>
+        <p className="modal-body">{suspensionDuration(suspension, new Date(), timeFormat)}</p>
         {suspension.messages.length > 0 && (
           <>
             <p className="modal-body suspension-evidence-label">
@@ -89,7 +91,7 @@ export function SuspensionNotice() {
                 <li key={`${message.at ?? index}-${index}`}>
                   {message.at && (
                     <span className="suspension-evidence-time">
-                      {new Date(message.at).toLocaleString()}
+                      {dateTime(new Date(message.at))}
                     </span>
                   )}
                   <span className="suspension-evidence-text">{message.text}</span>

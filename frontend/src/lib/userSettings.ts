@@ -4,6 +4,7 @@ import {
   type AppTheme,
   type BrushCursorStyle,
   type KeyBindings,
+  type TimeFormat,
 } from "../store/settingsStore";
 
 /** The preferences that follow a registered player across devices (R-SET-01). */
@@ -15,6 +16,7 @@ export interface AccountSettings {
   brushCursor: BrushCursorStyle;
   keyBindings: KeyBindings;
   colorblindSafeColors: boolean;
+  timeFormat: TimeFormat;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -29,6 +31,7 @@ export function currentSettingsPayload(): AccountSettings {
     brushCursor: settings.brushCursor,
     keyBindings: settings.keyBindings,
     colorblindSafeColors: settings.colorblindSafeColors,
+    timeFormat: settings.timeFormat,
   };
 }
 

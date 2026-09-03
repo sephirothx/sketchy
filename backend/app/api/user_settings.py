@@ -63,6 +63,9 @@ class UserSettingsSeed(BaseModel):
     colorblind_safe_colors: bool = Field(
         default=False, alias="colorblindSafeColors"
     )
+    time_format: Literal["system", "12h", "24h"] = Field(
+        default="system", alias="timeFormat"
+    )
 
     @field_validator("key_bindings")
     @classmethod
@@ -88,6 +91,9 @@ class UserSettingsPatch(BaseModel):
     colorblind_safe_colors: bool | None = Field(
         default=None, alias="colorblindSafeColors"
     )
+    time_format: Literal["system", "12h", "24h"] | None = Field(
+        default=None, alias="timeFormat"
+    )
 
     @field_validator("key_bindings")
     @classmethod
@@ -110,6 +116,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "brushCursor": settings.brush_cursor,
         "keyBindings": settings.key_bindings,
         "colorblindSafeColors": settings.colorblind_safe_colors,
+        "timeFormat": settings.time_format,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }

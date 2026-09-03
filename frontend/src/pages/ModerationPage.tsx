@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
@@ -44,8 +45,8 @@ const FILTERS: { name: Filter; label: string }[] = [
   { name: "bans", label: "Suspensions" },
 ];
 
-function formatWhen(value: string): string {
-  return new Date(value).toLocaleString();
+function formatWhen(value: string, dateTime: (date: Date) => string): string {
+  return dateTime(new Date(value));
 }
 
 function age(value: string): string {
@@ -74,6 +75,7 @@ function accountAge(createdAt: string): string {
 }
 
 export function ModerationPage() {
+  const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const [filter, setFilter] = useState<Filter>("open");
@@ -345,8 +347,8 @@ export function ModerationPage() {
                   <h1>{humanize(playerCase.reason)}</h1>
                   <p className="mod-case-meta">
                     {playerCase.reportedPlayer
-                      ? `About ${playerCase.reportedPlayer.displayName} · reported ${formatWhen(playerCase.createdAt)}`
-                      : `Reported ${formatWhen(playerCase.createdAt)}`}
+                      ? `About ${playerCase.reportedPlayer.displayName} · reported ${formatWhen(playerCase.createdAt, dateTime)}`
+                      : `Reported ${formatWhen(playerCase.createdAt, dateTime)}`}
                   </p>
                 </div>
                 <Chip kind="danger">{humanize(playerCase.reason)}</Chip>
@@ -563,7 +565,7 @@ export function ModerationPage() {
                   </SectionLabel>
                   <h1>{humanize(contentCase.reason)}</h1>
                   <p className="mod-case-meta">
-                    Reported {formatWhen(contentCase.createdAt)}
+                    Reported {formatWhen(contentCase.createdAt, dateTime)}
                   </p>
                 </div>
                 <Chip kind="warm">{humanize(contentCase.reason)}</Chip>
@@ -672,10 +674,10 @@ export function ModerationPage() {
                   <p className="mod-case-meta">
                     {banCase.isActive
                       ? banCase.expiresAt
-                        ? `In force until ${formatWhen(banCase.expiresAt)}`
+                        ? `In force until ${formatWhen(banCase.expiresAt, dateTime)}`
                         : "In force, with no end date"
                       : banCase.revokedAt
-                        ? `Lifted ${formatWhen(banCase.revokedAt)}`
+                        ? `Lifted ${formatWhen(banCase.revokedAt, dateTime)}`
                         : "Expired"}
                   </p>
                 </div>
@@ -688,7 +690,7 @@ export function ModerationPage() {
                 <h2>Why</h2>
                 <p className="mod-case-details">{banCase.reason}</p>
                 <p className="mod-evidence-caption">
-                  Suspended {formatWhen(banCase.createdAt)}
+                  Suspended {formatWhen(banCase.createdAt, dateTime)}
                 </p>
               </section>
 

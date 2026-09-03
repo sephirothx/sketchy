@@ -1,3 +1,5 @@
+import { useClock } from "../hooks/useClock";
+import { formatClock, type TimeFormat } from "../lib/clock";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
@@ -65,11 +67,11 @@ const TABS: readonly OpsTab[] = [
   { id: "audit", label: "Audit ledger" },
 ];
 
-function shortTime(iso: string): string {
+function shortTime(iso: string, timeFormat: TimeFormat): string {
   const then = new Date(iso);
   const now = new Date();
   if (then.toDateString() === now.toDateString()) {
-    return then.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatClock(then, timeFormat);
   }
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
@@ -141,6 +143,7 @@ and the audit ledger. Live counts come from the worker's own memory, which is
 exact because one worker owns everything; the chart comes from permanent daily
 aggregates, which outlive the raw rows behind them. */
 export function AdminOperationsPage() {
+  const { timeFormat, dateTime } = useClock();
   const [live, setLive] = useState<LiveSnapshot | null>(null);
   // Admission state, because the banner speaks for it. It used to say
   // "accepting rooms" unconditionally, which is the opposite of the truth
@@ -511,7 +514,7 @@ export function AdminOperationsPage() {
             <tbody>
               {events.map((row) => (
                 <tr key={row.id}>
-                  <td>{new Date(row.occurredAt).toLocaleString()}</td>
+                  <td>{dateTime(new Date(row.occurredAt))}</td>
                   <td>{row.eventType}</td>
                   <td>{row.roomId ?? "—"}</td>
                   <td className="ops-number">{row.value ?? "—"}</td>
@@ -576,7 +579,7 @@ export function AdminOperationsPage() {
             : (entry.targetName ?? entry.targetId ?? "");
           return (
             <div key={entry.id} className="ops-audit-row">
-              <time dateTime={entry.createdAt}>{shortTime(entry.createdAt)}</time>
+              <time dateTime={entry.createdAt}>{shortTime(entry.createdAt, timeFormat)}</time>
               <span className="ops-audit-body">
                 <strong className={showIds ? "ops-identifier" : undefined}>
                   {actor}
@@ -622,7 +625,7 @@ export function AdminOperationsPage() {
                 <tbody>
                   {player.events.map((row) => (
                     <tr key={row.id}>
-                      <td>{new Date(row.occurredAt).toLocaleString()}</td>
+                      <td>{dateTime(new Date(row.occurredAt))}</td>
                       <td>{row.eventType}</td>
                       <td>{row.roomId ?? "—"}</td>
                     </tr>

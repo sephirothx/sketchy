@@ -512,6 +512,7 @@ async def _build_export_artifact(
                 "brushCursor": settings.brush_cursor,
                 "keyBindings": settings.key_bindings,
                 "colorblindSafeColors": settings.colorblind_safe_colors,
+                "timeFormat": settings.time_format,
                 "createdAt": _timestamp(settings.created_at),
                 "updatedAt": _timestamp(settings.updated_at),
             }

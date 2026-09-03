@@ -13,6 +13,8 @@ line is deliberately not delivered to somebody who blocked its author. So
 hands over and the lines that beat it into one order without a duplicate. A
 line numbered at or below what is held is one we have; nothing ever asks for a
 resync because of it. */
+import { formatClock, type TimeFormat } from "./clock.ts";
+
 
 export interface LobbyChatLine {
   seq: number;
@@ -136,14 +138,18 @@ still here? A line from earlier today says when, because "six hours ago"
 is arithmetic the reader would do anyway. Older than that, the day is all
 that matters. A clock behind the server's reads as "now" rather than as a
 line from the future. */
-export function chatTimeLabel(sentAt: number, now: number): string {
+export function chatTimeLabel(
+  sentAt: number,
+  now: number,
+  timeFormat: TimeFormat = "system",
+): string {
   const age = now - sentAt;
   if (age < MINUTE_MS) return "now";
   if (age < HOUR_MS) return `${Math.floor(age / MINUTE_MS)}m`;
   const today = localMidnight(now);
   const thatDay = localMidnight(sentAt);
   if (thatDay === today) {
-    return new Date(sentAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return formatClock(new Date(sentAt), timeFormat);
   }
   const days = Math.round((today - thatDay) / DAY_MS);
   return days <= 1 ? "yesterday" : `${days}d`;

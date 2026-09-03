@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
@@ -20,8 +21,8 @@ import { canAdminister } from "../lib/operatorAccess";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 
-function formatWhen(value: string): string {
-  return new Date(value).toLocaleString();
+function formatWhen(value: string, dateTime: (date: Date) => string): string {
+  return dateTime(new Date(value));
 }
 
 function age(value: string): string {
@@ -58,6 +59,7 @@ const FILTERS: { name: BugReportStatus; label: string }[] = [
  * for themselves, so this decides what to show rather than what to allow.
  */
 export function BugReportsPage() {
+  const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const notify = useToast().notify;
@@ -220,7 +222,7 @@ export function BugReportsPage() {
                     {active.reporter
                       ? `From ${active.reporter.displayName} (${active.reporter.registered ? "registered" : "guest"})`
                       : "From a deleted account"}
-                    {" · "}{formatWhen(active.createdAt)}
+                    {" · "}{formatWhen(active.createdAt, dateTime)}
                     {active.buildSha ? ` · build ${active.buildSha}` : ""}
                   </p>
                 </div>
@@ -357,7 +359,7 @@ export function BugReportsPage() {
               ) : (
                 <section className="ops-card">
                   <h2>{humanizeBugValue(active.status)}</h2>
-                  <p className="mod-case-meta">{active.reviewedAt ? formatWhen(active.reviewedAt) : ""}</p>
+                  <p className="mod-case-meta">{active.reviewedAt ? formatWhen(active.reviewedAt, dateTime) : ""}</p>
                   <p className="bug-case-details">{active.resolutionNote}</p>
                 </section>
               )}

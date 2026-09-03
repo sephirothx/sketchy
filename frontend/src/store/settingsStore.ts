@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { DEFAULT_TIME_FORMAT, isTimeFormat, type TimeFormat } from "../lib/clock.ts";
 import {
   BRUSH_CURSOR_KEY,
   LEGACY_BRUSH_CURSOR_KEY,
@@ -39,6 +40,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 export const DEFAULT_BRUSH_CURSOR: BrushCursorStyle = "crosshair";
 export const DEFAULT_THEME: AppTheme = "system";
 export const DEFAULT_VOLUME = 0.7;
+export type { TimeFormat };
 
 /**
  * The thirteen colours a registered player may wear on their name.
@@ -143,6 +145,15 @@ function loadStoredTheme(): AppTheme {
   return DEFAULT_THEME;
 }
 
+function loadStoredTimeFormat(): TimeFormat {
+  try {
+    const raw = localStorage.getItem("sketchy_timeformat");
+    return isTimeFormat(raw) ? raw : DEFAULT_TIME_FORMAT;
+  } catch {
+    return DEFAULT_TIME_FORMAT;
+  }
+}
+
 function loadStoredFlag(key: string, defaultValue = true): boolean {
   try {
     const raw = localStorage.getItem(key);
@@ -192,6 +203,7 @@ interface SettingsStore {
   soundEffects: boolean;
   volume: number;
   colorblindSafeColors: boolean;
+  timeFormat: TimeFormat;
   nameColor: string;
   /** Adopt an account's copy wholesale, as login and registration do (R-SET-03). */
   setAllSettings: (payload: {
@@ -202,6 +214,7 @@ interface SettingsStore {
     soundEffects?: boolean;
     volume?: number;
     colorblindSafeColors?: boolean;
+    timeFormat?: TimeFormat;
     nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
@@ -212,6 +225,7 @@ interface SettingsStore {
   setSoundEffects: (enabled: boolean) => void;
   setVolume: (volume: number) => void;
   setColorblindSafeColors: (enabled: boolean) => void;
+  setTimeFormat: (timeFormat: TimeFormat) => void;
   resetKeyBindings: () => void;
 }
 
@@ -233,6 +247,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   soundEffects: loadStoredFlag("sketchy_soundeffects"),
   volume: loadStoredVolume(),
   colorblindSafeColors: loadStoredFlag("sketchy_colorblindsafecolors", false),
+  timeFormat: loadStoredTimeFormat(),
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
@@ -242,6 +257,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     soundEffects = true,
     volume = DEFAULT_VOLUME,
     colorblindSafeColors = false,
+    timeFormat = DEFAULT_TIME_FORMAT,
     nameColor,
   }) =>
     set(() => {
@@ -253,6 +269,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
       localStorage.setItem("sketchy_volume", String(volume));
       localStorage.setItem("sketchy_colorblindsafecolors", String(colorblindSafeColors));
+      localStorage.setItem("sketchy_timeformat", timeFormat);
       localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
       return {
@@ -263,6 +280,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         soundEffects,
         volume,
         colorblindSafeColors,
+        timeFormat,
         nameColor,
       };
     }),
@@ -310,6 +328,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_colorblindsafecolors", String(enabled));
       return { colorblindSafeColors: enabled };
+    }),
+  setTimeFormat: (timeFormat) =>
+    set(() => {
+      localStorage.setItem("sketchy_timeformat", timeFormat);
+      return { timeFormat };
     }),
   resetKeyBindings: () =>
     set(() => {

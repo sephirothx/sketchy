@@ -84,6 +84,7 @@ Three different things, never used for one another:
 | **Nickname** | The name a player is playing under in a room — what appears in the player list, chat, and scores. | handle, alias, screen name |
 | **Username** | The account login name, chosen when an account is claimed. A registered player's nickname is always their username. | user ID, login |
 | **Display name** | The name saved on an account and used as the default nickname. | profile name, real name |
+| **Time format** | The **Player setting** deciding how every clock and date-time reads to that player: **System** (the device's own convention, the default), **12-hour**, or **24-hour**. One formatter serves chat timestamps, sign-in dates, notices and operator pages alike. | clock format, hour format, AM/PM setting |
 | **Name color** | The color a player's name renders in. Guests have no name color. | name colour, player color |
 
 ## The prompt

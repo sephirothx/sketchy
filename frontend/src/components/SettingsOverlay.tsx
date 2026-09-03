@@ -34,6 +34,7 @@ import {
   type AppTheme,
   type BrushCursorStyle,
   type KeyBindings,
+  type TimeFormat,
 } from "../store/settingsStore";
 import {
   BrushIcon,
@@ -113,6 +114,12 @@ const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
   { value: "system", label: "System" },
+];
+
+const TIME_FORMAT_OPTIONS: { value: TimeFormat; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "12h", label: "12-hour" },
+  { value: "24h", label: "24-hour" },
 ];
 
 const BRUSH_CURSOR_OPTIONS: { value: BrushCursorStyle; label: string }[] = [
@@ -668,7 +675,14 @@ function AppearancePane() {
   const setColorblindSafeColors = useSettingsStore((state) => state.setColorblindSafeColors);
   const brushCursor = useSettingsStore((state) => state.brushCursor);
   const setBrushCursor = useSettingsStore((state) => state.setBrushCursor);
+  const timeFormat = useSettingsStore((state) => state.timeFormat);
+  const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
   const activePlayerId = useGameStore((state) => state.playerId);
+
+  function chooseTimeFormat(next: TimeFormat) {
+    setTimeFormat(next);
+    queueSettingsSync({ timeFormat: next });
+  }
 
   function chooseTheme(next: AppTheme) {
     setTheme(next);
@@ -692,7 +706,7 @@ function AppearancePane() {
 
   return (
     <>
-      <Group title="Theme">
+      <Group title="Display">
         <Row label="Color scheme" stacked hint="Applies the moment you pick it.">
           <div className="theme-cards" role="group" aria-label="Theme">
             {THEME_OPTIONS.map((option) => (
@@ -719,6 +733,17 @@ function AppearancePane() {
               </button>
             ))}
           </div>
+        </Row>
+        <Row
+          label="Time format"
+          hint="How every clock reads: chat timestamps, sign-in dates, notices. System follows your device."
+        >
+          <SegmentedControl
+            label="Time format"
+            value={timeFormat}
+            options={TIME_FORMAT_OPTIONS}
+            onChange={chooseTimeFormat}
+          />
         </Row>
       </Group>
       {/* A fact about the player rather than a taste, so it is not a theme

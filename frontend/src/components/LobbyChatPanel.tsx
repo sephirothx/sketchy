@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -27,6 +28,7 @@ it. A visitor who has not chosen one yet is offered that instead of a box
 that would refuse them, and choosing it reconnects the socket, which is what
 makes the next line theirs. */
 export function LobbyChatPanel() {
+  const { timeFormat, dateTime } = useClock();
   const lines = useLobbyChatStore((state) => state.chat.lines);
   const awaitingName = useAuthStore((state) => needsIdentity(state.user));
   const ensureIdentity = useAuthStore((state) => state.ensureIdentity);
@@ -121,8 +123,8 @@ export function LobbyChatPanel() {
                     {line.text}
                   </span>
                   {/* Fresh or stale at a glance; the whole instant on hover. */}
-                  <time className="lobby-chat-time" dateTime={at.toISOString()} title={at.toLocaleString()}>
-                    {chatTimeLabel(line.sentAt, now)}
+                  <time className="lobby-chat-time" dateTime={at.toISOString()} title={dateTime(at)}>
+                    {chatTimeLabel(line.sentAt, now, timeFormat)}
                   </time>
                 </div>
               );

@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { ApiError } from "../lib/api";
@@ -9,12 +10,12 @@ import {
 } from "../lib/sessions";
 import { useAuthStore } from "../store/authStore";
 
-function usedLabel(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+function usedLabel(value: string, dateTime: (date: Date) => string): string {
+  return dateTime(new Date(value));
 }
 
 export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
+  const { dateTime } = useClock();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const logout = useAuthStore((state) => state.logout);
@@ -105,7 +106,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
                 <span>
                   <strong>{session.deviceLabel}</strong>
                   {session.current && <span className="session-current">Current device</span>}
-                  <small>Last used {usedLabel(session.lastUsedAt)}</small>
+                  <small>Last used {usedLabel(session.lastUsedAt, dateTime)}</small>
                 </span>
                 <button
                   type="button"
