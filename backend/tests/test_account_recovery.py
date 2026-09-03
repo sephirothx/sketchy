@@ -23,6 +23,7 @@ from app.auth.recovery import (
     EmailAlreadyInUse,
     RecoveryError,
     _aware,
+    change_password,
     email_state,
     mark_reminder_shown,
     request_email_verification,
@@ -681,3 +682,33 @@ async def test_a_guest_has_no_password_to_change(env):
         json={"currentPassword": PASSWORD, "password": NEW_PASSWORD},
     )
     assert refused.status_code == 403
+
+
+async def test_changing_the_password_of_an_account_that_is_not_there_does_nothing(env):
+    """The route checks credentials first; the writer still refuses on its own."""
+    _, factory = env
+    assert (
+        await change_password(
+            factory, user_id=generate_uuid(), password_hash="argon2$not-a-real-hash"
+        )
+        is False
+    )
+
+
+async def test_a_password_change_without_a_verified_address_sends_no_mail(env):
+    """The PASSWORD_CHANGED notice goes only to an address somebody has proved
+    they can read (R-AUTH-07); an account without one still gets its audit row."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Quiet")
+    changed = await change_password(
+        factory, user_id=UUID(account["id"]), password_hash="argon2$not-a-real-hash"
+    )
+    assert changed is True
+    async with factory() as session:
+        assert (await session.scalar(select(func.count(EmailOutboxEntry.id)))) == 0
+        kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
+        assert "account.password_changed" in kinds
+    # Every session went with it, this one included: the route is what signs
+    # the caller back in, and nothing here did.
+    assert (await http.get("/api/auth/me")).json() is None

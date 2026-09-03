@@ -94,12 +94,9 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  // Still in the future, and not merely "a job is live" - that case has no
-  // date, and the job list already shows it being prepared.
-  const waitUntil =
-    nextRequestAt && new Date(nextRequestAt).getTime() > Date.now()
-      ? new Date(nextRequestAt)
-      : null;
+  // The server sends a date only while one is in the future, and none while
+  // a job is merely live - the list already shows that one being prepared.
+  const waitUntil = nextRequestAt ? new Date(nextRequestAt) : null;
   const canRequest = !loading && !requesting && !hasWork && !waitUntil;
 
   return (

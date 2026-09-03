@@ -28,7 +28,6 @@ JSON_COLUMNS: tuple[tuple[str, str, bool], ...] = (
     ("room_presets", "allowed_tools", False),
     ("room_presets", "prompt_list_ids", False),
     ("user_settings", "key_bindings", False),
-    ("user_settings", "custom_brush_presets", False),
     ("runtime_events", "details", True),
     ("email_outbox", "payload", False),
     ("audit_events", "details", False),
