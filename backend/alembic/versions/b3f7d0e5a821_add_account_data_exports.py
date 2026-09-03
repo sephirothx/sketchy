@@ -55,9 +55,20 @@ def upgrade() -> None:
         ["user_id", "created_at"],
         unique=False,
     )
+    # One live export per account, enforced where two simultaneous requests
+    # can only be told apart: at the insert.
+    op.create_index(
+        "uq_data_exports_one_live_per_user",
+        "data_exports",
+        ["user_id"],
+        unique=True,
+        postgresql_where=sa.text("status IN ('pending', 'processing')"),
+        sqlite_where=sa.text("status IN ('pending', 'processing')"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_data_exports_one_live_per_user", table_name="data_exports")
     op.drop_index("ix_data_exports_user_created_at", table_name="data_exports")
     op.drop_index(op.f("ix_data_exports_user_id"), table_name="data_exports")
     op.drop_index(op.f("ix_data_exports_expires_at"), table_name="data_exports")

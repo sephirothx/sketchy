@@ -8,6 +8,8 @@ signed out with no explanation at all.
 
 Both feed one notice, kept here rather than in a component so that `api.ts` can
 raise it without importing React. */
+import { formatDateTime, type TimeFormat } from "./clock.ts";
+
 
 export type ReportedMessage = {
   text: string;
@@ -73,10 +75,11 @@ an end on, which is what it says. */
 export function suspensionDuration(
   suspension: Suspension,
   now: Date = new Date(),
+  timeFormat: TimeFormat = "system",
 ): string {
   if (!suspension.expiresAt) return "This suspension has no end date.";
   const ends = new Date(suspension.expiresAt);
   if (Number.isNaN(ends.getTime())) return "This suspension has no end date.";
   if (ends <= now) return "This suspension has ended; try signing in again.";
-  return `This suspension lasts until ${ends.toLocaleString()}.`;
+  return `This suspension lasts until ${formatDateTime(ends, timeFormat)}.`;
 }

@@ -1,7 +1,6 @@
 """Registered-account preferences shared across devices."""
 from __future__ import annotations
 
-import json
 from typing import Literal
 from uuid import UUID
 
@@ -26,8 +25,6 @@ KEY_BINDING_ACTIONS = (
     "undo",
 )
 DEFAULT_KEY_BINDINGS = DEFAULT_USER_KEY_BINDINGS
-MAX_PRESETS = 20
-MAX_PRESETS_JSON_BYTES = 16_384
 
 
 class UserSettingsError(RuntimeError):
@@ -49,16 +46,6 @@ def _validated_key_bindings(value: dict[str, list[str]] | None):
     return value
 
 
-def _validated_presets(value: list[dict] | None):
-    if value is None:
-        return value
-    if len(value) > MAX_PRESETS:
-        raise ValueError(f"customBrushPresets may contain at most {MAX_PRESETS} items")
-    if len(json.dumps(value, separators=(",", ":")).encode("utf-8")) > MAX_PRESETS_JSON_BYTES:
-        raise ValueError("customBrushPresets is too large")
-    return value
-
-
 class UserSettingsSeed(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -76,22 +63,14 @@ class UserSettingsSeed(BaseModel):
     colorblind_safe_colors: bool = Field(
         default=False, alias="colorblindSafeColors"
     )
-    auto_clear_chat_on_guess: bool = Field(
-        default=True, alias="autoClearChatOnGuess"
-    )
-    custom_brush_presets: list[dict] = Field(
-        default_factory=list, alias="customBrushPresets"
+    time_format: Literal["system", "12h", "24h"] = Field(
+        default="system", alias="timeFormat"
     )
 
     @field_validator("key_bindings")
     @classmethod
     def validate_key_bindings(cls, value):
         return _validated_key_bindings(value)
-
-    @field_validator("custom_brush_presets")
-    @classmethod
-    def validate_presets(cls, value):
-        return _validated_presets(value)
 
 
 class UserSettingsPatch(BaseModel):
@@ -112,22 +91,14 @@ class UserSettingsPatch(BaseModel):
     colorblind_safe_colors: bool | None = Field(
         default=None, alias="colorblindSafeColors"
     )
-    auto_clear_chat_on_guess: bool | None = Field(
-        default=None, alias="autoClearChatOnGuess"
-    )
-    custom_brush_presets: list[dict] | None = Field(
-        default=None, alias="customBrushPresets"
+    time_format: Literal["system", "12h", "24h"] | None = Field(
+        default=None, alias="timeFormat"
     )
 
     @field_validator("key_bindings")
     @classmethod
     def validate_key_bindings(cls, value):
         return _validated_key_bindings(value)
-
-    @field_validator("custom_brush_presets")
-    @classmethod
-    def validate_presets(cls, value):
-        return _validated_presets(value)
 
     @model_validator(mode="after")
     def require_change(self):
@@ -145,8 +116,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "brushCursor": settings.brush_cursor,
         "keyBindings": settings.key_bindings,
         "colorblindSafeColors": settings.colorblind_safe_colors,
-        "autoClearChatOnGuess": settings.auto_clear_chat_on_guess,
-        "customBrushPresets": settings.custom_brush_presets,
+        "timeFormat": settings.time_format,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }

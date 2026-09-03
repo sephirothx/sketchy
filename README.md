@@ -23,7 +23,7 @@ keyboard that takes half the screen, and one thumb.
 - Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
-- Drawing rules — two room settings the host sets at creation and edits while waiting.
+- Drawing rules — two **Room rules** the host sets at creation and edits while waiting.
   **Allowed tools** turns the brush, fill, and shapes on and off independently (at least one
   of brush and shapes stays on, since fill alone can only flood a blank canvas), and
   **Color mode** picks between all colors, the built-in palette only, a colorblind-safe
@@ -570,13 +570,15 @@ the lobby rather than counting as seen. The deploy banner deliberately does not
 behave this way, because a game about to be ended under you is worth
 interrupting for.
 
-**Email & recovery** in the account menu is where an address is added, replaced
-or simply looked at. The weekly reminder is a prompt and nothing more; a prompt
-somebody has dismissed is not a place to go back to, so the menu entry is
-always there. The dialog opens by saying what the account already has - a
-confirmed address, one waiting to be confirmed, or, on a deployment with no
-SMTP configured, that a lost password has to be reset by whoever runs the
-server.
+The **Email** row in **Settings → Account** is where an address is added,
+replaced or simply looked at. The weekly reminder is a prompt and nothing more;
+a prompt somebody has dismissed is not a place to go back to, so the row is
+always there. It shows the address masked one dot per letter (`s•••••o@e•••••e.com`) beside a
+**Verified** or **Not verified** mark, with a control to reveal it in full; the
+dialog behind it says what the account already has - a verified address, one
+waiting to be verified, or, on a deployment with no SMTP configured, that a lost
+password has to be reset by whoever runs the server. The recovery banner masks
+the address the same way, because it sits on every screen.
 
 An address is recorded only once it has been confirmed. Until then it lives in
 the confirmation token and nowhere else, so a typo cannot hand the account to
@@ -768,12 +770,40 @@ losing a player. Account history and statistics resolve the account plus all
 of its guest aliases; the guest's sessions are revoked during the merge.
 
 Registered players' **Player settings** follow them across devices. Theme,
-sound and confetti switches, volume, brush cursor, keyboard shortcuts,
-colorblind-safe color preference, guess-field clearing, and reserved custom
-brush presets live in `user_settings` and are read or partially updated through
-`GET`/`PATCH /api/users/me/settings`. Values are bounded at the API and database
-layers; keyboard shortcuts must describe the complete supported action set and
-custom brush presets are limited to 20 entries and 16 KiB of JSON.
+time format (the device's convention, or a 12- or 24-hour clock), sound and
+confetti switches, volume, brush cursor, keyboard shortcuts, and the
+colorblind-safe color preference live in `user_settings` and are read or
+partially updated through `GET`/`PATCH /api/users/me/settings`. Values are
+bounded at the API and database layers; keyboard shortcuts must describe the
+complete supported action set.
+
+**Player settings** is a route — `/settings/account`, `/settings/appearance`,
+`/settings/sound`, `/settings/shortcuts` — drawn over the page it was opened
+from, so changing the volume mid-turn never gives up a seat; somebody arriving
+on the URL itself gets the lobby behind it. It is one rail of four sections on
+every device, a full-screen sheet below 1000 px. Every row applies as it
+changes and there is no Save: changes made together are merged into one write,
+success is silent, and a write the account refuses raises a notice while the
+value stays applied locally. The rows a server can refuse — the display name,
+the email address, the password — keep a button of their own. Guests see every
+section, with account-only rows locked and the reason on the row; a guest who
+logs in from inside Settings is told once that the account's values took over.
+
+The identity menu is navigation only: Settings, profile, prompt stats, prompt
+lists, bug reports, log out. Account absorbs what the menu used to hold: the
+username and name color, the email, changing the password (its own dialog:
+current password, the new one twice, or a mailed link for somebody who has
+forgotten it — the change signs every other device out), signed-in devices,
+the data export, and deleting the account, which is its own dialog with the
+password and a typed `DELETE` rather than the bottom of the data export.
+
+A registered player's **name color** is one of thirteen palette swatches. The
+server holds the rule the palette was drawn to — at least 1.8:1 against the
+player-list panel of both themes, a floor that refuses a colour which vanishes
+on one of them rather than a reading grade — on every path that writes one, so a modified
+client cannot produce an unreadable name; a value that fails is treated as
+unset and re-rolled. Guests play in grey, which is what marks a name as
+unclaimed.
 
 Guests keep Player settings in browser local storage only. Creating an account
 copies that browser's current settings to the account exactly once; logging in
@@ -785,12 +815,16 @@ The host can switch the room to the colorblind-safe palette or dismiss the
 suggestion for that live room. It belongs to the waiting room, where the
 palette can still be changed, so an unanswered one clears when a game starts
 and returns afterwards; a dismissed one stays gone. It disappears when the
-last opted-in player leaves, never changes room settings automatically, and the preference and
+last opted-in player leaves, never changes room rules automatically, and the preference and
 dismissal never appear in player, room-state, room-list, invite-preview, or
 session payloads. Registered preferences are read from server-side settings;
 guest preferences stay local and are supplied only to the live seat.
 
-Every guest or registered player can open **Your data** from the account menu.
+Every guest or registered player can request an export from **Settings →
+Account → Your data**, at most once a week: building one walks every game the
+account played, so a request too soon is refused with the date the next one is
+accepted, a failed build does not count, and the dialog disables the control
+and names the date rather than offer a request that will be refused.
 An export request creates a durable asynchronous job and produces a private,
 versioned JSON document containing that player's account fields, linked guest
 identities, session metadata, game seats, drawn turns, correct guesses, and
@@ -848,6 +882,7 @@ your players share one address:
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
 | `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
+| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
 

@@ -137,19 +137,22 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
 
             await guest.click(".header-settings-button")
             await guest.wait_for_selector("#settings-display-name")
-            # Guests are pinned to grey, so no colour picker is offered here.
-            assert await guest.locator("#name-color-input").count() == 0
-            assert await guest.is_visible(".settings-locked-hint")
+            # Guests are pinned to grey, so the colour row is locked with its
+            # reason rather than offering a picker that would be refused.
+            assert await guest.locator(".settings-swatch").count() == 0
+            assert await guest.is_visible(".settings-locked")
 
+            # The name is one of the few rows the server can refuse, so it
+            # keeps a button of its own where every other row applies at once.
             await guest.fill("#settings-display-name", "takenname")
-            await guest.click('.settings-modal-footer button:has-text("Save")')
+            await guest.click('.settings-row button:has-text("Change")')
             await guest.wait_for_selector("#settings-name-error")
             assert "registered player" in (
                 await guest.inner_text("#settings-name-error")
             )
 
             await guest.fill("#settings-display-name", "Marta")
-            await guest.click('.settings-modal-footer button:has-text("Save")')
+            await guest.click('.settings-row button:has-text("Change")')
             await guest.wait_for_selector('.identity-name:has-text("Marta")')
         finally:
             await owner_context.close()
@@ -316,15 +319,18 @@ async def test_identity_controls_wait_for_provisioning_to_settle():
 
 
 @pytest.mark.asyncio
-async def test_player_can_download_then_delete_account_from_account_menu():
+async def test_player_can_download_then_delete_account_from_settings():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         page = await browser.new_page()
         try:
             await page.goto(BASE_URL)
             await register_account(page, "AccountDataE2E")
-            await page.click(".identity-chip")
-            await page.get_by_role("menuitem", name="Your data").click()
+            # Both live in Settings > Account now: the identity menu is
+            # navigation, and deleting an account is not navigation.
+            await page.click("button.header-settings-button")
+            await page.wait_for_selector('[data-testid="settings"]')
+            await page.locator('.settings-row button:has-text("Request export")').click()
             dialog = page.locator(".account-data-dialog")
             await dialog.wait_for(state="visible")
 
@@ -337,12 +343,19 @@ async def test_player_can_download_then_delete_account_from_account_menu():
             assert download.suggested_filename.startswith("sketchy-data-export-")
             assert download.suggested_filename.endswith(".json")
 
-            await dialog.get_by_role("button", name="Delete account…").click()
-            await dialog.get_by_label("Password").fill("a-good-password")
-            await dialog.get_by_label("Type DELETE to confirm").fill("DELETE")
-            await dialog.get_by_role("button", name="Permanently delete").click()
-
+            await dialog.get_by_role("button", name="Close").click()
             await dialog.wait_for(state="hidden")
+
+            # Deletion has a row and a dialog of its own now: it is not the
+            # bottom of a panel called "Your data".
+            await page.locator('.settings-row button:has-text("Delete…")').click()
+            confirm = page.get_by_role("dialog", name="Delete your account")
+            await confirm.wait_for(state="visible")
+            await confirm.get_by_label("Password").fill("a-good-password")
+            await confirm.get_by_label("Type DELETE to confirm").fill("DELETE")
+            await confirm.get_by_role("button", name="Delete for good").click()
+
+            await confirm.wait_for(state="hidden")
             await page.wait_for_selector(".first-run")
             current = await page.evaluate(
                 """async () => {

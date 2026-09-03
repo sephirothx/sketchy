@@ -468,7 +468,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
     drawer = room_manager.add_player(
-        room, "Drawer", name_color="#123abc", is_anonymous=False
+        room, "Drawer", name_color="#199647", is_anonymous=False
     )
     guesser = room_manager.add_player(room, "Guesser")
     drawer.sid = "drawer-sid"
@@ -508,7 +508,7 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     assert recap.turn_number == 1
     assert recap.drawer_id == drawer.id
     assert recap.drawer_nickname == "Drawer"
-    assert recap.drawer_name_color == "#123abc"
+    assert recap.drawer_name_color == "#199647"
     assert recap.prompt == "apple"
     assert recap.action_count == 1
     assert decode_binary_canvas_history(recap.canvas_history) == [

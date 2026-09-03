@@ -358,7 +358,7 @@ async def get_room_settings(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can view room settings"}
+        return {"ok": False, "error": "Only the host can view room rules"}
     room, _ = current
     return {"ok": True, "settings": editable_room_settings_payload(room)}
 
@@ -413,7 +413,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can change room settings"}
+        return {"ok": False, "error": "Only the host can change room rules"}
     room, player = current
     # Resolving the prompt lists reads the repository, and the host may press
     # Start while that is in the air. Under the lock the game cannot begin
@@ -811,7 +811,13 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         await ctx.game_flow._emit_colorblind_suggestion(room)
         return {"ok": True}
     if payload.name_color is not None:
-        player.name_color = normalize_name_color(payload.name_color) or player.name_color
+        chosen = normalize_name_color(payload.name_color)
+        if chosen is None:
+            # Well-formed but unreadable on one of the panels (#571). Refused
+            # rather than quietly kept as the old colour, so a client that sent
+            # it is told, and nothing reaches the room or the account.
+            return {"ok": False, "error": "Invalid player name color"}
+        player.name_color = chosen
     # Keep the account in step with the seat, so the color this player is
     # using right now is the one their profile shows. A failure here must not
     # cost the room its update: the seat has already changed color, and

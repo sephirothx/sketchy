@@ -39,8 +39,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("colorblind_safe_colors", sa.Boolean(), server_default=sa.false(), nullable=False),
-        sa.Column("auto_clear_chat_on_guess", sa.Boolean(), server_default=sa.true(), nullable=False),
-        sa.Column("custom_brush_presets", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
+        sa.Column("time_format", sa.String(length=8), server_default="system", nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint(
@@ -50,6 +49,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "theme IN ('light', 'dark', 'system')",
             name="ck_user_settings_theme",
+        ),
+        sa.CheckConstraint(
+            "time_format IN ('system', '12h', '24h')",
+            name="ck_user_settings_time_format",
         ),
         sa.CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",

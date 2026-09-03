@@ -23,6 +23,7 @@ from app.auth.recovery import (
     EmailAlreadyInUse,
     RecoveryError,
     _aware,
+    change_password,
     email_state,
     mark_reminder_shown,
     request_email_verification,
@@ -603,3 +604,111 @@ async def test_a_naive_stored_timestamp_is_read_as_utc():
     aware = datetime(2026, 9, 1, tzinfo=timezone.utc)
     assert _aware(aware) is aware
     assert _aware(datetime(2026, 9, 1)) == aware
+
+
+async def test_changing_a_password_keeps_this_device_and_evicts_the_others(env):
+    """A change is also how somebody evicts a session they no longer trust."""
+    new_client, factory = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Rekeyer", email="rekeyer@example.com")
+    await verify_via_email(laptop, factory)
+    assert (
+        await phone.post(
+            "/api/auth/login", json={"username": "Rekeyer", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+    changed = await laptop.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": NEW_PASSWORD},
+    )
+    assert changed.status_code == 200
+
+    # The other device is out, the old password is dead, and the device that
+    # made the change is still signed in.
+    assert (await phone.get("/api/auth/me")).json() is None
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Rekeyer", "password": PASSWORD}
+        )
+    ).status_code == 401
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Rekeyer", "password": NEW_PASSWORD}
+        )
+    ).status_code == 200
+    assert (await laptop.get("/api/auth/me")).json()["id"] == account["id"]
+
+    async with factory() as session:
+        kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
+        assert "account.password_changed" in kinds
+
+
+async def test_a_password_change_needs_the_current_password(env):
+    new_client, _ = env
+    http = new_client()
+    await register(http, "Careful")
+
+    refused = await http.post(
+        "/api/auth/password/change",
+        json={"currentPassword": "not-the-password", "password": NEW_PASSWORD},
+    )
+    assert refused.status_code == 401
+    # And the account still opens with the password it had.
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Careful", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+
+async def test_a_password_change_holds_the_password_rules(env):
+    new_client, _ = env
+    http = new_client()
+    await register(http, "Rulebound")
+    weak = await http.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": "short"},
+    )
+    assert weak.status_code == 400
+
+
+async def test_a_guest_has_no_password_to_change(env):
+    new_client, _ = env
+    http = new_client()
+    await http.post("/api/auth/display-name", json={"displayName": "Passerby"})
+    refused = await http.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": NEW_PASSWORD},
+    )
+    assert refused.status_code == 403
+
+
+async def test_changing_the_password_of_an_account_that_is_not_there_does_nothing(env):
+    """The route checks credentials first; the writer still refuses on its own."""
+    _, factory = env
+    assert (
+        await change_password(
+            factory, user_id=generate_uuid(), password_hash="argon2$not-a-real-hash"
+        )
+        is False
+    )
+
+
+async def test_a_password_change_without_a_verified_address_sends_no_mail(env):
+    """The PASSWORD_CHANGED notice goes only to an address somebody has proved
+    they can read (R-AUTH-07); an account without one still gets its audit row."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Quiet")
+    changed = await change_password(
+        factory, user_id=UUID(account["id"]), password_hash="argon2$not-a-real-hash"
+    )
+    assert changed is True
+    async with factory() as session:
+        assert (await session.scalar(select(func.count(EmailOutboxEntry.id)))) == 0
+        kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
+        assert "account.password_changed" in kinds
+    # Every session went with it, this one included: the route is what signs
+    # the caller back in, and nothing here did.
+    assert (await http.get("/api/auth/me")).json() is None

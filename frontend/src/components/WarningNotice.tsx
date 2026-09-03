@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useEffect, useState } from "react";
 
 import {
@@ -38,6 +39,7 @@ nothing is restricted, but the player is told what was reported - in their own
 words - and that a moderator looked. Acknowledging it records that the message
 actually landed, and it does not come back. */
 export function WarningNotice() {
+  const { dateTime } = useClock();
   const userId = useAuthStore((state) => state.user?.id);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const [warning, setWarning] = useState<PendingWarning | null>(null);
@@ -118,7 +120,7 @@ export function WarningNotice() {
                 <li key={`${message.at ?? index}-${index}`}>
                   {message.at && (
                     <span className="suspension-evidence-time">
-                      {new Date(message.at).toLocaleString()}
+                      {dateTime(new Date(message.at))}
                     </span>
                   )}
                   <span className="suspension-evidence-text">{message.text}</span>

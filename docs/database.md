@@ -352,13 +352,18 @@ plus all of its aliases; the guest's sessions are revoked during the merge.
 ### `user_settings`
 Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE) ·
 `theme` · `sound_effects` · `confetti_effects` · `sound_effects_volume` (0.0–1.0) ·
-`brush_cursor` (`crosshair \| circle`) · `key_bindings` (JSON) ·
-`colorblind_safe_colors` · `auto_clear_chat_on_guess` · `custom_brush_presets` (JSON) ·
-`email_reminder_last_shown_at` · timestamps.
+`brush_cursor` (`crosshair \| circle`) · `time_format` (`system \| 12h \| 24h`) ·
+`key_bindings` (JSON) ·
+`colorblind_safe_colors` · `email_reminder_last_shown_at` · timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
-supported action set, and custom brush presets are limited to 20 entries and 16 KiB of
-JSON.
+supported action set.
+
+`auto_clear_chat_on_guess` and `custom_brush_presets` were removed rather than kept:
+the first is now the only behaviour (a guess you got right is not a draft worth
+keeping), and nothing in the interface could ever create a brush preset. Both were
+synced, bounded and present in the data export, which is what made them worth
+deleting rather than leaving (R-SET-07).
 
 **Guests keep these in browser local storage only.** Creating an account copies that
 browser's current settings to the account exactly once; logging in later makes the
@@ -402,6 +407,13 @@ rather than a migration, the same rule `canvas_storage` applies to drawings.
 `ck_data_exports_artifact_encoding_present` keeps the pair honest: a stored document
 says how to read itself, and a row with no document claims no encoding. The download
 endpoint decodes and serves the JSON bytes without reparsing them.
+
+`uq_data_exports_one_live_per_user` is a partial unique index on `user_id` where the
+status is `pending` or `processing`: one live job per account (R-PRIV-12), held by the
+database because two requests arriving together can each read "nothing live" and only
+a constraint sees them at once. The writer also locks the account row, which serialises
+the pair on PostgreSQL; SQLite ignores row locks, so the index is what holds the line
+there. The weekly interval is checked in the writer against the newest non-failed job.
 
 Expired jobs are purged at startup and hourly. Before that sweep existed, an expired
 row was removed only when its owner requested another export or a worker re-processed

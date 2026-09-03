@@ -324,6 +324,60 @@ async def password_reset_link_is_usable(
         )
 
 
+async def change_password(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    user_id: UUID,
+    password_hash: str,
+    ip_hash: str | None = None,
+    request_id: str | None = None,
+    now: datetime | None = None,
+) -> bool:
+    """Set a new password for a signed-in account and sign every device out.
+
+    The same ending as a reset (R-AUTH-10): whoever changed it keeps a fresh
+    session, and every other device is signed out, because a password change is
+    also how somebody evicts a session they no longer trust. The caller has
+    already proved they know the current password - that check belongs with the
+    credentials lookup in the route, not here.
+    """
+    changed_at = now or datetime.now(timezone.utc)
+    async with session_factory() as session:
+        async with session.begin():
+            user = await session.get(User, user_id)
+            if user is None or user.state != AccountState.REGISTERED.value:
+                return False
+            user.password_hash = password_hash
+            if user.email and user.email_verified_at is not None:
+                queue_email(
+                    session,
+                    to_address=user.email,
+                    template=EmailTemplate.PASSWORD_CHANGED,
+                    payload={"displayName": user.display_name},
+                    user_id=user.id,
+                    now=changed_at,
+                )
+            session.add(
+                AuditEvent(
+                    id=generate_uuid(),
+                    event_type="account.password_changed",
+                    actor_user_id=user.id,
+                    target_user_id=user.id,
+                    target_type=AuditTargetType.USER.value,
+                    target_id=str(user.id),
+                    request_id=request_id,
+                    ip_hash=ip_hash,
+                    details={},
+                )
+            )
+
+    # Outside the transaction above, for the same reason a reset does it here:
+    # revoking opens its own, and a change that took effect while every session
+    # stood is the one failure worth avoiding.
+    await revoke_all_sessions(session_factory, user_id=str(user_id), now=changed_at)
+    return True
+
+
 async def reset_password(
     session_factory: async_sessionmaker[AsyncSession],
     *,

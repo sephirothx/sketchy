@@ -73,10 +73,10 @@ def test_registered_player_uses_requested_name_color_or_random_default():
     rm = RoomManager()
     room = rm.create_room(name="Room")
 
-    chosen = rm.add_player(room, "Alice", name_color="#AABBCC", is_anonymous=False)
+    chosen = rm.add_player(room, "Alice", name_color="#EF3482", is_anonymous=False)
     generated = rm.add_player(room, "Bob", name_color="not-a-color", is_anonymous=False)
 
-    assert chosen.name_color == "#aabbcc"
+    assert chosen.name_color == "#ef3482"
     assert NAME_COLOR_PATTERN.fullmatch(generated.name_color)
 
 
@@ -84,7 +84,7 @@ def test_anonymous_players_are_forced_to_the_guest_color():
     rm = RoomManager()
     room = rm.create_room(name="Room")
 
-    guest = rm.add_player(room, "Alice", name_color="#AABBCC")
+    guest = rm.add_player(room, "Alice", name_color="#EF3482")
 
     assert guest.is_anonymous is True
     assert guest.name_color == ANONYMOUS_NAME_COLOR

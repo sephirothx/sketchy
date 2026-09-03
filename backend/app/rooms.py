@@ -72,28 +72,97 @@ def nearest_drawing_seconds(value: int) -> int:
     return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
 
 
+# The thirteen colours a registered player may wear on their name. The same list
+# lives in the client as NAME_COLOR_PALETTE (frontend/src/store/settingsStore.ts);
+# the swatches there are the only interface that can choose one, and the rule
+# below is what stops a modified client choosing anything else (#571).
+#
+# Every entry clears NAME_COLOR_MIN_CONTRAST against both NAME_COLOR_SURFACES -
+# tests/test_name_color.py proves it - so the palette and the rule cannot
+# disagree. Hues are spread so no two neighbours read as the same colour (brown
+# shares orange's hue but not its saturation), and
+# the set deliberately includes light ones (yellow, sky, pink) that only clear
+# a low floor on the white panel: readable, not AA, is the bar.
 NAME_COLORS: tuple[str, ...] = (
-    "#e11d48",
-    "#c2410c",
-    "#a16207",
-    "#15803d",
-    "#0f766e",
-    "#0369a1",
-    "#4f46e5",
-    "#7e22ce",
-    "#be185d",
+    "#e11d48",  # red
+    "#f97316",  # orange
+    "#eab308",  # yellow
+    "#84cc16",  # lime
+    "#16a34a",  # green
+    "#0d9488",  # teal
+    "#38bdf8",  # sky
+    "#2563eb",  # blue
+    "#6366f1",  # indigo
+    "#a855f7",  # purple
+    "#d946ef",  # magenta
+    "#f472b6",  # pink
+    "#a0522d",  # brown
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+# Where a name is read: the player-list panel, which is `--card` in
+# frontend/src/styles/theme.css, once per theme. Mirrored rather than imported
+# because the server has no stylesheet to read; tests/test_name_color.py fails
+# the moment the CSS token moves without this following it.
+NAME_COLOR_SURFACES: tuple[str, ...] = ("#ffffff", "#1e293b")
+# Deliberately below WCAG's 3:1 for large text: the floor exists to refuse a
+# colour that *vanishes* on one of the panels - white on the light theme,
+# slate on the dark - not to enforce a reading grade on a short bold label.
+# 3:1 on both a white and a slate panel would leave no yellow, sky or pink at
+# all; every palette entry clears this on both.
+NAME_COLOR_MIN_CONTRAST = 1.8
 
 # Guests render in grey italics everywhere, so a color would be meaningless
 # and would also make an unclaimed name look like a registered one.
 ANONYMOUS_NAME_COLOR = "#888888"
 
 
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.x relative luminance of a `#rrggbb` colour."""
+    channels = []
+    for offset in (1, 3, 5):
+        value = int(hex_color[offset : offset + 2], 16) / 255
+        channels.append(
+            value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+        )
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(foreground: str, background: str) -> float:
+    """WCAG contrast ratio between two `#rrggbb` colours, 1.0 to 21.0."""
+    first = _relative_luminance(foreground)
+    second = _relative_luminance(background)
+    lighter, darker = max(first, second), min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def name_color_is_readable(hex_color: str) -> bool:
+    """Whether a name in this colour clears the floor on every surface it sits on."""
+    return all(
+        contrast_ratio(hex_color, surface) >= NAME_COLOR_MIN_CONTRAST
+        for surface in NAME_COLOR_SURFACES
+    )
+
+
 def normalize_name_color(value: object) -> str | None:
+    """The colour a name may be drawn in, lower-cased, or None.
+
+    Shape is not enough (#571): a well-formed `#rrggbb` can still be white on
+    the light theme or near-black on the dark one, and the swatches in
+    Settings are a client-side courtesy that a modified client or the
+    `update_player_settings` socket path does not have to observe. So the
+    server holds the rule the palette was drawn to: readable on both panels.
+
+    A value that fails is returned as None, and every caller treats None as
+    "no colour" - the seat rolls one from the palette instead. That is also
+    what heals a colour stored before this rule existed: it is not refused
+    after the fact, it simply is not kept.
+    """
     if not isinstance(value, str) or not NAME_COLOR_PATTERN.fullmatch(value):
         return None
-    return value.lower()
+    color = value.lower()
+    return color if name_color_is_readable(color) else None
 
 
 def generate_random_name_color() -> str:

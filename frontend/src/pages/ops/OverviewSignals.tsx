@@ -1,3 +1,4 @@
+import { useClock } from "../../hooks/useClock";
 import type { ReactNode } from "react";
 import { Chip } from "../../components/ui/Chip";
 import {
@@ -184,6 +185,7 @@ function PayloadSizes({ title, rows }: { title: string; rows: PayloadSizeRow[] }
 }
 
 export function ProcessCard({ live, reasons }: { live: LiveSnapshot; reasons: AttentionReason[] }) {
+  const { dateTime } = useClock();
   const { process, series } = live;
   const lagWarning = flagged(reasons, "loop-lag");
   return (
@@ -209,7 +211,7 @@ export function ProcessCard({ live, reasons }: { live: LiveSnapshot; reasons: At
         >
           <Sparkline values={series.rssBytes} label="Resident memory" format={formatBytes} />
         </Cell>
-        <Cell label="Uptime" value={formatDuration(process.uptimeSeconds)} note={`since ${new Date(process.startedAt).toLocaleString()}`} />
+        <Cell label="Uptime" value={formatDuration(process.uptimeSeconds)} note={`since ${dateTime(new Date(process.startedAt))}`} />
         <Cell
           label="Disk free"
           value={formatBytes(process.diskFreeBytes)}

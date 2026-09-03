@@ -113,7 +113,7 @@ async def test_registered_player_name_color_is_created_and_can_be_updated_live()
         {
             "nickname": "Ignored",
             "name": "Room",
-            "nameColor": "#AABBCC",
+            "nameColor": "#EF3482",
         },
     )
     assert user_repo.users["user-1"].last_active_at >= account.last_active_at
@@ -123,22 +123,22 @@ async def test_registered_player_name_color_is_created_and_can_be_updated_live()
     # A registered player always plays as their username, whatever they sent.
     assert player.nickname == "HostPlayer"
     assert player.is_anonymous is False
-    assert player.name_color == "#aabbcc"
-    assert room.to_state_payload()["players"][0]["nameColor"] == "#aabbcc"
+    assert player.name_color == "#ef3482"
+    assert room.to_state_payload()["players"][0]["nameColor"] == "#ef3482"
 
     sio.get_session = AsyncMock(
         return_value={"room_id": room.id, "player_id": player.id, "user_id": "user-1"}
     )
     update = sio.handlers["/"]["update_player_settings"]
-    assert await update("host-sid", {"nameColor": "#123ABC"}) == {"ok": True}
-    assert player.name_color == "#123abc"
+    assert await update("host-sid", {"nameColor": "#199647"}) == {"ok": True}
+    assert player.name_color == "#199647"
     assert sio.emit.await_args_list[-1].args[0] == "room_state"
 
     assert await update("host-sid", {"nameColor": "red"}) == {
         "ok": False,
         "error": "Invalid player name color",
     }
-    assert player.name_color == "#123abc"
+    assert player.name_color == "#199647"
 
 
 @pytest.mark.asyncio
@@ -153,7 +153,7 @@ async def test_anonymous_player_is_grey_and_cannot_change_color():
 
     response = await sio.handlers["/"]["create_room"](
         "guest-sid",
-        {"nickname": "Wanderer", "name": "Room", "nameColor": "#AABBCC"},
+        {"nickname": "Wanderer", "name": "Room", "nameColor": "#EF3482"},
     )
     room = room_manager.get_room(response["roomId"])
     player = room.players[response["playerId"]]
@@ -165,7 +165,7 @@ async def test_anonymous_player_is_grey_and_cannot_change_color():
         return_value={"room_id": room.id, "player_id": player.id, "user_id": "guest-1"}
     )
     update = sio.handlers["/"]["update_player_settings"]
-    result = await update("guest-sid", {"nameColor": "#123ABC"})
+    result = await update("guest-sid", {"nameColor": "#199647"})
     assert result["ok"] is False
     assert player.name_color == ANONYMOUS_NAME_COLOR
 
@@ -665,14 +665,14 @@ async def test_registering_mid_game_upgrades_the_existing_seat():
     await user_repo.claim_account("user-1", "Stefano", "hash")
 
     response = await sio.handlers["/"]["join_room"](
-        "new-sid", {"code": room.code, "nickname": "Wanderer", "nameColor": "#123abc"}
+        "new-sid", {"code": room.code, "nickname": "Wanderer", "nameColor": "#199647"}
     )
 
     assert response["ok"] is True
     assert response["playerId"] == seat.id, "must keep the same seat, not create one"
     assert seat.nickname == "Stefano"
     assert seat.is_anonymous is False
-    assert seat.name_color == "#123abc"
+    assert seat.name_color == "#199647"
     assert len(room.player_list()) == 1
 
 
@@ -846,12 +846,12 @@ async def test_changing_colour_in_a_room_also_stores_it_on_the_account():
     sio.emit = AsyncMock()
 
     response = await sio.handlers["/"]["update_player_settings"](
-        "sid-1", {"nameColor": "#4f46e5"}
+        "sid-1", {"nameColor": "#a761e5"}
     )
 
     assert response == {"ok": True}
-    assert player.name_color == "#4f46e5"
-    assert user_repo.users["user-1"].name_color == "#4f46e5"
+    assert player.name_color == "#a761e5"
+    assert user_repo.users["user-1"].name_color == "#a761e5"
 
 
 @pytest.mark.asyncio
@@ -879,11 +879,11 @@ async def test_a_failed_colour_write_still_updates_the_room():
     sio.emit = AsyncMock()
 
     response = await sio.handlers["/"]["update_player_settings"](
-        "sid-1", {"nameColor": "#4f46e5"}
+        "sid-1", {"nameColor": "#a761e5"}
     )
 
     assert response == {"ok": True}
-    assert player.name_color == "#4f46e5"
+    assert player.name_color == "#a761e5"
     assert any(call.args[0] == "room_state" for call in sio.emit.await_args_list)
 
 
@@ -894,7 +894,7 @@ async def test_a_registered_player_is_seated_in_their_account_colour():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
     user_repo.add_registered("user-1", "Painter")
-    await user_repo.update_profile("user-1", name_color="#4f46e5")
+    await user_repo.update_profile("user-1", name_color="#a761e5")
 
     sio = socketio.AsyncServer(async_mode="asgi")
     register_handlers(sio, room_manager, user_repo=user_repo)
@@ -905,12 +905,12 @@ async def test_a_registered_player_is_seated_in_their_account_colour():
 
     # The client offers the colour this browser happens to hold.
     response = await sio.handlers["/"]["create_room"](
-        "sid-1", {"nickname": "Painter", "nameColor": "#15803d"}
+        "sid-1", {"nickname": "Painter", "nameColor": "#139288"}
     )
 
     room = room_manager.get_room(response["roomId"])
     player = room.players[response["playerId"]]
-    assert player.name_color == "#4f46e5"
+    assert player.name_color == "#a761e5"
 
 
 @pytest.mark.asyncio
@@ -928,11 +928,11 @@ async def test_a_registered_player_without_a_stored_colour_keeps_the_client_one(
     sio.emit = AsyncMock()
 
     response = await sio.handlers["/"]["create_room"](
-        "sid-1", {"nickname": "Painter", "nameColor": "#15803d"}
+        "sid-1", {"nickname": "Painter", "nameColor": "#139288"}
     )
 
     room = room_manager.get_room(response["roomId"])
-    assert room.players[response["playerId"]].name_color == "#15803d"
+    assert room.players[response["playerId"]].name_color == "#139288"
 
 
 @pytest.mark.asyncio
@@ -949,7 +949,7 @@ async def test_a_guest_is_still_pinned_to_the_guest_grey():
     sio.emit = AsyncMock()
 
     response = await sio.handlers["/"]["create_room"](
-        "sid-1", {"nickname": "Wanderer", "nameColor": "#15803d"}
+        "sid-1", {"nickname": "Wanderer", "nameColor": "#139288"}
     )
 
     room = room_manager.get_room(response["roomId"])

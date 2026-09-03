@@ -40,6 +40,7 @@ from app.domain_values import (
     EMAIL_TEMPLATES,
     ACCOUNT_STATES,
     BRUSH_CURSOR_STYLES,
+    TIME_FORMATS,
     BUG_REPORT_AREAS,
     BUG_REPORT_SCREENSHOT_STATUSES,
     BUG_REPORT_SEVERITIES,
@@ -86,6 +87,7 @@ from app.domain_values import (
     ReportStatus,
     TurnEndReason,
     UserRole,
+    TimeFormat,
     UserTheme,
 )
 from app.identifiers import generate_uuid7
@@ -393,6 +395,7 @@ class UserSettings(Base):
         _values_check(
             "brush_cursor", BRUSH_CURSOR_STYLES, "ck_user_settings_brush_cursor"
         ),
+        _values_check("time_format", TIME_FORMATS, "ck_user_settings_time_format"),
         CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
             name="ck_user_settings_volume",
@@ -442,11 +445,13 @@ class UserSettings(Base):
     colorblind_safe_colors: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
-    auto_clear_chat_on_guess: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default=true(), nullable=False
-    )
-    custom_brush_presets: Mapped[list] = mapped_column(
-        PortableJSON, default=list, server_default=text("'[]'"), nullable=False
+    # How clocks read to this player (#577): the device's own convention, or
+    # a 12- or 24-hour clock regardless of it.
+    time_format: Mapped[str] = mapped_column(
+        String(8),
+        default=TimeFormat.SYSTEM.value,
+        server_default=TimeFormat.SYSTEM.value,
+        nullable=False,
     )
     # When the account was last told it has no way back in. Stored per account
     # rather than in the browser so the reminder does not restart on every new
@@ -1581,6 +1586,17 @@ class DataExport(Base):
             name="ck_data_exports_artifact_encoding_present",
         ),
         Index("ix_data_exports_user_created_at", "user_id", "created_at"),
+        # One live export per account (R-PRIV-12), held by the database rather
+        # than by a check the writer makes: two requests arriving together can
+        # both read "nothing live" and both insert, and only a constraint sees
+        # them at once.
+        Index(
+            "uq_data_exports_one_live_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'processing')"),
+            sqlite_where=text("status IN ('pending', 'processing')"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

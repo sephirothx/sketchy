@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useSettingsStore } from "../store/settingsStore";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError } from "../lib/api";
@@ -21,20 +21,14 @@ import {
   useEscapeLayer,
   useFocusTrap,
 } from "../hooks/useFocusTrap";
-import { AddEmailDialog } from "./AddEmailDialog";
-import { SessionManagerDialog } from "./SessionManagerDialog";
-import { AccountDataDialog } from "./AccountDataDialog";
 import { BugReportDialog } from "./BugReportDialog";
 import {
   BugIcon,
   BulbIcon,
   ChevronDownIcon,
-  DevicesIcon,
-  DownloadIcon,
   GearIcon,
   KeyIcon,
   LeaveIcon,
-  MailIcon,
   PlusIcon,
   ShieldIcon,
   UserIcon,
@@ -70,6 +64,11 @@ function MenuItem({
  * opens a menu - for guests too, since a guest has a profile and a game history
  * of their own and the chip is the only place to reach them from.
  *
+ * Navigation only. The account's own rows - email, password, devices, data
+ * export, deletion - live in Settings > Account, so there is one answer to
+ * "where do I change that" rather than a menu and a dialog that each held
+ * half of it.
+ *
  * `compact` drops the name and shows the avatar alone, for the game-room header
  * where the row is deliberately nowrap and every pixel is spoken for. A guest's
  * compact menu is cut down to the entries that keep them in their seat, because
@@ -81,7 +80,7 @@ function MenuItem({
 export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
-  const openSettings = useSettingsStore((s) => s.openSettings);
+  const openSettings = useOpenSettings();
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -89,9 +88,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
 
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [accountDataOpen, setAccountDataOpen] = useState(false);
   const [bugReportOpen, setBugReportOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -204,21 +200,20 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          {/* Settings reaches this menu on a phone, where the header has no
-              room for a gear beside the wordmark and the chip. Wide screens
-              keep the gear, so nothing moves for a mouse. */}
-          {isNarrow && (
-            <MenuItem
-              icon={<GearIcon size={16} />}
-              className="header-settings-button"
-              onClick={() => {
-                setMenuOpen(false);
-                openSettings();
-              }}
-            >
-              Settings
-            </MenuItem>
-          )}
+          {/* On every device: the account lives in Settings now, so the menu
+              that is about the account points there. On a phone the header
+              has no room for a gear beside the wordmark and the chip, so this
+              entry also carries the class the focus-restore looks for. */}
+          <MenuItem
+            icon={<GearIcon size={16} />}
+            className={isNarrow ? "header-settings-button" : undefined}
+            onClick={() => {
+              setMenuOpen(false);
+              openSettings();
+            }}
+          >
+            Settings
+          </MenuItem>
           {/* The two entries that leave the page. Hidden for a guest in a
               live game, where following one would give up their seat. */}
           {!seatBound && (
@@ -245,15 +240,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           )}
           {isGuest ? (
             <>
-              <MenuItem
-                icon={<DownloadIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setAccountDataOpen(true);
-                }}
-              >
-                Your data
-              </MenuItem>
               <div className="account-menu-divider" role="presentation" />
               {reportBugEntry}
               <div className="account-menu-divider" role="presentation" />
@@ -286,33 +272,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 }}
               >
                 My prompt lists
-              </MenuItem>
-              <MenuItem
-                icon={<DownloadIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setAccountDataOpen(true);
-                }}
-              >
-                Your data
-              </MenuItem>
-              <MenuItem
-                icon={<MailIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setEmailOpen(true);
-                }}
-              >
-                Email &amp; recovery
-              </MenuItem>
-              <MenuItem
-                icon={<DevicesIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setSessionsOpen(true);
-                }}
-              >
-                Signed-in devices
               </MenuItem>
               {/* Shown, not enforced: each of these endpoints checks the role
                   again for itself and answers 404 to anyone else. Hiding them
@@ -356,18 +315,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           onSwitchMode={setMode}
           onSubmit={mode === "login" ? login : register}
         />
-      )}
-      {emailOpen && (
-        <AddEmailDialog
-          onClose={() => setEmailOpen(false)}
-          onSaved={() => setEmailOpen(false)}
-        />
-      )}
-      {sessionsOpen && (
-        <SessionManagerDialog onClose={() => setSessionsOpen(false)} />
-      )}
-      {accountDataOpen && (
-        <AccountDataDialog onClose={() => setAccountDataOpen(false)} />
       )}
       {bugReportOpen && (
         <BugReportDialog onClose={() => setBugReportOpen(false)} />

@@ -56,3 +56,31 @@ export function migrateKeyBindings(parsed: unknown, defaults: KeyBindings): KeyB
 export function readStoredBrushCursor(storage: Pick<Storage, "getItem">): string | null {
   return storage.getItem(BRUSH_CURSOR_KEY) ?? storage.getItem(LEGACY_BRUSH_CURSOR_KEY);
 }
+
+/**
+ * Keys for settings that no longer exist (R-SET-04, R-SET-07).
+ *
+ * Retiring a setting is the opposite problem to renaming one: nothing reads
+ * these any more, so left alone they would sit in storage indefinitely, hand a
+ * data export a field the document no longer has, and come back the moment
+ * somebody grepped for the name. Cleared once on load, here, so storage has
+ * exactly one owner.
+ */
+export const RETIRED_SETTINGS_KEYS = [
+  // The guess field always clears after a correct guess now; it was never a
+  // decision worth asking a player to make.
+  "sketchy_autoclearchatonguess",
+  // Custom brush presets were stored, bounded and synced with nothing in the
+  // interface able to create one.
+  "sketchy_custombrushpresets",
+] as const;
+
+export function dropRetiredKeys(storage: Pick<Storage, "removeItem">): void {
+  for (const key of RETIRED_SETTINGS_KEYS) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // A browser refusing storage has nothing to clean up.
+    }
+  }
+}

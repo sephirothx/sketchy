@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   emailLooksUsable,
+  maskEmail,
   recoveryStatusMessage,
   shouldShowRecoveryReminder,
 } from "../src/lib/accountRecovery.ts";
@@ -23,7 +24,7 @@ test("an address is accepted unless it certainly cannot work", () => {
   assert.equal(emailLooksUsable(`${"a".repeat(250)}@example.com`), false);
 });
 
-test("a confirmed address is described as the way back in", () => {
+test("a confirmed address is described as the way back in, masked", () => {
   const message = recoveryStatusMessage({
     address: "player@example.com",
     verified: true,
@@ -32,7 +33,10 @@ test("a confirmed address is described as the way back in", () => {
     deliveryConfigured: true,
   });
 
-  assert.match(message, /player@example\.com/);
+  // Recognisable to its owner, not readable over their shoulder: this
+  // sentence rides a banner across every screen (R-SET-08).
+  assert.match(message, /p••••r@e•••••e\.com/);
+  assert.ok(!message.includes("player@example.com"));
 });
 
 test("an unconfirmed address says plainly that it does not count yet", () => {
@@ -44,7 +48,8 @@ test("an unconfirmed address says plainly that it does not count yet", () => {
     deliveryConfigured: true,
   });
 
-  assert.match(message, /pending@example\.com/);
+  assert.match(message, /p•••••g@e•••••e\.com/);
+  assert.ok(!message.includes("pending@example.com"));
   assert.match(message, /no way back in/);
 });
 
@@ -72,7 +77,7 @@ test("someone who already has an address is told what it is, not asked to add on
     deliveryConfigured: true,
   });
 
-  assert.match(message, /recover this account through player@example\.com/);
+  assert.match(message, /recover this account through p••••r@e•••••e\.com/);
 });
 
 const due = {
@@ -120,4 +125,31 @@ test("an account that is already set up is left alone", () => {
     }),
     false,
   );
+});
+
+test("an address is shown to its owner with one dot per hidden letter", () => {
+  assert.equal(maskEmail("stefano@example.com"), "s•••••o@e•••••e.com");
+  assert.equal(maskEmail("jo@example.co.uk"), "j•@e•••••e.co.uk");
+  assert.equal(maskEmail("a@b.io"), "•@•.io");
+  // The length is kept, so the owner can tell their addresses apart.
+  assert.equal(maskEmail("stefano@example.com").length, "stefano@example.com".length);
+});
+
+test("masking keeps the shape of anything that is not quite an address", () => {
+  // No @, a trailing @, or a domain with no dot: still never printed whole.
+  assert.equal(maskEmail("nonsense"), "n••••••e");
+  assert.equal(maskEmail("trailing@"), "t•••••••@");
+  assert.equal(maskEmail("someone@localhost"), "s•••••e@l•••••••t");
+});
+
+test("masking reveals neither the local part nor the domain label", () => {
+  for (const address of ["stefano@example.com", "jo@example.co.uk", "a@b.io"]) {
+    const [local, domain] = address.split("@");
+    const masked = maskEmail(address);
+    assert.ok(!masked.includes(local), `${masked} still contains ${local}`);
+    assert.ok(
+      !masked.includes(domain.split(".")[0]),
+      `${masked} still contains the domain label`,
+    );
+  }
 });

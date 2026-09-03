@@ -4,8 +4,10 @@ import {
   type AppTheme,
   type BrushCursorStyle,
   type KeyBindings,
+  type TimeFormat,
 } from "../store/settingsStore";
 
+/** The preferences that follow a registered player across devices (R-SET-01). */
 export interface AccountSettings {
   theme: AppTheme;
   soundEffects: boolean;
@@ -14,8 +16,7 @@ export interface AccountSettings {
   brushCursor: BrushCursorStyle;
   keyBindings: KeyBindings;
   colorblindSafeColors: boolean;
-  autoClearChatOnGuess: boolean;
-  customBrushPresets: Record<string, unknown>[];
+  timeFormat: TimeFormat;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -30,8 +31,7 @@ export function currentSettingsPayload(): AccountSettings {
     brushCursor: settings.brushCursor,
     keyBindings: settings.keyBindings,
     colorblindSafeColors: settings.colorblindSafeColors,
-    autoClearChatOnGuess: settings.autoClearChatOnGuess,
-    customBrushPresets: settings.customBrushPresets,
+    timeFormat: settings.timeFormat,
   };
 }
 
@@ -47,8 +47,9 @@ export function fetchUserSettings(): Promise<AccountSettings> {
   return apiRequest("/api/users/me/settings");
 }
 
+/** Partial by design: every row applies on its own, so it is sent on its own. */
 export function patchUserSettings(
-  settings: AccountSettings,
+  settings: Partial<AccountSettings>,
 ): Promise<AccountSettings> {
   return apiRequest("/api/users/me/settings", {
     method: "PATCH",

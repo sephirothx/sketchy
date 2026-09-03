@@ -20,6 +20,7 @@ import {
   GameplayRegion,
 } from "../components/GameRoomRegions";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
@@ -34,7 +35,6 @@ import {
   RoundsIcon,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
-import { useSettingsStore } from "../store/settingsStore";
 import { recordRender } from "../lib/renderDiagnostics";
 import type { AckResponse } from "../types";
 
@@ -42,7 +42,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
   const navigate = useNavigate();
   const { notify } = useToast();
-  const openSettings = useSettingsStore((s) => s.openSettings);
+  const openSettings = useOpenSettings();
 
   const canvasRef = useRef<CanvasRef | null>(null);
   const exitingRoomRef = useRef(false);
@@ -399,7 +399,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             <button
               type="button"
               className="btn btn-icon btn-compact header-settings-button"
-              onClick={openSettings}
+              onClick={() => openSettings()}
               title="Player settings"
               aria-label="Player settings"
             >
@@ -465,7 +465,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           onOpenPlayers={() => setPlayersSheetOpen(true)}
           onToggleAfk={handleToggleAfk}
           onSaveImage={() => canvasRef.current?.saveImage()}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings()}
           onProposeRestart={() => void handleProposeRestart()}
           onLeave={handleLeave}
         />

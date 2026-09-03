@@ -212,6 +212,14 @@ class BrushCursorStyle(StrEnum):
     CIRCLE = "circle"
 
 
+class TimeFormat(StrEnum):
+    """How a clock reads to this player; SYSTEM follows the device's locale."""
+
+    SYSTEM = "system"
+    TWELVE_HOUR = "12h"
+    TWENTY_FOUR_HOUR = "24h"
+
+
 class ReportReason(StrEnum):
     HARASSMENT = "harassment"
     OFFENSIVE_DRAWING = "offensive_drawing"
@@ -397,6 +405,7 @@ DATA_EXPORT_ARTIFACT_ENCODINGS = tuple(
 )
 USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
+TIME_FORMATS = tuple(value.value for value in TimeFormat)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
 BUG_REPORT_AREAS = tuple(area.value for area in BugReportArea)
 BUG_REPORT_SEVERITIES = tuple(severity.value for severity in BugReportSeverity)

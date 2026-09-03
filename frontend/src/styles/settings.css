@@ -1,4 +1,7 @@
-/* Settings Modal & Header Button */
+/* Player settings: the header gear, and the pane it opens over the page.
+   Four sections in one rail on every device, rows that apply as they change,
+   no footer - there is nothing to submit (R-SET-05, R-SET-06). */
+
 .lobby-header {
   display: flex;
   justify-content: space-between;
@@ -21,24 +24,32 @@
   transform: rotate(30deg);
 }
 
-.modal-card.settings-modal-card {
-  box-sizing: border-box;
-  max-width: 720px;
-  width: 92%;
-  max-height: min(90dvh, 860px);
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: 16px;
-  text-align: left;
+/* ------------------------------------------------------------- the sheet */
+
+.settings-overlay {
+  align-items: center;
+  padding: 16px;
+  /* Above the email reminder (1090), a note that can wait and that would
+     otherwise sit across the sheet's header on a phone; below the connection
+     (1100) and deploy (1150) banners, which are worth interrupting for. */
+  z-index: 1095;
 }
 
-/* Rail + panel, per the mockup's separated tabs. */
-.settings-modal-body {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-  margin-bottom: 16px;
+.modal-card.settings-modal-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-width: 940px;
+  width: 100%;
+  /* One size for every section, so switching tabs never makes the sheet jump:
+     tall enough for the biggest pane (Account), capped by the viewport. A
+     pane that still does not fit scrolls inside. */
+  height: min(calc(100dvh - 32px), 760px);
+  max-height: calc(100dvh - 32px);
+  padding: 14px 22px 14px;
+  border-radius: 16px;
+  text-align: left;
+  overflow: hidden;
 }
 
 .settings-modal-header {
@@ -46,11 +57,15 @@
   justify-content: space-between;
   align-items: center;
   border-bottom: 1.5px solid var(--line);
-  padding-bottom: 12px;
-  margin-bottom: 16px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
 }
 
 .settings-modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-family: var(--font-display);
   font-weight: 600;
@@ -76,6 +91,16 @@
   color: var(--ink);
 }
 
+/* Rail beside pane. The pane scrolls; the rail does not. */
+.settings-modal-body {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .settings-tabs {
   display: grid;
   gap: 4px;
@@ -93,7 +118,11 @@
   border-radius: var(--radius-sm);
   padding: 11px 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .settings-tab-icon {
@@ -102,21 +131,8 @@
 }
 
 .settings-tab-text {
-  display: grid;
-  gap: 1px;
   min-width: 0;
-}
-
-.settings-tab-text strong {
-  font-size: 13.5px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
-.settings-tab-text small {
-  font-size: 11.5px;
-  color: var(--faint);
-  font-weight: 700;
+  white-space: nowrap;
 }
 
 .settings-tab-button:hover {
@@ -132,126 +148,390 @@
   color: var(--primary);
 }
 
-.settings-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+.settings-tab-content {
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
-.reset-defaults-button {
-  background: none;
+/* ------------------------------------------------------------- the rows */
+
+.settings-group {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 0 16px 2px;
+  margin-bottom: 8px;
+}
+
+.settings-tab-content > .settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.settings-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 0;
+}
+
+.settings-group-head h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+  margin: 0;
+}
+
+.settings-group-hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 2px 0 6px;
+}
+
+/* The label carries the reason; the control sits beside it rather than in a
+   column of its own, so a long explanation never squeezes a switch. */
+.settings-row {
+  display: grid;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.settings-group-head + .settings-row,
+.settings-group-hint + .settings-row {
+  border-top: 0;
+}
+
+@media (min-width: 640px) {
+  /* The control takes what it needs and the label gets the rest, so a
+     reason - or a revealed address - has the room to stay on one line. */
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 20px;
+  }
+
+  .settings-row.is-stacked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-row:not(.is-stacked) .settings-row-control {
+    justify-content: flex-end;
+  }
+}
+
+.settings-row-label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-row-label b {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.settings-row-label small {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.settings-row.is-danger .settings-row-label b {
+  color: var(--danger);
+}
+
+.settings-row-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.settings-row-control input[type="search"],
+.settings-row-control input[type="text"] {
+  width: 200px;
+  background: var(--field);
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  padding: 5px 10px;
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--muted);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
+  color: var(--ink);
+  padding: 8px 11px;
+  font: inherit;
+  font-size: 14px;
+  min-height: 38px;
+  min-width: 0;
+  flex: 1 1 140px;
+  max-width: 100%;
 }
 
-.reset-defaults-button:hover {
+.settings-row-error {
+  margin: -4px 0 8px;
+}
+
+/* A value the player cannot change, shown as the value rather than as a
+   disabled field pretending to be editable. */
+.settings-readonly {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+/* An account-only row for a guest: the reason on the row, a lock in place of
+   the control (R-ACCT-05 is why the colour is one of them). */
+.settings-locked .settings-row-label b {
+  color: var(--muted);
+}
+
+.settings-locked-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--faint);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------- name color */
+
+.settings-swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-swatch {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.settings-swatch:hover {
+  transform: scale(1.08);
+}
+
+.settings-swatch.is-selected {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--card);
+}
+
+.settings-swatch-random {
+  margin-left: 4px;
+}
+
+/* ----------------------------------------------------------------- email */
+
+/* An address is the one thing on this pane worth copying off a shared
+   screen, so it is printed with its middle gone (R-SET-08), in a face where
+   a * is unmistakably a *. The state rides beside it as a symbol as well as
+   a word: whether the account can be recovered should not depend on
+   reading a sentence. */
+/* Inline, not flex: the mark follows the address like the next word, so it
+   stays on the address's last line instead of dropping under it whenever the
+   revealed value is long. */
+.settings-email-line {
+  display: inline;
+  line-height: 2;
+}
+
+.settings-email {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.settings-email-reveal {
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  margin: 0 6px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.settings-email-reveal:hover,
+.settings-email-reveal[aria-pressed="true"] {
   color: var(--ink);
   border-color: var(--faint);
 }
 
-.settings-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 20px;
-}
-
-.settings-fields {
+.settings-email-status {
+  display: inline-flex;
   align-items: center;
-  column-gap: 16px;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  margin: 4px 0 8px;
-  row-gap: 14px;
-  width: 100%;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
-.settings-section h4 {
-  margin: 0 0 4px 0;
+.settings-email-status.is-verified {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.settings-email-status.is-unverified {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+/* ------------------------------------------------------- account notices */
+
+/* R-SET-03 in one line: logging in replaces what this browser held, and the
+   theme changing under the reader is otherwise indistinguishable from a bug. */
+.settings-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  background: var(--success-soft);
+  border: 1px solid var(--success);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.settings-notice > svg {
+  color: var(--success-ink);
+  margin-top: 1px;
+  flex: none;
+}
+
+.settings-notice p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.settings-notice button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 2px;
+  cursor: pointer;
+  flex: none;
+}
+
+.settings-guest-card {
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-edge-soft);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.settings-guest-card b {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.settings-guest-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.settings-guest-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: var(--well);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 22px 18px;
+  margin-bottom: 14px;
+}
+
+.settings-empty > svg {
+  color: var(--faint);
+}
+
+.settings-empty b {
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 15px;
   color: var(--ink);
 }
 
-.settings-fields-heading {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  grid-column: 1 / -1;
-  letter-spacing: 0.09em;
-  margin: 18px 0 2px;
-  text-align: left;
-  text-transform: uppercase;
+/* --------------------------------------------------------------- toggles */
+
+/* The pane's own on/off control: the room form's track and thumb, driven by
+   a hidden input of ours, so the row keeps label-left and its reason visible. */
+.settings-toggle-row {
+  cursor: pointer;
 }
 
-.settings-fields-heading:first-child {
-  margin-top: 0;
+.settings-toggle-row .settings-row-control {
+  position: relative;
 }
 
-.settings-fields > .settings-fields-heading:not(:first-child) {
-  border-top: 1.5px solid var(--line);
-  margin-top: 8px;
-  padding-top: 16px;
-}
-
-.settings-fields > .m3-switch-label,
-.settings-fields > .segmented-control-field.is-labeled,
-.settings-fields > .settings-labeled-field {
-  align-items: center;
-  column-gap: 16px;
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-  justify-content: stretch;
-  max-width: 100%;
-  min-width: 0;
+/* Invisible but on top of the track it drives, and covering the control cell,
+   so the thing a pointer (or a test) lands on is the checkbox itself rather
+   than the decoration painted over it. */
+.settings-toggle-input {
+  position: absolute;
+  inset: 0;
   width: auto;
+  height: auto;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
 }
 
-.settings-fields .m3-switch-text,
-.settings-fields .segmented-control-label,
-.settings-fields .settings-labeled-field-label {
-  align-items: center;
-  box-sizing: border-box;
-  display: inline-flex;
-  flex: none;
-  gap: 6px;
-  grid-column: 1;
-  justify-self: start;
-  line-height: 1.3;
-  min-width: 0;
-  text-align: left;
-  white-space: nowrap;
-  width: auto;
+.settings-toggle-input:checked ~ .m3-switch-track {
+  background: var(--primary);
 }
 
-.settings-fields .m3-switch-track,
-.settings-fields .segmented-control,
-.settings-fields .name-color-controls,
-.settings-fields .settings-volume-control {
-  grid-column: 2;
-  justify-self: start;
-  min-width: 0;
+.settings-toggle-input:checked ~ .m3-switch-track .m3-switch-thumb {
+  transform: translateX(18px);
 }
 
-.settings-fields .m3-switch-label > input {
-  grid-column: 1;
+.settings-toggle-input:focus-visible ~ .m3-switch-track {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
 }
 
-.settings-labeled-field {
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 800;
-}
+/* ------------------------------------------------------------ theme cards */
 
-/* Theme preview cards. */
 .theme-cards {
   display: flex;
   flex-wrap: wrap;
@@ -313,6 +593,8 @@
   color: var(--faint);
 }
 
+/* ----------------------------------------------------------------- volume */
+
 .settings-volume-control {
   --volume-progress: 70%;
   --volume-track: var(--track);
@@ -320,9 +602,9 @@
   align-items: center;
   display: flex;
   gap: 12px;
-  max-width: 280px;
+  width: 340px;
+  max-width: 100%;
   min-width: 0;
-  width: 100%;
 }
 
 .settings-volume-control input[type="range"] {
@@ -412,229 +694,13 @@
   text-align: right;
 }
 
-@media (max-width: 900px) {
-  /* Full screen, not a 340x699 dialog with 900px scrolling inside it. The
-     close control moves to the bottom of the sheet, where the thumb is,
-     rather than the top-right corner of a 6-inch phone. */
-  .modal-overlay:has(.settings-modal-card) {
-    align-items: stretch;
-    overflow: hidden;
-    padding: 0;
-  }
-
-  .modal-card.settings-modal-card {
-    border: 0;
-    border-radius: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-    max-height: none;
-    max-width: none;
-    width: 100%;
-  }
-
-  .settings-modal-header {
-    flex: 0 0 auto;
-  }
-
-  .settings-modal-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .settings-modal-footer,
-  .settings-modal-actions {
-    flex: 0 0 auto;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
-@media (max-width: 600px) {
-
-  .settings-modal-body {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-tabs {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .settings-tab-button {
-    flex: 1 1 0;
-    justify-content: center;
-    min-width: 0;
-    padding: 8px 6px;
-  }
-
-  .settings-tab-text small {
-    display: none;
-  }
-
-  .modal-card.settings-modal-card {
-    max-height: min(90dvh, 90vh);
-    overflow-y: auto;
-    padding: 20px 14px;
-    width: calc(100% - 20px);
-  }
-
-  .settings-fields {
-    grid-template-columns: 1fr;
-  }
-
-  /* Switches: label and track on one row */
-  .settings-fields > .m3-switch-label {
-    align-items: center;
-    display: flex;
-    flex-direction: row;
-    gap: 12px;
-    grid-template-columns: unset;
-    justify-content: space-between;
-    width: 100%;
-  }
-
-  .settings-fields > .m3-switch-label .m3-switch-text {
-    flex: 1 1 auto;
-    grid-column: auto;
-    min-width: 0;
-    white-space: normal;
-    width: auto;
-  }
-
-  .settings-fields > .m3-switch-label .m3-switch-track {
-    flex: 0 0 auto;
-    grid-column: auto;
-  }
-
-  /* Wide controls: label above control */
-  .settings-fields > .segmented-control-field.is-labeled,
-  .settings-fields > .settings-labeled-field {
-    align-items: stretch;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    grid-template-columns: unset;
-  }
-
-  .settings-fields .segmented-control-label,
-  .settings-fields .settings-labeled-field-label {
-    grid-column: auto;
-    white-space: normal;
-    width: auto;
-  }
-
-  .settings-fields .segmented-control,
-  .settings-fields .name-color-controls,
-  .settings-fields .settings-volume-control {
-    grid-column: auto;
-    justify-self: unset;
-    max-width: 100%;
-  }
-
-  .settings-fields .segmented-control {
-    grid-auto-columns: minmax(0, 1fr);
-    width: 100%;
-  }
-
-  .settings-fields .segmented-control button {
-    padding: 8px 10px;
-  }
-
-  .settings-volume-control {
-    max-width: none;
-  }
-
-  /* Color + preview + Randomize stay on one line */
-  .settings-fields .name-color-controls {
-    flex-wrap: nowrap;
-    width: 100%;
-  }
-
-  .settings-fields .name-color-controls .colored-player-name,
-  .settings-fields .name-color-controls > strong {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .settings-fields .name-color-randomize {
-    flex: 0 0 auto;
-  }
-}
-
-.name-color-controls {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
-}
-
-.name-color-controls input[type="color"] {
-  background: var(--field);
-  border: 1.5px solid var(--line-strong);
-  border-radius: 8px;
-  cursor: pointer;
-  height: 38px;
-  padding: 3px;
-  width: 52px;
-}
-
-.name-color-randomize {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 11px;
-}
-
-.name-color-randomize:hover {
-  border-color: var(--faint);
-}
-
-.colored-player-name {
-  font-weight: 700;
-}
-
-.settings-label {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.settings-select {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--field);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-}
-
-.settings-description {
-  margin: 0 0 16px 0;
-  font-size: 13px;
-  color: var(--muted);
-}
+/* -------------------------------------------------------------- shortcuts */
 
 .keybindings-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 360px;
-  overflow-y: auto;
-  padding-right: 4px;
-  margin-bottom: 20px;
+  gap: 6px;
+  padding: 4px 0 8px;
 }
 
 .keybinding-row {
@@ -645,7 +711,7 @@
   background: var(--well);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .keybinding-icon {
@@ -661,9 +727,6 @@
 
 .keybinding-badges {
   margin-left: auto;
-}
-
-.keybinding-badges {
   display: flex;
   gap: 6px;
 }
@@ -703,26 +766,76 @@
   color: var(--muted);
 }
 
-.settings-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  align-items: center;
-  border-top: 1.5px solid var(--line);
-  padding-top: 16px;
+/* The other way to do the same job, under the form that does it the first way. */
+.settings-alt-route {
+  border-top: 1px solid var(--line);
+  margin: 14px 0 0;
+  padding-top: 12px;
+  font-size: 13px;
 }
 
-.settings-modal-footer .auth-error {
-  margin-right: auto;
-}
+/* ------------------------------------------------------------- narrow */
 
-.modal-button.secondary {
-  background: var(--card);
-  color: var(--ink);
-  border: 1.5px solid var(--line-strong);
-  box-shadow: var(--shadow);
-}
+@media (max-width: 999px) {
+  /* Full-screen sheet below 1000 px: not a dialog with 900 px scrolling
+     inside it. The rail is the same four sections in the same order; it
+     scrolls sideways rather than becoming a different control. */
+  .settings-overlay {
+    align-items: stretch;
+    padding: 0;
+  }
 
-.modal-button.secondary:hover {
-  border-color: var(--faint);
+  .modal-card.settings-modal-card {
+    border: 0;
+    border-radius: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    max-height: none;
+    max-width: none;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Flex, not a one-column grid: the rail becomes a scroll container, and a
+     scroll container's min-content height is zero - as a grid item it
+     collapsed to the row gap and the pane drew over it. */
+  .settings-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .settings-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    margin-inline: -4px;
+    padding-inline: 4px;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tab-button {
+    /* Not the rail's full width, as on a desktop: four chips side by side,
+       the ones that do not fit reached by scrolling the rail sideways. */
+    width: auto;
+    flex: 0 0 auto;
+    padding: 9px 13px;
+    border-color: var(--line);
+  }
+
+  .settings-tab-content {
+    flex: 1 1 auto;
+    padding-right: 0;
+  }
+
+  .settings-group {
+    padding-inline: 12px;
+  }
 }

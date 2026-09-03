@@ -1,17 +1,15 @@
+import { useClock } from "../hooks/useClock";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import {
-  deleteAccount,
   fetchDataExports,
   requestDataExport,
   type DataExportJob,
 } from "../lib/accountData";
 import { ApiError } from "../lib/api";
-import { useAuthStore } from "../store/authStore";
 
-function dateLabel(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+function dateLabel(value: string, dateTime: (date: Date) => string): string {
+  return dateTime(new Date(value));
 }
 
 function exportLabel(job: DataExportJob): string {
@@ -21,18 +19,22 @@ function exportLabel(job: DataExportJob): string {
   return "Could not prepare";
 }
 
+/**
+ * Requesting and downloading a copy of everything Sketchy holds about you
+ * (R-PRIV-01). One a week (R-PRIV-12): building one walks every game the
+ * account played, so the button says when the next is allowed rather than
+ * offering a request the server will refuse. Deleting the account used to
+ * live at the bottom of this dialog, which is where an irreversible act is
+ * least expected; it has a row and a dialog of its own in Settings now.
+ */
 export function AccountDataDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
+  const { dateTime, date } = useClock();
   const [exports, setExports] = useState<DataExportJob[]>([]);
+  const [nextRequestAt, setNextRequestAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showDelete, setShowDelete] = useState(false);
-  const [confirmation, setConfirmation] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useFocusTrap(dialogRef, { active: true, onEscape: onClose });
@@ -41,7 +43,9 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     let active = true;
     void fetchDataExports()
       .then((result) => {
-        if (active) setExports(result.exports);
+        if (!active) return;
+        setExports(result.exports);
+        setNextRequestAt(result.nextRequestAt);
       })
       .catch((failure) => {
         if (active) {
@@ -63,7 +67,10 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     if (!hasWork) return;
     const timer = window.setInterval(() => {
       void fetchDataExports()
-        .then((result) => setExports(result.exports))
+        .then((result) => {
+          setExports(result.exports);
+          setNextRequestAt(result.nextRequestAt);
+        })
         .catch(() => {});
     }, 1_000);
     return () => window.clearInterval(timer);
@@ -75,6 +82,8 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     try {
       const job = await requestDataExport();
       setExports((items) => [job, ...items.filter((item) => item.id !== job.id)]);
+      const refreshed = await fetchDataExports().catch(() => null);
+      if (refreshed) setNextRequestAt(refreshed.nextRequestAt);
     } catch (failure) {
       setError(
         failure instanceof ApiError
@@ -86,30 +95,16 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function confirmDeletion(event: React.FormEvent) {
-    event.preventDefault();
-    if (confirmation !== "DELETE" || deleting) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await deleteAccount(user?.isAnonymous ? undefined : password);
-      onClose();
-      // This also releases any live seat, provisions a clean guest, and
-      // reconnects the socket under the replacement identity.
-      await logout();
-    } catch (failure) {
-      setError(
-        failure instanceof ApiError ? failure.message : "Could not delete the account.",
-      );
-      setDeleting(false);
-    }
-  }
+  // The server sends a date only while one is in the future, and none while
+  // a job is merely live - the list already shows that one being prepared.
+  const waitUntil = nextRequestAt ? new Date(nextRequestAt) : null;
+  const canRequest = !loading && !requesting && !hasWork && !waitUntil;
 
   return (
     <div
       className="modal-overlay"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !deleting) onClose();
+        if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
@@ -129,7 +124,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
         <section className="account-data-section" aria-labelledby={`${titleId}-exports`}>
           <div className="account-data-heading-row">
             <h4 id={`${titleId}-exports`}>Data exports</h4>
-            <button type="button" onClick={() => void startExport()} disabled={requesting}>
+            <button type="button" onClick={() => void startExport()} disabled={!canRequest}>
               {requesting ? "Requesting…" : "Request export"}
             </button>
           </div>
@@ -144,7 +139,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
                   <span>
                     <strong>{exportLabel(job)}</strong>
                     <small>
-                      Requested {dateLabel(job.createdAt)} · format v{job.schemaVersion}
+                      Requested {dateLabel(job.createdAt, dateTime)} · format v{job.schemaVersion}
                     </small>
                   </span>
                   {job.downloadUrl && (
@@ -154,68 +149,14 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           )}
-          <p className="account-data-note">Ready exports expire after seven days.</p>
-        </section>
-
-        <section className="account-data-section account-danger-zone" aria-labelledby={`${titleId}-delete`}>
-          <h4 id={`${titleId}-delete`}>Delete account</h4>
-          <p>
-            Your identity and name are removed from saved games. Shared scores and game structure remain as “Deleted player.” This cannot be undone.
+          <p className="account-data-note">
+            One export a week; ready exports expire after seven days.
+            {waitUntil && ` You can request another on ${date(waitUntil)}.`}
           </p>
-          {!showDelete ? (
-            <button type="button" className="account-delete-start" onClick={() => setShowDelete(true)}>
-              Delete account…
-            </button>
-          ) : (
-            <form className="account-delete-form" onSubmit={(event) => void confirmDeletion(event)}>
-              {!user?.isAnonymous && (
-                <label>
-                  Password
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="current-password"
-                    required
-                  />
-                </label>
-              )}
-              <label>
-                Type DELETE to confirm
-                <input
-                  type="text"
-                  value={confirmation}
-                  onChange={(event) => setConfirmation(event.target.value)}
-                  autoComplete="off"
-                  required
-                />
-              </label>
-              <div className="account-delete-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDelete(false);
-                    setConfirmation("");
-                    setPassword("");
-                  }}
-                  disabled={deleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="account-delete-confirm"
-                  disabled={confirmation !== "DELETE" || deleting}
-                >
-                  {deleting ? "Deleting…" : "Permanently delete"}
-                </button>
-              </div>
-            </form>
-          )}
         </section>
 
         <div className="account-data-actions">
-          <button type="button" onClick={onClose} disabled={deleting}>Close</button>
+          <button type="button" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

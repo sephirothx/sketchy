@@ -106,6 +106,9 @@ test("the label says how fresh a line is, and no more than that", () => {
   assert.equal(chatTimeLabel(noon - minute, noon), "1m");
   assert.equal(chatTimeLabel(noon - 59 * minute, noon), "59m");
   assert.match(chatTimeLabel(noon - 60 * minute, noon), /\d{1,2}:\d{2}/);
+  // The clock beside a line follows the player's time format (#577).
+  assert.equal(chatTimeLabel(noon - 60 * minute, noon, "24h"), "11:00");
+  assert.match(chatTimeLabel(noon - 60 * minute, noon, "12h"), /^11:00\s?AM$/i);
   assert.match(chatTimeLabel(new Date(2026, 8, 2, 0, 30).getTime(), noon), /\d{1,2}:\d{2}/);
   assert.equal(chatTimeLabel(new Date(2026, 8, 1, 23, 30).getTime(), noon), "yesterday");
   assert.equal(chatTimeLabel(new Date(2026, 8, 1, 0, 5).getTime(), noon), "yesterday");

@@ -263,7 +263,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `update_room_settings` | `UpdateRoomSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_custom_prompts` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_recap_drawing` | `RecapDrawingPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
-| `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
+| `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — `nameColor` must be a `#rrggbb` that reads at 1.8:1 on both themes' player-list panel (R-ACCT-08); anything else answers `{ ok: false, error: "Invalid player name color" }`, and a guest's colour is always refused |
 | `rename_player` | `RenamePlayerPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `become_player` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `session_ping` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
@@ -1005,7 +1005,7 @@ replaced, not echoed.
 | --- | --- | --- |
 | `GET` | `/api/auth/me` | Provisions a guest account on first call. **The only path that creates a user row for a visitor.** |
 | `GET` | `/api/auth/nickname-available` | Rate limited (`AUTH_LOOKUP_LIMIT`) |
-| `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits |
+| `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies |
 | `POST` | `/api/auth/register` | Claims the current account (`AUTH_REGISTER_LIMIT`) |
 | `POST` | `/api/auth/login` | Argon2id; rehashes stale-cost hashes on success (`AUTH_LOGIN_LIMIT`) |
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
@@ -1016,7 +1016,8 @@ replaced, not echoed.
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
 | `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in |
-| `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs |
+| `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
+| `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status |
 | `GET` | `/api/auth/data-exports/{export_id}/download` | The artifact. Owner-only; v1 exports expire after 7 days |
 | `DELETE` | `/api/auth/account` | Password required for a registered account |
@@ -1198,6 +1199,7 @@ address under `IP_HASH_SECRET` — **raw IP addresses are never stored**
 | `AUTH_LOOKUP_LIMIT` | 60 / min | Name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 / hour | `POST /api/auth/password/forgot` |
 | `AUTH_RESET_CHECK_LIMIT` | 30 / hour | `POST /api/auth/password/reset/check` |
+| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
 
 Lower-risk profile and prompt-statistics throttles remain process-local.

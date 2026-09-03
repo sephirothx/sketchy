@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   BRUSH_CURSOR_KEY,
   LEGACY_BRUSH_CURSOR_KEY,
+  dropRetiredKeys,
   migrateKeyBindings,
   readStoredBrushCursor,
 } from "../src/store/settingsMigrations.ts";
@@ -53,4 +54,26 @@ test("the brush cursor is read from the new key, then the old one", () => {
     "a cursor set since the rename wins over the one stored before it",
   );
   assert.equal(readStoredBrushCursor(storage({})), null);
+});
+
+test("a retired setting's key is cleared from storage rather than left behind", () => {
+  const store = new Map([
+    ["sketchy_autoclearchatonguess", "false"],
+    ["sketchy_custombrushpresets", '[{"name":"Fine"}]'],
+    ["sketchy_theme", "dark"],
+  ]);
+  dropRetiredKeys({ removeItem: (key) => store.delete(key) });
+  assert.ok(!store.has("sketchy_autoclearchatonguess"), "the guess-box key should be gone");
+  assert.ok(!store.has("sketchy_custombrushpresets"), "the presets key should be gone");
+  assert.equal(store.get("sketchy_theme"), "dark", "a live setting must be untouched");
+});
+
+test("clearing retired keys survives a browser that refuses storage", () => {
+  assert.doesNotThrow(() =>
+    dropRetiredKeys({
+      removeItem: () => {
+        throw new Error("SecurityError");
+      },
+    }),
+  );
 });

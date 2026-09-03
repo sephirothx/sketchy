@@ -12,6 +12,7 @@ import logging
 from uuid import UUID
 
 from sqlalchemy import delete, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -68,6 +69,11 @@ from app.domain_values import (
 # should be able to tell which shape it has.
 EXPORT_SCHEMA_VERSION = 2
 EXPORT_TTL = timedelta(days=7)
+# How long an account waits between exports (R-PRIV-12). Building one walks
+# every game the account ever played, so an account with thousands of them is
+# a real cost, and a right to a copy of one's data is not a right to a fresh
+# copy on every click. A failed build does not count against the interval.
+EXPORT_INTERVAL = timedelta(days=7)
 STALE_PROCESSING_AFTER = timedelta(minutes=15)
 DELETED_DISPLAY_NAME = "Deleted player"
 # Not an address anyone owns, and not empty, so the not-null column keeps
@@ -80,6 +86,58 @@ logger = logging.getLogger(__name__)
 
 class AccountDataError(RuntimeError):
     """Raised when an export or deletion cannot apply to an account."""
+
+
+class ExportNotYetAllowed(AccountDataError):
+    """An export was asked for too soon after the last one (R-PRIV-12).
+
+    `retry_at` is when the next request will be accepted; None while one is
+    still being built, because that depends on the build rather than a clock.
+    """
+
+    def __init__(self, message: str, *, retry_at: datetime | None):
+        super().__init__(message)
+        self.retry_at = retry_at
+
+
+def next_export_allowed_at(
+    latest: DataExport | None, now: datetime
+) -> tuple[datetime | None, str | None]:
+    """When the next export may be requested, given the newest non-failed job.
+
+    Returns `(None, None)` when one may be requested now; otherwise the time
+    (None while a job is still live) and the reason to show.
+    """
+    if latest is None:
+        return None, None
+    live = (DataExportStatus.PENDING.value, DataExportStatus.PROCESSING.value)
+    if latest.status in live:
+        return None, "An export is already being prepared. Wait for it to finish."
+    created_at = latest.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    allowed_at = created_at + EXPORT_INTERVAL
+    if allowed_at <= now:
+        return None, None
+    return allowed_at, (
+        "One export a week: you can request another on "
+        f"{allowed_at.strftime('%d %b %Y')}."
+    )
+
+
+async def latest_counted_export(
+    session: AsyncSession, db_user_id: UUID
+) -> DataExport | None:
+    """The newest job that counts against the interval - a failed one does not."""
+    return await session.scalar(
+        select(DataExport)
+        .where(
+            DataExport.user_id == db_user_id,
+            DataExport.status != DataExportStatus.FAILED.value,
+        )
+        .order_by(DataExport.created_at.desc(), DataExport.id.desc())
+        .limit(1)
+    )
 
 
 @dataclass(frozen=True)
@@ -140,7 +198,13 @@ async def create_data_export(
     db_user_id = _entity_id(user_id)
     async with session_factory() as session:
         async with session.begin():
-            user = await session.get(User, db_user_id)
+            # The account row is the lock: on PostgreSQL two requests arriving
+            # together queue here, so the second reads the first's job. SQLite
+            # ignores row locks (R-RATE-01), which is why the unique index
+            # below is what actually holds the line.
+            user = await session.scalar(
+                select(User).where(User.id == db_user_id).with_for_update()
+            )
             if user is None or user.state == AccountState.DELETED.value:
                 raise AccountDataError("account not found")
             await session.execute(
@@ -149,6 +213,13 @@ async def create_data_export(
                     DataExport.expires_at <= requested_at,
                 )
             )
+            # Enforced where the job is written rather than beside one caller,
+            # so a second way in cannot be given a weaker rule (R-PRIV-12).
+            retry_at, reason = next_export_allowed_at(
+                await latest_counted_export(session, db_user_id), requested_at
+            )
+            if reason is not None:
+                raise ExportNotYetAllowed(reason, retry_at=retry_at)
             job = DataExport(
                 id=generate_uuid(),
                 user_id=db_user_id,
@@ -172,6 +243,16 @@ async def create_data_export(
                     },
                 )
             )
+            try:
+                await session.flush()
+            except IntegrityError as error:
+                # `uq_data_exports_one_live_per_user`: a request that arrived
+                # in the same instant got there first. Same answer as if it
+                # had been read a moment earlier.
+                raise ExportNotYetAllowed(
+                    "An export is already being prepared. Wait for it to finish.",
+                    retry_at=None,
+                ) from error
         return job
 
 
@@ -448,8 +529,7 @@ async def _build_export_artifact(
                 "brushCursor": settings.brush_cursor,
                 "keyBindings": settings.key_bindings,
                 "colorblindSafeColors": settings.colorblind_safe_colors,
-                "autoClearChatOnGuess": settings.auto_clear_chat_on_guess,
-                "customBrushPresets": settings.custom_brush_presets,
+                "timeFormat": settings.time_format,
                 "createdAt": _timestamp(settings.created_at),
                 "updatedAt": _timestamp(settings.updated_at),
             }

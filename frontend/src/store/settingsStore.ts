@@ -1,8 +1,10 @@
 import { create } from "zustand";
 
+import { DEFAULT_TIME_FORMAT, isTimeFormat, type TimeFormat } from "../lib/clock.ts";
 import {
   BRUSH_CURSOR_KEY,
   LEGACY_BRUSH_CURSOR_KEY,
+  dropRetiredKeys,
   migrateKeyBindings,
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
@@ -37,17 +39,37 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 
 export const DEFAULT_BRUSH_CURSOR: BrushCursorStyle = "crosshair";
 export const DEFAULT_THEME: AppTheme = "system";
+export const DEFAULT_VOLUME = 0.7;
+export type { TimeFormat };
+
+/**
+ * The thirteen colours a registered player may wear on their name.
+ *
+ * The same list as `NAME_COLORS` in backend/app/rooms.py, which is the one
+ * that counts: the server refuses anything that vanishes on either theme's
+ * player list (#571), and every entry here was chosen to clear that. The
+ * swatches in Settings are the only control that picks one, so the interface
+ * cannot produce an unreadable name in the first place.
+ */
 export const NAME_COLOR_PALETTE = [
   "#e11d48",
-  "#c2410c",
-  "#a16207",
-  "#15803d",
-  "#0f766e",
-  "#0369a1",
-  "#4f46e5",
-  "#7e22ce",
-  "#be185d",
+  "#f97316",
+  "#eab308",
+  "#84cc16",
+  "#16a34a",
+  "#0d9488",
+  "#38bdf8",
+  "#2563eb",
+  "#6366f1",
+  "#a855f7",
+  "#d946ef",
+  "#f472b6",
+  "#a0522d",
 ] as const;
+
+export function isPaletteColor(value: string | null | undefined): boolean {
+  return NAME_COLOR_PALETTE.includes(value as (typeof NAME_COLOR_PALETTE)[number]);
+}
 
 export function randomNameColor(exclude?: string): string {
   const choices = NAME_COLOR_PALETTE.filter((color) => color !== exclude);
@@ -123,27 +145,21 @@ function loadStoredTheme(): AppTheme {
   return DEFAULT_THEME;
 }
 
+function loadStoredTimeFormat(): TimeFormat {
+  try {
+    const raw = localStorage.getItem("sketchy_timeformat");
+    return isTimeFormat(raw) ? raw : DEFAULT_TIME_FORMAT;
+  } catch {
+    return DEFAULT_TIME_FORMAT;
+  }
+}
+
 function loadStoredFlag(key: string, defaultValue = true): boolean {
   try {
     const raw = localStorage.getItem(key);
     return raw === null ? defaultValue : raw !== "false";
   } catch {
     return defaultValue;
-  }
-}
-
-function loadStoredBrushPresets(): Record<string, unknown>[] {
-  try {
-    const parsed: unknown = JSON.parse(
-      localStorage.getItem("sketchy_custombrushpresets") ?? "[]",
-    );
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is Record<string, unknown> => (
-        typeof item === "object" && item !== null && !Array.isArray(item)
-      )).slice(0, 20)
-      : [];
-  } catch {
-    return [];
   }
 }
 
@@ -154,16 +170,23 @@ function loadStoredVolume(): number {
       const parsed = parseFloat(raw);
       if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 1) return parsed;
     }
-    return 0.7;
+    return DEFAULT_VOLUME;
   } catch {
-    return 0.7;
+    return DEFAULT_VOLUME;
   }
 }
 
+/**
+ * The colour this browser last chose, or a fresh one from the palette.
+ *
+ * A stored value outside the palette is one picked before the palette was the
+ * only choice; the server would refuse it now, so it is replaced rather than
+ * carried into a room and bounced there.
+ */
 function loadStoredNameColor(): string {
   try {
-    const raw = localStorage.getItem("sketchy_namecolor");
-    if (raw && /^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+    const raw = localStorage.getItem("sketchy_namecolor")?.toLowerCase();
+    if (raw && isPaletteColor(raw)) return raw;
     const generated = randomNameColor();
     localStorage.setItem("sketchy_namecolor", generated);
     return generated;
@@ -173,9 +196,6 @@ function loadStoredNameColor(): string {
 }
 
 interface SettingsStore {
-  isSettingsOpen: boolean;
-  openSettings: () => void;
-  closeSettings: () => void;
   keyBindings: KeyBindings;
   brushCursor: BrushCursorStyle;
   theme: AppTheme;
@@ -183,9 +203,9 @@ interface SettingsStore {
   soundEffects: boolean;
   volume: number;
   colorblindSafeColors: boolean;
-  autoClearChatOnGuess: boolean;
-  customBrushPresets: Record<string, unknown>[];
+  timeFormat: TimeFormat;
   nameColor: string;
+  /** Adopt an account's copy wholesale, as login and registration do (R-SET-03). */
   setAllSettings: (payload: {
     keyBindings: KeyBindings;
     brushCursor: BrushCursorStyle;
@@ -194,8 +214,7 @@ interface SettingsStore {
     soundEffects?: boolean;
     volume?: number;
     colorblindSafeColors?: boolean;
-    autoClearChatOnGuess?: boolean;
-    customBrushPresets?: Record<string, unknown>[];
+    timeFormat?: TimeFormat;
     nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
@@ -206,17 +225,21 @@ interface SettingsStore {
   setSoundEffects: (enabled: boolean) => void;
   setVolume: (volume: number) => void;
   setColorblindSafeColors: (enabled: boolean) => void;
-  setAutoClearChatOnGuess: (enabled: boolean) => void;
+  setTimeFormat: (timeFormat: TimeFormat) => void;
   resetKeyBindings: () => void;
+}
+
+// Storage is read once, so what has been retired is cleared once, first.
+try {
+  dropRetiredKeys(localStorage);
+} catch {
+  // No storage, nothing to clear.
 }
 
 const initialTheme = loadStoredTheme();
 applyThemeToDocument(initialTheme);
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
-  isSettingsOpen: false,
-  openSettings: () => set({ isSettingsOpen: true }),
-  closeSettings: () => set({ isSettingsOpen: false }),
   keyBindings: loadStoredKeyBindings(),
   brushCursor: loadStoredBrushCursor(),
   theme: initialTheme,
@@ -224,8 +247,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   soundEffects: loadStoredFlag("sketchy_soundeffects"),
   volume: loadStoredVolume(),
   colorblindSafeColors: loadStoredFlag("sketchy_colorblindsafecolors", false),
-  autoClearChatOnGuess: loadStoredFlag("sketchy_autoclearchatonguess"),
-  customBrushPresets: loadStoredBrushPresets(),
+  timeFormat: loadStoredTimeFormat(),
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
@@ -233,10 +255,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     theme = DEFAULT_THEME,
     confettiEffects = true,
     soundEffects = true,
-    volume = 0.7,
+    volume = DEFAULT_VOLUME,
     colorblindSafeColors = false,
-    autoClearChatOnGuess = true,
-    customBrushPresets = [],
+    timeFormat = DEFAULT_TIME_FORMAT,
     nameColor,
   }) =>
     set(() => {
@@ -248,8 +269,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
       localStorage.setItem("sketchy_volume", String(volume));
       localStorage.setItem("sketchy_colorblindsafecolors", String(colorblindSafeColors));
-      localStorage.setItem("sketchy_autoclearchatonguess", String(autoClearChatOnGuess));
-      localStorage.setItem("sketchy_custombrushpresets", JSON.stringify(customBrushPresets));
+      localStorage.setItem("sketchy_timeformat", timeFormat);
       localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
       return {
@@ -260,8 +280,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         soundEffects,
         volume,
         colorblindSafeColors,
-        autoClearChatOnGuess,
-        customBrushPresets,
+        timeFormat,
         nameColor,
       };
     }),
@@ -274,6 +293,8 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setBrushCursor: (brushCursor) =>
     set(() => {
       localStorage.setItem(BRUSH_CURSOR_KEY, brushCursor);
+      // The pre-rename key is retired the first time the new one is written,
+      // so it cannot resurface if the new one is ever cleared.
       localStorage.removeItem(LEGACY_BRUSH_CURSOR_KEY);
       return { brushCursor };
     }),
@@ -308,10 +329,10 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_colorblindsafecolors", String(enabled));
       return { colorblindSafeColors: enabled };
     }),
-  setAutoClearChatOnGuess: (enabled) =>
+  setTimeFormat: (timeFormat) =>
     set(() => {
-      localStorage.setItem("sketchy_autoclearchatonguess", String(enabled));
-      return { autoClearChatOnGuess: enabled };
+      localStorage.setItem("sketchy_timeformat", timeFormat);
+      return { timeFormat };
     }),
   resetKeyBindings: () =>
     set(() => {
