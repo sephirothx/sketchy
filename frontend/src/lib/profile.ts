@@ -1,3 +1,4 @@
+import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
 import type { AuthUser } from "../store/authStore";
 
@@ -193,18 +194,15 @@ export async function fetchGameDrawing(
   );
 }
 
-/** "12 Aug 2026, 14:05" — locale-formatted, with the raw value as a fallback. */
-export function formatTimestamp(value: string | null): string {
+/** "12 Aug 2026, 14:05" in the player's time format; empty for no or bad value. */
+export function formatTimestamp(
+  value: string | null,
+  timeFormat: TimeFormat = "system",
+): string {
   if (!value) return "";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(parsed, timeFormat);
 }
 
 export function formatDuration(seconds: number): string {

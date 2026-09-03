@@ -1,3 +1,4 @@
+import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AuthDialog, type AuthMode } from "../components/AccountMenu";
@@ -75,13 +76,14 @@ function drawingNote(turn: GameTurn): string {
 }
 
 function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
+  const { timeFormat } = useClock();
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const seat = game.participants.find((p) => p.userId === viewerId);
-  const finishedAt = formatTimestamp(game.finishedAt);
+  const finishedAt = formatTimestamp(game.finishedAt, timeFormat);
 
   async function toggle() {
     const next = !expanded;
@@ -382,6 +384,7 @@ export function ProfilePage() {
 
 
 function ProfileView({ userId }: { userId: string }) {
+  const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
   const isOwnProfile = userId === currentUser?.id;
 
@@ -478,7 +481,7 @@ function ProfileView({ userId }: { userId: string }) {
               </h1>
               <p className="profile-subtitle">
                 {subject.isAnonymous ? "Guest — display name not saved" : "Registered player"}
-                {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt)}`}
+                {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt, timeFormat)}`}
               </p>
             </div>
           </header>
