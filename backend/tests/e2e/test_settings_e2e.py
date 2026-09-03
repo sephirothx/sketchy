@@ -40,16 +40,11 @@ async def test_theme_defaults_to_system_preference_unless_saved(
 
 
 @pytest.mark.asyncio
-async def test_settings_dialog_brush_cursor_scenario():
-    """
-    Scenario 2: Settings Dialog & In-Game Preferences E2E Test
-    1. Opens Lobby page, creates a room.
-    2. Opens Settings dialog via header button.
-    3. Navigates to 'Game' tab.
-    4. Selects 'Outline' brush cursor option.
-    5. Clicks Save.
-    6. Verifies localStorage persists 'sketchy_brushcursor' == 'circle' and
-       that saving clears the pre-rename 'sketchy_pencursor' key.
+async def test_settings_apply_as_they_change_without_a_save():
+    """Preferences are not a transaction: each row lands as it is changed.
+
+    Also completes the pre-rename cursor migration, which used to depend on a
+    Save press and now happens on the change itself.
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
@@ -68,7 +63,7 @@ async def test_settings_dialog_brush_cursor_scenario():
             migrated_cursor = await page.evaluate(
                 "() => localStorage.getItem('sketchy_pencursor')"
             )
-            assert migrated_cursor == "circle", "the legacy value should survive until a save"
+            assert migrated_cursor == "circle", "the legacy value should survive the read"
             await use_guest_name(page, "SettingsTester")
             await page.click('button:has-text("Create room")')
             await page.click('button:has-text("Create room")')
@@ -83,53 +78,80 @@ async def test_settings_dialog_brush_cursor_scenario():
             # before exercising the colour picker.
             await register_account(page, "SettingsTester")
 
-            # Open Settings Modal
             await page.wait_for_selector('button.header-settings-button')
             await page.click('button.header-settings-button')
+            dialog = page.locator('.settings-modal-card')
+            await dialog.wait_for(state="visible")
+            # A route, not a flag: it can be linked to and it survives a reload.
+            assert "/settings/" in page.url
 
-            # Verify Settings modal opened
-            await page.wait_for_selector('.settings-modal-card')
-            assert await page.is_visible('text=Settings')
+            # The canvas cursor is an appearance preference, with the rest of
+            # what the player looks at.
+            await dialog.get_by_role("tab", name="Appearance").click()
+            cursor = dialog.get_by_role("group", name="Brush cursor style")
+            await cursor.get_by_role("button", name="Outline").click()
 
-            # Choose a player name color in General settings.
-            await page.locator("#name-color-input").fill("#22aa66")
-
-            # Click Game tab
-            await page.click('button[role="tab"]:has-text("Game")')
-
-            # Select Outline brush cursor style
-            brush_cursor = page.get_by_role("group", name="Brush cursor style")
-            await brush_cursor.get_by_role("button", name="Outline").click()
-
-            # Save settings
-            await page.click('.settings-modal-footer button:has-text("Save")')
-
-            # Verify modal closed
-            await page.wait_for_selector('.settings-modal-card', state='hidden')
-
-            # Verify localStorage
+            # No Save anywhere on the pane.
+            assert await dialog.get_by_role("button", name="Save").count() == 0
             stored_cursor = await page.evaluate(
                 "() => localStorage.getItem('sketchy_brushcursor')"
             )
             assert stored_cursor == "circle"
             # The pre-rename key is seeded above, so this is the migration
-            # completing: once a save writes the new key, the old one is gone
-            # and cannot be resurrected if the new one is ever cleared.
+            # completing: once the new key is written the old one is gone and
+            # cannot be resurrected if the new one is ever cleared.
             legacy_cursor = await page.evaluate(
                 "() => localStorage.getItem('sketchy_pencursor')"
             )
             assert legacy_cursor is None
-            stored_name_color = await page.evaluate("() => localStorage.getItem('sketchy_namecolor')")
-            assert stored_name_color == "#22aa66"
 
-            # Saving settings updates the shared room state without reconnecting.
+            # A colour from the account palette, picked rather than typed
+            # (#571: the swatches are the only way to choose one).
+            await dialog.get_by_role("tab", name="Account").click()
+            await dialog.get_by_role("button", name="Teal").click()
+            stored_name_color = await page.evaluate(
+                "() => localStorage.getItem('sketchy_namecolor')"
+            )
+            assert stored_name_color == "#139288"
+
+            # And it reaches the room without a save and without reconnecting.
             await page.wait_for_function(
                 """() => {
                     const name = document.querySelector('.player-name .colored-player-name');
-                    return name && getComputedStyle(name).color === 'rgb(34, 170, 102)';
+                    return name && getComputedStyle(name).color === 'rgb(19, 146, 136)';
                 }"""
             )
 
+            # Closing goes back to the page it was opened over, with the room
+            # still mounted underneath it.
+            await dialog.get_by_role("button", name="Close settings").click()
+            await dialog.wait_for(state="hidden")
+            assert "/room/" in page.url
+            assert await page.is_visible('[data-testid="waiting-room"]')
+        finally:
+            await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_settings_url_opens_over_the_lobby_for_a_direct_visit():
+    """The URL is real: typed straight in, it draws over the lobby."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=['--mute-audio'])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "DeepLinker")
+            await page.goto(f"{BASE_URL}/settings/sound")
+            dialog = page.locator('.settings-modal-card')
+            await dialog.wait_for(state="visible")
+            assert await dialog.get_by_role("tab", name="Sound & effects").get_attribute(
+                "aria-selected"
+            ) == "true"
+            # The lobby is what a direct visitor gets behind it, so closing has
+            # somewhere to land.
+            assert await page.is_visible(".lobby-rooms-panel")
         finally:
             await context.close()
             await browser.close()
@@ -153,15 +175,21 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
 
             dialog = first_page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
+            await dialog.get_by_role("tab", name="Appearance").click()
             theme = dialog.get_by_role("group", name="Theme")
             await theme.get_by_role("button", name="Dark").click()
             await dialog.get_by_role(
                 "switch", name="Prefer colorblind-safe colors"
             ).check()
-            await dialog.get_by_role("tab", name="Game").click()
             cursor = dialog.get_by_role("group", name="Brush cursor style")
-            await cursor.get_by_role("button", name="Outline").click()
-            await dialog.get_by_role("button", name="Save").click()
+            # Immediately-applied rows are merged into one write, so waiting for
+            # the request the last change triggers is waiting for all three.
+            async with first_page.expect_response(
+                lambda response: "/api/users/me/settings" in response.url
+                and response.request.method == "PATCH"
+            ):
+                await cursor.get_by_role("button", name="Outline").click()
+            await dialog.get_by_role("button", name="Close settings").click()
             await dialog.wait_for(state="hidden")
 
             fresh_device = await browser.new_context(color_scheme="light")
@@ -183,26 +211,32 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                         theme: localStorage.getItem('sketchy_theme'),
                         cursor: localStorage.getItem('sketchy_brushcursor'),
                         colors: localStorage.getItem('sketchy_colorblindsafecolors'),
-                        clearGuess: localStorage.getItem('sketchy_autoclearchatonguess'),
                     })"""
                 )
                 assert stored == {
                     "theme": "dark",
                     "cursor": "circle",
                     "colors": "true",
-                    # The clear-guess-box behavior kept its stored key but
-                    # lost its settings row; the default passes through.
-                    "clearGuess": "true",
                 }
+                # Retired settings leave no key behind to be resurrected.
+                retired = await fresh_page.evaluate(
+                    """() => [
+                        localStorage.getItem('sketchy_autoclearchatonguess'),
+                        localStorage.getItem('sketchy_custombrushpresets'),
+                    ]"""
+                )
+                assert retired == [None, None]
 
                 await fresh_page.click("button.header-settings-button")
                 fresh_dialog = fresh_page.locator(".settings-modal-card")
                 await fresh_dialog.wait_for(state="visible")
+                await fresh_dialog.get_by_role("tab", name="Appearance").click()
                 assert await fresh_dialog.get_by_role(
                     "switch", name="Prefer colorblind-safe colors"
                 ).is_checked()
-                await fresh_dialog.get_by_role("tab", name="Game").click()
-                cursor_synced = fresh_dialog.get_by_role("group", name="Brush cursor style")
+                cursor_synced = fresh_dialog.get_by_role(
+                    "group", name="Brush cursor style"
+                )
                 assert await cursor_synced.get_by_role(
                     "button", name="Outline"
                 ).get_attribute("aria-pressed") == "true"
@@ -210,4 +244,101 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                 await fresh_device.close()
         finally:
             await first_device.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
+    """Settings is opened with other people looking at the screen."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "MaskedMail")
+            # The claim dialog takes an optional address as its third field.
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Create account").click()
+            claim = page.locator(".modal-card").filter(has_text="Password")
+            await claim.wait_for(state="visible")
+            inputs = claim.locator("input")
+            await inputs.nth(0).fill("MaskedMail")
+            await inputs.nth(1).fill("a-good-password")
+            await inputs.nth(2).fill("masked@example.com")
+            await claim.locator('button[type="submit"]').click()
+            await claim.wait_for(state="hidden")
+
+            await page.click("button.header-settings-button")
+            dialog = page.locator(".settings-modal-card")
+            await dialog.wait_for(state="visible")
+
+            shown = await dialog.locator(".settings-email").inner_text()
+            assert "masked" not in shown, f"the local part is still readable in {shown!r}"
+            assert "example" not in shown, f"the domain label is still readable in {shown!r}"
+            assert shown.endswith(".com"), shown
+            assert "*" in shown, shown
+            # An address nobody has verified cannot recover the account, and
+            # the row says so as a symbol and two words, not only a sentence.
+            status = dialog.locator(".settings-email-status")
+            assert "is-unverified" in (await status.get_attribute("class") or "")
+            assert (await status.inner_text()).strip() == "Not verified"
+            # Masking is presentation only: the reveal control shows it whole
+            # for somebody who needs to read it back, and hides it again.
+            await dialog.get_by_role("button", name="Show the full address").click()
+            assert await dialog.locator(".settings-email").inner_text() == "masked@example.com"
+            await dialog.get_by_role("button", name="Hide the full address").click()
+            assert "*" in await dialog.locator(".settings-email").inner_text()
+        finally:
+            await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_changing_the_password_from_settings_signs_other_devices_out():
+    username = "SettingsRekey"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner = await browser.new_context()
+        other = await browser.new_context()
+        page, elsewhere = await owner.new_page(), await other.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username)
+            await register_account(page, username)
+
+            # A second signed-in device, to prove the change evicts it.
+            await elsewhere.goto(BASE_URL)
+            await elsewhere.click(".first-run-login")
+            login = elsewhere.get_by_role("dialog", name="Log in")
+            await login.get_by_label("Username").fill(username)
+            await login.get_by_label("Password").fill("a-good-password")
+            await login.get_by_role("button", name="Log in", exact=True).click()
+            await login.wait_for(state="hidden")
+
+            await page.click("button.header-settings-button")
+            await page.wait_for_selector('[data-testid="settings"]')
+            await page.get_by_role("button", name="Change password").click()
+            change = page.get_by_role("dialog", name="Change your password")
+            await change.wait_for(state="visible")
+            # The mailed route needs a verified address to arrive at, and this
+            # account has none, so the link is not offered rather than dead.
+            assert await change.get_by_text("Email me a link instead").count() == 0
+            await change.get_by_label("Current password").fill("a-good-password")
+            await change.get_by_label("New password", exact=True).fill("a-better-password")
+            await change.get_by_label("New password again").fill("a-better-password")
+            await change.get_by_role("button", name="Change password").click()
+            await change.wait_for(state="hidden")
+
+            # This device keeps its session; the other one is out.
+            assert await page.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json())?.username"
+            ) == username
+            await elsewhere.reload()
+            assert await elsewhere.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json())"
+            ) is None
+        finally:
+            await owner.close()
+            await other.close()
             await browser.close()

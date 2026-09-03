@@ -67,8 +67,6 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         "brushCursor": "circle",
         "keyBindings": {**DEFAULT_KEY_BINDINGS, "brush": ["b"]},
         "colorblindSafeColors": True,
-        "autoClearChatOnGuess": False,
-        "customBrushPresets": [{"name": "Fine", "size": 2}],
     }
     registered = await http.post(
         "/api/auth/register",
@@ -87,7 +85,7 @@ async def test_registration_seeds_and_patch_persists_settings(env):
 
     patched = await http.patch(
         "/api/users/me/settings",
-        json={"theme": "light", "volume": 0.9, "autoClearChatOnGuess": True},
+        json={"theme": "light", "volume": 0.9},
     )
     assert patched.status_code == 200
     assert patched.json()["theme"] == "light"
@@ -99,7 +97,6 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         assert row is not None
         assert row.theme == "light"
         assert row.sound_effects_volume == 0.9
-        assert row.custom_brush_presets == [{"name": "Fine", "size": 2}]
 
 
 async def test_registration_seed_never_overwrites_existing_settings(env):
@@ -130,7 +127,6 @@ async def test_registration_seed_never_overwrites_existing_settings(env):
         {"volume": 1.01},
         {"brushCursor": "dot"},
         {"keyBindings": {"brush": ["b"]}},
-        {"customBrushPresets": [{}] * 21},
     ],
 )
 async def test_patch_rejects_invalid_or_unbounded_values(env, body):

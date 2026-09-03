@@ -603,3 +603,81 @@ async def test_a_naive_stored_timestamp_is_read_as_utc():
     aware = datetime(2026, 9, 1, tzinfo=timezone.utc)
     assert _aware(aware) is aware
     assert _aware(datetime(2026, 9, 1)) == aware
+
+
+async def test_changing_a_password_keeps_this_device_and_evicts_the_others(env):
+    """A change is also how somebody evicts a session they no longer trust."""
+    new_client, factory = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Rekeyer", email="rekeyer@example.com")
+    await verify_via_email(laptop, factory)
+    assert (
+        await phone.post(
+            "/api/auth/login", json={"username": "Rekeyer", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+    changed = await laptop.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": NEW_PASSWORD},
+    )
+    assert changed.status_code == 200
+
+    # The other device is out, the old password is dead, and the device that
+    # made the change is still signed in.
+    assert (await phone.get("/api/auth/me")).json() is None
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Rekeyer", "password": PASSWORD}
+        )
+    ).status_code == 401
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Rekeyer", "password": NEW_PASSWORD}
+        )
+    ).status_code == 200
+    assert (await laptop.get("/api/auth/me")).json()["id"] == account["id"]
+
+    async with factory() as session:
+        kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
+        assert "account.password_changed" in kinds
+
+
+async def test_a_password_change_needs_the_current_password(env):
+    new_client, _ = env
+    http = new_client()
+    await register(http, "Careful")
+
+    refused = await http.post(
+        "/api/auth/password/change",
+        json={"currentPassword": "not-the-password", "password": NEW_PASSWORD},
+    )
+    assert refused.status_code == 401
+    # And the account still opens with the password it had.
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Careful", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+
+async def test_a_password_change_holds_the_password_rules(env):
+    new_client, _ = env
+    http = new_client()
+    await register(http, "Rulebound")
+    weak = await http.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": "short"},
+    )
+    assert weak.status_code == 400
+
+
+async def test_a_guest_has_no_password_to_change(env):
+    new_client, _ = env
+    http = new_client()
+    await http.post("/api/auth/display-name", json={"displayName": "Passerby"})
+    refused = await http.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": NEW_PASSWORD},
+    )
+    assert refused.status_code == 403

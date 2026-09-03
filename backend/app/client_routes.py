@@ -29,6 +29,8 @@ CLIENT_ROUTES: tuple[str, ...] = (
     "/my-prompt-lists",
     "/profile",
     "/profile/:userId",
+    "/settings",
+    "/settings/:section",
     "/forgot-password",
     "/reset-password",
     "/verify-email",

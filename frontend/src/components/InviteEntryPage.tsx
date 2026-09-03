@@ -93,7 +93,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
             </dl>
 
-            <ul className="invite-rule-list" aria-label="Room settings">
+            <ul className="invite-rule-list" aria-label="Room rules">
               <li>{hintModeLabel(room)}</li>
               <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
               <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>

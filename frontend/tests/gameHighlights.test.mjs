@@ -61,11 +61,11 @@ test("highlights that belong to a player carry the name to render", () => {
     prompt: "cat",
     seconds: 1.5,
     nickname: "Ana",
-    nameColor: "#4f46e5",
+    nameColor: "#a761e5",
     isAnonymous: false,
   });
   assert.equal(presented.name?.nickname, "Ana");
-  assert.equal(presented.name?.nameColor, "#4f46e5");
+  assert.equal(presented.name?.nameColor, "#a761e5");
   assert.equal(presented.name?.isAnonymous, false);
 });
 

@@ -595,18 +595,18 @@ async def test_registered_player_colour_is_stored_on_the_account(client):
         "/api/auth/register", json={"username": "colorist", "password": "a-good-password"}
     )
 
-    response = await client.post("/api/auth/name-color", json={"nameColor": "#4F46E5"})
+    response = await client.post("/api/auth/name-color", json={"nameColor": "#A761E5"})
 
     assert response.status_code == 200
-    assert response.json()["nameColor"] == "#4f46e5"
-    assert (await client.get("/api/auth/me")).json()["nameColor"] == "#4f46e5"
+    assert response.json()["nameColor"] == "#a761e5"
+    assert (await client.get("/api/auth/me")).json()["nameColor"] == "#a761e5"
 
 
 @pytest.mark.asyncio
 async def test_a_guest_cannot_colour_their_name(client):
     """Grey italics is the only cue an unclaimed name carries."""
     await become_guest(client)
-    response = await client.post("/api/auth/name-color", json={"nameColor": "#4f46e5"})
+    response = await client.post("/api/auth/name-color", json={"nameColor": "#a761e5"})
     assert response.status_code == 403
 
 

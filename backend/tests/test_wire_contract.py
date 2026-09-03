@@ -356,7 +356,10 @@ def test_player_facing_copy_uses_current_vocabulary():
         "Keyboard Shortcuts",
         "Play again",
         "Reset Defaults",
-        "Room rules",
+        # Renamed the other way in #575: the host's per-room editor is "Room
+        # rules", so "settings" means one thing - a player's own.
+        "Room settings",
+        "Edit room settings",
         "View rules",
         "You’re offline",
         'placeholder="Your name"',

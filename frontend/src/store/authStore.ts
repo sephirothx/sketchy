@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { apiRequest, ApiError } from "../lib/api";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
-import { useSettingsStore } from "./settingsStore";
+import { isPaletteColor, useSettingsStore } from "./settingsStore";
 import { nicknameError } from "../lib/roomEntryState";
 import {
   applyAccountSettings,
@@ -118,12 +118,15 @@ function releaseSeatBeforeIdentityChange(): void {
  * An account with no color is a player who chose one before it was ever
  * stored, or who has never opened Settings; their local choice is pushed up
  * once so their name looks the same on their profile as it does in a room.
- * Guests are skipped - their grey is the cue that the name is unclaimed.
+ * A stored color outside the palette counts as none: the server re-rolls it
+ * at the seat now (#571), so adopting it here would only show a color the
+ * room is about to disagree with. Guests are skipped - their grey is the cue
+ * that the name is unclaimed.
  */
 function reconcileNameColor(user: AuthUser | null): void {
   if (!user || user.isAnonymous) return;
   const settings = useSettingsStore.getState();
-  if (user.nameColor) {
+  if (user.nameColor && isPaletteColor(user.nameColor)) {
     if (user.nameColor !== settings.nameColor) settings.setNameColor(user.nameColor);
     return;
   }

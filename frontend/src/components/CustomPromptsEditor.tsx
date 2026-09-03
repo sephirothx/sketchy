@@ -8,7 +8,7 @@ interface CustomPromptsEditorProps {
   onChange: (value: string) => void;
   /** The host has stopped editing - a good moment to store what they wrote. */
   onCommit?: () => void;
-  /** Room settings put their explicit Apply control here; room creation does not. */
+  /** Room rules put their explicit Apply control here; room creation does not. */
   footer?: ReactNode;
 }
 

@@ -501,7 +501,7 @@ async def test_an_in_room_colour_change_reaches_the_lobby(monkeypatch):
         PresenceIdentity(
             user_id="user-ada",
             display_name="Ada",
-            name_color="#111111",
+            name_color="#de5720",
             is_anonymous=False,
         )
     )

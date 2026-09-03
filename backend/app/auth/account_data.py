@@ -448,8 +448,6 @@ async def _build_export_artifact(
                 "brushCursor": settings.brush_cursor,
                 "keyBindings": settings.key_bindings,
                 "colorblindSafeColors": settings.colorblind_safe_colors,
-                "autoClearChatOnGuess": settings.auto_clear_chat_on_guess,
-                "customBrushPresets": settings.custom_brush_presets,
                 "createdAt": _timestamp(settings.created_at),
                 "updatedAt": _timestamp(settings.updated_at),
             }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { isSettingsPath, type SettingsLocationState } from "./hooks/useSettingsRoute";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
@@ -14,7 +15,7 @@ import { AdminOperationsPage } from "./pages/AdminOperationsPage";
 import { BugReportsPage } from "./pages/BugReportsPage";
 import { ModerationPage } from "./pages/ModerationPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
-import { SettingsModal } from "./components/SettingsModal";
+import { SettingsOverlay } from "./components/SettingsOverlay";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
@@ -36,13 +37,68 @@ import { onServerFull } from "./lib/socket";
 import type { ServerShutdownNotice } from "./types";
 
 /* The router keeps the window scroll across navigations, so submitting a form
-   at the bottom of one page would open the next one part-way down. */
+   at the bottom of one page would open the next one part-way down. Settings is
+   the exception: it opens *over* the page, which stays where it was. */
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
+    if (isSettingsPath(pathname)) return;
     window.scrollTo(0, 0);
   }, [pathname]);
   return null;
+}
+
+/**
+ * The page table, with Settings over the top of it (R-SET-06).
+ *
+ * Settings is a route so it can be linked and bookmarked, and an overlay so
+ * opening it never unmounts a live room. The two are reconciled by rendering
+ * `<Routes>` against the location Settings was opened *from*; somebody who
+ * arrives on the URL itself gets the lobby behind it.
+ */
+function AppRoutes() {
+  const location = useLocation();
+  const onSettings = isSettingsPath(location.pathname);
+  // Always a value, never undefined: `useRoutes` wraps its result in an extra
+  // location context *only* when it is handed one, so letting this flip
+  // between a value and nothing would change the element tree and remount
+  // every page behind the overlay - the live room included.
+  const behind = onSettings
+    ? ((location.state as SettingsLocationState | null)?.settingsBackground ?? "/")
+    : location;
+
+  return (
+    <>
+      <Routes location={behind}>
+        <Route path="/" element={<LobbyBrowserPage />} />
+        <Route path="/create" element={<CreateRoomPage />} />
+        <Route path="/room/:code" element={<GameRoomPage />} />
+        <Route path="/prompt-lists" element={<PromptStatsPage />} />
+        <Route path="/prompt-lists/:slug" element={<PromptStatsPage />} />
+        <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/:userId" element={<ProfilePage />} />
+        {/* Declared so backend/app/client_routes.py has something to mirror
+            and an unknown URL still answers 404. They never render: the table
+            is drawing the page underneath, and the overlay below draws
+            Settings itself. */}
+        <Route path="/settings" element={null} />
+        <Route path="/settings/:section" element={null} />
+        <Route path="/forgot-password" element={<AccountRecoveryPage mode="forgot" />} />
+        <Route path="/reset-password" element={<AccountRecoveryPage mode="reset" />} />
+        <Route path="/verify-email" element={<AccountRecoveryPage mode="verify" />} />
+        <Route path="/admin/operations" element={<AdminOperationsPage />} />
+        <Route path="/moderation" element={<ModerationPage />} />
+        <Route path="/admin/bug-reports" element={<BugReportsPage />} />
+        {/* Last, and the only route not mirrored in
+            backend/app/client_routes.py: it is what draws the page a URL
+            with nothing behind it gets, and the server answers 404 for
+            exactly the URLs that land here. */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+      {onSettings && <SettingsOverlay />}
+    </>
+  );
 }
 
 function App() {
@@ -182,28 +238,7 @@ function App() {
         <ScrollToTop />
         {/* Inside the router: answering an invitation navigates. */}
         <FriendInviteNotice />
-        <Routes>
-          <Route path="/" element={<LobbyBrowserPage />} />
-          <Route path="/create" element={<CreateRoomPage />} />
-          <Route path="/room/:code" element={<GameRoomPage />} />
-          <Route path="/prompt-lists" element={<PromptStatsPage />} />
-          <Route path="/prompt-lists/:slug" element={<PromptStatsPage />} />
-          <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/profile/:userId" element={<ProfilePage />} />
-          <Route path="/forgot-password" element={<AccountRecoveryPage mode="forgot" />} />
-          <Route path="/reset-password" element={<AccountRecoveryPage mode="reset" />} />
-          <Route path="/verify-email" element={<AccountRecoveryPage mode="verify" />} />
-          <Route path="/admin/operations" element={<AdminOperationsPage />} />
-          <Route path="/moderation" element={<ModerationPage />} />
-          <Route path="/admin/bug-reports" element={<BugReportsPage />} />
-          {/* Last, and the only route not mirrored in
-              backend/app/client_routes.py: it is what draws the page a URL
-              with nothing behind it gets, and the server answers 404 for
-              exactly the URLs that land here. */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-        <SettingsModal />
+        <AppRoutes />
         <ConfettiCanvas />
       </BrowserRouter>
     </ToastProvider>

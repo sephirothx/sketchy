@@ -7,7 +7,6 @@ import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, sendGuess, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import { useSettingsStore } from "../store/settingsStore";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 
 interface RoomChatPanelProps {
@@ -97,10 +96,6 @@ export function RoomChatPanel({
   // Matches the mobile block in game-room.css so JS and CSS agree on the breakpoint.
   const isMobile = useMediaQuery("(max-width: 900px)");
   const inputVisible = mode !== "playing" || !isDrawer;
-  const autoClearChatOnGuess = useSettingsStore(
-    (state) => state.autoClearChatOnGuess,
-  );
-
   useEffect(() => {
     return () => {
       if (blurTimeoutRef.current != null) {
@@ -278,10 +273,9 @@ export function RoomChatPanel({
           : current,
       );
       setHistoryIndex(null);
-      if (autoClearChatOnGuess) {
-        draftTextRef.current = "";
-        setText("");
-      }
+      // Always: a guess you got right is not a draft worth keeping.
+      draftTextRef.current = "";
+      setText("");
       scrollToBottom();
       return;
     }

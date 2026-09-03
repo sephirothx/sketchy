@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AddEmailDialog } from "./AddEmailDialog";
 import {
   acknowledgeReminder,
+  maskEmail,
   readEmailState,
   shouldShowRecoveryReminder,
   type EmailState,
@@ -63,7 +64,8 @@ export function EmailRecoveryReminder() {
       <div className="email-reminder-banner" role="status" aria-live="polite">
         <span>
           {state.pendingAddress
-            ? `Confirm ${state.pendingAddress} to finish setting up account recovery.`
+            /* Masked (R-SET-08): this banner sits across every screen. */
+            ? `Confirm ${maskEmail(state.pendingAddress)} to finish setting up account recovery.`
             : "This account has no email address, so a forgotten password cannot be reset."}
         </span>
         {!state.pendingAddress && (

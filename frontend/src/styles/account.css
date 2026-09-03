@@ -532,7 +532,9 @@
   position: sticky;
   text-align: center;
   top: 0;
-  z-index: 1140;
+  /* Below the connection banner (1100): this is a note that can wait
+     (R-AUTH-16), and losing the connection is not. Above ordinary dialogs. */
+  z-index: 1090;
 }
 
 .email-reminder-banner button {
@@ -753,4 +755,10 @@
     text-decoration: underline;
     text-underline-offset: 3px;
   }
+}
+
+/* Deleting the account has a dialog of its own (Settings > Account). */
+.account-delete-dialog .account-delete-confirm {
+  background: var(--danger);
+  box-shadow: none;
 }

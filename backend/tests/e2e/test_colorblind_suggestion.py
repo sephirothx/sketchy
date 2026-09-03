@@ -121,14 +121,16 @@ async def test_dismissed_suggestion_does_not_return_when_preference_changes():
                 await player.locator("button.header-settings-button").click()
                 dialog = player.locator(".settings-modal-card")
                 await dialog.wait_for()
+                await dialog.get_by_role("tab", name="Appearance").click()
                 preference = dialog.get_by_role(
                     "switch", name="Prefer colorblind-safe colors"
                 )
+                # No Save: the switch reaches the room as it is flipped.
                 if desired:
                     await preference.check()
                 else:
                     await preference.uncheck()
-                await dialog.get_by_role("button", name="Save").click()
+                await dialog.get_by_role("button", name="Close settings").click()
                 await dialog.wait_for(state="hidden")
 
             await host.wait_for_timeout(250)

@@ -72,28 +72,90 @@ def nearest_drawing_seconds(value: int) -> int:
     return min(DRAWING_TIME_OPTIONS, key=lambda option: (abs(option - value), option))
 
 
+# The nine colours a registered player may wear on their name. The same list
+# lives in the client as NAME_COLOR_PALETTE (frontend/src/store/settingsStore.ts);
+# the swatches there are the only interface that can choose one, and the rule
+# below is what stops a modified client choosing anything else (#571).
+#
+# Every entry clears NAME_COLOR_MIN_CONTRAST against both NAME_COLOR_SURFACES -
+# tests/test_name_color.py proves it - so the palette and the rule cannot
+# disagree. The hues are the ones the game has always used; they were lightened
+# so a name reads on the dark theme's panel too, where the old shades sat
+# between 2.1:1 and 3.1:1.
 NAME_COLORS: tuple[str, ...] = (
-    "#e11d48",
-    "#c2410c",
-    "#a16207",
-    "#15803d",
-    "#0f766e",
-    "#0369a1",
-    "#4f46e5",
-    "#7e22ce",
-    "#be185d",
+    "#ef3c63",  # red
+    "#de5720",  # orange
+    "#b8730f",  # amber
+    "#199647",  # green
+    "#139288",  # teal
+    "#1c8ac6",  # blue
+    "#7971f4",  # indigo
+    "#a761e5",  # purple
+    "#ef3482",  # pink
 )
 NAME_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+# Where a name is read: the player-list panel, which is `--card` in
+# frontend/src/styles/theme.css, once per theme. Mirrored rather than imported
+# because the server has no stylesheet to read; tests/test_name_color.py fails
+# the moment the CSS token moves without this following it.
+NAME_COLOR_SURFACES: tuple[str, ...] = ("#ffffff", "#1e293b")
+# WCAG's floor for large text and user-interface components. The normal-text
+# 4.5:1 would leave almost no hue readable on a white and a slate panel at
+# once, and a name is a short, bold label rather than a paragraph.
+NAME_COLOR_MIN_CONTRAST = 3.0
 
 # Guests render in grey italics everywhere, so a color would be meaningless
 # and would also make an unclaimed name look like a registered one.
 ANONYMOUS_NAME_COLOR = "#888888"
 
 
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.x relative luminance of a `#rrggbb` colour."""
+    channels = []
+    for offset in (1, 3, 5):
+        value = int(hex_color[offset : offset + 2], 16) / 255
+        channels.append(
+            value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+        )
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(foreground: str, background: str) -> float:
+    """WCAG contrast ratio between two `#rrggbb` colours, 1.0 to 21.0."""
+    first = _relative_luminance(foreground)
+    second = _relative_luminance(background)
+    lighter, darker = max(first, second), min(first, second)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def name_color_is_readable(hex_color: str) -> bool:
+    """Whether a name in this colour clears the floor on every surface it sits on."""
+    return all(
+        contrast_ratio(hex_color, surface) >= NAME_COLOR_MIN_CONTRAST
+        for surface in NAME_COLOR_SURFACES
+    )
+
+
 def normalize_name_color(value: object) -> str | None:
+    """The colour a name may be drawn in, lower-cased, or None.
+
+    Shape is not enough (#571): a well-formed `#rrggbb` can still be white on
+    the light theme or near-black on the dark one, and the swatches in
+    Settings are a client-side courtesy that a modified client or the
+    `update_player_settings` socket path does not have to observe. So the
+    server holds the rule the palette was drawn to: readable on both panels.
+
+    A value that fails is returned as None, and every caller treats None as
+    "no colour" - the seat rolls one from the palette instead. That is also
+    what heals a colour stored before this rule existed: it is not refused
+    after the fact, it simply is not kept.
+    """
     if not isinstance(value, str) or not NAME_COLOR_PATTERN.fullmatch(value):
         return None
-    return value.lower()
+    color = value.lower()
+    return color if name_color_is_readable(color) else None
 
 
 def generate_random_name_color() -> str:

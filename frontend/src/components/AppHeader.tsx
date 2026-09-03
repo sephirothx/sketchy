@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useSettingsStore } from "../store/settingsStore";
+import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { AccountMenu } from "./AccountMenu";
 import { BackIcon, GearIcon, Wordmark } from "./icons";
 
@@ -16,8 +16,8 @@ import { BackIcon, GearIcon, Wordmark } from "./icons";
  * back control is the arrow alone — the label is what would not fit beside it.
  *
  * The gear keeps its `.header-settings-button` class and "Player settings"
- * name — the settings modal restores focus to it on close, and the e2e suite
- * asserts both.
+ * name — Settings restores focus to it on close, and the e2e suite asserts
+ * both. It opens `/settings/account` over this page (R-SET-06).
  *
  * On a phone the gear moves into the identity menu instead: three controls
  * beside a wordmark is what used to push this header onto two rows, and
@@ -35,7 +35,7 @@ export function AppHeader({
 }: { backLabel?: string; actions?: ReactNode } = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
-  const openSettings = useSettingsStore((s) => s.openSettings);
+  const openSettings = useOpenSettings();
 
   return (
     <header className={`lobby-header${backLabel ? " has-back" : ""}`}>
@@ -62,7 +62,7 @@ export function AppHeader({
           <button
             type="button"
             className="btn btn-icon header-settings-button"
-            onClick={openSettings}
+            onClick={() => openSettings()}
             title="Player settings"
             aria-label="Player settings"
           >

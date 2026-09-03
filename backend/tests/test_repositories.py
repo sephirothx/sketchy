@@ -119,10 +119,10 @@ async def test_user_repository_crud_and_stats():
 
         # 8. Update profile with a deployment-hosted avatar key.
         updated = await repo.update_profile(
-            anon.id, name_color="#00ff00", avatar_key="PENCIL"
+            anon.id, name_color="#ef3c63", avatar_key="PENCIL"
         )
         assert updated is not None
-        assert updated.name_color == "#00ff00"
+        assert updated.name_color == "#ef3c63"
         assert updated.avatar_key == "pencil"
 
         # Arbitrary URLs and unrecognized asset names never reach a browser.
@@ -153,10 +153,10 @@ async def test_game_history_repository():
         u2 = await user_repo.create_anonymous("Player2")
         u3 = await user_repo.create_anonymous("Player3_NonParticipant")
         u1 = await user_repo.update_profile(
-            u1.id, name_color="#112233", avatar_key="pencil"
+            u1.id, name_color="#b8730f", avatar_key="pencil"
         )
         u2 = await user_repo.update_profile(
-            u2.id, name_color="#223344", avatar_key="spark"
+            u2.id, name_color="#1c8ac6", avatar_key="spark"
         )
         assert u1 is not None and u2 is not None
 
@@ -180,7 +180,7 @@ async def test_game_history_repository():
                 final_rank=1,
                 seat_id=u1_seat,
                 display_name="Player1",
-                name_color="#112233",
+                name_color="#b8730f",
             ),
             GameParticipantInput(
                 user_id=u2.id,
@@ -188,7 +188,7 @@ async def test_game_history_repository():
                 final_rank=2,
                 seat_id=u2_seat,
                 display_name="Player2",
-                name_color="#223344",
+                name_color="#1c8ac6",
             ),
         ]
         turn_id = str(generate_uuid())
@@ -260,13 +260,13 @@ async def test_game_history_repository():
         await user_repo.update_profile(
             u1.id,
             display_name="RenamedLater",
-            name_color="#aabbcc",
+            name_color="#ef3482",
             avatar_key="palette",
         )
         await user_repo.update_profile(
             u2.id,
             display_name="AlsoRenamed",
-            name_color="#bbccdd",
+            name_color="#ef3c63",
             avatar_key="initial",
         )
 
@@ -278,7 +278,7 @@ async def test_game_history_repository():
         assert u1_games[0].participants[0].user_id == u1.id
         assert u1_games[0].participants[0].seat_id
         assert u1_games[0].participants[0].display_name == "Player1"
-        assert u1_games[0].participants[0].name_color == "#112233"
+        assert u1_games[0].participants[0].name_color == "#b8730f"
 
         # Check game detail for participant (authorized)
         detail = await history_repo.get_game_detail(game_id, requesting_user_id=u1.id)
@@ -287,13 +287,13 @@ async def test_game_history_repository():
         assert len(detail.turns) == 1
         assert detail.turns[0].prompt == "guitar"
         assert detail.turns[0].drawer_display_name == "Player1"
-        assert detail.turns[0].drawer_name_color == "#112233"
+        assert detail.turns[0].drawer_name_color == "#b8730f"
         assert detail.turns[0].drawer_is_anonymous
         assert detail.turns[0].drawer_user_id == u1.id
         assert len(detail.turns[0].guesses) == 1
         assert detail.turns[0].guesses[0].user_id == u2.id
         assert detail.turns[0].guesses[0].display_name == "Player2"
-        assert detail.turns[0].guesses[0].name_color == "#223344"
+        assert detail.turns[0].guesses[0].name_color == "#1c8ac6"
         assert detail.turns[0].guesses[0].is_anonymous
         assert detail.turns[0].guesses[0].points_awarded == 200
 
@@ -355,7 +355,7 @@ async def test_game_history_preserves_distinct_accountless_seats():
                     1,
                     seat_id=drawer_seat_id,
                     display_name="No-cookie drawer",
-                    name_color="#112233",
+                    name_color="#b8730f",
                 ),
                 GameParticipantInput(
                     None,
@@ -363,7 +363,7 @@ async def test_game_history_preserves_distinct_accountless_seats():
                     2,
                     seat_id=guesser_seat_id,
                     display_name="No-cookie guesser",
-                    name_color="#445566",
+                    name_color="#7971f4",
                 ),
             ],
             [

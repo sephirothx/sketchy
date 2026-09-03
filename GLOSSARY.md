@@ -56,7 +56,7 @@ the rotation itself are counted in *rounds*.
 | **Drawer** | The player whose turn it is to draw. | artist, painter, sketcher |
 | **Guesser** | Any player in the drawing phase who is not the drawer. Stays a guesser after guessing the prompt. | watcher, viewer |
 | **Spectator** | Someone watching a room without playing. Never draws, never scores, never votes, and is never a moderation target. | observer, viewer, lurker |
-| **Host** | The player who created the room and can start the game and change room settings. | owner, admin, leader |
+| **Host** | The player who created the room and can start the game and change its **Room rules**. | owner, admin, leader |
 | **Guest** | Someone playing under an unclaimed account. Shown in grey italics. | anonymous player, unregistered user |
 | **Administrator** | A trusted service-wide operator. This is an account role, never the **host** of a room. | admin (for a room host), owner |
 | **Game outcome** | Whether a game reached its end (**finished**), stopped when the last player left (**abandoned**), or was cut short by a planned deploy (**shutdown**). Every game has one; `finished_at` says when it stopped, not that it finished. | game status, completed, ended |
@@ -200,11 +200,11 @@ Three different things, never used for one another:
 | **Not kept** | What a finished game says about a turn whose drawing the room could not hold, because that game's drawings had already filled its budget. Distinct from **Erased**, and from a turn nobody drew on. | lost, failed, missing |
 | **Erased** | What a finished game says about a drawing removed because the account that made it was deleted. The turn and its scores remain; only the drawing is gone. | deleted game, removed turn, not kept |
 | **Room code** | The random six-character invite capability that identifies a room to join. Allocation is globally unique. A code is retired for 30 days after its room ends. Codes claimed by the removed persistent-room feature stay claimed for good. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
-| **Room settings** | The host-controlled configuration: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. | options, config, preferences, rules |
-| **Player settings** | A player's own preferences, which travel with them between rooms. | user settings, profile settings |
+| **Room rules** | The host-controlled configuration of one room: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. Edited from the waiting room with a draft-and-save model, so a half-made decision never reaches the room. Renamed from *room settings* so that "settings" means one thing — a player's own — and never appears inside **Player settings**; the wire (`update_room_settings`, the `settings` payload) and the code keep the old word, which is recorded drift, not a second concept. | room settings, options, config, preferences |
+| **Player settings** | A player's own preferences, which travel with them between rooms. Reached at `/settings/<section>`, drawn over whatever page they were on, in four sections: **Account**, **Appearance**, **Sound & effects**, **Shortcuts**. Every row applies as it changes; only the rows a server can refuse keep a button. Not to be confused with **Room rules**, which belong to a room and are the host's. | user settings, profile settings, room settings |
 | **Colorblind-safe preference** | A private **Player setting** asking hosts to prefer **Colorblind-safe** room colors. Only an anonymous aggregate suggestion may reach a host; never expose who enabled it. | disability flag, accessibility request |
+| **Name color** | The one of nine palette colors a registered player's name and avatar wear everywhere. Chosen from swatches in **Player settings**; the server accepts only a color that reads on both themes' player list. Guests have none: their grey is what marks a name as unclaimed. | name colour (in UI copy), username color, avatar color |
 | **Colorblind-safe suggestion** | The unattributed, host-only notice that at least one seated player enabled the **Colorblind-safe preference**. It never names or counts players, never changes the room automatically, ignores spectators, and may be dismissed for the live room. | accessibility alert, player flag |
-| **Clear guesses after sending** | The **Player setting** choosing whether a sent guess empties the guess field or remains available to edit and resend. | clear chat, keep guesses |
 
 ## Votes and moderation
 

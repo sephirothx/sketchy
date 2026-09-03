@@ -442,12 +442,6 @@ class UserSettings(Base):
     colorblind_safe_colors: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
-    auto_clear_chat_on_guess: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default=true(), nullable=False
-    )
-    custom_brush_presets: Mapped[list] = mapped_column(
-        PortableJSON, default=list, server_default=text("'[]'"), nullable=False
-    )
     # When the account was last told it has no way back in. Stored per account
     # rather than in the browser so the reminder does not restart on every new
     # device, and does not vanish because one was cleared.

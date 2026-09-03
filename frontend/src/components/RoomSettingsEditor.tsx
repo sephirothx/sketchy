@@ -115,9 +115,9 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
           });
           setError(null);
         }
-        else setError(response.error || "Could not load room settings");
+        else setError(response.error || "Could not load room rules");
       } catch (loadError) {
-        if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room settings"));
+        if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room rules"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -166,7 +166,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
       setPromptsBaseline({ value: customPrompts.value, only: customPrompts.only });
       onSaved?.();
     } catch (saveError) {
-      const message = socketRequestErrorMessage(saveError, "save room settings");
+      const message = socketRequestErrorMessage(saveError, "save room rules");
       setError(message);
       notify(message, "error");
     } finally {
@@ -182,7 +182,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
   >
     <div className="room-settings-editor-heading">
       <p className="waiting-card-kicker">Host settings</p>
-      <h2 id="room-settings-title">Edit room settings</h2>
+      <h2 id="room-settings-title">Edit room rules</h2>
     </div>
     {loading ? <p>Loading settings…</p> : (
       <RoomSetupForm

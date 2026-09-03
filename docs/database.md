@@ -353,12 +353,16 @@ plus all of its aliases; the guest's sessions are revoked during the merge.
 Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE) ·
 `theme` · `sound_effects` · `confetti_effects` · `sound_effects_volume` (0.0–1.0) ·
 `brush_cursor` (`crosshair \| circle`) · `key_bindings` (JSON) ·
-`colorblind_safe_colors` · `auto_clear_chat_on_guess` · `custom_brush_presets` (JSON) ·
-`email_reminder_last_shown_at` · timestamps.
+`colorblind_safe_colors` · `email_reminder_last_shown_at` · timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
-supported action set, and custom brush presets are limited to 20 entries and 16 KiB of
-JSON.
+supported action set.
+
+`auto_clear_chat_on_guess` and `custom_brush_presets` were removed rather than kept:
+the first is now the only behaviour (a guess you got right is not a draft worth
+keeping), and nothing in the interface could ever create a brush preset. Both were
+synced, bounded and present in the data export, which is what made them worth
+deleting rather than leaving (R-SET-07).
 
 **Guests keep these in browser local storage only.** Creating an account copies that
 browser's current settings to the account exactly once; logging in later makes the

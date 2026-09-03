@@ -57,6 +57,7 @@ from app.auth.mail import mail_is_configured
 from app.auth.recovery import (
     EmailAlreadyInUse,
     RecoveryError,
+    change_password,
     confirm_email,
     email_state,
     password_reset_link_is_usable,
@@ -158,6 +159,15 @@ class NameColorBody(BaseModel):
     name_color: str = Field(max_length=16, alias="nameColor")
 
 
+class ChangePasswordBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    current_password: str = Field(
+        max_length=MAX_PASSWORD_LENGTH, alias="currentPassword"
+    )
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+
+
 class DeleteAccountBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -239,6 +249,15 @@ def create_auth_router(
         session_factory,
         scope="email_verify",
         limit=_limit("AUTH_VERIFY_LIMIT", 10),
+        window_seconds=3600,
+    )
+    # Costs a password verification and a hash rather than somebody's inbox,
+    # so it sits between the two - loose enough for a mistyped current
+    # password, tight enough that a stolen session cannot grind at one.
+    password_change_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_change",
+        limit=_limit("AUTH_PASSWORD_CHANGE_LIMIT", 10),
         window_seconds=3600,
     )
 
@@ -416,7 +435,11 @@ def create_auth_router(
         await throttle(lookup_limiter, request)
         color = normalize_name_color(body.name_color)
         if color is None:
-            raise HTTPException(status_code=400, detail="Invalid color.")
+            # Shape or readability (#571): the same rule the seat applies.
+            raise HTTPException(
+                status_code=400,
+                detail="Pick a color that reads on both the light and the dark player list.",
+            )
 
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
@@ -863,6 +886,54 @@ def create_auth_router(
         # here. Signing them back in is the point of having reset it.
         clear_session_cookie(response, secure=is_secure_request(request))
         await issue_cookie(response, request, str(user_id))
+        return {"ok": True}
+
+    @router.post("/password/change")
+    async def change_own_password(
+        body: ChangePasswordBody, request: Request, response: Response
+    ):
+        """Change the password of the account making the request.
+
+        The signed-in counterpart of a reset, for somebody who knows their
+        password and simply wants a different one - the reset link exists for
+        the case where they do not, and remains the only route for a guest,
+        who has no password to change.
+        """
+        await throttle(password_change_limiter, request)
+        user = await require_user(request)
+        if user.is_anonymous:
+            raise HTTPException(
+                status_code=403, detail="Create an account to set a password."
+            )
+        try:
+            password = validate_password(body.password)
+        except PasswordPolicyError as error:
+            raise HTTPException(status_code=400, detail=PASSWORD_RULE_MESSAGE) from error
+        credentials = (
+            await user_repo.get_credentials_by_username(user.username)
+            if user.username
+            else None
+        )
+        if (
+            credentials is None
+            or credentials.user.id != user.id
+            or not await verify_password(credentials.password_hash, body.current_password)
+        ):
+            raise HTTPException(status_code=401, detail="Password is incorrect.")
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        changed = await change_password(
+            session_factory,
+            user_id=UUID(user.id),
+            password_hash=await hash_password(password),
+            ip_hash=ip_hash,
+            request_id=request_id,
+        )
+        if not changed:
+            raise HTTPException(status_code=409, detail="Could not change the password.")
+        # Every session was revoked, this one included. Signing the caller
+        # back in is what keeps a password change from also being a logout.
+        clear_session_cookie(response, secure=is_secure_request(request))
+        await issue_cookie(response, request, user.id)
         return {"ok": True}
 
     @router.post("/logout")
