@@ -517,7 +517,7 @@ process. These deployment settings can be tuned without code changes:
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | Where confirmation and reset links point |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
-| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`); `text` is the classic line with the same ids as a suffix. Secrets and e-mail addresses are redacted in both |
+| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable |
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
@@ -1427,10 +1427,11 @@ p95 over 250 ms, more than 1 % of requests or commands failing, a saturated pool
 mail older than two sweeps, an export older than ten minutes, abandonment at or above
 25 % — so the banner, the list, and the chip on each card always agree.
 
-Every request is logged once by the server itself (route template, status, time) and
-answered with an `X-Request-ID`; quote it when reporting a problem and the log lines
-and the audit entry for that request are one search away. Client commands are logged
-under the socket id and command name the same way.
+In JSON mode every request is logged once by the server itself (route template,
+status, time) under its `X-Request-ID`, which every response carries in both modes;
+quote it when reporting a problem and the log lines and the audit entry for that
+request are one search away. Client commands are logged under the socket id and
+command name the same way.
 
 A scrape configuration for the token-protected endpoint:
 

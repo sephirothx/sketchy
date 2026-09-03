@@ -12,16 +12,28 @@ documents has no SMTP, and its console transport answers that by logging the
 message it would have sent. If the log goes nowhere, the account recovery flow
 silently does nothing at all on the default deployment.
 
-Since #472 the lines also carry who they belong to and can be read by a
-machine. Every record gets the request id, socket id and command that were
-current when it was written (`app.correlation`), so the lines of one request
-can be found together. In production the format is one JSON object per line -
-`LOG_FORMAT=json`, the default when `SKETCHY_ENV=production` - because a log
-that has to be parsed by regular expression is a log nobody parses. And every
-line, in either format, passes through a redaction filter before it is
-written: a bearer token, a password in a query string, a session cookie, a
-password inside a database URL, or an e-mail address is replaced before it
-can reach a log store that is kept longer than the data it came from.
+Since #472 there are two formats, for two readers.
+
+`LOG_FORMAT=json` - the default when `SKETCHY_ENV=production` - is for a log
+store. One object per line, because a log that has to be parsed by regular
+expression is a log nobody parses; every record stamped with the request id,
+socket id and command that were current when it was written
+(`app.correlation`), so the lines of one request can be found together; and
+every line passed through a redaction filter first, so a bearer token, a
+password in a query string, a session cookie, a password inside a database
+URL or an e-mail address cannot reach a store kept longer than the data it
+came from. In this mode uvicorn's own logging is switched off by the server
+entry point and its loggers attached here, so its lines take the same shape,
+and the timing middleware's one access line per request replaces uvicorn's.
+
+`LOG_FORMAT=text` - the default everywhere else - is the development
+console, and it is deliberately what it was before #472: the plain line,
+uvicorn's own coloured lines and access log left exactly as uvicorn writes
+them, nothing redacted. A developer reads this with their eyes, and the
+zero-configuration deployment prints the verification and reset links here
+with their tokens in them - a console that masked those would break the
+account flow it exists to make work. The request id is still on every
+response as `X-Request-ID`; it just is not on every line.
 """
 from __future__ import annotations
 
@@ -37,7 +49,10 @@ from app import correlation
 from app.deployment import is_production
 
 
-TREES = ("app", "sketchy", "uvicorn")
+TREES = ("app", "sketchy")
+# Taken over only in JSON mode; in text mode uvicorn keeps its own config.
+UVICORN_TREES = ("uvicorn",)
+ACCESS_LOGGER = "sketchy.http"
 FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 JSON_FORMAT = "json"
 TEXT_FORMAT = "text"
@@ -87,21 +102,6 @@ class CorrelationFilter(logging.Filter):
         return True
 
 
-class RedactingFormatter(logging.Formatter):
-    """The text format, with the correlation fields as a suffix and secrets removed."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        line = super().format(record)
-        suffix = " ".join(
-            f"{key}={getattr(record, key)}"
-            for key in ("request_id", "sid", "event")
-            if getattr(record, key, None)
-        )
-        if suffix:
-            line = f"{line} [{suffix}]"
-        return redact(line)
-
-
 class JsonFormatter(logging.Formatter):
     """One JSON object per line, with a fixed set of keys a log store can index."""
 
@@ -132,7 +132,13 @@ class JsonFormatter(logging.Formatter):
 
 
 def make_formatter(fmt: str | None = None) -> logging.Formatter:
-    return JsonFormatter() if (fmt or log_format()) == JSON_FORMAT else RedactingFormatter(FORMAT)
+    return JsonFormatter() if (fmt or log_format()) == JSON_FORMAT else logging.Formatter(FORMAT)
+
+
+def _detach(name: str) -> None:
+    logger = logging.getLogger(name)
+    for handler in [h for h in logger.handlers if getattr(h, "_sketchy_handler", False)]:
+        logger.removeHandler(handler)
 
 
 def configure_logging(level: str | None = None, *, fmt: str | None = None) -> None:
@@ -142,14 +148,27 @@ def configure_logging(level: str | None = None, *, fmt: str | None = None) -> No
     may all call it; a second call with a different format replaces the
     formatter rather than adding a handler. Handlers are attached to the trees
     rather than the root so that anything else attached to root - pytest's
-    caplog included - is left exactly as it is. The uvicorn tree is one of
-    them since #472: the server is started with uvicorn's own logging config
-    switched off, so its lines take the same shape as ours.
+    caplog included - is left exactly as it is.
+
+    In JSON mode the uvicorn tree is ours as well (the server starts uvicorn
+    with its own config switched off) and the access logger writes at the
+    configured level. In text mode uvicorn is left alone and the access
+    logger is held at WARNING, because uvicorn's own access log is back and
+    a second line per request would be noise.
     """
     resolved = (level or os.getenv("LOG_LEVEL", "info")).upper()
     numeric = getattr(logging, resolved, logging.INFO)
-    formatter = make_formatter(fmt)
-    for name in TREES:
+    chosen = fmt or log_format()
+    formatter = make_formatter(chosen)
+    if chosen == JSON_FORMAT:
+        trees = (*TREES, *UVICORN_TREES)
+        logging.getLogger(ACCESS_LOGGER).setLevel(logging.NOTSET)
+    else:
+        trees = TREES
+        for name in UVICORN_TREES:
+            _detach(name)
+        logging.getLogger(ACCESS_LOGGER).setLevel(logging.WARNING)
+    for name in trees:
         logger = logging.getLogger(name)
         logger.setLevel(numeric)
         existing = [h for h in logger.handlers if getattr(h, "_sketchy_handler", False)]
