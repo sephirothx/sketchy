@@ -458,7 +458,7 @@ claim that an arbitrary host will sustain it.
 | **R-OBS-09** | The operations overview MUST poll only while it is the selected tab in a visible document. |
 | **R-OBS-10** | A finished-game or prompt-usage write that is abandoned (timeout or error) MUST be counted with its kind and reason, on the persisted recorder and on `/metrics`; the swallow itself stays (#482). |
 | **R-OBS-11** | Every log line MUST carry the request id, or the socket id and command, it was written inside; every response MUST echo the request's id as `X-Request-ID`; the audit ledger MUST record the same id. A supplied id that is not a UUID MUST be replaced. |
-| **R-OBS-12** | In production log lines MUST be JSON objects, one per line, and in every format a line MUST pass redaction - credentials, session values, database passwords, e-mail local parts - before it is written. |
+| **R-OBS-12** | In production log lines MUST be JSON objects, one per line, each passed through redaction - credentials, session values, database passwords, e-mail local parts - before it is written. The text format is the development console and MUST stay verbatim: plain lines, uvicorn's own output, nothing redacted, so the links the console mail transport prints remain usable. |
 | **R-OBS-13** | The service objectives and the alert rules that enforce them MUST live in the repository (`docs/slo.md`, `ops/prometheus/rules/`), every series a rule names MUST be one the server exposes (checked in CI), and a synthetic game (`app.probe`) MUST be runnable against a deployment with no dependency beyond the standard library. |
 
 ### Runtime tuning

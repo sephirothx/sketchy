@@ -8,10 +8,11 @@ import pytest
 
 from app import correlation
 from app.logging_config import (
+    ACCESS_LOGGER,
     FORMAT,
     JsonFormatter,
-    RedactingFormatter,
     configure_logging,
+    make_formatter,
     log_format,
     redact,
 )
@@ -89,12 +90,16 @@ def test_an_exception_is_one_string_field_not_a_dozen_lines():
 # --- text lines ------------------------------------------------------------------
 
 
-def test_the_text_format_is_unchanged_except_for_a_suffix_when_there_is_one():
-    formatter = RedactingFormatter(FORMAT)
-    plain = formatter.format(record("mail sent"))
-    assert plain.endswith("INFO     app.test: mail sent")
-    tagged = formatter.format(record("mail sent", request_id="rid-1", event="draw"))
-    assert tagged.endswith("INFO     app.test: mail sent [request_id=rid-1 event=draw]")
+def test_the_text_format_is_the_development_console_verbatim():
+    """No suffix, no redaction: a developer reads it, and the console mail
+    transport prints reset links here that a masked `token=` would break."""
+    formatter = make_formatter("text")
+    assert type(formatter) is logging.Formatter
+    assert formatter._fmt == FORMAT
+    line = formatter.format(
+        record("reset link: http://x/reset-password?token=abc for user@example.com", request_id="rid-1")
+    )
+    assert line.endswith("INFO     app.test: reset link: http://x/reset-password?token=abc for user@example.com")
 
 
 # --- redaction ---------------------------------------------------------------------
@@ -129,14 +134,21 @@ def test_configure_logging_is_idempotent_and_can_change_format(monkeypatch):
     app_logger = logging.getLogger("app")
     ours = [h for h in app_logger.handlers if getattr(h, "_sketchy_handler", False)]
     assert len(ours) == 1
-    assert isinstance(ours[0].formatter, RedactingFormatter)
+    assert type(ours[0].formatter) is logging.Formatter
+    # In text mode uvicorn is left to its own config, and the access line
+    # that would duplicate its access log is held back.
+    assert not any(getattr(h, "_sketchy_handler", False) for h in logging.getLogger("uvicorn").handlers)
+    assert logging.getLogger(ACCESS_LOGGER).getEffectiveLevel() == logging.WARNING
     configure_logging(fmt="json")
     ours = [h for h in app_logger.handlers if getattr(h, "_sketchy_handler", False)]
     assert len(ours) == 1
     assert isinstance(ours[0].formatter, JsonFormatter)
-    # uvicorn's tree is ours too, since the server hands its config over.
+    # uvicorn's tree is ours in JSON mode, since the server hands its config over.
     assert any(getattr(h, "_sketchy_handler", False) for h in logging.getLogger("uvicorn").handlers)
+    assert logging.getLogger(ACCESS_LOGGER).getEffectiveLevel() == logging.INFO
+    # And back again, cleanly.
     configure_logging(fmt="text")
+    assert not any(getattr(h, "_sketchy_handler", False) for h in logging.getLogger("uvicorn").handlers)
 
 
 def test_records_written_inside_a_request_are_stamped_with_it():

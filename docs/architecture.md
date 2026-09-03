@@ -1043,18 +1043,21 @@ fresh one - echoed on the response and set as task-local context; every client c
 gets the socket id, the command name and a fresh id of its own at `HandlerContext.on`.
 A filter on the handler stamps each record with whatever is current, so a logger deep
 in a service never has to be told, and the audit ledger reads the same id rather than
-minting another. The middleware also writes the one access line per request (route
-template, status, milliseconds; probes and static files at DEBUG), which replaces
-uvicorn's access log: the server starts uvicorn with its own logging configuration
-switched off so its lines take the application's shape too. That shape is one JSON
-object per line - `ts`, `level`, `logger`, `msg`, the correlation keys when present, a
-`fields` object for structured extras, `exc` for a traceback - when `LOG_FORMAT=json`,
-which is the default under `SKETCHY_ENV=production`; the development default is the old
-text line with the correlation keys as a suffix. Either way each line passes a redaction
-filter first: a bearer or basic credential, a `password=`/`token=`/`secret=`/cookie
-value, a password inside a database URL, and the local part of any e-mail address are
-replaced before the line is written, because a log store is kept longer than the data
-that leaks into it.
+minting another. There are two formats, for two readers. `LOG_FORMAT=json`, the default under
+`SKETCHY_ENV=production`, is for a log store: one object per line - `ts`, `level`,
+`logger`, `msg`, the correlation keys when present, a `fields` object for structured
+extras, `exc` for a traceback - each passed through a redaction filter first (a bearer
+or basic credential, a `password=`/`token=`/`secret=`/cookie value, a password inside
+a database URL, the local part of any e-mail address), because a log store is kept
+longer than the data that leaks into it. In this mode the server starts uvicorn with
+its own logging configuration switched off so its lines take the same shape, and the
+middleware's one access line per request (route template, status, milliseconds; probes
+and static files at DEBUG) replaces uvicorn's access log. `LOG_FORMAT=text`, the default
+elsewhere, is the development console and is deliberately what it was before #472:
+plain lines, uvicorn's own coloured output and access log, nothing redacted - the
+console mail transport prints verification and reset links there with their tokens,
+and a console that masked them would break the account flow it exists to serve. The
+request id is on every response in both modes; only JSON puts it on every line.
 
 The objectives these signals are held to, and the rules that page on them, live in
 the repository rather than in a monitoring console: [`docs/slo.md`](slo.md) states each
