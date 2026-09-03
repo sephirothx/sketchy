@@ -720,9 +720,13 @@ function AppearancePane() {
             ))}
           </div>
         </Row>
+      </Group>
+      {/* A fact about the player rather than a taste, so it is not a theme
+          option: its own group, worded as what it says about you. */}
+      <Group title="Accessibility">
         <ToggleRow
-          label="Prefer colorblind-safe colors"
-          hint="Asks the host to switch the room’s colors, without telling them who asked. The palette it suggests stays distinguishable with deuteranopia and protanopia."
+          label="I have trouble telling colors apart"
+          hint="Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own."
           checked={colorblindSafeColors}
           onChange={chooseColorblindSafe}
         />

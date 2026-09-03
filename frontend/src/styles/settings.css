@@ -41,7 +41,10 @@
   flex-direction: column;
   max-width: 940px;
   width: 100%;
-  /* As tall as the viewport allows, so the pane scrolls only when it must. */
+  /* One size for every section, so switching tabs never makes the sheet jump:
+     tall enough for the biggest pane (Account), capped by the viewport. A
+     pane that still does not fit scrolls inside. */
+  height: min(calc(100dvh - 32px), 760px);
   max-height: calc(100dvh - 32px);
   padding: 14px 22px 14px;
   border-radius: 16px;
@@ -786,6 +789,7 @@
     border: 0;
     border-radius: 0;
     height: 100dvh;
+    max-height: 100dvh;
     max-height: none;
     max-width: none;
     padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));

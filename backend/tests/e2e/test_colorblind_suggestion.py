@@ -123,7 +123,7 @@ async def test_dismissed_suggestion_does_not_return_when_preference_changes():
                 await dialog.wait_for()
                 await dialog.get_by_role("tab", name="Appearance").click()
                 preference = dialog.get_by_role(
-                    "switch", name="Prefer colorblind-safe colors"
+                    "switch", name="I have trouble telling colors apart"
                 )
                 # No Save: the switch reaches the room as it is flipped.
                 if desired:
