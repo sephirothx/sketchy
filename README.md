@@ -1179,7 +1179,7 @@ Install `requirements-dev.txt` instead when you plan to run unit, integration, o
 
 ```bash
 cd frontend
-npm install
+npm install --no-audit   # the audit POST hangs on some networks; the install itself is instant
 npm run dev
 ```
 
