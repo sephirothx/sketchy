@@ -101,6 +101,42 @@ async def test_a_registered_player_uploads_a_picture_and_everyone_can_fetch_it(e
     assert "avatar.uploaded" in kinds
 
 
+async def test_two_accounts_may_wear_the_same_picture(env):
+    """Content addresses are shared by construction: the same bytes are the
+    same key for everyone, so a second upload of them must not collide."""
+    new_client, factory = env
+    first, second = new_client(), new_client()
+    await register(first, "Twin1")
+    await register(second, "Twin2")
+    picture = png_bytes(seed=9)
+    one = await first.post("/api/users/me/avatar", json=encoded(picture))
+    two = await second.post("/api/users/me/avatar", json=encoded(picture))
+    assert one.status_code == 200 and two.status_code == 200, two.text
+    assert one.json()["avatarKey"] == two.json()["avatarKey"]
+    async with factory() as session:
+        rows = (await session.scalars(select(UploadedAvatarAsset))).all()
+    assert len(rows) == 2
+    # One taking theirs down leaves the other's served.
+    assert (await first.delete("/api/users/me/avatar")).status_code == 200
+    assert (await second.get(two.json()["avatarUrl"])).status_code == 200
+
+
+def test_the_room_report_command_takes_every_report_reason():
+    """The socket payload spells its reasons out as a Literal; this is what
+    keeps it from silently missing one the REST body and the dialog offer."""
+    from typing import get_args
+
+    from app.domain_values import ReportReason
+    from app.handlers.payloads import ReportPlayerPayload
+
+    literal = ReportPlayerPayload.model_fields["reason"].annotation
+    assert set(get_args(literal)) == {reason.value for reason in ReportReason}
+    parsed = ReportPlayerPayload.model_validate(
+        {"targetPlayerId": "seat-1", "reason": "inappropriate_avatar", "details": "Look."}
+    )
+    assert parsed.reason == "inappropriate_avatar"
+
+
 async def test_a_new_picture_replaces_the_old_one_and_its_url(env):
     new_client, factory = env
     http = new_client()

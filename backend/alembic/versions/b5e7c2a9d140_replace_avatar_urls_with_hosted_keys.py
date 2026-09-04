@@ -74,8 +74,15 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("object_key"),
         sa.UniqueConstraint("user_id"),
+    )
+    # Not unique: the same bytes are the same address for every account
+    # that uploads them (R-AVA-03), and each account keeps its own row.
+    op.create_index(
+        op.f("ix_uploaded_avatar_assets_object_key"),
+        "uploaded_avatar_assets",
+        ["object_key"],
+        unique=False,
     )
     op.create_table(
         "external_identities",
@@ -108,6 +115,9 @@ def downgrade() -> None:
         op.f("ix_external_identities_user_id"), table_name="external_identities"
     )
     op.drop_table("external_identities")
+    op.drop_index(
+        op.f("ix_uploaded_avatar_assets_object_key"), table_name="uploaded_avatar_assets"
+    )
     op.drop_table("uploaded_avatar_assets")
     with op.batch_alter_table("users") as batch_op:
         batch_op.drop_column("avatar_upload_blocked_until")

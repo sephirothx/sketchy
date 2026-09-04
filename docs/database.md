@@ -462,8 +462,10 @@ cd backend && .venv/bin/python -m app.services.mail_delivery   # flush by hand
 
 ### `uploaded_avatar_assets`
 One account's uploaded picture (#573): `id` · `user_id` (CASCADE, **unique**: one
-picture per account) · `object_key` (unique; the content address `<sha256>.webp` or `.png`, also
-denormalised onto `users.avatar_key` so identity payloads need no join) ·
+picture per account) · `object_key` (indexed, **not** unique: the content address
+`<sha256>.webp` or `.png`, which two accounts uploading the same bytes share, each on
+their own row; also denormalised onto `users.avatar_key` so identity payloads need no
+join) ·
 `content_type` · `byte_size` · `width` · `height` · `checksum_sha256` · `payload`
 (the bytes) · `created_at`.
 

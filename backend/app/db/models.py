@@ -1488,7 +1488,9 @@ class UploadedAvatarAsset(Base):
 
     Small by construction - 256×256 WebP or PNG, 128 KiB at most - which is what keeps
     the bytes in the primary database defensible until object storage (#471)
-    exists. `object_key` is the content address the picture is served under.
+    exists. `object_key` is the content address the picture is served under:
+    indexed for the fetch, not unique, because two accounts uploading the
+    same bytes hold the same address and each keeps their own row.
     """
 
     __tablename__ = "uploaded_avatar_assets"
@@ -1502,7 +1504,7 @@ class UploadedAvatarAsset(Base):
         nullable=False,
         unique=True,
     )
-    object_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    object_key: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
     content_type: Mapped[str] = mapped_column(String(64), nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
