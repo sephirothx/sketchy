@@ -56,7 +56,7 @@ the rotation itself are counted in *rounds*.
 | **Drawer** | The player whose turn it is to draw. | artist, painter, sketcher |
 | **Guesser** | Any player in the drawing phase who is not the drawer. Stays a guesser after guessing the prompt. | watcher, viewer |
 | **Spectator** | Someone watching a room without playing. Never draws, never scores, never votes, and is never a moderation target. | observer, viewer, lurker |
-| **Host** | The player who created the room and can start the game and change its **Room rules**. | owner, admin, leader |
+| **Host** | The player who created the room and can start the game and change its **Room rules**. Marked by a gold crown on the corner of their **Avatar** wherever players are listed. | owner, admin, leader |
 | **Guest** | Someone playing under an unclaimed account. Shown in grey italics. | anonymous player, unregistered user |
 | **Administrator** | A trusted service-wide operator. This is an account role, never the **host** of a room. | admin (for a room host), owner |
 | **Game outcome** | Whether a game reached its end (**finished**), stopped when the last player left (**abandoned**), or was cut short by a planned deploy (**shutdown**). Every game has one; `finished_at` says when it stopped, not that it finished. | game status, completed, ended |

@@ -176,13 +176,15 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           {activePlayers.map((player) => (
             <li
               key={player.playerId}
-              className={`waiting-roster-tile${player.connected && !player.isAfk ? " is-ready" : ""}`}
+              className="waiting-roster-tile"
             >
               <Avatar
                 name={player.nickname}
                 nameColor={player.nameColor}
                 avatarUrl={player.avatarUrl}
                 isAnonymous={player.isAnonymous}
+                isHost={player.isHost}
+                isSelf={player.playerId === myPlayerId}
                 size={46}
               />
               <span className="waiting-roster-name">
@@ -192,11 +194,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 >
                   {player.nickname}
                 </span>
+                {player.playerId === myPlayerId && (
+                  <span className="visually-hidden">(you)</span>
+                )}
+                {player.isHost && <span className="visually-hidden">Host</span>}
               </span>
-              {player.isHost && <span className="waiting-roster-tag">host</span>}
-              {player.playerId === myPlayerId && !player.isHost && (
-                <span className="waiting-roster-tag">you</span>
-              )}
             </li>
           ))}
           {activePlayers.length < props.maxPlayers && (

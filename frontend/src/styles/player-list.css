@@ -1,5 +1,7 @@
 /* Players sidebar rows, per docs/ui-mockups (playerRow in tools/shell.mjs):
-   avatar, name + live status on two lines, score on the right. */
+   avatar, name + live status on two lines, score on the right. "You" and
+   "host" live on the avatar (ring and crown, see primitives.css) rather than
+   in the name line (#574). */
 .player-list {
   display: grid;
   gap: 5px;
@@ -31,6 +33,13 @@
 
 .player-row.has-scores:has(.player-role-placement) {
   grid-template-columns: 20px auto minmax(0, 1fr) auto;
+}
+
+/* Your own row is faintly tinted so it can be found in a full list without
+   reading names. Declared before the drawing and guessed backgrounds so
+   those, which say something that changes, win over one that does not. */
+.player-row.is-self {
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
 }
 
 .player-row.is-drawing {
@@ -97,19 +106,6 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
-}
-
-.player-you-mark {
-  color: var(--faint);
-  flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.player-host-mark {
-  color: var(--muted);
-  display: inline-flex;
-  flex: none;
 }
 
 .player-status {

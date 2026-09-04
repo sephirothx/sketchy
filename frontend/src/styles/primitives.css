@@ -184,3 +184,44 @@
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* The viewer's own disc wears a ring in the primary colour (#574). An outline
+   rather than a border, so the initial and the picture keep their whole disc,
+   and offset so the ring floats clear of it instead of thickening its edge.
+   Rows that change background (drawing, guessed) show through the gap. */
+.avatar.is-self {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* The host's crown perches on the disc's top-right edge, like a crown on a
+   head (#574), in gold so it is never mistaken for a status colour. No disc
+   under it: the filled silhouette with a dark contour is enough to read over
+   any player colour or picture. */
+.avatar-frame {
+  display: inline-flex;
+  flex: none;
+  position: relative;
+}
+
+/* The dark theme's gold in both themes: the light theme's --gold is the
+   ink-dark shade a word needs on paper, too muddy for a filled shape that
+   already has its own dark contour. */
+.avatar-crown {
+  color: #f5ce62;
+  display: inline-flex;
+  line-height: 0;
+  position: absolute;
+  right: -6px;
+  top: -7px;
+}
+
+/* A stroked crown at 12 px is a scribble; filling it keeps the silhouette,
+   and a dark contour painted underneath separates it from the disc without
+   drawing a badge. Dark in both themes: gold reads as gold against dark. */
+.avatar-crown svg {
+  fill: currentColor;
+  paint-order: stroke;
+  stroke: #292520;
+  stroke-width: 2.5;
+}

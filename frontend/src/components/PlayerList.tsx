@@ -10,7 +10,7 @@ import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderatio
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
-import { CheckIcon, CrownIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
+import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -38,10 +38,9 @@ function fitPlayerNames(list: HTMLElement) {
     const name = cell.querySelector<HTMLElement>(".colored-player-name");
     if (!name) continue;
     name.style.fontSize = "";
-    const youMark = cell.querySelector(".player-you-mark");
-    const gap = youMark ? parseFloat(getComputedStyle(cell).gap) || 0 : 0;
-    const available =
-      cell.clientWidth - (youMark instanceof HTMLElement ? youMark.offsetWidth : 0) - gap;
+    // Nothing visible shares the line since #574 moved "you" and the crown
+    // onto the avatar, so the name may have the whole cell.
+    const available = cell.clientWidth;
     const range = document.createRange();
     range.selectNodeContents(name);
     const natural = range.getBoundingClientRect().width;
@@ -215,6 +214,8 @@ export function PlayerList({
               nameColor={p.nameColor}
               avatarUrl={p.avatarUrl}
               isAnonymous={p.isAnonymous}
+              isHost={p.isHost}
+              isSelf={isMe}
               size={38}
             />
             <span className="player-main">
@@ -224,12 +225,10 @@ export function PlayerList({
                   nameColor={p.nameColor}
                   isAnonymous={p.isAnonymous}
                 />
-                {isMe && <span className="player-you-mark">you</span>}
-                {p.isHost && (
-                  <span className="player-host-mark" role="img" aria-label="Host" title="Host">
-                    <CrownIcon size={14} />
-                  </span>
-                )}
+                {/* The ring and the crown are on the avatar (#574); these say
+                    the same two things where a screen reader reads the name. */}
+                {isMe && <span className="visually-hidden">(you)</span>}
+                {p.isHost && <span className="visually-hidden">Host</span>}
                 {!p.connected && <span className="visually-hidden">Disconnected</span>}
               </span>
               {status}

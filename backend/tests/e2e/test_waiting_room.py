@@ -37,7 +37,8 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             assert await host_page.get_by_role("heading", name="Players").is_visible()
             assert await host_page.get_by_label("1 of 8 players").is_visible()
             assert await host_page.locator(".player-row.is-self").get_by_text("LobbyHost").is_visible()
-            assert await host_page.get_by_label("Host", exact=True).is_visible()
+            # The crown sits on the avatar (#574); the name line still says it.
+            assert await host_page.locator(".player-row.is-self").get_by_text("Host", exact=True).count() == 1
             await open_room_settings(host_page)
             await host_page.wait_for_selector('.room-settings-editor')
             await assert_input_contract(
