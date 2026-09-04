@@ -39,7 +39,6 @@ import {
   DEFAULT_KEY_BINDINGS,
   NAME_COLOR_PALETTE,
   getSystemTheme,
-  randomNameColor,
   useSettingsStore,
   type AppTheme,
   type BrushCursorStyle,
@@ -54,7 +53,6 @@ import {
   CircleIcon,
   ClockIcon,
   DevicesIcon,
-  DiceIcon,
   DownloadIcon,
   EraserIcon,
   EyeIcon,
@@ -695,15 +693,6 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                     {color === nameColor && <CheckIcon size={14} />}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  className="btn btn-ghost settings-swatch-random"
-                  aria-label="Surprise me"
-                  title="Surprise me"
-                  onClick={() => chooseNameColor(randomNameColor(nameColor))}
-                >
-                  <DiceIcon size={15} />
-                </button>
               </span>
             )}
             {pictureError && (
