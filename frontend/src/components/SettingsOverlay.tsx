@@ -370,7 +370,7 @@ function PictureEditChip({
         aria-controls={hasPicture && open ? menuId : undefined}
         onClick={() => (hasPicture ? setOpen((shown) => !shown) : pick())}
       >
-        <PencilIcon size={14} />
+        <PencilIcon size={12} />
       </button>
       {hasPicture && open && (
         <div
