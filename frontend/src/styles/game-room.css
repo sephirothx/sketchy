@@ -5,24 +5,9 @@
   padding: 16px;
 }
 
-@media (max-width: 600px) {
-  .waiting-rules-head {
-    flex-direction: column;
-  }
-
-  .waiting-rules-grid {
-    gap: 6px;
-  }
-
-  .rule-tile {
-    padding: 10px 10px;
-  }
-
-  .rule-tile dd {
-    font-size: 17px;
-  }
-
-  .waiting-leave-link {
+/* The way out for whoever landed in the wrong room, quiet enough not to
+   compete with Start. */
+.waiting-leave-link {
   color: var(--faint);
   font-size: 13px;
   margin-top: 6px;
@@ -39,17 +24,6 @@
   .waiting-leave-link {
     display: none;
   }
-}
-
-.waiting-start-card {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .waiting-start-button,
-  .custom-prompts-apply { width: 100%; }
-  .waiting-card { padding: 16px; }
-  .waiting-room-actions { justify-content: flex-start; width: 100%; }
 }
 
 .restart-vote-banner {
@@ -594,6 +568,40 @@
 .waiting-start-button:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
 .custom-prompts-apply { background: var(--primary); border: 0; border-radius: var(--radius-sm); box-shadow: 0 2px 0 var(--primary-edge); color: #fff; font-size: 14px; font-weight: 800; margin-top: 10px; padding: 10px 14px; }
 .custom-prompts-apply:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
+
+/* The waiting room on a phone. It has to come after the rules it narrows:
+   at equal specificity the later declaration wins, so a media query above
+   them changes nothing. */
+@media (max-width: 600px) {
+  .waiting-rules-head {
+    flex-direction: column;
+  }
+
+  /* Two columns, not three: a 390px phone gives a third of the card ~105px,
+     and "Drawing time" alone wraps to two lines in it. */
+  .waiting-rules-grid {
+    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rule-tile {
+    padding: 10px 10px;
+  }
+
+  .rule-tile dd {
+    font-size: 17px;
+  }
+
+  .waiting-start-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waiting-start-button,
+  .custom-prompts-apply { width: 100%; }
+  .waiting-card { padding: 16px; }
+  .waiting-room-actions { justify-content: flex-start; width: 100%; }
+}
 .waiting-chat-empty { color: var(--muted); font-style: italic; margin: 0; }
 .waiting-chat-form { margin-top: 10px; }
 .waiting-chat-error { color: var(--danger); margin: 7px 0 0; }
