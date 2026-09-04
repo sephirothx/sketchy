@@ -204,8 +204,11 @@
   position: relative;
 }
 
+/* The dark theme's gold in both themes: the light theme's --gold is the
+   ink-dark shade a word needs on paper, too muddy for a filled shape that
+   already has its own dark contour. */
 .avatar-crown {
-  color: var(--gold);
+  color: #f5ce62;
   display: inline-flex;
   line-height: 0;
   position: absolute;
