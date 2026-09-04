@@ -2,12 +2,15 @@
    ways out. It shares the `.not-found-*` recipes because it is the same object
    - a canvas nobody meant to draw on - and differs only in what sits below. */
 
+/* Under the report, and only once it has gone (or could not go). */
 .crash-actions {
+  border-top: 1.5px solid var(--line);
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  margin-bottom: 22px;
+  margin-top: 18px;
+  padding-top: 18px;
 }
 
 .crash-actions .btn {
@@ -18,6 +21,10 @@
   border-top: 1.5px solid var(--line);
   margin-top: 0;
   padding-top: 18px;
+}
+
+.crash-report .modal-button {
+  margin-top: 10px;
 }
 
 .crash-report h2 {

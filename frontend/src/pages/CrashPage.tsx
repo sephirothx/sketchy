@@ -46,10 +46,13 @@ interface Props {
 
 Drawn like the not-found page - the canvas is the illustration, a bug on it -
 because it is the same object seen from the other side: a page nobody meant
-to draw. Two ways out, and under them a bug report that is already written.
-The player has one thing to add, what they were doing, and may send it with or
-without the details, exactly as in the dialog they would otherwise have had to
-find (R-BUG-01).
+to draw. Under it a bug report that is already written: the player has one
+thing to add, what they were doing, and may send it with or without the
+details, exactly as in the dialog they would otherwise have had to find
+(R-BUG-01). The two ways out - Reload and Back to lobby - appear once the
+report has gone, because a crash nobody hears about is a crash that stays.
+They also appear if sending fails: a page that cannot be left is worse than a
+report that was not filed.
 
 Router-free on purpose: the boundary around `<App>` sits outside the router, so
 the ways out arrive as callbacks and the header is the wordmark alone. Every
@@ -121,6 +124,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
 
   const budget = playerTextBudget(prefill.diagnosticBlock);
   const nothingToSend = descriptionOnly && !playerText.trim();
+  const waysOutOpen = sent || failure !== null;
 
   const rows: [string, string][] = context
     ? [
@@ -184,18 +188,9 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
         <h1>A bug crawled onto the page</h1>
         <p>
           {scope === "room"
-            ? "This room’s screen hit an error and had to stop. Your seat is held for a moment: reload to pick it back up, or go back to the lobby."
-            : "This screen hit an error and had to stop. Your account and settings are safe."}
+            ? "This room’s screen hit an error and had to stop. Your seat is held for a moment: send the report below, then reload to pick it back up or go back to the lobby."
+            : "This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you’ll be on your way."}
         </p>
-        <div className="crash-actions">
-          <button type="button" className="btn btn-primary" onClick={onReload}>
-            Reload
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={onBackToLobby}>
-            Back to lobby
-          </button>
-        </div>
-
         <form className="auth-form crash-report" aria-labelledby={reportTitleId} onSubmit={(event) => void submit(event)}>
           <h2 id={reportTitleId}>Help us squash it</h2>
           <p className="auth-hint">
@@ -256,10 +251,21 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
             <p className="crash-sent" role="status">Thanks — your report is with the people who run Sketchy.</p>
           ) : (
             <button type="submit" className="modal-button" disabled={busy || nothingToSend}>
-              {busy ? "Sending…" : "Send report"}
+              {busy ? (failure ? "Sending again…" : "Sending…") : (failure ? "Try sending again" : "Send report")}
             </button>
           )}
         </form>
+
+        {waysOutOpen && (
+          <div className="crash-actions">
+            <button type="button" className="btn btn-primary" onClick={onReload}>
+              Reload
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={onBackToLobby}>
+              Back to lobby
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

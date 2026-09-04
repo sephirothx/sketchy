@@ -259,7 +259,8 @@ Three frontend conventions worth knowing:
    store. That emit matters because the socket is a module singleton the unmount never
    touched; without it a crashed room keeps its seat. Both show
    [`pages/CrashPage.tsx`](../frontend/src/pages/CrashPage.tsx), which pre-fills a bug
-   report from the caught error and leaves browser storage exactly as it was.
+   report from the caught error, offers the ways out only once it has been sent (or has
+   failed to send), and leaves browser storage exactly as it was.
 
 ---
 

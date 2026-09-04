@@ -385,10 +385,12 @@ export const NotFoundPage = `
 // ------------------------------------------------------------------- Crash
 // What a screen shows when its own code throws (#474, R-UX-06): the not-found
 // card again, because it is the same object - a canvas nobody meant to draw on
-// - with a bug on the sheet. Two ways out first, and under them a bug report
-// that is already written: the player adds what they were doing, if anything,
-// and sends it. The header is the wordmark alone: the boundary around the app
-// sits outside the router, so there is no account button to draw.
+// - with a bug on the sheet. Under it a bug report that is already written:
+// the player adds what they were doing, if anything, and sends it. The two
+// ways out appear only once it has gone (drawn here in that state), because a
+// crash nobody hears about is a crash that stays. The header is the wordmark
+// alone: the boundary around the app sits outside the router, so there is no
+// account button to draw.
 const crashRow = (label, value) => `
 <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; padding: 7px 2px; border-bottom: 1px solid ${T.line}">
   <dt style="color: ${T.faint}; font-size: 12.5px; font-weight: 700">${label}</dt>
@@ -410,11 +412,7 @@ export const CrashPage = `
       ${notFoundTool(icon.brush(18))}${notFoundTool(icon.fill(18))}${notFoundTool(icon.rect(18))}${notFoundTool(icon.undo(18))}
     </div>
     <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 25px; color: ${T.ink}; margin-bottom: 8px">A bug crawled onto the page</h1>
-    <p style="font-size: 14.5px; color: ${T.muted}; font-weight: 600; margin-bottom: 20px">This screen hit an error and had to stop. Your account and settings are safe.</p>
-    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 22px">
-      ${btn.primary('Reload', { style: 'flex: 1 1 150px' })}
-      ${btn.secondary('Back to lobby', { style: 'flex: 1 1 150px' })}
-    </div>
+    <p style="font-size: 14.5px; color: ${T.muted}; font-weight: 600; margin-bottom: 20px">This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you&rsquo;ll be on your way.</p>
     <form style="display: flex; flex-direction: column; gap: 6px; text-align: left; border-top: 1.5px solid ${T.line}; padding-top: 18px">
       <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17.5px; color: ${T.ink}; margin: 0 0 4px">Help us squash it</h2>
       <p style="font-size: 12px; color: ${T.muted}; margin: 0 0 8px">A report is ready to send: the error, and what this tab knows about itself. It reaches the people who run Sketchy &mdash; never other players.</p>
@@ -441,8 +439,12 @@ export const CrashPage = `
         <input type="checkbox" style="flex: none; margin-top: 2px">
         <span style="font-size: 13px; font-weight: 700; color: ${T.ink}; line-height: 1.45">Send my description only<span style="display: block; color: ${T.faint}; font-size: 12px; font-weight: 600; margin-top: 2px">Drops the details above. We will still read it, but the crash is much harder to find.</span></span>
       </label>
-      ${btn.primary('Send report', { style: 'margin-top: 10px; width: 100%' })}
+      <p style="color: ${T.successInk}; font-size: 13.5px; font-weight: 700; margin: 10px 0 0; text-align: center">Thanks &mdash; your report is with the people who run Sketchy.</p>
     </form>
+    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 18px; padding-top: 18px; border-top: 1.5px solid ${T.line}">
+      ${btn.primary('Reload', { style: 'flex: 1 1 150px' })}
+      ${btn.secondary('Back to lobby', { style: 'flex: 1 1 150px' })}
+    </div>
   </main>
 </div>`;
 

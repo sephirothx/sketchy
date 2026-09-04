@@ -1336,8 +1336,9 @@ A screen whose own code throws shows the **crash page** instead of going blank: 
 is caught at the application root and again around the live room. The page offers a reload, a
 way back to the lobby — the room's releases the seat, since the socket outlives the crashed
 tree — and a bug report already filled with the error and the client error tail, which the
-player may send with a line about what they were doing. Browser-stored settings are left alone;
-only the in-memory game state is reset.
+player may send with a line about what they were doing. The two ways out appear once that
+report has gone (or could not go), so a crash is heard about before it is left behind.
+Browser-stored settings are left alone; only the in-memory game state is reset.
 
 If a reverse proxy handles compression instead, it may replace the gzip layer, but it should
 preserve the same cache distinction: fingerprinted assets are immutable while the SPA HTML

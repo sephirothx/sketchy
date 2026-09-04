@@ -40,6 +40,12 @@ async def filed_reports_mentioning(marker: str) -> list[BugReport]:
         await engine.dispose()
 
 
+async def send_report(page) -> None:
+    """Send the pre-filled report as it stands; the ways out appear after."""
+    await page.click('.crash-report button[type="submit"]')
+    await expect(page.locator(".crash-sent")).to_contain_text("your report is with")
+
+
 @pytest.mark.asyncio
 async def test_a_crash_at_the_root_shows_the_page_and_files_a_prefilled_report():
     """R-UX-06, R-BUG-01. Before this a render error was a blank page.
@@ -63,6 +69,9 @@ async def test_a_crash_at_the_root_shows_the_page_and_files_a_prefilled_report()
             await page.evaluate("() => window.__SKETCHY_CRASH__('app')")
             await expect(page.get_by_role("heading", name=HEADING)).to_be_visible()
             await assert_no_axe_violations(page, "crash page")
+            # The ways out wait for the report: a crash nobody hears about stays.
+            await expect(page.get_by_role("button", name="Reload")).to_have_count(0)
+            await expect(page.get_by_role("button", name="Back to lobby")).to_have_count(0)
 
             # What is listed is what is sent, with the crash first.
             await page.click(".bug-report-context > summary")
@@ -87,7 +96,8 @@ async def test_a_crash_at_the_root_shows_the_page_and_files_a_prefilled_report()
             kinds = [entry["kind"] for entry in report.client_context["recentErrors"]]
             assert "render" in kinds, kinds
 
-            # Reload puts the lobby back, and the stored setting is still there.
+            # Sent, so the ways out are offered. Reload puts the lobby back, and
+            # the stored setting is still there.
             await page.get_by_role("button", name="Reload").click()
             await expect(page.get_by_role("button", name="Create room")).to_be_visible()
             assert await page.evaluate("() => localStorage.getItem('sketchy_theme')") == "dark"
@@ -128,6 +138,7 @@ async def test_a_crash_in_the_room_can_leave_it_and_the_seat_goes_too():
 
             await host.evaluate("() => window.__SKETCHY_CRASH__('room')")
             await expect(host.get_by_role("heading", name=HEADING)).to_be_visible()
+            await send_report(host)
 
             await host.get_by_role("button", name="Back to lobby").click()
             await host.wait_for_url(f"{BASE_URL}/")
@@ -170,6 +181,7 @@ async def test_reloading_after_a_room_crash_keeps_the_seat():
 
             await host.evaluate("() => window.__SKETCHY_CRASH__('room')")
             await expect(host.get_by_role("heading", name=HEADING)).to_be_visible()
+            await send_report(host)
 
             await host.get_by_role("button", name="Reload").click()
             await host.wait_for_selector('[data-testid="waiting-room"]')

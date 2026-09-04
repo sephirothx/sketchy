@@ -2000,7 +2000,7 @@ S({ id:'crash', n:'19', group:'Elsewhere', title:'Crash page',
     ],
     good:[
       '<b>The not-found card again, with a bug on the sheet.</b> Same white 4:3 canvas, same drawn-not-wired tool strip; a page nobody meant to draw, seen from the other side.',
-      '<b>Two ways out, then the report.</b> <code>Reload</code> keeps the seat — the server holds it through its disconnect grace and the page rejoins from the URL. <code>Back to lobby</code> in a room sends <code>leave_room</code> first, so the seat goes with the player.',
+      '<b>The report first, then the ways out.</b> <code>Reload</code> and <code>Back to lobby</code> appear once the report has gone (or could not go) — a crash nobody hears about is a crash that stays. Reload keeps the seat: the server holds it through its disconnect grace and the page rejoins from the URL. Back to lobby in a room sends <code>leave_room</code> first, so the seat goes with the player.',
       '<b>The bug report is already written.</b> Summary, area and severity come from the error; the player adds one line about what they were doing, or nothing, and sends. What leaves the browser is listed under the field, with the crash on top of the error tail.',
       'Nothing in browser storage is touched: settings stay, and so does the marker that stops an upgrade from reloading forever. Only the in-memory game state is reset, because it is the one thing the crashed tree was reading.',
       'The header is the wordmark alone. The boundary around the app sits outside the router, so there is no account button to draw and no route to navigate to.'
@@ -2047,11 +2047,7 @@ S({ id:'crash', n:'19', group:'Elsewhere', title:'Crash page',
           </div>
           <div>
             <div class="disp" style="font-size:21px">A bug crawled onto the page</div>
-            <div class="muted" style="font-size:13px;font-weight:700;margin-top:5px">This screen hit an error and had to stop. Your account and settings are safe.</div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <span class="btn" style="flex:1">Reload</span>
-            <span class="btn ghost" style="flex:1;border:1.5px solid var(--line-strong)">Back to lobby</span>
+            <div class="muted" style="font-size:13px;font-weight:700;margin-top:5px">This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you’ll be on your way.</div>
           </div>
           <div style="border-top:1.5px solid var(--line);padding-top:12px;text-align:left;display:flex;flex-direction:column;gap:6px">
             <div class="disp" style="font-size:16px">Help us squash it</div>
@@ -2059,7 +2055,11 @@ S({ id:'crash', n:'19', group:'Elsewhere', title:'Crash page',
             <div style="font-size:13px;font-weight:600;margin-top:4px">What were you doing? <span class="muted" style="font-weight:600">Optional</span></div>
             <div style="border:1.5px solid var(--line-strong);border-radius:10px;padding:10px 12px;min-height:72px;background:var(--field);color:var(--faint);font-size:14px">The last thing you clicked or typed, if you remember.</div>
             <div style="background:var(--well);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:800">▸ What we send with this</div>
-            <span class="btn" style="margin-top:6px">Send report</span>
+            <div style="color:var(--success-ink);font-size:13px;font-weight:700;text-align:center;margin-top:6px">Thanks — your report is with the people who run Sketchy.</div>
+          </div>
+          <div style="display:flex;gap:8px;border-top:1.5px solid var(--line);padding-top:12px">
+            <span class="btn" style="flex:1">Reload</span>
+            <span class="btn ghost" style="flex:1;border:1.5px solid var(--line-strong)">Back to lobby</span>
           </div>
         </div>
       </div>
