@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -13,7 +14,10 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from pathlib import Path
+
 from app.api.avatars import create_avatar_router
+from app.auth.avatar_doodles import DOODLES
 from app.api.moderation import create_moderation_router
 from app.auth.avatars import AVATAR_REUPLOAD_BLOCK, MAX_AVATAR_BYTES, avatar_key_for
 from app.auth.middleware import SessionAuthMiddleware
@@ -135,6 +139,71 @@ def test_the_room_report_command_takes_every_report_reason():
         {"targetPlayerId": "seat-1", "reason": "inappropriate_avatar", "details": "Look."}
     )
     assert parsed.reason == "inappropriate_avatar"
+
+
+async def test_a_registered_player_wears_a_doodle_in_the_deployment_s_ink(env):
+    """R-AVA-06: a doodle is a name, drawn from the sprite the frontend
+    ships, so nothing is uploaded or stored but the name."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Doodler")
+    chosen = await http.put("/api/users/me/avatar/doodle", json={"name": "fox"})
+    assert chosen.status_code == 200, chosen.text
+    assert chosen.json() == {"avatarKey": "doodle:fox", "avatarUrl": "/avatars/doodles.svg#fox"}
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] == "/avatars/doodles.svg#fox"
+    new_client.changed.assert_awaited_with(account["id"], "doodle:fox")
+    async with factory() as session:
+        kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
+        assert "avatar.doodle_chosen" in kinds
+
+    # Not a name we have: refused, and a guest cannot wear one at all.
+    assert (await http.put("/api/users/me/avatar/doodle", json={"name": "dragon"})).status_code == 400
+    guest = new_client()
+    await guest.post("/api/auth/display-name", json={"displayName": "Passing"})
+    assert (await guest.put("/api/users/me/avatar/doodle", json={"name": "fox"})).status_code == 403
+
+
+async def test_a_doodle_replaces_an_upload_and_an_upload_replaces_a_doodle(env):
+    new_client, factory = env
+    http = new_client()
+    await register(http, "Fickle")
+    uploaded = (await http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=4)))).json()
+    assert (await http.put("/api/users/me/avatar/doodle", json={"name": "owl"})).status_code == 200
+    # One picture per account: the uploaded bytes went with the choice.
+    assert (await http.get(uploaded["avatarUrl"])).status_code == 404
+    async with factory() as session:
+        assert (await session.scalars(select(UploadedAvatarAsset))).all() == []
+    again = await http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=4)))
+    assert again.status_code == 200
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] == again.json()["avatarUrl"]
+    # Removing clears either kind.
+    assert (await http.put("/api/users/me/avatar/doodle", json={"name": "owl"})).status_code == 200
+    assert (await http.delete("/api/users/me/avatar")).status_code == 200
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] is None
+
+
+async def test_a_moderator_s_block_does_not_keep_a_player_from_a_doodle(env):
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Blocked")
+    await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
+    with pytest.raises(AvatarBlocked):
+        await set_avatar(factory, user_id=account["id"], payload=png_bytes())
+    assert (await http.put("/api/users/me/avatar/doodle", json={"name": "cat"})).status_code == 200
+
+
+def test_the_doodle_list_is_the_same_on_the_server_the_client_and_the_sprite():
+    """Three places name the doodles; adding one to fewer than all three
+    would either refuse a drawing the client offers or offer a name the
+    sprite cannot draw."""
+    root = Path(__file__).resolve().parent.parent.parent
+    sprite = (root / "frontend" / "public" / "avatars" / "doodles.svg").read_text("utf-8")
+    symbols = re.findall(r'<symbol id="([a-z]+)"', sprite)
+    assert list(symbols) == list(DOODLES)
+    client = (root / "frontend" / "src" / "lib" / "avatarDoodles.ts").read_text("utf-8")
+    listed = re.search(r"DOODLES = \[(.*?)\] as const", client, re.S)
+    assert listed is not None
+    assert re.findall(r'"([a-z]+)"', listed.group(1)) == list(DOODLES)
 
 
 async def test_a_new_picture_replaces_the_old_one_and_its_url(env):

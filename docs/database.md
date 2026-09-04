@@ -226,7 +226,7 @@ One row per player identity, guest or registered.
 | `username` VARCHAR(32) | Null for guests; case-insensitively unique via `ix_users_username_lower` |
 | `password_hash` VARCHAR(255) | Argon2id encoded hash, carrying its own algorithm and cost parameters |
 | `display_name` VARCHAR(32) | |
-| `name_color`, `avatar_key` | `avatar_key` is the content address of the uploaded picture (`<sha256>.webp` or `.png`), or null for the initial (R-AVA-03) |
+| `name_color`, `avatar_key` | `avatar_key` is the content address of the uploaded picture (`<sha256>.webp` or `.png`, R-AVA-03), the name of a doodle (`doodle:fox`, R-AVA-06: nothing stored but the name), or null for the initial |
 | `avatar_upload_blocked_until` | Set when a moderator removed the picture: no upload until then (R-AVA-04) |
 | `state` | `anonymous \| registered \| merged \| deleted` |
 | `role` | `user \| moderator \| admin` |

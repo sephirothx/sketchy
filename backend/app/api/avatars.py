@@ -1,7 +1,7 @@
 """Uploading and serving player pictures (#573).
 
-Three routes: the owner sets or removes their own picture, and anybody may
-fetch a picture by its content address. The address is the SHA-256 of the
+Four routes: the owner sets, picks a doodle for, or removes their own
+picture, and anybody may fetch an uploaded picture by its content address. The address is the SHA-256 of the
 bytes, so a fetched picture can be cached for ever - a changed picture is a
 different URL - and served with sniffing disabled, as an image and nothing
 else.
@@ -25,7 +25,13 @@ from app.auth.avatars import (
 )
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.repositories.interfaces import UserRepository
-from app.services.avatars import AvatarBlocked, read_avatar, remove_avatar, set_avatar
+from app.services.avatars import (
+    AvatarBlocked,
+    choose_doodle,
+    read_avatar,
+    remove_avatar,
+    set_avatar,
+)
 
 # Base64 of the largest picture accepted, plus a little slack for padding.
 MAX_AVATAR_BASE64 = ((MAX_AVATAR_BYTES + 2) // 3) * 4 + 8
@@ -36,6 +42,12 @@ class AvatarUploadBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     image: str = Field(min_length=1, max_length=MAX_AVATAR_BASE64)
+
+
+class DoodleBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=32)
 
 
 def create_avatar_router(
@@ -97,6 +109,24 @@ def create_avatar_router(
             )
         except AvatarBlocked as error:
             raise HTTPException(status_code=403, detail=str(error)) from error
+        except AvatarError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        await announce(user.id, key)
+        return {"avatarKey": key, "avatarUrl": avatar_url(key)}
+
+    @router.put("/api/users/me/avatar/doodle")
+    async def pick_doodle(body: DoodleBody, request: Request):
+        # No rate limit of its own: a doodle is one row update, nothing stored.
+        user = await require_registered(request)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        try:
+            key = await choose_doodle(
+                session_factory,
+                user_id=user.id,
+                name=body.name,
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
         except AvatarError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         await announce(user.id, key)

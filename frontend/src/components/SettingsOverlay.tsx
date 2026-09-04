@@ -14,7 +14,8 @@ import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
-import { removeAvatar, uploadAvatar } from "../lib/avatars";
+import { chooseDoodle, removeAvatar, uploadAvatar } from "../lib/avatars";
+import type { Doodle } from "../lib/avatarDoodles";
 import { useToast } from "../lib/toast";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -31,6 +32,7 @@ import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { PictureCropDialog } from "./PictureCropDialog";
+import { AvatarDoodleDialog } from "./AvatarDoodleDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
 import { Avatar } from "./ui/Avatar";
@@ -294,20 +296,22 @@ function EmailAddressStatus({
 }
 
 /**
- * The pencil on the disc's corner. With no picture it opens the file picker;
- * with one it opens a two-item menu, because "Remove" needs a home once the
- * picture row is gone. The menu is a real menu: Escape, outside click and
- * the arrow keys all work, the way the account menu's do.
+ * The pencil on the disc's corner opens a menu: a doodle of ours, a picture
+ * of the player's own, and - once there is either - taking it off. A real
+ * menu: Escape, outside click and the arrow keys all work, the way the
+ * account menu's do.
  */
 function PictureEditChip({
   hasPicture,
   busy,
   onChoose,
+  onPickDoodle,
   onRemove,
 }: {
   hasPicture: boolean;
   busy: boolean;
   onChoose: (file: File | undefined) => void;
+  onPickDoodle: () => void;
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -363,14 +367,14 @@ function PictureEditChip({
         disabled={busy}
         aria-label="Edit picture"
         title="Edit picture"
-        aria-haspopup={hasPicture ? "menu" : undefined}
-        aria-expanded={hasPicture ? open : undefined}
-        aria-controls={hasPicture && open ? menuId : undefined}
-        onClick={() => (hasPicture ? setOpen((shown) => !shown) : pick())}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((shown) => !shown)}
       >
         <PencilIcon size={14} />
       </button>
-      {hasPicture && open && (
+      {open && (
         <div
           ref={menuRef}
           id={menuId}
@@ -380,22 +384,35 @@ function PictureEditChip({
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          <button type="button" role="menuitem" onClick={pick}>
-            <ImageIcon size={15} />
-            Change picture
-          </button>
           <button
             type="button"
             role="menuitem"
-            className="is-danger"
             onClick={() => {
               setOpen(false);
-              onRemove();
+              onPickDoodle();
             }}
           >
-            <TrashIcon size={15} />
-            Remove picture
+            <BrushIcon size={15} />
+            Pick a doodle
           </button>
+          <button type="button" role="menuitem" onClick={pick}>
+            <ImageIcon size={15} />
+            Upload a picture
+          </button>
+          {hasPicture && (
+            <button
+              type="button"
+              role="menuitem"
+              className="is-danger"
+              onClick={() => {
+                setOpen(false);
+                onRemove();
+              }}
+            >
+              <TrashIcon size={15} />
+              Remove
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -419,7 +436,15 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [pictureError, setPictureError] = useState<string | null>(null);
   // A chosen file opens the crop dialog; the dialog uploads what was framed.
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [doodlesOpen, setDoodlesOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
+
+  async function wearDoodle(doodle: Doodle) {
+    await chooseDoodle(doodle);
+    await useAuthStore.getState().fetchMe();
+    setDoodlesOpen(false);
+    setPictureError(null);
+  }
 
   async function usePicture(base64: string) {
     // The dialog shows the server's reason - "too large", "a moderator
@@ -578,10 +603,10 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       )}
 
       <Group title="You">
-        {/* The identity card: disc, name in its colour, palette. A registered
+        {/* The identity card: disc, name in its color, palette. A registered
             player always plays as their username (R-ACCT-05), so only a guest
             gets a way to change the name; and only an account gets a picture
-            or a colour, because the grey initial is what marks a guest. */}
+            or a color, because the grey initial is what marks a guest. */}
         <div className="settings-you">
           <div className="settings-you-disc">
             <Avatar
@@ -598,6 +623,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                 onChoose={(file) => {
                   if (file) setPendingFile(file);
                 }}
+                onPickDoodle={() => setDoodlesOpen(true)}
                 onRemove={() => void dropPicture()}
               />
             )}
@@ -826,6 +852,15 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       )}
       {sessionsOpen && <SessionManagerDialog onClose={() => setSessionsOpen(false)} />}
       {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
+      {doodlesOpen && (
+        <AvatarDoodleDialog
+          name={user?.displayName ?? ""}
+          nameColor={nameColor}
+          currentUrl={user?.avatarUrl}
+          onChoose={wearDoodle}
+          onClose={() => setDoodlesOpen(false)}
+        />
+      )}
       {pendingFile && (
         <PictureCropDialog
           file={pendingFile}
