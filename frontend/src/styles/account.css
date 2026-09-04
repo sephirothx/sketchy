@@ -31,15 +31,6 @@
   color: #94a3b8;
 }
 
-/* Groups the account control with Settings so the header stays one row. */
-.lobby-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .account-menu {
   position: relative;
   display: flex;
@@ -496,26 +487,6 @@
     max-width: 9ch;
   }
 
-  /* One row, always. The wordmark, the gear and the identity chip come to
-     about 280px of a 358px content width, so the second row this used to take
-     was spent on nothing — and it pushed the whole page down by 52px before
-     anything playable. The name truncates instead. */
-  .lobby-header {
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 10px;
-  }
-
-  .lobby-header-actions {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-  }
-
-  .lobby-wordmark {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
 }
 
 .auth-optional {

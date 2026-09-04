@@ -1,7 +1,7 @@
 // In-room artboards: one game, one story — waiting, choosing, drawing,
 // guessing, turn results, game over, highlights.
-import { T, P, icon, avatar, pname, btn, chip, card, sectionLabel, segmented } from './ui.mjs';
-import { ROOM, roomHeader, headerStatus, roomGrid, roomPage, playersPanel, playerRow, chat, canvasFrame, lighthouseSVG } from './shell.mjs';
+import { T, P, icon, avatar, pname, btn, chip, card, sectionLabel, segmented, qrArt } from './ui.mjs';
+import { ROOM, roomHeader, roomMenu, headerStatus, roomGrid, roomPage, playersPanel, playerRow, chat, canvasFrame, lighthouseSVG } from './shell.mjs';
 
 // ------------------------------------------------------------- Waiting room
 const waitingPlayers = playersPanel({
@@ -29,42 +29,56 @@ const waitingChat = chat.panel({
   inputHTML: chat.input({}),
 });
 
-const settingChip = (label, value) =>
-  `<span style="display: inline-flex; align-items: center; gap: 6px; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; color: ${T.muted}">${label}<strong style="color: ${T.ink}; font-weight: 800">${value}</strong></span>`;
+// One of the six room-rule facts, as a tile. The same six, in the same order,
+// as the lobby card and the invite page — a room described one way, not five.
+// Readable from across the table, because everyone in the room reads them and
+// only the host can change them.
+const ruleTile = (svg, label, value, hint) => `
+<div style="display: grid; gap: 2px; background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 10px 12px">
+  <dt style="display: inline-flex; align-items: center; gap: 6px; color: ${T.faint}; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">${svg}${label}</dt>
+  <dd style="display: grid; gap: 1px; font-family: ${T.display}; font-weight: 600; font-size: 19px; color: ${T.ink}">${value}<small style="font-family: ${T.body}; font-size: 11.5px; font-weight: 700; color: ${T.faint}">${hint}</small></dd>
+</div>`;
 
 export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
   waitingPlayers,
   `
   <div style="display: grid; gap: 14px">
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 24px; box-shadow: ${T.shadow}; text-align: center">
-      ${sectionLabel('Public room · waiting for players')}
-      <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 28px; color: ${T.ink}; margin-top: 5px">${ROOM.name}</h1>
-      <p style="color: ${T.muted}; font-size: 14px; margin-top: 6px">Send friends the code or the link — they can join mid-lobby.</p>
-      <div style="display: flex; align-items: center; justify-content: center; gap: 5px; margin: 18px 0 14px" aria-label="Room code ${ROOM.code}">
-        ${ROOM.code.split('').map((c) => `<span style="display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 56px; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; background: ${T.well}; font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}">${c}</span>`).join('')}
+    <section style="background: ${T.primarySoft}; border: 1.5px solid ${T.primaryEdgeSoft}; border-radius: ${T.radius}; padding: 18px 20px; box-shadow: ${T.shadow}; text-align: center">
+      <p style="color: ${T.primaryInk}; font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase">Invite your friends</p>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 10px">
+        ${qrArt(104)}
+        <div>
+          <p style="font-family: ${T.display}; font-weight: 600; font-size: 34px; letter-spacing: 0.14em; color: ${T.primaryInk}; line-height: 1.1" aria-label="Room code ${ROOM.code}">${ROOM.code}</p>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px">
+            ${btn.primary('Share the link', { iconL: icon.link(15) })}
+            ${btn.secondary('Copy code', { iconL: icon.copy(14) })}
+          </div>
+        </div>
       </div>
-      <div style="display: flex; align-items: center; justify-content: center; gap: 10px">
-        ${btn.primary('Copy invite link', { iconL: icon.link(15) })}
-        ${btn.ghost('Copy code', { iconL: icon.copy(14) })}
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1.5px solid ${T.primaryEdgeSoft}; text-align: left">
+        <span style="color: ${T.primaryInk}; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase">Friends online</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 999px; padding: 4px 11px 4px 4px">${avatar(P.yuki, 24)}${pname(P.yuki, '; font-size: 13px')}</span>
+        ${btn.secondary('Invite', { iconL: icon.plus(13), style: 'min-height: 32px; padding: 5px 11px; font-size: 12.5px' })}
       </div>
     </section>
 
     <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px">
-        <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Room settings</h2>
-        ${btn.secondary('Edit settings', { iconL: icon.gear(15) })}
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px">
+        <div>
+          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Room rules</h2>
+          <p style="color: ${T.muted}; font-size: 12.5px; font-weight: 700; margin-top: 3px">3 rounds · 90s · Default scoring · Timed hints · All tools</p>
+        </div>
+        ${btn.secondary('Edit room rules', { iconL: icon.gear(15), style: 'min-height: 38px; padding: 8px 13px; font-size: 13.5px' })}
       </div>
-      <div style="display: flex; flex-wrap: wrap; gap: 7px">
-        ${settingChip('Players', '8 max')}
-        ${settingChip('Rounds', '3')}
-        ${settingChip('Drawing time', '90s')}
-        ${settingChip('Scoring', 'Default')}
-        ${settingChip('Hints', 'Timed')}
-        ${settingChip('Prompts', 'Standard English · 432')}
-        ${settingChip('Colors', 'All')}
-        ${settingChip('Spectators', 'See the prompt')}
-      </div>
-      <p style="color: ${T.faint}; font-size: 12.5px; margin-top: 10px">Only you can edit settings while the room waits. Everyone sees changes instantly.</p>
+      <dl style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        ${ruleTile(icon.users(12), 'Players', '5 of 8', '3 seats free')}
+        ${ruleTile(icon.rounds(12), 'Rounds', '3', 'everyone draws 3 times')}
+        ${ruleTile(icon.clock(12), 'Drawing time', '90s', 'about 23 min with 5')}
+        ${ruleTile(icon.trophy(12), 'Scoring', 'Default', 'speed and a drawer bonus')}
+        ${ruleTile(icon.bulb(12), 'Hints', 'Timed', 'letters appear as time runs out')}
+        ${ruleTile(icon.brush(12), 'Drawing rules', 'All tools', 'all colors')}
+      </dl>
+      <p style="display: flex; align-items: center; gap: 7px; color: ${T.muted}; font-size: 12.5px; font-weight: 700; margin-top: 10px">${icon.bulb(13)}<span>Standard English · 432 prompts · spectators see the prompt</span></p>
     </section>
 
     <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}; display: flex; align-items: center; justify-content: space-between; gap: 16px">
@@ -72,11 +86,14 @@ export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
         <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Ready when you are</h2>
         <p style="color: ${T.muted}; font-size: 13.5px; margin-top: 4px">4 players are ready. Ines is AFK and will sit out until she's back.</p>
       </div>
-      ${btn.success('Start game', { big: true })}
+      <div style="display: grid; justify-items: center; gap: 4px">
+        ${btn.warm('Start game', { big: true })}
+        ${btn.ghost('Leave the room', { style: 'min-height: 30px; padding: 4px 8px; font-size: 13px; color: ' + T.faint })}
+      </div>
     </section>
   </div>`,
   waitingChat,
-), { minHeight: 1000 });
+), { minHeight: 880 });
 
 // ------------------------------------------------------ Prompt choice (new)
 const promptOption = (word) => `
@@ -449,3 +466,44 @@ export const HighlightsPage = roomPage(roomHeader() + roomGrid(
     inputHTML: chat.input({}),
   }),
 ), { minHeight: 960 });
+
+// ------------------------------------------------------------- The Room menu
+// The place's one action, on both devices, side by side: the same rows in the
+// same order, so a player who learns the menu on one device knows it on the
+// other. Leave is last, separated, and red on both — never mixed in with the
+// routine actions the way the old bar's seven controls were.
+const menuNote = (title, body) => `
+<div style="display: grid; gap: 4px; max-width: 320px">
+  <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">${title}</h2>
+  <p style="font-size: 13px; color: ${T.muted}; font-weight: 600; line-height: 1.5">${body}</p>
+</div>`;
+
+export const RoomMenuPage = `
+<div style="width: 1060px; min-height: 660px; margin: 0 auto; padding: 28px 24px 40px">
+  <div style="margin-bottom: 24px">
+    ${sectionLabel("The place's one action")}
+    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 24px; color: ${T.ink}; margin-top: 4px">One Room menu, one order, both devices</h1>
+    <p style="font-size: 14px; color: ${T.muted}; font-weight: 600; line-height: 1.5; margin-top: 6px; max-width: 620px">The desktop bar used to carry seven controls on its right-hand side, with Leave at the end of a row of routine ones. Four of them moved in here. The invite comes first because it is what a waiting room is for; Leave is last, set apart, and still routed through the confirmation dialog.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: 300px 1fr; gap: 32px; align-items: start">
+    <div style="display: grid; gap: 22px">
+      ${menuNote('On a wide screen', 'A dropdown under the <strong>Room</strong> button — the one action, with Player settings and the identity chip beside it, never moving.')}
+      ${menuNote('On a phone', 'The same rows in a sheet under the thumb, opened by the bar\'s single ⋯ button. It carries two more, because the phone bar has nowhere else to put them: <strong>Players and scores</strong> and <strong>Player settings</strong>.')}
+    </div>
+    <div style="display: flex; gap: 40px; align-items: start">
+      <div style="position: relative; width: 300px; padding-top: 52px">
+        <span style="position: absolute; right: 0; top: 0">
+          <button type="button" aria-haspopup="menu" aria-expanded="true" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; color: ${T.ink}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 8px 13px; font-family: ${T.body}; font-size: 14px; font-weight: 800; min-height: 38px; box-shadow: ${T.shadow}">Room${icon.chevD(14)}</button>
+        </span>
+        <span style="position: relative; display: block">${roomMenu({ inGame: true }).replace('position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; ', '')}</span>
+      </div>
+      <div style="width: 322px; border: 1.5px solid ${T.lineStrong}; border-radius: 20px; padding: 10px 10px 0; background: ${T.paper}; box-shadow: ${T.shadowRaised}">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 10px">
+          <span style="font-size: 12px; font-weight: 800; color: ${T.faint}">Sheet</span>
+          <button type="button" aria-label="Close" style="display: inline-flex; color: ${T.faint}; background: transparent; border: 0">${icon.x(15)}</button>
+        </div>
+        ${roomMenu({ inGame: true, phone: true }).replace('position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; ', '').replace('width: 300px; ', 'width: 100%; ').replace(`box-shadow: ${T.shadowRaised}; `, '')}
+      </div>
+    </div>
+  </div>
+</div>`;

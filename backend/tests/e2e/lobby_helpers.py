@@ -80,7 +80,7 @@ async def room_code(page) -> str:
 
 async def open_room_settings(page) -> None:
     """Open the host's room-settings editor, which lives in a modal."""
-    await page.locator(".waiting-settings-row").click()
+    await page.locator(".waiting-settings-edit-button").click()
     await page.wait_for_selector(".room-settings-editor")
 
 
@@ -126,3 +126,24 @@ async def join_by_code(page, code: str, *, spectate: bool = False) -> None:
         if spectate
         else 'button:has-text("Join the room")'
     )
+
+
+async def open_room_menu(page) -> None:
+    """Open the room menu: the bar's one action for a room.
+
+    A desktop bar has a "Room" button that drops the menu down; a phone bar
+    has the ⋯ button that raises it as a sheet. Both hold the same rows.
+    """
+    desktop = page.locator(".room-menu-button")
+    if await desktop.count() and await desktop.is_visible():
+        await desktop.click()
+        await page.wait_for_selector(".room-menu-dropdown")
+    else:
+        await page.click('[data-testid="open-room-menu"]')
+        await page.wait_for_selector('[data-testid="room-menu-sheet"]')
+
+
+async def leave_room(page) -> None:
+    """Press Leave in the room menu. The confirmation, if any, is the caller's."""
+    await open_room_menu(page)
+    await page.click(".game-header-leave-button")

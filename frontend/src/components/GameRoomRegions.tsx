@@ -89,6 +89,7 @@ interface ConnectedWaitingRoomPanelProps {
   highlightCount: number;
   finalScores: ReturnType<typeof useGameStore.getState>["finalScores"];
   onStart: () => void;
+  onLeave: () => void;
   onViewDrawings: () => void;
   onViewHighlights: () => void;
   startBusy: boolean;
@@ -100,6 +101,7 @@ export function ConnectedWaitingRoomPanel({
   highlightCount,
   finalScores,
   onStart,
+  onLeave,
   onViewDrawings,
   onViewHighlights,
   startBusy,
@@ -148,6 +150,7 @@ export function ConnectedWaitingRoomPanel({
       startBusy={startBusy}
       startError={startError}
       onStart={onStart}
+      onLeave={onLeave}
       drawingCount={drawingCount}
       onViewDrawings={onViewDrawings}
       highlightCount={highlightCount}

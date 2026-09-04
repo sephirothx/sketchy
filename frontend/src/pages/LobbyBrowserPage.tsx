@@ -294,25 +294,16 @@ export function LobbyBrowserPage() {
   return (
     <div className="lobby-page">
       <AppHeader
-        actions={
-          <>
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              onClick={() => setCodeSheetOpen(true)}
-            >
-              Join by code
-            </button>
-            <Button
-              variant="primary"
-              compact
-              iconLeft={<PlusIcon size={15} />}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              Create room
-            </Button>
-          </>
-        }
+        action={!isNarrow && (
+          <Button
+            variant="primary"
+            compact
+            iconLeft={<PlusIcon size={15} />}
+            onClick={() => void handleOpenCreateRoom()}
+          >
+            Create room
+          </Button>
+        )}
       />
 
       {criticalError && (
@@ -334,6 +325,15 @@ export function LobbyBrowserPage() {
           <span className="lobby-rooms-count">
             {!roomsState.loaded ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
           </span>
+          {!isNarrow && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact lobby-rooms-code-button"
+              onClick={() => setCodeSheetOpen(true)}
+            >
+              Join by code
+            </button>
+          )}
         </div>
 
         {roomsState.loaded && rooms.length > 0 && (

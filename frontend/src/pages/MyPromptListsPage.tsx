@@ -220,7 +220,7 @@ export function MyPromptListsPage() {
   }
 
   return <main className="prompt-list-manager-page">
-    <AppHeader backLabel="Back to lobby" />
+    <AppHeader page="My prompt lists" />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
         <div><p>Your library</p><h1>Reusable prompt lists</h1></div>

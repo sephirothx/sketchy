@@ -5,12 +5,20 @@
       "x": 0,
       "y": 0,
       "w": 960,
-      "h": 1240,
+      "h": 820,
       "title": "Lobby"
     },
     {
-      "file": "CreateRoom.dc.html",
+      "file": "JoinByCode.dc.html",
       "x": 1050,
+      "y": 0,
+      "w": 520,
+      "h": 340,
+      "title": "Join by code"
+    },
+    {
+      "file": "CreateRoom.dc.html",
+      "x": 1660,
       "y": 0,
       "w": 780,
       "h": 1100,
@@ -18,7 +26,7 @@
     },
     {
       "file": "AccountRecovery.dc.html",
-      "x": 1920,
+      "x": 2530,
       "y": 0,
       "w": 880,
       "h": 560,
@@ -26,7 +34,7 @@
     },
     {
       "file": "Settings.dc.html",
-      "x": 2900,
+      "x": 3500,
       "y": 0,
       "w": 1080,
       "h": 900,
@@ -34,7 +42,7 @@
     },
     {
       "file": "NotFound.dc.html",
-      "x": 4070,
+      "x": 4670,
       "y": 0,
       "w": 720,
       "h": 700,
@@ -45,12 +53,20 @@
       "x": 0,
       "y": 1780,
       "w": 1240,
-      "h": 1000,
+      "h": 880,
       "title": "Waiting room"
     },
     {
-      "file": "PromptChoice.dc.html",
+      "file": "RoomMenu.dc.html",
       "x": 1330,
+      "y": 1780,
+      "w": 1060,
+      "h": 660,
+      "title": "Room menu"
+    },
+    {
+      "file": "PromptChoice.dc.html",
+      "x": 2320,
       "y": 1780,
       "w": 1240,
       "h": 1000,
@@ -58,7 +74,7 @@
     },
     {
       "file": "Drawing.dc.html",
-      "x": 2660,
+      "x": 3650,
       "y": 1780,
       "w": 1240,
       "h": 1080,
@@ -66,7 +82,7 @@
     },
     {
       "file": "Guessing.dc.html",
-      "x": 3990,
+      "x": 4980,
       "y": 1780,
       "w": 1240,
       "h": 1000,

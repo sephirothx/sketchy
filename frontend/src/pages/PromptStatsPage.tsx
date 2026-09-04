@@ -168,7 +168,7 @@ export function PromptStatsPage() {
 
   return (
     <div className="prompt-stats-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader page="Prompt stats" />
 
       <header className="prompt-stats-header">
         <SectionLabel>Server-wide</SectionLabel>

@@ -304,7 +304,7 @@ export function CreateRoomPage() {
   const halfMinutes = estimateMinutes(halfPlayers);
 
   return <main className="create-room-page">
-    <AppHeader backLabel="Back to lobby" />
+    <AppHeader page="Create a room" />
     <div className="create-room-heading-row">
       <div className="create-room-heading">
         <SectionLabel>Room setup</SectionLabel>

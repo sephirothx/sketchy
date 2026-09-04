@@ -259,6 +259,16 @@ them:
 
 ## Where the build departs from the artboards
 
+> **Updated for #580.** The one-header change reached these artboards: on a
+> phone the bar is the same three slots as anywhere else, with **one control in
+> each** — the wordmark or a back arrow; the page's name or the room's phase;
+> and one menu on the right. The room code left the in-game bar for the first
+> row of the **Room menu**, where the share and copy buttons already were, and
+> the waiting room's one-line settings summary became the same six room-rule
+> tiles the lobby card and the invite page use. The measurements in the
+> sections above still describe what was measured on `51bf7da`; the artboards
+> themselves are current.
+
 - **First landing ships variant A**: one field, one Play, and the account offer
   as a quiet line, with the rooms list below it. Variant B — browse freely with
   a sticky name dock — is not built; it trades a visitor being able to scroll a

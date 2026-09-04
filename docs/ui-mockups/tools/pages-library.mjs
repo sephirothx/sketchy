@@ -1,14 +1,6 @@
 // Library, profile and operator artboards.
 import { T, P, icon, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark } from './ui.mjs';
-
-const backBar = (label = 'Back to lobby') => `
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
-  ${btn.ghost(label, { iconL: icon.back(15), style: 'padding-left: 0' })}
-  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
-    ${avatar(P.marta, 30)}
-    <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
-  </button>
-</div>`;
+import { appHeader } from './header.mjs';
 
 // ------------------------------------------------------------- Prompt stats
 const diffMeter = (pct, label, color) => `
@@ -30,7 +22,7 @@ const th = (label) => `<th scope="col" style="border-bottom: 1.5px solid ${T.lin
 
 export const PromptStatsPage = `
 <div style="width: 920px; min-height: 980px; margin: 0 auto; padding: 26px 24px 48px">
-  ${backBar()}
+  ${appHeader({ page: 'Prompt stats', gap: 18 })}
   <header style="margin-bottom: 16px">
     ${sectionLabel('Server-wide')}
     <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 28px; color: ${T.ink}; margin-top: 4px">Prompt stats</h1>
@@ -92,7 +84,7 @@ const promptChip = (text, review = false) => review
 
 export const MyPromptListsPage = `
 <div style="width: 1020px; min-height: 1080px; margin: 0 auto; padding: 26px 24px 48px">
-  ${backBar()}
+  ${appHeader({ page: 'My prompt lists', gap: 18 })}
   <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 22px 24px; box-shadow: ${T.shadow}">
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px">
       <div>
@@ -210,7 +202,7 @@ const turnCell = (v, opts = '') => `<td style="padding: 8px 12px; text-align: le
 
 export const ProfilePage = `
 <div style="width: 920px; min-height: 1220px; margin: 0 auto; padding: 26px 24px 48px">
-  ${backBar()}
+  ${appHeader({ page: 'Profile', gap: 18 })}
   <header style="display: flex; align-items: center; gap: 18px; margin-bottom: 20px">
     ${avatar(P.marta, 64)}
     <div>
@@ -449,7 +441,7 @@ const tunableGroup = (title, rows, note = '') => `
 
 export const AdminOpsPage = `
 <div style="width: 1100px; min-height: 1860px; margin: 0 auto; padding: 24px 24px 40px">
-  ${backBar()}
+  ${appHeader({ page: 'Server operations', gap: 16 })}
   <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
     <div>
       ${sectionLabel('Administrators only')}
@@ -505,7 +497,7 @@ ${overviewSignals}
 
 export const AdminOpsTuningPage = `
 <div style="width: 1100px; min-height: 1000px; margin: 0 auto; padding: 24px 24px 40px">
-  ${backBar()}
+  ${appHeader({ page: 'Server operations', gap: 16 })}
   <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
     <div>
       ${sectionLabel('Administrators only')}
@@ -546,7 +538,7 @@ export const AdminOpsTuningPage = `
 
 export const AdminOpsAuditPage = `
 <div style="width: 1100px; min-height: 720px; margin: 0 auto; padding: 24px 24px 40px">
-  ${backBar()}
+  ${appHeader({ page: 'Server operations', gap: 16 })}
   <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
     <div>
       ${sectionLabel('Administrators only')}
@@ -595,7 +587,7 @@ const contextRow = (label, value) => `
 
 export const ModerationPage = `
 <div style="width: 1160px; min-height: 1040px; margin: 0 auto; padding: 24px 24px 40px">
-  ${backBar()}
+  ${appHeader({ page: 'Moderation', gap: 16 })}
   <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start">
 
     <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px; box-shadow: ${T.shadow}; display: grid; gap: 10px; align-content: start">

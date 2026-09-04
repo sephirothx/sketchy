@@ -1,13 +1,13 @@
-import { Fragment, useState } from "react";
+import { useState, type ReactNode } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
+import { BrushIcon, BulbIcon, ClockIcon, CopyIcon, LinkIcon, ListIcon, PlusIcon, RoundsIcon, SlidersIcon, TrophyIcon, UsersIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import { describeDrawingRules } from "../lib/drawingRules";
-import { hintLabelFor } from "../lib/roomSetup";
+import { roomFacts, roomFactsSummary, type RoomFactKey } from "../lib/roomFacts";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -20,6 +20,16 @@ import type {
   ScoreEntry,
   ScoringMode,
 } from "../types";
+
+/** One icon per fact, in the order `roomFacts` returns them. */
+const ROOM_FACT_ICONS: Record<RoomFactKey, ReactNode> = {
+  players: <UsersIcon size={12} />,
+  rounds: <RoundsIcon size={12} />,
+  drawingTime: <ClockIcon size={12} />,
+  scoring: <TrophyIcon size={12} />,
+  hints: <BulbIcon size={12} />,
+  drawingRules: <BrushIcon size={12} />,
+};
 
 interface WaitingRoomPanelProps {
   name: string;
@@ -44,6 +54,8 @@ interface WaitingRoomPanelProps {
   startBusy: boolean;
   startError: string | null;
   onStart: () => void;
+  /** The way out for whoever landed in the wrong room. */
+  onLeave: () => void;
   drawingCount: number;
   onViewDrawings: () => void;
   highlightCount: number;
@@ -74,6 +86,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const startBlockedReason =
     "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.";
   const rematch = Boolean(finalScores);
+  // The address bar itself, which is what the room chip and the Room menu
+  // copy too — so the code on the card, the link that is shared, and the QR
+  // beside it are provably one destination.
+  const inviteUrl = window.location.href;
 
   async function copyToClipboard(value: string, what: string) {
     try {
@@ -90,9 +106,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // worth a line. Eight chips said all of it always, and spent 250px doing it.
   // The OS share sheet is how a code actually reaches a group chat. Where
   // there is none — every desktop browser but Safari — copying the link is
-  // the same job done by hand.
+  // the same job done by hand. Both it and the QR code carry `inviteUrl`, so
+  // scanning the card and sending it cannot land people in different rooms.
   async function shareInvite() {
-    const url = window.location.href;
+    const url = inviteUrl;
     if (navigator.share) {
       try {
         await navigator.share({ title: props.name, text: `Join my Sketchy room: ${code ?? ""}`, url });
@@ -113,15 +130,26 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       : props.promptListSlugs && props.promptListSlugs.length > 1
         ? `${props.promptListSlugs.length} curated prompt lists`
         : null;
-  const settingsFacts = [
-    `${props.rounds} ${props.rounds === 1 ? "round" : "rounds"}`,
-    `${props.drawingSeconds}s`,
-    hintLabelFor(props.hintMode, props.hideMaskedPrompt),
-    props.scoringMode === "none" ? "No scoring" : null,
-    promptsValue,
-    describeDrawingRules(props.allowedTools, props.colorMode),
-    props.spectatorsSeePrompt ? "Spectators see the prompt" : null,
-  ].filter((fact): fact is string => Boolean(fact));
+  // The six facts, from the one place that decides what they are and in
+  // which order (R-UX-09) — the lobby card and the invite page read the same
+  // list. The player count is the live one, not the room summary's.
+  const factsInput = {
+    playerCount: activePlayers.length,
+    maxPlayers: props.maxPlayers,
+    rounds: props.rounds,
+    drawingSeconds: props.drawingSeconds,
+    scoringMode: props.scoringMode,
+    hintMode: props.hintMode,
+    hideMaskedPrompt: props.hideMaskedPrompt,
+    allowedTools: props.allowedTools,
+    colorMode: props.colorMode,
+  };
+  const facts = roomFacts(factsInput);
+  const listCount = props.promptListSlugs?.length ?? 0;
+  const promptsLine = [
+    promptsValue ?? `${listCount} curated prompt ${listCount === 1 ? "list" : "lists"}`,
+    props.spectatorsSeePrompt ? "spectators see the prompt" : null,
+  ].filter(Boolean).join(" · ");
 
 
   return (
@@ -139,9 +167,35 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           Six bordered cells and two buttons spent 237px on that. */}
       <section className="waiting-card waiting-invite-card">
         <p className="waiting-invite-kicker">Invite your friends</p>
-        {code && (
-          <p className="waiting-code" aria-label={`Room code ${code}`}>{code}</p>
-        )}
+        <div className="waiting-invite-main">
+          {/* Beside the code because it answers the same question for the
+              person sitting across the table: the code they would type, and
+              the link they can point a camera at instead. Drawn on its own
+              white plate, whose padding is the quiet zone the format needs -
+              a dark-theme card would otherwise leave nothing to scan. */}
+          {code && (
+            <div className="waiting-invite-qr">
+              <QRCodeSVG
+                value={inviteUrl}
+                size={104}
+                marginSize={0}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#12100e"
+                // The <title> alone is skipped by readers that treat an SVG
+                // as a graphic with no role; role="img" is what makes it the
+                // element's name.
+                role="img"
+                title={`Scan to join room ${code}`}
+              />
+            </div>
+          )}
+          {code && (
+            <p className="waiting-code" aria-label={`Room code ${code}`}>{code}</p>
+          )}
+        </div>
+        {/* Under both, across the card: two buttons squeezed into what is
+            left beside a QR code is how a phone gets a truncated one. */}
         <div className="waiting-invite-actions">
           <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
             Share the link
@@ -212,38 +266,49 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </ul>
       </section>}
 
-      {/* One line, and a way in. Eight chips restating what the host chose a
-          minute ago spent 250px saying it twice. */}
-      {isHost ? (
-        <button
-          type="button"
-          className="waiting-card waiting-settings-row"
-          onClick={() => setSettingsOpen(true)}
-        >
-          <span className="waiting-settings-summary">
-            {settingsFacts.map((fact, index) => (
-              <Fragment key={fact}>
-                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                <span>{fact}</span>
-              </Fragment>
-            ))}
-          </span>
-          <span className="waiting-settings-edit">
-            Edit <ChevronRightIcon size={16} />
-          </span>
-        </button>
-      ) : (
-        <p className="waiting-card waiting-settings-row is-static">
-          <span className="waiting-settings-summary">
-            {settingsFacts.map((fact, index) => (
-              <Fragment key={fact}>
-                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                <span>{fact}</span>
-              </Fragment>
-            ))}
-          </span>
+      {/* The room rules, for everyone: the same six facts the lobby card and
+          the invite page show, from the same list and in the same order
+          (R-UX-09), as tiles readable from across the table, with their
+          one-line form above them. The host has the way in; a guest sees
+          whose rules they are. */}
+      <section
+        className="waiting-card waiting-rules waiting-settings-row"
+        aria-labelledby="waiting-rules-title"
+      >
+        <div className="waiting-rules-head">
+          <div className="waiting-rules-title">
+            <h2 id="waiting-rules-title">Room rules</h2>
+            <p className="waiting-settings-summary">{roomFactsSummary(factsInput)}</p>
+          </div>
+          {isHost ? (
+            <Button
+              variant="secondary"
+              compact
+              className="waiting-settings-edit-button"
+              iconLeft={<SlidersIcon size={15} />}
+              onClick={() => setSettingsOpen(true)}
+            >
+              Edit room rules
+            </Button>
+          ) : host ? (
+            <span className="waiting-rules-host">
+              <span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span> sets these
+            </span>
+          ) : null}
+        </div>
+        <dl className="waiting-rules-grid">
+          {facts.map((fact) => (
+            <div className="rule-tile" key={fact.key}>
+              <dt>{ROOM_FACT_ICONS[fact.key]}{fact.label}</dt>
+              <dd>{fact.value}{fact.detail && <small>{fact.detail}</small>}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="waiting-rules-prompts">
+          <ListIcon size={13} />
+          <span>{promptsLine}</span>
         </p>
-      )}
+      </section>
 
       {/* Players get a read-only look at the prompts; the host has the editor
           itself, and spectators are kept away from spoilers. */}
@@ -275,7 +340,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             {props.startError && <p className="waiting-start-error">{props.startError}</p>}
             <button
               type="button"
-              className="btn btn-success btn-big waiting-start-button"
+              className="btn btn-warm btn-big waiting-start-button"
               disabled={!canStart || props.startBusy}
               onClick={props.onStart}
               title={canStart ? undefined : startBlockedReason}
@@ -294,6 +359,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               : "Waiting for a host"}
           </p>
         )}
+        {/* Wrong room, wrong night: the exit lives here as well as in the
+            Room menu, quiet enough not to compete with Start. */}
+        <button type="button" className="btn btn-ghost waiting-leave-link" onClick={props.onLeave}>
+          Leave the room
+        </button>
       </section>
 
       {settingsOpen && (

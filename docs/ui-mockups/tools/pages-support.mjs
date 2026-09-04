@@ -4,6 +4,7 @@
 // operations rather than in the moderation queue.
 import { T, P, icon, avatar, btn, chip, sectionLabel } from './ui.mjs';
 import { lighthouseSVG } from './shell.mjs';
+import { appHeader } from './header.mjs';
 
 // The ten triage buckets, taken from the requirement sections rather than
 // invented, so a report lands where the code and its tests already live.
@@ -62,19 +63,19 @@ export const BugReportMenuPage = `
   </div>
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start">
     ${accountMenu(P.marta, `
+      ${menuItem(icon.gear(16), 'Settings')}
       ${menuItem(icon.user(16), 'My profile')}
       ${menuItem(icon.zap(16), 'Prompt stats')}
       ${menuItem(icon.bulb(16), 'My prompt lists')}
-      ${menuItem(icon.download(16), 'Your data')}
       ${divider}
       ${menuItem(icon.bug(16), 'Report a bug', { fresh: true })}
       ${divider}
       ${menuItem(icon.leave(16), 'Sign out', { danger: true })}
     `, { label: 'Registered player' })}
     ${accountMenu(P.sparrow, `
+      ${menuItem(icon.gear(16), 'Settings')}
       ${menuItem(icon.user(16), 'My profile')}
       ${menuItem(icon.zap(16), 'Prompt stats')}
-      ${menuItem(icon.download(16), 'Your data')}
       ${divider}
       ${menuItem(icon.bug(16), 'Report a bug', { fresh: true })}
       ${divider}
@@ -197,15 +198,6 @@ export const BugReportDialogPage = `
 
 // ------------------------------------------------------- 3. The triage queue
 
-const backBar = `
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
-  ${btn.ghost('Back to lobby', { iconL: icon.back(15), style: 'padding-left: 0' })}
-  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
-    ${avatar(P.marta, 30)}
-    <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
-  </button>
-</div>`;
-
 const filterPill = (label, on = false) => on
   ? `<button type="button" aria-pressed="true" style="background: ${T.primarySoft}; border: 1.5px solid ${T.primary}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12px; font-weight: 800; color: ${T.primaryInk}">${label}</button>`
   : `<button type="button" aria-pressed="false" style="background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 999px; padding: 6px 12px; font-family: ${T.body}; font-size: 12px; font-weight: 800; color: ${T.muted}">${label}</button>`;
@@ -278,7 +270,7 @@ const TRIAGE_TEXT = [
 
 export const BugReportsQueuePage = `
 <div style="width: 1160px; min-height: 1175px; margin: 0 auto; padding: 24px 24px 40px">
-  ${backBar}
+  ${appHeader({ page: 'Bug reports', gap: 16 })}
   <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start">
 
     <aside style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px; box-shadow: ${T.shadow}; display: grid; gap: 10px; align-content: start">

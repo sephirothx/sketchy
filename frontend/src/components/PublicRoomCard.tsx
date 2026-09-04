@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { promptLanguageLabel } from "../lib/promptLanguages";
+import { roomFacts } from "../lib/roomFacts";
 import { emitWithAck } from "../lib/socket";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
@@ -29,12 +30,17 @@ interface PublicRoomCardProps {
  * (rounds x drawing time). Everything else the card used to carry — a chip per
  * house rule, a capacity meter, the spectator count — priced the room rather
  * than described it, and on a phone it pushed the next room off the screen.
- * The room's own settings are one tap away on the other side of Join.
+ *
+ * The three it does show are the first three of `roomFacts` (R-UX-09), in that
+ * order and in its words, so a room reads the same here as on the invite page
+ * and in the waiting room. A row per open room is the one surface with no
+ * space for the other three; they are one tap away, on the other side of Join.
  */
 export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCardProps) {
   const full = room.isFull || room.playerCount >= room.maxPlayers;
   const playing = room.state === "playing";
   const languageLabel = promptLanguageLabel(room.promptLanguage);
+  const [players, rounds, drawingTime] = roomFacts(room);
 
   // Who is in there is fetched for this room when it is asked for, never
   // carried by the room list - see Room.to_public_roster.
@@ -89,16 +95,16 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             title="See who is in this room"
           >
             <UsersIcon size={14} />
-            {room.playerCount}/{room.maxPlayers}
+            {players.short}
             <ChevronDownIcon size={12} />
           </button>
-          <span title="Rounds">
+          <span title={rounds.label}>
             <RoundsIcon size={14} />
-            {room.rounds} {room.rounds === 1 ? "round" : "rounds"}
+            {rounds.short}
           </span>
-          <span title="Drawing time">
+          <span title={drawingTime.label}>
             <ClockIcon size={14} />
-            {room.drawingSeconds}s
+            {drawingTime.short}
           </span>
           {/* Not decoration: full removes the Join button, and a game already
               running means joining puts you in a later turn. */}

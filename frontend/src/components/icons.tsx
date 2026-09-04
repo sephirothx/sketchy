@@ -94,6 +94,8 @@ export function GlobeIcon(p: IconProps) { return <IconBase {...p}><circle cx="12
 export function LockIcon(p: IconProps) { return <IconBase {...p}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></IconBase>; }
 export function InfoIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.5h.01" /></IconBase>; }
 export function MailIcon(p: IconProps) { return <IconBase {...p}><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="m3 7 9 6.5L21 7" /></IconBase>; }
+export function SlidersIcon(p: IconProps) { return <IconBase {...p}><path d="M4 6h9" /><path d="M17 6h3" /><circle cx="15" cy="6" r="2" /><path d="M4 12h2" /><path d="M10 12h10" /><circle cx="8" cy="12" r="2" /><path d="M4 18h11" /><path d="M19 18h1" /><circle cx="17" cy="18" r="2" /></IconBase>; }
+export function ListIcon(p: IconProps) { return <IconBase {...p}><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></IconBase>; }
 export function DevicesIcon(p: IconProps) { return <IconBase {...p}><rect x="2" y="4" width="15" height="10" rx="2" /><path d="M6 18h7" /><path d="M9.5 14v4" /><rect x="17.5" y="9" width="5" height="9" rx="1.5" /></IconBase>; }
 export function ShieldIcon(p: IconProps) { return <IconBase {...p}><path d="M12 2.5 4.5 5.5v6c0 4.7 3.2 8.3 7.5 10 4.3-1.7 7.5-5.3 7.5-10v-6L12 2.5Z" /></IconBase>; }
 export function KeyIcon(p: IconProps) { return <IconBase {...p}><circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.7 12.3 9.8-9.8" /><path d="M15.5 7.5 19 11" /><path d="m18 5 3 3" /></IconBase>; }

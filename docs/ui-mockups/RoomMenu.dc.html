@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --brandWordmark: #3D2B1F; --brandFerrule: #75726D; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --brandWordmark: #F8FAFC; --brandFerrule: #94A3B8; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
+  </style>
+</helmet>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+
+<div style="width: 1060px; min-height: 660px; margin: 0 auto; padding: 28px 24px 40px">
+  <div style="margin-bottom: 24px">
+    <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">The place's one action</p>
+    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 24px; color: var(--ink); margin-top: 4px">One Room menu, one order, both devices</h1>
+    <p style="font-size: 14px; color: var(--muted); font-weight: 600; line-height: 1.5; margin-top: 6px; max-width: 620px">The desktop bar used to carry seven controls on its right-hand side, with Leave at the end of a row of routine ones. Four of them moved in here. The invite comes first because it is what a waiting room is for; Leave is last, set apart, and still routed through the confirmation dialog.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: 300px 1fr; gap: 32px; align-items: start">
+    <div style="display: grid; gap: 22px">
+      
+<div style="display: grid; gap: 4px; max-width: 320px">
+  <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 17px; color: var(--ink)">On a wide screen</h2>
+  <p style="font-size: 13px; color: var(--muted); font-weight: 600; line-height: 1.5">A dropdown under the <strong>Room</strong> button — the one action, with Player settings and the identity chip beside it, never moving.</p>
+</div>
+      
+<div style="display: grid; gap: 4px; max-width: 320px">
+  <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 17px; color: var(--ink)">On a phone</h2>
+  <p style="font-size: 13px; color: var(--muted); font-weight: 600; line-height: 1.5">The same rows in a sheet under the thumb, opened by the bar's single ⋯ button. It carries two more, because the phone bar has nowhere else to put them: <strong>Players and scores</strong> and <strong>Player settings</strong>.</p>
+</div>
+    </div>
+    <div style="display: flex; gap: 40px; align-items: start">
+      <div style="position: relative; width: 300px; padding-top: 52px">
+        <span style="position: absolute; right: 0; top: 0">
+          <button type="button" aria-haspopup="menu" aria-expanded="true" style="display: inline-flex; align-items: center; gap: 7px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 8px 13px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 38px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">Room<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></button>
+        </span>
+        <span style="position: relative; display: block">
+<div role="menu" aria-label="Room" style="background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); padding: 6px; width: 300px; display: grid; gap: 1px; text-align: left">
+  <div style="display: grid; gap: 8px; background: var(--primarySoft); border-radius: 10px; padding: 11px 12px; margin-bottom: 3px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--primaryInk)">Invite</span>
+      <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 19px; letter-spacing: 0.1em; color: var(--primaryInk)">BQ7F2K</span>
+    </div>
+    <div style="display: flex; gap: 7px">
+      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge); flex: 1; min-height: 36px; padding: 7px 10px; font-size: 13px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Share the link</button>
+      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); min-height: 36px; padding: 7px 10px; font-size: 13px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy code</button>
+    </div>
+  </div>
+  
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></span>
+  <span style="display: grid; gap: 1px">Go AFK<small style="font-size: 11.5px; font-weight: 700; color: var(--faint)">skipped until you’re back</small></span>
+</button>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg></span>
+  <span style="display: grid; gap: 1px">Save this drawing</span>
+</button>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg></span>
+  <span style="display: grid; gap: 1px">Vote to restart the game</span>
+</button>
+  
+  <div style="border-top: 1.5px solid var(--line); margin: 4px 6px"></div>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--danger); min-height: 40px">
+  <span style="display: inline-flex; color: var(--danger)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></span>
+  <span style="display: grid; gap: 1px">Leave the room</span>
+</button>
+</div></span>
+      </div>
+      <div style="width: 322px; border: 1.5px solid var(--lineStrong); border-radius: 20px; padding: 10px 10px 0; background: var(--paper); box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14)">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 10px">
+          <span style="font-size: 12px; font-weight: 800; color: var(--faint)">Sheet</span>
+          <button type="button" aria-label="Close" style="display: inline-flex; color: var(--faint); background: transparent; border: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        
+<div role="menu" aria-label="Room" style="background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px; width: 100%; display: grid; gap: 1px; text-align: left">
+  <div style="display: grid; gap: 8px; background: var(--primarySoft); border-radius: 10px; padding: 11px 12px; margin-bottom: 3px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--primaryInk)">Invite</span>
+      <span style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 19px; letter-spacing: 0.1em; color: var(--primaryInk)">BQ7F2K</span>
+    </div>
+    <div style="display: flex; gap: 7px">
+      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge); flex: 1; min-height: 36px; padding: 7px 10px; font-size: 13px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Share the link</button>
+      <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); min-height: 36px; padding: 7px 10px; font-size: 13px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy code</button>
+    </div>
+  </div>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5a3.5 3.5 0 0 1 0 6.7"/><path d="M17.5 14.4a6.5 6.5 0 0 1 4 5.6"/></svg></span>
+  <span style="display: grid; gap: 1px">Players and scores</span>
+</button>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></span>
+  <span style="display: grid; gap: 1px">Go AFK<small style="font-size: 11.5px; font-weight: 700; color: var(--faint)">skipped until you’re back</small></span>
+</button>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg></span>
+  <span style="display: grid; gap: 1px">Save this drawing</span>
+</button>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></svg></span>
+  <span style="display: grid; gap: 1px">Vote to restart the game</span>
+</button>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--ink); min-height: 40px">
+  <span style="display: inline-flex; color: var(--faint)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></span>
+  <span style="display: grid; gap: 1px">Player settings</span>
+</button>
+  <div style="border-top: 1.5px solid var(--line); margin: 4px 6px"></div>
+  
+<button type="button" role="menuitem" style="display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 11px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; color: var(--danger); min-height: 40px">
+  <span style="display: inline-flex; color: var(--danger)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></span>
+  <span style="display: grid; gap: 1px">Leave the room</span>
+</button>
+</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 1060, "height": 660}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
+  }
+}
+</script>
+</body>
+</html>

@@ -22,7 +22,18 @@ keyboard that takes half the screen, and one thumb.
 
 ## Features
 
+- One header on every screen: the wordmark (a link back to the lobby everywhere but a
+  room), a back arrow on every sub-page, then the page name or the room chip; the room's
+  phase in the middle; and on the right the place's one action, **Player settings**, and the
+  identity chip. Inside a room the one action is the **Room menu**, which holds the invite,
+  AFK, saving the drawing, the restart vote, and leaving, in the same order on a desktop
+  dropdown and a phone sheet; the waiting room also carries a quiet **Leave the room** link.
 - Lobby with a live, polled list of public rooms, or join a private room by code.
+- The waiting room leads with the invite: the room code at a size you can read across a
+  table, a QR code of the same link beside it for the phone that would rather use its
+  camera, and the two ways to send it by hand. Below it the **Room rules** are the same
+  six facts the lobby card and the invite page show, as tiles everyone in the room can
+  read, with the host's way to edit them beside them.
 - Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools).
@@ -90,7 +101,7 @@ flowchart LR
 | Layer    | Technology |
 |----------|------------|
 | Backend  | Python 3.14, FastAPI, python-socketio (`AsyncServer`, ASGI), uvicorn, SQLAlchemy 2.0 (async), PostgreSQL, aiosqlite, Alembic |
-| Frontend | React 19, TypeScript, Vite, react-router-dom, zustand, socket.io-client |
+| Frontend | React 19, TypeScript, Vite, react-router-dom, zustand, socket.io-client, qrcode.react |
 | Testing  | pytest + pytest-asyncio (backend unit tests), ruff (backend lint), Playwright (multi-browser E2E testing) |
 
 ## Database & Configuration

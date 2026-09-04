@@ -308,7 +308,7 @@ export function AdminOperationsPage() {
 
   return (
     <main className="ops-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader page="Server operations" />
       <header className="ops-header">
         <div>
           <SectionLabel>Administrators only</SectionLabel>

@@ -64,7 +64,12 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
             await guest.get_by_text("Custom prompts only (1)").wait_for()
-            await guest.get_by_text("Buy letters", exact=True).wait_for()
+            # The Hints tile, not the summary line above it: the six room
+            # facts are one list now, and the summary joins them into a single
+            # string that no exact match can pick a fact out of.
+            await guest.locator('.rule-tile:has(dt:text-is("Hints"))').filter(
+                has_text="Buy letters"
+            ).wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             drawer, guesser, prompt = await choose_prompt([host, guest])

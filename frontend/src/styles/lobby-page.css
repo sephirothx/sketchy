@@ -1,34 +1,218 @@
 /* Lobby and invite-entry pages, per docs/ui-mockups (MainPage in
    tools/pages-entry.mjs). Shared recipes come from primitives.css. */
 
+/* ── The header: one bar, three slots, every screen ─────────────────────
+   Slot 1 is where you are (the wordmark, then a page crumb or the room
+   chip), slot 2 is what is going on (a room's phase; empty elsewhere), slot 3
+   is you: the place's one action, Player settings, the identity chip. The
+   phone keeps the three slots with one control each. See AppHeader.tsx. */
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 64px;
+  margin-bottom: 18px;
+}
+
 .lobby-wordmark {
   margin: 0;
   line-height: 1;
+  flex: none;
 }
 
-/* The back control and the wordmark travel together on the left. */
 .lobby-header-lead {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
-@media (max-width: 720px) {
-  /* The arrow alone. "Back to lobby" beside a wordmark and an identity chip is
-     what would not fit; the label stays as the accessible name. */
-  .header-back-label {
-    display: none;
-  }
+.app-header-center {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 0;
+}
 
-  .lobby-header.has-back .header-back-button {
-    flex: none;
-    padding-inline: 10px;
-  }
+.app-header-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lobby-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  justify-self: end;
+  flex-wrap: nowrap;
+}
+
+.header-divider {
+  width: 1.5px;
+  height: 22px;
+  background: var(--line);
+  flex: none;
+}
+
+.header-crumb {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-back-button {
-  padding-left: 0;
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.lobby-wordmark-link {
+  display: inline-flex;
+  border-radius: 8px;
+}
+
+/* The room chip: which room, which code, and one press copies the invite
+   link. `room-copy-button` and data-room-code are what the e2e suite reads. */
+.room-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 360px;
+  min-height: 40px;
+  padding: 5px 12px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.room-chip:hover {
+  border-color: var(--line-strong);
+}
+
+.room-chip-name {
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.room-chip .header-divider {
+  height: 16px;
+}
+
+.room-chip-code {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--primary-ink);
+}
+
+.room-chip > svg {
+  color: var(--faint);
+  flex: none;
+}
+
+/* The bar's one action for a room. */
+.room-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.room-menu-button {
+  gap: 6px;
+  padding-right: 10px;
+}
+
+.room-menu-button.is-open {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.room-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 320px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-raised);
+  padding: 8px;
+}
+
+.room-menu-dropdown .sheet-menu-item {
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.room-menu-invite {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 4px 8px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1.5px solid var(--line);
+}
+
+.room-menu-invite-code {
+  grid-column: span 2;
+}
+
+.room-menu-invite-code {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.room-menu-invite-label {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.room-menu-code {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--primary-ink);
+  line-height: 1.1;
+}
+
+.app-header.is-compact {
+  gap: 8px;
+  min-height: 56px;
+  margin-bottom: 8px;
+}
+
+.app-header.is-compact .lobby-header-actions .btn-icon {
+  width: 40px;
+  height: 40px;
 }
 
 .lobby-columns {
@@ -162,6 +346,11 @@
   font-size: 13px;
   color: var(--faint);
   font-weight: 700;
+}
+
+.lobby-rooms-code-button {
+  margin-left: auto;
+  align-self: center;
 }
 
 .room-list {
@@ -444,11 +633,19 @@
   color: var(--warning);
 }
 
+/* Three across, two rows — the same six facts the waiting room lays out as
+   tiles, in the same order (R-UX-09). `minmax(0, 1fr)` because "Drawing
+   rules" can be a sentence: an implicit content minimum is what lays a
+   560px row out inside a 390px phone. */
 .invite-room-facts {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0 0 18px;
+}
+
+@media (max-width: 560px) {
+  .invite-room-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .invite-room-facts > div {
@@ -1109,8 +1306,6 @@
   color: var(--warm-ink);
 }
 
-/* The header's page actions: a desktop gets them beside the wordmark, a phone
-   gets the dock instead. */
 .lobby-header-actions .btn-compact {
   white-space: nowrap;
 }
