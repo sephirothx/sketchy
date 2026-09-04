@@ -66,10 +66,9 @@
 }
 .prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
 
+/* The width comes from the shell steps in layout-primitives.css. */
 .prompt-list-manager-page {
-  margin: 0 auto;
-  max-width: 1000px;
-  padding: 24px 16px 64px;
+  padding-block: 24px 64px;
 }
 
 .prompt-list-manager-card {
@@ -102,6 +101,22 @@
   gap: 24px;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   margin-top: 24px;
+}
+
+/* The rail carries list names, which are the thing that gets truncated
+   first, so it takes a share of a wider shell. */
+@media (min-width: 1500px) {
+  .prompt-list-manager-layout {
+    grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  }
+}
+
+/* A wider page is more prompts on screen, not a wider name box: the single
+   line fields keep a measure, and the height the shell frees goes to the
+   list of prompts itself. */
+.prompt-list-manager-layout form > label input,
+.prompt-list-manager-meta {
+  max-width: var(--measure);
 }
 
 .prompt-list-manager-layout aside {
@@ -268,7 +283,7 @@
   gap: 6px;
   list-style: none;
   margin: 0;
-  max-height: 320px;
+  max-height: clamp(320px, 44vh, 560px);
   overflow: auto;
   padding: 0 4px 0 0;
 }
@@ -343,7 +358,7 @@
   letter-spacing: 0.04em;
 }
 .prompt-list-manager-notice { color: var(--success-ink); }
-.prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
+.prompt-list-manager-empty { color: var(--muted); margin-top: 24px; max-width: var(--measure); }
 
 @media (max-width: 700px) {
   .prompt-list-manager-card { padding: 18px; }

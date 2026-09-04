@@ -175,19 +175,24 @@ export const chat = {
   },
 };
 
-// Standard three-column room grid.
+// Standard three-column room grid, at the base shell step: 250 / 1fr / 300
+// with a 12px gap (docs/architecture.md, "The layout contract"). An artboard
+// is one width, so the 1500px and 2100px steps live in the explorer and in
+// layout-primitives.css rather than here.
 export const roomGrid = (left, center, right) => `
-<div style="display: grid; grid-template-columns: 252px minmax(0, 1fr) 292px; gap: 16px; align-items: start">
+<div style="display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 12px; align-items: start">
   ${left}
   <div style="min-width: 0">${center}</div>
   ${right}
 </div>`;
 
+// The page shell: `min(100% - gutter, max)`, the same rule every page in the
+// app uses. At the base step that is a 28px gutter and a 1240px ceiling.
 export const roomPage = (inner, { width = 1240, minHeight = 980 } = {}) =>
-  `<div style="width: ${width}px; min-height: ${minHeight}px; margin: 0 auto; padding: 18px 20px 28px">${inner}</div>`;
+  `<div style="width: min(100% - 28px, ${width}px); min-height: ${minHeight}px; margin: 0 auto; padding: 16px 0 28px">${inner}</div>`;
 
 export const canvasFrame = (inner, overlay = '') => `
-<div style="position: relative; width: 100%; max-width: 820px; aspect-ratio: 4 / 3; background: #fff; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; overflow: hidden; box-shadow: ${T.shadow}">
+<div style="position: relative; width: 100%; max-width: 760px; aspect-ratio: 4 / 3; background: #fff; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; overflow: hidden; box-shadow: ${T.shadow}">
   ${inner}
   ${overlay}
 </div>`;

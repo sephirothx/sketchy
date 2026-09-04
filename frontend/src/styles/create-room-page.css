@@ -1,7 +1,80 @@
 /* Create-room page, per docs/ui-mockups (CreateRoomPage in
    tools/pages-entry.mjs). The control recipes here (segmented, steppers,
    chips, switches) are shared with the waiting room's settings editor. */
-.create-room-page { margin: 0 auto; max-width: 780px; padding: 26px 16px 64px; }
+/* The width comes from the shell steps in layout-primitives.css. */
+.create-room-page { padding-block: 26px 64px; }
+
+/* A form is running text with boxes in it: past a point more width is not
+   more usable, only wider. So this page stops at the middle shell step and
+   spends nothing on a third — the widest it ever gets is a 900px form beside
+   a 620px preview. */
+@media (min-width: 2100px) {
+  .create-room-page {
+    width: min(100% - var(--shell-gutter), 1600px);
+  }
+}
+
+.create-room-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The page renders the preview column or the footer strip, never both, from
+   the same 1200px step (CreateRoomPage.tsx). */
+@media (min-width: 1200px) {
+  .create-room-layout {
+    align-items: start;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  }
+}
+
+.create-room-preview-card {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px 20px;
+  position: sticky;
+  /* Clear of the page's own top padding, so it never sits against the edge. */
+  top: 16px;
+}
+
+.create-room-preview-card h2 {
+  font-size: 21px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.create-room-preview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.create-room-preview-chips li {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 800;
+  padding: 4px 11px;
+  white-space: nowrap;
+}
+
+.create-room-preview-duration {
+  margin: 0;
+}
+
+.create-room-preview-card .create-room-submit {
+  width: 100%;
+}
 
 .create-room-heading-row {
   display: flex;

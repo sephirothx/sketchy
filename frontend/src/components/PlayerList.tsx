@@ -413,6 +413,17 @@ function PlayerModerationMenu({
   useEscapeLayer(isOpen, () => onOpenChange(false));
   useFocusTrap(menuRef, { active: isOpen });
 
+  // The roster scrolls inside its own column in a pinned room, and a scroll
+  // container clips whatever its children position outside it — this menu is
+  // absolutely positioned under its row. The list keeps a menu's worth of
+  // room below the last player while one is open (game-room.css); this is
+  // what makes that room useful. `nearest` scrolls only when it has to, so
+  // nothing moves for a menu that already fits.
+  useEffect(() => {
+    if (!isOpen) return;
+    menuRef.current?.scrollIntoView({ block: "nearest" });
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     function handleClickOutside(event: MouseEvent) {

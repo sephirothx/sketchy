@@ -328,168 +328,174 @@ export function LobbyBrowserPage() {
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 
-      <section className="panel lobby-rooms-panel">
-        <div className="lobby-rooms-heading">
-          <h2>Public rooms</h2>
-          <span className="lobby-rooms-count">
-            {!roomsState.loaded ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
-          </span>
-        </div>
-
-        {roomsState.loaded && rooms.length > 0 && (
-          <div className="lobby-filter-bar">
-            <span className="lobby-room-search">
-              <SearchIcon size={15} />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search rooms by name or code"
-                aria-label="Search rooms by name or code"
-                autoComplete="off"
-                enterKeyHint="search"
-              />
+      {/* The three live lists, in one block so a wide screen can put them
+          side by side. Below 1500px they stack, as they always have. */}
+      <div className="lobby-lists">
+        <section className="panel lobby-rooms-panel">
+          <div className="lobby-rooms-heading">
+            <h2>Public rooms</h2>
+            <span className="lobby-rooms-count">
+              {!roomsState.loaded ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
             </span>
-            {/* Three controls in a row is three rows on a phone, and 110px of
-                filtering before the first room. Behind one chip they cost a
-                slot beside the search field, and the chip says how many are
-                on so a filtered-looking list is never a mystery. */}
-            {isNarrow ? (
-              <button
-                type="button"
-                className={`lobby-filter-toggle lobby-filter-sheet-button${activeFilterCount > 0 ? " has-filters" : ""}`}
-                aria-pressed={activeFilterCount > 0}
-                onClick={() => setFilterSheetOpen(true)}
-              >
-                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
-              </button>
-            ) : (
-              <>
-                <span className="lobby-language-filter">
-                  <select
-                    aria-label="Filter by prompt language"
-                    value={languageFilter}
-                    onChange={(e) => setLanguageFilter(e.target.value)}
-                  >
-                    <option value="all">All languages</option>
-                    {roomLanguages.map((language) => (
-                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
-                    ))}
-                  </select>
-                  <ChevronDownIcon size={14} />
-                </span>
+          </div>
+
+          {roomsState.loaded && rooms.length > 0 && (
+            <div className="lobby-filter-bar">
+              <span className="lobby-room-search">
+                <SearchIcon size={15} />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search rooms by name or code"
+                  aria-label="Search rooms by name or code"
+                  autoComplete="off"
+                  enterKeyHint="search"
+                />
+              </span>
+              {/* Three controls in a row is three rows on a phone, and 110px of
+                  filtering before the first room. Behind one chip they cost a
+                  slot beside the search field, and the chip says how many are
+                  on so a filtered-looking list is never a mystery. */}
+              {isNarrow ? (
                 <button
                   type="button"
-                  className="lobby-filter-toggle"
+                  className={`lobby-filter-toggle lobby-filter-sheet-button${activeFilterCount > 0 ? " has-filters" : ""}`}
+                  aria-pressed={activeFilterCount > 0}
+                  onClick={() => setFilterSheetOpen(true)}
+                >
+                  Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+                </button>
+              ) : (
+                <>
+                  <span className="lobby-language-filter">
+                    <select
+                      aria-label="Filter by prompt language"
+                      value={languageFilter}
+                      onChange={(e) => setLanguageFilter(e.target.value)}
+                    >
+                      <option value="all">All languages</option>
+                      {roomLanguages.map((language) => (
+                        <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                      ))}
+                    </select>
+                    <ChevronDownIcon size={14} />
+                  </span>
+                  <button
+                    type="button"
+                    className="lobby-filter-toggle"
+                    aria-pressed={hideFullRooms}
+                    onClick={() => setHideFullRooms((v) => !v)}
+                  >
+                    Hide full
+                  </button>
+                  <button
+                    type="button"
+                    className="lobby-filter-toggle"
+                    aria-pressed={hideInProgressRooms}
+                    onClick={() => setHideInProgressRooms((v) => !v)}
+                  >
+                    Hide in progress
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {filterSheetOpen && (
+            <BottomSheet
+              title="Filters"
+              testId="lobby-filter-sheet"
+              onDismiss={() => setFilterSheetOpen(false)}
+              footer={
+                <>
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setLanguageFilter("all");
+                        setHideFullRooms(false);
+                        setHideInProgressRooms(false);
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                  <Button variant="primary" onClick={() => setFilterSheetOpen(false)}>
+                    Show {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
+                  </Button>
+                </>
+              }
+            >
+              <div className="lobby-filter-sheet">
+                <label className="lobby-filter-row">
+                  <span>Prompt language</span>
+                  <span className="lobby-language-filter">
+                    <select
+                      value={languageFilter}
+                      onChange={(e) => setLanguageFilter(e.target.value)}
+                    >
+                      <option value="all">All languages</option>
+                      {roomLanguages.map((language) => (
+                        <option key={language} value={language}>{promptLanguageLabel(language)}</option>
+                      ))}
+                    </select>
+                    <ChevronDownIcon size={14} />
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="lobby-filter-row is-toggle"
                   aria-pressed={hideFullRooms}
                   onClick={() => setHideFullRooms((v) => !v)}
                 >
-                  Hide full
+                  <span>Hide full rooms</span>
+                  <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
-                  className="lobby-filter-toggle"
+                  className="lobby-filter-row is-toggle"
                   aria-pressed={hideInProgressRooms}
                   onClick={() => setHideInProgressRooms((v) => !v)}
                 >
-                  Hide in progress
+                  <span>Hide games in progress</span>
+                  <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
                 </button>
-              </>
-            )}
-          </div>
-        )}
+              </div>
+            </BottomSheet>
+          )}
 
-        {filterSheetOpen && (
-          <BottomSheet
-            title="Filters"
-            testId="lobby-filter-sheet"
-            onDismiss={() => setFilterSheetOpen(false)}
-            footer={
-              <>
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => {
-                      setLanguageFilter("all");
-                      setHideFullRooms(false);
-                      setHideInProgressRooms(false);
-                    }}
-                  >
-                    Clear filters
-                  </button>
-                )}
-                <Button variant="primary" onClick={() => setFilterSheetOpen(false)}>
-                  Show {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
-                </Button>
-              </>
-            }
-          >
-            <div className="lobby-filter-sheet">
-              <label className="lobby-filter-row">
-                <span>Prompt language</span>
-                <span className="lobby-language-filter">
-                  <select
-                    value={languageFilter}
-                    onChange={(e) => setLanguageFilter(e.target.value)}
-                  >
-                    <option value="all">All languages</option>
-                    {roomLanguages.map((language) => (
-                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
-                    ))}
-                  </select>
-                  <ChevronDownIcon size={14} />
-                </span>
-              </label>
-              <button
-                type="button"
-                className="lobby-filter-row is-toggle"
-                aria-pressed={hideFullRooms}
-                onClick={() => setHideFullRooms((v) => !v)}
-              >
-                <span>Hide full rooms</span>
-                <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="lobby-filter-row is-toggle"
-                aria-pressed={hideInProgressRooms}
-                onClick={() => setHideInProgressRooms((v) => !v)}
-              >
-                <span>Hide games in progress</span>
-                <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
-              </button>
+          {/* No retry, and no refresh error. There is nothing to re-ask: the
+              channel re-subscribes itself on reconnect and on a missed delta,
+              and a socket that is down is what `ConnectionStatusBanner` is for.
+              The only states left are "not told yet" and "told". */}
+          {!roomsState.loaded ? (
+            <div className="room-list-loading" role="status">Loading public rooms…</div>
+          ) : rooms.length === 0 ? (
+            <p>No public rooms yet. Create one!</p>
+          ) : filteredRooms.length === 0 ? (
+            <p className="lobby-no-matches">
+              No public rooms match your search criteria.
+            </p>
+          ) : (
+            <div className="room-list">
+              {filteredRooms.map((room) => (
+                <PublicRoomCard key={room.id} room={room} busy={Boolean(pendingJoin)} pendingMode={pendingJoin?.key === room.id ? pendingJoin.mode : null} onJoin={(asSpectator) => void handleJoinRoom(room, asSpectator)} />
+              ))}
             </div>
-          </BottomSheet>
-        )}
+          )}
+        </section>
+        {/* Two panels that are about the people here rather than the rooms, so
+            they sit below the list rather than above it. They stack on a phone
+            in the same order: the room browser is what the page is for. At
+            1500px the wrapper dissolves and both become columns of their own,
+            beside the rooms rather than under them. */}
+        <div className="lobby-social">
+          <LobbyChatPanel />
 
-        {/* No retry, and no refresh error. There is nothing to re-ask: the
-            channel re-subscribes itself on reconnect and on a missed delta,
-            and a socket that is down is what `ConnectionStatusBanner` is for.
-            The only states left are "not told yet" and "told". */}
-        {!roomsState.loaded ? (
-          <div className="room-list-loading" role="status">Loading public rooms…</div>
-        ) : rooms.length === 0 ? (
-          <p>No public rooms yet. Create one!</p>
-        ) : filteredRooms.length === 0 ? (
-          <p className="lobby-no-matches">
-            No public rooms match your search criteria.
-          </p>
-        ) : (
-          <div className="room-list">
-            {filteredRooms.map((room) => (
-              <PublicRoomCard key={room.id} room={room} busy={Boolean(pendingJoin)} pendingMode={pendingJoin?.key === room.id ? pendingJoin.mode : null} onJoin={(asSpectator) => void handleJoinRoom(room, asSpectator)} />
-            ))}
-          </div>
-        )}
-      </section>
-      {/* Two panels that are about the people here rather than the rooms, so
-          they sit below the list rather than above it. They stack on a phone
-          in the same order: the room browser is what the page is for. */}
-      <div className="lobby-social">
-        <LobbyChatPanel />
-
-        <OnlinePlayersPanel />
+          <OnlinePlayersPanel />
+        </div>
       </div>
 
       {/* The way in is a fixed bar under the thumb on a phone, rather than the

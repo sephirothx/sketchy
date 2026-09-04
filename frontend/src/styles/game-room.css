@@ -1,8 +1,6 @@
-/* Game room */
+/* Game room. The width comes from the shell steps in layout-primitives.css. */
 .game-room {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 16px;
+  padding-block: 16px;
 }
 
 .game-header {
@@ -718,10 +716,13 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
 
 .room-settings-actions .room-settings-save { min-width: 148px; }
 
+/* Three tracks that grow with the shell: every pixel the side columns do not
+   take is canvas, and every pixel past the canvas cap is better spent on the
+   roster and the guesses than on a blurrier drawing. */
 .room-shell {
   display: grid;
-  grid-template-columns: 252px minmax(0, 1fr) 292px;
-  gap: 16px;
+  grid-template-columns: var(--room-players-col) minmax(0, 1fr) var(--room-chat-col);
+  gap: 12px;
   align-items: start;
 }
 
@@ -796,6 +797,10 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   text-transform: uppercase;
 }
 
+/* The fallback for a window too short to pin the room to (see the block
+   below): there the page scrolls, and the chat needs a height of its own. The
+   pinned room overrides this with the height of the column it lives in, so
+   the 520px ceiling binds nowhere it used to. */
 .room-chat-panel.guess-chat {
   height: clamp(360px, calc(100vh - 130px), 520px);
 }
@@ -812,6 +817,149 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   color: var(--muted);
   font-size: 13px;
   margin: 10px 0 0;
+}
+
+/* ── The room as a screen rather than a document ────────────────────────────
+
+   R-UX-01: a room lays itself out to the viewport. On a phone that has always
+   meant the playing shell in the block below; on a desktop the room was an
+   ordinary scrolling page, so in a 1440px-tall window the content ended at
+   y≈615 and the rest was empty — the players column and the chat both stopped
+   at their content, and the chat could not grow past 520px however tall the
+   window was.
+
+   Pinned, the three columns scroll inside themselves instead. Nothing here is
+   a reading surface: the roster and the guesses are live lists you glance at,
+   and scrolling one of them should not carry the drawing off the screen.
+
+   The height floor is the lobby's, and for the same reason — below it each
+   column would be a few rows tall, which is worse than the ordinary page, so
+   the ordinary page is what it falls back to. 901px rather than 900 so this
+   and the phone block below can never both match. */
+@media (min-width: 901px) and (min-height: 640px) {
+  .game-room {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* Chrome keeps its height; only the columns give ground. The gap owns the
+     spacing now, so the per-element margin would double it. */
+  .game-room > .game-header,
+  .game-room > .restart-vote-banner,
+  .game-room > .colorblind-safe-suggestion {
+    flex: none;
+    margin-bottom: 0;
+  }
+
+  .room-shell {
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* `min-height: 0` is what lets a grid or flex child shrink below its
+     content and hand the overflow to the scroll container inside it. */
+  .room-shell > * {
+    min-height: 0;
+  }
+
+  /* Sticky was how a short column followed a scrolling page. There is no page
+     scroll here — each column is its own scroll area. */
+  .room-shell-players,
+  .room-shell-chat {
+    position: static;
+    top: auto;
+  }
+
+  .sidebar-left,
+  .sidebar-right {
+    height: 100%;
+  }
+
+  .room-shell-panel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .room-players-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .room-players-panel .player-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* So a row's name does not run under the scrollbar's lane. */
+    padding-right: 4px;
+    /* Reaching the end of the roster must not start scrolling anything else. */
+    overscroll-behavior: contain;
+  }
+
+  /* A scroll container clips what its children position outside it, and the
+     moderation menu is absolutely positioned under its row — so on a full
+     16-seat roster a vote on the bottom row would be a menu cut in half.
+     While one is open the list keeps a menu's worth of scrollable room below
+     the last player, and PlayerList scrolls the menu into view. */
+  .room-players-panel .player-list:has(.player-vote-menu) {
+    padding-bottom: 200px;
+  }
+
+  /* The ceiling goes: the chat is as tall as the column it lives in. */
+  .room-chat-panel.guess-chat {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .room-shell-main,
+  .room-shell-main-transition {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .room-shell-main-transition {
+    flex: 1 1 auto;
+  }
+
+  /* The waiting room and the game-over panel *are* documents — a long invite
+     card, a settings summary, a scoreboard — so they scroll in their column.
+     The gameplay column deliberately does not: the canvas is sized to fit. */
+  .room-shell-waiting .room-shell-main-transition,
+  .room-shell-game-end .room-shell-main-transition {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* The canvas takes whichever cap binds first — the middle track's width or
+     the height the bands around it leave — and derives the other side from
+     4:3, the same rule the phone shell uses. `container-type: size` is what
+     lets the sheet read the leftover height as 100cqh; a definite `height`
+     would stop `aspect-ratio` applying and stretch the drawing. */
+  .game-room-playing .canvas-area {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .game-room-playing .canvas-wrapper {
+    container-type: size;
+    flex: 1 1 auto;
+    /* Whatever height the drawing cannot use at 4:3 is split above and below
+       it rather than left as a hole under it. */
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .game-room-playing .canvas-stack {
+    width: min(100%, calc(100cqh * 4 / 3));
+  }
 }
 
 @media (max-width: 900px) {
@@ -1877,7 +2025,7 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
 .canvas-stack {
   position: relative;
   width: 100%;
-  max-width: 800px;
+  max-width: var(--canvas-cap);
   aspect-ratio: 4 / 3;
   background: white;
   border: 1.5px solid var(--line-strong);

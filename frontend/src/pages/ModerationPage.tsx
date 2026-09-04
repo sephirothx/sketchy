@@ -23,6 +23,7 @@ import {
   type ReportStatus,
   type UserBan,
 } from "../lib/moderation";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { canModerate } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
 
@@ -38,6 +39,16 @@ type QueueEntry = {
   createdAt: string;
   dot: "danger" | "warning" | "neutral";
 };
+
+/** One line of the recent-decisions rail: what was decided, and when. */
+type Decision = {
+  key: string;
+  title: string;
+  note: string;
+  decidedAt: string;
+};
+
+const RECENT_DECISIONS = 12;
 
 const FILTERS: { name: Filter; label: string }[] = [
   { name: "open", label: "All open" },
@@ -85,6 +96,10 @@ export function ModerationPage() {
   const [content, setContent] = useState<PromptContentReport[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
   const [openCount, setOpenCount] = useState(0);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
+  // The third column only exists at the wide shell step, and neither does the
+  // pair of requests behind it. Matches the 1500px step in operator.css.
+  const showDecisions = useMediaQuery("(min-width: 1500px)");
   const [selected, setSelected] = useState<Selection | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
   const [duration, setDuration] = useState<Record<string, string>>({});
@@ -120,8 +135,17 @@ export function ModerationPage() {
             listModerationReports("pending"),
             listPromptContentReports("pending"),
           ]),
+      // What was decided lately, for the third column. Not asked for when the
+      // column is not on screen, nor when the queue is already showing the
+      // resolved cases itself.
+      !showDecisions || effectiveStatus === "resolved"
+        ? Promise.resolve(null)
+        : Promise.all([
+            listModerationReports("resolved"),
+            listPromptContentReports("resolved"),
+          ]),
     ])
-      .then(([playerResult, contentResult, banResult, pendingResult]) => {
+      .then(([playerResult, contentResult, banResult, pendingResult, resolvedResult]) => {
         setPlayers(playerResult.reports);
         setContent(contentResult.reports);
         setBans(banResult.bans);
@@ -130,10 +154,33 @@ export function ModerationPage() {
             ? pendingResult[0].reports.length + pendingResult[1].reports.length
             : playerResult.reports.length + contentResult.reports.length,
         );
+        const [resolvedPlayers, resolvedContent] = resolvedResult
+          ? [resolvedResult[0].reports, resolvedResult[1].reports]
+          : effectiveStatus === "resolved"
+            ? [playerResult.reports, contentResult.reports]
+            : [[], []];
+        setDecisions(
+          [
+            ...resolvedPlayers.map((report) => ({
+              key: `player:${report.id}`,
+              title: humanize(report.reason),
+              note: report.resolutionNote ?? "No note recorded.",
+              decidedAt: report.reviewedAt ?? report.updatedAt,
+            })),
+            ...resolvedContent.map((report) => ({
+              key: `content:${report.id}`,
+              title: humanize(report.reason),
+              note: report.resolutionNote ?? "No note recorded.",
+              decidedAt: report.reviewedAt ?? report.updatedAt,
+            })),
+          ]
+            .sort((a, b) => Date.parse(b.decidedAt) - Date.parse(a.decidedAt))
+            .slice(0, RECENT_DECISIONS),
+        );
         setError(null);
       })
       .catch(fail);
-  }, [allowed, effectiveStatus, fail]);
+  }, [allowed, effectiveStatus, fail, showDecisions]);
 
   useEffect(load, [load]);
 
@@ -336,6 +383,33 @@ export function ModerationPage() {
             })}
           </div>
         </aside>
+
+        {/* The third column, from 1500px. A moderator decides in a row and
+            wants to see what they have just done without leaving the case —
+            and the width is there to show it rather than to be margin. */}
+        {showDecisions && <aside className="ops-card mod-decisions" aria-label="Recent decisions">
+          <div className="mod-queue-head">
+            <div>
+              <SectionLabel>Just decided</SectionLabel>
+              <h2>Recent decisions</h2>
+            </div>
+          </div>
+          {decisions.length === 0 ? (
+            <p className="ops-empty">Nothing has been decided yet.</p>
+          ) : (
+            <ul className="mod-decision-list">
+              {decisions.map((decision) => (
+                <li key={decision.key}>
+                  <span className="mod-decision-head">
+                    <strong>{decision.title}</strong>
+                    <time dateTime={decision.decidedAt}>{age(decision.decidedAt)}</time>
+                  </span>
+                  <span className="mod-decision-note">{decision.note}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>}
 
         <div className="mod-case">
           {playerCase && (

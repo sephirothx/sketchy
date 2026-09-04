@@ -1351,6 +1351,49 @@ Files are named for their single concern; the directory says the role.
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
 `frontend/src/styles/` is one CSS file per surface.
 
+### The layout contract
+
+One rule decides how wide anything is. `frontend/src/styles/layout-primitives.css`
+owns the tokens; nothing else names a page width.
+
+| | shell | gutter | players / chat | canvas cap |
+| --- | ---: | ---: | ---: | ---: |
+| base | 1240 | 28 | 250 / 300 | 760 |
+| ≥ 1500px | 1600 | 64 | 290 / 340 | 1000 |
+| ≥ 2100px | 1960 | 96 | 320 / 380 | 1180 |
+
+Every page shell is `width: min(100% - var(--shell-gutter), var(--shell-max))`, so
+the steps reach the lobby, the room, the create form, the profile, the library and
+the operator pages at once (R-UX-07). Two pages stop early on purpose and say so
+where they do it: the create form at 1600 and prompt stats at 1240, because a form
+and a five-column table have a measure the way a paragraph does. Running text keeps
+`--measure` regardless of the shell.
+
+The steps are **viewport media queries**, not container queries, even though
+[`ui-mockups/`](ui-mockups/) expresses the same steps as container queries. The
+mockups have to, because an artboard is a frame inside a page. The app must not:
+`container-type` applies layout containment, which makes the element the containing
+block for every `position: fixed` descendant — the phone room shell, the lobby dock,
+the toasts — and none of those may be trapped inside a page.
+
+`--canvas-cap` is the one number here with a protocol behind it. Strokes travel as
+normalised coordinates and are replayed onto a backing store fixed at 800 × 600;
+the store cannot move because `draw_fill` is pixel-addressed against that grid and
+validated against it on the wire, so a client with a different store would land the
+same flood fill on different pixels. Presenting the element larger is therefore a
+pure upscale, and 1180 is where a 1.48× upscale stops looking like crayon (R-UX-06).
+Past it the width goes to the side columns.
+
+Above 900px wide and 640px tall the lobby and the room are both **pinned to the
+viewport** and their panels scroll inside themselves (R-UX-01). Neither is a
+reading surface — they are live lists you glance at and come back to, and scrolling
+one of them should not carry the others away. The height floor is the fallback: below
+it each column would be a few rows tall, which is worse than one page that scrolls.
+Inside the pinned room the canvas is sized from whichever cap binds first, the middle
+track's width or the height the bands around it leave, exactly as the phone shell
+does it — `container-type: size` on `.canvas-wrapper` and `100cqh` on the sheet, with
+`aspect-ratio` deriving the other side.
+
 ### The phone layout
 
 Below the 900px breakpoint a room in play is a fixed shell of three bands —

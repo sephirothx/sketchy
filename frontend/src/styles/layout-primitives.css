@@ -1,8 +1,78 @@
-/* Layout shells */
+/* Layout shells.
+
+   ── The shell steps ────────────────────────────────────────────────────────
+   Every page is drawn in one centred column. The column used to be a single
+   fixed width chosen for a 1440px laptop, so a 2560px monitor got the same
+   layout with more empty paper around it. It grows in three steps instead:
+
+              shell     gutter    players / chat    canvas cap
+     base     1240        28          250 / 300         760
+     1500     1600        64          290 / 340        1000
+     2100     1960        96          320 / 380        1180
+
+   The steps are viewport media queries rather than container queries because
+   the app *is* the viewport: making a root element a query container would
+   also make it the containing block for every `position: fixed` descendant —
+   the phone room shell, the lobby dock, the toasts — and none of those may be
+   trapped in a page. The mockups in docs/ui-mockups use container queries for
+   the same steps because an artboard is a frame inside a page.
+
+   --canvas-cap is the presented size of the drawing, and it stops at 1180px
+   on purpose. Strokes travel as normalised coordinates and are replayed onto
+   an 800x600 backing store that CANNOT move: `draw_fill` is pixel-addressed
+   against that grid and validated against it on the wire, so a different
+   store would land the same flood fill on different pixels for different
+   clients. Presenting it larger is therefore a pure upscale — 1180px is
+   1.48x, and past that crayon-weight strokes visibly soften, so the rest of
+   the width goes to the side columns instead of to a blurrier drawing.
+   (R-UX-06.) */
+:root {
+  --shell-max: 1240px;
+  --shell-gutter: 28px;
+  --room-players-col: 250px;
+  --room-chat-col: 300px;
+  --canvas-cap: 760px;
+  /* Running text keeps a measure whatever the shell does, so widening the
+     page never turns a paragraph into a single line. */
+  --measure: 68ch;
+}
+
+@media (min-width: 1500px) {
+  :root {
+    --shell-max: 1600px;
+    --shell-gutter: 64px;
+    --room-players-col: 290px;
+    --room-chat-col: 340px;
+    --canvas-cap: 1000px;
+  }
+}
+
+@media (min-width: 2100px) {
+  :root {
+    --shell-max: 1960px;
+    --shell-gutter: 96px;
+    --room-players-col: 320px;
+    --room-chat-col: 380px;
+    --canvas-cap: 1180px;
+  }
+}
+
+/* Every page shell is the same column. Page stylesheets set their own
+   padding-block; none of them sets a width of its own. */
+.lobby-page,
+.game-room,
+.create-room-page,
+.profile-page,
+.prompt-stats-page,
+.prompt-list-manager-page,
+.ops-page {
+  box-sizing: border-box;
+  margin-inline: auto;
+  width: min(100% - var(--shell-gutter), var(--shell-max));
+}
+
 .lobby-page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: 24px 0 64px;
 }
 
 .panel {
@@ -48,6 +118,6 @@ textarea:disabled {
 
 
 
-.create-room-lobby-copy { color: var(--muted); line-height: 1.5; margin: 8px 0 16px; font-size: 14px; }
+.create-room-lobby-copy { color: var(--muted); line-height: 1.5; margin: 8px 0 16px; font-size: 14px; max-width: var(--measure); }
 .lobby-action-error { background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-weight: 600; margin: 0 0 16px; padding: 10px 12px; }
 .room-list-loading { color: var(--muted); padding: 20px 0; text-align: center; }
