@@ -870,24 +870,25 @@
 
 .settings-you-edit {
   position: absolute;
-  right: 2px;
-  bottom: 2px;
+  right: -3px;
+  bottom: -3px;
 }
 
 /* A round pencil on the disc's corner: it reads over any picture, light or
-   dark, without covering the face. */
+   dark, without covering the face. The light border is what keeps it a
+   button on a dark picture; the ring behind it lifts it off a light one. */
 .settings-you-edit-chip {
   display: inline-grid;
   place-items: center;
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 2px solid var(--card);
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.82);
+  background: rgba(15, 23, 42, 0.85);
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 0 0 2px var(--card), 0 1px 3px rgba(15, 23, 42, 0.3);
 }
 
 .settings-you-edit-chip:hover,
