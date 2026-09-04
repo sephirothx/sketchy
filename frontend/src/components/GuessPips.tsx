@@ -103,6 +103,7 @@ function GuessPip({
       <Avatar
         name={player.nickname}
         nameColor={player.nameColor}
+        avatarUrl={player.avatarUrl}
         isAnonymous={player.isAnonymous}
         size={26}
       />

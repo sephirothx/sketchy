@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import gzip
 import json
 import zlib
@@ -53,6 +54,7 @@ from app.db.models import (
     UserSettings,
     generate_uuid,
 )
+from app.services.avatars import delete_avatars_for
 from app.domain_values import (
     DataExportArtifactEncoding,
     AccountState,
@@ -501,6 +503,9 @@ async def _build_export_artifact(
             )
         ).all()
     )
+    avatar_asset = await session.scalar(
+        select(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == account.id)
+    )
 
     return {
         "schemaVersion": EXPORT_SCHEMA_VERSION,
@@ -513,6 +518,22 @@ async def _build_export_artifact(
             "displayName": account.display_name,
             "nameColor": account.name_color,
             "avatarKey": account.avatar_key,
+            # The picture itself: the player's own upload, so it is theirs to
+            # take with them (R-PRIV-01), as bytes rather than a URL that dies
+            # with the account.
+            "avatar": (
+                {
+                    "key": avatar_asset.object_key,
+                    "contentType": avatar_asset.content_type,
+                    "byteSize": avatar_asset.byte_size,
+                    "width": avatar_asset.width,
+                    "height": avatar_asset.height,
+                    "createdAt": _timestamp(avatar_asset.created_at),
+                    "imageBase64": base64.b64encode(bytes(avatar_asset.payload)).decode("ascii"),
+                }
+                if avatar_asset is not None
+                else None
+            ),
             "state": account.state,
             "role": account.role,
             "createdAt": _timestamp(account.created_at),
@@ -1338,6 +1359,8 @@ async def anonymize_account(
                 .where(EmailOutboxEntry.user_id.in_(identity_ids))
                 .values(to_address=DELETED_EMAIL_ADDRESS, user_id=None)
             )
+            # The picture is the account's, not the game's: it goes now.
+            await delete_avatars_for(session, identity_ids)
 
             for identity in (
                 await session.scalars(select(User).where(User.id.in_(identity_ids)))
@@ -1349,6 +1372,7 @@ async def anonymize_account(
                 identity.display_name = DELETED_DISPLAY_NAME
                 identity.name_color = None
                 identity.avatar_key = None
+                identity.avatar_upload_blocked_until = None
                 identity.role = UserRole.USER.value
                 identity.updated_at = deleted_at
                 identity.last_login_at = deleted_at

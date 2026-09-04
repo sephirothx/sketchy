@@ -459,7 +459,9 @@ function ProfileView({ userId }: { userId: string }) {
           <header className="profile-identity">
             {/* The avatar wears the same color as the name it belongs to. */}
             <span
-              className="profile-avatar avatar avatar-player"
+              className={`profile-avatar avatar avatar-player${
+                !subject.isAnonymous && subject.avatarUrl ? " has-picture" : ""
+              }`}
               aria-hidden="true"
               style={{
                 ["--player-color" as string]: identityColor(
@@ -469,7 +471,11 @@ function ProfileView({ userId }: { userId: string }) {
                 ),
               }}
             >
-              {avatarInitial(shownName)}
+              {!subject.isAnonymous && subject.avatarUrl ? (
+                <img src={subject.avatarUrl} alt="" />
+              ) : (
+                avatarInitial(shownName)
+              )}
             </span>
             <div>
               <h1>

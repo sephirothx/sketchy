@@ -2,6 +2,8 @@ export interface PlayerInfo {
   playerId: string;
   nickname: string;
   nameColor?: string;
+  /** The uploaded picture, content-addressed; absent for guests and initials. */
+  avatarUrl?: string | null;
   /** Guests render in grey italics; the flag is what drives that styling. */
   isAnonymous?: boolean;
   score: number;
@@ -206,6 +208,8 @@ export interface ChatMessage {
   playerId?: string;
   nickname: string;
   nameColor?: string;
+  /** The uploaded picture, content-addressed; absent for guests and initials. */
+  avatarUrl?: string | null;
   isAnonymous?: boolean;
   text: string;
   correct: boolean;
@@ -219,6 +223,8 @@ export interface ScoreEntry {
   playerId: string;
   nickname: string;
   nameColor?: string;
+  /** The uploaded picture, content-addressed; absent for guests and initials. */
+  avatarUrl?: string | null;
   isAnonymous?: boolean;
   score: number;
 }
@@ -238,6 +244,8 @@ export interface TurnEndedPayload {
     playerId: string;
     nickname: string;
     nameColor?: string;
+    /** The uploaded picture, content-addressed; absent for guests and initials. */
+    avatarUrl?: string | null;
     isAnonymous?: boolean;
     seconds: number;
   }[];
@@ -277,6 +285,8 @@ export type GameHighlight =
 export interface HighlightName {
   nickname: string;
   nameColor?: string;
+  /** The uploaded picture, content-addressed; absent for guests and initials. */
+  avatarUrl?: string | null;
   isAnonymous?: boolean;
 }
 

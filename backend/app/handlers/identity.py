@@ -21,6 +21,8 @@ class PlayerIdentity:
     # are a guest, who is pinned to the guest grey regardless.
     name_color: str | None = None
     colorblind_safe_colors: bool = False
+    # The account's uploaded picture (#573); never set for a guest.
+    avatar_key: str | None = None
 
 
 class IdentityError(ValueError):
@@ -59,6 +61,7 @@ async def resolve_identity(
             nickname=user.username,
             is_anonymous=False,
             name_color=user.name_color,
+            avatar_key=None if user.is_anonymous else user.avatar_key,
             colorblind_safe_colors=await resolve_colorblind_safe_preference(
                 ctx,
                 user_id=user.id,

@@ -213,6 +213,7 @@ export function PlayerList({
             <Avatar
               name={p.nickname}
               nameColor={p.nameColor}
+              avatarUrl={p.avatarUrl}
               isAnonymous={p.isAnonymous}
               size={38}
             />

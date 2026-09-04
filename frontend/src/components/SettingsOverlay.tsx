@@ -7,6 +7,7 @@ import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
+import { AvatarInputError, preparePicture, removeAvatar, uploadAvatar } from "../lib/avatars";
 import { useToast } from "../lib/toast";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -24,6 +25,7 @@ import { AccountDataDialog } from "./AccountDataDialog";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
+import { Avatar } from "./ui/Avatar";
 import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
@@ -51,6 +53,7 @@ import {
   EyeOffIcon,
   FillIcon,
   GearIcon,
+  ImageIcon,
   KeyIcon,
   KeyboardIcon,
   LockIcon,
@@ -295,6 +298,48 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
 
   const [draftName, setDraftName] = useState(user?.displayName ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
+  const [pictureBusy, setPictureBusy] = useState(false);
+  const [pictureError, setPictureError] = useState<string | null>(null);
+  const pictureInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function choosePicture(file: File | undefined) {
+    if (!file || pictureBusy) return;
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      const { base64 } = await preparePicture(file);
+      await uploadAvatar(base64);
+      await useAuthStore.getState().fetchMe();
+    } catch (error) {
+      // The server's reason when it has one - "too large", "a moderator
+      // removed your picture" - and the browser's when the file never got
+      // that far.
+      setPictureError(
+        error instanceof AvatarInputError || error instanceof ApiError
+          ? error.message
+          : "Could not set that picture. Please try again.",
+      );
+    } finally {
+      setPictureBusy(false);
+      if (pictureInputRef.current) pictureInputRef.current.value = "";
+    }
+  }
+
+  async function dropPicture() {
+    if (pictureBusy) return;
+    setPictureBusy(true);
+    setPictureError(null);
+    try {
+      await removeAvatar();
+      await useAuthStore.getState().fetchMe();
+    } catch (error) {
+      setPictureError(
+        error instanceof ApiError ? error.message : "Could not remove the picture.",
+      );
+    } finally {
+      setPictureBusy(false);
+    }
+  }
   const [nameBusy, setNameBusy] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
   // Arriving straight at /settings/account beats `GET /api/auth/me`, so the
@@ -478,6 +523,62 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         {nameError && (
           <p id="settings-name-error" className="auth-error settings-row-error" role="alert">
             {nameError}
+          </p>
+        )}
+
+        {isGuest ? (
+          <Row
+            label="Picture"
+            hint="Guests keep the grey initial, so a name in the player list is never mistaken for an account."
+            locked
+          >
+            <NeedsAccount />
+          </Row>
+        ) : (
+          <Row
+            label="Picture"
+            hint="Shown beside your name wherever it appears. Cropped to a square and shrunk to 256 pixels in your browser before it is sent. Other players can report a picture, and a moderator can remove it."
+          >
+            <span className="settings-picture">
+              <Avatar
+                name={user?.username ?? ""}
+                nameColor={nameColor}
+                avatarUrl={user?.avatarUrl}
+                size={44}
+              />
+              <input
+                ref={pictureInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="settings-picture-input"
+                aria-label="Choose a picture"
+                onChange={(event) => void choosePicture(event.target.files?.[0])}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-compact"
+                disabled={pictureBusy}
+                onClick={() => pictureInputRef.current?.click()}
+              >
+                <ImageIcon size={15} />
+                {pictureBusy ? "Working…" : user?.avatarUrl ? "Change" : "Upload"}
+              </button>
+              {user?.avatarUrl && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact"
+                  disabled={pictureBusy}
+                  onClick={() => void dropPicture()}
+                >
+                  Remove
+                </button>
+              )}
+            </span>
+          </Row>
+        )}
+        {pictureError && (
+          <p className="auth-error settings-row-error" role="alert">
+            {pictureError}
           </p>
         )}
 

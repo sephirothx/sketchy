@@ -1,6 +1,7 @@
 """Pure construction of Socket.IO response and broadcast payloads."""
 from __future__ import annotations
 
+from app.auth.avatars import avatar_url
 from app.flow_timing import timing
 from app.game import Game, MAX_HINT_SPEND, competition_ranks
 from app.rooms import Player, Room
@@ -130,6 +131,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "playerId": player.id,
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
+                "avatarUrl": avatar_url(player.avatar_key),
                 "isAnonymous": player.is_anonymous,
                 "seconds": game.guess_times[player.id],
             }
@@ -144,6 +146,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "playerId": player.id,
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
+                "avatarUrl": avatar_url(player.avatar_key),
                 "isAnonymous": player.is_anonymous,
                 "score": player.score,
                 "delta": deltas[player.id],

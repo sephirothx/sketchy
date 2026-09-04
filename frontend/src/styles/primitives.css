@@ -170,3 +170,17 @@
 .avatar-guest {
   background: var(--guest-avatar);
 }
+
+/* An uploaded picture fills the disc (#573). The disc keeps its colour
+   underneath, so a transparent picture still reads as this player's. */
+.avatar.has-picture {
+  overflow: hidden;
+}
+
+.avatar.has-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}

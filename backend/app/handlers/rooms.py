@@ -343,6 +343,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         user_id=identity.user_id,
         is_anonymous=identity.is_anonymous,
         colorblind_safe_colors=identity.colorblind_safe_colors,
+        avatar_key=identity.avatar_key,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     if ctx.is_ending(sid):
@@ -687,6 +688,7 @@ async def _seat_in_room(
             user_id=identity.user_id,
             is_anonymous=identity.is_anonymous,
             colorblind_safe_colors=identity.colorblind_safe_colors,
+            avatar_key=identity.avatar_key,
         )
     except RoomFullError:
         # Flagged rather than left for the client to recognise by its prose:
@@ -749,6 +751,7 @@ async def _refresh_seat_identity(
         return
     player.nickname = account.username
     player.is_anonymous = False
+    player.avatar_key = account.avatar_key
     player.name_color = (
         normalize_name_color(account.name_color)
         or normalize_name_color(name_color)

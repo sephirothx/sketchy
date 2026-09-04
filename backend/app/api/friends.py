@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.auth.avatars import avatar_url
 from app.db.models import Friendship, User
 from app.domain_values import AccountState, FriendshipState
 from app.services.friends import (
@@ -47,6 +48,7 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
         "userId": str(person.id),
         "displayName": person.display_name,
         "nameColor": person.name_color,
+        "avatarUrl": avatar_url(None if person.is_anonymous else person.avatar_key),
         "isAnonymous": person.is_anonymous,
         "status": row.status,
         "requestedByMe": row.requested_by_id == viewer_id,

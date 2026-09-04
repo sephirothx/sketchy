@@ -839,3 +839,22 @@
     padding-inline: 12px;
   }
 }
+
+/* ---------------------------------------------------------------- picture */
+
+.settings-picture {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The real file input is driven by the button beside it; hidden rather than
+   display:none so assistive tech and the e2e suite can still set a file. */
+.settings-picture-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}

@@ -353,3 +353,85 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await owner.close()
             await other.close()
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tmp_path):
+    """#573: the picture chosen in Settings replaces the initial on the chip
+    and on the seat, cropped and shrunk by the browser before it is sent."""
+    from tests.png_fixture import png_bytes
+
+    source = tmp_path / "face.png"
+    # Deliberately not square and not 256: the browser has to make it so.
+    source.write_bytes(png_bytes(640, 400, seed=7))
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "Portrait")
+            # Guests keep the grey initial: the row is locked, with the reason.
+            await page.click("button.header-settings-button")
+            dialog = page.locator(".settings-modal-card")
+            await dialog.wait_for(state="visible")
+            assert await dialog.get_by_label("Choose a picture").count() == 0
+            await dialog.get_by_role("button", name="Close settings").click()
+            await dialog.wait_for(state="hidden")
+
+            await register_account(page, "Portrait")
+            await page.click("button.header-settings-button")
+            await dialog.wait_for(state="visible")
+            async with page.expect_response(
+                lambda response: response.url.endswith("/api/users/me/avatar")
+                and response.request.method == "POST"
+            ) as uploaded:
+                await dialog.get_by_label("Choose a picture").set_input_files(str(source))
+            response = await uploaded.value
+            assert response.status == 200, await response.text()
+            key = (await response.json())["avatarKey"]
+            assert key.endswith(".png") and len(key) == 68
+
+            # The row shows it, and so does the identity chip behind the pane.
+            await dialog.locator(".settings-picture img").wait_for(state="visible")
+            picture_row = dialog.locator(".settings-picture")
+            assert await picture_row.get_by_role("button", name="Change").count() == 1
+            assert await picture_row.get_by_role("button", name="Remove").count() == 1
+            await dialog.get_by_role("button", name="Close settings").click()
+            await dialog.wait_for(state="hidden")
+            chip = page.locator(".identity-avatar img")
+            await chip.wait_for(state="visible")
+            assert (await chip.get_attribute("src")).endswith(key)
+
+            # What was stored is what the browser made: a 256-square PNG.
+            picture = await page.evaluate(
+                """async (key) => {
+                    const response = await fetch('/api/avatars/' + key);
+                    const blob = await response.blob();
+                    const bitmap = await createImageBitmap(blob);
+                    return { type: blob.type, width: bitmap.width, height: bitmap.height,
+                             cache: response.headers.get('cache-control') };
+                }""",
+                key,
+            )
+            assert picture["type"] == "image/png"
+            assert (picture["width"], picture["height"]) == (256, 256)
+            assert "immutable" in picture["cache"]
+
+            # And the seat wears it too.
+            await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create room")')
+            seat = page.locator(".player-list .avatar img").first
+            await seat.wait_for(state="visible")
+            assert (await seat.get_attribute("src")).endswith(key)
+
+            # Removing it returns the initial everywhere.
+            await page.click("button.header-settings-button")
+            await dialog.wait_for(state="visible")
+            await dialog.get_by_role("button", name="Remove").click()
+            await dialog.locator(".settings-picture img").wait_for(state="hidden")
+            await dialog.get_by_role("button", name="Close settings").click()
+            await page.locator(".player-list .avatar img").first.wait_for(state="hidden")
+        finally:
+            await context.close()
+            await browser.close()

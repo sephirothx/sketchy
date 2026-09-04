@@ -34,8 +34,11 @@ DEFAULT_MAX_BODY_BYTES = 512 * 1024
 # context. Four gives that room without inviting anything else.
 BUG_REPORT_MAX_BODY_BYTES = 4 * 1024 * 1024
 
+# A picture is 128 KiB decoded, about 175 KB of base64, in a JSON envelope.
+AVATAR_MAX_BODY_BYTES = 256 * 1024
 PATH_LIMITS: Mapping[str, int] = {
     "/api/bug-reports": BUG_REPORT_MAX_BODY_BYTES,
+    "/api/users/me/avatar": AVATAR_MAX_BODY_BYTES,
 }
 
 

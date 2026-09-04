@@ -175,11 +175,15 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         }
       >
         <span
-          className="identity-avatar avatar-player"
+          className={`identity-avatar avatar-player${!isGuest && user.avatarUrl ? " has-picture" : ""}`}
           aria-hidden="true"
           style={{ "--player-color": identityColor(shownName, isGuest, user.nameColor) } as CSSProperties}
         >
-          {avatarInitial(shownName)}
+          {!isGuest && user.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" />
+          ) : (
+            avatarInitial(shownName)
+          )}
         </span>
         {!compact && <span className="identity-name">{shownName}</span>}
         {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}

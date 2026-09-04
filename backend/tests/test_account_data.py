@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
 import app.auth.account_data as account_data_module
+from app.services.avatars import set_avatar
+from tests.png_fixture import png_bytes
 from app.auth.account_data import (
     EXPORT_INTERVAL,
     AccountDataError,
@@ -307,6 +309,8 @@ def artifact_field_paths(value, prefix: str = "") -> set[str]:
 async def test_export_is_versioned_durable_and_requester_only(env):
     http, users, history, factory = env
     owner = await register(http)
+    # The picture is the player's own upload, so the export carries it (#573).
+    await set_avatar(factory, user_id=owner["id"], payload=png_bytes(seed=5))
     linked_guest = await users.create_anonymous("Linked road guest")
     await users.merge_guest_into_account(linked_guest.id, owner["id"])
     other = await users.create_anonymous("Private Bob")

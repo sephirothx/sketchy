@@ -13,6 +13,7 @@ from collections import deque
 from dataclasses import dataclass, field, replace
 from typing import Literal, Optional
 
+from app.auth.avatars import avatar_url
 from app.drawing_rules import (
     DEFAULT_ALLOWED_TOOLS,
     DEFAULT_COLOR_MODE,
@@ -247,6 +248,9 @@ class Player:
     user_id: str | None = None
     is_anonymous: bool = True
     name_color: str = field(default_factory=generate_random_name_color)
+    # The account's uploaded picture, as a content-addressed key (#573).
+    # Always None for a guest.
+    avatar_key: Optional[str] = None
     sid: Optional[str] = None
     score: int = 0
     connected: bool = True
@@ -581,6 +585,7 @@ class Room:
             {
                 "nickname": player.nickname,
                 "nameColor": player.name_color,
+                "avatarUrl": avatar_url(player.avatar_key),
                 "isAnonymous": player.is_anonymous,
                 "isHost": player.is_host,
             }
@@ -627,6 +632,7 @@ class Room:
             "playerId": player.id,
             "nickname": player.nickname,
             "nameColor": player.name_color,
+            "avatarUrl": avatar_url(player.avatar_key),
             "isAnonymous": player.is_anonymous,
             "score": player.score,
             "connected": player.connected,
@@ -802,6 +808,7 @@ class RoomManager:
         user_id: str | None = None,
         is_anonymous: bool = True,
         colorblind_safe_colors: bool = False,
+        avatar_key: str | None = None,
     ) -> Player:
         active_players = room.seated_players()
         if not is_spectator and len(active_players) >= room.max_players:
@@ -817,6 +824,7 @@ class RoomManager:
                 if is_anonymous
                 else normalize_name_color(name_color) or generate_random_name_color()
             ),
+            avatar_key=None if is_anonymous else avatar_key,
             score=0,
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,

@@ -61,7 +61,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "reason IN ('harassment', 'offensive_drawing', "
-            "'inappropriate_name', 'cheating', 'spam')",
+            "'inappropriate_name', 'cheating', 'spam', 'inappropriate_avatar')",
             name="ck_player_reports_reason",
         ),
         sa.CheckConstraint(

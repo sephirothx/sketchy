@@ -797,6 +797,15 @@ forgotten it — the change signs every other device out), signed-in devices,
 the data export, and deleting the account, which is its own dialog with the
 password and a typed `DELETE` rather than the bottom of the data export.
 
+A registered player can upload a **picture** to stand in for their initial, from
+**Settings → Account**. The browser crops it to a square and shrinks it to 256
+pixels before it is sent; the server takes only a PNG of exactly that size under
+128 KiB, checked from its header without decoding it, and serves it only as an
+image from `/api/avatars/{sha256}.png`, cacheable for ever because a changed
+picture is a new address. Guests keep the grey initial. A picture can be
+reported, a moderator can remove it through the report, and removal blocks
+uploads for a week. The export carries the bytes; deletion removes them.
+
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the
 player-list panel of both themes, a floor that refuses a colour which vanishes
@@ -907,8 +916,9 @@ it on every attempt.
 ### Reports and suspensions
 
 Any signed-in player, including a guest account, can submit a private **Report**
-with `POST /api/reports`. Reports use one of five bounded reasons—harassment,
-offensive drawing, inappropriate name, cheating, or spam—plus up to 2,000
+with `POST /api/reports`. Reports use one of six bounded reasons—harassment,
+offensive drawing, inappropriate name, cheating, spam, or inappropriate
+picture—plus up to 2,000
 characters of detail and an optional 32 KiB JSON context snapshot. Game and
 turn references are validated when supplied. Submitted context is preserved as
 versioned, reporter-supplied evidence; it is not treated as a server-verified

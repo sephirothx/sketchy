@@ -14,6 +14,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
+from app.auth.avatars import avatar_url
+from app.services.avatars import remove_avatar
 from app.auth.rate_limit import (
     PersistentRateLimiter,
     client_key,
@@ -250,6 +252,8 @@ async def _reported_player_context(
     return {
         user.id: {
             "displayName": user.display_name,
+            # So a report about a picture can be judged from the queue.
+            "avatarUrl": avatar_url(user.avatar_key),
             "registered": user.state == AccountState.REGISTERED.value,
             "createdAt": user.created_at.isoformat(),
             # This report itself is not "prior".
@@ -422,6 +426,9 @@ def create_moderation_router(
     *,
     on_user_banned: OnUserBanned | None = None,
     on_user_warned: OnUserWarned | None = None,
+    # Called with the account whose picture a moderator took down, so live
+    # seats and the lobby's identity cache stop showing it.
+    on_avatar_changed: Callable[[str, str | None], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
     report_limiter = PersistentRateLimiter(
@@ -788,6 +795,34 @@ def create_moderation_router(
                     _report_payload(report, player_context) for report in reports
                 ]
             }
+
+    @router.post("/moderation/reports/{report_id}/remove-avatar")
+    async def remove_reported_avatar(report_id: UUID, request: Request):
+        """Take down the picture a report is about, and block re-upload.
+
+        Reached through the report rather than the account (R-MOD-02): the
+        moderator acts on the case in front of them and never has to hold an
+        account id to do it. The block is what makes the removal stick - a
+        re-upload a minute later would otherwise be the same picture back.
+        """
+        async with session_factory() as session:
+            actor = await _reviewer(session, request)
+            report = await session.get(PlayerReport, report_id)
+        if report is None or report.reported_user_id is None:
+            raise HTTPException(status_code=404, detail="No such report.")
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        removed = await remove_avatar(
+            session_factory,
+            user_id=report.reported_user_id,
+            actor_id=actor.id,
+            by_moderator=True,
+            report_id=report.id,
+            request_id=request_id,
+            ip_hash=ip_hash,
+        )
+        if on_avatar_changed is not None:
+            await on_avatar_changed(str(report.reported_user_id), None)
+        return {"ok": True, "removed": removed}
 
     @router.get("/moderation/prompt-content-reports")
     async def list_prompt_content_reports(

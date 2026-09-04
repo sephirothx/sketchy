@@ -168,6 +168,7 @@ async def test_account_state_and_role_constants_cover_database_values():
         "inappropriate_name",
         "cheating",
         "spam",
+        "inappropriate_avatar",
     )
     assert REPORT_STATUSES == ("pending", "resolved", "dismissed")
     assert RETAINED_MESSAGE_KINDS == ("chat", "wrong_guess", "correct_guess")
