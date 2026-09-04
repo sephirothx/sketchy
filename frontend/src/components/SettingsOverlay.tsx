@@ -296,7 +296,7 @@ function EmailAddressStatus({
 }
 
 /**
- * The "Edit" chip on the disc. With no picture it opens the file picker;
+ * The pencil on the disc's corner. With no picture it opens the file picker;
  * with one it opens a two-item menu, because "Remove" needs a home once the
  * picture row is gone. The menu is a real menu: Escape, outside click and
  * the arrow keys all work, the way the account menu's do.
@@ -363,13 +363,14 @@ function PictureEditChip({
         type="button"
         className="settings-you-edit-chip"
         disabled={busy}
+        aria-label="Edit picture"
+        title="Edit picture"
         aria-haspopup={hasPicture ? "menu" : undefined}
         aria-expanded={hasPicture ? open : undefined}
         aria-controls={hasPicture && open ? menuId : undefined}
         onClick={() => (hasPicture ? setOpen((shown) => !shown) : pick())}
       >
-        <PencilIcon size={13} />
-        {busy ? "Working…" : "Edit"}
+        <PencilIcon size={14} />
       </button>
       {hasPicture && open && (
         <div

@@ -371,20 +371,20 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "Portrait")
-            # Guests keep the grey initial: no picker and no chip on the disc.
+            # Guests keep the grey initial: no picker and no pencil on the disc.
             await page.click("button.header-settings-button")
             dialog = page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
             assert await dialog.get_by_label("Choose a picture").count() == 0
-            assert await dialog.get_by_role("button", name="Edit").count() == 0
+            assert await dialog.get_by_role("button", name="Edit picture").count() == 0
             await dialog.get_by_role("button", name="Close settings").click()
             await dialog.wait_for(state="hidden")
 
             await register_account(page, "Portrait")
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
-            # No picture yet: the chip on the disc goes straight to the picker.
-            assert await dialog.get_by_role("button", name="Edit").count() == 1
+            # No picture yet: the pencil on the disc goes straight to the picker.
+            assert await dialog.get_by_role("button", name="Edit picture").count() == 1
             await dialog.get_by_label("Choose a picture").set_input_files(str(source))
             # The file opens the crop dialog first; nothing is sent until it is used.
             crop = page.get_by_role("dialog", name="Frame your picture")
@@ -403,7 +403,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
 
             # The disc shows it, and so does the identity chip behind the pane.
             await dialog.locator(".settings-you .avatar img").wait_for(state="visible")
-            await dialog.get_by_role("button", name="Edit").click()
+            await dialog.get_by_role("button", name="Edit picture").click()
             menu = dialog.get_by_role("menu", name="Picture")
             assert await menu.get_by_role("menuitem", name="Change picture").count() == 1
             assert await menu.get_by_role("menuitem", name="Remove picture").count() == 1
@@ -440,7 +440,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             # Removing it returns the initial everywhere.
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
-            await dialog.get_by_role("button", name="Edit").click()
+            await dialog.get_by_role("button", name="Edit picture").click()
             await dialog.get_by_role("menuitem", name="Remove picture").click()
             await dialog.locator(".settings-you .avatar img").wait_for(state="hidden")
             await dialog.get_by_role("button", name="Close settings").click()

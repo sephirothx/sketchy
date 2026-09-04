@@ -870,39 +870,41 @@
 
 .settings-you-edit {
   position: absolute;
-  left: 50%;
-  bottom: -6px;
-  transform: translateX(-50%);
+  right: 2px;
+  bottom: 2px;
 }
 
-/* The chip on the disc: it reads over any picture, light or dark. */
+/* A round pencil on the disc's corner: it reads over any picture, light or
+   dark, without covering the face. */
 .settings-you-edit-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1.5px solid rgba(255, 255, 255, 0.35);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.78);
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.82);
   color: #fff;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 800;
   cursor: pointer;
-  white-space: nowrap;
-  backdrop-filter: blur(3px);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
 }
 
 .settings-you-edit-chip:hover,
 .settings-you-edit-chip[aria-expanded="true"] {
-  background: rgba(15, 23, 42, 0.92);
+  background: rgba(15, 23, 42, 0.95);
 }
 
-/* Anchored to the chip's left edge rather than centred on it: the card
-   clips at its own edge, and the disc sits at the card's left. */
+.settings-you-edit-chip:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Opens to the right of the button, away from the card's left edge, which
+   would clip it. */
 .settings-you-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   left: 0;
   z-index: 2;
   width: 180px;

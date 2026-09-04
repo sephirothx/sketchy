@@ -798,7 +798,7 @@ the data export, and deleting the account, which is its own dialog with the
 password and a typed `DELETE` rather than the bottom of the data export.
 
 A registered player can upload a **picture** to stand in for their initial, from
-**Settings → Account**: the **Edit** chip on the disc. The browser lets the player
+**Settings → Account**: the pencil on the disc. The browser lets the player
 frame a square of it — drag to move, zoom to get closer — then shrinks that square
 to 256 pixels and encodes it as WebP (PNG where the browser cannot) before it is
 sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
