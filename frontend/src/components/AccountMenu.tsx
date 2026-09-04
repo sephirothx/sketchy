@@ -22,6 +22,8 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { BugReportDialog } from "./BugReportDialog";
+import { AvatarPicture } from "./ui/Avatar";
+import { avatarFillClass } from "../lib/avatarDoodles";
 import {
   BugIcon,
   BulbIcon,
@@ -175,12 +177,12 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         }
       >
         <span
-          className={`identity-avatar avatar-player${!isGuest && user.avatarUrl ? " has-picture" : ""}`}
+          className={`identity-avatar avatar-player${avatarFillClass(isGuest ? null : user.avatarUrl)}`}
           aria-hidden="true"
           style={{ "--player-color": identityColor(shownName, isGuest, user.nameColor) } as CSSProperties}
         >
           {!isGuest && user.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" />
+            <AvatarPicture url={user.avatarUrl} />
           ) : (
             avatarInitial(shownName)
           )}

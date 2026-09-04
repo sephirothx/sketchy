@@ -124,15 +124,19 @@ jobs:
           gitleaks git . --no-banner --redact --exit-code 1 \
             --baseline-path .gitleaks-known.json --log-opts="-m ${from}..HEAD"
 
-      # The mockup artboards are generated files that open like source, so a
-      # hand edit to one is invisible until someone rebuilds and loses it.
-      # No install: the generator is plain node with no dependencies.
+      # The mockup artboards and the avatar doodle sprite are generated files
+      # that open like source, so a hand edit to one is invisible until
+      # someone rebuilds and loses it.
+      # No install: both generators are plain node with no dependencies.
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
       - name: Check the mockups still match their generator
         run: bash scripts/check-mockups-regenerated.sh
+
+      - name: Check the doodle sprite still matches its generator
+        run: bash scripts/check-doodles-regenerated.sh
 
   backend:
     name: Backend lint & tests

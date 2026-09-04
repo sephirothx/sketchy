@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AuthDialog, type AuthMode } from "../components/AccountMenu";
 import { AppHeader } from "../components/AppHeader";
+import { AvatarPicture } from "../components/ui/Avatar";
+import { avatarFillClass } from "../lib/avatarDoodles";
 import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
@@ -459,9 +461,9 @@ function ProfileView({ userId }: { userId: string }) {
           <header className="profile-identity">
             {/* The avatar wears the same color as the name it belongs to. */}
             <span
-              className={`profile-avatar avatar avatar-player${
-                !subject.isAnonymous && subject.avatarUrl ? " has-picture" : ""
-              }`}
+              className={`profile-avatar avatar avatar-player${avatarFillClass(
+                subject.isAnonymous ? null : subject.avatarUrl,
+              )}`}
               aria-hidden="true"
               style={{
                 ["--player-color" as string]: identityColor(
@@ -472,7 +474,7 @@ function ProfileView({ userId }: { userId: string }) {
               }}
             >
               {!subject.isAnonymous && subject.avatarUrl ? (
-                <img src={subject.avatarUrl} alt="" />
+                <AvatarPicture url={subject.avatarUrl} />
               ) : (
                 avatarInitial(shownName)
               )}

@@ -383,8 +383,22 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await register_account(page, "Portrait")
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
-            # No picture yet: the pencil on the disc goes straight to the picker.
-            assert await dialog.get_by_role("button", name="Edit picture").count() == 1
+            # The pencil offers a doodle of ours first: drawn in the player's
+            # own colour, nothing uploaded (R-AVA-06).
+            await dialog.get_by_role("button", name="Edit picture").click()
+            await dialog.get_by_role("menuitem", name="Pick a doodle").click()
+            doodles = page.get_by_role("dialog", name="Pick a doodle")
+            await doodles.wait_for(state="visible")
+            async with page.expect_response(
+                lambda response: response.url.endswith("/api/users/me/avatar/doodle")
+            ) as picked:
+                await doodles.get_by_role("button", name="Fox").click()
+            assert (await picked.value).status == 200
+            await doodles.wait_for(state="hidden")
+            worn = dialog.locator(".settings-you .avatar.has-doodle use")
+            await worn.wait_for(state="attached")
+            assert (await worn.get_attribute("href")).endswith("#fox")
+            # Uploading a picture of your own replaces it.
             await dialog.get_by_label("Choose a picture").set_input_files(str(source))
             # The file opens the crop dialog first; nothing is sent until it is used.
             crop = page.get_by_role("dialog", name="Frame your picture")
@@ -405,8 +419,8 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await dialog.locator(".settings-you .avatar img").wait_for(state="visible")
             await dialog.get_by_role("button", name="Edit picture").click()
             menu = dialog.get_by_role("menu", name="Picture")
-            assert await menu.get_by_role("menuitem", name="Change picture").count() == 1
-            assert await menu.get_by_role("menuitem", name="Remove picture").count() == 1
+            assert await menu.get_by_role("menuitem", name="Upload a picture").count() == 1
+            assert await menu.get_by_role("menuitem", name="Remove").count() == 1
             await page.keyboard.press("Escape")
             await menu.wait_for(state="hidden")
             await dialog.get_by_role("button", name="Close settings").click()
@@ -441,7 +455,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
             await dialog.get_by_role("button", name="Edit picture").click()
-            await dialog.get_by_role("menuitem", name="Remove picture").click()
+            await dialog.get_by_role("menuitem", name="Remove").click()
             await dialog.locator(".settings-you .avatar img").wait_for(state="hidden")
             await dialog.get_by_role("button", name="Close settings").click()
             await page.locator(".player-list .avatar img").first.wait_for(state="hidden")

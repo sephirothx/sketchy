@@ -82,9 +82,13 @@ is worse than none.
   removed.
 - **Facts, not counters.** Derived rows such as `user_stats_daily` are disposable;
   finished-game facts are not.
-- **Mockup artboards are output.** `docs/ui-mockups/*.dc.html` and `canvas.json` are
-  written by `tools/build.mjs`; edit `tools/` and commit the regenerated files.
-  `scripts/check-mockups-regenerated.sh` fails on a hand-edited artboard.
+- **Generated art is output.** `docs/ui-mockups/*.dc.html` and `canvas.json` are
+  written by `tools/build.mjs`; `frontend/public/avatars/doodles.svg` is written by
+  `scripts/brand/build-avatar-doodles.mjs` from the centrelines in
+  `scripts/brand/avatar-doodles.mjs`; `brandArt.ts`, `notFoundArt.ts` and
+  `favicon.svg` by `scripts/brand/derive-assets.mjs`. Edit the source and commit the
+  regenerated files. `scripts/check-mockups-regenerated.sh` and
+  `scripts/check-doodles-regenerated.sh` fail on a hand-edited one.
 
 ## Branch naming
 

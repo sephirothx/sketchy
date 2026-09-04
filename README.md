@@ -807,9 +807,12 @@ to 256 pixels and encodes it as WebP (PNG where the browser cannot) before it is
 sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
-picture is a new address. Guests keep the grey initial. A picture can be
-reported, a moderator can remove it through the report, and removal blocks
-uploads for a week. The export carries the bytes; deletion removes them.
+picture is a new address. The same pencil offers a **doodle** instead: one of two
+dozen drawings of Sketchy's own — drawn with the same brush as the logo, in the
+player's name color — stored as nothing but its name; a new account starts with a
+random one. Guests keep the grey initial. A picture can be reported, a moderator
+can remove it through the report, and removal blocks uploads for a week. The
+export carries the bytes; deletion removes them.
 
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the
@@ -1074,6 +1077,7 @@ frontend/
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
+  public/avatars/doodles.svg  The avatar doodle set, written by scripts/brand/build-avatar-doodles.mjs
 docs/
   architecture.md   Processes, layering, state ownership, lifecycle, and a module index
   wire-protocol.md  Every Socket.IO event, the binary drawing formats, and the REST surface
@@ -1084,8 +1088,9 @@ scripts/
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
   check-mockups-regenerated.sh  Refuses a hand-edited mockup artboard
+  check-doodles-regenerated.sh  Refuses a hand-edited avatar doodle sprite
   check-coverage.py   Per-module coverage floors on the risk-critical modules
-  brand/            Logo and icon sources, and the scripts that raster them
+  brand/            Logo and icon sources, the avatar doodle set, and the scripts that ink them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
 AGENTS.md         Repository instructions: what to read, what to check, the invariants
@@ -1216,6 +1221,9 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 
 # Refuse a mockup artboard that its generator would not write (also a CI job)
 ./scripts/check-mockups-regenerated.sh
+
+# Refuse an avatar doodle sprite its generator would not write (also a CI job)
+./scripts/check-doodles-regenerated.sh
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py

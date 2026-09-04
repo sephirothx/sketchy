@@ -1,13 +1,14 @@
 import type { CSSProperties } from "react";
 
 import { CrownMarkIcon } from "../icons";
+import { avatarFillClass, doodleFromUrl } from "../../lib/avatarDoodles";
 
 interface AvatarProps {
   name: string;
   /** The account color; ignored for guests, who use the theme's guest fill. */
   nameColor?: string;
-  /** The uploaded picture (#573). Never set for a guest: the grey initial is
-      what marks a name as unclaimed (R-ACCT-05). */
+  /** The uploaded picture or the chosen doodle (#573). Never set for a guest:
+      the grey initial is what marks a name as unclaimed (R-ACCT-05). */
   avatarUrl?: string | null;
   isAnonymous?: boolean;
   /** The room's host: a gold crown on the disc's top-right edge (#574). */
@@ -18,11 +19,30 @@ interface AvatarProps {
 }
 
 /**
- * Round avatar: the uploaded picture when the account has one, otherwise the
- * initial. Light theme fills with the account color and a white initial; dark
- * theme pastelizes the same color via color-mix (see primitives.css) with a
- * dark initial, so arbitrary account colors stay legible on the slate ground.
- * Guests use the fixed guest fill per theme.
+ * What fills a disc that has something other than an initial: an uploaded
+ * picture covers it, a doodle is drawn in the disc's own ink from the sprite
+ * (R-AVA-06), so the name color still shows through. Shared by every disc
+ * that is not the `Avatar` component itself - the header chip, the profile
+ * header, the moderation queue - so a doodle never lands in an <img>, which
+ * could not tint it.
+ */
+export function AvatarPicture({ url, size }: { url: string; size?: number }) {
+  if (doodleFromUrl(url)) {
+    return (
+      <svg className="avatar-doodle" aria-hidden="true" focusable="false">
+        <use href={url} />
+      </svg>
+    );
+  }
+  return <img src={url} alt="" width={size} height={size} />;
+}
+
+/**
+ * Round avatar: the uploaded picture or doodle when the account has one,
+ * otherwise the initial. Light theme fills with the account color and a white
+ * initial; dark theme pastelizes the same color via color-mix (see
+ * primitives.css) with a dark initial, so arbitrary account colors stay
+ * legible on the slate ground. Guests use the fixed guest fill per theme.
  *
  * The disc also carries the two facts every roster used to spell out beside
  * the name (#574): the host's crown perches on its top-right edge, and the
@@ -52,10 +72,10 @@ export function Avatar({
   const disc = (
     <span
       aria-hidden="true"
-      className={`avatar ${variant}${picture ? " has-picture" : ""}${isSelf ? " is-self" : ""}`}
+      className={`avatar ${variant}${avatarFillClass(picture)}${isSelf ? " is-self" : ""}`}
       style={style}
     >
-      {picture ? <img src={picture} alt="" width={size} height={size} /> : initial}
+      {picture ? <AvatarPicture url={picture} size={size} /> : initial}
     </span>
   );
   if (!isHost) return disc;

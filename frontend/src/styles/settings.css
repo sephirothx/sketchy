@@ -1001,6 +1001,46 @@
   pointer-events: none;
 }
 
+/* ---------------------------------------------------------- doodle picker */
+
+.avatar-doodle-card {
+  max-width: 440px;
+}
+
+.avatar-doodle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 6px;
+  justify-items: center;
+  margin: 4px 0 8px;
+}
+
+.avatar-doodle-choice {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.avatar-doodle-choice:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+
+.avatar-doodle-choice.is-selected {
+  border-color: var(--ink);
+}
+
+.avatar-doodle-choice:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 /* ------------------------------------------------------------ crop dialog */
 
 .picture-crop-card {
