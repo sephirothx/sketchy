@@ -66,7 +66,7 @@ export const WaitingRoomPage = roomPage(roomHeader() + roomGrid(
       <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px">
         <div>
           <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 18px; color: ${T.ink}">Room rules</h2>
-          <p style="color: ${T.muted}; font-size: 12.5px; font-weight: 700; margin-top: 3px">3 rounds · 90s · up to 8 · Default scoring · Timed hints · All tools</p>
+          <p style="color: ${T.muted}; font-size: 12.5px; font-weight: 700; margin-top: 3px">3 rounds · 90s · Default scoring · Timed hints · All tools</p>
         </div>
         ${btn.secondary('Edit room rules', { iconL: icon.gear(15), style: 'min-height: 38px; padding: 8px 13px; font-size: 13.5px' })}
       </div>

@@ -821,7 +821,7 @@ S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
     good:[
       '<b>Who invited you and who is already there</b> is the top of the screen: the room’s name, its state, and the faces in it. That is the whole reason the link got tapped.',
       '<b>The name field and Join are one docked block.</b> Type, tap, you are in — and the field is pre-filled from the last name this device used, so a returning guest just taps.',
-      '<b>Room settings collapse behind one line.</b> They matter to the host who set them and nobody else at this moment; the summary stays for anyone who wants it.',
+      '<b>Room settings collapse behind one line.</b> They matter to the host who set them and nobody else at this moment; the summary stays for anyone who wants it — and it is the same line, in the same order, that the waiting room shows above its tiles (#580).',
       '<b>Spectate is a link.</b> It is a real choice for someone arriving mid-game, just not the one the link was sent for.',
       'Everything above the dock scrolls; the dock does not.'
     ],
@@ -851,7 +851,7 @@ S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
         </div>
 
         <button class="row card" style="flex:0 0 auto;display:flex;align-items:center;gap:11px;min-height:56px;width:100%;text-align:left;border-radius:16px">
-          <span class="lbl">3 rounds · 90s · timed hints</span>
+          <span class="lbl">3 rounds · 90s · Default scoring · Timed hints · All tools</span>
           <span class="val faint">${ic.chev}</span>
         </button>
       </div>
@@ -1177,8 +1177,11 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
         </div>
 
         <div class="card" style="flex:0 0 auto;padding:14px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <div class="disp" style="font-size:15px;flex:1">Room rules</div>
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
+            <div style="flex:1;min-width:0">
+              <div class="disp" style="font-size:15px">Room rules</div>
+              <div class="muted" style="font-size:12px;font-weight:700;margin-top:2px">2 rounds · 60s · Default scoring · Timed hints · All tools</div>
+            </div>
             <button class="chip on" style="min-height:34px">Edit ${ic.chev}</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px">

@@ -266,10 +266,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </ul>
       </section>}
 
-      {/* The room's settings, for everyone: the same six facts the lobby card
-          and the invite page show, as tiles readable from across the table,
-          with the one-line summary above them. The host has the way in; a
-          guest sees whose settings they are. */}
+      {/* The room rules, for everyone: the same six facts the lobby card and
+          the invite page show, from the same list and in the same order
+          (R-UX-09), as tiles readable from across the table, with their
+          one-line form above them. The host has the way in; a guest sees
+          whose rules they are. */}
       <section
         className="waiting-card waiting-rules waiting-settings-row"
         aria-labelledby="waiting-rules-title"
