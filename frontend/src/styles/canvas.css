@@ -1,10 +1,17 @@
-/* Canvas Wrapper */
+/* Canvas wrapper.
+
+   The drawing is presented at --canvas-cap (760 / 1000 / 1180 with the shell
+   steps, see layout-primitives.css), never at the size of its backing store.
+   The store is fixed at 800x600 because `draw_fill` is pixel-addressed
+   against that grid and validated against it on the wire; strokes, by
+   contrast, are normalised coordinates replayed as vector commands, so how
+   big the element is drawn is a pure CSS decision. R-UX-06. */
 .canvas-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 800px;
+  max-width: var(--canvas-cap);
 }
 
 /* Sizing comes from .btn.btn-icon in the room header. */

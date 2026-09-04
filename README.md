@@ -39,6 +39,13 @@ keyboard that takes half the screen, and one thumb.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
+- Layout that spends the window. The page shell steps `1240 → 1600 → 1960` at 1500px and
+  2100px; the room's players and chat columns step `250/300 → 290/340 → 320/380` with it,
+  and the drawing is presented at up to `760 → 1000 → 1180`. On a desktop the room is
+  pinned to the viewport like the lobby, so the roster and the guesses fill the height and
+  scroll inside themselves rather than both stopping half way down the window. The lobby's
+  room list goes to two columns at 1500px and three at 2100px, and *Who is online* and
+  *Chat* become columns of their own beside the rooms. Phones are untouched.
 - Game highlights — the hardest prompt, the fastest guess, the best drawer, and the quickest
   guesser on average, on a screen of their own reached from the game over screen or from the
   waiting room afterwards. Derived from guess counts and timings rather than points, so the
@@ -1580,6 +1587,14 @@ cd backend
   leftover receives only a 90-day privacy-safe abandonment fact; partial games,
   canvases, timers, scores, and rooms are never serialized or restored, and a
   crash still loses process-owned state.
+- **A presented canvas, not a bigger one**: the drawing's backing store is fixed at
+  800 × 600 and does not move with the layout. `draw_fill` is pixel-addressed against
+  that grid and validated against it on the wire, so a client with a different store
+  would land the same flood fill on different pixels. Strokes, by contrast, are
+  normalised coordinates replayed as vector commands, so how large the element is
+  *drawn* is a pure CSS decision. It is capped at 1180px because that is a 1.48×
+  upscale of the source and crayon-weight strokes visibly soften past it; the width
+  beyond the cap goes to the side columns instead.
 - **Versioned hybrid drawing protocol**: live drawing actions share one compact Socket.IO
   event. Data-bearing path, shape, and fill actions use binary attachments with fixed-width
   colors, widths, shape IDs, and quarter-pixel signed coordinates. Path-end and clear use

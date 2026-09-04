@@ -492,69 +492,77 @@ function ProfileView({ userId }: { userId: string }) {
             </div>
           </header>
 
-          {isOwnProfile && subject.isAnonymous && (
-            <section className="panel profile-claim">
-              <h2>Claim your account</h2>
-              <p>
-                Your games are already being recorded under this display name.
-                Create an account to keep them and use it as your username on every device.
-              </p>
-              <button type="button" onClick={() => setAuthMode("claim")}>
-                Create account
-              </button>
+          {/* Two columns from 1200px: the history is what a profile is for and
+              takes the wide track, the cards about you sit beside it rather
+              than pushing it a screen down. Stacked, the DOM order is the
+              reading order — who this is, then the numbers, then the games. */}
+          <div className="profile-columns">
+            <div className="profile-column-side">
+              {isOwnProfile && subject.isAnonymous && (
+                <section className="panel profile-claim">
+                  <h2>Claim your account</h2>
+                  <p>
+                    Your games are already being recorded under this display name.
+                    Create an account to keep them and use it as your username on every device.
+                  </p>
+                  <button type="button" onClick={() => setAuthMode("claim")}>
+                    Create account
+                  </button>
+                </section>
+              )}
+
+              <section className="panel">
+                <h2>Statistics</h2>
+                <div className="profile-stats">
+                  <StatTile label="Games played" value={String(stats.gamesPlayed)} />
+                  <StatTile label="Games won" value={String(stats.gamesWon)} />
+                  <StatTile
+                    label="Win rate"
+                    value={`${Math.round(stats.winRate * 100)}%`}
+                  />
+                  <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
+                </div>
+                <div className="profile-stats profile-stats-small">
+                  <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
+                  <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
+                  <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
+                  <StatTile label="Total score" value={String(stats.totalScore)} />
+                </div>
+              </section>
+            </div>
+
+            <section className="panel profile-history">
+              <div className="profile-history-head">
+                <h2>Game history</h2>
+                <label className="profile-history-filter">
+                  <input
+                    type="checkbox"
+                    checked={includeAbandoned}
+                    onChange={(change) => setIncludeAbandoned(change.target.checked)}
+                  />
+                  Include games that fell apart
+                </label>
+              </div>
+              {games.length === 0 ? (
+                <p className="profile-note">
+                  {isOwnProfile
+                    ? "No finished games yet. Play one and it will show up here."
+                    : "This player has not finished a game yet."}
+                </p>
+              ) : (
+                <ul className="profile-games">
+                  {games.map((game) => (
+                    <GameRow key={game.id} game={game} viewerId={subject.id} />
+                  ))}
+                </ul>
+              )}
+              {hasMore && (
+                <button type="button" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? "Loading…" : `Load ${HISTORY_PAGE_SIZE} more`}
+                </button>
+              )}
             </section>
-          )}
-
-          <section className="panel">
-            <h2>Statistics</h2>
-            <div className="profile-stats">
-              <StatTile label="Games played" value={String(stats.gamesPlayed)} />
-              <StatTile label="Games won" value={String(stats.gamesWon)} />
-              <StatTile
-                label="Win rate"
-                value={`${Math.round(stats.winRate * 100)}%`}
-              />
-              <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
-            </div>
-            <div className="profile-stats profile-stats-small">
-              <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
-              <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
-              <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
-              <StatTile label="Total score" value={String(stats.totalScore)} />
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="profile-history-head">
-              <h2>Game history</h2>
-              <label className="profile-history-filter">
-                <input
-                  type="checkbox"
-                  checked={includeAbandoned}
-                  onChange={(change) => setIncludeAbandoned(change.target.checked)}
-                />
-                Include games that fell apart
-              </label>
-            </div>
-            {games.length === 0 ? (
-              <p className="profile-note">
-                {isOwnProfile
-                  ? "No finished games yet. Play one and it will show up here."
-                  : "This player has not finished a game yet."}
-              </p>
-            ) : (
-              <ul className="profile-games">
-                {games.map((game) => (
-                  <GameRow key={game.id} game={game} viewerId={subject.id} />
-                ))}
-              </ul>
-            )}
-            {hasMore && (
-              <button type="button" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? "Loading…" : `Load ${HISTORY_PAGE_SIZE} more`}
-              </button>
-            )}
-          </section>
+          </div>
         </>
       )}
 

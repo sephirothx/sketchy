@@ -164,9 +164,18 @@
   font-weight: 700;
 }
 
+/* The rooms are a grid, not a lane. One column is right up to the point
+   where a second card fits without either becoming a strip; past that, an
+   extra column shows more of what the page is for instead of more paper
+   beside it. */
 .room-list {
   display: grid;
   gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  /* A card is as tall as its content. Without this the rows stretch to fill
+     a panel that is now the height of the window, and one open room becomes
+     one very tall card. */
+  align-content: start;
   /* Positioned on purpose, and load-bearing once this scrolls.
      `.visually-hidden` is `position: absolute`, and with no positioned
      ancestor inside the list its containing block is the document - so the
@@ -975,6 +984,16 @@
   background: var(--track);
 }
 
+/* The three live lists. A plain stack until the shell is wide enough to put
+   them side by side; the wrapper exists so that step is one rule rather than
+   a grid whose rows have to account for the masthead and the first-run card. */
+.lobby-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
 /* Chat and who-is-online, below the room list.
 
    Two panels about the people rather than the rooms. Equal columns on a
@@ -1157,9 +1176,16 @@
 
   /* The gap owns the spacing now; the per-panel margin would double it. */
   .lobby-page > .panel,
-  .lobby-page > .lobby-social,
+  .lobby-lists > .panel,
+  .lobby-lists > .lobby-social,
   .lobby-social > .panel {
     margin-bottom: 0;
+  }
+
+  /* The lists take whatever the chrome above them leaves. */
+  .lobby-page > .lobby-lists {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   /* Chrome keeps its height; only the lists give ground. */
@@ -1220,6 +1246,52 @@
   .lobby-rooms-panel > p {
     flex: 1 1 auto;
     min-height: 0;
+  }
+}
+
+/* Three columns, one per live list.
+
+   Stacked, *Who is online* and *Chat* share a 38% band under the rooms and
+   each ends up a few rows tall; side by side they are full-height columns and
+   all three lists are readable at once. `display: contents` dissolves the
+   social wrapper so its two panels become columns of the lists grid — the
+   alternative was a second grid nested in the first, with the same two panels
+   sharing one track. Their visual order is rooms · who · chat; the DOM keeps
+   chat first, because stacked it is the panel worth reaching sooner. */
+@media (min-width: 1500px) and (min-height: 640px) {
+  .lobby-lists {
+    display: grid;
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
+    align-items: stretch;
+  }
+
+  .lobby-social {
+    display: contents;
+  }
+
+  .lobby-online-panel { order: 1; }
+  .lobby-chat-panel { order: 2; }
+
+  .lobby-lists > .panel,
+  .lobby-social > .panel {
+    min-height: 0;
+  }
+
+  /* The rooms panel no longer has a row of its own to be the tallest thing
+     in, so the floor that shared the squeeze between the two rows goes with
+     it. */
+  .lobby-rooms-panel {
+    min-height: 0;
+  }
+
+  .room-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 2100px) and (min-height: 640px) {
+  .room-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

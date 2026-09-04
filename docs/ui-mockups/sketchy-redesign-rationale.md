@@ -475,6 +475,16 @@ artboards, kept for stability or clarity rather than drift:
   again.
 - **Identity chip stays in the room header** — the artboards drop it, but
   it is the only in-room path to claiming an account and account menus.
+- **An artboard is one width; the app has three.** These frames render each
+  screen at its *base* shell step, which is what a 1240–1500px window shows.
+  The app steps the shell `1240 → 1600 → 1960` at 1500px and 2100px, with the
+  room's side columns and the canvas cap stepping with it — see "The layout
+  contract" in [`../architecture.md`](../architecture.md) and R-UX-06/R-UX-07.
+  The navigable explorer linked from issue #581 shows every screen at phone,
+  1440, 1920 and 2560; a fixed-size artboard cannot. What the artboards do
+  carry is the base step itself: the room grid here is 250 / 1fr / 300 with a
+  12px gap inside a `min(100% - 28px, 1240px)` shell, and the canvas sheet is
+  capped at 760px, because those are the numbers the app uses at this width.
 
 ## 5. What was deliberately kept
 

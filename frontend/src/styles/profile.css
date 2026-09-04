@@ -1,12 +1,53 @@
 /* The profile page: identity header, stat tiles, and expandable game history. */
 
+/* The width comes from the shell steps in layout-primitives.css. */
 .profile-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 16px;
+  padding-block: 16px;
+}
+
+/* Stacked below 1200px, where the source order is the reading order. Above
+   it the history takes the wide track and the cards about the player sit
+   beside it — placed explicitly rather than reordered, so what a screen
+   reader hears never depends on the width of the window. The side column is
+   sticky because the history is the long one. */
+.profile-columns {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1200px) {
+  .profile-columns {
+    align-items: start;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  }
+
+  .profile-column-side {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 16px;
+  }
+
+  .profile-history {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  /* The gap owns the spacing between the columns; the panel margin would
+     leave the shorter one hanging. */
+  .profile-columns > .panel,
+  .profile-column-side > .panel:last-child {
+    margin-bottom: 0;
+  }
 }
 
 
+
+.profile-note,
+.profile-claim p {
+  max-width: var(--measure);
+}
 
 .profile-identity {
   display: flex;
@@ -243,11 +284,20 @@
   border-color: var(--primary-ink);
 }
 
-/* Prompt stats: how a list's prompts have actually played. */
+/* Prompt stats: how a list's prompts have actually played. The width comes
+   from the shell steps in layout-primitives.css, and stops at the first one.
+   Five columns of short values have a measure the way a paragraph does: past
+   about 1200px the extra width goes into the gap between a prompt and its own
+   numbers, and reading across a row starts costing an eye movement. The page
+   is still 38% wider than the 900px column it replaces. */
 .prompt-stats-page {
-  margin: 0 auto;
-  max-width: 900px;
-  padding: 16px;
+  padding-block: 16px;
+}
+
+@media (min-width: 1500px) {
+  .prompt-stats-page {
+    width: min(100% - var(--shell-gutter), 1240px);
+  }
 }
 
 .prompt-stats-header h1 {
@@ -259,6 +309,7 @@
 .prompt-stats-intro {
   color: var(--muted);
   margin: 0 0 16px;
+  max-width: var(--measure);
 }
 
 .prompt-stats-controls {
@@ -278,6 +329,7 @@
   color: var(--muted);
   line-height: 1.5;
   margin: 12px 0 0;
+  max-width: var(--measure);
 }
 
 .prompt-stats-note.is-error {

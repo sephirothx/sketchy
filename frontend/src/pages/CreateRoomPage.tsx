@@ -8,6 +8,7 @@ import type { PromptListSummary } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringLabelFor } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -34,6 +35,11 @@ export function CreateRoomPage() {
   // visitor without an account, so the form waits rather than filling
   // itself in and failing at the last step.
   const awaitingName = needsIdentity(authUser);
+  // The preview card and the footer strip carry the same summary and the same
+  // Create button, so exactly one of them is rendered: two live Create buttons
+  // would be two entries in the accessibility tree saying the same thing.
+  // Matches the 1200px step in create-room-page.css.
+  const hasPreviewColumn = useMediaQuery("(min-width: 1200px)");
   const identityResolved = useAuthStore((state) => state.hasResolved);
 
   // Turned away at the door rather than at the submit button: a visitor with
@@ -284,16 +290,19 @@ export function CreateRoomPage() {
   }
 
   // The form's own collapsed summaries live with the form. What is left here
-  // is the one the dock carries, which is about the room as a whole.
+  // is the room as a whole: one set of facts, shown as chips in the preview
+  // card a wide screen has room for and as a single line in the dock a narrow
+  // one gets, so the two can never say different things.
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
-  const scoringSummary = `${scoringMode === "none" ? "No scoring" : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
-  const footerSummary = [
+  const previewChips = [
     isPublic ? "Public" : "Private",
     `${maxPlayers} players`,
     `${rounds} ${rounds === 1 ? "round" : "rounds"}`,
-    `${drawingSeconds}s`,
-    scoringSummary,
-  ].join(" · ");
+    `${drawingSeconds}s per turn`,
+    scoringMode === "none" ? "No scoring" : `${scoringLabelFor(scoringMode)} scoring`,
+    hintLabelFor(hintMode, hideMaskedPrompt),
+  ];
+  const footerSummary = previewChips.join(" · ");
 
   // A rough but honest running-time estimate: each turn is the drawing time
   // plus prompt choice and results, and every player draws once per round.
@@ -355,71 +364,107 @@ export function CreateRoomPage() {
     </div>
     {error && <p className="create-room-error" role="alert">{error}</p>}
 
-    <RoomSetupForm
-      values={{
-        name: roomName,
-        isPublic,
-        maxPlayers,
-        rounds,
-        drawingSeconds,
-        promptListSlugs,
-        promptListShareCodes,
-        allowedTools,
-        colorMode,
-        scoringMode,
-        hintMode,
-        spectatorsSeePrompt,
-        hideMaskedPrompt,
-      }}
-      onChange={(patch) => {
-        if (patch.name !== undefined) setRoomName(patch.name);
-        if (patch.isPublic !== undefined) setIsPublic(patch.isPublic);
-        if (patch.maxPlayers !== undefined) setMaxPlayers(patch.maxPlayers);
-        if (patch.rounds !== undefined) setRounds(patch.rounds);
-        if (patch.drawingSeconds !== undefined) setDrawingSeconds(patch.drawingSeconds);
-        if (patch.promptListSlugs !== undefined) setPromptListSlugs(patch.promptListSlugs);
-        if (patch.promptListShareCodes !== undefined) setPromptListShareCodes(patch.promptListShareCodes);
-        if (patch.allowedTools !== undefined) setAllowedTools(patch.allowedTools);
-        if (patch.colorMode !== undefined) setColorMode(patch.colorMode);
-        if (patch.scoringMode !== undefined) setScoringMode(patch.scoringMode);
-        if (patch.hintMode !== undefined) setHintMode(patch.hintMode);
-        if (patch.spectatorsSeePrompt !== undefined) setSpectatorsSeePrompt(patch.spectatorsSeePrompt);
-        if (patch.hideMaskedPrompt !== undefined) setHideMaskedPrompt(patch.hideMaskedPrompt);
-      }}
-      customPrompts={customPrompts}
-      dispatchCustomPrompts={dispatchCustomPrompts}
-      namePlaceholder="Leave blank for a random name!"
-      onListsLoaded={setLoadedLists}
-      selectedLists={selectedLists}
-      promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
-        <button
-          type="button"
-          className="custom-prompts-apply"
-          onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
-        >
-          Save as reusable list
-        </button>
-      ) : undefined}
-      durationNote={
-        <p className="create-room-duration">
-          <ClockIcon size={17} />
-          <span>
-            This setup runs <strong>about {fullMinutes} minutes</strong> with a full room of{" "}
-            <strong>{maxPlayers}</strong>
-            {halfPlayers >= 2 && halfPlayers < maxPlayers && (
-              <> — closer to <strong>{halfMinutes}</strong> if {halfPlayers} join</>
-            )}
-            .
-          </span>
-        </p>
-      }
-    />
+    <div className="create-room-layout">
+      <RoomSetupForm
+        values={{
+          name: roomName,
+          isPublic,
+          maxPlayers,
+          rounds,
+          drawingSeconds,
+          promptListSlugs,
+          promptListShareCodes,
+          allowedTools,
+          colorMode,
+          scoringMode,
+          hintMode,
+          spectatorsSeePrompt,
+          hideMaskedPrompt,
+        }}
+        onChange={(patch) => {
+          if (patch.name !== undefined) setRoomName(patch.name);
+          if (patch.isPublic !== undefined) setIsPublic(patch.isPublic);
+          if (patch.maxPlayers !== undefined) setMaxPlayers(patch.maxPlayers);
+          if (patch.rounds !== undefined) setRounds(patch.rounds);
+          if (patch.drawingSeconds !== undefined) setDrawingSeconds(patch.drawingSeconds);
+          if (patch.promptListSlugs !== undefined) setPromptListSlugs(patch.promptListSlugs);
+          if (patch.promptListShareCodes !== undefined) setPromptListShareCodes(patch.promptListShareCodes);
+          if (patch.allowedTools !== undefined) setAllowedTools(patch.allowedTools);
+          if (patch.colorMode !== undefined) setColorMode(patch.colorMode);
+          if (patch.scoringMode !== undefined) setScoringMode(patch.scoringMode);
+          if (patch.hintMode !== undefined) setHintMode(patch.hintMode);
+          if (patch.spectatorsSeePrompt !== undefined) setSpectatorsSeePrompt(patch.spectatorsSeePrompt);
+          if (patch.hideMaskedPrompt !== undefined) setHideMaskedPrompt(patch.hideMaskedPrompt);
+        }}
+        customPrompts={customPrompts}
+        dispatchCustomPrompts={dispatchCustomPrompts}
+        namePlaceholder="Leave blank for a random name!"
+        onListsLoaded={setLoadedLists}
+        selectedLists={selectedLists}
+        promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
+          <button
+            type="button"
+            className="custom-prompts-apply"
+            onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
+          >
+            Save as reusable list
+          </button>
+        ) : undefined}
+        /* The estimate belongs with the decision it follows from. With the
+           preview column it is in the card, beside the button; without it, it
+           stays in the section whose steppers change it. */
+        durationNote={hasPreviewColumn ? undefined : (
+          <p className="create-room-duration">
+            <ClockIcon size={17} />
+            <span>
+              This setup runs <strong>about {fullMinutes} minutes</strong> with a full room of{" "}
+              <strong>{maxPlayers}</strong>
+              {halfPlayers >= 2 && halfPlayers < maxPlayers && (
+                <> — closer to <strong>{halfMinutes}</strong> if {halfPlayers} join</>
+              )}
+              .
+            </span>
+          </p>
+        )}
+      />
 
-    <div className="create-room-footer">
+      {/* The width that used to be margin. From 1200px the form gets a second
+          column carrying what it is about to make — the facts, the running
+          time, and the button — sticky, so the decision and the control that
+          commits it are in one glance however far down the form you are.
+          Narrower than that it is the footer strip below, and on a phone that
+          strip is the docked bar; only one of the two is ever rendered. */}
+      {/* Named by the kicker, not by the room. Labelling the landmark with the
+          room's own name gave it an accessible name containing "room name",
+          which is what `get_by_label("Room name")` means to reach. */}
+      {hasPreviewColumn && <aside className="create-room-preview" aria-label="What you are about to create">
+        <div className="create-room-preview-card">
+          <SectionLabel>What you are about to create</SectionLabel>
+          <h2>{roomName.trim() || "A random room name"}</h2>
+          <ul className="create-room-preview-chips">
+            {previewChips.map((chip) => <li key={chip}>{chip}</li>)}
+          </ul>
+          <p className="create-room-duration create-room-preview-duration">
+            <ClockIcon size={17} />
+            <span>
+              About <strong>{fullMinutes} minutes</strong> with a full room of{" "}
+              <strong>{maxPlayers}</strong>
+              {halfPlayers >= 2 && halfPlayers < maxPlayers && (
+                <> — closer to <strong>{halfMinutes}</strong> if {halfPlayers} join</>
+              )}
+              .
+            </span>
+          </p>
+          <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
+        </div>
+      </aside>}
+    </div>
+
+    {!hasPreviewColumn && <div className="create-room-footer">
       <div className="create-room-footer-info">
         <span className="create-room-footer-summary">{footerSummary}</span>
       </div>
       <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
-    </div>
+    </div>}
   </main>;
 }
