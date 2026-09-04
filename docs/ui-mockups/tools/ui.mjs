@@ -147,7 +147,7 @@ export const icon = {
   bulb: (s) => stroke('<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z"/>', s),
   trophy: (s) => stroke('<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a3 3 0 0 0 3 5"/><path d="M17 6h3a3 3 0 0 1-3 5"/>', s),
   zap: (s) => stroke('<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/>', s),
-  brush: (s) => stroke('<path d="M9.06 11.9 20.5 2.5a2 2 0 0 1 3 3l-9.4 11.44"/><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5"/>', s),
+  brush: (s) => stroke('<path d="M9.06 11.9 18.8 4.2a2 2 0 0 1 3 3l-7.7 9.74"/><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5"/>', s),
   search: (s) => stroke('<circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/>', s),
   plus: (s) => stroke('<path d="M12 5v14"/><path d="M5 12h14"/>', s),
   x: (s) => stroke('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', s),

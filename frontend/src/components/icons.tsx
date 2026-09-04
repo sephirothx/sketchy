@@ -65,7 +65,11 @@ export function LeaveIcon(p: IconProps) { return <IconBase {...p}><path d="M9 21
 export function BulbIcon(p: IconProps) { return <IconBase {...p}><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z" /></IconBase>; }
 export function TrophyIcon(p: IconProps) { return <IconBase {...p}><path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" /><path d="M7 6H4a3 3 0 0 0 3 5" /><path d="M17 6h3a3 3 0 0 1-3 5" /></IconBase>; }
 export function ZapIcon(p: IconProps) { return <IconBase {...p}><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" /></IconBase>; }
-export function BrushIcon(p: IconProps) { return <IconBase {...p}><path d="M9.06 11.9 20.5 2.5a2 2 0 0 1 3 3l-9.4 11.44" /><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5" /></IconBase>; }
+/** The ferrule end sat at x=23.5 with a 2-unit stroke around it, so the tip
+    was painted out to x=25.1 and the viewBox clipped it flat. The handle is
+    the same drawing pulled 2.4 units back down its own 45° axis, which keeps
+    the tip inside 24 with the ~1 unit of margin the rest of the set leaves. */
+export function BrushIcon(p: IconProps) { return <IconBase {...p}><path d="M9.06 11.9 18.8 4.2a2 2 0 0 1 3 3l-7.7 9.74" /><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5" /></IconBase>; }
 export function SearchIcon(p: IconProps) { return <IconBase {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4-4" /></IconBase>; }
 export function PlusIcon(p: IconProps) { return <IconBase {...p}><path d="M12 5v14" /><path d="M5 12h14" /></IconBase>; }
 export function XIcon(p: IconProps) { return <IconBase {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></IconBase>; }
