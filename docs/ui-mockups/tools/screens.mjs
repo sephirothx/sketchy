@@ -1,23 +1,25 @@
 // The single manifest of every redesign screen: page markup, frame size,
 // canvas position, display title, and grouping. Both the canvas build and
 // the explorer build read this, so they cannot drift apart.
-import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage, NotFoundPage } from './pages-entry.mjs';
-import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage } from './pages-room.mjs';
+import { MainPage, JoinByCodePage, CreateRoomPage, AccountRecoveryPage, SettingsPage, NotFoundPage } from './pages-entry.mjs';
+import { WaitingRoomPage, RoomMenuPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage } from './pages-room.mjs';
 import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, AdminOpsTuningPage, AdminOpsAuditPage, ModerationPage } from './pages-library.mjs';
 import { BugReportMenuPage, BugReportDialogPage, BugReportsQueuePage } from './pages-support.mjs';
 
 export const SCREENS = [
   // Row 1 — getting in
-  { name: 'Main', page: MainPage, w: 960, h: 1240, x: 0, y: 0, title: 'Lobby', group: 'Getting in' },
-  { name: 'CreateRoom', page: CreateRoomPage, w: 780, h: 1100, x: 1050, y: 0, title: 'Create a room', group: 'Getting in' },
-  { name: 'AccountRecovery', page: AccountRecoveryPage, w: 880, h: 560, x: 1920, y: 0, title: 'Reset password', group: 'Getting in' },
-  { name: 'Settings', page: SettingsPage, w: 1080, h: 900, x: 2900, y: 0, title: 'Settings (new)', group: 'Getting in', extraProps: { tab: { editor: 'enum', options: ['general', 'game', 'shortcuts'], default: 'general' } } },
-  { name: 'NotFound', page: NotFoundPage, w: 720, h: 700, x: 4070, y: 0, title: 'Page not found', group: 'Getting in' },
+  { name: 'Main', page: MainPage, w: 960, h: 820, x: 0, y: 0, title: 'Lobby', group: 'Getting in' },
+  { name: 'JoinByCode', page: JoinByCodePage, w: 520, h: 340, x: 1050, y: 0, title: 'Join by code', group: 'Getting in' },
+  { name: 'CreateRoom', page: CreateRoomPage, w: 780, h: 1100, x: 1660, y: 0, title: 'Create a room', group: 'Getting in' },
+  { name: 'AccountRecovery', page: AccountRecoveryPage, w: 880, h: 560, x: 2530, y: 0, title: 'Reset password', group: 'Getting in' },
+  { name: 'Settings', page: SettingsPage, w: 1080, h: 900, x: 3500, y: 0, title: 'Settings (new)', group: 'Getting in', extraProps: { tab: { editor: 'enum', options: ['general', 'game', 'shortcuts'], default: 'general' } } },
+  { name: 'NotFound', page: NotFoundPage, w: 720, h: 700, x: 4670, y: 0, title: 'Page not found', group: 'Getting in' },
   // Row 2 — in the room
-  { name: 'WaitingRoom', page: WaitingRoomPage, w: 1240, h: 1000, x: 0, y: 1780, title: 'Waiting room', group: 'In the room' },
-  { name: 'PromptChoice', page: PromptChoicePage, w: 1240, h: 1000, x: 1330, y: 1780, title: 'Prompt choice (new)', group: 'In the room' },
-  { name: 'Drawing', page: DrawingPage, w: 1240, h: 1080, x: 2660, y: 1780, title: 'Drawing — drawer', group: 'In the room' },
-  { name: 'Guessing', page: GuessingPage, w: 1240, h: 1000, x: 3990, y: 1780, title: 'Guessing — guesser', group: 'In the room' },
+  { name: 'WaitingRoom', page: WaitingRoomPage, w: 1240, h: 880, x: 0, y: 1780, title: 'Waiting room', group: 'In the room' },
+  { name: 'RoomMenu', page: RoomMenuPage, w: 1060, h: 660, x: 1330, y: 1780, title: 'Room menu', group: 'In the room' },
+  { name: 'PromptChoice', page: PromptChoicePage, w: 1240, h: 1000, x: 2320, y: 1780, title: 'Prompt choice (new)', group: 'In the room' },
+  { name: 'Drawing', page: DrawingPage, w: 1240, h: 1080, x: 3650, y: 1780, title: 'Drawing — drawer', group: 'In the room' },
+  { name: 'Guessing', page: GuessingPage, w: 1240, h: 1000, x: 4980, y: 1780, title: 'Guessing — guesser', group: 'In the room' },
   // Row 3 — after the turn
   { name: 'TurnResults', page: TurnResultsPage, w: 1240, h: 1000, x: 0, y: 3000, title: 'Turn results', group: 'After the turn' },
   { name: 'GameOver', page: GameOverPage, w: 1240, h: 960, x: 1330, y: 3000, title: 'Game over', group: 'After the turn' },

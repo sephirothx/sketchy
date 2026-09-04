@@ -1,42 +1,7 @@
 // Entry screens: lobby, room creation, account recovery.
 import { T, P, icon, flag, avatar, pname, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle } from './ui.mjs';
+import { appHeader } from './header.mjs';
 import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from './notFoundArt.mjs';
-
-const menuItem = (svg, label, danger = false) => `
-<button type="button" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 700; color: ${danger ? T.danger : T.ink}; min-height: 40px">
-  <span style="display: inline-flex; color: ${danger ? T.danger : T.faint}">${svg}</span>${label}
-</button>`;
-
-// The lobby header carries only the account button; every navigation option
-// lives in its menu, drawn open here so the design documents its contents.
-const appHeader = `
-<header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 26px">
-  ${wordmark(34)}
-  <div style="position: relative">
-    <button type="button" aria-expanded="true" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
-      ${avatar(P.marta, 30)}
-      <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
-      <span style="display: inline-flex; color: ${T.faint}">${icon.chevD(14)}</span>
-    </button>
-    <div role="menu" style="position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 12px; box-shadow: ${T.shadowRaised}; padding: 6px; width: 216px; display: grid; gap: 1px">
-      ${menuItem(icon.user(16), 'Profile')}
-      ${menuItem(icon.zap(16), 'Prompt stats')}
-      ${menuItem(icon.bulb(16), 'My prompt lists')}
-      ${menuItem(icon.gear(16), 'Settings')}
-      <div style="border-top: 1.5px solid ${T.line}; margin: 4px 6px"></div>
-      ${menuItem(icon.leave(16), 'Sign out', true)}
-    </div>
-  </div>
-</header>`;
-
-const backBar = (label = 'Back to lobby') => `
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
-  ${btn.ghost(label, { iconL: icon.back(15), style: 'padding-left: 0' })}
-  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid ${T.line}; background: ${T.card}; border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: ${T.body}; box-shadow: ${T.shadow}">
-    ${avatar(P.marta, 30)}
-    <span style="font-weight: 800; font-size: 14px; color: ${T.ink}">Marta</span>
-  </button>
-</div>`;
 
 // ---------------------------------------------------------------- Main lobby
 const codeCells = ['B', 'Q', '7', 'F', '', '']
@@ -67,33 +32,19 @@ const roomCard = ({ name, status, statusKind, lang, meta, fillFrac, tags, action
 </article>`;
 
 export const MainPage = `
-<div style="width: 960px; min-height: 1240px; margin: 0 auto; padding: 26px 24px 48px">
-  ${appHeader}
-
-  <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; margin-bottom: 18px">
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 24px; box-shadow: ${T.shadow}; display: flex; flex-direction: column; gap: 12px">
-      <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 22px; color: ${T.ink}">Start a game</h2>
-      <p style="color: ${T.muted}; font-size: 14px; line-height: 1.5">Pick the basics, invite your friends, draw. Settings can change any time before the first round.</p>
-      <div style="display: flex; align-items: center; gap: 12px; margin-top: auto">
-        ${btn.primary('Create a room', { big: true, iconL: icon.plus(16) })}
-        ${btn.ghost('Quick start with defaults')}
-      </div>
-    </section>
-
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 24px; box-shadow: ${T.shadow}; display: flex; flex-direction: column; gap: 12px">
-      <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 22px; color: ${T.ink}">Join with a code</h2>
-      <div style="display: flex; gap: 6px" aria-label="Room code">${codeCells}</div>
-      <div style="display: flex; align-items: center; gap: 10px; margin-top: auto">
-        ${btn.primary('Join')}
-        ${btn.secondary('Spectate instead', { iconL: icon.eye(14) })}
-      </div>
-    </section>
-  </div>
+<div style="width: 960px; min-height: 820px; margin: 0 auto; padding: 26px 24px 48px">
+  ${appHeader({ action: btn.primary('Create room', { iconL: icon.plus(15), style: 'min-height: 38px; padding: 8px 14px; font-size: 14px' }), gap: 26 })}
 
   <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 22px 24px; box-shadow: ${T.shadow}">
-    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px">
+    <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px">
       <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 22px; color: ${T.ink}">Public rooms</h2>
       <span style="font-size: 13px; color: ${T.faint}; font-weight: 700">Showing 4 of 4</span>
+      <!-- Beside the list it belongs to, not in the bar: the bar's one action
+           is Create room, and a code is how you join a room that is not on
+           this list. It opens the dialog drawn over this artboard. -->
+      <span style="margin-left: auto">
+        ${btn.secondary('Join by code', { style: 'min-height: 40px; padding: 8px 14px; font-size: 13.5px' })}
+      </span>
     </div>
 
     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px">
@@ -137,6 +88,7 @@ export const MainPage = `
       })}
     </div>
   </section>
+
 </div>`;
 
 // ------------------------------------------------------------- Create a room
@@ -197,7 +149,7 @@ const formSection = (title, hint, inner, { collapsed = false } = {}) => {
 
 export const CreateRoomPage = `
 <div style="width: 780px; min-height: 1100px; margin: 0 auto; padding: 26px 24px 48px">
-  ${backBar()}
+  ${appHeader({ page: 'Create a room', gap: 18 })}
   <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 18px">
     <div>
       ${sectionLabel('Room setup')}
@@ -528,5 +480,22 @@ export const SettingsPage = `
         ${btn.primary('Done')}
       </footer>
     </section>
+  </div>
+</div>`;
+
+// ------------------------------------------------------------- Join by code
+// The dialog the lobby's Join by code button opens — beside the room list,
+// because a code is how you reach a room that is not on it. The segmented
+// input is the part worth drawing: one box per character, the next one lit.
+export const JoinByCodePage = `
+<div style="width: 520px; min-height: 340px; margin: 0 auto; padding: 28px 24px; display: grid; align-content: center; justify-items: center; gap: 14px">
+  ${sectionLabel('Beside the room list')}
+  <div role="dialog" aria-label="Join by code" style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 18px; box-shadow: ${T.shadowRaised}; padding: 24px 26px; display: grid; gap: 14px; justify-items: center; width: 440px">
+    <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 22px; color: ${T.ink}">Join with a code</h2>
+    <div style="display: flex; gap: 6px" aria-label="Room code">${codeCells}</div>
+    <div style="display: flex; align-items: center; gap: 10px">
+      ${btn.primary('Join')}
+      ${btn.secondary('Spectate instead', { iconL: icon.eye(14) })}
+    </div>
   </div>
 </div>`;

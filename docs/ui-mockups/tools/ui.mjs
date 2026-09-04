@@ -197,6 +197,41 @@ export const flag = {
   de: flagWrap('<rect width="18" height="4.33" fill="#111"/><rect y="4.33" width="18" height="4.34" fill="#DD0000"/><rect y="8.67" width="18" height="4.33" fill="#FFCE00"/>'),
 };
 
+// A QR code as decoration, not as data: the artboards are drawn, not built,
+// and shipping a real encoder here would buy nothing a designer can read. The
+// three finder squares and the module density are what makes the shape
+// recognisable, so those are what this draws — deterministically, because
+// scripts/check-mockups-regenerated.sh requires the build to be a no-op.
+// The white plate and its padding are the quiet zone, in both themes: a QR on
+// a dark card is not a QR.
+export const qrArt = (px = 104, seed = 7) => {
+  const n = 25;
+  const cell = px / n;
+  let state = seed * 2654435761 % 2147483647;
+  const next = () => (state = (state * 48271) % 2147483647) / 2147483647;
+  const finder = (x, y) => `
+    <rect x="${x * cell}" y="${y * cell}" width="${7 * cell}" height="${7 * cell}" fill="#12100e"/>
+    <rect x="${(x + 1) * cell}" y="${(y + 1) * cell}" width="${5 * cell}" height="${5 * cell}" fill="#fff"/>
+    <rect x="${(x + 2) * cell}" y="${(y + 2) * cell}" width="${3 * cell}" height="${3 * cell}" fill="#12100e"/>`;
+  const inFinder = (c, r) =>
+    (c < 8 && r < 8) || (c > n - 9 && r < 8) || (c < 8 && r > n - 9);
+  const modules = [];
+  for (let r = 0; r < n; r += 1) {
+    for (let c = 0; c < n; c += 1) {
+      if (inFinder(c, r)) continue;
+      if (next() > 0.52) continue;
+      modules.push(`<rect x="${c * cell}" y="${r * cell}" width="${cell}" height="${cell}" fill="#12100e"/>`);
+    }
+  }
+  return `<span aria-hidden="true" style="display: inline-flex; background: #fff; border-radius: 10px; padding: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); flex: none">
+    <svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" style="display: block">
+      <rect width="${px}" height="${px}" fill="#fff"/>
+      ${finder(0, 0)}${finder(n - 7, 0)}${finder(0, n - 7)}
+      ${modules.join('')}
+    </svg>
+  </span>`;
+};
+
 // A small squiggle underline used under the wordmark and section moments.
 export const squiggle = (w = 96, color = T.warm) =>
   `<svg width="${w}" height="8" viewBox="0 0 ${w} 8" fill="none" aria-hidden="true" style="display: block"><path d="M2 5 C ${w * 0.14} 1, ${w * 0.22} 7, ${w * 0.36} 4 C ${w * 0.5} 1, ${w * 0.62} 7, ${w * 0.76} 4 C ${w * 0.86} 2, ${w * 0.94} 5, ${w - 2} 3" stroke-width="2.5" stroke-linecap="round" style="stroke: ${color}"/></svg>`;

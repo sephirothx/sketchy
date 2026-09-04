@@ -297,6 +297,7 @@ button{font:inherit;color:inherit}
   box-shadow:0 3px 0 var(--primary-edge);width:100%;padding:0 16px;
 }
 .btn.go{background:var(--success-button);box-shadow:0 3px 0 var(--success-button-edge)}
+.btn.warm{background:var(--warm);box-shadow:0 3px 0 var(--warm-edge)}
 .btn.ghost{
   background:var(--card);color:var(--ink);border:1.5px solid var(--line-strong);box-shadow:none;
 }
@@ -552,16 +553,41 @@ const ring = (secs, pct, urgent=false) => `<div class="ring${urgent?' urgent':''
 
 const menuBtn = `<button class="iconbtn"><span class="dots"><i></i><i></i><i></i></span></button>`;
 
-/* The in-game header, measured off the build: wordmark, the room code as a
-   copy button, the round chip, the countdown ring, and the ⋯ sheet. One clock
-   on the screen, and it lives here. */
+/* A QR code as decoration, not as data: this file is drawn, not built. The
+   finder squares and the module density are what make the shape readable as
+   one. Its white plate is the same in both themes — the padding is the quiet
+   zone the format needs, and a QR on a dark card is not a QR. */
+const qr = (px=84, seed=7) => {
+  const n = 25, cell = px / n;
+  let st = seed * 2654435761 % 2147483647;
+  const next = () => (st = (st * 48271) % 2147483647) / 2147483647;
+  const finder = (x,y) => `<rect x="${x*cell}" y="${y*cell}" width="${7*cell}" height="${7*cell}" fill="#12100e"/>`
+    + `<rect x="${(x+1)*cell}" y="${(y+1)*cell}" width="${5*cell}" height="${5*cell}" fill="#fff"/>`
+    + `<rect x="${(x+2)*cell}" y="${(y+2)*cell}" width="${3*cell}" height="${3*cell}" fill="#12100e"/>`;
+  const inFinder = (c,r) => (c<8&&r<8) || (c>n-9&&r<8) || (c<8&&r>n-9);
+  let mods = '';
+  for (let r=0; r<n; r++) for (let c=0; c<n; c++){
+    if (inFinder(c,r) || next() > 0.52) continue;
+    mods += `<rect x="${c*cell}" y="${r*cell}" width="${cell}" height="${cell}" fill="#12100e"/>`;
+  }
+  return `<span aria-hidden="true" style="display:inline-flex;background:#fff;border-radius:9px;padding:6px;flex:none">
+    <svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" style="display:block">
+      <rect width="${px}" height="${px}" fill="#fff"/>${finder(0,0)}${finder(n-7,0)}${finder(0,n-7)}${mods}
+    </svg></span>`;
+};
+
+/* The in-game header, three slots and one control each (#580): the wordmark,
+   the phase — round chip and countdown ring — and the ⋯ sheet. One clock on
+   the screen, and it lives here. The room code used to sit between the mark
+   and the round; it is the first row of the Room menu now, where the share
+   and copy buttons are too. */
 const gameBand = (secs, pct, urgent=false) => `
   <div class="sband band" style="gap:6px">
     ${wordmark(20)}
-    <span class="codechip" style="min-height:31px">BQ7F2K ${ic.copy}</span>
     <span class="sb-sp"></span>
     <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px;font-weight:800">R1/3</span>
     ${ring(secs,pct,urgent)}
+    <span class="sb-sp"></span>
     ${menuBtn}
   </div>`;
 
@@ -803,9 +829,9 @@ S({ id:'invite', n:'02', group:'Arriving', title:'Arriving from an invite',
     <div class="app">
       <div class="sband band">
         <button class="iconbtn ghost">${ic.back}</button>
-        <span class="codechip">6CR2TQ</span>
+        <div class="disp" style="font-size:17px">Join a room</div>
         <span class="sb-sp"></span>
-        <span class="chip warm">Waiting</span>
+        <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
       </div>
       <div class="stagearea" style="padding:14px;gap:14px;overflow-y:auto">
         <div style="flex:0 0 auto">
@@ -854,7 +880,7 @@ S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
     good:[
       '<b>Open rooms are the page.</b> A card is the room\'s name with its prompt language as a flag on the same line, then one row of facts: how many are in it, rounds, seconds.',
       '<b>The player count is the control.</b> Tapping it asks the server who is in that room and lists them under the card. The polled list itself carries no names — it is sent to everyone every four seconds — so the roster is fetched on demand instead.',
-      '<b>Identity moves into the status band</b> as <code>Marta ▾</code>, and settings moved inside that menu: three controls beside a wordmark is what put this header on two rows.',
+      '<b>Identity moves into the status band</b> as <code>Marta ▾</code>, and settings moved inside that menu: three controls beside a wordmark is what put this header on two rows. #580 made that the rule everywhere — one control in each of the bar\'s three slots on a phone.',
       'One dock, <b>one loud control</b>. <code>Join with a code</code> is quiet and opens a sheet.',
       'A <b>Rejoin</b> strip appears only when you hold a live seat — the single most valuable row for someone who backgrounded the app mid-turn.',
       'Filters are a sheet behind one chip rather than a block above the rooms, and the search field is one control rather than the two nested boxes a <code>.panel input</code> rule was drawing.'
@@ -913,7 +939,6 @@ S({ id:'lobby', n:'03', group:'Entry', title:'Lobby',
         ${wordmark(24)}
         <span class="sb-sp"></span>
         <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
-        <button class="iconbtn ghost"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"/></svg></button>
       </div>
       <div class="stagearea" style="padding:20px 14px 12px;gap:16px;overflow:hidden">
         <div style="text-align:center;flex:0 0 auto;padding:8px 0 2px">
@@ -1004,13 +1029,13 @@ S({ id:'create', n:'05', group:'Entry', title:'Create a room',
       '<b>Steppers are full-width rows</b> — label left, ± right — with 44 px targets. Three across cannot hold a 44 px target on a phone: it overflowed by 3 px at 360 and 10 px at 320.',
       'No hints under the three numbers. The ranges are enforced by the controls, "everyone draws once per round" is what a round is, and the line under them says what the three add up to in minutes.',
       'Grid tracks are <code>minmax(0,1fr)</code> everywhere, which is the actual fix for the overflow — and for a second one of the same kind: <code>repeat(3, 1fr)</code> laid the steppers out 560 px wide inside a 390 px phone.',
-      '<b>The wordmark stays in the header.</b> A sub-page replaced it with the back button, so the one screen a first-time visitor might arrive on from a link was the one that never said whose site it was.'
+      '<b>A sub-page opens with the back arrow, and its own name beside it.</b> The wordmark used to be the only thing in the bar, so every sub-page looked like every other one; the arrow and the crumb are what say which page this is. On a wide screen the mark stays, with the name as a crumb after it (#580).'
     ],
     html:`
     <div class="app">
       <div class="sband band">
         <button class="iconbtn ghost">${ic.back}</button>
-        ${wordmark(22)}
+        <div class="disp" style="font-size:17px">Create a room</div>
         <span class="sb-sp"></span>
         <button class="chip" style="min-height:40px"><span class="av sm">M</span> Marta ${ic.chev}</button>
       </div>
@@ -1104,13 +1129,14 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
       'Settings collapse to <b>one summary line that opens the editor</b>, carrying only the facts the host has moved off their defaults.',
       '<b>Start game</b> is docked and permanent — <code>position: fixed</code>, not sticky, which pins to the bottom of its own column and let the chat card end up underneath it. It carries its own blocking reason (<code>Need 1 more player</code>) instead of a heading and a paragraph.',
       'Every gap on the screen is the same 14 px, and an empty room comes to exactly <span class="m">844 px</span> on an 844 px viewport — against 1 432 before.',
-      'Chat stays a card in the column rather than becoming a dock tab; leaving moves into the ⋯ sheet behind a confirm.'
+      'Chat stays a card in the column rather than becoming a dock tab; leaving moves into the ⋯ sheet behind a confirm. That sheet is the <b>Room menu</b> (#580): the invite, AFK, saving the drawing, the restart vote, and Leave last — the same rows in the same order as the desktop dropdown.'
     ],
     html:`
     <div class="app">
       <div class="sband band">
-        <span class="codechip">BQ7F2K</span>
         ${wordmark(20)}
+        <span class="sb-sp"></span>
+        <span class="chip">Waiting · 5 of 8</span>
         <span class="sb-sp"></span>
         ${menuBtn}
       </div>
@@ -1122,7 +1148,10 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
 
         <div class="card" style="flex:0 0 auto;text-align:center;padding:14px;background:var(--primary-soft);border-color:var(--primary-edge-soft)">
           <div class="kick" style="color:var(--primary-ink)">Invite your friends</div>
-          <div class="disp" style="font-size:30px;letter-spacing:.14em;margin:4px 0 10px;color:var(--primary-ink)">BQ7F2K</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 10px">
+            ${qr(84)}
+            <div class="disp" style="font-size:30px;letter-spacing:.14em;color:var(--primary-ink)">BQ7F2K</div>
+          </div>
           <div style="display:flex;gap:8px">
             <button class="btn" style="flex:1;padding:0 10px">${ic.share} Share the link</button>
             <button class="btn ghost" style="flex:1;padding:0 10px;border:1.5px solid var(--line-strong);background:var(--card)">${ic.copy} Copy code</button>
@@ -1147,10 +1176,20 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
           </div>
         </div>
 
-        <button class="row card" style="flex:0 0 auto;display:flex;gap:11px;align-items:center;min-height:58px;border-radius:16px;width:100%;text-align:left">
-          <span class="lbl" style="flex:1;min-width:0;font-size:14px">2 rounds · 60s · Timed hints</span>
-          <span class="val faint">Edit ${ic.chev}</span>
-        </button>
+        <div class="card" style="flex:0 0 auto;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <div class="disp" style="font-size:15px;flex:1">Room rules</div>
+            <button class="chip on" style="min-height:34px">Edit ${ic.chev}</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px">
+            ${[['Players','3 of 8','5 seats free'],['Rounds','2','everyone draws twice'],['Drawing time','60s','about 6 min with 3'],['Scoring','Default','speed and a drawer bonus'],['Hints','Timed','letters appear as time runs out'],['Drawing rules','All tools','all colors']].map(([l,v,h])=>`
+              <div style="background:var(--well);border:1.5px solid var(--line);border-radius:10px;padding:8px 10px">
+                <div class="kick" style="font-size:10px">${l}</div>
+                <div class="disp" style="font-size:16px;margin-top:1px">${v}</div>
+                <div class="faint" style="font-size:10.5px;font-weight:700;line-height:1.35">${h}</div>
+              </div>`).join('')}
+          </div>
+        </div>
 
         <div class="card" style="flex:0 0 auto;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
           <div class="kick" style="margin-bottom:4px">Room chat</div>
@@ -1160,7 +1199,7 @@ S({ id:'waiting', n:'06', group:'In the room', title:'Waiting room',
         </div>
       </div>
       <div class="dock">
-        <button class="btn go">Start game</button>
+        <button class="btn warm">Start game</button>
       </div>
     </div>` }]});
 
@@ -1220,7 +1259,7 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
       '<b>The strip moved rather than grew.</b> Tool, colour, size, undo and clear are one row of collapsed chips filling the dock at the bottom of the screen, each opening a popover above itself. An earlier draft unrolled the palette permanently; it cost the canvas two rows of swatches for a control that is one tap away, and the original complaint was about <i>where</i> the controls sat.',
       'The dock renders into a slot after the chat region, so it lands under the thumb rather than between canvas and feed.',
       '<b>One clock.</b> The ring in the header, and nothing else — the same number had been on the screen three times.',
-      '<b>The top row is the wordmark, the room code, the round and the ring</b>, in that order, with the ⋯ sheet last. The drawer\'s prompt is not up there: it sits in a 28 px bar directly above the canvas, which is where the drawing is.',
+      '<b>The top row is the wordmark, then the round and the ring, then the ⋯ sheet</b> — the bar\'s three slots with one thing in each. The room code left it for the first row of the Room menu (#580), beside the two buttons that send it. The drawer\'s prompt is not up there either: it sits in a 28 px bar directly above the canvas, which is where the drawing is.',
       'The drawer sees <b>the word itself</b>, not the masked tiles the guessers get.',
       '<b>Guesses arrive on the drawer’s screen</b> and the feed scrolls — <code>justify-content: flex-end</code> had been putting the overflow above the scroll origin, where no gesture could reach it.',
       'Pinch to zoom the canvas for detail; <b>⤢ flips to landscape focus</b> (variant B).'
@@ -1281,7 +1320,6 @@ S({ id:'drawing', n:'08', group:'In the room', title:'Drawing',
     <div class="app">
       <div class="sband band" style="gap:6px;flex:0 0 auto">
         ${wordmark(20)}
-        <span class="codechip" style="min-height:31px">B0J3CE ${ic.copy}</span>
         <span class="sb-sp"></span>
         <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px;font-weight:800">R1/3</span>
         ${ring(89,.7)}
@@ -1344,10 +1382,11 @@ S({ id:'guessing', n:'09', group:'In the room', title:'Guessing',
     html:`
     <div class="app">
       <div class="sband band">
-        <span class="codechip">BQ7F2K</span>
-        <span class="chip">R2 · <b style="color:var(--ink)">Marta</b> draws</span>
+        ${wordmark(20)}
         <span class="sb-sp"></span>
+        <span class="chip">R2 · <b style="color:var(--ink)">Marta</b> draws</span>
         ${ring(47,.52)}
+        <span class="sb-sp"></span>
         ${menuBtn}
       </div>
       <div class="stagearea" style="gap:9px">
@@ -1562,7 +1601,8 @@ S({ id:'results', n:'11', group:'Between turns', title:'Turn results',
     html:`
     <div class="app">
       <div class="sband band">
-        <span class="codechip">BQ7F2K</span>
+        ${wordmark(20)}
+        <span class="sb-sp"></span>
         <span class="chip">Round 2 of 3</span>
         <span class="sb-sp"></span>${menuBtn}
       </div>
@@ -1617,7 +1657,8 @@ S({ id:'gameover', n:'12', group:'Between turns', title:'Game over',
     html:`
     <div class="app">
       <div class="sband band">
-        <span class="codechip">BQ7F2K</span><span class="chip">Game over</span>
+        ${wordmark(20)}<span class="sb-sp"></span>
+        <span class="chip">Game over</span>
         <span class="sb-sp"></span>${menuBtn}
       </div>
       <div class="stagearea" style="overflow:hidden">
@@ -1718,7 +1759,7 @@ S({ id:'players', n:'14', group:'Overlays', title:'Players & score',
     bad:[
       'The drawer slides in from the <b>left and covers 74% of the width, full height</b>, for two rows of content — checking the score means covering the game.',
       '<b>Confetti renders on top of the drawer</b> (z-index 9999 vs the drawer’s 1200), so during the celebration the names are unreadable — exactly when people look.',
-      'Reached only from an icon in an eight-control header strip.'
+      'Reached only from an icon in an eight-control header strip. It is a row in the Room menu now (#580), where the phone bar\'s one control leads.'
     ],
     good:[
       'A <b>bottom sheet at 55%</b>: the canvas stays visible above, so you never lose the drawing to check the score.',
@@ -1729,8 +1770,9 @@ S({ id:'players', n:'14', group:'Overlays', title:'Players & score',
     html:`
     <div class="app">
       <div class="sband band">
-        <span class="codechip">BQ7F2K</span><span class="chip">R2 · <b style="color:var(--ink)">Marta</b> draws</span>
-        <span class="sb-sp"></span>${ring(47,.52)}${menuBtn}
+        ${wordmark(20)}<span class="sb-sp"></span>
+        <span class="chip">R2 · <b style="color:var(--ink)">Marta</b> draws</span>${ring(47,.52)}
+        <span class="sb-sp"></span>${menuBtn}
       </div>
       <div class="stagearea" style="gap:9px">
         <div style="padding:10px 12px 2px;display:flex;justify-content:center;flex:0 0 auto">
@@ -1854,7 +1896,7 @@ S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
       <div class="sband band">
         <button class="iconbtn ghost">${ic.back}</button>
         <div class="disp" style="font-size:17px">Profile</div>
-        <span class="sb-sp"></span>${menuBtn}
+        <span class="sb-sp"></span><button class="chip" style="min-height:40px;padding-right:9px"><span class="av sm">M</span> ${ic.chev}</button>
       </div>
       <div class="stagearea" style="padding:16px 14px;gap:15px;overflow-y:auto">
         <div style="display:flex;align-items:center;gap:14px;flex:0 0 auto">
@@ -1913,7 +1955,7 @@ S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
         <button class="iconbtn ghost">${ic.back}</button>
         <div class="disp" style="font-size:17px">Prompt stats</div>
         <span class="sb-sp"></span>
-        <span class="chip on">Filters · 2</span>
+        <button class="chip" style="min-height:40px;padding-right:9px"><span class="av sm">M</span> ${ic.chev}</button>
       </div>
       <div style="padding:11px 14px 0;flex:0 0 auto;display:flex;flex-direction:column;gap:9px;background:var(--card);border-bottom:1.5px solid var(--line);padding-bottom:11px">
         <div class="gfield" style="min-height:46px;font-size:15px">Find a prompt…</div>
