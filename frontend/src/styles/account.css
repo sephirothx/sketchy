@@ -13,6 +13,18 @@
   font-style: italic;
   font-weight: 600;
   color: #6b7280;
+  /*
+   * Neither font ships an italic face here - Nunito Sans has one that is not
+   * loaded, and Fredoka has none at all - so the browser synthesises the
+   * slant: the glyphs lean but their advance widths do not grow, and the last
+   * one leans past the end of the box. Measured across ASCII, the worst case
+   * is 0.208em ("Y", Nunito Sans at weight 800); every weight either font is
+   * asked for stays under 0.21em. Any name that clips itself to one line -
+   * the player list, the standings, the roster tile - then cut that lean off.
+   * The allowance belongs to the italic, so it is set with it rather than at
+   * each of those places.
+   */
+  padding-right: 0.22em;
 }
 
 [data-theme="dark"] .colored-player-name.is-guest {

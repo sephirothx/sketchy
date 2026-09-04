@@ -1093,6 +1093,9 @@
   color: var(--muted);
   font-style: italic;
   font-weight: 500;
+  /* Room for the synthesised slant, which this row clips - see
+     `.colored-player-name.is-guest` in account.css for the measurement. */
+  padding-right: 0.22em;
 }
 
 .online-player-status {
