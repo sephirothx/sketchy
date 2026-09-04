@@ -195,9 +195,8 @@
 }
 
 /* The host's crown perches on the disc's top-right edge, like a crown on a
-   head (#574), in gold so it is never mistaken for a status colour. No disc
-   under it: the filled silhouette with a hairline of the card colour around
-   it is enough to read over any player colour or picture. */
+   head (#574), in gold so it is never mistaken for a status colour. Nothing
+   under or around it: the filled silhouette alone. */
 .avatar-frame {
   display: inline-flex;
   flex: none;
@@ -213,12 +212,7 @@
   top: -5px;
 }
 
-/* A stroked crown at 12 px is a scribble; filling it keeps the silhouette,
-   and painting the card-coloured stroke underneath separates it from the
-   disc without drawing a badge. */
+/* A stroked crown at 12 px is a scribble; filling it keeps the silhouette. */
 .avatar-crown svg {
   fill: currentColor;
-  paint-order: stroke;
-  stroke: var(--card);
-  stroke-width: 3;
 }
