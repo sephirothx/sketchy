@@ -194,6 +194,7 @@ frontend/src/
 ├── main.tsx, App.tsx      Router, identity bootstrap, socket connection
 ├── pages/                 One component per route
 ├── components/            Canvas, toolbar, player list, dialogs, overlays
+│   └── CrashBoundary.tsx  The class both crash boundaries use (R-UX-06); pages/CrashPage.tsx is its fallback
 ├── hooks/
 │   ├── useGameSocketListeners.ts  Every server→client listener, registered once
 │   ├── useCanvasProtocol.ts       Client half of the canvas sequencing protocol
@@ -204,11 +205,13 @@ frontend/src/
 │   ├── settingsStore.ts   Player settings (+ settingsMigrations.ts)
 │   └── canvasBudgetStore.ts  Client-side replay-work budget
 ├── lib/                   Pure helpers, one concern per file; socket.ts is the singleton
+│   ├── crashReport.ts     Pre-fills and redacts the crash page's bug report
+│   └── crashTestSeam.ts   Diagnostics-build hook the E2E suite uses to make a screen throw
 ├── types.ts               Shared TypeScript types for every socket payload
 └── styles/                CSS, one file per surface
 ```
 
-Routes ([`frontend/src/App.tsx:172`](../frontend/src/App.tsx)):
+Routes ([`frontend/src/App.tsx:59`](../frontend/src/App.tsx)):
 
 | Path | Page |
 | --- | --- |
@@ -233,7 +236,7 @@ refuses any difference, because the drift is invisible in a browser. The three s
 routes render the same page for the wrong role rather than naming the surface and
 refusing it (§7, *Authorization*), and keep their 200: the URL exists, the account is what does not.
 
-Two frontend conventions worth knowing:
+Three frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).
    The handshake reads the session cookie exactly once, and on a first visit that
@@ -247,6 +250,16 @@ Two frontend conventions worth knowing:
    replayed. A guess is dropped the same way but *confirmed*: it is resent once if the
    server does not acknowledge it, and carries an id so the resend cannot be processed
    twice (`wire-protocol.md` §2).
+3. **Two crash boundaries, and where they sit** ([`components/CrashBoundary.tsx`](../frontend/src/components/CrashBoundary.tsx), R-UX-06).
+   One wraps `<App>` in `main.tsx`, *outside* `BrowserRouter` and every provider, so
+   nothing that can crash sits above it — which is why its fallback cannot use the
+   router and leaves by `window.location`. The other wraps the live room in
+   `GameRoomPage`, inside all of them, so its way back to the lobby is the same clean
+   leave as the Leave button: `leave_room` on the socket, then a reset of the game
+   store. That emit matters because the socket is a module singleton the unmount never
+   touched; without it a crashed room keeps its seat. Both show
+   [`pages/CrashPage.tsx`](../frontend/src/pages/CrashPage.tsx), which pre-fills a bug
+   report from the caught error and leaves browser storage exactly as it was.
 
 ---
 
@@ -1381,5 +1394,7 @@ is the reference for all of it.
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 
 The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-404-source.svg` is the artwork of record, and the generator writes `frontend/src/components/notFoundArt.ts` and `docs/ui-mockups/tools/notFoundArt.mjs` from it. Unlike the wordmark it keeps literal colours rather than tokens — it hangs on the canvas sheet, which is `white` in both themes (`.canvas-stack`), so ink that answered to the theme would only get weaker on the one ground it ever sits on. The generator maps each authored fill onto a chosen colour — mostly the same-family swatch from the game's own drawing palette (`COLOR_PAIRS` in `lib/drawingRules.ts`), so the doodle is close to a drawing a player could have made — and it refuses to run if a re-export introduces a fill it has no mapping for.
+
+The crash page's ladybird is the third drawing on that pipe: `scripts/brand/sketchy-bug-source.svg` is the artwork of record and the generator writes `frontend/src/components/crashArt.ts` and `docs/ui-mockups/tools/crashArt.mjs`, with the same palette rule and the same counting of paths per fill. It was drawn in code as a first draft so the page could ship with a bug on it; a hand-drawn re-export from Inkscape drops in without touching the generator, as long as it keeps the same fills.
 
 The square app mark is a separate drawing, `scripts/brand/sketchy-icon-source.svg`. The same generator rewrites it into `frontend/public/favicon.svg`, lifting its paint into a `<style>` block with a `prefers-color-scheme` branch — a file-based icon renders in an isolated document where `var()` and `currentColor` do not resolve, so it carries literal colours rather than tokens. The dark values preserve each element's authored contrast ratio rather than being picked by eye; without them the mark sits at 1.03:1 against the dark theme's ground. `scripts/brand/render-rasters.sh` then produces the PNGs that cannot be SVG at all — `apple-touch-icon.png` (iOS ignores alpha and composites onto black), the manifest icons, and `og-image.png`. Those are committed rather than built, since they change about as often as the product name.

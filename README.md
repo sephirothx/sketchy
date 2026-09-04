@@ -1332,6 +1332,13 @@ so a crawler or an uptime probe is not told a page exists where none does. The r
 the server checks that against lives in `app/client_routes.py` and is held to the one in
 `App.tsx` by a test.
 
+A screen whose own code throws shows the **crash page** instead of going blank: a render error
+is caught at the application root and again around the live room. The page offers a reload, a
+way back to the lobby — the room's releases the seat, since the socket outlives the crashed
+tree — and a bug report already filled with the error and the client error tail, which the
+player may send with a line about what they were doing. Browser-stored settings are left alone;
+only the in-memory game state is reset.
+
 If a reverse proxy handles compression instead, it may replace the gzip layer, but it should
 preserve the same cache distinction: fingerprinted assets are immutable while the SPA HTML
 must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encoding`.

@@ -1,6 +1,7 @@
 // Entry screens: lobby, room creation, account recovery.
 import { T, P, icon, flag, avatar, pname, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle } from './ui.mjs';
 import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from './notFoundArt.mjs';
+import { CRASH_PATHS, CRASH_VIEWBOX } from './crashArt.mjs';
 
 const menuItem = (svg, label, danger = false) => `
 <button type="button" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 10px 12px; font-family: ${T.body}; font-size: 14px; font-weight: 700; color: ${danger ? T.danger : T.ink}; min-height: 40px">
@@ -378,6 +379,70 @@ export const NotFoundPage = `
     <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 25px; color: ${T.ink}; margin-bottom: 8px">Nobody drew this page</h1>
     <p style="font-size: 14.5px; color: ${T.muted}; font-weight: 600; margin-bottom: 20px">That link doesn&rsquo;t lead anywhere on Sketchy.</p>
     ${btn.primary('Back to lobby')}
+  </main>
+</div>`;
+
+// ------------------------------------------------------------------- Crash
+// What a screen shows when its own code throws (#474, R-UX-06): the not-found
+// card again, because it is the same object - a canvas nobody meant to draw on
+// - with a bug on the sheet. Two ways out first, and under them a bug report
+// that is already written: the player adds what they were doing, if anything,
+// and sends it. The header is the wordmark alone: the boundary around the app
+// sits outside the router, so there is no account button to draw.
+const crashRow = (label, value) => `
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; padding: 7px 2px; border-bottom: 1px solid ${T.line}">
+  <dt style="color: ${T.faint}; font-size: 12.5px; font-weight: 700">${label}</dt>
+  <dd style="margin: 0; font-size: 12.5px; font-weight: 700; text-align: right; overflow-wrap: anywhere">${value}</dd>
+</div>`;
+
+export const CrashPage = `
+<div style="width: 720px; min-height: 1040px; padding: 22px 26px 34px">
+  <header style="display: flex; align-items: flex-end; margin-bottom: 18px">
+    ${wordmark(34)}
+  </header>
+  <main style="max-width: 460px; margin: 12px auto 0; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadow}; padding: 26px 24px; text-align: center">
+    <div style="aspect-ratio: 4 / 3; background: #fff; border: 1.5px solid ${T.lineStrong}; border-radius: 12px; box-shadow: ${T.shadow}; overflow: hidden; margin-bottom: 16px; padding: 3.5%">
+      <svg viewBox="${CRASH_VIEWBOX}" width="100%" height="100%" aria-hidden="true" style="display: block">
+        ${CRASH_PATHS.map(({ fill, d }) => `<path d="${d}" fill="${fill}"/>`).join('')}
+      </svg>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 7px; margin-bottom: 18px">
+      ${notFoundTool(icon.brush(18))}${notFoundTool(icon.fill(18))}${notFoundTool(icon.rect(18))}${notFoundTool(icon.undo(18))}
+    </div>
+    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 25px; color: ${T.ink}; margin-bottom: 8px">A bug crawled onto the page</h1>
+    <p style="font-size: 14.5px; color: ${T.muted}; font-weight: 600; margin-bottom: 20px">This screen hit an error and had to stop. Your account and settings are safe.</p>
+    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 22px">
+      ${btn.primary('Reload', { style: 'flex: 1 1 150px' })}
+      ${btn.secondary('Back to lobby', { style: 'flex: 1 1 150px' })}
+    </div>
+    <form style="display: flex; flex-direction: column; gap: 6px; text-align: left; border-top: 1.5px solid ${T.line}; padding-top: 18px">
+      <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17.5px; color: ${T.ink}; margin: 0 0 4px">Help us squash it</h2>
+      <p style="font-size: 12px; color: ${T.muted}; margin: 0 0 8px">A report is ready to send: the error, and what this tab knows about itself. It reaches the people who run Sketchy &mdash; never other players.</p>
+      <label style="font-size: 13px; font-weight: 600; color: ${T.ink}">What were you doing? <span style="color: ${T.faint}; margin-left: 4px">Optional</span></label>
+      <textarea rows="3" placeholder="The last thing you clicked or typed, if you remember." style="background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 10px 12px; font-family: ${T.body}; font-size: 16px; color: ${T.ink}; min-height: 84px; resize: vertical"></textarea>
+      <details open style="background: ${T.well}; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; margin-top: 6px; padding: 12px 14px">
+        <summary style="cursor: pointer; font-size: 13px; font-weight: 800; color: ${T.ink}">What we send with this</summary>
+        <dl style="display: grid; margin: 0">
+          ${crashRow('Summary', 'Crash on /room/BQ7F2K: TypeError: Cannot read properties of null (reading &lsquo;players&rsquo;)')}
+          ${crashRow('Build', 'a299f80 &middot; 2026-09-05')}
+          ${crashRow('Page', '/room/BQ7F2K')}
+          ${crashRow('Room', 'BQ7F2K &middot; round 2 of 3')}
+          ${crashRow('Screen', '1440 &times; 900 &middot; 2&times;')}
+          ${crashRow('Connection', 'connected &middot; 0 reconnects this visit')}
+        </dl>
+        <p style="color: ${T.faint}; font-size: 12px; font-weight: 800; margin: 10px 0 6px">Recent client errors, newest first</p>
+        <ul style="background: ${T.well}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; display: grid; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; gap: 3px; line-height: 1.5; list-style: none; margin: 0; padding: 10px 12px; color: ${T.muted}">
+          <li style="display: flex; gap: 10px"><span style="color: ${T.faint}">14:02:11</span>[room] TypeError: Cannot read properties of null (reading &lsquo;players&rsquo;)<br>in at PlayerList &lt; at RoomShell &lt; at ActiveGameRoom</li>
+          <li style="display: flex; gap: 10px"><span style="color: ${T.faint}">14:01:58</span>[socket] disconnect: transport close</li>
+        </ul>
+        <p style="font-size: 12px; color: ${T.muted}; margin: 8px 0 0">The crash, the last 20 errors your browser recorded, and where in the page it happened. No page addresses beyond the path, nothing you typed into chat, and never the prompt in play.</p>
+      </details>
+      <label style="display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; cursor: pointer">
+        <input type="checkbox" style="flex: none; margin-top: 2px">
+        <span style="font-size: 13px; font-weight: 700; color: ${T.ink}; line-height: 1.45">Send my description only<span style="display: block; color: ${T.faint}; font-size: 12px; font-weight: 600; margin-top: 2px">Drops the details above. We will still read it, but the crash is much harder to find.</span></span>
+      </label>
+      ${btn.primary('Send report', { style: 'margin-top: 10px; width: 100%' })}
+    </form>
   </main>
 </div>`;
 

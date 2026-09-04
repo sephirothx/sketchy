@@ -11,7 +11,12 @@ never persists, and is read only when a player chooses to attach it. An error lo
 that phoned home would be telemetry, which is a different thing needing a
 different conversation. */
 
-export type ClientErrorKind = "error" | "unhandled" | "console" | "socket";
+import { redactDiagnostic } from "./crashReport.ts";
+
+/** `render` is a crash a boundary caught: the screen it was on is gone and the
+    crash page is what the player is looking at. Every other kind left the
+    screen standing. */
+export type ClientErrorKind = "error" | "unhandled" | "console" | "socket" | "render";
 
 export interface ClientErrorEntry {
   /** ISO-8601, so the server can line it up against its own clock. */
@@ -64,6 +69,34 @@ export function recordClientError(kind: ClientErrorKind, message: unknown): void
   } finally {
     recording = false;
   }
+}
+
+/** The crash a boundary caught, with where in the tree it happened.
+ *
+ * Recorded into the same tail as everything else rather than kept by the
+ * boundary, so a report filed from the crash page carries the crash *and* the
+ * errors that led up to it, in order. The message leads: the budget per entry
+ * is 500 characters, and the frames are there to place the error, not to
+ * reproduce the whole stack - the bug report's diagnostic block carries that.
+ * Redacted on the way in, unlike the other kinds: those are read only when a
+ * player attaches them, this one is written by code into a report that is
+ * already filled (R-UX-06).
+ */
+export function recordRenderCrash(
+  scope: "app" | "room",
+  error: unknown,
+  componentStack: string | null | undefined,
+): void {
+  const head = error instanceof Error ? `${error.name}: ${error.message}` : describe(error);
+  const jsFrames = error instanceof Error && error.stack
+    ? error.stack.split("\n").filter((line) => /^\s+at /.test(line)).slice(0, 3)
+    : [];
+  const treeFrames = componentStack
+    ? componentStack.trim().split("\n").slice(0, 4).map((line) => line.trim())
+    : [];
+  const lines = [`[${scope}] ${head}`, ...jsFrames.map((line) => line.trim())];
+  if (treeFrames.length) lines.push(`in ${treeFrames.join(" < ")}`);
+  recordClientError("render", redactDiagnostic(lines.join("\n")));
 }
 
 /** The tail, oldest first. A copy, so a caller cannot mutate the buffer. */

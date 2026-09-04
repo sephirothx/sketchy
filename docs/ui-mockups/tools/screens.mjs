@@ -1,7 +1,7 @@
 // The single manifest of every redesign screen: page markup, frame size,
 // canvas position, display title, and grouping. Both the canvas build and
 // the explorer build read this, so they cannot drift apart.
-import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage, NotFoundPage } from './pages-entry.mjs';
+import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage, NotFoundPage, CrashPage } from './pages-entry.mjs';
 import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage } from './pages-room.mjs';
 import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, AdminOpsTuningPage, AdminOpsAuditPage, ModerationPage } from './pages-library.mjs';
 import { BugReportMenuPage, BugReportDialogPage, BugReportsQueuePage } from './pages-support.mjs';
@@ -13,6 +13,7 @@ export const SCREENS = [
   { name: 'AccountRecovery', page: AccountRecoveryPage, w: 880, h: 560, x: 1920, y: 0, title: 'Reset password', group: 'Getting in' },
   { name: 'Settings', page: SettingsPage, w: 1080, h: 900, x: 2900, y: 0, title: 'Settings (new)', group: 'Getting in', extraProps: { tab: { editor: 'enum', options: ['general', 'game', 'shortcuts'], default: 'general' } } },
   { name: 'NotFound', page: NotFoundPage, w: 720, h: 700, x: 4070, y: 0, title: 'Page not found', group: 'Getting in' },
+  { name: 'Crash', page: CrashPage, w: 720, h: 1300, x: 4880, y: 0, title: 'Crash page', group: 'Getting in' },
   // Row 2 — in the room
   { name: 'WaitingRoom', page: WaitingRoomPage, w: 1240, h: 1000, x: 0, y: 1780, title: 'Waiting room', group: 'In the room' },
   { name: 'PromptChoice', page: PromptChoicePage, w: 1240, h: 1000, x: 1330, y: 1780, title: 'Prompt choice (new)', group: 'In the room' },

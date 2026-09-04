@@ -22,6 +22,7 @@ const ROUTES = {
   CreateRoom: [['Back to lobby', 'Main'], ['Create room', 'WaitingRoom'], ['Marta', 'Profile']],
   AccountRecovery: [['Back to the lobby', 'Main'], ['Send a reset link', 'Main']],
   NotFound: [['Back to lobby', 'Main']],
+  Crash: [['Back to lobby', 'Main']],
   WaitingRoom: [['Start game', 'PromptChoice'], ['Edit settings', 'CreateRoom'], ['Settings', 'Settings'], ['Leave', 'Main']],
   PromptChoice: [['lighthouse', 'Drawing'], ['roller coaster', 'Drawing'], ['windmill', 'Drawing'], ['Settings', 'Settings'], ['Leave', 'Main']],
   Drawing: [['Settings', 'Settings'], ['Leave', 'Main']],

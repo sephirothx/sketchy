@@ -7,6 +7,7 @@ import {
   installClientErrorLog,
   recentClientErrors,
   recordClientError,
+  recordRenderCrash,
   resetClientErrorLog,
 } from "../src/lib/clientErrorLog.ts";
 
@@ -145,4 +146,38 @@ test("recording cannot recurse when the recorder itself logs", () => {
     console.error = original;
   }
   assert.ok(recentClientErrors().length <= MAX_ENTRIES);
+});
+
+test("a caught render crash is recorded with its scope, a few frames and the tree", () => {
+  const error = new TypeError("Cannot read properties of null (reading 'players')");
+  error.stack = "TypeError: Cannot read properties of null\n    at PlayerList (/assets/room.js:10:5)\n    at renderWithHooks (/assets/react.js:1:1)\n    at a\n    at b\n    at c";
+  recordRenderCrash("room", error, "\n    at PlayerList\n    at RoomShell\n    at ActiveGameRoom\n    at GameRoomPage\n    at Routes");
+  const [entry] = recentClientErrors();
+  assert.equal(entry.kind, "render");
+  const lines = entry.message.split("\n");
+  assert.equal(lines[0], "[room] TypeError: Cannot read properties of null (reading 'players')");
+  // Three frames, not the whole stack; four tree entries, not five.
+  assert.deepEqual(lines.slice(1, 4), [
+    "at PlayerList (/assets/room.js:10:5)",
+    "at renderWithHooks (/assets/react.js:1:1)",
+    "at a",
+  ]);
+  assert.equal(lines[4], "in at PlayerList < at RoomShell < at ActiveGameRoom < at GameRoomPage");
+  assert.equal(lines.length, 5);
+});
+
+test("a render crash is redacted on the way into the tail", () => {
+  const error = new Error("refused for marta@example.org with token=abc");
+  error.stack = "Error: refused\n    at f (https://sketchy.example/assets/a.js?v=1:1:1)";
+  recordRenderCrash("app", error, null);
+  const [entry] = recentClientErrors();
+  assert.equal(
+    entry.message,
+    "[app] Error: refused for ***@example.org with token=***\nat f (https://sketchy.example/assets/a.js?***)",
+  );
+});
+
+test("a render crash that is not an Error is still recorded", () => {
+  recordRenderCrash("app", "plain string", "");
+  assert.equal(recentClientErrors()[0].message, "[app] plain string");
 });
