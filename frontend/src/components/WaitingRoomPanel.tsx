@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
@@ -76,6 +77,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const startBlockedReason =
     "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.";
   const rematch = Boolean(finalScores);
+  // The address bar itself, which is what the room chip and the Room menu
+  // copy too — so the code on the card, the link that is shared, and the QR
+  // beside it are provably one destination.
+  const inviteUrl = window.location.href;
 
   async function copyToClipboard(value: string, what: string) {
     try {
@@ -92,9 +97,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // worth a line. Eight chips said all of it always, and spent 250px doing it.
   // The OS share sheet is how a code actually reaches a group chat. Where
   // there is none — every desktop browser but Safari — copying the link is
-  // the same job done by hand.
+  // the same job done by hand. Both it and the QR code carry `inviteUrl`, so
+  // scanning the card and sending it cannot land people in different rooms.
   async function shareInvite() {
-    const url = window.location.href;
+    const url = inviteUrl;
     if (navigator.share) {
       try {
         await navigator.share({ title: props.name, text: `Join my Sketchy room: ${code ?? ""}`, url });
@@ -159,9 +165,35 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           Six bordered cells and two buttons spent 237px on that. */}
       <section className="waiting-card waiting-invite-card">
         <p className="waiting-invite-kicker">Invite your friends</p>
-        {code && (
-          <p className="waiting-code" aria-label={`Room code ${code}`}>{code}</p>
-        )}
+        <div className="waiting-invite-main">
+          {/* Beside the code because it answers the same question for the
+              person sitting across the table: the code they would type, and
+              the link they can point a camera at instead. Drawn on its own
+              white plate, whose padding is the quiet zone the format needs -
+              a dark-theme card would otherwise leave nothing to scan. */}
+          {code && (
+            <div className="waiting-invite-qr">
+              <QRCodeSVG
+                value={inviteUrl}
+                size={104}
+                marginSize={0}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#12100e"
+                // The <title> alone is skipped by readers that treat an SVG
+                // as a graphic with no role; role="img" is what makes it the
+                // element's name.
+                role="img"
+                title={`Scan to join room ${code}`}
+              />
+            </div>
+          )}
+          {code && (
+            <p className="waiting-code" aria-label={`Room code ${code}`}>{code}</p>
+          )}
+        </div>
+        {/* Under both, across the card: two buttons squeezed into what is
+            left beside a QR code is how a phone gets a truncated one. */}
         <div className="waiting-invite-actions">
           <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
             Share the link

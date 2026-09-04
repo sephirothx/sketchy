@@ -346,6 +346,31 @@
   margin: 6px 0 12px;
 }
 
+/* The code and the QR answer the same question for two different people —
+   the one who types and the one who points a camera — so they sit on one
+   row, and the card grows by the difference rather than by a block. The two
+   buttons stay under both, across the whole card. */
+.waiting-invite-main {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.waiting-invite-main .waiting-code { margin: 0; }
+
+/* A white plate whichever theme is on: the format needs a light quiet zone,
+   and the padding is it. Nothing here follows the theme for that reason. */
+.waiting-invite-qr {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+  display: flex;
+  flex: none;
+  padding: 8px;
+}
+
 .waiting-invite-actions {
   display: flex;
   align-items: center;
@@ -814,6 +839,12 @@
 
   .waiting-invite-card { padding: 14px 14px 15px; }
   .waiting-code { font-size: 30px; margin: 4px auto 10px; }
+
+  /* Still side by side: the QR is for the phone held up to the one next to
+     you, which is exactly the phone case. It only gets smaller. */
+  .waiting-invite-main { gap: 12px; margin-bottom: 10px; }
+  .waiting-invite-qr { padding: 6px; }
+  .waiting-invite-qr svg { height: 84px; width: 84px; }
 
   /* Side by side: two full-width buttons would put back most of what the
      card just gave up. */
