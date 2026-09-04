@@ -310,16 +310,35 @@ function deriveDoodle({ label, sourceFile, paint, expected, constPrefix, tsFile,
   const paths = [];
   const seen = {};
 
-  for (const m of source.matchAll(/<path\b([\s\S]*?)\/>/g)) {
-    const attrs = m[1];
-    const d = attrs.match(/\sd="([^"]+)"/)?.[1];
+  // Inkscape writes a dot as <circle>; the shipped component is a flat list
+  // of paths, so a circle becomes two arcs. A radius under a tenth of a
+  // millimetre is a stray click left in the drawing, not a mark - a real dot
+  // in either source is over 1.5 mm - and it is skipped rather than shipped.
+  const STRAY_RADIUS_MM = 0.1;
+  const circlePath = (cx, cy, r) =>
+    `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0 Z`;
+  let strays = 0;
+
+  for (const m of source.matchAll(/<(path|circle)\b([\s\S]*?)\/>/g)) {
+    const [, tag, attrs] = m;
     const fill = attrs.match(/fill:\s*([^;"]+)/)?.[1]?.trim().toLowerCase();
-    if (!d || !fill) continue;
+    if (!fill) continue;
+    let d;
+    if (tag === "path") {
+      d = attrs.match(/\sd="([^"]+)"/)?.[1];
+    } else {
+      const num = (name) => Number(attrs.match(new RegExp(`\\s${name}="([^"]+)"`))?.[1]);
+      const r = num("r");
+      if (!(r > STRAY_RADIUS_MM)) { strays += 1; continue; }
+      d = circlePath(num("cx"), num("cy"), r);
+    }
+    if (!d) continue;
     const colour = paint[fill];
     if (!colour) throw new Error(`${label}: no palette mapping for the authored fill ${fill}`);
     seen[fill] = (seen[fill] ?? 0) + 1;
     paths.push({ d: d.replace(/\s+/g, " ").trim(), fill: colour });
   }
+  if (strays) console.log(`${label}: skipped ${strays} stray dot(s) under ${STRAY_RADIUS_MM} mm`);
 
   for (const [fill, count] of Object.entries(expected)) {
     if (seen[fill] !== count) {
@@ -399,21 +418,23 @@ deriveDoodle({
   mjsFile: "notFoundArt.mjs",
 });
 
-// The crash page's ladybird: red shell, black head, split, spots, legs and
-// antennae, white eyes (the one place white ink shows, because it sits on the
-// black head), an orange buzz trailing off, and three blue twitch marks. The
-// counts pin the drawing's anatomy, so a re-export that drops a leg is caught.
+// The crash page's ladybird, Stefano's Inkscape drawing: a red shell, a black
+// head with two sky-blue eyes and a white grin, seven spots, six legs, two
+// antennae, a blue zigzag it has just crawled along and two orange sparks.
+// The counts pin the drawing's anatomy, so a re-export that drops a leg is
+// caught; the three stray dots in the source are skipped by radius above.
 deriveDoodle({
   label: "bug art",
   sourceFile: "sketchy-bug-source.svg",
   paint: {
-    "#ff0000": PALETTE.red,
+    "#e00000": PALETTE.red,
     "#000000": PALETTE.black,
     "#ffffff": PALETTE.white,
-    "#ff6600": PALETTE.orange,
+    "#00ffff": PALETTE.sky,
     "#0000ff": PALETTE.blue,
+    "#ff6600": PALETTE.orange,
   },
-  expected: { "#ff0000": 1, "#000000": 15, "#ffffff": 2, "#ff6600": 1, "#0000ff": 3 },
+  expected: { "#e00000": 1, "#000000": 17, "#ffffff": 1, "#00ffff": 2, "#0000ff": 1, "#ff6600": 2 },
   constPrefix: "CRASH",
   tsFile: "crashArt.ts",
   mjsFile: "crashArt.mjs",
