@@ -14,7 +14,6 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.auth.avatar_doodles import DOODLES, doodle_key
 from app.auth.avatars import (
     AVATAR_REUPLOAD_BLOCK,
     AvatarError,
@@ -122,47 +121,6 @@ async def set_avatar(
                 actor_id=db_user_id,
                 target_id=db_user_id,
                 details={"key": key, "byte_size": len(payload)},
-                request_id=request_id,
-                ip_hash=ip_hash,
-            )
-    return key
-
-
-async def choose_doodle(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    user_id: str | UUID,
-    name: str,
-    request_id: str | None = None,
-    ip_hash: str | None = None,
-    now: datetime | None = None,
-) -> str:
-    """Wear one of the deployment's own drawings (R-AVA-06) and return its key.
-
-    A doodle is not an upload, so a moderator's block does not apply: the
-    block exists to stop a removed picture coming straight back, and a
-    drawing this deployment made cannot be the picture that was removed.
-    One picture per account still holds - an uploaded one goes.
-    """
-    if name not in DOODLES:
-        raise AvatarError("No such doodle.")
-    at = now or datetime.now(timezone.utc)
-    key = doodle_key(name)
-    db_user_id = UUID(str(user_id))
-    async with session_factory() as session:
-        async with session.begin():
-            user = await _registered(session, db_user_id)
-            await session.execute(
-                delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
-            )
-            user.avatar_key = key
-            user.updated_at = at
-            _audit(
-                session,
-                event_type="avatar.doodle_chosen",
-                actor_id=db_user_id,
-                target_id=db_user_id,
-                details={"key": key},
                 request_id=request_id,
                 ip_hash=ip_hash,
             )

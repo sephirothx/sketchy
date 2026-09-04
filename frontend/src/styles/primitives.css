@@ -171,7 +171,7 @@
   background: var(--guest-avatar);
 }
 
-/* An uploaded picture fills the disc (#573). The disc keeps its color
+/* An uploaded picture fills the disc (#573). The disc keeps its colour
    underneath, so a transparent picture still reads as this player's. */
 .avatar.has-picture {
   overflow: hidden;
@@ -183,14 +183,4 @@
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
-}
-
-/* A doodle (R-AVA-06) is drawn in the disc's ink from the sprite, so the
-   disc keeps its color: the name color is what makes it this player's. */
-.avatar-doodle {
-  display: block;
-  width: 76%;
-  height: 76%;
-  fill: none;
-  stroke: currentColor;
 }

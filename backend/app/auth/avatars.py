@@ -15,10 +15,7 @@ because it is what an older Safari produces from a canvas.
 
 Keys are content-addressed - the SHA-256 of the bytes, plus the extension -
 so the same picture has one URL for ever and a changed picture is a new URL.
-That is what lets every avatar be cached as immutable. The other shape a key
-takes is `doodle:<name>`: one of this deployment's own drawings
-(avatar_doodles.py), which is served from the frontend's sprite and never
-stored as bytes at all.
+That is what lets every avatar be cached as immutable.
 """
 from __future__ import annotations
 
@@ -26,8 +23,6 @@ import hashlib
 import re
 import struct
 from datetime import timedelta
-
-from app.auth.avatar_doodles import DOODLE_KEY_PREFIX, doodle_name
 
 AVATAR_SIZE = 256
 MAX_AVATAR_BYTES = 128 * 1024
@@ -55,27 +50,14 @@ def validate_avatar_key(value: str | None) -> str | None:
     key = value.strip().lower()
     if not key:
         return None
-    if key.startswith(DOODLE_KEY_PREFIX):
-        if doodle_name(key) is None:
-            raise ValueError("Unknown doodle.")
-        return key
     if not AVATAR_KEY_PATTERN.fullmatch(key):
         raise ValueError("Unknown avatar key.")
     return key
 
 
 def avatar_url(key: str | None) -> str | None:
-    """Where the picture behind `key` is drawn from; None for no picture.
-
-    A doodle points into the sprite the frontend ships, by fragment, which is
-    what lets the client draw it with the disc's own ink.
-    """
-    if not key:
-        return None
-    name = doodle_name(key)
-    if name is not None:
-        return f"/avatars/doodles.svg#{name}"
-    return f"/api/avatars/{key}"
+    """Where the picture behind `key` is served from; None for no picture."""
+    return f"/api/avatars/{key}" if key else None
 
 
 def avatar_key_for(payload: bytes, content_type: str) -> str:

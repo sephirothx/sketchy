@@ -89,11 +89,6 @@ export function uploadAvatar(base64: string): Promise<{ avatarKey: string; avata
   return apiRequest("/api/users/me/avatar", { method: "POST", body: { image: base64 } });
 }
 
-/** Wear one of the deployment's own drawings instead (R-AVA-06). */
-export function chooseDoodle(name: string): Promise<{ avatarKey: string; avatarUrl: string }> {
-  return apiRequest("/api/users/me/avatar/doodle", { method: "PUT", body: { name } });
-}
-
 export function removeAvatar(): Promise<{ ok: boolean }> {
   return apiRequest("/api/users/me/avatar", { method: "DELETE" });
 }

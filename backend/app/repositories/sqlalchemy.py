@@ -63,7 +63,6 @@ from app.domain_values import (
     TURN_PARTICIPANT_STATES,
     TurnDrawingStatus,
 )
-from app.auth.avatar_doodles import DOODLES, doodle_key
 from app.auth.avatars import validate_avatar_key
 from app.services.user_stats_projection import (
     increment_user_stats_projection,
@@ -515,11 +514,6 @@ class SqlAlchemyUserRepository(UserRepository):
                 # Registered players play as their username, so the display
                 # name follows it rather than keeping the old guest nickname.
                 user.display_name = clean_username
-                # A new account starts with a doodle rather than an initial
-                # (R-AVA-06): the grey initial was the guest's mark, and a
-                # claimed account should look claimed from its first seat.
-                # Random, so a room of new players is not a room of foxes.
-                user.avatar_key = doodle_key(secrets.choice(DOODLES))
                 try:
                     await session.flush()
                 except IntegrityError as error:

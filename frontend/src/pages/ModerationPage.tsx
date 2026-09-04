@@ -2,8 +2,6 @@ import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
-import { AvatarPicture } from "../components/ui/Avatar";
-import { avatarFillClass } from "../lib/avatarDoodles";
 import { Chip } from "../components/ui/Chip";
 import { SectionLabel } from "../components/ui/Card";
 
@@ -397,18 +395,12 @@ export function ModerationPage() {
                         <div className="mod-context-row">
                           <span>Picture</span>
                           {/* Shown at the size a player list shows it, and
-                              at full size on hover: the case may be about it.
-                              A doodle is one of ours, drawn in the queue's
-                              ink; the case cannot be about that. */}
-                          <span
-                            className={`mod-context-avatar avatar avatar-player${avatarFillClass(
-                              playerCase.reportedPlayer.avatarUrl,
-                            )}`}
-                            role="img"
-                            aria-label={`${playerCase.reportedPlayer.displayName}'s picture`}
-                          >
-                            <AvatarPicture url={playerCase.reportedPlayer.avatarUrl} />
-                          </span>
+                              at full size on hover: the case may be about it. */}
+                          <img
+                            className="mod-context-avatar"
+                            src={playerCase.reportedPlayer.avatarUrl}
+                            alt={`${playerCase.reportedPlayer.displayName}'s picture`}
+                          />
                         </div>
                       )}
                       <div className="mod-context-row">
