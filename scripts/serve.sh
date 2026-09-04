@@ -69,7 +69,12 @@ if [[ "$SKIP_BUILD" == true ]]; then
   log "Skipping frontend build (--skip-build)"
 else
   log "Installing frontend dependencies"
-  (cd "$FRONTEND_DIR" && npm install --no-fund)
+  # --no-audit: the install itself is instant, but npm's audit is a separate
+  # POST to registry.npmjs.org that some networks (a sandboxing proxy, a
+  # corporate firewall) black-hole rather than refuse, and npm then retries
+  # it for minutes with nothing on screen but a spinner. CI runs `npm ci`,
+  # which audits on its own.
+  (cd "$FRONTEND_DIR" && npm install --no-fund --no-audit)
 
   log "Building frontend (tsc -b && vite build)"
   (cd "$FRONTEND_DIR" && npm run build)

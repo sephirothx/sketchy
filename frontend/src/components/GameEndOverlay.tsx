@@ -139,6 +139,7 @@ export function GameEndOverlay({
                   <Avatar
                     name={entry.nickname}
                     nameColor={entry.nameColor}
+                    avatarUrl={entry.avatarUrl}
                     isAnonymous={entry.isAnonymous}
                     size={place === 1 ? 52 : 42}
                   />
@@ -167,6 +168,7 @@ export function GameEndOverlay({
                   <Avatar
                     name={score.nickname}
                     nameColor={score.nameColor}
+                    avatarUrl={score.avatarUrl}
                     isAnonymous={score.isAnonymous}
                     size={26}
                   />

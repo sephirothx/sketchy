@@ -136,23 +136,26 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             await use_guest_name(guest, "Wanderer")
 
             await guest.click(".header-settings-button")
-            await guest.wait_for_selector("#settings-display-name")
-            # Guests are pinned to grey, so the colour row is locked with its
-            # reason rather than offering a picker that would be refused.
+            await guest.wait_for_selector(".settings-you")
+            # Guests are pinned to grey, so there is no palette and no chip on
+            # the disc; the account-only rows below are locked with a reason.
             assert await guest.locator(".settings-swatch").count() == 0
             assert await guest.is_visible(".settings-locked")
 
-            # The name is one of the few rows the server can refuse, so it
-            # keeps a button of its own where every other row applies at once.
+            # Only a guest can change the name (a registered player always
+            # plays as their username), and it is the one thing on the card
+            # the server can refuse, so it keeps a Save button of its own
+            # where everything else applies at once.
+            await guest.click('.settings-you button:has-text("Change")')
             await guest.fill("#settings-display-name", "takenname")
-            await guest.click('.settings-row button:has-text("Change")')
+            await guest.click('.settings-you button:has-text("Save")')
             await guest.wait_for_selector("#settings-name-error")
             assert "registered player" in (
                 await guest.inner_text("#settings-name-error")
             )
 
             await guest.fill("#settings-display-name", "Marta")
-            await guest.click('.settings-row button:has-text("Change")')
+            await guest.click('.settings-you button:has-text("Save")')
             await guest.wait_for_selector('.identity-name:has-text("Marta")')
         finally:
             await owner_context.close()

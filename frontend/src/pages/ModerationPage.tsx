@@ -13,6 +13,7 @@ import {
   listPromptContentReports,
   listUserBans,
   revokeUserBan,
+  removeReportedAvatar,
   reviewModerationReport,
   reviewPromptContentReport,
   type PlayerReport,
@@ -390,6 +391,18 @@ export function ModerationPage() {
                         <span>Player</span>
                         <strong>{playerCase.reportedPlayer.displayName}</strong>
                       </div>
+                      {playerCase.reportedPlayer.avatarUrl && (
+                        <div className="mod-context-row">
+                          <span>Picture</span>
+                          {/* Shown at the size a player list shows it, and
+                              at full size on hover: the case may be about it. */}
+                          <img
+                            className="mod-context-avatar"
+                            src={playerCase.reportedPlayer.avatarUrl}
+                            alt={`${playerCase.reportedPlayer.displayName}'s picture`}
+                          />
+                        </div>
+                      )}
                       <div className="mod-context-row">
                         <span>Account</span>
                         <strong>
@@ -472,6 +485,22 @@ export function ModerationPage() {
                         }
                       >
                         Resolve
+                      </button>
+                    )}
+                    {playerCase.reportedUserId && playerCase.reportedPlayer?.avatarUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-danger-ghost"
+                        disabled={busy === playerCase.id}
+                        onClick={() =>
+                          act(
+                            playerCase.id,
+                            () => removeReportedAvatar(playerCase.id),
+                            "Picture removed. They cannot upload another for a week.",
+                          )
+                        }
+                      >
+                        Remove picture
                       </button>
                     )}
                     {playerCase.reportedUserId && (

@@ -117,22 +117,22 @@ async def test_user_repository_crud_and_stats():
         assert by_name.id == anon.id
         assert not hasattr(by_name, "password_hash")
 
-        # 8. Update profile with a deployment-hosted avatar key.
+        # 8. Update profile with a content-addressed picture key (#573).
         updated = await repo.update_profile(
-            anon.id, name_color="#ef3c63", avatar_key="PENCIL"
+            anon.id, name_color="#ef3c63", avatar_key=("A" * 63 + "B") + ".PNG"
         )
         assert updated is not None
         assert updated.name_color == "#ef3c63"
-        assert updated.avatar_key == "pencil"
+        assert updated.avatar_key == ("a" * 63 + "b") + ".png"
 
-        # Arbitrary URLs and unrecognized asset names never reach a browser.
+        # Arbitrary URLs and anything but a content address never reach a browser.
         with pytest.raises(InvalidProfileDataError):
             await repo.update_profile(
                 anon.id, avatar_key="https://example.com/avatar.png"
             )
 
         with pytest.raises(InvalidProfileDataError):
-            await repo.update_profile(anon.id, avatar_key="unknown")
+            await repo.update_profile(anon.id, avatar_key="pencil")
 
         # 9. Stats with 0 games
         stats = await repo.get_stats(anon.id)
@@ -153,10 +153,10 @@ async def test_game_history_repository():
         u2 = await user_repo.create_anonymous("Player2")
         u3 = await user_repo.create_anonymous("Player3_NonParticipant")
         u1 = await user_repo.update_profile(
-            u1.id, name_color="#b8730f", avatar_key="pencil"
+            u1.id, name_color="#b8730f", avatar_key="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab.png"
         )
         u2 = await user_repo.update_profile(
-            u2.id, name_color="#1c8ac6", avatar_key="spark"
+            u2.id, name_color="#1c8ac6", avatar_key="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccd.png"
         )
         assert u1 is not None and u2 is not None
 
@@ -261,13 +261,13 @@ async def test_game_history_repository():
             u1.id,
             display_name="RenamedLater",
             name_color="#ef3482",
-            avatar_key="palette",
+            avatar_key="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef.png",
         )
         await user_repo.update_profile(
             u2.id,
             display_name="AlsoRenamed",
             name_color="#ef3c63",
-            avatar_key="initial",
+            avatar_key="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab.png",
         )
 
         # Check user games list with pagination clamping

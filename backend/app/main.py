@@ -21,6 +21,7 @@ from app.api.profiles import create_profile_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.bug_reports import create_bug_report_router
+from app.api.avatars import create_avatar_router
 from app.api.moderation import create_moderation_router
 from app.api.admin_controls import create_admin_controls_router, read_paused
 from app.api.admin_settings import create_admin_settings_router
@@ -556,11 +557,36 @@ api.include_router(
     create_friends_router(async_session_factory, friend_service)
 )
 api.include_router(create_role_notice_router(async_session_factory))
+async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:
+    """A changed picture reaches the seats and the lobby that show it.
+
+    Seats copy the account's identity when they are taken, and the lobby reads
+    it from a cache warmed at the handshake; neither looks again on its own.
+    """
+    forget_presence_identity(user_id)
+    for room in list(room_manager.rooms.values()):
+        changed = False
+        for player in room.players.values():
+            if player.user_id == user_id and not player.is_anonymous:
+                player.avatar_key = avatar_key
+                changed = True
+        if changed:
+            await handler_context.game_flow._emit_room_state(room)
+
+
 api.include_router(
     create_moderation_router(
         async_session_factory,
         on_user_banned=remove_banned_account_from_live_rooms,
         on_user_warned=push_warning_to_account,
+        on_avatar_changed=refresh_avatar_on_live_surfaces,
+    )
+)
+api.include_router(
+    create_avatar_router(
+        user_repo,
+        async_session_factory,
+        on_avatar_changed=refresh_avatar_on_live_surfaces,
     )
 )
 

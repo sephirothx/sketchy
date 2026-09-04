@@ -215,6 +215,7 @@ def test_the_payload_carries_no_room_identifier():
         "userId",
         "displayName",
         "nameColor",
+        "avatarUrl",
         "isAnonymous",
         "status",
     }
@@ -343,6 +344,7 @@ class StubUser:
         self.display_name = name
         self.name_color = None if guest else "#4f9"
         self.is_anonymous = guest
+        self.avatar_key = None
 
 
 @pytest.mark.asyncio

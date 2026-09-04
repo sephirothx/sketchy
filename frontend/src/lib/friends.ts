@@ -18,6 +18,7 @@ export interface FriendEntry {
   userId: string;
   displayName: string;
   nameColor: string | null;
+  avatarUrl: string | null;
   isAnonymous: boolean;
   status: FriendshipStatus;
   /** Which of the two asked. The server sends a boolean, not an id. */
@@ -48,6 +49,7 @@ function parseEntry(value: unknown): FriendEntry | null {
     userId: row.userId,
     displayName: row.displayName,
     nameColor: typeof row.nameColor === "string" ? row.nameColor : null,
+    avatarUrl: typeof row.avatarUrl === "string" ? row.avatarUrl : null,
     isAnonymous: row.isAnonymous === true,
     status: row.status,
     requestedByMe: row.requestedByMe === true,

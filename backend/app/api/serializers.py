@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.auth.avatars import avatar_url
 from app.repositories.interfaces import (
     GameDetail,
     GameSummary,
@@ -32,6 +33,7 @@ def user_payload(user: UserData) -> dict:
         "username": user.username,
         "displayName": user.display_name,
         "nameColor": user.name_color,
+        "avatarUrl": avatar_url(None if user.is_anonymous else user.avatar_key),
         "isAnonymous": user.is_anonymous,
         # The client needs this to decide whether to offer the operator and
         # moderation entries at all. It is not the authorization - every one of

@@ -270,10 +270,6 @@
   max-width: 100%;
 }
 
-.settings-row-error {
-  margin: -4px 0 8px;
-}
-
 /* A value the player cannot change, shown as the value rather than as a
    disabled field pretending to be editable. */
 .settings-readonly {
@@ -326,10 +322,6 @@
 .settings-swatch.is-selected {
   border-color: var(--ink);
   box-shadow: inset 0 0 0 2px var(--card);
-}
-
-.settings-swatch-random {
-  margin-left: 4px;
 }
 
 /* ----------------------------------------------------------------- email */
@@ -838,4 +830,279 @@
   .settings-group {
     padding-inline: 12px;
   }
+}
+
+/* -------------------------------------------------------------------- you */
+
+/* The identity card: the disc large enough to judge a picture by, the name
+   in its own colour - which is the preview - and the palette beneath. One
+   card where three labelled rows with three explanations used to be. */
+.settings-you {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 22px;
+  row-gap: 12px;
+  padding: 6px 0 10px;
+}
+
+@media (max-width: 639px) {
+  .settings-you {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+}
+
+.settings-you-disc {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.settings-you-disc .avatar {
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 4.5px var(--line);
+}
+
+.settings-you-edit {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+}
+
+/* A round pencil on the disc's corner: it reads over any picture, light or
+   dark, without covering the face. The light border is what keeps it a
+   button on a dark picture; the ring behind it lifts it off a light one. */
+.settings-you-edit-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--card), 0 1px 3px rgba(15, 23, 42, 0.3);
+}
+
+.settings-you-edit-chip:hover,
+.settings-you-edit-chip[aria-expanded="true"] {
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.settings-you-edit-chip:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Opens to the right of the button, away from the card's left edge, which
+   would clip it. */
+.settings-you-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 2;
+  width: 180px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-raised);
+  padding: 6px;
+  display: grid;
+  gap: 1px;
+}
+
+.settings-you-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-you-menu button:hover,
+.settings-you-menu button:focus-visible {
+  background: var(--primary-soft);
+}
+
+.settings-you-menu button.is-danger {
+  color: var(--danger);
+}
+
+.settings-you-body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-you .settings-swatches {
+  gap: 7px;
+}
+
+.settings-you-name-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  .settings-you-name-line,
+  .settings-you .settings-swatches {
+    justify-content: center;
+  }
+}
+
+.settings-you-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.settings-you-name-line input[type="search"] {
+  width: 220px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  padding: 8px 11px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  min-height: 38px;
+  min-width: 0;
+  flex: 1 1 160px;
+  max-width: 100%;
+}
+
+/* The real file input is driven by the chip; hidden rather than
+   display:none so assistive tech and the e2e suite can still set a file. */
+.settings-picture-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ crop dialog */
+
+.picture-crop-card {
+  display: grid;
+  justify-items: center;
+}
+
+.picture-crop-card .modal-body {
+  margin-bottom: 14px;
+}
+
+.picture-crop-viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--track);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  max-width: 100%;
+}
+
+.picture-crop-viewport[data-dragging] {
+  cursor: grabbing;
+}
+
+.picture-crop-viewport img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+
+/* Everything outside the disc is dimmed rather than hidden, so the player
+   can see what they are dragging into view. */
+.picture-crop-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.55);
+  pointer-events: none;
+}
+
+.picture-crop-zoom {
+  --volume-track: var(--track);
+  --volume-fill: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 14px 0 6px;
+}
+
+.picture-crop-zoom label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.picture-crop-zoom input[type="range"] {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  flex: 1 1 auto;
+  height: 32px;
+  margin: 0;
+  min-width: 0;
+}
+
+.picture-crop-zoom input[type="range"]::-webkit-slider-runnable-track {
+  background: var(--volume-track);
+  border-radius: 999px;
+  height: 10px;
+}
+
+.picture-crop-zoom input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  background: var(--primary);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  height: 20px;
+  margin-top: -5px;
+  width: 20px;
+}
+
+.picture-crop-zoom input[type="range"]::-moz-range-track {
+  background: var(--volume-track);
+  border: 0;
+  border-radius: 999px;
+  height: 10px;
+}
+
+.picture-crop-zoom input[type="range"]::-moz-range-thumb {
+  background: var(--primary);
+  border: 0;
+  border-radius: 50%;
+  height: 20px;
+  width: 20px;
+}
+
+.picture-crop-card .modal-button {
+  margin-top: 8px;
+  width: 100%;
 }

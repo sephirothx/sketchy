@@ -424,12 +424,15 @@ class ReportPlayerPayload(RequestModel):
     target_player_id: str = Field(
         alias="targetPlayerId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
     )
+    # Every ReportReason, spelled out so the schema is visible here; the
+    # test in tests/test_avatars.py holds the two lists together.
     reason: Literal[
         "harassment",
         "offensive_drawing",
         "inappropriate_name",
         "cheating",
         "spam",
+        "inappropriate_avatar",
     ]
     details: str = Field(min_length=1, max_length=1000)
 

@@ -226,7 +226,8 @@ One row per player identity, guest or registered.
 | `username` VARCHAR(32) | Null for guests; case-insensitively unique via `ix_users_username_lower` |
 | `password_hash` VARCHAR(255) | Argon2id encoded hash, carrying its own algorithm and cost parameters |
 | `display_name` VARCHAR(32) | |
-| `name_color`, `avatar_key` | `avatar_key` ∈ `initial \| pencil \| palette \| spark` |
+| `name_color`, `avatar_key` | `avatar_key` is the content address of the uploaded picture (`<sha256>.webp` or `.png`), or null for the initial (R-AVA-03) |
+| `avatar_upload_blocked_until` | Set when a moderator removed the picture: no upload until then (R-AVA-04) |
 | `state` | `anonymous \| registered \| merged \| deleted` |
 | `role` | `user \| moderator \| admin` |
 | `email`, `email_verified_at` | Nullable; normalized by trim + lowercase, enforced by `ck_users_email_normalized`; case-insensitively unique via `ix_users_email_lower` |
@@ -459,12 +460,26 @@ it, so a terminal row is a delivery record, never a credential. Terminal rows ar
 cd backend && .venv/bin/python -m app.services.mail_delivery   # flush by hand
 ```
 
-### `external_identities`, `uploaded_avatar_assets`
-**Reserved, unused in v1.** Schema for a future authenticated identity provider and a
-future moderated upload flow. No upload or provider-login API is enabled until storage
-validation, moderation, and identity-linking flows ship. Avatars today may only be a
-key from the deployment-hosted catalog — Sketchy never hotlinks arbitrary third-party
-URLs.
+### `uploaded_avatar_assets`
+One account's uploaded picture (#573): `id` · `user_id` (CASCADE, **unique**: one
+picture per account) · `object_key` (indexed, **not** unique: the content address
+`<sha256>.webp` or `.png`, which two accounts uploading the same bytes share, each on
+their own row; also denormalised onto `users.avatar_key` so identity payloads need no
+join) ·
+`content_type` · `byte_size` · `width` · `height` · `checksum_sha256` · `payload`
+(the bytes) · `created_at`.
+
+The bytes live here rather than in object storage because they are small by
+construction — a 256×256 WebP (PNG where the browser cannot encode WebP) under 128 KiB,
+framed and re-encoded by the browser and checked from its header by the server
+(R-AVA-01) — so a whole player base is megabytes: a photograph is ~22 KiB as WebP.
+Replacing a picture replaces the row; the moderator's removal (R-AVA-04) deletes it and
+stamps `users.avatar_upload_blocked_until`; account deletion deletes it in the same
+transaction (R-AVA-05). The export carries the bytes.
+
+### `external_identities`
+**Reserved, unused in v1.** Schema for a future authenticated identity provider. No
+provider-login API is enabled until identity-linking flows ship.
 
 ---
 

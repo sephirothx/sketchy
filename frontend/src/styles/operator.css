@@ -1395,3 +1395,19 @@
   font-weight: 700;
   color: var(--faint);
 }
+
+/* The picture a report may be about, at list size; full size on hover. */
+.mod-context-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  transition: transform 0.15s ease;
+}
+
+.mod-context-avatar:hover {
+  transform: scale(3);
+  border-radius: 8px;
+  position: relative;
+  z-index: 2;
+}

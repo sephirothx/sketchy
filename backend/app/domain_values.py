@@ -226,6 +226,7 @@ class ReportReason(StrEnum):
     INAPPROPRIATE_NAME = "inappropriate_name"
     CHEATING = "cheating"
     SPAM = "spam"
+    INAPPROPRIATE_AVATAR = "inappropriate_avatar"
 
 
 class ReportStatus(StrEnum):

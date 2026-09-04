@@ -90,6 +90,7 @@ export function OnlinePlayersPanel() {
               <Avatar
                 name={entry.displayName}
                 nameColor={entry.nameColor ?? undefined}
+                avatarUrl={entry.avatarUrl}
                 isAnonymous={entry.isAnonymous}
                 size={28}
               />
@@ -135,6 +136,7 @@ export function OnlinePlayersPanel() {
                 <Avatar
                   name={player.displayName}
                   nameColor={player.nameColor ?? undefined}
+                  avatarUrl={player.avatarUrl}
                   isAnonymous={player.isAnonymous}
                   size={28}
                 />

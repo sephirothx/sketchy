@@ -22,7 +22,8 @@ export type ReportReason =
   | "offensive_drawing"
   | "inappropriate_name"
   | "cheating"
-  | "spam";
+  | "spam"
+  | "inappropriate_avatar";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
 
 export interface PlayerReportMessageEvidence {
@@ -45,6 +46,8 @@ export interface PlayerReportMessageEvidence {
 /** The reported player's standing, as a moderator weighs the case. */
 export interface ReportedPlayerContext {
   displayName: string;
+  /** The picture the report may be about, so it can be judged from the queue. */
+  avatarUrl?: string | null;
   registered: boolean;
   createdAt: string;
   priorReports: number;
@@ -130,6 +133,14 @@ export function reviewModerationReport(
     method: "PATCH",
     body: { status, note },
   });
+}
+
+/**
+ * Take down the picture a report is about and block re-uploads for a while.
+ * Reached through the report rather than the account (R-MOD-02).
+ */
+export function removeReportedAvatar(reportId: string): Promise<{ ok: boolean; removed: boolean }> {
+  return apiRequest(`/api/moderation/reports/${reportId}/remove-avatar`, { method: "POST" });
 }
 
 export function createUserBan(input: {

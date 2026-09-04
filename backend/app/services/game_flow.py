@@ -9,6 +9,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from app.auth.avatars import avatar_url
 from app.flow_timing import timing
 from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase
 from app.domain_values import (
@@ -1190,6 +1191,7 @@ class GameFlowService:
                     "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
+                    "avatarUrl": avatar_url(p.avatar_key),
                     "isAnonymous": p.is_anonymous,
                     "score": p.score,
                 }

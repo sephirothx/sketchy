@@ -797,6 +797,17 @@ forgotten it — the change signs every other device out), signed-in devices,
 the data export, and deleting the account, which is its own dialog with the
 password and a typed `DELETE` rather than the bottom of the data export.
 
+A registered player can upload a **picture** to stand in for their initial, from
+**Settings → Account**: the pencil on the disc. The browser lets the player
+frame a square of it — drag to move, zoom to get closer — then shrinks that square
+to 256 pixels and encodes it as WebP (PNG where the browser cannot) before it is
+sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
+checked from its header without decoding it, and serves it only as an image from
+`/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
+picture is a new address. Guests keep the grey initial. A picture can be
+reported, a moderator can remove it through the report, and removal blocks
+uploads for a week. The export carries the bytes; deletion removes them.
+
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the
 player-list panel of both themes, a floor that refuses a colour which vanishes
@@ -907,8 +918,9 @@ it on every attempt.
 ### Reports and suspensions
 
 Any signed-in player, including a guest account, can submit a private **Report**
-with `POST /api/reports`. Reports use one of five bounded reasons—harassment,
-offensive drawing, inappropriate name, cheating, or spam—plus up to 2,000
+with `POST /api/reports`. Reports use one of six bounded reasons—harassment,
+offensive drawing, inappropriate name, cheating, spam, or inappropriate
+picture—plus up to 2,000
 characters of detail and an optional 32 KiB JSON context snapshot. Game and
 turn references are validated when supplied. Submitted context is preserved as
 versioned, reporter-supplied evidence; it is not treated as a server-verified
@@ -1169,7 +1181,7 @@ Install `requirements-dev.txt` instead when you plan to run unit, integration, o
 
 ```bash
 cd frontend
-npm install
+npm install --no-audit   # the audit POST hangs on some networks; the install itself is instant
 npm run dev
 ```
 

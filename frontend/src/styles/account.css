@@ -762,3 +762,19 @@
   background: var(--danger);
   box-shadow: none;
 }
+
+/* The identity chip and the profile disc show the uploaded picture too. */
+.identity-avatar.has-picture,
+.profile-avatar.has-picture {
+  overflow: hidden;
+  padding: 0;
+}
+
+.identity-avatar.has-picture img,
+.profile-avatar.has-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}

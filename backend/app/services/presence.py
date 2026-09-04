@@ -30,6 +30,7 @@ from dataclasses import dataclass
 import logging
 import os
 
+from app.auth.avatars import avatar_url
 from app.repositories.interfaces import UserRepository
 from app.services.lobby_rooms import (
     EMPTY_ROOMS,
@@ -99,6 +100,7 @@ class PresenceIdentity:
     display_name: str
     name_color: str | None
     is_anonymous: bool
+    avatar_key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +112,7 @@ class PresenceEntry:
     name_color: str | None
     is_anonymous: bool
     status: str
+    avatar_key: str | None = None
 
     def payload(self) -> dict:
         """The wire shape.
@@ -125,6 +128,7 @@ class PresenceEntry:
             "userId": self.user_id,
             "displayName": self.display_name,
             "nameColor": self.name_color,
+            "avatarUrl": avatar_url(self.avatar_key),
             "isAnonymous": self.is_anonymous,
             "status": self.status,
         }
@@ -396,6 +400,7 @@ def build_snapshot(
             name_color=identity.name_color,
             is_anonymous=identity.is_anonymous,
             status=STATUS_PLAYING if user_id in seated else STATUS_LOBBY,
+            avatar_key=identity.avatar_key,
         )
         for user_id in online
         if (identity := identities.get(user_id)) is not None
@@ -506,6 +511,7 @@ class PresenceIdentityCache:
                 display_name=user.display_name,
                 name_color=user.name_color,
                 is_anonymous=user.is_anonymous,
+                avatar_key=None if user.is_anonymous else user.avatar_key,
             ),
             key=user_id,
         )

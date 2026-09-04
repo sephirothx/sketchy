@@ -9,6 +9,7 @@ import type { RoomSummary } from "../types";
 interface RosterEntry {
   nickname: string;
   nameColor?: string;
+  avatarUrl?: string | null;
   isAnonymous?: boolean;
   isHost?: boolean;
 }
@@ -120,6 +121,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
                     <Avatar
                       name={player.nickname}
                       nameColor={player.nameColor}
+                      avatarUrl={player.avatarUrl}
                       isAnonymous={player.isAnonymous}
                       size={22}
                     />

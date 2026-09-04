@@ -29,7 +29,6 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.auth.avatars import BUILT_IN_AVATAR_KEYS
 from app.db.types import UTCDateTime
 from app.domain_values import (
     BugReportScreenshotStatus,
@@ -264,9 +263,6 @@ class User(Base):
         ),
         _values_check("state", ACCOUNT_STATES, "ck_users_state"),
         _values_check("role", USER_ROLES, "ck_users_role"),
-        _values_check(
-            "avatar_key", BUILT_IN_AVATAR_KEYS, "ck_users_avatar_key"
-        ),
         Index("ix_users_state_last_active_at", "state", "last_active_at"),
         CheckConstraint(
             "email IS NULL OR email = lower(trim(email))",
@@ -285,7 +281,14 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(32), nullable=False)
     name_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    avatar_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # The content address of the uploaded picture (`<sha256>.webp` or `.png`), or none.
+    # Denormalised from uploaded_avatar_assets so every identity payload can
+    # carry the URL without a join (#573).
+    avatar_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Set when a moderator removed the picture: no upload until then.
+    avatar_upload_blocked_until: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
     state: Mapped[str] = mapped_column(
         String(16),
         default=AccountState.ANONYMOUS.value,
@@ -1481,7 +1484,14 @@ class IdentityAlias(Base):
 
 
 class UploadedAvatarAsset(Base):
-    """Reserved ownership/metadata row for a future moderated upload flow."""
+    """One account's uploaded picture: the bytes and what they are (#573).
+
+    Small by construction - 256×256 WebP or PNG, 128 KiB at most - which is what keeps
+    the bytes in the primary database defensible until object storage (#471)
+    exists. `object_key` is the content address the picture is served under:
+    indexed for the fetch, not unique, because two accounts uploading the
+    same bytes hold the same address and each keeps their own row.
+    """
 
     __tablename__ = "uploaded_avatar_assets"
 
@@ -1494,12 +1504,13 @@ class UploadedAvatarAsset(Base):
         nullable=False,
         unique=True,
     )
-    object_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    object_key: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
     content_type: Mapped[str] = mapped_column(String(64), nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

@@ -40,16 +40,18 @@ def upgrade() -> None:
     """Invalidate external hotlinks and reserve future identity asset tables."""
     op.execute("UPDATE users SET avatar_url = NULL")
     with op.batch_alter_table("users") as batch_op:
+        # The content address of an uploaded picture (#573): `<sha256>.webp` or `.png`.
         batch_op.alter_column(
             "avatar_url",
             new_column_name="avatar_key",
             existing_type=sa.String(length=512),
-            type_=sa.String(length=32),
+            type_=sa.String(length=80),
             existing_nullable=True,
         )
-        batch_op.create_check_constraint(
-            "ck_users_avatar_key",
-            "avatar_key IN ('initial', 'pencil', 'palette', 'spark')",
+        batch_op.add_column(
+            sa.Column(
+                "avatar_upload_blocked_until", sa.DateTime(timezone=True), nullable=True
+            )
         )
     _restore_expression_indexes_on_sqlite()
 
@@ -63,6 +65,7 @@ def upgrade() -> None:
         sa.Column("width", sa.Integer(), nullable=False),
         sa.Column("height", sa.Integer(), nullable=False),
         sa.Column("checksum_sha256", sa.String(length=64), nullable=False),
+        sa.Column("payload", sa.LargeBinary(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -71,8 +74,15 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("object_key"),
         sa.UniqueConstraint("user_id"),
+    )
+    # Not unique: the same bytes are the same address for every account
+    # that uploads them (R-AVA-03), and each account keeps its own row.
+    op.create_index(
+        op.f("ix_uploaded_avatar_assets_object_key"),
+        "uploaded_avatar_assets",
+        ["object_key"],
+        unique=False,
     )
     op.create_table(
         "external_identities",
@@ -105,13 +115,16 @@ def downgrade() -> None:
         op.f("ix_external_identities_user_id"), table_name="external_identities"
     )
     op.drop_table("external_identities")
+    op.drop_index(
+        op.f("ix_uploaded_avatar_assets_object_key"), table_name="uploaded_avatar_assets"
+    )
     op.drop_table("uploaded_avatar_assets")
     with op.batch_alter_table("users") as batch_op:
-        batch_op.drop_constraint("ck_users_avatar_key", type_="check")
+        batch_op.drop_column("avatar_upload_blocked_until")
         batch_op.alter_column(
             "avatar_key",
             new_column_name="avatar_url",
-            existing_type=sa.String(length=32),
+            existing_type=sa.String(length=80),
             type_=sa.String(length=512),
             existing_nullable=True,
         )

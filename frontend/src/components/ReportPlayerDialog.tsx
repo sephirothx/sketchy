@@ -11,6 +11,7 @@ const REASONS: { value: ReportReason; label: string }[] = [
   { value: "inappropriate_name", label: "Inappropriate name" },
   { value: "cheating", label: "Cheating" },
   { value: "spam", label: "Spam" },
+  { value: "inappropriate_avatar", label: "Inappropriate picture" },
 ];
 
 /** Report somebody in this room.

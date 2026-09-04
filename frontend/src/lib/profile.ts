@@ -18,6 +18,7 @@ export interface GameParticipant {
   userId: string | null;
   displayName: string;
   nameColor: string | null;
+  avatarUrl?: string | null;
   isAnonymous: boolean;
   finalScore: number;
   // Null for abandoned games: no placing in a game that never ended.
@@ -48,6 +49,7 @@ export interface TurnGuess {
   seatId: string | null;
   displayName: string;
   nameColor: string | null;
+  avatarUrl?: string | null;
   isAnonymous: boolean;
   pointsAwarded: number;
   guessTimeSeconds: number;

@@ -15,6 +15,8 @@ export interface AuthUser {
   username: string | null;
   displayName: string;
   nameColor: string | null;
+  /** The uploaded picture's URL (#573), or null for the initial. */
+  avatarUrl: string | null;
   isAnonymous: boolean;
   /** Decides which staff entries the menu offers. Never the authorization -
       every endpoint behind them checks the role again for itself. */
