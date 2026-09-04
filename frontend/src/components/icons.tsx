@@ -51,6 +51,9 @@ export function VolumeIcon(p: IconProps) { return <IconBase {...p}><path d="M11 
 export function EyeOffIcon(p: IconProps) { return <IconBase {...p}><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17.5 17.5 0 0 1-3.2 4.1" /><path d="M6.6 6.6C3.9 8.5 2 12 2 12s3.5 7 10 7c1.6 0 3-.4 4.3-1" /></IconBase>; }
 export function MoonIcon(p: IconProps) { return <IconBase {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></IconBase>; }
 export function CrownIcon(p: IconProps) { return <IconBase {...p}><path d="M3 17h18l-1-9-4.5 3.5L12 6l-3.5 5.5L4 8l-1 9Z" /><path d="M4 21h16" /></IconBase>; }
+/** The crown alone, without its base line: the avatar mark (#574), where a
+    filled silhouette is all there is room for. */
+export function CrownMarkIcon(p: IconProps) { return <IconBase {...p}><path d="M3 18h18l-1-10-4.5 3.5L12 6l-3.5 5.5L4 8l-1 10Z" /></IconBase>; }
 export function CheckIcon(p: IconProps) { return <IconBase {...p}><path d="M4 12.5 9.5 18 20 6.5" /></IconBase>; }
 export function ClockIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></IconBase>; }
 export function UserIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></IconBase>; }

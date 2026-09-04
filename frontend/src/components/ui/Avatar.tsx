@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { CrownIcon } from "../icons";
+import { CrownMarkIcon } from "../icons";
 
 interface AvatarProps {
   name: string;
@@ -65,7 +65,7 @@ export function Avatar({
     <span className="avatar-frame" aria-hidden="true">
       {disc}
       <span className="avatar-crown">
-        <CrownIcon size={crown} strokeWidth={2} />
+        <CrownMarkIcon size={crown} strokeWidth={2} />
       </span>
     </span>
   );
