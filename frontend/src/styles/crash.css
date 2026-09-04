@@ -1,0 +1,64 @@
+/* The crash page: the not-found card again, with a report form under the two
+   ways out. It shares the `.not-found-*` recipes because it is the same object
+   - a canvas nobody meant to draw on - and differs only in what sits below. */
+
+/* Under the report, and only once it has gone (or could not go). */
+.crash-actions {
+  border-top: 1.5px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.crash-actions .btn {
+  flex: 1 1 150px;
+}
+
+.crash-report {
+  border-top: 1.5px solid var(--line);
+  margin-top: 0;
+  padding-top: 18px;
+}
+
+.crash-report .modal-button {
+  margin-top: 10px;
+}
+
+.crash-report h2 {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.crash-report .auth-hint {
+  margin-bottom: 8px;
+}
+
+/* Long enough for a sentence, and 16px so iOS does not zoom the field. */
+.crash-report .report-details {
+  font-size: 16px;
+  min-height: 84px;
+  padding: 10px 12px;
+}
+
+.crash-optional {
+  color: var(--faint);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.crash-report .bug-console-log {
+  text-align: left;
+}
+
+.crash-sent {
+  color: var(--success-ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 10px 0 0;
+  text-align: center;
+}

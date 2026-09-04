@@ -36,6 +36,7 @@ import {
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import { recordRender } from "../lib/renderDiagnostics";
+import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
 
 export function ActiveGameRoom({ code }: { code: string }) {
@@ -471,6 +472,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
         />
       )}
 
+      {/* Nothing in a production build; the E2E suite's way to crash the room. */}
+      <CrashProbe scope="room" />
       <RoomShell
         mode={roomView}
         players={

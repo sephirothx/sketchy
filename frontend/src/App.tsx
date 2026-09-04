@@ -25,6 +25,7 @@ import { SuspensionNotice } from "./components/SuspensionNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
 import { WarningNotice } from "./components/WarningNotice";
 import { XIcon } from "./components/icons";
+import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
 import { useFriendsStore } from "./store/friendsStore";
 import { socket } from "./lib/socket";
@@ -229,6 +230,8 @@ function App() {
           <button type="button" aria-label="Dismiss" onClick={() => setRestarted(false)}><XIcon size={14} /></button>
         </div>
       )}
+      {/* Nothing in a production build; the E2E suite's way to crash the app. */}
+      <CrashProbe scope="app" />
       <ConnectionStatusBanner />
       <EmailRecoveryReminder />
       <SuspensionNotice />

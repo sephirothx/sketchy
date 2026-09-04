@@ -5,6 +5,7 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from "./notFoundArt";
+import { CRASH_PATHS, CRASH_VIEWBOX } from "./crashArt";
 import {
   FERRULE_PATHS,
   LETTERING_GRADIENT,
@@ -209,6 +210,25 @@ export function NotFoundDoodle() {
       style={{ display: "block" }}
     >
       {NOT_FOUND_PATHS.map(({ fill, d }) => (
+        <path key={d} d={d} fill={fill} />
+      ))}
+    </svg>
+  );
+}
+
+/** The ladybird on the crash page. Same pipeline and same rules as the 404
+    drawing: authored in scripts/brand, painted in the drawing palette, hung on
+    a white sheet. */
+export function BugDoodle() {
+  return (
+    <svg
+      viewBox={CRASH_VIEWBOX}
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "block" }}
+    >
+      {CRASH_PATHS.map(({ fill, d }) => (
         <path key={d} d={d} fill={fill} />
       ))}
     </svg>

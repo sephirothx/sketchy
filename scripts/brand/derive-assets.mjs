@@ -279,100 +279,163 @@ ${found.ferrule.map((d) => `      <path d="${d}" fill="${OG_FER}"/>`).join("\n")
 console.log("wrote scripts/brand/raster/{icon-square,icon-maskable,og-image}.svg");
 
 /* --------------------------------------------------------- not-found doodle */
-// scripts/brand/sketchy-404-source.svg is the drawing on the not-found page:
-// a hand-drawn 404 with a swash under it and four sparks around it.
+// ------------------------------------------------------------- the doodles
 //
-// It is painted in literal colours rather than theme tokens, because it is a
-// drawing *on the canvas* - and `.canvas-stack` is a white sheet in both
+// Two drawings hang on a canvas sheet: the hand-drawn 404 on the not-found page
+// (scripts/brand/sketchy-404-source.svg - numerals, a swash, four sparks) and
+// the ladybird on the crash page (scripts/brand/sketchy-bug-source.svg).
+//
+// They are painted in literal colours rather than theme tokens, because each is
+// a drawing *on the canvas* - and `.canvas-stack` is a white sheet in both
 // themes, so ink chosen to respond to the theme would only get weaker on the
-// one ground it ever sits on. The source's flat RGB primaries are the author's
+// one ground it ever sits on. The sources' flat RGB primaries are the author's
 // placeholders; each maps to the same-family swatch from COLOR_PAIRS in
 // frontend/src/lib/drawingRules.ts, which is what a player would have had to
 // hand - except the yellow spark, which is Stefano's own brighter yellow.
 //
 // Matched by ROLE - the fill literal - and not by id, for the same reason the
 // logo is: Inkscape renumbers ids on every re-export.
-const DOODLE_PAINT = {
-  // numerals and swash: the palette's blue and orange.
-  "#0000ff": "#3f48cc",
-  "#ff6600": "#ff7f27",
-  // sparks. Yellow is picked rather than taken from COLOR_PAIRS: chosen for
-  // the drawing, and lighter than the palette's own #fff200.
-  "#ff0000": "#ed1c24",
-  "#ffff00": "#fbec5d",
-  "#00ff00": "#22b14c",
-  "#00ffff": "#7ac9e8",
+const PALETTE = {
+  black: "#000000",
+  white: "#ffffff",
+  red: "#ed1c24",
+  orange: "#ff7f27",
+  green: "#22b14c",
+  sky: "#7ac9e8",
+  blue: "#3f48cc",
 };
-const DOODLE_EXPECTED = { "#0000ff": 5, "#ff6600": 1, "#ff0000": 1, "#ffff00": 1, "#00ff00": 1, "#00ffff": 1 };
 
-const doodleSource = readFileSync(join(here, "sketchy-404-source.svg"), "utf8");
-const doodlePaths = [];
-const doodleSeen = {};
+function deriveDoodle({ label, sourceFile, paint, expected, constPrefix, tsFile, mjsFile }) {
+  const source = readFileSync(join(here, sourceFile), "utf8");
+  const paths = [];
+  const seen = {};
 
-for (const m of doodleSource.matchAll(/<path\b([\s\S]*?)\/>/g)) {
-  const attrs = m[1];
-  const d = attrs.match(/\sd="([^"]+)"/)?.[1];
-  const fill = attrs.match(/fill:\s*([^;"]+)/)?.[1]?.trim().toLowerCase();
-  if (!d || !fill) continue;
-  const paint = DOODLE_PAINT[fill];
-  if (!paint) throw new Error(`404 art: no palette mapping for the authored fill ${fill}`);
-  doodleSeen[fill] = (doodleSeen[fill] ?? 0) + 1;
-  doodlePaths.push({ d: d.replace(/\s+/g, " ").trim(), fill: paint });
-}
+  // Inkscape writes a dot as <circle>; the shipped component is a flat list
+  // of paths, so a circle becomes two arcs. A radius under a tenth of a
+  // millimetre is a stray click left in the drawing, not a mark - a real dot
+  // in either source is over 1.5 mm - and it is skipped rather than shipped.
+  const STRAY_RADIUS_MM = 0.1;
+  const circlePath = (cx, cy, r) =>
+    `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0 Z`;
+  let strays = 0;
 
-for (const [fill, count] of Object.entries(DOODLE_EXPECTED)) {
-  if (doodleSeen[fill] !== count) {
-    throw new Error(`404 art: expected ${count} path(s) filled ${fill}, found ${doodleSeen[fill] ?? 0} - a re-export changed the paint`);
+  for (const m of source.matchAll(/<(path|circle)\b([\s\S]*?)\/>/g)) {
+    const [, tag, attrs] = m;
+    const fill = attrs.match(/fill:\s*([^;"]+)/)?.[1]?.trim().toLowerCase();
+    if (!fill) continue;
+    let d;
+    if (tag === "path") {
+      d = attrs.match(/\sd="([^"]+)"/)?.[1];
+    } else {
+      const num = (name) => Number(attrs.match(new RegExp(`\\s${name}="([^"]+)"`))?.[1]);
+      const r = num("r");
+      if (!(r > STRAY_RADIUS_MM)) { strays += 1; continue; }
+      d = circlePath(num("cx"), num("cy"), r);
+    }
+    if (!d) continue;
+    const colour = paint[fill];
+    if (!colour) throw new Error(`${label}: no palette mapping for the authored fill ${fill}`);
+    seen[fill] = (seen[fill] ?? 0) + 1;
+    paths.push({ d: d.replace(/\s+/g, " ").trim(), fill: colour });
   }
-}
+  if (strays) console.log(`${label}: skipped ${strays} stray dot(s) under ${STRAY_RADIUS_MM} mm`);
 
-// The artwork sits inside one translated layer. Baking that translate into the
-// viewBox origin is exactly equivalent and leaves the paths untouched, so the
-// shipped component is a flat list of paths with no wrapper transform.
-const shift = doodleSource.match(/transform="translate\(([-\d.]+),([-\d.]+)\)"/g);
-if (!shift || shift.length !== 1) {
-  throw new Error(`404 art: expected exactly one translated layer, found ${shift?.length ?? 0}`);
-}
-const [, dx, dy] = doodleSource.match(/transform="translate\(([-\d.]+),([-\d.]+)\)"/);
-const [, dw, dh] = doodleSource.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
-const doodleViewBox = `${-Number(dx)} ${-Number(dy)} ${dw} ${dh}`;
+  for (const [fill, count] of Object.entries(expected)) {
+    if (seen[fill] !== count) {
+      throw new Error(`${label}: expected ${count} path(s) filled ${fill}, found ${seen[fill] ?? 0} - a re-export changed the paint`);
+    }
+  }
 
-const doodleHeader = `// GENERATED by scripts/brand/derive-assets.mjs — do not edit by hand.
-// Source artwork: scripts/brand/sketchy-404-source.svg
+  // The artwork sits inside one translated layer. Baking that translate into
+  // the viewBox origin is exactly equivalent and leaves the paths untouched, so
+  // the shipped component is a flat list of paths with no wrapper transform.
+  const shift = source.match(/transform="translate\(([-\d.]+),([-\d.]+)\)"/g);
+  if (!shift || shift.length !== 1) {
+    throw new Error(`${label}: expected exactly one translated layer, found ${shift?.length ?? 0}`);
+  }
+  const [, dx, dy] = source.match(/transform="translate\(([-\d.]+),([-\d.]+)\)"/);
+  const [, dw, dh] = source.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+  const viewBox = `${-Number(dx)} ${-Number(dy)} ${dw} ${dh}`;
+
+  const header = `// GENERATED by scripts/brand/derive-assets.mjs — do not edit by hand.
+// Source artwork: scripts/brand/${sourceFile}
 //
 // Geometry is the authored drawing, untouched; the layer's translate is baked
 // into the viewBox origin instead. The paint is the game's drawing palette,
 // not theme tokens: this hangs on the canvas sheet, which is white in both
 // themes.`;
 
-const doodleEntries = doodlePaths
-  .map(({ d, fill }) => `  { fill: "${fill}", d: "${d}" },`)
-  .join("\n");
+  const entries = paths
+    .map(({ d, fill }) => `  { fill: "${fill}", d: "${d}" },`)
+    .join("\n");
 
-writeFileSync(
-  join(repo, "frontend", "src", "components", "notFoundArt.ts"),
-  `${doodleHeader}
+  writeFileSync(
+    join(repo, "frontend", "src", "components", tsFile),
+    `${header}
 
 /** The authored page box, with the layer translate folded into its origin. */
-export const NOT_FOUND_VIEWBOX = "${doodleViewBox}";
+export const ${constPrefix}_VIEWBOX = "${viewBox}";
 
 /** Every path in source order, each with the palette colour it is painted. */
-export const NOT_FOUND_PATHS: readonly { fill: string; d: string }[] = [
-${doodleEntries}
+export const ${constPrefix}_PATHS: readonly { fill: string; d: string }[] = [
+${entries}
 ] as const;
 `,
-);
+  );
 
-writeFileSync(
-  join(repo, "docs", "ui-mockups", "tools", "notFoundArt.mjs"),
-  `${doodleHeader}
-export const NOT_FOUND_VIEWBOX = "${doodleViewBox}";
-export const NOT_FOUND_PATHS = [
-${doodleEntries}
+  writeFileSync(
+    join(repo, "docs", "ui-mockups", "tools", mjsFile),
+    `${header}
+export const ${constPrefix}_VIEWBOX = "${viewBox}";
+export const ${constPrefix}_PATHS = [
+${entries}
 ];
 `,
-);
+  );
 
-console.log(`404 art: ${doodlePaths.length} paths, viewBox ${doodleViewBox}`);
-console.log("wrote frontend/src/components/notFoundArt.ts");
-console.log("wrote docs/ui-mockups/tools/notFoundArt.mjs");
+  console.log(`${label}: ${paths.length} paths, viewBox ${viewBox}`);
+  console.log(`wrote frontend/src/components/${tsFile}`);
+  console.log(`wrote docs/ui-mockups/tools/${mjsFile}`);
+}
+
+deriveDoodle({
+  label: "404 art",
+  sourceFile: "sketchy-404-source.svg",
+  paint: {
+    // numerals and swash: the palette's blue and orange.
+    "#0000ff": PALETTE.blue,
+    "#ff6600": PALETTE.orange,
+    // sparks. Yellow is picked rather than taken from COLOR_PAIRS: chosen for
+    // the drawing, and lighter than the palette's own #fff200.
+    "#ff0000": PALETTE.red,
+    "#ffff00": "#fbec5d",
+    "#00ff00": PALETTE.green,
+    "#00ffff": PALETTE.sky,
+  },
+  expected: { "#0000ff": 5, "#ff6600": 1, "#ff0000": 1, "#ffff00": 1, "#00ff00": 1, "#00ffff": 1 },
+  constPrefix: "NOT_FOUND",
+  tsFile: "notFoundArt.ts",
+  mjsFile: "notFoundArt.mjs",
+});
+
+// The crash page's ladybird, Stefano's Inkscape drawing: a red shell, a black
+// head with two sky-blue eyes and a white grin, seven spots, six legs, two
+// antennae, a blue zigzag it has just crawled along and two orange sparks.
+// The counts pin the drawing's anatomy, so a re-export that drops a leg is
+// caught; the three stray dots in the source are skipped by radius above.
+deriveDoodle({
+  label: "bug art",
+  sourceFile: "sketchy-bug-source.svg",
+  paint: {
+    "#e00000": PALETTE.red,
+    "#000000": PALETTE.black,
+    "#ffffff": PALETTE.white,
+    "#00ffff": PALETTE.sky,
+    "#0000ff": PALETTE.blue,
+    "#ff6600": PALETTE.orange,
+  },
+  expected: { "#e00000": 1, "#000000": 17, "#ffffff": 1, "#00ffff": 2, "#0000ff": 1, "#ff6600": 2 },
+  constPrefix: "CRASH",
+  tsFile: "crashArt.ts",
+  mjsFile: "crashArt.mjs",
+});
