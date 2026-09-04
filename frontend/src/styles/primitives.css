@@ -212,8 +212,8 @@
   display: inline-flex;
   line-height: 0;
   position: absolute;
-  right: -4px;
-  top: -5px;
+  right: -6px;
+  top: -7px;
 }
 
 /* A stroked crown at 12 px is a scribble; filling it keeps the silhouette,

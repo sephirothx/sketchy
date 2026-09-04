@@ -60,7 +60,7 @@ export function Avatar({
   );
   if (!isHost) return disc;
   // The crown scales with the disc but never below a size it survives.
-  const crown = Math.max(12, Math.round(size * 0.38));
+  const crown = Math.max(12, Math.round(size * 0.52));
   return (
     <span className="avatar-frame" aria-hidden="true">
       {disc}
