@@ -163,6 +163,19 @@ async def test_a_registered_player_wears_a_doodle_in_the_deployment_s_ink(env):
     assert (await guest.put("/api/users/me/avatar/doodle", json={"name": "fox"})).status_code == 403
 
 
+async def test_a_new_account_starts_with_a_doodle(env):
+    """Claiming an account gives it a random doodle (R-AVA-06), so a
+    registered player looks claimed from their first seat; a guest keeps
+    the initial that marks them (R-ACCT-05)."""
+    new_client, _ = env
+    http = new_client()
+    guest = (await http.post("/api/auth/display-name", json={"displayName": "Newcomer"})).json()
+    assert guest["avatarUrl"] is None
+    registered = await register(http, "Newcomer")
+    assert registered["avatarUrl"].startswith("/avatars/doodles.svg#")
+    assert registered["avatarUrl"].split("#")[1] in DOODLES
+
+
 async def test_a_doodle_replaces_an_upload_and_an_upload_replaces_a_doodle(env):
     new_client, factory = env
     http = new_client()

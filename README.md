@@ -806,7 +806,8 @@ checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. The same pencil offers a **doodle** instead: one of two
 dozen drawings of Sketchy's own, drawn in the player's name color, stored as
-nothing but its name. Guests keep the grey initial. A picture can be
+nothing but its name; a new account starts with a random one. Guests keep the
+grey initial. A picture can be
 reported, a moderator can remove it through the report, and removal blocks
 uploads for a week. The export carries the bytes; deletion removes them.
 
