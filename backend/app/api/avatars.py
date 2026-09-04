@@ -83,7 +83,9 @@ def create_avatar_router(
         try:
             payload = base64.b64decode(body.image, validate=True)
         except (binascii.Error, ValueError) as error:
-            raise HTTPException(status_code=400, detail="That is not a PNG picture.") from error
+            raise HTTPException(
+                status_code=400, detail="That is not a WebP or PNG picture."
+            ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
             key = await set_avatar(

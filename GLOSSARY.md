@@ -85,7 +85,7 @@ Three different things, never used for one another:
 | **Username** | The account login name, chosen when an account is claimed. A registered player's nickname is always their username. | user ID, login |
 | **Display name** | The name saved on an account and used as the default nickname. | profile name, real name |
 | **Time format** | The **Player setting** deciding how every clock and date-time reads to that player: **System** (the device's own convention, the default), **12-hour**, or **24-hour**. One formatter serves chat timestamps, sign-in dates, notices and operator pages alike. | clock format, hour format, AM/PM setting |
-| **Picture** | A registered player's uploaded avatar, shown in the disc beside their name wherever it appears. Cropped and shrunk by the browser to 256×256, checked and served by the server only as an image, content-addressed so it caches for ever. Guests keep the grey initial. Reportable as **Inappropriate picture**; a moderator removes it through the report and the account cannot upload again for a week. | avatar (in UI copy), profile photo, image |
+| **Picture** | A registered player's uploaded avatar, shown in the disc beside their name wherever it appears. Framed by the player (drag and zoom), then shrunk by the browser to 256×256 WebP (PNG where it cannot), checked and served by the server only as an image, content-addressed so it caches for ever. Guests keep the grey initial. Reportable as **Inappropriate picture**; a moderator removes it through the report and the account cannot upload again for a week. | avatar (in UI copy), profile photo, image |
 | **Name color** | The color a player's name renders in. Guests have no name color. | name colour, player color |
 
 ## The prompt

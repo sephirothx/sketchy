@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
@@ -7,9 +14,9 @@ import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
-import { AvatarInputError, preparePicture, removeAvatar, uploadAvatar } from "../lib/avatars";
+import { removeAvatar, uploadAvatar } from "../lib/avatars";
 import { useToast } from "../lib/toast";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
   SETTINGS_SECTIONS,
@@ -23,6 +30,7 @@ import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
+import { PictureCropDialog } from "./PictureCropDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
 import { Avatar } from "./ui/Avatar";
@@ -58,9 +66,11 @@ import {
   KeyboardIcon,
   LockIcon,
   MailIcon,
+  PencilIcon,
   PlusIcon,
   RectIcon,
   SunIcon,
+  TrashIcon,
   TriangleIcon,
   UndoIcon,
   UserIcon,
@@ -285,6 +295,114 @@ function EmailAddressStatus({
   );
 }
 
+/**
+ * The "Edit" chip on the disc. With no picture it opens the file picker;
+ * with one it opens a two-item menu, because "Remove" needs a home once the
+ * picture row is gone. The menu is a real menu: Escape, outside click and
+ * the arrow keys all work, the way the account menu's do.
+ */
+function PictureEditChip({
+  hasPicture,
+  busy,
+  onChoose,
+  onRemove,
+}: {
+  hasPicture: boolean;
+  busy: boolean;
+  onChoose: (file: File | undefined) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const menuId = useId();
+
+  useEscapeLayer(open, () => setOpen(false));
+  useFocusTrap(menuRef, { active: open });
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [open]);
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
+    if (!items.length) return;
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      items[(index + step + items.length) % items.length]?.focus();
+    }
+  }
+
+  function pick() {
+    setOpen(false);
+    inputRef.current?.click();
+  }
+
+  return (
+    <div className="settings-you-edit" ref={rootRef}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="settings-picture-input"
+        aria-label="Choose a picture"
+        onChange={(event) => {
+          onChoose(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        className="settings-you-edit-chip"
+        disabled={busy}
+        aria-haspopup={hasPicture ? "menu" : undefined}
+        aria-expanded={hasPicture ? open : undefined}
+        aria-controls={hasPicture && open ? menuId : undefined}
+        onClick={() => (hasPicture ? setOpen((shown) => !shown) : pick())}
+      >
+        <PencilIcon size={13} />
+        {busy ? "Working…" : "Edit"}
+      </button>
+      {hasPicture && open && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          className="settings-you-menu"
+          role="menu"
+          aria-label="Picture"
+          tabIndex={-1}
+          onKeyDown={handleMenuKeyDown}
+        >
+          <button type="button" role="menuitem" onClick={pick}>
+            <ImageIcon size={15} />
+            Change picture
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="is-danger"
+            onClick={() => {
+              setOpen(false);
+              onRemove();
+            }}
+          >
+            <TrashIcon size={15} />
+            Remove picture
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const user = useAuthStore((state) => state.user);
   const setDisplayName = useAuthStore((state) => state.setDisplayName);
@@ -300,29 +418,17 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [nameError, setNameError] = useState<string | null>(null);
   const [pictureBusy, setPictureBusy] = useState(false);
   const [pictureError, setPictureError] = useState<string | null>(null);
-  const pictureInputRef = useRef<HTMLInputElement | null>(null);
+  // A chosen file opens the crop dialog; the dialog uploads what was framed.
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [editingName, setEditingName] = useState(false);
 
-  async function choosePicture(file: File | undefined) {
-    if (!file || pictureBusy) return;
-    setPictureBusy(true);
+  async function usePicture(base64: string) {
+    // The dialog shows the server's reason - "too large", "a moderator
+    // removed your picture" - itself, and stays open for another try.
+    await uploadAvatar(base64);
+    await useAuthStore.getState().fetchMe();
+    setPendingFile(null);
     setPictureError(null);
-    try {
-      const { base64 } = await preparePicture(file);
-      await uploadAvatar(base64);
-      await useAuthStore.getState().fetchMe();
-    } catch (error) {
-      // The server's reason when it has one - "too large", "a moderator
-      // removed your picture" - and the browser's when the file never got
-      // that far.
-      setPictureError(
-        error instanceof AvatarInputError || error instanceof ApiError
-          ? error.message
-          : "Could not set that picture. Please try again.",
-      );
-    } finally {
-      setPictureBusy(false);
-      if (pictureInputRef.current) pictureInputRef.current.value = "";
-    }
   }
 
   async function dropPicture() {
@@ -341,7 +447,6 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
     }
   }
   const [nameBusy, setNameBusy] = useState(false);
-  const [nameSaved, setNameSaved] = useState(false);
   // Arriving straight at /settings/account beats `GET /api/auth/me`, so the
   // field would otherwise start empty and stay empty. It follows the account's
   // own name whenever that changes - including turning up - and leaves typing
@@ -405,8 +510,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       } else {
         await setDisplayName(trimmed);
       }
-      setNameSaved(true);
-      window.setTimeout(() => setNameSaved(false), 2500);
+      setEditingName(false);
     } catch (error) {
       // The server's reason - "that name belongs to a registered player" is
       // the whole point of the check, and a generic line would leave the
@@ -475,160 +579,139 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       )}
 
       <Group title="You">
-        {isGuest ? (
-          <Row
-            label="Display name"
-            hint="What the other players see. Kept in this browser only."
-          >
-            <input
-              id="settings-display-name"
-              type="search"
-              inputMode="text"
-              value={draftName}
-              onChange={(event) => {
-                setDraftName(event.target.value);
-                setNameError(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void saveDisplayName();
-              }}
-              maxLength={MAX_NICKNAME_LENGTH}
-              autoComplete="nickname"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              aria-label="Display name"
-              aria-describedby={nameError ? "settings-name-error" : undefined}
+        {/* The identity card: disc, name in its colour, palette. A registered
+            player always plays as their username (R-ACCT-05), so only a guest
+            gets a way to change the name; and only an account gets a picture
+            or a colour, because the grey initial is what marks a guest. */}
+        <div className="settings-you">
+          <div className="settings-you-disc">
+            <Avatar
+              name={user?.displayName ?? ""}
+              nameColor={isGuest ? undefined : nameColor}
+              avatarUrl={user?.avatarUrl}
+              isAnonymous={isGuest}
+              size={96}
             />
-            {/* One of the rows the server can refuse - the name may belong to
-                a registered player - so it keeps a button where every other
-                row applies at once (R-SET-05). */}
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              disabled={nameBusy || draftName.trim() === (user?.displayName ?? "")}
-              onClick={() => void saveDisplayName()}
-            >
-              {nameBusy ? "Saving…" : nameSaved ? "Saved" : "Change"}
-            </button>
-          </Row>
-        ) : (
-          <Row
-            label="Username"
-            hint="Your login, and the name everyone in a room sees. A registered player always plays as their username, so it cannot be changed here."
-          >
-            <strong className="settings-readonly">{user?.username}</strong>
-          </Row>
-        )}
-        {nameError && (
-          <p id="settings-name-error" className="auth-error settings-row-error" role="alert">
-            {nameError}
-          </p>
-        )}
-
-        {isGuest ? (
-          <Row
-            label="Picture"
-            hint="Guests keep the grey initial, so a name in the player list is never mistaken for an account."
-            locked
-          >
-            <NeedsAccount />
-          </Row>
-        ) : (
-          <Row
-            label="Picture"
-            hint="Shown beside your name wherever it appears. Cropped to a square and shrunk to 256 pixels in your browser before it is sent. Other players can report a picture, and a moderator can remove it."
-          >
-            <span className="settings-picture">
-              <Avatar
-                name={user?.username ?? ""}
-                nameColor={nameColor}
-                avatarUrl={user?.avatarUrl}
-                size={44}
+            {!isGuest && (
+              <PictureEditChip
+                hasPicture={Boolean(user?.avatarUrl)}
+                busy={pictureBusy}
+                onChoose={(file) => {
+                  if (file) setPendingFile(file);
+                }}
+                onRemove={() => void dropPicture()}
               />
-              <input
-                ref={pictureInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="settings-picture-input"
-                aria-label="Choose a picture"
-                onChange={(event) => void choosePicture(event.target.files?.[0])}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-compact"
-                disabled={pictureBusy}
-                onClick={() => pictureInputRef.current?.click()}
-              >
-                <ImageIcon size={15} />
-                {pictureBusy ? "Working…" : user?.avatarUrl ? "Change" : "Upload"}
-              </button>
-              {user?.avatarUrl && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-compact"
-                  disabled={pictureBusy}
-                  onClick={() => void dropPicture()}
-                >
-                  Remove
-                </button>
+            )}
+          </div>
+          <div className="settings-you-body">
+            <div className="settings-you-name-line">
+              {isGuest && editingName ? (
+                <>
+                  <input
+                    id="settings-display-name"
+                    type="search"
+                    inputMode="text"
+                    value={draftName}
+                    autoFocus
+                    onChange={(event) => {
+                      setDraftName(event.target.value);
+                      setNameError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void saveDisplayName();
+                    }}
+                    maxLength={MAX_NICKNAME_LENGTH}
+                    autoComplete="nickname"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    aria-label="Display name"
+                    aria-describedby={nameError ? "settings-name-error" : undefined}
+                  />
+                  {/* The one thing here the server can refuse - the name may
+                      belong to a registered player - so it keeps a button
+                      where everything else applies at once (R-SET-05). */}
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-compact"
+                    disabled={nameBusy || draftName.trim() === (user?.displayName ?? "")}
+                    onClick={() => void saveDisplayName()}
+                  >
+                    {nameBusy ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-compact"
+                    disabled={nameBusy}
+                    onClick={() => {
+                      setEditingName(false);
+                      setNameError(null);
+                      setDraftName(user?.displayName ?? "");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <strong
+                    className={`settings-you-name colored-player-name${isGuest ? " is-guest" : ""}`}
+                    style={isGuest ? undefined : { color: nameColor }}
+                  >
+                    {user?.displayName}
+                  </strong>
+                  {isGuest && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-compact"
+                      onClick={() => setEditingName(true)}
+                    >
+                      <PencilIcon size={14} />
+                      Change
+                    </button>
+                  )}
+                </>
               )}
-            </span>
-          </Row>
-        )}
-        {pictureError && (
-          <p className="auth-error settings-row-error" role="alert">
-            {pictureError}
-          </p>
-        )}
-
-        {isGuest ? (
-          <Row
-            label="Name color"
-            hint="Guests play in grey, so a name in the player list is never mistaken for an account."
-            locked
-          >
-            <NeedsAccount />
-          </Row>
-        ) : (
-          <Row
-            label="Name color"
-            stacked
-            hint={
-              <>
-                Everyone in a room sees this on your name and your avatar. Preview:{" "}
-                <strong className="colored-player-name" style={{ color: nameColor }}>
-                  {user?.username}
-                </strong>
-              </>
-            }
-          >
-            <span className="settings-swatches" role="group" aria-label="Name color">
-              {NAME_COLOR_PALETTE.map((color) => (
+            </div>
+            {nameError && (
+              <p id="settings-name-error" className="auth-error" role="alert">
+                {nameError}
+              </p>
+            )}
+            {!isGuest && (
+              <span className="settings-swatches" role="group" aria-label="Name color">
+                {NAME_COLOR_PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`settings-swatch${color === nameColor ? " is-selected" : ""}`}
+                    style={{ background: color }}
+                    aria-label={NAME_COLOR_NAMES[color]}
+                    aria-pressed={color === nameColor}
+                    title={NAME_COLOR_NAMES[color]}
+                    onClick={() => chooseNameColor(color)}
+                  >
+                    {color === nameColor && <CheckIcon size={14} />}
+                  </button>
+                ))}
                 <button
-                  key={color}
                   type="button"
-                  className={`settings-swatch${color === nameColor ? " is-selected" : ""}`}
-                  style={{ background: color }}
-                  aria-label={NAME_COLOR_NAMES[color]}
-                  aria-pressed={color === nameColor}
-                  title={NAME_COLOR_NAMES[color]}
-                  onClick={() => chooseNameColor(color)}
+                  className="btn btn-ghost settings-swatch-random"
+                  aria-label="Surprise me"
+                  title="Surprise me"
+                  onClick={() => chooseNameColor(randomNameColor(nameColor))}
                 >
-                  {color === nameColor && <CheckIcon size={14} />}
+                  <DiceIcon size={15} />
                 </button>
-              ))}
-              <button
-                type="button"
-                className="btn btn-ghost btn-compact settings-swatch-random"
-                onClick={() => chooseNameColor(randomNameColor(nameColor))}
-              >
-                <DiceIcon size={15} />
-                Surprise me
-              </button>
-            </span>
-          </Row>
-        )}
+              </span>
+            )}
+            {pictureError && (
+              <p className="auth-error" role="alert">
+                {pictureError}
+              </p>
+            )}
+          </div>
+        </div>
       </Group>
 
       <Group title="Signing in">
@@ -753,6 +836,13 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       )}
       {sessionsOpen && <SessionManagerDialog onClose={() => setSessionsOpen(false)} />}
       {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
+      {pendingFile && (
+        <PictureCropDialog
+          file={pendingFile}
+          onUse={usePicture}
+          onCancel={() => setPendingFile(null)}
+        />
+      )}
       {passwordOpen && (
         <ChangePasswordDialog
           username={user?.username ?? ""}

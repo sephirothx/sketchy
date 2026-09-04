@@ -371,39 +371,51 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "Portrait")
-            # Guests keep the grey initial: the row is locked, with the reason.
+            # Guests keep the grey initial: no picker and no chip on the disc.
             await page.click("button.header-settings-button")
             dialog = page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
             assert await dialog.get_by_label("Choose a picture").count() == 0
+            assert await dialog.get_by_role("button", name="Edit").count() == 0
             await dialog.get_by_role("button", name="Close settings").click()
             await dialog.wait_for(state="hidden")
 
             await register_account(page, "Portrait")
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
+            # No picture yet: the chip on the disc goes straight to the picker.
+            assert await dialog.get_by_role("button", name="Edit").count() == 1
+            await dialog.get_by_label("Choose a picture").set_input_files(str(source))
+            # The file opens the crop dialog first; nothing is sent until it is used.
+            crop = page.get_by_role("dialog", name="Frame your picture")
+            await crop.wait_for(state="visible")
             async with page.expect_response(
                 lambda response: response.url.endswith("/api/users/me/avatar")
                 and response.request.method == "POST"
             ) as uploaded:
-                await dialog.get_by_label("Choose a picture").set_input_files(str(source))
+                await crop.get_by_role("button", name="Use picture").click()
             response = await uploaded.value
             assert response.status == 200, await response.text()
             key = (await response.json())["avatarKey"]
-            assert key.endswith(".png") and len(key) == 68
+            # Chromium encodes WebP from a canvas, so that is what it sent.
+            assert key.endswith(".webp") and len(key) == 69
+            await crop.wait_for(state="hidden")
 
-            # The row shows it, and so does the identity chip behind the pane.
-            await dialog.locator(".settings-picture img").wait_for(state="visible")
-            picture_row = dialog.locator(".settings-picture")
-            assert await picture_row.get_by_role("button", name="Change").count() == 1
-            assert await picture_row.get_by_role("button", name="Remove").count() == 1
+            # The disc shows it, and so does the identity chip behind the pane.
+            await dialog.locator(".settings-you .avatar img").wait_for(state="visible")
+            await dialog.get_by_role("button", name="Edit").click()
+            menu = dialog.get_by_role("menu", name="Picture")
+            assert await menu.get_by_role("menuitem", name="Change picture").count() == 1
+            assert await menu.get_by_role("menuitem", name="Remove picture").count() == 1
+            await page.keyboard.press("Escape")
+            await menu.wait_for(state="hidden")
             await dialog.get_by_role("button", name="Close settings").click()
             await dialog.wait_for(state="hidden")
             chip = page.locator(".identity-avatar img")
             await chip.wait_for(state="visible")
             assert (await chip.get_attribute("src")).endswith(key)
 
-            # What was stored is what the browser made: a 256-square PNG.
+            # What was stored is what the browser made: a 256-square WebP.
             picture = await page.evaluate(
                 """async (key) => {
                     const response = await fetch('/api/avatars/' + key);
@@ -414,7 +426,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
                 }""",
                 key,
             )
-            assert picture["type"] == "image/png"
+            assert picture["type"] == "image/webp"
             assert (picture["width"], picture["height"]) == (256, 256)
             assert "immutable" in picture["cache"]
 
@@ -428,8 +440,9 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             # Removing it returns the initial everywhere.
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
-            await dialog.get_by_role("button", name="Remove").click()
-            await dialog.locator(".settings-picture img").wait_for(state="hidden")
+            await dialog.get_by_role("button", name="Edit").click()
+            await dialog.get_by_role("menuitem", name="Remove picture").click()
+            await dialog.locator(".settings-you .avatar img").wait_for(state="hidden")
             await dialog.get_by_role("button", name="Close settings").click()
             await page.locator(".player-list .avatar img").first.wait_for(state="hidden")
         finally:

@@ -798,10 +798,12 @@ the data export, and deleting the account, which is its own dialog with the
 password and a typed `DELETE` rather than the bottom of the data export.
 
 A registered player can upload a **picture** to stand in for their initial, from
-**Settings → Account**. The browser crops it to a square and shrinks it to 256
-pixels before it is sent; the server takes only a PNG of exactly that size under
-128 KiB, checked from its header without decoding it, and serves it only as an
-image from `/api/avatars/{sha256}.png`, cacheable for ever because a changed
+**Settings → Account**: the **Edit** chip on the disc. The browser lets the player
+frame a square of it — drag to move, zoom to get closer — then shrinks that square
+to 256 pixels and encodes it as WebP (PNG where the browser cannot) before it is
+sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
+checked from its header without decoding it, and serves it only as an image from
+`/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial. A picture can be
 reported, a moderator can remove it through the report, and removal blocks
 uploads for a week. The export carries the bytes; deletion removes them.

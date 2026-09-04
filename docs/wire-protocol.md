@@ -1005,8 +1005,8 @@ replaced, not echoed.
 | --- | --- | --- |
 | `GET` | `/api/auth/me` | Provisions a guest account on first call. **The only path that creates a user row for a visitor.** |
 | `GET` | `/api/auth/nickname-available` | Rate limited (`AUTH_LOOKUP_LIMIT`) |
-| `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour. Answers `{ avatarKey, avatarUrl }` |
-| `GET` | `/api/avatars/{key}` | The picture behind a content address, for anybody: `image/png`, `nosniff`, `Cache-Control: public, max-age=31536000, immutable`. `404` for a key that is not a content address or not stored |
+| `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 WebP or PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour. Answers `{ avatarKey, avatarUrl }` |
+| `GET` | `/api/avatars/{key}` | The picture behind a content address, for anybody: `image/webp` or `image/png` as the key's extension says, `nosniff`, `Cache-Control: public, max-age=31536000, immutable`. `404` for a key that is not a content address or not stored |
 | `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator. Takes down the reported account's picture, audits it, blocks re-upload for 7 days; `{ ok, removed }` (R-AVA-04) |
 | `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies |
 | `POST` | `/api/auth/register` | Claims the current account (`AUTH_REGISTER_LIMIT`) |

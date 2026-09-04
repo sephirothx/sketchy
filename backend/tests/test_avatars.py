@@ -23,6 +23,7 @@ from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import AvatarBlocked, remove_avatar, set_avatar
 from tests.png_fixture import png_bytes
+from tests.webp_fixture import webp_bytes
 
 PASSWORD = "a-good-password"
 pytestmark = pytest.mark.asyncio
@@ -80,7 +81,7 @@ async def test_a_registered_player_uploads_a_picture_and_everyone_can_fetch_it(e
     uploaded = await http.post("/api/users/me/avatar", json=encoded(picture))
     assert uploaded.status_code == 200
     key = uploaded.json()["avatarKey"]
-    assert key == avatar_key_for(picture)
+    assert key == avatar_key_for(picture, "image/png")
     assert uploaded.json()["avatarUrl"] == f"/api/avatars/{key}"
     # The account now carries it, and so does everything built from the account.
     assert (await http.get("/api/auth/me")).json()["avatarUrl"] == f"/api/avatars/{key}"
@@ -135,16 +136,46 @@ async def test_a_guest_has_no_picture_to_set(env):
     assert (await http.delete("/api/users/me/avatar")).status_code == 403
 
 
+@pytest.mark.parametrize("layout", ["VP8L", "VP8 ", "VP8X"])
+async def test_a_webp_of_any_layout_is_taken_and_served_as_webp(env, layout):
+    """What a browser encodes from a canvas: lossless, lossy, or extended
+    (alpha) - each keeps its size somewhere else in the header."""
+    new_client, _ = env
+    http = new_client()
+    await register(http, f"Web{layout.strip()}")
+    picture = webp_bytes(seed=5, layout=layout)
+    uploaded = await http.post("/api/users/me/avatar", json=encoded(picture))
+    assert uploaded.status_code == 200, uploaded.text
+    key = uploaded.json()["avatarKey"]
+    assert key == avatar_key_for(picture, "image/webp")
+    assert key.endswith(".webp")
+    fetched = await new_client().get(f"/api/avatars/{key}")
+    assert fetched.status_code == 200
+    assert fetched.content == picture
+    assert fetched.headers["content-type"] == "image/webp"
+    assert fetched.headers["x-content-type-options"] == "nosniff"
+
+
 @pytest.mark.parametrize(
     "payload, message",
     [
-        (b"not a picture at all", "not a PNG"),
+        (b"not a picture at all", "not a WebP or PNG"),
         (png_bytes(200, 256), "256 by 256"),
         (png_bytes(256, 300), "256 by 256"),
-        (b"\x89PNG\r\n\x1a\n" + b"\x00" * 40, "not a PNG"),
+        (b"\x89PNG\r\n\x1a\n" + b"\x00" * 40, "not a WebP or PNG"),
+        (webp_bytes(256, 128, layout="VP8L"), "256 by 256"),
+        (webp_bytes(300, 256, layout="VP8 "), "256 by 256"),
+        (webp_bytes(256, 257, layout="VP8X"), "256 by 256"),
+        # A RIFF that is not WebP, and a WebP whose first chunk is unknown.
+        (b"RIFF\x10\x00\x00\x00WAVEfmt " + b"\x00" * 24, "not a WebP or PNG"),
+        (b"RIFF\x10\x00\x00\x00WEBPXXXX" + b"\x00" * 24, "not a WebP or PNG"),
+        # A lossless header without its signature byte, a lossy one without
+        # its start code: neither is a frame a browser would draw.
+        (b"RIFF\x20\x00\x00\x00WEBPVP8L\x10\x00\x00\x00\x00" + b"\x00" * 40, "not a WebP or PNG"),
+        (b"RIFF\x20\x00\x00\x00WEBPVP8 \x10\x00\x00\x00" + b"\x00" * 40, "not a WebP or PNG"),
     ],
 )
-async def test_only_a_square_png_of_the_right_size_is_taken(env, payload, message):
+async def test_only_a_square_picture_of_the_right_size_is_taken(env, payload, message):
     new_client, _ = env
     http = new_client()
     await register(http, "Fussy")

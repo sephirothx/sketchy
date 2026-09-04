@@ -15,7 +15,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.avatars import (
-    AVATAR_CONTENT_TYPE,
     AVATAR_REUPLOAD_BLOCK,
     AvatarError,
     avatar_key_for,
@@ -87,8 +86,8 @@ async def set_avatar(
 ) -> str:
     """Store `payload` as the account's picture and return its key."""
     at = now or datetime.now(timezone.utc)
-    width, height = inspect_avatar(payload)
-    key = avatar_key_for(payload)
+    content_type, width, height = inspect_avatar(payload)
+    key = avatar_key_for(payload, content_type)
     db_user_id = UUID(str(user_id))
     async with session_factory() as session:
         async with session.begin():
@@ -105,11 +104,11 @@ async def set_avatar(
                     id=generate_uuid(),
                     user_id=db_user_id,
                     object_key=key,
-                    content_type=AVATAR_CONTENT_TYPE,
+                    content_type=content_type,
                     byte_size=len(payload),
                     width=width,
                     height=height,
-                    checksum_sha256=key.removesuffix(".png"),
+                    checksum_sha256=key.split(".")[0],
                     payload=payload,
                     created_at=at,
                 )

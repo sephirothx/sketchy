@@ -40,7 +40,7 @@ def upgrade() -> None:
     """Invalidate external hotlinks and reserve future identity asset tables."""
     op.execute("UPDATE users SET avatar_url = NULL")
     with op.batch_alter_table("users") as batch_op:
-        # The content address of an uploaded picture (#573): `<sha256>.png`.
+        # The content address of an uploaded picture (#573): `<sha256>.webp` or `.png`.
         batch_op.alter_column(
             "avatar_url",
             new_column_name="avatar_key",
