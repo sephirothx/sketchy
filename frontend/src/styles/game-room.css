@@ -571,18 +571,6 @@
   text-align: center;
 }
 
-/* The ready ring is drawn outside the avatar rather than as a border, so it
-   does not eat into the initial. */
-.waiting-roster-tile.is-ready .avatar {
-  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--success);
-}
-
-/* Your own disc already wears the "you" ring (#574), so the ready ring steps
-   outward and the two read as a double ring rather than one over the other. */
-.waiting-roster-tile.is-ready .avatar.is-self {
-  box-shadow: 0 0 0 6px var(--card), 0 0 0 8px var(--success);
-}
-
 .waiting-roster-name {
   font-size: 11.5px;
   font-weight: 800;

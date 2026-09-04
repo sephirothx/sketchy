@@ -176,7 +176,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           {activePlayers.map((player) => (
             <li
               key={player.playerId}
-              className={`waiting-roster-tile${player.connected && !player.isAfk ? " is-ready" : ""}`}
+              className="waiting-roster-tile"
             >
               <Avatar
                 name={player.nickname}

@@ -59,13 +59,13 @@ export function Avatar({
     </span>
   );
   if (!isHost) return disc;
-  // The badge scales with the disc but never below a size the crown survives.
-  const badge = Math.max(14, Math.round(size * 0.42));
+  // The crown scales with the disc but never below a size it survives.
+  const crown = Math.max(12, Math.round(size * 0.38));
   return (
     <span className="avatar-frame" aria-hidden="true">
       {disc}
-      <span className="avatar-crown" style={{ width: badge, height: badge }}>
-        <CrownIcon size={Math.round(badge * 0.68)} strokeWidth={2.5} />
+      <span className="avatar-crown">
+        <CrownIcon size={crown} strokeWidth={2} />
       </span>
     </span>
   );
