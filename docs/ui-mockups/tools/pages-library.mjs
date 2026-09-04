@@ -323,6 +323,92 @@ const opsBars = [42, 55, 38, 61, 70, 52, 78, 64, 58, 84, 76, 66]
   .map((h) => `<span style="flex: 1; height: ${h}%; border-radius: 5px 5px 0 0; background: ${T.primary}; opacity: 0.85"></span>`).join('');
 
 
+// The overview's signal panels (#540), matching what OverviewSignals.tsx
+// draws: everything the running server can say about itself, laid out to be
+// scanned rather than read. Tiles are deliberately uniform - label, number,
+// one line of context - because the operator is looking for the one that is
+// wrong, not studying any of them. Sparklines cover an hour; the numbers over
+// them are the last five minutes.
+const signalSpark = (d) =>
+  `<svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true" style="display: block; width: 100%; height: 28px; margin-top: 6px"><path d="${d}" fill="none" stroke="${T.primary}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+
+const signalTile = ([label, value, sub, spark, span]) =>
+  `<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; background: ${T.well}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 10px 12px${span ? `; grid-column: ${span}` : ''}"><span style="font-size: 11px; letter-spacing: 0.06em; color: ${T.faint}; font-weight: 800; text-transform: uppercase">${label}</span><span style="font-family: ${T.display}; font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; color: ${T.ink}; line-height: 1.15">${value}</span><span style="font-size: 11.5px; color: ${T.faint}; font-weight: 700">${sub}</span>${spark ? signalSpark(spark) : ''}</div>`;
+
+// Traffic's tiles come in named rows - requests, then commands, then sockets -
+// so the rule above each row is what separates one subject from the next.
+const signalRow = (name, tiles, divided = true) =>
+  `<div role="group" aria-label="${name}" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; margin-bottom: 8px${divided ? `; border-top: 1px solid ${T.line}; padding-top: 10px` : ''}">${tiles.map(signalTile).join('')}</div>`;
+
+// The narrow panels have one unnamed row that reflows to whatever fits.
+const signalGrid = (tiles) =>
+  `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 14px; margin-bottom: 8px">${tiles.map(signalTile).join('')}</div>`;
+
+const payloadHead = (label, first = false) =>
+  `<th scope="col" style="border-bottom: 1px solid ${T.line}; padding: 5px 8px; text-align: ${first ? 'left' : 'right'}; white-space: nowrap; color: ${T.faint}; font-size: 11px; font-weight: 800${first ? '; width: 34%' : ''}">${label}</th>`;
+
+// Which events actually move the bytes, so an operator can see whether a
+// regression is one message getting fatter or simply more of them.
+const payloadTable = (title, rows) => `<div style="margin-top: 10px">
+  <h3 style="font-size: 11px; letter-spacing: 0.06em; color: ${T.faint}; font-weight: 800; text-transform: uppercase; margin-bottom: 4px">${title}</h3>
+  <table style="border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; font-size: 12.5px; font-variant-numeric: tabular-nums; background: ${T.well}; border: 1px solid ${T.line}; border-radius: ${T.radiusSm}; overflow: hidden">
+    <thead><tr>${['Event', 'Count', 'p50', 'p95', 'p99', 'Total'].map((c, i) => payloadHead(c, i === 0)).join('')}</tr></thead>
+    <tbody>${rows.map(([event, ...cells]) => `<tr><th scope="row" style="border-bottom: 1px solid ${T.line}; padding: 5px 8px; text-align: left; white-space: nowrap; color: ${T.ink}; font-family: ui-monospace, monospace; font-weight: 700">${event}</th>${cells.map((v) => `<td style="border-bottom: 1px solid ${T.line}; padding: 5px 8px; text-align: right; white-space: nowrap; color: ${T.muted}; font-weight: 700">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>
+</div>`;
+
+const signalPanel = (label, span, sub, body) => `<section aria-label="${label}" style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}; grid-column: ${span}">
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px"><div><h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">${label}</h2><p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 2px">${sub}</p></div>${chip('Healthy', 'success')}</div>
+  ${body}
+</section>`;
+
+const overviewSignals = `
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px">
+  ${signalPanel('Traffic', '1 / -1', 'Rates and latency over the last 5 min · sparklines cover an hour', `${signalRow('Requests', [
+    ['Requests / min', '41.2', '1 in flight', 'M0 20 L15 18 L30 21 L45 14 L60 12 L75 16 L90 9 L105 11 L120 7'],
+    ['Request p95', '28 ms', 'p50 3 ms · p99 90 ms', 'M0 22 L15 21 L30 23 L45 20 L60 22 L75 19 L90 21 L105 20 L120 22'],
+    ['Request errors', '0.2 %', '12,345 since start'],
+  ], false)}${signalRow('Commands', [
+    ['Commands / min', '880', '94 sockets open', 'M0 16 L15 15 L30 17 L45 12 L60 10 L75 13 L90 8 L105 9 L120 6'],
+    ['Command p95', '2 ms', 'handler time, per command', 'M0 23 L15 22 L30 24 L45 23 L60 22 L75 24 L90 23 L105 22 L120 23'],
+    ['Command errors', '0 %', 'refused 1.2 % · throttled 0.4/min'],
+  ])}${signalRow('Sockets', [
+    ['Socket in / min', '412 KB', '1.2 GB since start · before compression', 'M0 18 L15 17 L30 19 L45 12 L60 10 L75 14 L90 8 L105 9 L120 6'],
+    ['Socket out / min', '3.1 MB', '9.8 GB since start · per recipient', 'M0 19 L15 18 L30 20 L45 13 L60 11 L75 15 L90 9 L105 10 L120 7'],
+  ])}<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px">${payloadTable('Command payloads', [
+    ['draw', '1,204,551', '96 B', '412 B', '1.1 KB', '1.1 GB'],
+    ['guess', '88,120', '34 B', '58 B', '90 B', '3.4 MB'],
+    ['chat_message', '12,004', '41 B', '120 B', '240 B', '612 KB'],
+  ])}${payloadTable('Emitted payloads', [
+    ['draw', '1,204,551', '96 B', '412 B', '1.1 KB', '1.1 GB'],
+    ['room_state', '40,310', '2.8 KB', '6.1 KB', '9.4 KB', '132 MB'],
+    ['game_ended', '3,102', '18 KB', '41 KB', '63 KB', '62 MB'],
+  ])}</div>`)}
+  ${signalPanel('Process', 'span 2', 'One worker: the event loop, its memory, and its disk', signalGrid([
+    ['Loop lag', '1 ms', 'p95 4 ms', 'M0 24 L15 24 L30 23 L45 25 L60 24 L75 22 L90 24 L105 23 L120 24'],
+    ['CPU', '3.5 %', 'of one core'],
+    ['Memory', '178 MB', 'resident set size', 'M0 20 L15 19 L30 19 L45 18 L60 18 L75 17 L90 17 L105 16 L120 16'],
+    ['Uptime', '1 d 2 h', 'since 1 Sep 2026, 08:00'],
+    ['Disk free', '46 GB', 'of 93 GB at /srv/sketchy', null, '1 / -1'],
+  ]))}
+  ${signalPanel('Database', 'span 2', 'Pool, statement latency, and what was lost', `${signalGrid([
+    ['Pool in use', '1 / 10', '10 % · 0 overflow'],
+    ['Queries / min', '300', '0 errors since start'],
+    ['Query p95', '2 ms', 'per statement'],
+    ['History writes lost', '0', 'last hour · 0 since start (0 timed out, 0 failed)'],
+  ])}${healthRow('Readiness probe', 'reached the database 3 s ago')}`)}
+  ${signalPanel('Queues and loops', 'span 2', 'Work written down for later, and the loops that carry it out', [
+    ['Mail outbox', '0 pending · swept every 30 s'],
+    ['Account exports', '0 pending'],
+    ['loop_lag', 'ok 1 s ago'],
+    ['mail_delivery', 'ok 12 s ago'],
+    ['presence_broadcast', 'ok 0 s ago'],
+    ['retention_sweep', 'ok 4 min ago'],
+    ['runtime_metrics', 'ok 9 s ago'],
+  ].map(([label, value]) => healthRow(label, value)).join(''))}
+</div>`;
+
+
 // The operations workspace carries five surfaces since #446: the dashboard it
 // always had, the runtime settings and the commands, and the activity table
 // and audit ledger that used to sit below the fold as a disclosure and a
@@ -362,7 +448,7 @@ const tunableGroup = (title, rows, note = '') => `
 </section>`;
 
 export const AdminOpsPage = `
-<div style="width: 1100px; min-height: 940px; margin: 0 auto; padding: 24px 24px 40px">
+<div style="width: 1100px; min-height: 1860px; margin: 0 auto; padding: 24px 24px 40px">
   ${backBar()}
   <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 16px">
     <div>
@@ -386,7 +472,7 @@ export const AdminOpsPage = `
     ${metricCard('Games running', '11', '38 rooms opened today')}
     ${metricCard('Abandoned', '28%', '142 of 507 this window', true)}
   </div>
-
+${overviewSignals}
   <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; margin-bottom: 14px">
     <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
       <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px">
@@ -396,7 +482,7 @@ export const AdminOpsPage = `
         </div>
         ${selectBox('Hourly')}
       </div>
-      <div aria-label="Rooms opened by hour" style="display: flex; align-items: flex-end; gap: 7px; height: 150px; border-bottom: 1.5px solid ${T.lineStrong}; padding: 0 2px">${opsBars}</div>
+      <div aria-label="Rooms opened by hour" style="display: flex; align-items: flex-end; gap: 7px; height: 150px; border-bottom: 1.5px solid ${T.lineStrong}; padding: 8px 8px 0; background: ${T.well}; border: 1px solid ${T.line}; border-bottom: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm} ${T.radiusSm} 0 0">${opsBars}</div>
       <div style="display: flex; justify-content: space-between; margin-top: 7px; font-size: 11.5px; font-weight: 700; color: ${T.faint}"><span>06:00</span><span>12:00</span><span>18:00</span></div>
     </section>
 

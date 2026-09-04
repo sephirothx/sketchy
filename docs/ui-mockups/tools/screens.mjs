@@ -27,7 +27,7 @@ export const SCREENS = [
   { name: 'MyPromptLists', page: MyPromptListsPage, w: 1020, h: 1080, x: 1010, y: 4180, title: 'My prompt lists', group: 'Library and profile' },
   { name: 'Profile', page: ProfilePage, w: 920, h: 1220, x: 2120, y: 4180, title: 'Profile', group: 'Library and profile' },
   // Row 5 — operator pages
-  { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 940, x: 0, y: 5620, title: 'Server operations — overview', group: 'Operator pages' },
+  { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 1860, x: 0, y: 5620, title: 'Server operations — overview', group: 'Operator pages' },
   { name: 'AdminOpsTuning', page: AdminOpsTuningPage, w: 1100, h: 1000, x: 1190, y: 5620, title: 'Server operations — tuning', group: 'Operator pages' },
   { name: 'AdminOpsAudit', page: AdminOpsAuditPage, w: 1100, h: 620, x: 2380, y: 5620, title: 'Server operations — audit ledger', group: 'Operator pages' },
   { name: 'Moderation', page: ModerationPage, w: 1160, h: 1040, x: 3570, y: 5620, title: 'Moderation', group: 'Operator pages' },

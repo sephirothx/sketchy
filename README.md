@@ -13,6 +13,9 @@ This README is the narrative introduction. The precise references live in
 [requirements](docs/requirements.md). Read the relevant one before changing the thing it
 describes, and update it in the same change. [`docs/ui-mockups/`](docs/ui-mockups/) holds
 the same rule for the interface: an artboard per screen, matched to the shipped styles.
+The artboards are generated - `node tools/build.mjs` rewrites every `.dc.html` and
+`canvas.json` from the sources in [`docs/ui-mockups/tools/`](docs/ui-mockups/tools/) - so a
+change goes into the generator and the output is committed with it.
 [`docs/ui-mockups/mobile/`](docs/ui-mockups/mobile/README.md) does the same for those screens on a
 portrait phone, where the layout is a different problem: a protocol-fixed 4:3 canvas, a soft
 keyboard that takes half the screen, and one thumb.
@@ -1080,6 +1083,7 @@ scripts/
   serve.sh          Local development server
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
+  check-mockups-regenerated.sh  Refuses a hand-edited mockup artboard
   check-coverage.py   Per-module coverage floors on the risk-critical modules
   brand/            Logo and icon sources, and the scripts that raster them
 .githooks/
@@ -1209,6 +1213,9 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 
 # Refuse a tracked database, env file, or private key (also a CI job)
 ./scripts/check-tracked-artifacts.sh
+
+# Refuse a mockup artboard that its generator would not write (also a CI job)
+./scripts/check-mockups-regenerated.sh
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py
