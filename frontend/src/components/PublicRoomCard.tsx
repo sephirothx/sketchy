@@ -123,6 +123,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
                       nameColor={player.nameColor}
                       avatarUrl={player.avatarUrl}
                       isAnonymous={player.isAnonymous}
+                      isHost={player.isHost}
                       size={22}
                     />
                     <span
@@ -131,7 +132,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
                     >
                       {player.nickname}
                     </span>
-                    {player.isHost && <span className="public-room-roster-host">host</span>}
+                    {player.isHost && <span className="visually-hidden">Host</span>}
                   </li>
                 ))}
               </ul>

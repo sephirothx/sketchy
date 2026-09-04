@@ -1333,7 +1333,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 1. **Lobby**: pick a nickname, then create a room (public or private, with a max player count
    and number of rounds), pick a scoring mode, or join one by code.
-2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**.
+2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. Wherever
+   players are listed, the host's avatar wears a gold crown on its corner and your own
+   avatar wears a ring, so neither needs a word beside the name.
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.
 4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
    prompt (`_ _ _ _`) and guesses in the chat. The turn ends early once everyone's guessed

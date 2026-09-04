@@ -577,6 +577,12 @@
   box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--success);
 }
 
+/* Your own disc already wears the "you" ring (#574), so the ready ring steps
+   outward and the two read as a double ring rather than one over the other. */
+.waiting-roster-tile.is-ready .avatar.is-self {
+  box-shadow: 0 0 0 6px var(--card), 0 0 0 8px var(--success);
+}
+
 .waiting-roster-name {
   font-size: 11.5px;
   font-weight: 800;
@@ -584,14 +590,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.waiting-roster-tag {
-  color: var(--faint);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .waiting-roster-tile.is-empty .waiting-roster-name { color: var(--faint); }

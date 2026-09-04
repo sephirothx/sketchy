@@ -184,3 +184,39 @@
   object-fit: cover;
   border-radius: 50%;
 }
+
+/* The viewer's own disc wears a ring in the primary colour (#574). An outline
+   rather than a border, so the initial and the picture keep their whole disc,
+   and offset so the ring floats clear of it instead of thickening its edge.
+   Rows that change background (drawing, guessed) show through the gap. */
+.avatar.is-self {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* The host's crown perches on the disc's top-right edge, like a crown on a
+   head (#574). It sits on the card colour so it reads over any player colour
+   or picture, and in gold so it is never mistaken for a status colour. */
+.avatar-frame {
+  display: inline-flex;
+  flex: none;
+  position: relative;
+}
+
+.avatar-crown {
+  align-items: center;
+  background: var(--card);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  color: var(--gold);
+  display: inline-flex;
+  justify-content: center;
+  position: absolute;
+  right: -3px;
+  top: -3px;
+}
+
+/* A stroked crown at 10 px is a scribble; filling it keeps the silhouette. */
+.avatar-crown svg {
+  fill: currentColor;
+}
