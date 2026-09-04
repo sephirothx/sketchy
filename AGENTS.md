@@ -82,6 +82,9 @@ is worse than none.
   removed.
 - **Facts, not counters.** Derived rows such as `user_stats_daily` are disposable;
   finished-game facts are not.
+- **Mockup artboards are output.** `docs/ui-mockups/*.dc.html` and `canvas.json` are
+  written by `tools/build.mjs`; edit `tools/` and commit the regenerated files.
+  `scripts/check-mockups-regenerated.sh` fails on a hand-edited artboard.
 
 ## Branch naming
 
