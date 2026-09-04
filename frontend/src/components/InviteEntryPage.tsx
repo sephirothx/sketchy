@@ -2,21 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomEntry } from "../hooks/useRoomEntry";
-import { describeDrawingRules } from "../lib/drawingRules";
-import type { RoomSummary } from "../types";
+import { roomFacts, roomFactsSummary } from "../lib/roomFacts";
 import { AppHeader } from "./AppHeader";
 import { FirstRunIdentity } from "./FirstRunIdentity";
 import { XIcon } from "./icons";
 
 const INVITE_LOADING_DELAY_MS = 250;
-
-function hintModeLabel(room: RoomSummary) {
-  if (room.hideMaskedPrompt) return "Prompt details hidden";
-  if (room.hintMode === "checkpoints") return "Timed hints";
-  if (room.hintMode === "purchase") return "Buyable letter hints";
-  if (room.hintMode === "wheel") return "Wheel of Fortune";
-  return "No letter hints";
-}
 
 function DelayedInviteLoader() {
   const [visible, setVisible] = useState(false);
@@ -82,20 +73,21 @@ export function InviteEntryPage({ code }: { code: string }) {
               pushed the Join button off the bottom of the screen. */}
           <details className="invite-details" open={!isMobile}>
             <summary>
-              <span className="invite-details-summary">
-                {room.rounds} rounds · {room.drawingSeconds}s · {hintModeLabel(room).toLowerCase()}
-              </span>
+              <span className="invite-details-summary">{roomFactsSummary(room)}</span>
             </summary>
+            {/* The same six facts the lobby card and the waiting room show,
+                in the same order (R-UX-09). Hints and the drawing rules used
+                to be prose in the list below, which is how the same room came
+                to be described three ways. */}
             <dl className="invite-room-facts">
-              <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
-              <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
-              <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
-              <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
+              {roomFacts(room).map((fact) => (
+                <div key={fact.key}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+              ))}
             </dl>
 
-            <ul className="invite-rule-list" aria-label="Room rules">
-              <li>{hintModeLabel(room)}</li>
-              <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
+            {/* What is left after the six: the two facts about this room that
+                are not room rules. */}
+            <ul className="invite-rule-list" aria-label="Prompts and spectators">
               <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
               <li>
                 {room.customPromptCount > 0

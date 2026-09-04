@@ -633,11 +633,19 @@
   color: var(--warning);
 }
 
+/* Three across, two rows — the same six facts the waiting room lays out as
+   tiles, in the same order (R-UX-09). `minmax(0, 1fr)` because "Drawing
+   rules" can be a sentence: an implicit content minimum is what lays a
+   560px row out inside a 390px phone. */
 .invite-room-facts {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0 0 18px;
+}
+
+@media (max-width: 560px) {
+  .invite-room-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .invite-room-facts > div {

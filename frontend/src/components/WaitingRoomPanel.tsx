@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { useState, type ReactNode } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
@@ -7,8 +7,7 @@ import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { BrushIcon, BulbIcon, ClockIcon, CopyIcon, LinkIcon, ListIcon, PlusIcon, RoundsIcon, SlidersIcon, TrophyIcon, UsersIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import { describeDrawingRules } from "../lib/drawingRules";
-import { HINT_OPTIONS, SCORING_OPTIONS, hintLabelFor, scoringLabelFor } from "../lib/roomSetup";
+import { roomFacts, roomFactsSummary, type RoomFactKey } from "../lib/roomFacts";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -21,6 +20,16 @@ import type {
   ScoreEntry,
   ScoringMode,
 } from "../types";
+
+/** One icon per fact, in the order `roomFacts` returns them. */
+const ROOM_FACT_ICONS: Record<RoomFactKey, ReactNode> = {
+  players: <UsersIcon size={12} />,
+  rounds: <RoundsIcon size={12} />,
+  drawingTime: <ClockIcon size={12} />,
+  scoring: <TrophyIcon size={12} />,
+  hints: <BulbIcon size={12} />,
+  drawingRules: <BrushIcon size={12} />,
+};
 
 interface WaitingRoomPanelProps {
   name: string;
@@ -121,28 +130,21 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       : props.promptListSlugs && props.promptListSlugs.length > 1
         ? `${props.promptListSlugs.length} curated prompt lists`
         : null;
-  // The one-line summary above the tiles: what a game here is like, in the
-  // words the lobby card uses. Prompts and drawing rules have their own
-  // places on the card, so they are not repeated here.
-  const settingsFacts = [
-    `${props.rounds} ${props.rounds === 1 ? "round" : "rounds"}`,
-    `${props.drawingSeconds}s`,
-    hintLabelFor(props.hintMode, props.hideMaskedPrompt),
-    props.scoringMode === "none" ? "No scoring" : null,
-  ].filter((fact): fact is string => Boolean(fact));
-  const seatsFree = Math.max(0, props.maxPlayers - activePlayers.length);
-  // The same rough estimate the create page shows: every player draws once
-  // per round, and a turn is the drawing time plus choosing and results.
-  const estimateMinutes = Math.max(
-    1,
-    Math.round((Math.max(2, activePlayers.length) * props.rounds * (props.drawingSeconds + 24)) / 60),
-  );
-  const scoringDescription = SCORING_OPTIONS.find((option) => option.value === props.scoringMode)?.description ?? "";
-  const hintDescription = props.hideMaskedPrompt
-    ? "Blanks are hidden, so there is nothing to reveal."
-    : HINT_OPTIONS.find((option) => option.value === props.hintMode)?.description ?? "";
-  // Null when the room restricts nothing: the defaults are worth no words.
-  const drawingRules = describeDrawingRules(props.allowedTools, props.colorMode);
+  // The six facts, from the one place that decides what they are and in
+  // which order (R-UX-09) — the lobby card and the invite page read the same
+  // list. The player count is the live one, not the room summary's.
+  const factsInput = {
+    playerCount: activePlayers.length,
+    maxPlayers: props.maxPlayers,
+    rounds: props.rounds,
+    drawingSeconds: props.drawingSeconds,
+    scoringMode: props.scoringMode,
+    hintMode: props.hintMode,
+    hideMaskedPrompt: props.hideMaskedPrompt,
+    allowedTools: props.allowedTools,
+    colorMode: props.colorMode,
+  };
+  const facts = roomFacts(factsInput);
   const listCount = props.promptListSlugs?.length ?? 0;
   const promptsLine = [
     promptsValue ?? `${listCount} curated prompt ${listCount === 1 ? "list" : "lists"}`,
@@ -275,14 +277,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         <div className="waiting-rules-head">
           <div className="waiting-rules-title">
             <h2 id="waiting-rules-title">Room rules</h2>
-            <p className="waiting-settings-summary">
-              {settingsFacts.map((fact, index) => (
-                <Fragment key={fact}>
-                  {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                  <span>{fact}</span>
-                </Fragment>
-              ))}
-            </p>
+            <p className="waiting-settings-summary">{roomFactsSummary(factsInput)}</p>
           </div>
           {isHost ? (
             <Button
@@ -301,30 +296,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           ) : null}
         </div>
         <dl className="waiting-rules-grid">
-          <div className="rule-tile">
-            <dt><UsersIcon size={12} />Players</dt>
-            <dd>{activePlayers.length} of {props.maxPlayers}<small>{seatsFree === 0 ? "the room is full" : `${seatsFree} ${seatsFree === 1 ? "seat" : "seats"} free`}</small></dd>
-          </div>
-          <div className="rule-tile">
-            <dt><RoundsIcon size={12} />Rounds</dt>
-            <dd>{props.rounds}<small>everyone draws {props.rounds === 1 ? "once" : `${props.rounds} times`}</small></dd>
-          </div>
-          <div className="rule-tile">
-            <dt><ClockIcon size={12} />Drawing time</dt>
-            <dd>{props.drawingSeconds}s<small>about {estimateMinutes} min with {Math.max(2, activePlayers.length)}</small></dd>
-          </div>
-          <div className="rule-tile">
-            <dt><TrophyIcon size={12} />Scoring</dt>
-            <dd>{scoringLabelFor(props.scoringMode)}<small>{scoringDescription}</small></dd>
-          </div>
-          <div className="rule-tile">
-            <dt><BulbIcon size={12} />Hints</dt>
-            <dd>{hintLabelFor(props.hintMode, props.hideMaskedPrompt)}<small>{hintDescription}</small></dd>
-          </div>
-          <div className="rule-tile">
-            <dt><BrushIcon size={12} />Drawing rules</dt>
-            <dd>{drawingRules ?? "All tools"}<small>{drawingRules ? "" : "all colors"}</small></dd>
-          </div>
+          {facts.map((fact) => (
+            <div className="rule-tile" key={fact.key}>
+              <dt>{ROOM_FACT_ICONS[fact.key]}{fact.label}</dt>
+              <dd>{fact.value}{fact.detail && <small>{fact.detail}</small>}</dd>
+            </div>
+          ))}
         </dl>
         <p className="waiting-rules-prompts">
           <ListIcon size={13} />
