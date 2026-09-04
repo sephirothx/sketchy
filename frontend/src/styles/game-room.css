@@ -22,7 +22,26 @@
     font-size: 17px;
   }
 
-  .waiting-start-card {
+  .waiting-leave-link {
+  color: var(--faint);
+  font-size: 13px;
+  margin-top: 6px;
+  min-height: 36px;
+}
+
+.waiting-leave-link:hover {
+  color: var(--danger);
+}
+
+/* The phone docks Start under the thumb; a second row in that dock would
+   only cover more of the page, and the Room menu holds Leave there. */
+@media (max-width: 900px) {
+  .waiting-leave-link {
+    display: none;
+  }
+}
+
+.waiting-start-card {
     align-items: stretch;
     flex-direction: column;
   }

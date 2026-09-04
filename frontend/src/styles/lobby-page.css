@@ -78,6 +78,11 @@
   flex: none;
 }
 
+.lobby-wordmark-link {
+  display: inline-flex;
+  border-radius: 8px;
+}
+
 /* The room chip: which room, which code, and one press copies the invite
    link. `room-copy-button` and data-room-code are what the e2e suite reads. */
 .room-chip {

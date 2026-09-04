@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { AccountMenu } from "./AccountMenu";
@@ -35,8 +35,14 @@ interface AppHeaderProps {
  *   3 · you — at most three controls, and the last two never move: the
  *       place's one action, then Player settings, then the identity chip.
  *
- * The phone keeps the same three slots with one control each: the mark or a
- * back arrow; the page name or the phase; one menu on the right — the
+ * The way back is in slot 1 too. The wordmark is a link to the lobby on
+ * every screen but a room, where a click must not silently give up the seat.
+ * A sub-page also gets a back arrow, on both devices: it goes back in
+ * history when the previous entry was one of ours, and to the lobby when
+ * the page was arrived at from outside.
+ *
+ * The phone keeps the same three slots with one control each: the arrow or
+ * the mark; the page name or the phase; one menu on the right — the
  * identity chip outside a room, the room menu inside one. Player settings
  * lives inside whichever menu that is.
  *
@@ -47,31 +53,46 @@ interface AppHeaderProps {
  */
 export function AppHeader({ page, room, center, action, phone }: AppHeaderProps = {}) {
   const navigate = useNavigate();
+  const location = useLocation();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useOpenSettings();
   const compact = phone ?? isNarrow;
   const mode = room ? "room" : page ? "page" : "lobby";
+  // React Router keys the first entry of a session "default"; anything else
+  // was navigated to from inside the app, so back is where you came from.
+  const goBack = () => {
+    if (location.key !== "default") navigate(-1);
+    else navigate("/");
+  };
+  const mark = (
+    <h1 className="lobby-wordmark">
+      {room ? (
+        <Wordmark size={compact ? 22 : 28} />
+      ) : (
+        <Link to="/" className="lobby-wordmark-link" aria-label="Sketchy · back to the lobby">
+          <Wordmark size={compact ? 22 : 28} decorative />
+        </Link>
+      )}
+    </h1>
+  );
 
   return (
     <header
       className={`lobby-header app-header app-header-${mode}${compact ? " is-compact" : ""}${room ? " game-header" : ""}${room && compact ? " game-header-mobile" : ""}`}
     >
       <div className="lobby-header-lead">
-        {mode === "page" && compact ? (
+        {mode === "page" && (
           <button
             type="button"
             className="btn btn-icon header-back-button"
-            onClick={() => navigate("/")}
-            aria-label="Back to lobby"
-            title="Back to lobby"
+            onClick={goBack}
+            aria-label="Back"
+            title="Back"
           >
             <BackIcon size={18} />
           </button>
-        ) : (
-          <h1 className="lobby-wordmark">
-            <Wordmark size={compact ? 22 : 28} />
-          </h1>
         )}
+        {!(mode === "page" && compact) && mark}
         {mode === "page" && !compact && (
           <>
             <span className="header-divider" aria-hidden="true" />

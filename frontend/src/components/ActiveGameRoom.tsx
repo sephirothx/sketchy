@@ -426,6 +426,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               startBusy={startBusy}
               startError={startError}
               onStart={() => void handleStartGame()}
+              onLeave={handleLeave}
               drawingCount={drawingRecap.length}
               onViewDrawings={() => setRecapOpen(true)}
               highlightCount={gameHighlights.length}

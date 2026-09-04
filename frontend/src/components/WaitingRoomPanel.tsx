@@ -44,6 +44,8 @@ interface WaitingRoomPanelProps {
   startBusy: boolean;
   startError: string | null;
   onStart: () => void;
+  /** The way out for whoever landed in the wrong room. */
+  onLeave: () => void;
   drawingCount: number;
   onViewDrawings: () => void;
   highlightCount: number;
@@ -347,6 +349,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               : "Waiting for a host"}
           </p>
         )}
+        {/* Wrong room, wrong night: the exit lives here as well as in the
+            Room menu, quiet enough not to compete with Start. */}
+        <button type="button" className="btn btn-ghost waiting-leave-link" onClick={props.onLeave}>
+          Leave the room
+        </button>
       </section>
 
       {settingsOpen && (
