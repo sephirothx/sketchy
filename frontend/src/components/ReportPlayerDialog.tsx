@@ -10,10 +10,11 @@ import { socketRequestErrorMessage } from "../lib/socket";
 Each part is stated from the acknowledgement rather than from what was asked
 for: the turn can end between opening the dialog and sending, and a reporter
 who ticked the box should hear that the drawing did not make it. */
-function sentSummary(
-  sent: { messages: number; drawing: boolean },
-  drawingRequested: boolean,
-): string {
+function sentSummary(sent: {
+  messages: number;
+  drawing: boolean;
+  drawingRequested: boolean;
+}): string {
   const messages =
     sent.messages > 0
       ? `${sent.messages} of their recent message${sent.messages === 1 ? "" : "s"}`
@@ -26,7 +27,7 @@ function sentSummary(
   const base = messages
     ? `Sent, with ${messages} attached.`
     : "Sent. They had said nothing in this room, so there are no messages attached.";
-  return drawingRequested
+  return sent.drawingRequested
     ? `${base} The turn had ended, so the drawing could not be attached.`
     : base;
 }
@@ -73,7 +74,16 @@ export function ReportPlayerDialog({
   const [includeDrawing, setIncludeDrawing] = useState(drawingOffered);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ messages: number; drawing: boolean } | null>(null);
+  // What went, and what was asked for, as of the moment of sending. Read
+  // from here rather than from the live props afterwards: the turn can end
+  // while the dialog is open, which takes the offer away before the
+  // confirmation renders, and the reporter who ticked the box should still
+  // hear why the drawing did not come with it.
+  const [sent, setSent] = useState<{
+    messages: number;
+    drawing: boolean;
+    drawingRequested: boolean;
+  } | null>(null);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: detailsRef });
 
@@ -87,11 +97,15 @@ export function ReportPlayerDialog({
     setBusy(true);
     setError(null);
     try {
+      // The reporter's choice, sent as made. If the turn has ended since
+      // the box was ticked the server declines it and says so; deciding
+      // that here would only hide the answer.
+      const drawingRequested = includeDrawing;
       const result = await reportPlayerInRoom({
         targetPlayerId,
         reason,
         details: details.trim(),
-        includeDrawing: drawingOffered && includeDrawing,
+        includeDrawing: drawingRequested,
       });
       if (!result.ok) {
         setError(result.error ?? "That report could not be sent.");
@@ -100,6 +114,7 @@ export function ReportPlayerDialog({
       setSent({
         messages: result.evidenceCount ?? 0,
         drawing: result.drawingAttached ?? false,
+        drawingRequested,
       });
     } catch (problem) {
       setError(socketRequestErrorMessage(problem, "send that report"));
@@ -200,9 +215,7 @@ export function ReportPlayerDialog({
           </>
         ) : (
           <>
-            <p className="modal-body">
-              {sentSummary(sent, drawingOffered && includeDrawing)}
-            </p>
+            <p className="modal-body">{sentSummary(sent)}</p>
             <button type="button" className="modal-button" onClick={onClose}>
               Done
             </button>
