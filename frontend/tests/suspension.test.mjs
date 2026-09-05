@@ -20,6 +20,7 @@ test("the refusal for a suspended account is recognised, and nothing else is", (
       reason: "Harassment",
       expiresAt: "2026-08-25T12:00:00.000Z",
       messages: [{ text: "the thing they said", at: "2026-08-24T11:00:00.000Z" }],
+      drawing: null,
     },
   );
 
@@ -36,6 +37,7 @@ test("a suspension with no reason recorded is still a suspension", () => {
     reason: null,
     expiresAt: null,
     messages: [],
+    drawing: null,
   });
 });
 
@@ -89,4 +91,22 @@ test("a malformed message is dropped rather than rendered", () => {
     ],
   );
   assert.deepEqual(reportedMessages(undefined), []);
+});
+
+
+test("a suspension refusal carries the reported drawing by its metadata", () => {
+  const suspension = suspensionFromPayload({
+    suspended: true,
+    reason: "Not a toaster.",
+    expiresAt: null,
+    messages: [],
+    drawing: { turnId: "t1", roundNumber: 2, prompt: "toaster", actionCount: 3, byteSize: 90, capturedAt: "2026-09-05T18:00:00Z" },
+  });
+  assert.equal(suspension?.drawing?.prompt, "toaster");
+  assert.equal(suspension?.drawing?.roundNumber, 2);
+});
+
+test("a malformed drawing on a refusal is dropped rather than rendered", () => {
+  const suspension = suspensionFromPayload({ suspended: true, drawing: { prompt: 7 } });
+  assert.equal(suspension?.drawing, null);
 });

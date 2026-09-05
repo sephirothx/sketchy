@@ -156,6 +156,8 @@ async def test_report_submission_is_bounded_private_and_audited(env):
         assert audit.details == {
             "report_id": str(report.id),
             "reason": "offensive_drawing",
+            # A REST report has no live canvas to copy from.
+            "has_drawing": False,
         }
 
 
@@ -1415,3 +1417,461 @@ async def test_lobby_context_omits_authors_the_reporter_blocked(env):
         ("cited", "the reported line"),
         ("context", "seen, said after"),
     ]
+
+
+async def _attach_drawing(factory, report_id: str, frame: bytes) -> None:
+    """Pin a canvas frame to a report the way the socket path does."""
+    from app.canvas_storage import stored_drawing_checksum
+    from app.db.models import PlayerReportDrawingEvidence
+
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PlayerReportDrawingEvidence(
+                    report_id=UUID(report_id),
+                    turn_id_snapshot=generate_uuid(),
+                    round_number=2,
+                    prompt_snapshot="lighthouse",
+                    action_count=0,
+                    format_magic="SKCH",
+                    format_version=1,
+                    payload=frame,
+                    byte_size=len(frame),
+                    checksum_sha256=stored_drawing_checksum(frame),
+                )
+            )
+
+
+async def test_the_queue_carries_the_drawing_and_only_a_reviewer_reads_it(env):
+    """The queue lists a drawing by its metadata; the bytes have their own
+    route, answered in the wire format and only to a moderator. A report
+    without one, or that does not exist, is a 404 either way."""
+    from app.canvas_history import PackedCanvasHistory
+
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "DrawingReporter")
+    target = await register(target_http, "DrawingTarget")
+    moderator = await register(moderator_http, "DrawingReviewer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    with_drawing = (
+        await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "offensive_drawing",
+                "details": "The lighthouse was not a lighthouse.",
+            },
+        )
+    ).json()["id"]
+    frame = PackedCanvasHistory().binary_payload()
+    await _attach_drawing(factory, with_drawing, frame)
+
+    listing = await moderator_http.get(
+        "/api/moderation/reports", params={"status": "pending"}
+    )
+    assert listing.status_code == 200
+    (report,) = listing.json()["reports"]
+    assert report["id"] == with_drawing
+    drawing = report["drawing"]
+    assert drawing["prompt"] == "lighthouse"
+    assert drawing["roundNumber"] == 2
+    assert drawing["actionCount"] == 0
+    assert drawing["byteSize"] == len(frame)
+    assert drawing["capturedAt"] is not None
+    assert "payload" not in drawing
+
+    bytes_response = await moderator_http.get(
+        f"/api/moderation/reports/{with_drawing}/drawing"
+    )
+    assert bytes_response.status_code == 200
+    assert bytes_response.content == frame
+    assert bytes_response.headers["content-type"] == "application/octet-stream"
+    assert bytes_response.headers["cache-control"] == "private, no-store"
+
+    # Evidence is for the reviewer: the reporter who asked for it cannot
+    # read it back, and neither can anyone else.
+    assert (
+        await reporter_http.get(f"/api/moderation/reports/{with_drawing}/drawing")
+    ).status_code == 403
+    assert (
+        await target_http.get(f"/api/moderation/reports/{with_drawing}/drawing")
+    ).status_code == 403
+
+    # Reviewing keeps the drawing with the report.
+    reviewed = await moderator_http.patch(
+        f"/api/moderation/reports/{with_drawing}",
+        json={"status": "resolved", "note": "It was a lighthouse after all."},
+    )
+    assert reviewed.status_code == 200
+    assert reviewed.json()["drawing"]["prompt"] == "lighthouse"
+    assert (
+        await moderator_http.get(f"/api/moderation/reports/{with_drawing}/drawing")
+    ).content == frame
+
+    without_drawing = (
+        await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "spam",
+                "details": "Same link, six times.",
+            },
+        )
+    ).json()["id"]
+    assert (
+        await moderator_http.get(
+            "/api/moderation/reports", params={"status": "pending"}
+        )
+    ).json()["reports"][0]["drawing"] is None
+    assert (
+        await moderator_http.get(f"/api/moderation/reports/{without_drawing}/drawing")
+    ).status_code == 404
+    assert (
+        await moderator_http.get(f"/api/moderation/reports/{generate_uuid()}/drawing")
+    ).status_code == 404
+
+
+async def test_a_corrupt_report_drawing_is_refused_rather_than_served(env):
+    """The checksum beside the bytes is checked on every read, as it is for
+    a stored turn drawing."""
+    from sqlalchemy import update
+
+    from app.canvas_history import PackedCanvasHistory
+    from app.db.models import PlayerReportDrawingEvidence
+
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "CorruptReporter")
+    target = await register(target_http, "CorruptTarget")
+    moderator = await register(moderator_http, "CorruptReviewer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    report_id = (
+        await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "offensive_drawing",
+                "details": "See the drawing.",
+            },
+        )
+    ).json()["id"]
+    await _attach_drawing(factory, report_id, PackedCanvasHistory().binary_payload())
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(PlayerReportDrawingEvidence)
+                .where(PlayerReportDrawingEvidence.report_id == UUID(report_id))
+                .values(checksum_sha256="0" * 64)
+            )
+
+    assert (
+        await moderator_http.get(f"/api/moderation/reports/{report_id}/drawing")
+    ).status_code == 500
+
+
+async def test_closed_cases_are_one_stream_newest_decision_first_and_paged(
+    env, monkeypatch
+):
+    """Decided player and content reports are read together, ordered by when
+    they were decided, under a page - the open queues can be held whole, but
+    closed cases accumulate for as long as the service runs, and without a
+    page the newest would be the ones nobody could reach."""
+    from sqlalchemy import update
+
+    from app.db.models import PromptContentReport
+
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "ClosedReviewer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    target = await register(new_client(), "ClosedTarget")
+    owner = await register(new_client(), "ClosedListOwner")
+
+    async def player_report(name: str) -> str:
+        http = new_client()
+        await register(http, name)
+        return (
+            await http.post(
+                "/api/reports",
+                json={
+                    "reportedUserId": target["id"],
+                    "reason": "spam",
+                    "details": f"Filed by {name}.",
+                },
+            )
+        ).json()["id"]
+
+    async def content_report(name: str) -> str:
+        report = PromptContentReport(
+            id=generate_uuid(),
+            reporter_user_id=UUID(moderator["id"]),
+            reported_owner_user_id=UUID(owner["id"]),
+            target_type="list",
+            list_name_snapshot=name,
+            reason="inappropriate",
+            details=f"About the list {name}.",
+        )
+        async with factory() as session:
+            async with session.begin():
+                session.add(report)
+        return str(report.id)
+
+    first = await player_report("ClosedFirst")
+    second = await player_report("ClosedSecond")
+    third = await player_report("ClosedThird")
+    still_open = await player_report("ClosedStillOpen")
+    list_a = await content_report("Alpha")
+    list_b = await content_report("Beta")
+
+    # Decided in an order that interleaves the two kinds, so the merge is
+    # what is being tested rather than one table's own order.
+    base = datetime(2026, 9, 5, 12, 0, tzinfo=timezone.utc)
+    decided = [
+        (PlayerReport, first, 1),
+        (PromptContentReport, list_a, 2),
+        (PlayerReport, second, 3),
+        (PromptContentReport, list_b, 4),
+        (PlayerReport, third, 5),
+    ]
+    async with factory() as session:
+        async with session.begin():
+            for model, row_id, minute in decided:
+                await session.execute(
+                    update(model)
+                    .where(model.id == UUID(row_id))
+                    .values(
+                        status=ReportStatus.RESOLVED.value,
+                        reviewed_by_user_id=UUID(moderator["id"]),
+                        resolution_note="Decided.",
+                        reviewed_at=base + timedelta(minutes=minute),
+                    )
+                )
+
+    def ids(page: dict) -> list[str]:
+        merged = sorted(
+            [(report["reviewedAt"], report["id"]) for report in page["players"]]
+            + [(report["reviewedAt"], report["id"]) for report in page["content"]],
+            reverse=True,
+        )
+        return [row_id for _, row_id in merged]
+
+    page_one = await moderator_http.get(
+        "/api/moderation/closed-cases", params={"limit": 2, "offset": 0}
+    )
+    assert page_one.status_code == 200
+    assert ids(page_one.json()) == [third, list_b]
+    assert page_one.json()["hasMore"] is True
+    # A player report on a closed page carries everything the open queue
+    # does, standing included.
+    assert page_one.json()["players"][0]["reportedPlayer"]["displayName"] == (
+        "ClosedTarget"
+    )
+
+    page_two = await moderator_http.get(
+        "/api/moderation/closed-cases", params={"limit": 2, "offset": 2}
+    )
+    assert ids(page_two.json()) == [second, list_a]
+    assert page_two.json()["hasMore"] is True
+
+    page_three = await moderator_http.get(
+        "/api/moderation/closed-cases", params={"limit": 2, "offset": 4}
+    )
+    assert ids(page_three.json()) == [first]
+    assert page_three.json()["hasMore"] is False
+    assert page_three.json()["content"] == []
+
+    # The one still waiting is not a closed case.
+    everything = await moderator_http.get("/api/moderation/closed-cases")
+    assert still_open not in ids(everything.json())
+    assert len(ids(everything.json())) == 5
+
+    # Bounded, and a reviewer's surface.
+    assert (
+        await moderator_http.get(
+            "/api/moderation/closed-cases", params={"offset": 1001}
+        )
+    ).status_code == 422
+    # At the cap the page stops offering an older one, even though older
+    # rows exist: a page that pointed past the bound would only be refused.
+    import app.api.moderation as moderation_module
+
+    monkeypatch.setattr(moderation_module, "MAX_CLOSED_CASES_OFFSET", 3)
+    capped = await moderator_http.get(
+        "/api/moderation/closed-cases", params={"limit": 2, "offset": 2}
+    )
+    assert ids(capped.json()) == [second, list_a]
+    assert capped.json()["hasMore"] is False
+    assert (
+        await new_client().get("/api/moderation/closed-cases")
+    ).status_code == 401
+
+
+async def test_a_rest_report_needs_no_words_of_its_own(env):
+    """The cited line is the complaint, so a lobby report may say nothing
+    beside it; blank is stored as empty rather than refused or padded."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    await register(reporter_http, "QuietReporter")
+    target = await register(target_http, "QuietTarget")
+    filed = await reporter_http.post(
+        "/api/reports",
+        json={"reportedUserId": target["id"], "reason": "spam", "details": "  "},
+    )
+    assert filed.status_code == 201
+    async with factory() as session:
+        report = await session.get(PlayerReport, UUID(filed.json()["id"]))
+        assert report.details == ""
+
+
+async def test_a_closed_case_says_what_was_done_and_by_whom(env):
+    """A report's own status only says decided. The queue reads the outcome
+    from what was done - a warning or suspension naming the report, the state
+    a content decision set - and resolves the reviewer's name when read."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "OutcomeReviewer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    # One reporter for every case: a reporter holds one open report per
+    # target, and these are five targets. Fewer registrations, too, which
+    # the fixture's rate limit counts.
+    reporter_http = new_client()
+    await register(reporter_http, "OutcomeReporter")
+
+    async def report_about(name: str) -> tuple[str, str]:
+        target_http = new_client()
+        target = await register(target_http, f"{name}Tgt")
+        filed = await reporter_http.post(
+            "/api/reports",
+            json={"reportedUserId": target["id"], "reason": "spam", "details": name},
+        )
+        return filed.json()["id"], target["id"]
+
+    dismissed, _ = await report_about("Dismissed")
+    warned, warned_target = await report_about("Warned")
+    suspended, suspended_target = await report_about("Suspended")
+    resolved, _ = await report_about("Resolved")
+    still_open, _ = await report_about("Open")
+
+    assert (
+        await moderator_http.patch(
+            f"/api/moderation/reports/{dismissed}",
+            json={"status": "dismissed", "note": "Nothing there."},
+        )
+    ).json()["outcome"] == "dismissed"
+    assert (
+        await moderator_http.post(
+            "/api/moderation/warnings",
+            json={"userId": warned_target, "reason": "Tone it down.", "reportId": warned},
+        )
+    ).status_code == 201
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={"userId": suspended_target, "reason": "Enough.", "reportId": suspended},
+        )
+    ).status_code == 201
+    reviewed = await moderator_http.patch(
+        f"/api/moderation/reports/{resolved}",
+        json={"status": "resolved", "note": "Handled elsewhere."},
+    )
+    assert reviewed.json()["outcome"] == "resolved"
+    assert reviewed.json()["reviewedBy"] == "OutcomeReviewer"
+
+    closed = (await moderator_http.get("/api/moderation/closed-cases")).json()
+    by_id = {report["id"]: report for report in closed["players"]}
+    assert {
+        report_id: by_id[report_id]["outcome"]
+        for report_id in (dismissed, warned, suspended, resolved)
+    } == {
+        dismissed: "dismissed",
+        warned: "warned",
+        suspended: "suspended",
+        resolved: "resolved",
+    }
+    assert {report["reviewedBy"] for report in by_id.values()} == {"OutcomeReviewer"}
+    assert still_open not in by_id
+    pending = (
+        await moderator_http.get("/api/moderation/reports", params={"status": "pending"})
+    ).json()["reports"]
+    assert [report["outcome"] for report in pending] == ["pending"]
+    assert pending[0]["reviewedBy"] is None
+
+
+async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
+    """The drawing the report carried is the player's own work, shown back
+    for the reason their words are: by its metadata in the notice, and its
+    bytes over a route only they can reach - the suspended one through the
+    ban-time credential, since every other request of theirs is refused."""
+    from app.canvas_history import PackedCanvasHistory
+
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    warned_http = new_client()
+    suspended_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "PicReporter")
+    warned = await register(warned_http, "PicWarned")
+    suspended = await register(suspended_http, "PicSuspended")
+    moderator = await register(moderator_http, "PicReviewer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    frame = PackedCanvasHistory().binary_payload()
+
+    async def report_with_drawing(target_id: str) -> str:
+        filed = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target_id,
+                "reason": "offensive_drawing",
+                "details": "See the drawing.",
+            },
+        )
+        await _attach_drawing(factory, filed.json()["id"], frame)
+        return filed.json()["id"]
+
+    warning_report = await report_with_drawing(warned["id"])
+    warning_id = (
+        await moderator_http.post(
+            "/api/moderation/warnings",
+            json={"userId": warned["id"], "reason": "Not a lighthouse.", "reportId": warning_report},
+        )
+    ).json()["id"]
+    pending = (await warned_http.get("/api/warnings/pending")).json()["warning"]
+    assert pending["drawing"]["prompt"] == "lighthouse"
+    assert "payload" not in pending["drawing"]
+    assert (
+        await warned_http.get(f"/api/warnings/{warning_id}/drawing")
+    ).content == frame
+    # Nobody else's to see: not the reporter's, and not a moderator's by
+    # this route either.
+    assert (
+        await reporter_http.get(f"/api/warnings/{warning_id}/drawing")
+    ).status_code == 404
+    # A warning without a drawing behind it has none to give.
+    assert (
+        await suspended_http.get("/api/suspension/drawing")
+    ).status_code == 404, "not suspended yet, so no suspension to ask about"
+
+    suspension_report = await report_with_drawing(suspended["id"])
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={"userId": suspended["id"], "reason": "Still not a lighthouse.", "reportId": suspension_report},
+        )
+    ).status_code == 201
+    refused = await suspended_http.get("/api/auth/me")
+    assert refused.status_code == 403
+    assert refused.json()["drawing"]["prompt"] == "lighthouse"
+    picture = await suspended_http.get("/api/suspension/drawing")
+    assert picture.status_code == 200
+    assert picture.content == frame
+    assert picture.headers["cache-control"] == "private, no-store"
+    # The escape hatch opens that one path and nothing beside it.
+    assert (await suspended_http.get("/api/warnings/pending")).status_code == 403

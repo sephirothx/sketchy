@@ -741,7 +741,8 @@
   color: var(--primary-ink);
 }
 
-.mod-queue-item-text span {
+/* The snippet only: a chip on the same rows keeps its own colour and weight. */
+.mod-queue-item-text span:not(.chip) {
   color: var(--muted);
   display: -webkit-box;
   font-size: 12px;
@@ -880,6 +881,85 @@
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.5;
+}
+
+/* The attached drawing, in the same white frame the room draws it in but
+   held to the evidence column rather than the room's 800px. */
+.mod-drawing {
+  margin: 12px 0 0;
+}
+
+.mod-drawing .reported-drawing-status {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.mod-drawing .reported-drawing-caption {
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+/* The outcome under a closed case's title, the same chip its decision card
+   carries: its own row, hugging its text rather than stretching across the
+   grid cell, and exempt from the snippet's line clamp. */
+.mod-queue-item-text .mod-outcome-chip {
+  justify-self: start;
+  margin: 2px 0 3px;
+}
+
+.mod-decision-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.mod-decision-head h2 {
+  margin-bottom: 0;
+}
+
+.mod-decision .mod-case-meta {
+  margin-top: 8px;
+}
+
+.mod-decision .mod-resolution {
+  margin-top: 10px;
+}
+
+.mod-drawing .canvas-wrapper,
+.mod-drawing .canvas-stack {
+  max-width: 520px;
+}
+
+.mod-drawing .canvas-stack {
+  border-left: 3px solid var(--danger);
+}
+
+.mod-drawing .drawing-canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.mod-drawing figcaption strong {
+  color: var(--ink);
+}
+
+/* Paging the closed stream: one row under the list, the page between. */
+.mod-pager {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.mod-pager-page {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .mod-note {

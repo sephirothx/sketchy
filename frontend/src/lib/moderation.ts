@@ -1,6 +1,6 @@
-import { apiRequest } from "./api.ts";
+import { apiBinaryRequest, apiRequest } from "./api.ts";
 import { emitWithAck } from "./socket.ts";
-import type { ModerationState } from "../types";
+import type { GamePhase, ModerationState } from "../types";
 
 export function canCastModerationVote(
   moderation: ModerationState,
@@ -25,6 +25,17 @@ export type ReportReason =
   | "spam"
   | "inappropriate_avatar";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
+/** What was done about a case, in one word. Player reports close as
+    dismissed, warned, suspended or a plain resolved; content reports as
+    dismissed, hidden, left_up or resolved. Pending until then. */
+export type ReportOutcome =
+  | "pending"
+  | "dismissed"
+  | "resolved"
+  | "warned"
+  | "suspended"
+  | "hidden"
+  | "left_up";
 
 export interface PlayerReportMessageEvidence {
   sourceMessageId: string;
@@ -44,6 +55,18 @@ export interface PlayerReportMessageEvidence {
   text: string;
   messageCreatedAt: string;
   copiedAt: string;
+}
+
+/** The canvas as it stood when the report was sent, by its metadata. The
+    bytes come from `fetchReportDrawing`, in the wire format a live canvas uses. */
+export interface PlayerReportDrawing {
+  turnId: string;
+  roundNumber: number;
+  /** What the drawer was asked to draw - server-held, so it may be read as fact. */
+  prompt: string;
+  actionCount: number;
+  byteSize: number;
+  capturedAt: string;
 }
 
 /** The reported player's standing, as a moderator weighs the case. */
@@ -70,8 +93,15 @@ export interface PlayerReport {
   details: string;
   contextSnapshot: Record<string, unknown>;
   messageEvidence: PlayerReportMessageEvidence[];
+  /** Null unless the reporter asked for the drawing and the reported seat was
+      the one drawing at the time. */
+  drawing: PlayerReportDrawing | null;
   status: ReportStatus;
+  outcome: ReportOutcome;
   reviewedByUserId: string | null;
+  /** The reviewer's name, resolved when the case is read; null until decided
+      or once the account is gone. */
+  reviewedBy: string | null;
   resolutionNote: string | null;
   createdAt: string;
   updatedAt: string;
@@ -94,17 +124,40 @@ export interface UserBan {
   revokeReason: string | null;
 }
 
+/** Whether a report about this seat can carry the drawing on the canvas.
+
+Only the drawer's own work is worth attaching, and only while the canvas still
+shows it: during the drawing and on the results screen that follows. The
+server applies the same rule to what it actually copies, so this decides what
+is offered and never what is sent. */
+export function canAttachDrawing(
+  phase: GamePhase,
+  drawerId: string | null | undefined,
+  targetPlayerId: string,
+): boolean {
+  if (phase !== "drawing" && phase !== "turn_results") return false;
+  return Boolean(drawerId) && drawerId === targetPlayerId;
+}
+
 /** Report somebody in the room you are both in.
 
 Addressed by room seat, not by account: the room's payloads deliberately carry
 no account ids, and filing a complaint is not a reason to learn one. The server
 resolves the seat and gathers the chat evidence itself, so nothing here has to
-be trusted. */
+be trusted. `includeDrawing` asks for the canvas to be copied too; the server
+takes it from the room's own state, and only if that seat is the one drawing. */
 export function reportPlayerInRoom(input: {
   targetPlayerId: string;
   reason: ReportReason;
   details: string;
-}): Promise<{ ok: boolean; id?: string; evidenceCount?: number; error?: string }> {
+  includeDrawing?: boolean;
+}): Promise<{
+  ok: boolean;
+  id?: string;
+  evidenceCount?: number;
+  drawingAttached?: boolean;
+  error?: string;
+}> {
   return emitWithAck("report_player", input);
 }
 
@@ -125,6 +178,28 @@ export function listModerationReports(status?: ReportStatus): Promise<{
 }> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiRequest(`/api/moderation/reports${query}`);
+}
+
+/** The drawing a report carries, in the wire format a live canvas uses. */
+export function fetchReportDrawing(reportId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/moderation/reports/${reportId}/drawing`);
+}
+
+/** How many closed cases one page of the queue shows. */
+export const CLOSED_CASES_PAGE_SIZE = 25;
+
+/** Decided player and content reports as one stream, newest decision first.
+
+Paged by the server rather than merged here, because closed cases accumulate
+for as long as the service runs and the newest are the ones worth reaching. */
+export function listClosedCases(input: { limit?: number; offset?: number } = {}): Promise<{
+  players: PlayerReport[];
+  content: PromptContentReport[];
+  hasMore: boolean;
+}> {
+  const limit = input.limit ?? CLOSED_CASES_PAGE_SIZE;
+  const offset = input.offset ?? 0;
+  return apiRequest(`/api/moderation/closed-cases?limit=${limit}&offset=${offset}`);
 }
 
 export function reviewModerationReport(
@@ -163,6 +238,33 @@ export interface PendingWarning {
   createdAt: string;
   /** The reported messages behind it - the player's own words. */
   messages: { text: string; at: string | null }[];
+  /** The drawing the report carried, if one did - the player's own work. */
+  drawing: PlayerReportDrawing | null;
+}
+
+/** The drawing behind the caller's own warning. */
+export function fetchWarningDrawing(warningId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/warnings/${warningId}/drawing`);
+}
+
+/** The drawing behind the caller's own suspension, reachable while suspended. */
+export function fetchSuspensionDrawing(): Promise<ArrayBuffer> {
+  return apiBinaryRequest("/api/suspension/drawing");
+}
+
+/** Keep only a payload shaped like a drawing's metadata. */
+export function reportedDrawing(value: unknown): PlayerReportDrawing | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.prompt !== "string" || typeof row.turnId !== "string") return null;
+  return {
+    turnId: row.turnId,
+    roundNumber: typeof row.roundNumber === "number" ? row.roundNumber : 0,
+    prompt: row.prompt,
+    actionCount: typeof row.actionCount === "number" ? row.actionCount : 0,
+    byteSize: typeof row.byteSize === "number" ? row.byteSize : 0,
+    capturedAt: typeof row.capturedAt === "string" ? row.capturedAt : "",
+  };
 }
 
 export function createUserWarning(input: {
@@ -206,7 +308,9 @@ export interface PromptContentReport {
   reason: string;
   details: string;
   status: ReportStatus;
+  outcome: ReportOutcome;
   reviewedByUserId: string | null;
+  reviewedBy: string | null;
   resolutionNote: string | null;
   moderationState: "active" | "hidden" | null;
   createdAt: string;

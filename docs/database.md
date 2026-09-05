@@ -117,6 +117,7 @@ erDiagram
     prompt_lists ||--o{ prompts : "display rows"
 
     player_reports ||--o{ player_report_message_evidence : "pins"
+    player_reports ||--o| player_report_drawing_evidence : "canvas"
     player_reports ||--o{ user_bans : "sources"
     player_reports ||--o{ user_warnings : "sources"
     room_messages ||--o{ player_report_message_evidence : "copied from"
@@ -126,7 +127,7 @@ erDiagram
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
-| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
+| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
@@ -628,6 +629,46 @@ Account deletion erases ordinary authored messages immediately and **tombstones 
 presentation** on copied evidence, `context` rows included — a third party's line copied
 into somebody else's report loses its name the same way; the evidence text continues
 under the protected report retention policy.
+
+### `player_report_drawing_evidence`
+`report_id` **PK** (FK → `player_reports`, CASCADE) · `turn_id_snapshot` ·
+`round_number` · `prompt_snapshot` · `action_count` · `format_magic` ·
+`format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `captured_at`.
+
+The canvas as it stood when a report about the player drawing on it was filed
+(R-MOD-14). One per report, and only when the reporter asked for it over
+`report_player` with `includeDrawing` **and** the reported seat held the pen in a
+phase where the canvas still showed the turn — the server decides both, so the
+frame is the reported player's work by construction.
+
+**Copied, never referenced.** The drawing on the canvas keeps changing after the
+report: the drawer can add to it, undo the part complained about, or clear it. The
+turn's own `turn_drawings` row is written only when the game ends, holds the
+turn's *final* state, and is erased when the drawer's account is deleted. What a
+moderator has to judge is what the reporter saw, so that is what is kept, for as
+long as the report is — the same rule as message evidence. `turn_id_snapshot`
+carries no foreign key for the reason `room_messages.turn_id` does not: the report
+is filed while the game is still being played, and a game abandoned before it ends
+never writes a `turn_records` row.
+
+The bytes are the same `SKCH` frame `turn_drawings` stores, under the same
+[`canvas_storage`](../backend/app/canvas_storage.py) rules: validated on ingest,
+the format named in the row so a decoder can be found without parsing, the checksum
+verified on every read, and `byte_size` under the same 8 MiB structural bound. The
+`payload` column is deferred in the model, so listing the queue and building an
+export never drag the bytes along; only
+`GET /api/moderation/reports/{report_id}/drawing` reads them.
+
+`prompt_snapshot` is what the drawer was asked to draw — server-held, so unlike the
+reporter's own words it may be read as fact, and it is what makes an "offensive
+drawing" judgeable at all. No drawer name is snapshotted here: the report already
+names the reported account, and a name would be one more thing deletion had to
+reach. A reporter's data export records that a drawing was attached and of which
+turn — never the bytes, and never the prompt, which a guesser who reported
+mid-turn has not earned and must not be able to read out of their own export
+(R-PRIV-02). The reported player sees it through a
+**Warning** or **Suspension** decided from the report, beside their cited
+words and for the same reason (R-MOD-12, R-BAN-08).
 
 ### `prompt_content_reports`
 Player-authored prompt content has a separate, target-specific flow.

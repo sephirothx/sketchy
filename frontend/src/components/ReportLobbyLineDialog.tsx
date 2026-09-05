@@ -16,11 +16,6 @@ const REASONS: { value: ReportReason; label: string }[] = [
   { value: "inappropriate_name", label: "Inappropriate name" },
 ];
 
-/** What the report says when the reporter adds nothing. The server refuses a
-blank, and the line itself is the complaint; a moderator opening the report
-should read that rather than an empty box. */
-const NO_DETAILS = "No details given - see the attached line.";
-
 /** Report a line of the lobby's chat.
 
 The room's dialog names a seat and lets the server pick the evidence. The
@@ -59,7 +54,10 @@ export function ReportLobbyLineDialog({
       await submitPlayerReport({
         reportedUserId: line.userId,
         reason,
-        details: details.trim() || NO_DETAILS,
+        // Sent as typed, empty included: the line itself is the complaint,
+        // and the queue says "no details given" rather than reading a
+        // stand-in as the reporter's words.
+        details: details.trim(),
         messageIds: [retainedMessageId],
       });
       setSent(true);

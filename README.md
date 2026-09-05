@@ -722,7 +722,17 @@ room. It also selects the evidence - the reported player's recent messages, as
 the reporter actually received them - which is what makes "is this message
 theirs" and "did you see it" true by construction rather than checks against a
 client's claims - and then what was said around them, by anyone, so the line
-is read where it was said. Reporting requires an account, because a report a
+is read where it was said. A report about the player drawing can carry the
+canvas as well: the dialog offers to include their drawing, on by default,
+and the server copies its own frame at that instant - only for the seat
+holding the pen, and only while the canvas still shows the turn, so a report
+about a guesser or one sent after the turn goes without it and says so. The
+copy outlives the turn's own stored drawing, which is its final state and is
+erased with the drawer's account; what the reporter saw is what a moderator
+judges. Because the server attaches the evidence, the report's own text is
+optional: what they said or drew is usually the whole complaint, and a
+reporter mid-turn should not be made to write it out. Reporting requires an
+account, because a report a
 moderator cannot follow up on helps nobody. One reporter holds one open report per
 player, the same rule content reports carry: saying it again while a moderator
 has yet to look adds no evidence and buries the queue, and once the report is
@@ -753,11 +763,20 @@ somebody from a report resolves that report - acting on a report is deciding
 it, and leaving it open puts it back in front of the next moderator.
 
 **Moderation** is where reports are read and acted on - player reports with
-their preserved message evidence, and prompt-content reports against a list or
-a single prompt. Resolving a content report records that it was looked at;
-hiding the list or prompt is the separate decision that acts on it, and the
-owner is told when it happens if they have a confirmed address. Every review
-takes a note, so no decision is anonymous.
+their preserved message evidence and, when one was attached, the drawing drawn
+from its stored frame beside the prompt the drawer was given, and
+prompt-content reports against a list or a single prompt. A warned or
+suspended player is shown that same drawing with their own words: it is
+their work, and a reason with nothing behind it is easy to dismiss. Resolving a content
+report records that it was looked at; hiding the list or prompt is the separate
+decision that acts on it, and the owner is told when it happens if they have a
+confirmed address. Every review takes a note, so no decision is anonymous. A
+**Closed** queue lists every decided case, player and content together, newest
+decision first and a page at a time, each with a chip saying how it ended -
+dismissed, warned, suspended; hidden or left up for content - and, opened, the
+decision itself: what was done, who did it, when, and the note. The open
+queues are small enough to show whole, but closed cases accumulate for as
+long as the server runs, and the newest are the ones worth finding.
 
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a

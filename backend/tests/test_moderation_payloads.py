@@ -51,10 +51,16 @@ def _report(**overrides) -> dict:
 
 
 @pytest.mark.parametrize("blank", BLANK)
-def test_report_details_that_are_only_whitespace_are_refused(blank):
-    """`min_length=1` counts characters; a moderator needs words."""
-    with pytest.raises(ValidationError, match="details cannot be blank"):
-        ReportBody(**_report(details=blank))
+def test_report_details_that_are_only_whitespace_are_stored_empty(blank):
+    """The evidence is the complaint, so the words beside it are optional -
+    and blank is stored as nothing rather than as a row of spaces."""
+    assert ReportBody(**_report(details=blank)).details == ""
+
+
+def test_report_details_may_be_left_out_altogether():
+    body = _report()
+    body.pop("details", None)
+    assert ReportBody(**body).details == ""
 
 
 @pytest.mark.parametrize("blank", BLANK)
@@ -99,7 +105,6 @@ def test_a_warning_without_a_reason_is_refused(blank):
 @pytest.mark.parametrize(
     ("build", "field"),
     [
-        (lambda v: ReportBody(**_report(details=v)), "details"),
         (lambda v: ReportReviewBody(status="resolved", note=v), "note"),
         (lambda v: BanBody(userId=str(uuid4()), reason=v), "reason"),
         (lambda v: BanRevokeBody(reason=v), "reason"),

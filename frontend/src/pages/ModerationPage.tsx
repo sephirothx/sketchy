@@ -2,13 +2,17 @@ import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
-import { Chip } from "../components/ui/Chip";
+import { ReportedDrawing } from "../components/ReportedDrawing";
+import { Chip, type ChipKind } from "../components/ui/Chip";
 import { SectionLabel } from "../components/ui/Card";
 
 import { ApiError } from "../lib/api";
 import {
+  CLOSED_CASES_PAGE_SIZE,
   createUserBan,
   createUserWarning,
+  fetchReportDrawing,
+  listClosedCases,
   listModerationReports,
   listPromptContentReports,
   listUserBans,
@@ -18,15 +22,15 @@ import {
   reviewPromptContentReport,
   type PlayerReport,
   type PromptContentReport,
+  type ReportOutcome,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
-  type ReportStatus,
   type UserBan,
 } from "../lib/moderation";
 import { canModerate } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
 
-type Filter = "open" | "players" | "content" | "bans";
+type Filter = "open" | "players" | "content" | "bans" | "closed";
 type CaseKind = "player" | "content" | "ban";
 type Selection = { kind: CaseKind; id: string };
 
@@ -35,16 +39,71 @@ type QueueEntry = {
   id: string;
   title: string;
   snippet: string;
-  createdAt: string;
+  /** What the list is ordered by and dated with: when the case arrived, or
+      for a closed one when it was decided. */
+  at: string;
   dot: "danger" | "warning" | "neutral";
+  /** How a closed case ended; absent while it is still open. */
+  outcome?: ReportOutcome;
 };
+
+/** One chip per outcome: what was done, in the colour of how serious it was.
+    Green for a case that ended with nothing against anyone, orange for a
+    warning, red for a suspension or a takedown. */
+const OUTCOMES: Record<ReportOutcome, { label: string; kind: ChipKind }> = {
+  pending: { label: "Waiting", kind: "neutral" },
+  dismissed: { label: "Dismissed", kind: "success" },
+  resolved: { label: "Resolved", kind: "neutral" },
+  warned: { label: "Warned", kind: "warning" },
+  suspended: { label: "Suspended", kind: "danger" },
+  hidden: { label: "Hidden", kind: "danger" },
+  left_up: { label: "Left up", kind: "success" },
+};
+
+function OutcomeChip({ outcome }: { outcome: ReportOutcome }) {
+  const { label, kind } = OUTCOMES[outcome] ?? OUTCOMES.resolved;
+  return <Chip kind={kind} className="mod-outcome-chip">{label}</Chip>;
+}
+
+/** How a closed case was decided: the outcome, who decided it and when, and
+    the note they left. The note alone used to stand for all three. */
+function DecisionCard({
+  report,
+  dateTime,
+}: {
+  report: PlayerReport | PromptContentReport;
+  dateTime: (date: Date) => string;
+}) {
+  return (
+    <section className="ops-card mod-decision" aria-label="Decision" data-testid="mod-decision">
+      <div className="mod-decision-head">
+        <h2>Decision</h2>
+        <OutcomeChip outcome={report.outcome} />
+      </div>
+      <p className="mod-case-meta">
+        {report.reviewedBy ? `By ${report.reviewedBy}` : "Reviewer no longer has an account"}
+        {report.reviewedAt ? ` · ${formatWhen(report.reviewedAt, dateTime)}` : ""}
+      </p>
+      {report.resolutionNote && (
+        <p className="mod-resolution">{report.resolutionNote}</p>
+      )}
+    </section>
+  );
+}
 
 const FILTERS: { name: Filter; label: string }[] = [
   { name: "open", label: "All open" },
   { name: "players", label: "Player reports" },
   { name: "content", label: "Prompt content" },
   { name: "bans", label: "Suspensions" },
+  { name: "closed", label: "Closed" },
 ];
+
+/** When a decided case was decided. The review stamps it; the last write
+    stands in for a row decided some other way. */
+function decidedAt(report: PlayerReport | PromptContentReport): string {
+  return report.reviewedAt ?? report.updatedAt;
+}
 
 function formatWhen(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
@@ -75,12 +134,44 @@ function accountAge(createdAt: string): string {
   return `${years} year${years === 1 ? "" : "s"}`;
 }
 
+/** The drawing a report carries, for the case view. */
+function ReportDrawing({
+  reportId,
+  drawing,
+  drawerName,
+  dateTime,
+}: {
+  reportId: string;
+  drawing: NonNullable<PlayerReport["drawing"]>;
+  drawerName: string;
+  dateTime: (date: Date) => string;
+}) {
+  return (
+    <ReportedDrawing
+      className="mod-drawing"
+      testId="mod-drawing"
+      load={() => fetchReportDrawing(reportId)}
+      label={`${drawerName}'s drawing of ${drawing.prompt}, as it was when reported`}
+      caption={
+        <>
+          The canvas when the report was sent, {formatWhen(drawing.capturedAt, dateTime)}:
+          round {drawing.roundNumber}, {drawing.actionCount} action
+          {drawing.actionCount === 1 ? "" : "s"}. They were asked to draw{" "}
+          <strong>{drawing.prompt || "nothing yet"}</strong>.
+        </>
+      }
+    />
+  );
+}
+
 export function ModerationPage() {
   const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const [filter, setFilter] = useState<Filter>("open");
-  const [status, setStatus] = useState<ReportStatus>("pending");
+  // Which page of closed cases is open, and whether an older one exists.
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [players, setPlayers] = useState<PlayerReport[]>([]);
   const [content, setContent] = useState<PromptContentReport[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
@@ -93,9 +184,7 @@ export function ModerationPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const allowed = hasResolved && canModerate(user?.role);
-  // "All open" is always the pending work; the status select only applies to
-  // the single-queue views, where looking back at decided cases makes sense.
-  const effectiveStatus: ReportStatus = filter === "open" ? "pending" : status;
+  const showingClosed = filter === "closed";
 
   const fail = useCallback((problem: unknown) => {
     setError(
@@ -107,44 +196,65 @@ export function ModerationPage() {
 
   const load = useCallback(() => {
     if (!allowed) return;
+    // The open queues are the pending work, whatever is being viewed: the
+    // "N open" chip counts them even while a closed page is on screen.
+    const pending = Promise.all([
+      listModerationReports("pending"),
+      listPromptContentReports("pending"),
+    ]);
+    // Closed cases are paged by the server, newest decision first, because
+    // they accumulate for as long as the service runs; the open queues are
+    // small enough to hold whole.
+    const cases = showingClosed
+      ? listClosedCases({
+          limit: CLOSED_CASES_PAGE_SIZE,
+          offset: page * CLOSED_CASES_PAGE_SIZE,
+        })
+      : pending.then(([playerResult, contentResult]) => ({
+          players: playerResult.reports,
+          content: contentResult.reports,
+          hasMore: false,
+        }));
     void Promise.all([
-      listModerationReports(effectiveStatus),
-      listPromptContentReports(effectiveStatus),
+      cases,
       // Everything, not only what is in force: a suspension that has been
       // lifted or has expired is part of the record of what was done.
       listUserBans(),
-      // The "N open" chip counts pending work whatever is being viewed.
-      effectiveStatus === "pending"
-        ? Promise.resolve(null)
-        : Promise.all([
-            listModerationReports("pending"),
-            listPromptContentReports("pending"),
-          ]),
+      pending,
     ])
-      .then(([playerResult, contentResult, banResult, pendingResult]) => {
-        setPlayers(playerResult.reports);
-        setContent(contentResult.reports);
+      .then(([caseResult, banResult, pendingResult]) => {
+        setPlayers(caseResult.players);
+        setContent(caseResult.content);
+        setHasMore(caseResult.hasMore);
         setBans(banResult.bans);
         setOpenCount(
-          pendingResult
-            ? pendingResult[0].reports.length + pendingResult[1].reports.length
-            : playerResult.reports.length + contentResult.reports.length,
+          pendingResult[0].reports.length + pendingResult[1].reports.length,
         );
         setError(null);
       })
       .catch(fail);
-  }, [allowed, effectiveStatus, fail]);
+  }, [allowed, showingClosed, page, fail]);
 
   useEffect(load, [load]);
 
+  // A page is a position in the closed stream and means nothing elsewhere.
+  function changeFilter(next: Filter) {
+    setFilter(next);
+    setPage(0);
+  }
+
   const queue = useMemo<QueueEntry[]>(() => {
+    // A closed case is dated by its decision and marked as settled; an open
+    // one by its arrival and by what kind of trouble it is.
     const playerEntries: QueueEntry[] = players.map((report) => ({
       kind: "player",
       id: report.id,
       title: humanize(report.reason),
-      snippet: report.details,
-      createdAt: report.createdAt,
-      dot: "danger",
+      // A room report may say nothing beyond its evidence.
+      snippet: report.details || "No details given.",
+      at: showingClosed ? decidedAt(report) : report.createdAt,
+      dot: showingClosed ? "neutral" : "danger",
+      outcome: showingClosed ? report.outcome : undefined,
     }));
     const contentEntries: QueueEntry[] = content.map((report) => ({
       kind: "content",
@@ -154,15 +264,16 @@ export function ModerationPage() {
         report.targetType === "prompt"
           ? `Prompt “${report.prompt}” in ${report.listName ?? "a list"}`
           : `List “${report.listName}”`,
-      createdAt: report.createdAt,
-      dot: "warning",
+      at: showingClosed ? decidedAt(report) : report.createdAt,
+      dot: showingClosed ? "neutral" : "warning",
+      outcome: showingClosed ? report.outcome : undefined,
     }));
     const banEntries: QueueEntry[] = bans.map((ban) => ({
       kind: "ban",
       id: ban.id,
       title: ban.displayName ?? "Deleted player",
       snippet: ban.reason,
-      createdAt: ban.createdAt,
+      at: ban.createdAt,
       dot: ban.isActive ? "danger" : "neutral",
     }));
     const entries =
@@ -173,8 +284,8 @@ export function ModerationPage() {
           : filter === "bans"
             ? banEntries
             : [...playerEntries, ...contentEntries];
-    return entries.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  }, [filter, players, content, bans]);
+    return entries.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }, [filter, showingClosed, players, content, bans]);
 
   // Derived rather than synced by an effect: whatever is clicked wins while
   // it is still in the queue, and the newest entry stands in otherwise.
@@ -279,30 +390,22 @@ export function ModerationPage() {
                 type="button"
                 className="mod-filter-pill"
                 aria-pressed={filter === name}
-                onClick={() => setFilter(name)}
+                onClick={() => changeFilter(name)}
               >
                 {label}
               </button>
             ))}
           </div>
-          {(filter === "players" || filter === "content") && (
-            <select
-              className="ops-select"
-              aria-label="Which cases to show"
-              value={status}
-              onChange={(change) => setStatus(change.target.value as ReportStatus)}
-            >
-              <option value="pending">Waiting for review</option>
-              <option value="resolved">Resolved</option>
-              <option value="dismissed">Dismissed</option>
-            </select>
-          )}
           <div className="mod-queue-list">
             {queue.length === 0 && (
               <p className="ops-empty">
                 {filter === "bans"
                   ? "Nobody has been suspended."
-                  : "Nothing in this queue."}
+                  : showingClosed
+                    ? page > 0
+                      ? "No older cases."
+                      : "No case has been decided yet."
+                    : "Nothing in this queue."}
               </p>
             )}
             {queue.map((entry) => {
@@ -328,13 +431,35 @@ export function ModerationPage() {
                   />
                   <span className="mod-queue-item-text">
                     <strong>{entry.title}</strong>
+                    {entry.outcome && <OutcomeChip outcome={entry.outcome} />}
                     <span>{entry.snippet}</span>
                   </span>
-                  <time dateTime={entry.createdAt}>{age(entry.createdAt)}</time>
+                  <time dateTime={entry.at}>{age(entry.at)}</time>
                 </button>
               );
             })}
           </div>
+          {showingClosed && (
+            <nav className="mod-pager" aria-label="Closed cases pages">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={page === 0}
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+              >
+                Newer
+              </button>
+              <span className="mod-pager-page">Page {page + 1}</span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!hasMore}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Older
+              </button>
+            </nav>
+          )}
         </aside>
 
         <div className="mod-case">
@@ -358,9 +483,9 @@ export function ModerationPage() {
               <div className="mod-case-columns">
                 <section className="ops-card" aria-label="Reported evidence">
                   <h2>Reported evidence</h2>
-                  {playerCase.details && (
-                    <p className="mod-case-details">{playerCase.details}</p>
-                  )}
+                  <p className="mod-case-details">
+                    {playerCase.details || "The reporter gave no details; the evidence is the complaint."}
+                  </p>
                   {playerCase.messageEvidence.length > 0 && (
                     <>
                       {/* One thread, in the order it was said: the cited
@@ -393,6 +518,24 @@ export function ModerationPage() {
                         saw it.
                       </p>
                     </>
+                  )}
+                  {playerCase.drawing ? (
+                    <ReportDrawing
+                      key={playerCase.id}
+                      reportId={playerCase.id}
+                      drawing={playerCase.drawing}
+                      drawerName={
+                        playerCase.reportedPlayer?.displayName ?? "The reported player"
+                      }
+                      dateTime={dateTime}
+                    />
+                  ) : (
+                    playerCase.reason === "offensive_drawing" && (
+                      <p className="mod-evidence-caption">
+                        No drawing was attached: the reporter did not include
+                        it, or the reported player was not drawing at the time.
+                      </p>
+                    )
                   )}
                 </section>
                 <aside className="ops-card" aria-label="Account context">
@@ -590,9 +733,7 @@ export function ModerationPage() {
                   </div>
                 </>
               ) : (
-                playerCase.resolutionNote && (
-                  <p className="mod-resolution">{playerCase.resolutionNote}</p>
-                )
+                <DecisionCard report={playerCase} dateTime={dateTime} />
               )}
             </>
           )}
@@ -699,9 +840,7 @@ export function ModerationPage() {
                   </div>
                 </>
               ) : (
-                contentCase.resolutionNote && (
-                  <p className="mod-resolution">{contentCase.resolutionNote}</p>
-                )
+                <DecisionCard report={contentCase} dateTime={dateTime} />
               )}
             </>
           )}

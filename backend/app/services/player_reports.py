@@ -16,21 +16,27 @@ construction. What is left in common is the writing, which is what lives here.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import undefer
 
+from app.canvas_storage import prepare_stored_drawing
 from app.db.models import (
     AuditEvent,
     PlayerReport,
+    PlayerReportDrawingEvidence,
     PlayerReportMessageEvidence,
     RoomMessage,
     UserBlock,
     generate_uuid,
 )
 from app.domain_values import AuditTargetType
+from app.game import Phase
+from app.rooms import Room
 
 
 # A report is a complaint about something that just happened, so the evidence
@@ -52,6 +58,93 @@ CONTEXT_WINDOW = timedelta(hours=12)
 # says between two lines the reporter saw.
 _CONTEXT_FETCH_FACTOR = 4
 
+# The canvas still shows the drawer's work in these two phases. Choosing a
+# prompt has a blank canvas and the game's end has the recap; a report from
+# either has nothing of the drawer's to copy.
+_PHASES_WITH_A_DRAWING = frozenset({Phase.DRAWING, Phase.TURN_RESULTS})
+
+
+@dataclass(frozen=True, slots=True)
+class CapturedDrawing:
+    """One turn's canvas, taken at the instant of a report and ready to store."""
+
+    turn_id: UUID
+    round_number: int
+    prompt: str
+    action_count: int
+    payload: bytes
+    format_magic: str
+    format_version: int
+    checksum_sha256: str
+
+
+def drawing_from_live_room(room: Room, target_player_id: str) -> CapturedDrawing | None:
+    """The canvas as it is right now, if the reported seat is the one drawing on it.
+
+    Selected by the server for the reason the messages are: the reporter asks
+    for the drawing to be included and never supplies it, so whether it is
+    the reported player's work is settled here, against the room's own
+    state, rather than checked against a client's claim. Nothing is copied
+    unless that seat holds the pen this turn and the canvas still shows the
+    turn - a report about a guesser, or one filed while the next drawer is
+    choosing, gets no drawing and the acknowledgement says so.
+
+    The frame is validated the way a stored drawing is on ingest, so a row
+    written here is one every future decoder can read.
+    """
+    game = room.game
+    if (
+        game is None
+        or game.current_drawer != target_player_id
+        or game.phase not in _PHASES_WITH_A_DRAWING
+        or game.current_turn_id is None
+    ):
+        return None
+    blob, magic, version, checksum = prepare_stored_drawing(game.canvas.sync_payload())
+    return CapturedDrawing(
+        turn_id=UUID(game.current_turn_id),
+        round_number=game.round_number,
+        prompt=game.prompt or "",
+        action_count=len(game.canvas.history),
+        payload=blob,
+        format_magic=magic.decode("ascii"),
+        format_version=version,
+        checksum_sha256=checksum,
+    )
+
+
+def drawing_evidence_payload(evidence: PlayerReportDrawingEvidence | None) -> dict | None:
+    """The attached drawing by its metadata; the bytes travel by their own route.
+
+    One shape for every reader - the moderator's queue, the warned player's
+    notice, the suspended player's refusal - so a drawing means the same
+    thing wherever it is shown.
+    """
+    if evidence is None:
+        return None
+    return {
+        "turnId": str(evidence.turn_id_snapshot),
+        "roundNumber": evidence.round_number,
+        "prompt": evidence.prompt_snapshot,
+        "actionCount": evidence.action_count,
+        "byteSize": evidence.byte_size,
+        "capturedAt": evidence.captured_at.isoformat(),
+    }
+
+
+async def drawing_evidence_for_report(
+    session: AsyncSession, report_id: UUID | None, *, with_bytes: bool = False
+) -> PlayerReportDrawingEvidence | None:
+    """The drawing a report carries, if any; `with_bytes` undefers the blob."""
+    if report_id is None:
+        return None
+    statement = select(PlayerReportDrawingEvidence).where(
+        PlayerReportDrawingEvidence.report_id == report_id
+    )
+    if with_bytes:
+        statement = statement.options(undefer(PlayerReportDrawingEvidence.payload))
+    return await session.scalar(statement)
+
 
 def record_player_report(
     session: AsyncSession,
@@ -65,6 +158,7 @@ def record_player_report(
     messages: list[RoomMessage],
     context_messages: list[RoomMessage] | None = None,
     context_snapshot: dict | None = None,
+    drawing: CapturedDrawing | None = None,
     request_id: str | None = None,
     ip_hash: str | None = None,
 ) -> PlayerReport:
@@ -76,7 +170,10 @@ def record_player_report(
     `messages` are the cited lines and `context_messages` what was said around
     them; both are copied the same way, and the rows are positioned in the
     order the lines were said so every reader gets the conversation back
-    rather than two lists to interleave.
+    rather than two lists to interleave. `drawing` is the canvas at the
+    moment of the report, when the report is about the player drawing on it
+    (`drawing_from_live_room`); it is kept for as long as the report is, for
+    the reason the messages are.
 
     Returns the unflushed row. Its `created_at` comes from the database, so a
     caller that needs the timestamp has to flush before reading it - returning
@@ -122,6 +219,21 @@ def record_player_report(
         )
         for position, (message, role) in enumerate(copied)
     )
+    if drawing is not None:
+        session.add(
+            PlayerReportDrawingEvidence(
+                report_id=report.id,
+                turn_id_snapshot=drawing.turn_id,
+                round_number=drawing.round_number,
+                prompt_snapshot=drawing.prompt,
+                action_count=drawing.action_count,
+                format_magic=drawing.format_magic,
+                format_version=drawing.format_version,
+                payload=drawing.payload,
+                byte_size=len(drawing.payload),
+                checksum_sha256=drawing.checksum_sha256,
+            )
+        )
     session.add(
         AuditEvent(
             id=generate_uuid(),
@@ -132,7 +244,13 @@ def record_player_report(
             target_id=str(reported_user_id),
             request_id=request_id,
             ip_hash=ip_hash,
-            details={"report_id": str(report.id), "reason": reason},
+            details={
+                "report_id": str(report.id),
+                "reason": reason,
+                # That a drawing was attached, never the drawing: the ledger
+                # records what was acted on, not the evidence (R-AUDIT-04).
+                "has_drawing": drawing is not None,
+            },
         )
     )
     return report

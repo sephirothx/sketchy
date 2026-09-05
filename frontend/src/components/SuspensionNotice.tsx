@@ -2,7 +2,9 @@ import { useClock } from "../hooks/useClock";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api";
+import { fetchSuspensionDrawing, reportedDrawing } from "../lib/moderation";
 import { socket } from "../lib/socket";
+import { ReportedDrawing } from "./ReportedDrawing";
 import {
   onSuspended,
   reportedMessages,
@@ -34,6 +36,7 @@ export function SuspensionNotice() {
         reason: typeof body.reason === "string" ? body.reason : null,
         expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
         messages: reportedMessages(body.messages),
+        drawing: reportedDrawing(body.drawing),
       });
     }
     socket.on("account_suspended", onAccountSuspended);
@@ -98,6 +101,22 @@ export function SuspensionNotice() {
                 </li>
               ))}
             </ul>
+          </>
+        )}
+        {suspension.drawing && (
+          <>
+            <p className="modal-body suspension-evidence-label">
+              The drawing this was about:
+            </p>
+            {/* Their own work, as it was when the report was made. The bytes
+                come through the one path a suspended account may still
+                reach for them. */}
+            <ReportedDrawing
+              className="suspension-drawing"
+              load={fetchSuspensionDrawing}
+              label={`Your drawing of ${suspension.drawing.prompt}, as it was reported`}
+              caption={<>You were asked to draw <strong>{suspension.drawing.prompt}</strong>.</>}
+            />
           </>
         )}
         <button

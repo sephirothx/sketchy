@@ -21,6 +21,7 @@ from app.domain_values import ReportStatus
 from app.rooms import majority_of
 from app.services.player_reports import (
     context_around,
+    drawing_from_live_room,
     evidence_from_live_room,
     record_player_report,
 )
@@ -124,7 +125,9 @@ async def report_player(ctx: HandlerContext, sid, data):
 
     Evidence is gathered here too, rather than accepted from the reporter. That
     is what makes the checks the REST path performs by hand - is this message
-    theirs, did you actually receive it - true by construction.
+    theirs, did you actually receive it - true by construction. The drawing
+    is the same: asked for with `includeDrawing`, taken from the live canvas,
+    and only when the reported seat is the one drawing on it.
     """
     try:
         payload = parse_payload(ReportPlayerPayload, data)
@@ -152,6 +155,12 @@ async def report_player(ctx: HandlerContext, sid, data):
         return {"ok": False, "error": "No such player in this room."}
     if not target.user_id:
         return {"ok": False, "error": "That player cannot be reported."}
+
+    # Taken before the database is touched, so the frame is the one on the
+    # canvas at the moment of the report rather than after a round-trip.
+    drawing = (
+        drawing_from_live_room(room, target.id) if payload.include_drawing else None
+    )
 
     async with ctx.session_factory() as session:
         async with session.begin():
@@ -198,6 +207,7 @@ async def report_player(ctx: HandlerContext, sid, data):
                 details=payload.details,
                 messages=messages,
                 context_messages=context_messages,
+                drawing=drawing,
                 context_snapshot={
                     "source": "room",
                     "room_code": room.code,
@@ -224,7 +234,14 @@ async def report_player(ctx: HandlerContext, sid, data):
         room.id,
         payload.reason,
     )
-    return {"ok": True, "id": report_id, "evidenceCount": len(messages)}
+    return {
+        "ok": True,
+        "id": report_id,
+        "evidenceCount": len(messages),
+        # Told apart from "not asked for": a reporter who ticked the box while
+        # the turn ended under them should hear that nothing was attached.
+        "drawingAttached": drawing is not None,
+    }
 
 
 def register(ctx: HandlerContext) -> None:

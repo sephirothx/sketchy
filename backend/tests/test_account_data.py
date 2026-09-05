@@ -29,6 +29,8 @@ from app.auth.account_data import (
     process_pending_data_exports,
 )
 from app.auth.routes import create_auth_router
+from app.canvas_history import PackedCanvasHistory
+from app.canvas_storage import stored_drawing_checksum
 from app.db.models import (
     AuditEvent,
     AuthSession,
@@ -39,6 +41,7 @@ from app.db.models import (
     GameRecord,
     IdentityAlias,
     PlayerReport,
+    PlayerReportDrawingEvidence,
     PlayerReportMessageEvidence,
     PromptConcept,
     PromptContentReport,
@@ -462,6 +465,24 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                     message_created_at=STARTED + timedelta(minutes=2),
                 )
             )
+            # The drawing the report was about. Its bytes are the reported
+            # player's work and stay with the report; the export says only
+            # that one was attached, and of which turn.
+            frame = PackedCanvasHistory().binary_payload()
+            session.add(
+                PlayerReportDrawingEvidence(
+                    report_id=submitted_report_id,
+                    turn_id_snapshot=owner_turn.id,
+                    round_number=1,
+                    prompt_snapshot="cat",
+                    action_count=0,
+                    format_magic="SKCH",
+                    format_version=1,
+                    payload=frame,
+                    byte_size=len(frame),
+                    checksum_sha256=stored_drawing_checksum(frame),
+                )
+            )
     exported_list = await SqlAlchemyPromptListRepository(factory).create_owned(
         owner["id"],
         name="Exported prompts",
@@ -563,6 +584,12 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         "Requester-authored prompt report"
     )
     assert "reportedOwnerUserId" not in artifact["promptContentReportsSubmitted"][0]
+    # That a drawing went with the report, and of which turn - never the
+    # prompt, which a guesser reporting mid-turn has not earned.
+    drawing = artifact["reportsSubmitted"][0]["drawing"]
+    assert drawing["turnId"] == str(owner_turn.id)
+    assert "prompt" not in drawing
+    assert "cat" not in json.dumps(artifact["reportsSubmitted"])
 
     encoded = json.dumps(artifact)
     assert "Private Bob" not in encoded

@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import {
   acknowledgeWarning,
   fetchPendingWarning,
+  fetchWarningDrawing,
+  reportedDrawing,
   type PendingWarning,
 } from "../lib/moderation";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
+import { ReportedDrawing } from "./ReportedDrawing";
 
 /** Keep only a payload shaped like a warning; a malformed one is dropped
 rather than rendered as "undefined" in front of the player. */
@@ -29,6 +32,7 @@ function warningFromPayload(payload: unknown): PendingWarning | null {
             !!line && typeof (line as { text?: unknown }).text === "string",
         )
       : [],
+    drawing: reportedDrawing(warning.drawing),
   };
 }
 
@@ -127,6 +131,20 @@ export function WarningNotice() {
                 </li>
               ))}
             </ul>
+          </>
+        )}
+        {warning.drawing && (
+          <>
+            <p className="modal-body suspension-evidence-label">
+              The drawing this was about:
+            </p>
+            <ReportedDrawing
+              key={warning.id}
+              className="suspension-drawing"
+              load={() => fetchWarningDrawing(warning.id)}
+              label={`Your drawing of ${warning.drawing.prompt}, as it was reported`}
+              caption={<>You were asked to draw <strong>{warning.drawing.prompt}</strong>.</>}
+            />
           </>
         )}
         <button

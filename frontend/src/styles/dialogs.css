@@ -220,6 +220,32 @@
   opacity: 0.6;
 }
 
+/* The reported drawing inside a notice: the room's white frame, at the
+   card's width, under the same left rule the messages carry. */
+.suspension-drawing {
+  border-left: 2px solid currentColor;
+  margin: 0 0 16px;
+  padding-left: 12px;
+}
+
+.suspension-drawing .canvas-wrapper,
+.suspension-drawing .canvas-stack {
+  max-width: none;
+}
+
+.suspension-drawing .drawing-canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.suspension-drawing .reported-drawing-status,
+.suspension-drawing .reported-drawing-caption {
+  font-size: 12px;
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
 .suspension-evidence-text {
   font-size: 14px;
 }
