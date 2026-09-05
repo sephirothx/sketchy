@@ -1575,7 +1575,9 @@ async def test_a_corrupt_report_drawing_is_refused_rather_than_served(env):
     ).status_code == 500
 
 
-async def test_closed_cases_are_one_stream_newest_decision_first_and_paged(env):
+async def test_closed_cases_are_one_stream_newest_decision_first_and_paged(
+    env, monkeypatch
+):
     """Decided player and content reports are read together, ordered by when
     they were decided, under a page - the open queues can be held whole, but
     closed cases accumulate for as long as the service runs, and without a
@@ -1695,6 +1697,16 @@ async def test_closed_cases_are_one_stream_newest_decision_first_and_paged(env):
             "/api/moderation/closed-cases", params={"offset": 1001}
         )
     ).status_code == 422
+    # At the cap the page stops offering an older one, even though older
+    # rows exist: a page that pointed past the bound would only be refused.
+    import app.api.moderation as moderation_module
+
+    monkeypatch.setattr(moderation_module, "MAX_CLOSED_CASES_OFFSET", 3)
+    capped = await moderator_http.get(
+        "/api/moderation/closed-cases", params={"limit": 2, "offset": 2}
+    )
+    assert ids(capped.json()) == [second, list_a]
+    assert capped.json()["hasMore"] is False
     assert (
         await new_client().get("/api/moderation/closed-cases")
     ).status_code == 401

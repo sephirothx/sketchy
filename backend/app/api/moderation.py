@@ -1020,7 +1020,13 @@ def create_moderation_router(
                 "content": [
                     _prompt_content_report_payload(report) for report in content
                 ],
-                "hasMore": len(merged) > offset + limit,
+                # False at the cap even when older rows exist: the page says
+                # what can be asked for next, and an Older that answers 422
+                # is a dead control rather than an honest one.
+                "hasMore": (
+                    len(merged) > offset + limit
+                    and offset + limit <= MAX_CLOSED_CASES_OFFSET
+                ),
             }
 
     @router.get("/moderation/prompt-content-reports")
