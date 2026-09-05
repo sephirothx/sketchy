@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db import async_engine, async_session_factory, init_db
+from app.db import init_db, maintenance_engine
 from app.db.models import AuditEvent, User, generate_uuid
 from app.domain_values import AccountState, AuditTargetType, UserRole
 
@@ -72,13 +72,12 @@ async def bootstrap_first_admin(
 
 
 async def _run(username: str, reason: str) -> AdminBootstrapResult:
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
-        return await bootstrap_first_admin(
-            async_session_factory, username=username, reason=reason
-        )
+        await init_db(engine)
+        return await bootstrap_first_admin(factory, username=username, reason=reason)
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

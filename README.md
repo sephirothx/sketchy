@@ -526,6 +526,11 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
+| `DB_STATEMENT_TIMEOUT_SECONDS` | `30` | PostgreSQL `statement_timeout` for the application's connections (`application_name` `sketchy-web`) |
+| `DB_LOCK_TIMEOUT_SECONDS` | `5` | PostgreSQL `lock_timeout` for the application's connections |
+| `DB_IDLE_TRANSACTION_TIMEOUT_SECONDS` | `60` | PostgreSQL `idle_in_transaction_session_timeout` for the application's connections |
+| `DB_MIGRATION_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `60` | The same three for `python -m app.db.migrate` (`sketchy-migration`); the lock budget covers the deploy advisory lock |
+| `DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `120` | The same three for every operator command (`sketchy-maintenance`): retention, projection rebuilds, drawing verification, exports, mail, metrics, the admin bootstrap and the operator reset |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
 | `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent |
 | `SMTP_PORT` | `587` | Relay port |

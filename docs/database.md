@@ -31,6 +31,7 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
 | Pool (PostgreSQL) | 5 persistent + 5 overflow, pre-ping, 10 s timeout, 30 min recycle; all four tunable | [`db/__init__.py:25`](../backend/app/db/__init__.py) |
+| Session budgets (PostgreSQL) | Every connection carries its role's `application_name` and server-enforced `statement_timeout` / `lock_timeout` / `idle_in_transaction_session_timeout`, sent by asyncpg at connect so a recycled or re-established connection carries them too: **web** 30 s / 5 s / 60 s, **migration** 600 s / 5 s / 60 s (the lock budget covers the deploy advisory lock), **maintenance** 600 s / 5 s / 120 s for every operator command. Validated from the environment at startup beside the pool settings; SQLite is untouched. They bound one statement, one lock wait and one idle transaction — not a whole sweep, which has budgets of its own (§10) (#555) | [`db/__init__.py`](../backend/app/db/__init__.py) (`POSTGRES_ROLE_BUDGETS`) |
 
 ### Identifiers
 
@@ -1497,6 +1498,19 @@ chain **down and up** on both PostgreSQL and SQLite, checks schema drift and the
 hand-written username index, then runs the whole backend suite against the migrated
 schema. A SQLite pass proves integrity, not concurrency: READ COMMITTED interleavings
 and row locks are only ever exercised on that job.
+
+### Budgets a PostgreSQL deployment enforces
+
+The application's connections identify themselves as `sketchy-web` in
+`pg_stat_activity` and are cut off by the server after 30 s of one statement, 5 s
+waiting for a lock, or 60 s idle inside a transaction; `python -m app.db.migrate`
+connects as `sketchy-migration` (600 s / 5 s / 60 s) and every operator command below
+as `sketchy-maintenance` (600 s / 5 s / 120 s). A statement that hits its budget fails
+with `canceling statement due to statement timeout` (or `lock timeout`) and the
+connection stays usable; an idle transaction that hits its budget has its connection
+terminated, and the pool's pre-ping replaces it on the next checkout. Override with the
+`DB_*_TIMEOUT_SECONDS` variables (README → Database & Configuration); raising one is
+not a fix for unbounded work, which the sweeps' own budgets bound.
 
 ### Production deploy order
 

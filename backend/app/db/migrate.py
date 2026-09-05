@@ -3,14 +3,18 @@ from __future__ import annotations
 
 import asyncio
 
-from app.db import async_engine, upgrade_database
+from app.db import create_db_engine, upgrade_database
 
 
 async def _run() -> None:
+    # The migration role: a short lock wait (the deploy advisory lock
+    # included) and a statement budget of its own, rather than the web
+    # engine's request-sized ones.
+    engine = create_db_engine(role="migration")
     try:
-        await upgrade_database(async_engine)
+        await upgrade_database(engine)
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

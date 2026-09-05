@@ -105,13 +105,14 @@ async def stop_delivery_loop(task: asyncio.Task[None] | None) -> None:
 
 
 async def _run(args) -> DeliveryResult:
-    from app.db import async_engine, async_session_factory, init_db
+    from app.db import init_db, maintenance_engine
 
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
-        return await deliver_pending(async_session_factory, batch_size=args.batch_size)
+        await init_db(engine)
+        return await deliver_pending(factory, batch_size=args.batch_size)
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

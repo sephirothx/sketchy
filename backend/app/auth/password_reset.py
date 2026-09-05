@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from app.auth.mail import queue_email
 from app.auth.password import PasswordPolicyError, hash_password, validate_password
 from app.auth.sessions import revoke_sessions
-from app.db import async_engine, async_session_factory, init_db
+from app.db import init_db, maintenance_engine
 from app.db.models import AuditEvent, User, generate_uuid
 from app.domain_values import AccountState, AuditTargetType, EmailTemplate
 
@@ -111,16 +111,17 @@ async def reset_password_as_operator(
 
 
 async def _run(args) -> OperatorResetResult:
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
+        await init_db(engine)
         return await reset_password_as_operator(
-            async_session_factory,
+            factory,
             username=args.username,
             password=args.password,
             reason=args.reason,
         )
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

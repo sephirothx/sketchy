@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
-from app.db import async_engine, async_session_factory, init_db
+from app.db import init_db, maintenance_engine
 from app.db.models import (
     AuditEvent,
     AuthSession,
@@ -1661,11 +1661,12 @@ def export_status_payload(job: DataExport) -> dict:
 
 
 async def _run_pending(limit: int) -> int:
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
-        return await process_pending_data_exports(async_session_factory, limit=limit)
+        await init_db(engine)
+        return await process_pending_data_exports(factory, limit=limit)
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

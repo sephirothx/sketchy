@@ -24,7 +24,7 @@ from app.canvas_storage import (
     UnsupportedStoredDrawingError,
     stored_drawing_wire_payload,
 )
-from app.db import async_engine, async_session_factory, init_db
+from app.db import init_db, maintenance_engine
 from app.db.models import TurnDrawing
 from app.domain_values import TurnDrawingStatus
 
@@ -83,13 +83,12 @@ async def verify_stored_drawings(
 
 
 async def _run(args) -> DrawingVerification:
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
-        return await verify_stored_drawings(
-            async_session_factory, batch_size=args.batch_size
-        )
+        await init_db(engine)
+        return await verify_stored_drawings(factory, batch_size=args.batch_size)
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

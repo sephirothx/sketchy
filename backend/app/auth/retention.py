@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db import async_engine, async_session_factory, init_db
+from app.db import init_db, maintenance_engine
 from app.db.models import (
     AuditEvent,
     AuthSession,
@@ -292,17 +292,18 @@ async def purge_stale_anonymous_accounts(
 
 
 async def _run(args) -> AnonymousRetentionResult:
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
+        await init_db(engine)
         return await purge_stale_anonymous_accounts(
-            async_session_factory,
+            factory,
             unused_retention_days=args.unused_days,
             player_retention_days=args.player_days,
             batch_size=args.batch_size,
             apply=args.apply,
         )
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def sweep_interval_seconds(environ: dict[str, str] | None = None) -> float:

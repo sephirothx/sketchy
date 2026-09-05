@@ -33,6 +33,34 @@ POSTGRES_POOL_TIMEOUT_SECONDS = 10
 POSTGRES_POOL_RECYCLE_SECONDS = 1_800
 POSTGRES_MIGRATION_LOCK_ID = int.from_bytes(b"SKETCHY", "big")
 
+# Server-enforced budgets for a PostgreSQL connection, by the role the
+# process plays (#555). These bound one statement, one lock wait and one
+# idle transaction; they do not bound a whole retention run or a
+# transaction that keeps issuing statements - the sweeps' own budgets do
+# that. The web role is the application; the migration role holds DDL and
+# the deploy advisory lock, where waiting long is worse than failing fast;
+# the maintenance role is every operator command that reads or rewrites
+# history and may legitimately run a long statement.
+#   statement_timeout, lock_timeout, idle_in_transaction_session_timeout
+POSTGRES_ROLE_BUDGETS: dict[str, tuple[int, int, int]] = {
+    "web": (30, 5, 60),
+    "migration": (600, 5, 60),
+    "maintenance": (600, 5, 120),
+}
+_ROLE_ENV = {
+    "web": ("DB_STATEMENT_TIMEOUT_SECONDS", "DB_LOCK_TIMEOUT_SECONDS", "DB_IDLE_TRANSACTION_TIMEOUT_SECONDS"),
+    "migration": (
+        "DB_MIGRATION_STATEMENT_TIMEOUT_SECONDS",
+        "DB_MIGRATION_LOCK_TIMEOUT_SECONDS",
+        "DB_MIGRATION_IDLE_TRANSACTION_TIMEOUT_SECONDS",
+    ),
+    "maintenance": (
+        "DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS",
+        "DB_MAINTENANCE_LOCK_TIMEOUT_SECONDS",
+        "DB_MAINTENANCE_IDLE_TRANSACTION_TIMEOUT_SECONDS",
+    ),
+}
+
 
 class DatabaseRevisionError(RuntimeError):
     """Raised when an externally managed database is not at Alembic head."""
@@ -73,11 +101,42 @@ def get_database_url(raw_url: str | None = None) -> str:
     return url
 
 
-def get_engine_connect_args(url: str) -> dict[str, Any]:
-    """Provide driver-specific engine parameters."""
+def get_engine_connect_args(url: str, *, role: str = "web") -> dict[str, Any]:
+    """Provide driver-specific engine parameters.
+
+    For PostgreSQL that is the role's `application_name` - what
+    `pg_stat_activity` shows - and its server-enforced budgets. asyncpg sends
+    `server_settings` on every connection it opens, so a pooled connection
+    that was recycled or re-established after a pre-ping failure carries
+    them too; nothing has to re-apply them on checkout.
+    """
     if url.startswith("sqlite"):
         return {"check_same_thread": False}
+    if url.startswith("postgresql"):
+        return {"server_settings": postgres_server_settings(role)}
     return {}
+
+
+def postgres_server_settings(role: str = "web") -> dict[str, str]:
+    """The role's PostgreSQL session settings, validated from the environment.
+
+    Values are seconds in the environment and milliseconds on the wire.
+    Invalid values fail here, at startup, next to the pool settings.
+    """
+    if role not in POSTGRES_ROLE_BUDGETS:
+        raise ValueError(f"unknown database role {role!r}")
+    defaults = POSTGRES_ROLE_BUDGETS[role]
+    names = _ROLE_ENV[role]
+    statement, lock, idle = (
+        _integer_setting(name, default, minimum=1)
+        for name, default in zip(names, defaults, strict=True)
+    )
+    return {
+        "application_name": f"sketchy-{role}",
+        "statement_timeout": str(statement * 1000),
+        "lock_timeout": str(lock * 1000),
+        "idle_in_transaction_session_timeout": str(idle * 1000),
+    }
 
 
 def _integer_setting(name: str, default: int, *, minimum: int) -> int:
@@ -182,14 +241,14 @@ def instrument_engine(engine: AsyncEngine, store: Telemetry | None = None) -> En
     return EngineListeners(before=before, after=after, failed=failed)
 
 
-def create_db_engine(url: str | None = None) -> AsyncEngine:
-    """Create an async SQLAlchemy engine instance."""
+def create_db_engine(url: str | None = None, *, role: str = "web") -> AsyncEngine:
+    """Create an async SQLAlchemy engine instance for one database role."""
     resolved_url = url or get_database_url()
     pool_options = get_engine_pool_options(resolved_url)
     engine = create_async_engine(
         resolved_url,
         echo=False,
-        connect_args=get_engine_connect_args(resolved_url),
+        connect_args=get_engine_connect_args(resolved_url, role=role),
         future=True,
         **pool_options,
     )
@@ -220,6 +279,19 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
     expire_on_commit=False,
     class_=AsyncSession,
 )
+
+
+def maintenance_engine() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+    """An engine and session factory for an operator command.
+
+    Separate from the process-wide web engine on purpose: a rebuild, a
+    verification pass or an export batch may run statements far longer than
+    a request may, and gets the maintenance budgets rather than the web
+    ones by accident of sharing the import.
+    """
+    engine = create_db_engine(role="maintenance")
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    return engine, factory
 
 
 def get_alembic_config(ini_path: Path | None = None) -> AlembicConfig:

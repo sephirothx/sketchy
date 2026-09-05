@@ -408,19 +408,18 @@ async def stored_event_count(
 
 
 async def _run_cli(args) -> tuple[int, int]:
-    from app.db import async_engine, async_session_factory, init_db
+    from app.db import init_db, maintenance_engine
 
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
-        written = await flush_events(async_session_factory)
+        await init_db(engine)
+        written = await flush_events(factory)
         removed = (
-            await purge_expired_events(async_session_factory, days=args.days)
-            if args.purge
-            else 0
+            await purge_expired_events(factory, days=args.days) if args.purge else 0
         )
         return written, removed
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:

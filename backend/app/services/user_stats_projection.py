@@ -482,16 +482,15 @@ async def rebuild_user_stats_projection(
 
 
 async def _run_cli(user_id: UUID | None) -> None:
-    from app.db import async_engine, async_session_factory, init_db
+    from app.db import init_db, maintenance_engine
 
+    engine, factory = maintenance_engine()
     try:
-        await init_db()
-        rows = await rebuild_user_stats_projection(
-            async_session_factory, user_id=user_id
-        )
+        await init_db(engine)
+        rows = await rebuild_user_stats_projection(factory, user_id=user_id)
         print(f"Rebuilt {rows} daily user-stat projection rows.")
     finally:
-        await async_engine.dispose()
+        await engine.dispose()
 
 
 def main() -> None:
