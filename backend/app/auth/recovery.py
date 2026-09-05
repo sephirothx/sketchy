@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.email import EmailAddressError, normalize_email
 from app.auth.mail import queue_email
-from app.auth.sessions import revoke_all_sessions
+from app.auth.sessions import revoke_sessions
 from app.auth.tokens import (
     AuthTokenPurpose,
     consume_token,
@@ -344,7 +344,9 @@ async def change_password(
     changed_at = now or datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
-            user = await session.get(User, user_id)
+            # Locked so a reset and a change racing for the same account apply
+            # one after the other, each revoking what the other issued.
+            user = await session.get(User, user_id, with_for_update=True)
             if user is None or user.state != AccountState.REGISTERED.value:
                 return False
             user.password_hash = password_hash
@@ -370,11 +372,10 @@ async def change_password(
                     details={},
                 )
             )
-
-    # Outside the transaction above, for the same reason a reset does it here:
-    # revoking opens its own, and a change that took effect while every session
-    # stood is the one failure worth avoiding.
-    await revoke_all_sessions(session_factory, user_id=str(user_id), now=changed_at)
+            # In the same transaction as the new password: a change that took
+            # effect while every session stood is the one failure worth
+            # avoiding, and only one commit can rule it out.
+            await revoke_sessions(session, user_id=user_id, now=changed_at)
     return True
 
 
@@ -399,7 +400,10 @@ async def reset_password(
             )
             if record is None:
                 return None
-            user = await session.get(User, record.user_id)
+            # The claim above locked the token row; the account row comes
+            # second, always, so a concurrent change (which locks only the
+            # account) cannot deadlock with a reset.
+            user = await session.get(User, record.user_id, with_for_update=True)
             if user is None or user.state != AccountState.REGISTERED.value:
                 return None
             user.password_hash = password_hash
@@ -425,12 +429,9 @@ async def reset_password(
                     details={},
                 )
             )
+            # Token spent, password set, devices out, mail and audit queued:
+            # one commit, so a crash anywhere leaves all of it undone rather
+            # than a new password with every old session still standing.
+            await revoke_sessions(session, user_id=user.id, now=changed_at)
             reset_user_id = user.id
-
-    # Outside the transaction above: revoking opens its own, and a reset that
-    # changed the password but left every session standing would be the one
-    # failure worth avoiding here.
-    await revoke_all_sessions(
-        session_factory, user_id=str(reset_user_id), now=changed_at
-    )
     return reset_user_id

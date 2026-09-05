@@ -277,23 +277,40 @@ async def revoke_session(
             return result.rowcount == 1
 
 
+async def revoke_sessions(
+    database: AsyncSession,
+    *,
+    user_id: str | UUID,
+    now: datetime | None = None,
+) -> int:
+    """Revoke every live session of an account inside the caller's transaction.
+
+    A password reset or change wants this to commit with the new credential,
+    or not at all: a crash between the two would leave a committed password
+    and every old device still signed in (#607), which is the one outcome
+    R-AUTH-10 exists to rule out.
+    """
+    result = await database.execute(
+        update(AuthSession)
+        .where(
+            AuthSession.user_id == UUID(str(user_id)),
+            AuthSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=now or datetime.now(timezone.utc))
+    )
+    return int(result.rowcount or 0)
+
+
 async def revoke_all_sessions(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     user_id: str,
     now: datetime | None = None,
 ) -> int:
+    """`revoke_sessions` in a transaction of its own, for callers that have none."""
     async with session_factory() as database:
         async with database.begin():
-            result = await database.execute(
-                update(AuthSession)
-                .where(
-                    AuthSession.user_id == UUID(user_id),
-                    AuthSession.revoked_at.is_(None),
-                )
-                .values(revoked_at=now or datetime.now(timezone.utc))
-            )
-            return int(result.rowcount or 0)
+            return await revoke_sessions(database, user_id=user_id, now=now)
 
 
 async def list_active_sessions(

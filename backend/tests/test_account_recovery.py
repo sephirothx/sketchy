@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import os
 from uuid import UUID
 
 import pytest
@@ -709,3 +710,267 @@ async def test_a_password_change_without_a_verified_address_sends_no_mail(env):
     # Every session went with it, this one included: the route is what signs
     # the caller back in, and nothing here did.
     assert (await http.get("/api/auth/me")).json() is None
+
+
+# --- #607: one consumer per link, one commit per credential change ---------
+
+
+async def test_two_submissions_of_one_link_admit_exactly_one_consumer(env):
+    """The database, not the caller, decides who spends a token.
+
+    A select followed by an ORM delete let two transactions both read the
+    row and both be told yes before either delete ran. The claim is now one
+    conditional DELETE ... RETURNING: on PostgreSQL the second waits on the
+    row lock and then deletes nothing; on SQLite's single connection it simply
+    finds nothing.
+    """
+    import asyncio
+
+    from app.auth.tokens import consume_token
+
+    new_client, factory = env
+    http = new_client()
+    await register(http, "Twice", email="twice@example.com")
+    await verify_via_email(http, factory)
+    await http.post("/api/auth/password/forgot", json={"identifier": "Twice"})
+    token = token_in(await drain(factory))
+
+    first_claimed = asyncio.Event()
+    release_first = asyncio.Event()
+
+    async def claim(hold: bool):
+        async with factory() as session:
+            async with session.begin():
+                record = await consume_token(
+                    session, token=token, purpose=AuthTokenPurpose.PASSWORD_RESET
+                )
+                if hold:
+                    first_claimed.set()
+                    await release_first.wait()
+                return record
+
+    first = asyncio.create_task(claim(True))
+    await first_claimed.wait()
+    second = asyncio.create_task(claim(False))
+    # On PostgreSQL the second delete is now waiting on the row the first
+    # holds; there is nothing observable to wait on for that, so give it a
+    # moment to be waiting before the first commits.
+    await asyncio.sleep(0.2)
+    release_first.set()
+    results = await asyncio.gather(first, second)
+
+    assert results[0] is not None
+    assert results[1] is None
+    async with factory() as session:
+        assert await session.scalar(select(func.count(AuthToken.token_hash))) == 0
+
+
+async def test_a_link_presented_for_another_purpose_is_refused_and_kept(env):
+    """A wrong-purpose presentation spends nothing: the right one still works."""
+    from app.auth.tokens import consume_token
+
+    new_client, factory = env
+    http = new_client()
+    await register(http, "Purposeful", email="purposeful@example.com")
+    await verify_via_email(http, factory)
+    await http.post("/api/auth/password/forgot", json={"identifier": "Purposeful"})
+    token = token_in(await drain(factory))
+
+    async with factory() as session:
+        async with session.begin():
+            assert (
+                await consume_token(
+                    session, token=token, purpose=AuthTokenPurpose.EMAIL_VERIFY
+                )
+                is None
+            )
+    check = await http.post("/api/auth/password/reset/check", json={"token": token})
+    assert check.json()["valid"] is True
+
+
+async def test_a_failure_before_commit_leaves_the_password_the_link_and_the_devices(
+    env, monkeypatch
+):
+    """R-AUTH-10 is one transaction: a crash between the new password and the
+    revocation must leave both undone, so the same link works on retry and
+    the other device is only out once the password is really changed."""
+    import app.auth.recovery as recovery
+
+    new_client, factory = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Fragile", email="fragile@example.com")
+    await verify_via_email(laptop, factory)
+    assert (
+        await phone.post(
+            "/api/auth/login", json={"username": "Fragile", "password": PASSWORD}
+        )
+    ).status_code == 200
+    await laptop.post("/api/auth/password/forgot", json={"identifier": "Fragile"})
+    token = token_in(await drain(factory))
+
+    async def crash(session, **_):
+        raise RuntimeError("crashed between the password and the revocation")
+
+    monkeypatch.setattr(recovery, "revoke_sessions", crash)
+    with pytest.raises(RuntimeError):
+        await recovery.reset_password(factory, token=token, password_hash="new-hash")
+    monkeypatch.undo()
+
+    # Nothing moved: the phone is still in, the old password still works, and
+    # the link was not spent by a transaction that did not commit.
+    assert (await phone.get("/api/auth/me")).json()["id"] == account["id"]
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Fragile", "password": PASSWORD}
+        )
+    ).status_code == 200
+    check = await laptop.post("/api/auth/password/reset/check", json={"token": token})
+    assert check.json()["valid"] is True
+
+    retry = await laptop.post(
+        "/api/auth/password/reset", json={"token": token, "password": NEW_PASSWORD}
+    )
+    assert retry.status_code == 200
+    assert (await phone.get("/api/auth/me")).json() is None
+
+
+async def test_a_failed_password_change_leaves_every_device_signed_in(env, monkeypatch):
+    """R-AUTH-17 ends the way a reset does, and fails the way a reset does."""
+    import app.auth.recovery as recovery
+
+    new_client, factory = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Changing")
+    assert (
+        await phone.post(
+            "/api/auth/login", json={"username": "Changing", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+    async def crash(session, **_):
+        raise RuntimeError("crashed between the password and the revocation")
+
+    monkeypatch.setattr(recovery, "revoke_sessions", crash)
+    with pytest.raises(RuntimeError):
+        await recovery.change_password(
+            factory, user_id=UUID(account["id"]), password_hash="new-hash"
+        )
+    monkeypatch.undo()
+
+    assert (await phone.get("/api/auth/me")).json()["id"] == account["id"]
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Changing", "password": PASSWORD}
+        )
+    ).status_code == 200
+    async with factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.event_type == "account.password_changed"
+                )
+            )
+            == 0
+        )
+
+
+async def test_a_failed_operator_reset_changes_nothing(env, monkeypatch):
+    import app.auth.password_reset as operator
+
+    new_client, factory = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Stranded2")
+    assert (
+        await phone.post(
+            "/api/auth/login", json={"username": "Stranded2", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+    async def crash(session, **_):
+        raise RuntimeError("crashed between the password and the revocation")
+
+    monkeypatch.setattr(operator, "revoke_sessions", crash)
+    with pytest.raises(RuntimeError):
+        await operator.reset_password_as_operator(
+            factory, username="stranded2", password=NEW_PASSWORD, reason="asked"
+        )
+    monkeypatch.undo()
+
+    assert (await phone.get("/api/auth/me")).json()["id"] == account["id"]
+    assert (
+        await new_client().post(
+            "/api/auth/login", json={"username": "Stranded2", "password": PASSWORD}
+        )
+    ).status_code == 200
+
+    result = await operator.reset_password_as_operator(
+        factory, username="stranded2", password=NEW_PASSWORD, reason="asked"
+    )
+    assert result.sessions_revoked >= 1
+    assert (await phone.get("/api/auth/me")).json() is None
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="proves row locking, which SQLite's single test connection cannot",
+)
+async def test_a_reset_and_a_change_racing_for_one_account_apply_in_turn(
+    env, monkeypatch
+):
+    """Both lock the account row, so they serialise: the change waits for the
+    reset to commit, then wins the password, and each revokes what stood
+    before it. Two writers on SQLite's one shared connection interleave inside
+    one transaction instead, so this is a PostgreSQL-only proof."""
+    import asyncio
+
+    import app.auth.recovery as recovery
+
+    new_client, factory = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Racer", email="racer@example.com")
+    await verify_via_email(laptop, factory)
+    assert (
+        await phone.post(
+            "/api/auth/login", json={"username": "Racer", "password": PASSWORD}
+        )
+    ).status_code == 200
+    await laptop.post("/api/auth/password/forgot", json={"identifier": "Racer"})
+    token = token_in(await drain(factory))
+
+    real_revoke = recovery.revoke_sessions
+    reset_is_holding_the_row = asyncio.Event()
+    let_the_reset_commit = asyncio.Event()
+    calls: list[str] = []
+
+    async def paused(session, *, user_id, now=None):
+        calls.append("revoke")
+        if len(calls) == 1:
+            reset_is_holding_the_row.set()
+            await let_the_reset_commit.wait()
+        return await real_revoke(session, user_id=user_id, now=now)
+
+    monkeypatch.setattr(recovery, "revoke_sessions", paused)
+    reset = asyncio.create_task(
+        recovery.reset_password(factory, token=token, password_hash="from-the-reset")
+    )
+    await reset_is_holding_the_row.wait()
+    change = asyncio.create_task(
+        recovery.change_password(
+            factory, user_id=UUID(account["id"]), password_hash="from-the-change"
+        )
+    )
+    await asyncio.sleep(0.2)
+    assert not change.done(), "the change must wait for the reset's row lock"
+    let_the_reset_commit.set()
+    reset_user, changed = await asyncio.gather(reset, change)
+
+    assert reset_user == UUID(account["id"]) and changed is True
+    async with factory() as session:
+        user = await session.get(User, UUID(account["id"]))
+        assert user.password_hash == "from-the-change"
+        live = await session.scalar(
+            select(func.count(AuthSession.id)).where(
+                AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None)
+            )
+        )
+        assert live == 0

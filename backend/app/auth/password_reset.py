@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 
 from app.auth.mail import queue_email
 from app.auth.password import PasswordPolicyError, hash_password, validate_password
-from app.auth.sessions import revoke_all_sessions
+from app.auth.sessions import revoke_sessions
 from app.db import async_engine, async_session_factory, init_db
 from app.db.models import AuditEvent, User, generate_uuid
 from app.domain_values import AccountState, AuditTargetType, EmailTemplate
@@ -65,7 +65,9 @@ async def reset_password_as_operator(
     async with session_factory() as session:
         async with session.begin():
             user = await session.scalar(
-                select(User).where(func.lower(User.username) == username.strip().lower())
+                select(User)
+                .where(func.lower(User.username) == username.strip().lower())
+                .with_for_update()
             )
             if user is None:
                 raise OperatorResetError(f"No account named {username!r}.")
@@ -96,11 +98,10 @@ async def reset_password_as_operator(
                     created_at=changed_at,
                 )
             )
+            # Committed with the password, or not at all (R-AUTH-10).
+            revoked = await revoke_sessions(session, user_id=user.id, now=changed_at)
             user_id, resolved_name = str(user.id), user.username or username
 
-    revoked = await revoke_all_sessions(
-        session_factory, user_id=user_id, now=changed_at
-    )
     return OperatorResetResult(
         user_id=user_id,
         username=resolved_name,
