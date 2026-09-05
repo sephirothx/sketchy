@@ -678,6 +678,10 @@ cd backend
   --username Operator --reason "Initial production administrator"
 ```
 
+`./scripts/make-admin.sh <username> [reason]` runs the same command from the
+repository root, against `backend/sketchy.db` unless `DATABASE_URL` says
+otherwise, with a development reason filled in.
+
 Every entry in that log records who acted, the request it belonged to, a
 hashed client address, and what was acted on. The admin view renders names for
 both, resolved when the ledger is read and never written into it: the table is
@@ -1122,6 +1126,7 @@ docs/
 scripts/
   serve.sh          Local development server
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
+  make-admin.sh     Promote a registered account to administrator on this checkout's database
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
   check-mockups-regenerated.sh  Refuses a hand-edited mockup artboard
   check-coverage.py   Per-module coverage floors on the risk-critical modules
