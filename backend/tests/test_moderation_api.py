@@ -1289,7 +1289,7 @@ async def test_a_report_with_nothing_cited_has_no_context(env):
     reporter_http = new_client()
     target_http = new_client()
     moderator_http = new_client()
-    reporter = await register(reporter_http, "BareReporter")
+    await register(reporter_http, "BareReporter")
     target = await register(target_http, "BareTarget")
     moderator = await register(moderator_http, "BareMod")
     await set_role(factory, moderator["id"], UserRole.MODERATOR)
