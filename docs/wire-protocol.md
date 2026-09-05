@@ -388,7 +388,9 @@ the server resolves the seat against the live room and selects the evidence itse
 > the **REST** `POST /api/reports` bounds it at `MAX_REPORT_DETAILS` = 2000 and also
 > accepts `contextSnapshot` (≤ 32 768 bytes) and `messageIds` (≤ 20, which must be
 > unique). The socket path exists so a player can report from the room without leaving
-> it, and the server selects the evidence itself.
+> it, and the server selects the evidence itself. On both paths the server then copies
+> the conversation around the cited lines as `context` (R-MOD-13); the acknowledgement's
+> `evidenceCount` counts the cited lines only.
 
 > **Two routes, by where the reporter is.** A room reports a *seat* over this event. A
 > line of the lobby's chat has no seat, so the lobby reports over **REST** instead: the
@@ -1128,14 +1130,14 @@ whose frozen snapshots are already tombstoned on deletion.
 | --- | --- | --- | --- |
 | `POST` | `/api/reports` | any signed-in | ≤ 2000 chars detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
 | `POST` | `/api/prompt-content-reports` | any signed-in | Targets a list or an exact `promptVersionId`. Official content and self-reports rejected |
-| `GET` | `/api/moderation/reports` | moderator+ | The queue; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension) |
+| `GET` | `/api/moderation/reports` | moderator+ | The queue; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension) and `messageEvidence` in the order it was said, each line with a `role` of `cited` or `context` (R-MOD-13) |
 | `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | Review is one-way |
 | `GET` | `/api/moderation/prompt-content-reports` | moderator+ | The queue |
 | `PATCH` | `/api/moderation/prompt-content-reports/{report_id}` | moderator+ | A resolution chooses Active or Hidden; a dismissal cannot mutate content |
 | `GET`/`POST` | `/api/moderation/bans` | moderator+ | Moderators cannot suspend peers; administrators cannot be targeted. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
 | `POST` | `/api/moderation/bans/{ban_id}/revoke` | moderator+ | Preserves the historic record and reason |
 | `POST` | `/api/moderation/warnings` | moderator+ | Formal warning; same role boundaries as a suspension, restricts nothing. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
-| `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it |
+| `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it — the `cited` lines only, never the context around them |
 | `POST` | `/api/warnings/{warning_id}/acknowledge` | any signed-in | Own warnings only (`404` otherwise); records that the notice landed |
 | `GET` | `/api/role-notices/pending` | any signed-in | The caller's own **newest** unacknowledged role-change notice. Newest rather than oldest: a role is one current fact, so an account promoted and then demoted while it was away is told once, correctly |
 | `POST` | `/api/role-notices/{notice_id}/acknowledge` | any signed-in | Own notices only (`404` otherwise); settles that notice and every older one, since the account has just been shown where it stands |

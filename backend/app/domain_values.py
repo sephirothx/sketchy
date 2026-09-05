@@ -436,6 +436,10 @@ USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
 TIME_FORMATS = tuple(value.value for value in TimeFormat)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
+# A line copied into a report is either what the report is about or what was
+# said around it. The second kind is chosen by the server, never by a client,
+# and is never shown back to the reported player as their own words.
+REPORT_EVIDENCE_ROLES = ("cited", "context")
 BUG_REPORT_AREAS = tuple(area.value for area in BugReportArea)
 BUG_REPORT_SEVERITIES = tuple(severity.value for severity in BugReportSeverity)
 BUG_REPORT_SCREENSHOT_STATUSES = tuple(

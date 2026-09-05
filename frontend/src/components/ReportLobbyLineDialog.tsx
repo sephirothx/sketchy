@@ -26,9 +26,9 @@ const NO_DETAILS = "No details given - see the attached line.";
 The room's dialog names a seat and lets the server pick the evidence. The
 lobby has no seat - a line carries its author's account id for exactly this
 reason (R-ROOM-07) - so this one goes over REST, names the account, and cites
-the one line it was opened from. Nothing else is attached: the lobby is one
-conversation rather than a room the server could gather from, and the line
-is shown here so the reporter sees what they are citing. */
+the one line it was opened from; the server adds what the lobby said around
+it, as it does for a room. The line is shown here so the reporter sees what
+they are citing. */
 export function ReportLobbyLineDialog({
   line,
   retainedMessageId,
@@ -116,7 +116,7 @@ export function ReportLobbyLineDialog({
               <select
                 id={`${titleId}-reason`}
                 ref={reasonRef}
-                className="settings-select"
+                className="report-reason"
                 value={reason}
                 onChange={(change) => setReason(change.target.value as ReportReason)}
               >
@@ -140,7 +140,9 @@ export function ReportLobbyLineDialog({
                 }}
                 placeholder="Anything a moderator should know"
               />
-              <p className="auth-hint">Only this line is attached.</p>
+              <p className="auth-hint">
+                This line is attached, with what the lobby said around it.
+              </p>
 
               {error && (
                 <p className="auth-error" role="alert">
@@ -154,7 +156,7 @@ export function ReportLobbyLineDialog({
           </>
         ) : (
           <>
-            <p className="modal-body">Sent, with the line attached.</p>
+            <p className="modal-body">Sent, with the line and what was said around it attached.</p>
             <button type="button" className="modal-button" onClick={onClose}>
               Done
             </button>

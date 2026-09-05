@@ -23,7 +23,7 @@ from app.auth.rate_limit import (
 from app.auth.audit import audit_coordinates
 from app.auth.bans import active_ban_filter, active_ban_for_user
 from app.auth.mail import queue_email
-from app.services.player_reports import record_player_report
+from app.services.player_reports import context_around, record_player_report
 from app.auth.sessions import revoke_all_sessions
 from app.auth.warnings import pending_warning_payload
 from app.db.models import (
@@ -311,6 +311,7 @@ def _report_payload(
                 "messageKind": evidence.message_kind,
                 "audience": evidence.audience,
                 "nearMissKind": evidence.near_miss_kind,
+                "role": evidence.role,
                 "text": evidence.text_snapshot,
                 "messageCreatedAt": evidence.message_created_at.isoformat(),
                 "copiedAt": evidence.copied_at.isoformat(),
@@ -732,6 +733,22 @@ def create_moderation_router(
                     )
 
                 game_id = game.id if game is not None else (turn.game_id if turn else None)
+                # What was said around the cited lines, in the one place they
+                # came from. Chosen by the server, like the socket path's
+                # evidence, so nothing about it has to be checked. Nothing
+                # cited means no place to look.
+                context_messages: list[RoomMessage] = []
+                if retained_messages:
+                    context_messages = await context_around(
+                        session,
+                        cited=retained_messages,
+                        reporter_user_id=db_reporter_id,
+                        room_instance_id=(
+                            None
+                            if retained_messages[0].audience == "lobby"
+                            else retained_messages[0].room_instance_id
+                        ),
+                    )
                 # Everything above this line is the router proving what a
                 # client told it. The writing is shared with the socket path,
                 # which has nothing to prove because it resolved the target and
@@ -745,6 +762,7 @@ def create_moderation_router(
                     reason=body.reason.value,
                     details=body.details,
                     messages=list(retained_messages),
+                    context_messages=context_messages,
                     context_snapshot=body.context_snapshot,
                     request_id=request_id,
                     ip_hash=ip_hash,

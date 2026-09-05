@@ -38,6 +38,9 @@ export interface PlayerReportMessageEvidence {
   messageKind: "chat" | "wrong_guess" | "correct_guess";
   audience: "room" | "prompt_aware";
   nearMissKind: "close" | "partial" | null;
+  /** `cited` is what the report is about; `context` is what was said around
+      it, by anyone, chosen by the server. Both in the order they were said. */
+  role: "cited" | "context";
   text: string;
   messageCreatedAt: string;
   copiedAt: string;
