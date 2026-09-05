@@ -276,3 +276,18 @@ def test_an_update_carrying_neither_rule_leaves_both_unset():
     payload = parse_payload(UpdateRoomSettingsPayload, {"rounds": 4})
     assert payload.allowed_tools is None
     assert payload.color_mode is None
+
+
+def test_the_reaction_payload_offers_exactly_the_current_set():
+    """The `Literal` is spelled out so the schema reads here; this holds it to
+    the server-owned set, minus retirements, so neither can drift."""
+    from typing import get_args
+
+    from app.domain_values import OFFERED_REACTION_EMOJI_CODES
+    from app.handlers.payloads import ReactToDrawingPayload
+
+    annotation = ReactToDrawingPayload.model_fields["emoji"].annotation
+    literal = next(arg for arg in get_args(annotation) if arg is not type(None))
+    assert set(get_args(literal)) == set(OFFERED_REACTION_EMOJI_CODES)
+    assert ReactToDrawingPayload.model_validate({"turnId": "t", "emoji": None}).emoji is None
+    assert ReactToDrawingPayload.model_validate({"turnId": "t"}).emoji is None

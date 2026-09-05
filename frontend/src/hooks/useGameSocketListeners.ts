@@ -13,6 +13,8 @@ import {
 import type {
   ChatMessage,
   ColorblindSafeSuggestion,
+  DrawingReaction,
+  DrawingReactionEvent,
   GameEndedPayload,
   RoomStatePayload,
   TurnEndedPayload,
@@ -71,6 +73,8 @@ export function useGameSocketListeners() {
     };
 
     const onGameStarted = () => {
+      // The last game's recap tallies belong to the last game.
+      store.getState().clearDrawingReactions();
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
@@ -107,6 +111,8 @@ export function useGameSocketListeners() {
     };
 
     const onTurnStarted = (payload: {
+      turnId?: string;
+      reactions?: DrawingReaction[];
       drawerId: string;
       maskedPrompt: string;
       roundNumber: number;
@@ -202,8 +208,14 @@ export function useGameSocketListeners() {
       store.getState().endGame(payload);
     };
 
+    const onDrawingReaction = (payload: DrawingReactionEvent) => {
+      store.getState().applyDrawingReaction(payload);
+    };
+
     const onSyncGame = (payload: {
       phase: string;
+      turnId?: string;
+      reactions?: DrawingReaction[];
       drawerId: string | null;
       maskedPrompt: string;
       roundNumber: number;
@@ -224,6 +236,8 @@ export function useGameSocketListeners() {
         });
       } else if (payload.phase === "drawing") {
         store.getState().startDrawing({
+          turnId: payload.turnId,
+          reactions: payload.reactions,
           drawerId: payload.drawerId || "",
           maskedPrompt: payload.maskedPrompt,
           roundNumber: payload.roundNumber,
@@ -256,6 +270,7 @@ export function useGameSocketListeners() {
     socket.on("turn_ended", onTurnEnded);
     socket.on("game_ended", onGameEnded);
     socket.on("sync_game", onSyncGame);
+    socket.on("drawing_reaction", onDrawingReaction);
 
     return () => {
       socket.off("room_state", onRoomState);
@@ -276,6 +291,7 @@ export function useGameSocketListeners() {
       socket.off("turn_ended", onTurnEnded);
       socket.off("game_ended", onGameEnded);
       socket.off("sync_game", onSyncGame);
+      socket.off("drawing_reaction", onDrawingReaction);
     };
   }, []);
 }

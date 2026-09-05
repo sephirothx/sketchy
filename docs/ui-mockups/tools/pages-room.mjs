@@ -1,7 +1,38 @@
 // In-room artboards: one game, one story — waiting, choosing, drawing,
-// guessing, turn results, game over, highlights.
-import { T, P, icon, avatar, pname, btn, chip, card, sectionLabel, segmented } from './ui.mjs';
+// guessing, turn results, game over, highlights, recap.
+import { T, P, icon, avatar, pname, btn, chip, card, sectionLabel, segmented, reactionArt } from './ui.mjs';
 import { ROOM, roomHeader, headerStatus, roomGrid, roomPage, playersPanel, playerRow, chat, canvasFrame, lighthouseSVG } from './shell.mjs';
+
+// ---------------------------------------------------------------- Reactions
+// Reactions are drawn from the bundled emoji artwork the app ships (#520):
+// player content, so the redesign's no-emoji-as-icon rule does not apply,
+// and pictures rather than glyphs so they sit the same in every browser. The
+// control is a small pill carrying the tally; pressing it opens a picker.
+const REACTION_CODES = ['heart', 'laugh', 'wow', 'fire'];
+
+const reactionChip = (code, count) => `<span style="display: inline-flex; align-items: center; gap: 3px">${reactionArt(code, 14)}<span style="font-variant-numeric: tabular-nums; line-height: 1">${count}</span></span>`;
+
+// `tally` is [[code, count], …]; `mine` highlights the pill; `passive` is the
+// drawer's or a spectator's view, where the pill cannot be pressed.
+// The drawer and spectators see a see-through tally with no control, and
+// nothing at all until there is something to count.
+const reactionPill = (tally, { mine = false, passive = false } = {}) => passive
+  ? (tally.length ? `<div role="status" style="display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 999px; background: rgba(255, 255, 255, 0.58); color: #3a3a40; font-size: 12px; font-weight: 700; line-height: 1">${tally.map(([code, count]) => reactionChip(code, count)).join('')}</div>` : '')
+  : `
+<button type="button" aria-label="React to this drawing" style="display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border: 1px solid ${mine ? T.primary : 'rgba(0, 0, 0, 0.08)'}; border-radius: 999px; background: rgba(255, 255, 255, 0.9); color: #3a3a40; font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1; box-shadow: ${mine ? `0 0 0 1px ${T.primary}, ` : ''}0 1px 3px rgba(0, 0, 0, 0.1)">
+  ${tally.length ? tally.map(([code, count]) => reactionChip(code, count)).join('') : `<span style="display: inline-flex; color: ${T.muted}">${icon.heart(15)}</span>`}
+</button>`;
+
+// The pill pinned to the canvas corner, optionally with the picker open above it.
+const reactionCorner = (tally, { mine = false, passive = false, open = false, floating = null } = {}) => `
+<div style="position: absolute; right: 10px; bottom: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 2">
+  ${open ? `
+  <div role="dialog" aria-label="React to this drawing" style="display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(32, 32, 36, 0.94); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28)">
+    ${REACTION_CODES.map((code) => `<button type="button" aria-label="${code}" aria-pressed="${code === mine}" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: ${code === mine ? 'rgba(255, 255, 255, 0.24)' : 'transparent'}; box-shadow: ${code === mine ? `inset 0 0 0 2px ${T.primary}` : 'none'}; padding: 0">${reactionArt(code, 24)}</button>`).join('')}
+  </div>` : ''}
+  ${floating ? `<span aria-hidden="true" style="position: absolute; right: 22px; bottom: 96px; display: block; transform: rotate(-8deg); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18))">${reactionArt(floating, 34)}</span>` : ''}
+  ${reactionPill(tally, { mine: Boolean(mine), passive })}
+</div>`;
 
 // ------------------------------------------------------------- Waiting room
 const waitingPlayers = playersPanel({
@@ -185,7 +216,7 @@ export const DrawingPage = roomPage(roomHeader({ inGame: true, status: headerSta
   `
   <main style="display: flex; flex-direction: column; gap: 10px; align-items: center">
     <span style="font-family: ${T.display}; font-weight: 600; font-size: 27px; color: ${T.ink}; line-height: 1.2">lighthouse</span>
-    ${canvasFrame(lighthouseSVG)}
+    ${canvasFrame(lighthouseSVG, reactionCorner([['fire', 2], ['heart', 1]], { passive: true, floating: 'fire' }))}
     ${toolbar}
   </main>`,
   chat.panel({
@@ -242,7 +273,7 @@ export const GuessingPage = roomPage(roomHeader({ inGame: true, status: headerSt
       </div>
       ${chip(`${icon.bulb(12)} Next free letter in 9s`, 'warm')}
     </div>
-    ${canvasFrame(lighthouseSVG)}
+    ${canvasFrame(lighthouseSVG, reactionCorner([['fire', 2], ['heart', 1]], { mine: 'heart', open: true }))}
   </main>`,
   chat.panel({
     heading: 'Guess and chat',
@@ -298,6 +329,7 @@ export const TurnResultsPage = roomPage(roomHeader({ inGame: true, status: heade
         <div style="background: ${T.card}; border-radius: 16px; box-shadow: ${T.shadowRaised}; padding: 22px 26px; width: min(430px, 92%)">
           <p style="text-align: center; color: ${T.faint}; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase">The prompt was</p>
           <p style="text-align: center; font-family: ${T.display}; font-weight: 600; font-size: 30px; color: ${T.ink}; margin: 3px 0 10px">lighthouse</p>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 10px">${reactionPill([['fire', 2], ['heart', 1], ['wow', 1]], { passive: true })}<span style="font-size: 12.5px; color: ${T.faint}; font-weight: 700">4 reactions to your drawing</span></div>
           <p style="display: flex; align-items: center; justify-content: center; gap: 7px; background: ${T.warmSoft}; border-radius: 10px; color: ${T.warmInk}; padding: 9px 12px; font-size: 14px; font-weight: 800; margin-bottom: 12px">${icon.pencil(14)}All 3 guessed your drawing · +120 for you</p>
           <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 1px">
             ${resultRow(P.bruno, { rank: 1, delta: '+161', total: 981 })}
@@ -432,10 +464,60 @@ export const HighlightsPage = roomPage(roomHeader() + roomGrid(
         ${highlightCard(icon.zap(19), 'Fastest guess', `${avatar(P.bruno, 26)}${pname(P.bruno)}<span style="color: ${T.faint}; font-size: 13px">on banana</span>`, '4.2s', 'from first stroke')}
         ${highlightCard(icon.brush(19), 'Best drawer', `${avatar(P.marta, 26)}${pname(P.marta)}`, '92%', 'of guessers got it')}
         ${highlightCard(icon.clock(19), 'Quickest on average', `${avatar(P.yuki, 26)}${pname(P.yuki)}`, '12.7s', 'per correct guess')}
+        ${highlightCard(icon.heart(19), 'Most reacted drawing', `${avatar(P.marta, 26)}${pname(P.marta)}<span style="color: ${T.faint}; font-size: 13px">on lighthouse</span>`, '4', `reactions · <a href="#" style="color: ${T.primary}">See it</a>`)}
       </div>
       <div style="display: flex; justify-content: center; margin-top: 20px">
         ${btn.secondary('Back to results', { iconL: icon.back(15) })}
       </div>
+    </section>
+  </main>`,
+  chat.panel({
+    heading: 'Game chat',
+    lines: [
+      chat.sysLine('The prompt was “bow and arrow”'),
+      chat.chatMsg(P.yuki, 'gg everyone'),
+      chat.chatMsg(P.bruno, 'that lighthouse was unfair'),
+      chat.chatMsg(P.marta, 'rematch?'),
+    ],
+    inputHTML: chat.input({}),
+  }),
+), { minHeight: 960 });
+
+// -------------------------------------------------------------------- Recap
+// The drawing recap, opened from "Drawings" on the game over screen. One
+// drawing at a time; the reactions it collected sit under the caption, and a
+// registered viewer who was not the drawer can still add theirs from here.
+const recapDot = (current) => `<i style="display: block; width: ${current ? 16 : 6}px; height: 6px; border-radius: 4px; background: ${current ? T.primary : T.lineStrong}"></i>`;
+
+export const RecapPage = roomPage(roomHeader() + roomGrid(
+  finalPlayers,
+  `
+  <main style="display: flex; justify-content: center; padding: 8px 0 32px">
+    <section style="background: ${T.card}; border: 1px solid ${T.line}; border-radius: 16px; box-shadow: ${T.shadowRaised}; max-width: 880px; width: 100%; padding: 22px; box-sizing: border-box">
+      <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px">
+        <div>
+          ${sectionLabel('Drawing recap')}
+          <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 26px; color: ${T.ink}; margin: 4px 0">lighthouse</h1>
+          <p style="color: ${T.muted}; margin: 0; font-size: 14px">Drawn by ${pname(P.marta)} · Round 2 · Turn 1</p>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px">
+            ${reactionPill([['fire', 2], ['heart', 1], ['wow', 1]], { mine: true })}
+            <span style="font-size: 12.5px; color: ${T.faint}; font-weight: 700">Bruno, Sparrow-14, Yuki and you reacted</span>
+          </div>
+        </div>
+        <div style="display: flex; flex: 0 0 auto; gap: 8px">
+          ${btn.primary('Save image', { iconL: icon.download(15) })}
+          ${btn.secondary('Close')}
+        </div>
+      </header>
+      <div style="aspect-ratio: 4 / 3; background: ${T.well}; border-radius: 10px; overflow: hidden; width: 100%">${lighthouseSVG}</div>
+      <nav aria-label="Drawing recap navigation" style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin-top: 16px">
+        <span style="justify-self: start">${btn.secondary('Previous')}</span>
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <strong style="color: ${T.ink}; font-size: 14px">1 of 4</strong>
+          <span aria-hidden="true" style="display: flex; gap: 5px">${recapDot(true)}${recapDot(false)}${recapDot(false)}${recapDot(false)}</span>
+        </span>
+        <span style="justify-self: end">${btn.secondary('Next')}</span>
+      </nav>
     </section>
   </main>`,
   chat.panel({

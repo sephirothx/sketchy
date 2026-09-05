@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --brandWordmark: #3D2B1F; --brandFerrule: #75726D; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --brandWordmark: #F8FAFC; --brandFerrule: #94A3B8; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
+  </style>
+</helmet>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+<div style="width: 1240px; min-height: 960px; margin: 0 auto; padding: 18px 20px 28px">
+<header style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 14px; min-height: 44px">
+  <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+    <span style="font-weight: 800; font-size: 16px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Coffee break doodles</span>
+    <button type="button" title="Copy invite link" style="display: inline-flex; align-items: center; gap: 7px; background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 12.5px; font-weight: 800; color: var(--muted); letter-spacing: 0.08em">
+      BQ7F2K<span style="display: inline-flex; color: var(--faint)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></span>
+    </button>
+  </div>
+  <span></span>
+  <div style="display: flex; align-items: center; gap: 7px; flex: none; justify-self: end">
+    
+    <button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 13px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13px; font-weight: 800; color: var(--muted); min-height: 38px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>AFK</button>
+    
+    <button type="button" aria-label="Settings" title="Settings" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; background: var(--card); color: var(--muted); border: 1.5px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg></button>
+    <span style="width: 1.5px; height: 22px; background: var(--line); margin: 0 3px"></span>
+    <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--danger); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; min-height: 38px; padding: 7px 10px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Leave</button>
+  </div>
+</header>
+<div style="display: grid; grid-template-columns: 252px minmax(0, 1fr) 292px; gap: 16px; align-items: start">
+  
+<aside style="display: flex; flex-direction: column; gap: 12px">
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 12px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; padding: 0 4px">
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <h2 style="font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-weight: 800; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink)">Final standings</h2>
+        <span style="color: var(--faint); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums">5/8</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px">
+        
+        <span title="2 spectating" style="display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-size: 12.5px; font-weight: 800"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>2</span>
+      </div>
+    </div>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; gap: 5px">
+      <li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    <span aria-label="Rank 1" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; color: #E3A008; flex: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="15" r="5"/><path d="m8.5 10.5-3-7.5"/><path d="m15.5 10.5 3-7.5"/><path d="m9 3 3 6 3-6"/></svg></span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avBruno); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">B</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcBruno); font-weight: 800">Bruno</span>
+        
+        
+      </span>
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 19px; color: var(--ink); flex: none">1420</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    <span aria-label="Rank 2" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; color: #9AA1AC; flex: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="15" r="5"/><path d="m8.5 10.5-3-7.5"/><path d="m15.5 10.5 3-7.5"/><path d="m9 3 3 6 3-6"/></svg></span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avYuki); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">Y</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcYuki); font-weight: 800">Yuki</span>
+        
+        
+      </span>
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 19px; color: var(--ink); flex: none">1180</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    <span aria-label="Rank 3" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; color: #B0703C; flex: none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="15" r="5"/><path d="m8.5 10.5-3-7.5"/><path d="m15.5 10.5 3-7.5"/><path d="m9 3 3 6 3-6"/></svg></span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">M</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcMarta); font-weight: 800">Marta</span>
+        <span style="color: var(--faint); font-size: 12px; font-weight: 700">you</span>
+        <span title="Host" style="display: inline-flex; color: var(--muted); flex: none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M3 17h18l-1-9-4.5 3.5L12 6l-3.5 5.5L4 8l-1 9Z"/><path d="M4 21h16"/></svg></span>
+      </span>
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 19px; color: var(--ink); flex: none">980</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: var(--faint); font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; flex: none">4</span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avGuest); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">S</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcSparrow); font-style: italic; font-weight: 700">Sparrow-14</span>
+        
+        
+      </span>
+      
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 19px; color: var(--ink); flex: none">520</span>
+  </li>
+<li style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; border: 1.5px solid transparent; opacity: 0.6">
+    <span style="display: inline-flex; justify-content: center; width: 20px; color: var(--faint); font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; flex: none">5</span>
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: var(--avInes); color: var(--avatarInk); font-weight: 800; font-size: 18px; flex: none">I</span>
+    <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+      <span style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px">
+        <span style="color: var(--pcInes); font-weight: 800">Ines</span>
+        
+        
+      </span>
+      <span style="display: inline-flex; align-items: center; gap: 5px; color: var(--warning); font-size: 12.5px; font-weight: 800"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>AFK</span>
+    </span>
+    <span style="margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; font-size: 19px; color: var(--ink); flex: none">310</span>
+  </li>
+    </ul>
+    
+  </div>
+</aside>
+  <div style="min-width: 0">
+  <main style="display: flex; justify-content: center; padding: 8px 0 32px">
+    <section style="background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 10px 30px rgba(20, 16, 10, 0.14); max-width: 880px; width: 100%; padding: 22px; box-sizing: border-box">
+      <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px">
+        <div>
+          <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Drawing recap</p>
+          <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 26px; color: var(--ink); margin: 4px 0">lighthouse</h1>
+          <p style="color: var(--muted); margin: 0; font-size: 14px">Drawn by <span style="color: var(--pcMarta); font-weight: 800">Marta</span> · Round 2 · Turn 1</p>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px">
+            
+<button type="button" aria-label="React to this drawing" style="display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border: 1px solid var(--primary); border-radius: 999px; background: rgba(255, 255, 255, 0.9); color: #3a3a40; font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1; box-shadow: 0 0 0 1px var(--primary), 0 1px 3px rgba(0, 0, 0, 0.1)">
+  <span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M26 19.3399C26 25.4393 20.9491 30.3451 14.8501 29.981C8.58145 29.6067 4.2892 23.5781 5.09774 17.2765C5.58685 13.4429 7.38361 10.1555 9.34008 7.6065C9.67947 7.16144 10.0288 10.7422 10.3782 10.3477C10.7276 9.94307 13.9717 4.32923 15.0997 2.35679C15.3093 1.99265 15.7884 1.88139 16.1278 2.14438C18.3937 3.85382 26 10.2769 26 19.3399Z" fill="#FF6723"/>
+<path d="M23 21.8512C23 25.893 19.4812 29.142 15.2011 28.9952C10.5815 28.8386 7.41254 24.6109 8.09159 20.256C9.06903 14.0124 15.4789 10 15.4789 10C15.4789 10 23 14.7072 23 21.8512Z" fill="#FFB02E"/>
+</svg>
+<span style="font-variant-numeric: tabular-nums; line-height: 1">2</span></span><span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M5.99987 6.00001C10.6646 3.66763 14.4999 6.50001 15.9999 8.50001C17.4999 6.5 21.3351 3.66763 25.9999 6.00001C31.9999 8.99999 30.4998 16.5 25.9998 21C23.8041 23.1958 19.9371 27.0628 17.1087 29.2137C16.4552 29.7106 15.5614 29.6884 14.9226 29.1728C12.3299 27.08 8.16491 23.165 5.99987 21C1.49986 16.5 -0.000126839 8.99999 5.99987 6.00001Z" fill="#F8312F"/>
+<path d="M15.9998 8.49998V11.5492C17.2695 8.86501 20.4252 5.28051 25.6578 5.83746C21.1482 3.80623 17.463 6.54908 15.9998 8.49998Z" fill="#CA0B4A"/>
+<path d="M11.9456 5.53691C10.2614 4.95005 8.22499 4.88745 5.99987 6.00001C-0.000126839 8.99999 1.49986 16.5 5.99987 21C8.16491 23.165 12.3299 27.08 14.9226 29.1728C15.5614 29.6884 16.4552 29.7106 17.1087 29.2137C17.3629 29.0204 17.6255 28.8132 17.8945 28.5946C15.0398 26.4524 11.0335 23.0762 8.85898 21.1325C3.90218 16.702 2.24993 9.31788 8.85898 6.36425C9.93279 5.88435 10.9667 5.62654 11.9456 5.53691Z" fill="#CA0B4A"/>
+<ellipse cx="23.4771" cy="12.5937" rx="2.83554" ry="4.78125" transform="rotate(30 23.4771 12.5937)" fill="#F37366"/>
+</svg>
+<span style="font-variant-numeric: tabular-nums; line-height: 1">1</span></span><span style="display: inline-flex; align-items: center; gap: 3px"><svg width="14" height="14" style="display: block; flex: none" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.9989 29.9978C25.3333 29.9978 29.9978 23.7303 29.9978 15.9989C29.9978 8.26751 25.3333 2 15.9989 2C6.66443 2 2 8.26751 2 15.9989C2 23.7303 6.66443 29.9978 15.9989 29.9978Z" fill="#FFB02E"/>
+<path d="M10.5 16C12.9853 16 15 13.9853 15 11.5C15 9.01472 12.9853 7 10.5 7C8.01472 7 6 9.01472 6 11.5C6 13.9853 8.01472 16 10.5 16Z" fill="white"/>
+<path d="M21.5 16C23.9853 16 26 13.9853 26 11.5C26 9.01472 23.9853 7 21.5 7C19.0147 7 17 9.01472 17 11.5C17 13.9853 19.0147 16 21.5 16Z" fill="white"/>
+<path d="M12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z" fill="#402A32"/>
+<path d="M20 14C21.1046 14 22 13.1046 22 12C22 10.8954 21.1046 10 20 10C18.8954 10 18 10.8954 18 12C18 13.1046 18.8954 14 20 14Z" fill="#402A32"/>
+<path d="M12 22C12 19.7909 13.7909 18 16 18C18.2091 18 20 19.7909 20 22V24C20 26.2091 18.2091 28 16 28C13.7909 28 12 26.2091 12 24V22Z" fill="#BB1D80"/>
+</svg>
+<span style="font-variant-numeric: tabular-nums; line-height: 1">1</span></span>
+</button>
+            <span style="font-size: 12.5px; color: var(--faint); font-weight: 700">Bruno, Sparrow-14, Yuki and you reacted</span>
+          </div>
+        </div>
+        <div style="display: flex; flex: 0 0 auto; gap: 8px">
+          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; padding: 11px 18px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 2px 0 var(--primaryEdge)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Save image</button>
+          <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">Close</button>
+        </div>
+      </header>
+      <div style="aspect-ratio: 4 / 3; background: var(--well); border-radius: 10px; overflow: hidden; width: 100%"><svg viewBox="0 0 800 600" style="display: block; width: 100%; height: 100%" xmlns="http://www.w3.org/2000/svg">
+  <path d="M40 470 C 150 452, 250 462, 330 470 L 330 600 L 40 600 Z" fill="#7ac9e8" opacity="0.35"/>
+  <path d="M470 468 C 570 458, 690 470, 770 462 L 770 600 L 470 600 Z" fill="#7ac9e8" opacity="0.35"/>
+  <path d="M300 480 C 340 455, 380 448, 420 450 C 470 452, 510 462, 540 480 Z" fill="#c69c6d"/>
+  <path d="M356 470 L 372 250 L 452 250 L 468 470 Z" fill="#ffffff" stroke="#000000" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M362 400 L 462 400 L 466 448 L 358 448 Z" fill="#ed1c24"/>
+  <path d="M368 300 L 456 300 L 459 342 L 365 342 Z" fill="#ed1c24"/>
+  <rect x="360" y="228" width="104" height="22" rx="4" fill="#4c4c4c" stroke="#000000" stroke-width="5"/>
+  <rect x="378" y="180" width="68" height="50" fill="#fff200" stroke="#000000" stroke-width="6"/>
+  <path d="M374 180 L 450 180 L 412 142 Z" fill="#22b14c" stroke="#000000" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M412 130 L 412 116" stroke="#000000" stroke-width="6" stroke-linecap="round"/>
+  <path d="M446 196 L 610 150" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M446 212 L 620 214" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.55"/>
+  <path d="M378 202 L 214 158" stroke="#fff200" stroke-width="10" stroke-linecap="round" opacity="0.75"/>
+  <path d="M40 500 C 90 490, 140 508, 190 498 C 240 488, 280 504, 320 496" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M480 508 C 530 498, 580 516, 630 506 C 680 496, 720 512, 764 504" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M60 552 C 120 542, 190 560, 250 550" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M540 556 C 600 546, 670 564, 740 554" fill="none" stroke="#2e5090" stroke-width="5" stroke-linecap="round"/>
+  <path d="M120 96 C 140 76, 180 78, 192 96 C 220 92, 236 112, 220 126 L 128 126 C 108 122, 106 104, 120 96 Z" fill="#c1c1c1" opacity="0.6"/>
+  <path d="M600 74 C 620 54, 660 56, 672 74 C 700 70, 716 90, 700 104 L 608 104 C 588 100, 586 82, 600 74 Z" fill="#c1c1c1" opacity="0.6"/>
+</svg></div>
+      <nav aria-label="Drawing recap navigation" style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin-top: 16px">
+        <span style="justify-self: start"><button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">Previous</button></span>
+        <span style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <strong style="color: var(--ink); font-size: 14px">1 of 4</strong>
+          <span aria-hidden="true" style="display: flex; gap: 5px"><i style="display: block; width: 16px; height: 6px; border-radius: 4px; background: var(--primary)"></i><i style="display: block; width: 6px; height: 6px; border-radius: 4px; background: var(--lineStrong)"></i><i style="display: block; width: 6px; height: 6px; border-radius: 4px; background: var(--lineStrong)"></i><i style="display: block; width: 6px; height: 6px; border-radius: 4px; background: var(--lineStrong)"></i></span>
+        </span>
+        <span style="justify-self: end"><button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--card); color: var(--ink); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 16px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; font-weight: 800; min-height: 44px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">Next</button></span>
+      </nav>
+    </section>
+  </main></div>
+  
+<aside style="display: flex; flex-direction: column; gap: 12px">
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: flex; flex-direction: column; height: 560px">
+    <div style="margin-bottom: 12px; flex: none">
+      <h2 style="font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink)">Game chat</h2>
+    </div>
+    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; align-items: baseline; gap: 7px; color: var(--faint); font-size: 13px"><span style="flex: none; width: 4px; height: 4px; border-radius: 50%; background: var(--lineStrong); align-self: center"></span><span style="overflow-wrap: anywhere">The prompt was “bow and arrow”</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: var(--pcYuki); font-weight: 800; font-size: 13.5px">Yuki</span><span style="color: var(--muted)"> gg everyone</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: var(--pcBruno); font-weight: 800; font-size: 13.5px">Bruno</span><span style="color: var(--muted)"> that lighthouse was unfair</span></div>
+<div style="font-size: 14px; overflow-wrap: anywhere"><span style="color: var(--pcMarta); font-weight: 800; font-size: 13.5px">Marta</span><span style="color: var(--muted)"> rematch?</span></div>
+    </div>
+    
+<form style="display: flex; flex-direction: column; gap: 7px; margin-top: 10px; flex: none; border-top: 1.5px solid var(--line); padding-top: 12px">
+  
+  
+  <div style="display: flex; align-items: center; gap: 7px">
+    <div style="flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border: 1.5px solid var(--lineStrong); border-radius: 10px; background: var(--field)">
+      <input type="text" placeholder="Type a message…" style="flex: 1; min-width: 0; border: none; outline: none; padding: 0; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; background: transparent; color: var(--ink)">
+    </div>
+    <button type="submit" aria-label="Send" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: var(--primary); color: #fff; border: 0; border-radius: 10px; box-shadow: 0 2px 0 var(--primaryEdge); flex: none"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m9 6 6 6-6 6"/></svg></button>
+  </div>
+</form>
+  </div>
+</aside>
+</div></div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 1240, "height": 960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
+  }
+}
+</script>
+</body>
+</html>

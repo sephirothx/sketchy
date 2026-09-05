@@ -1,7 +1,7 @@
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { presentHighlights } from "../lib/gameHighlights";
-import { AlertIcon, BackIcon, BrushIcon, ClockIcon, XIcon, ZapIcon } from "./icons";
+import { AlertIcon, BackIcon, BrushIcon, ClockIcon, HeartIcon, XIcon, ZapIcon } from "./icons";
 import { SectionLabel } from "./ui/Card";
 import type { GameHighlight } from "../types";
 import type { ReactNode } from "react";
@@ -9,6 +9,8 @@ import type { ReactNode } from "react";
 interface GameHighlightsPanelProps {
   highlights: GameHighlight[];
   onClose: () => void;
+  /** Opens the recap at one drawing; offered on cards that are about one. */
+  onOpenDrawing?: (index: number) => void;
 }
 
 const KIND_ICONS: Record<GameHighlight["kind"], ReactNode> = {
@@ -16,6 +18,7 @@ const KIND_ICONS: Record<GameHighlight["kind"], ReactNode> = {
   fastest_guess: <ZapIcon size={19} />,
   best_drawer: <BrushIcon size={19} />,
   quickest_average: <ClockIcon size={19} />,
+  most_reacted_drawing: <HeartIcon size={19} />,
 };
 
 /**
@@ -26,7 +29,7 @@ const KIND_ICONS: Record<GameHighlight["kind"], ReactNode> = {
  * account, on a ten-second timer - and this is a list meant to grow. Given its
  * own room, a new highlight costs nothing to add.
  */
-export function GameHighlightsPanel({ highlights, onClose }: GameHighlightsPanelProps) {
+export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: GameHighlightsPanelProps) {
   useEscapeLayer(true, onClose);
   const presented = presentHighlights(highlights);
 
@@ -79,7 +82,21 @@ export function GameHighlightsPanel({ highlights, onClose }: GameHighlightsPanel
                     </span>
                   ) : null}
                 </p>
-                <p className="game-highlights-value">{highlight.value}</p>
+                <p className="game-highlights-value">
+                  {highlight.value}
+                  {highlight.drawingIndex !== undefined && onOpenDrawing && (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        className="game-highlights-link"
+                        onClick={() => onOpenDrawing(highlight.drawingIndex!)}
+                      >
+                        See it
+                      </button>
+                    </>
+                  )}
+                </p>
               </li>
             ))}
           </ul>

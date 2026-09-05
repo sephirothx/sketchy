@@ -263,6 +263,8 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
     payload = room.to_state_payload()
     assert payload["lastGameDrawings"] == [{
         "index": 0,
+        "turnId": room.last_game_drawings[0].turn_id,
+        "reactions": [],
         "roundNumber": 1,
         "turnNumber": 1,
         "drawerId": drawer.id,

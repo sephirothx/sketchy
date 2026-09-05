@@ -11,6 +11,14 @@ export interface ProfileStats {
   turnsPlayed: number;
   promptsGuessed: number;
   drawingsMade: number;
+  /** Reactions other players left on this account's drawings, lifetime. */
+  reactionsReceived: number;
+}
+
+/** One reaction as history keeps it: the reactor's seat in that game and the code. */
+export interface HistoryReaction {
+  seatId: string;
+  emoji: string;
 }
 
 export interface GameParticipant {
@@ -100,6 +108,7 @@ export interface GameTurn {
   promptOffers: PromptOffer[];
   guesses: TurnGuess[];
   participantOutcomes: TurnParticipantOutcome[];
+  reactions: HistoryReaction[];
 }
 
 export interface PromptOffer {
@@ -158,9 +167,18 @@ export interface GameRuleSnapshot {
 export type GameDetail = GameSummary & {
   // Empty only for legacy version-zero games.
   ruleSnapshot: GameRuleSnapshot | Record<string, never>;
+  /** The signed-in viewer's own seat in this game; how "my reaction" is found. */
+  mySeatId: string | null;
   turns: GameTurn[];
   scoreEvents: ScoreEvent[];
 };
+
+export interface HistoryReactionResult {
+  turnId: string;
+  seatId: string;
+  emoji: string | null;
+  reactions: HistoryReaction[];
+}
 
 export const HISTORY_PAGE_SIZE = 10;
 
@@ -184,6 +202,22 @@ export function fetchGames(
 
 export function fetchGameDetail(gameId: string) {
   return apiRequest<GameDetail>(`/api/games/${encodeURIComponent(gameId)}`);
+}
+
+/**
+ * Leave, change (PUT) or take back (DELETE) the viewer's reaction to a stored
+ * drawing. Every refusal is a 404, like the drawing itself.
+ */
+export function setHistoryReaction(
+  gameId: string,
+  turnId: string,
+  emoji: string | null,
+): Promise<HistoryReactionResult> {
+  const path =
+    `/api/games/${encodeURIComponent(gameId)}/turns/${encodeURIComponent(turnId)}/reaction`;
+  return emoji === null
+    ? apiRequest<HistoryReactionResult>(path, { method: "DELETE" })
+    : apiRequest<HistoryReactionResult>(path, { method: "PUT", body: { emoji } });
 }
 
 /** The stored drawing for one turn, in the same wire format a live one uses. */

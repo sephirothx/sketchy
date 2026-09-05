@@ -9,9 +9,16 @@ database would go missing exactly when the database is having a bad day. These
 are read straight off `Game.completed_turns`, which is in memory and complete by
 the time the game ends.
 
-Every highlight here is derived from guess counts and timings alone. None of
-them reads points, so all four mean the same thing in a no-scoring game as in a
-scored one, and the final screen needs no second `scoring_mode` branch.
+Every highlight here is derived from guess counts and timings alone - or, for
+the most-reacted drawing, from what the room reacted to. None of them reads
+points, so all of them mean the same thing in a no-scoring game as in a scored
+one, and the final screen needs no second `scoring_mode` branch.
+
+The most-reacted drawing is the one highlight that can change after the game
+ends, because a reaction can be given from the recap. It is therefore built
+from the `Room` alone - the recap entries and the reactions on them - so it
+can be recomputed once `room.game` is gone; `refresh_reaction_highlight` does
+that in place.
 """
 from __future__ import annotations
 
@@ -182,6 +189,65 @@ def _quickest_on_average(game: Game, names: dict[str, _Name]) -> dict | None:
     )
 
 
+MOST_REACTED_KIND = "most_reacted_drawing"
+
+
+def _most_reacted_drawing(room: Room, names: dict[str, _Name]) -> dict | None:
+    """The drawing the room reacted to most; the earliest one on a tie.
+
+    Zero reactions is not a highlight. The count is of reactions, not of
+    reactors' points, so it means the same in every scoring mode.
+    """
+    best: tuple[int, int] | None = None
+    for index, entry in enumerate(room.last_game_drawings):
+        count = len(room.drawing_reactions.get(entry.turn_id, {}))
+        if count <= 0:
+            continue
+        if best is None or count > best[0]:
+            best = (count, index)
+    if best is None:
+        return None
+    count, index = best
+    entry = room.last_game_drawings[index]
+    name = names.get(entry.drawer_id) or _Name(
+        nickname=entry.drawer_nickname,
+        name_color=entry.drawer_name_color,
+        is_anonymous=False,
+    )
+    return _named(
+        {
+            "kind": MOST_REACTED_KIND,
+            "prompt": entry.prompt,
+            "reactionCount": count,
+            "drawingIndex": index,
+            "turnId": entry.turn_id,
+        },
+        name,
+    )
+
+
+def refresh_reaction_highlight(room: Room) -> None:
+    """Recompute the most-reacted card in `room.last_game_highlights`, in place.
+
+    Replaces the existing card where it stands, appends one when reactions
+    first arrive, and removes it when the last reaction is taken back, so the
+    other highlights keep their order.
+    """
+    fresh = _most_reacted_drawing(room, _resolve_names(room))
+    highlights = room.last_game_highlights
+    position = next(
+        (i for i, item in enumerate(highlights) if item.get("kind") == MOST_REACTED_KIND),
+        None,
+    )
+    if fresh is None:
+        if position is not None:
+            del highlights[position]
+    elif position is None:
+        highlights.append(fresh)
+    else:
+        highlights[position] = fresh
+
+
 def build_game_highlights(room: Room, game: Game) -> list[dict]:
     """The finished game's highlights, in the order they should be shown.
 
@@ -195,5 +261,6 @@ def build_game_highlights(room: Room, game: Game) -> list[dict]:
         _fastest_guess(game, names),
         _best_drawer(game, names),
         _quickest_on_average(game, names),
+        _most_reacted_drawing(room, names),
     )
     return [highlight for highlight in candidates if highlight is not None]

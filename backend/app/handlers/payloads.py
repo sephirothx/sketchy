@@ -17,7 +17,8 @@ Command inventory (client request shape)
 ``create_room`` CreateRoomPayload; ``join_room`` JoinRoomPayload;
 ``get_room_preview`` RoomPreviewPayload; ``update_room_settings``
 UpdateRoomSettingsPayload; ``update_player_settings`` PlayerSettingsPayload;
-``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
+``rename_player`` RenamePlayerPayload; ``get_recap_drawing`` RecapDrawingPayload;
+``react_to_drawing`` ReactToDrawingPayload; ``toggle_afk`` ToggleAfkPayload;
 ``vote_player`` VotePayload; ``cast_restart_vote`` RestartVotePayload;
 ``select_prompt`` SelectPromptPayload; ``send_chat`` TextPayload;
 ``guess`` GuessPayload; ``buy_hint`` HintPayload; ``buy_wheel_letter``
@@ -402,6 +403,18 @@ class RenamePlayerPayload(RequestModel):
 
 class RecapDrawingPayload(RequestModel):
     index: int = Field(ge=0, le=MAX_CANVAS_SEQUENCE)
+
+
+class ReactToDrawingPayload(RequestModel):
+    """One seat's reaction to one drawing; ``emoji: null`` removes it.
+
+    The set is spelled out so the schema is visible here; a test holds it
+    against ``OFFERED_REACTION_EMOJI_CODES``. A retired code is refused on the
+    way in - it still renders from history, it just cannot be chosen again.
+    """
+
+    turn_id: str = Field(alias="turnId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH)
+    emoji: Literal["heart", "laugh", "wow", "fire"] | None = None
 
 
 class ToggleAfkPayload(RequestModel):

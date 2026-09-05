@@ -59,10 +59,16 @@ def turn_payload(
     game: Game,
     player: Player | None = None,
     spectators_see_prompt: bool = False,
+    reactions: list[dict] | None = None,
 ) -> dict:
     player_id = player.id if player else None
     return {
         "phase": game.phase.value,
+        # The turn's durable id, so a reaction can name the drawing it is
+        # about; and the reactions so far, so a reconnect sees the tally and
+        # its own pick rather than an empty control.
+        "turnId": game.current_turn_id,
+        "reactions": list(reactions or []),
         "drawerId": game.current_drawer,
         "maskedPrompt": game.masked_prompt(
             player_id,
@@ -119,6 +125,10 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
     }
     return {
         "prompt": game.prompt,
+        # end_turn has appended this turn, and current_turn_id is never
+        # cleared, so it still names the turn whose results these are.
+        "turnId": game.current_turn_id,
+        "reactions": room.drawing_reactions_for(game.current_turn_id),
         "drawerId": game.current_drawer,
         "drawerBonus": drawer_bonus,
         "seconds": (

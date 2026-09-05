@@ -80,7 +80,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-50 tables in eight domains.
+51 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -105,6 +105,8 @@ erDiagram
     turn_records ||--o{ turn_prompt_offers : "options"
     turn_participant_outcomes ||--o| turn_guesses : "scoring child"
     game_participants ||--o{ turn_participant_outcomes : "seat"
+    turn_records ||--o{ turn_drawing_reactions : "reactions"
+    game_participants ||--o{ turn_drawing_reactions : "reactor seat"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -126,7 +128,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
+| **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
@@ -374,14 +376,22 @@ account copy authoritative on the new device.
 A **rebuildable, disposable** per-account/per-UTC-day projection of immutable game facts.
 
 `user_id` + `stat_date` composite **PK** · `games_played` · `games_won` ·
-`total_score` · `turns_played` · `prompts_guessed` · `drawings_made` · `updated_at`,
-with a non-negative `CHECK` that also enforces `games_won <= games_played`.
+`total_score` · `turns_played` · `prompts_guessed` · `drawings_made` ·
+`reactions_received` · `updated_at`, with a non-negative `CHECK` that also enforces
+`games_won <= games_played`.
 
 **Flow.** A finished-game transaction atomically adds one day's counts for each
 canonical account. Same-day saves use database upserts, so concurrent games cannot
 overwrite one another and an idempotent retry does not increment twice. Guest-to-account
 merges rebuild the target and deduplicate games shared by its factual identities. Ratios
 and averages are derived on read, never stored.
+
+`reactions_received` is the one counter that keeps moving after a game is written: a
+reaction given from the recap or from history adjusts the drawer's row for the **game's**
+day by a delta (`adjust_reactions_received`), so a rebuild — which only knows the game —
+reproduces the same totals. A decrement is guarded (`WHERE reactions_received >= n`)
+rather than trusted, because the row may have been erased since the reaction it undoes
+was counted, and the `CHECK` would otherwise turn a stale row into a failed write.
 
 It is **never the source of truth**. A missing or deliberately erased row reads as zero
 rather than silently falling back to an unbounded history scan. Operators repair drift
@@ -852,6 +862,40 @@ Because a database column has no integrity check of its own:
 cd backend && .venv/bin/python -m app.services.drawing_storage --batch-size 2000
 ```
 
+### `turn_drawing_reactions`
+`id` · `game_id` (denormalized) · `turn_id` · `participant_id` (the reactor's **participant
+seat**, indexed) · `emoji` · `set_version` · `created_at` · `updated_at`, with
+`uq_turn_drawing_reactions_turn_participant` on `(turn_id, participant_id)`,
+`fk_turn_drawing_reactions_turn_same_game` on `(game_id, turn_id)` and
+`fk_turn_drawing_reactions_seat_same_game` on `(game_id, participant_id)`, both CASCADE.
+
+`emoji` ∈ `heart \| laugh \| wow \| fire` — the **Reaction set**, version 1. Stored as a
+code, never a glyph, and a code shipped is never removed from the `CHECK` or reused: the
+stored-drawing rule (R-HIST-18) applied to an emoji, so retiring one changes what is
+offered and nothing an old row means. `set_version >= 1` says which version of the set the
+code was chosen from.
+
+- One reaction per registered account per drawing is the unique constraint. A game holds
+  at most one seat per linked account, so no alias resolution sits behind it; guests
+  cannot react, so a guest-to-account merge brings none with it.
+- The reactor is the **seat**, not an account column: the seat already carries the frozen
+  presentation and becomes the **Deleted player** tombstone with everything else, so a
+  deleted reactor's reaction keeps counting. The `game_id` denormalization is what lets
+  both foreign keys say the turn and the seat belong to the same game.
+- Reactions never touch `score_events` (R-HIST-11).
+
+**Flow.** Reactions given while the game is live sit on the `Room` and ride in the
+finished-game transaction, validated against the rows being written — a reaction on a turn
+that did not survive, from a seat not in the game, from the drawer, from a guest seat, or
+carrying an unknown code is a `ValueError`, not a row. They are part of the payload digest,
+so a retry carrying different reactions is a conflict. Later writes — the recap, the
+profile page — go through `set_drawing_reaction`, one transaction that resolves the
+requester's seat by identity, refuses the drawer by seat and by account, refuses an erased
+drawing, upserts or deletes the row, and moves the drawer's `reactions_received`.
+
+Deleting an account deletes the reactions on the drawings it erases; the reactions that
+account *gave* stay, attributed through the tombstoned seat.
+
 ### `turn_participant_outcomes`
 One row per current or late-arriving non-drawer seat, per turn.
 
@@ -1179,7 +1223,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Codes from the removed persistent-room feature | Permanent | Never enter the reuse pool |
 | Guests with no completed game | 30 inactive days (default) | `app.auth.retention` |
 | Guests with history | 365 inactive days (default) | `app.auth.retention`; history survives via frozen snapshots |
-| Game history, turns, outcomes, ledger, drawings, usage facts | Indefinite | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — |
 
 Anonymous retention is based on `last_active_at` and is bounded to 500 accounts per run.
 It **previews by default** and records aggregate audit evidence when applied:
@@ -1214,7 +1258,9 @@ Deletion:
 - removes every friendship and pending or refused request involving them;
 - deletes owned prompt lists and their owned prompt concepts, rather than leaving
   ownerless content;
-- erases the drawings that account made while leaving the row saying so;
+- erases the drawings that account made while leaving the row saying so, and deletes the
+  reactions those drawings had; reactions the account gave elsewhere stay, under the
+  tombstoned seat;
 - erases any screenshot on a bug report that account filed, while leaving the report:
   a defect is not un-found by an erasure, and the reporter foreign key detaches;
 

@@ -255,3 +255,27 @@ def test_lobby_chat_is_a_kind_of_its_own():
     assert policy.for_command("send_lobby_chat").limit < policy.for_command(
         "send_chat"
     ).limit
+
+
+@pytest.mark.asyncio
+async def test_a_flood_of_reactions_is_refused_by_the_action_budget():
+    """Reactions have no budget of their own (#520): a control somebody presses
+    at a human's pace answers to `action`, and a flood is refused before the
+    handler looks at the room."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    await seated(sio, sessions)
+    budget = CommandBudgetPolicy().for_command("react_to_drawing")
+    assert budget == CommandBudgetPolicy().for_command("toggle_afk")
+    # Opening the room spent one of the window's actions; start it clean.
+    ctx._command_windows.forget("host-sid")
+
+    answers = [
+        await sio.handlers["/"]["react_to_drawing"](
+            "host-sid", {"turnId": "turn", "emoji": "heart"}
+        )
+        for _ in range(budget.limit + 5)
+    ]
+
+    throttled = [answer for answer in answers if "too quickly" in answer.get("error", "")]
+    assert len(throttled) == 5

@@ -8,7 +8,10 @@ import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
-import type { DrawingRecapMetadata } from "../types";
+import { DrawingReactionControl } from "../components/DrawingReactionControl";
+import { ReactionGlyph } from "../components/ReactionGlyph";
+import type { DrawingRecapMetadata, DrawingReaction } from "../types";
+import { compactTally, reactionEligibility, tallyReactions } from "../lib/reactions";
 import {
   fetchGameDetail,
   fetchGameDrawing,
@@ -17,12 +20,38 @@ import {
   formatDuration,
   formatTimestamp,
   HISTORY_PAGE_SIZE,
+  setHistoryReaction,
   type GameDetail,
   type GameTurn,
   type GameSummary,
+  type HistoryReaction,
   type ProfileStats,
 } from "../lib/profile";
 import { useAuthStore, type AuthUser } from "../store/authStore";
+
+/** History reactions in the shape the shared control reads: seat id as the reactor id. */
+function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
+  return reactions.map((reaction) => ({ playerId: reaction.seatId, emoji: reaction.emoji }));
+}
+
+/** The per-emoji counts of one turn, read-only, for the turn table. */
+function ReactionTallyCell({ reactions }: { reactions: HistoryReaction[] }) {
+  const chips = compactTally(tallyReactions(reactions));
+  if (chips.length === 0) return null;
+  return (
+    <span
+      className="profile-turn-reactions"
+      aria-label={chips.map((chip) => `${chip.label} ${chip.count}`).join(", ")}
+    >
+      {chips.map((chip) => (
+        <span key={chip.code} className="reaction-chip">
+          <ReactionGlyph code={chip.code} size={14} />
+          <span className="reaction-count">{chip.count}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -75,12 +104,36 @@ function drawingNote(turn: GameTurn): string {
   return "—";
 }
 
-function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
+function GameRow({
+  game,
+  viewerId,
+  onRequestAccount,
+}: {
+  game: GameSummary;
+  viewerId: string;
+  /** Guests see how to become able to react; this opens the claim dialog. */
+  onRequestAccount: () => void;
+}) {
   const { timeFormat } = useClock();
+  const currentUser = useAuthStore((s) => s.user);
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+
+  async function reactToTurn(turnId: string, emoji: string | null) {
+    const result = await setHistoryReaction(game.id, turnId, emoji);
+    setDetail((current) =>
+      current
+        ? {
+            ...current,
+            turns: current.turns.map((turn) =>
+              turn.id === turnId ? { ...turn, reactions: result.reactions } : turn,
+            ),
+          }
+        : current,
+    );
+  }
 
   const seat = game.participants.find((p) => p.userId === viewerId);
   const finishedAt = formatTimestamp(game.finishedAt, timeFormat);
@@ -234,6 +287,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
             const viewerEntries: DrawingRecapMetadata[] = detail.turns.map(
               (turn, index) => ({
                 index,
+                turnId: turn.id,
                 roundNumber: turn.roundNumber,
                 turnNumber: turn.turnNumber,
                 drawerId: turn.drawerSeatId ?? "",
@@ -254,6 +308,23 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                 loadEntry={(entry) =>
                   fetchGameDrawing(game.id, detail.turns[entry.index].id)
                 }
+                renderReactions={(entry) => {
+                  const turn = detail.turns[entry.index];
+                  return (
+                    <DrawingReactionControl
+                      reactions={asReactions(turn.reactions)}
+                      myReactorId={detail.mySeatId}
+                      eligibility={reactionEligibility({
+                        isRegistered: Boolean(currentUser && !currentUser.isAnonymous),
+                        isDrawer: Boolean(turn.drawerSeatId) && turn.drawerSeatId === detail.mySeatId,
+                        open: turn.drawingStatus === "ready",
+                      })}
+                      onReact={(emoji) => reactToTurn(turn.id, emoji)}
+                      onRequestAccount={onRequestAccount}
+                      placement="panel"
+                    />
+                  );
+                }}
               />
             )}
             <table className="profile-turns">
@@ -265,6 +336,7 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                   <th scope="col">Drawn by</th>
                   <th scope="col">Time</th>
                   <th scope="col">Drawing</th>
+                  <th scope="col">Reactions</th>
                   <th scope="col">Guesser outcomes</th>
                 </tr>
               </thead>
@@ -290,6 +362,13 @@ function GameRow({ game, viewerId }: { game: GameSummary; viewerId: string }) {
                         </button>
                       ) : (
                         <span className="profile-note">{drawingNote(turn)}</span>
+                      )}
+                    </td>
+                    <td>
+                      {turn.reactions.length > 0 ? (
+                        <ReactionTallyCell reactions={turn.reactions} />
+                      ) : (
+                        <span className="profile-note">—</span>
                       )}
                     </td>
                     <td>
@@ -520,6 +599,7 @@ function ProfileView({ userId }: { userId: string }) {
               <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
               <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
               <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
+              <StatTile label="Reactions received" value={String(stats.reactionsReceived)} />
               <StatTile label="Total score" value={String(stats.totalScore)} />
             </div>
           </section>
@@ -545,7 +625,12 @@ function ProfileView({ userId }: { userId: string }) {
             ) : (
               <ul className="profile-games">
                 {games.map((game) => (
-                  <GameRow key={game.id} game={game} viewerId={subject.id} />
+                  <GameRow
+                    key={game.id}
+                    game={game}
+                    viewerId={subject.id}
+                    onRequestAccount={() => setAuthMode("claim")}
+                  />
                 ))}
               </ul>
             )}

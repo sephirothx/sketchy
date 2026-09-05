@@ -235,8 +235,42 @@ export interface TurnScoreEntry extends ScoreEntry {
   newRank: number;
 }
 
+/**
+ * One reaction to a drawing, as the room carries it: the reactor's seat token
+ * (never an account id) and the stable emoji code. The glyph is the client's
+ * business - see `lib/reactions.ts` - so a code the server adds later still
+ * arrives in one piece.
+ */
+export interface DrawingReaction {
+  playerId: string;
+  emoji: string;
+}
+
+/** Per-emoji counts for one drawing, keyed by code. */
+export type ReactionTally = Record<string, number>;
+
+/** The room-wide `drawing_reaction` broadcast. `emoji` is null when a reaction was taken back. */
+export interface DrawingReactionEvent {
+  turnId: string;
+  playerId: string;
+  nickname: string;
+  nameColor?: string;
+  isAnonymous?: boolean;
+  emoji: string | null;
+  tally: ReactionTally;
+}
+
+export interface ReactToDrawingResponse extends AckResponse {
+  turnId?: string;
+  emoji?: string | null;
+  tally?: ReactionTally;
+}
+
 export interface TurnEndedPayload {
   prompt: string;
+  /** The turn's durable id: what a reaction names. */
+  turnId?: string;
+  reactions?: DrawingReaction[];
   drawerId: string;
   drawerBonus: number;
   seconds?: number;
@@ -279,7 +313,15 @@ export type GameHighlight =
     }
   | ({ kind: "fastest_guess"; prompt: string; seconds: number } & HighlightName)
   | ({ kind: "best_drawer"; guessRatio: number } & HighlightName)
-  | ({ kind: "quickest_average"; seconds: number } & HighlightName);
+  | ({ kind: "quickest_average"; seconds: number } & HighlightName)
+  | ({
+      kind: "most_reacted_drawing";
+      prompt: string;
+      reactionCount: number;
+      /** Position in the recap, so the card can open that drawing. */
+      drawingIndex: number;
+      turnId: string;
+    } & HighlightName);
 
 /** The fields a highlight naming a player renders that name from. */
 export interface HighlightName {
@@ -298,6 +340,9 @@ export interface GameEndedPayload {
 
 export interface DrawingRecapMetadata {
   index: number;
+  /** The durable turn id; absent only for entries a client synthesised itself. */
+  turnId?: string;
+  reactions?: DrawingReaction[];
   roundNumber: number;
   turnNumber: number;
   drawerId: string;

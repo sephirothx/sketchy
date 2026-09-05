@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TouchEvent } from "react";
+import type { ReactNode, TouchEvent } from "react";
 import type { CanvasRef } from "./Canvas";
 import { CanvasSnapshot } from "./CanvasSnapshot";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
@@ -19,6 +19,12 @@ interface DrawingRecapGalleryProps {
   loadEntry: (entry: DrawingRecapMetadata) => Promise<ArrayBuffer | unknown>;
   /** Which drawing to open on. The rest stay reachable from the controls. */
   initialIndex?: number;
+  /**
+   * The reaction control for one entry. A prop for the same reason `loadEntry`
+   * is: the live room reacts over its socket and history over HTTP, and the
+   * gallery does not care which.
+   */
+  renderReactions?: (entry: DrawingRecapMetadata) => ReactNode;
 }
 
 export function DrawingRecapGallery({
@@ -26,6 +32,7 @@ export function DrawingRecapGallery({
   onClose,
   loadEntry,
   initialIndex = 0,
+  renderReactions,
 }: DrawingRecapGalleryProps) {
   const [position, setPosition] = useState(initialIndex);
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
@@ -135,6 +142,9 @@ export function DrawingRecapGallery({
               </strong>
               {" · "}Round {entry.roundNumber} · Turn {entry.turnNumber}
             </p>
+            {renderReactions && (
+              <div className="drawing-recap-reactions">{renderReactions(entry)}</div>
+            )}
           </div>
           <div className="drawing-recap-header-actions">
             <button

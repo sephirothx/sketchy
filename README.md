@@ -39,11 +39,21 @@ keyboard that takes half the screen, and one thumb.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
-- Game highlights — the hardest prompt, the fastest guess, the best drawer, and the quickest
-  guesser on average, on a screen of their own reached from the game over screen or from the
-  waiting room afterwards. Derived from guess counts and timings rather than points, so the
-  same four appear in a no-scoring game, and each is dropped when the game gives it nothing
-  to say.
+- Game highlights — the hardest prompt, the fastest guess, the best drawer, the quickest
+  guesser on average, and the most reacted drawing, on a screen of their own reached from
+  the game over screen or from the waiting room afterwards. Derived from guess counts,
+  timings and reactions rather than points, so the same five appear in a no-scoring game,
+  and each is dropped when the game gives it nothing to say.
+- Reactions to drawings — a registered player leaves one emoji from a fixed positive set
+  (❤️ 😂 😮 🔥) on a drawing, from a small button in the corner of the canvas while it is
+  being drawn, at turn results, in the recap, or later from game history. Changeable and
+  removable; one per player per drawing. The whole room sees it land and a running tally
+  stays on the drawing. Guests and spectators see reactions but cannot give them, and the
+  drawer cannot react to their own. Reactions are kept with the game for as long as the
+  game, feed a most-reacted-drawing highlight, and add a lifetime "reactions received"
+  total to the profile. They are never scored. The four faces are bundled artwork
+  (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
+  every browser.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -1054,12 +1064,14 @@ backend/
       drawing.py     Drawing, undo, and canvas synchronization handlers
       chat.py        Guessing, chat, and purchasable hint handlers
       moderation.py Vote-kick and AFK handlers
+      reactions.py  Reactions to drawings: the live command and the recap write
       restart.py    Majority-vote game restart handlers
       connection.py Socket connect/disconnect and reconnect-grace handling
       payloads.py    Typed boundary models and parsers for every client command
     services/
       game_flow.py Shared turn, round, timer, and player-removal workflows
       game_highlights.py Pure derivation of a finished game's highlights
+      drawing_reactions.py Who may react to which drawing, and the room broadcast
       timers.py    Application-owned asynchronous timer lifecycle
     presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
@@ -1079,6 +1091,7 @@ frontend/
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
     lib/drawingRules.ts The client's copy of the room's tool and color rules
+    lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
@@ -1361,13 +1374,14 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    avatar wears a ring, so neither needs a word beside the name.
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.
 4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
-   prompt (`_ _ _ _`) and guesses in the chat. The turn ends early once everyone's guessed
-   correctly. Somebody who joins while the drawing is underway guesses in that turn too -
+   prompt (`_ _ _ _`) and guesses in the chat. Registered guessers can also react to the
+   drawing with one emoji from the corner of the canvas. The turn ends early once
+   everyone's guessed correctly. Somebody who joins while the drawing is underway guesses in that turn too -
    the canvas and the masked prompt are already on their screen - and the turn waits for
    them like any other guesser. Players who were AFK or disconnected when the drawing began
    sit that turn out and rejoin the guessers on the next one.
-5. **Turn results** (5s by default): the prompt is revealed and scores update, then the next
-   player's turn begins.
+5. **Turn results** (5s by default): the prompt is revealed and scores update, reactions
+   stay open on the drawing, then the next player's turn begins.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings.
 

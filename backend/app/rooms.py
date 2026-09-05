@@ -378,6 +378,7 @@ class DrawingRecapEntry:
     def metadata(self, index: int) -> dict:
         return {
             "index": index,
+            "turnId": self.turn_id,
             "roundNumber": self.round_number,
             "turnNumber": self.turn_number,
             "drawerId": self.drawer_id,
@@ -449,6 +450,20 @@ class Room:
     last_game_scores: list[dict] = field(default_factory=list)
     last_game_highlights: list[dict] = field(default_factory=list)
     last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
+    # Reactions to this game's drawings (#520): turn id -> reactor's seat token
+    # -> emoji code. In memory because a live reaction predates the game row;
+    # folded into the finished-game write, and kept through the waiting room
+    # so the recap's tallies survive the game that produced them. Tokens
+    # rather than participant ids because a token is what the room can name
+    # and broadcast (R-ROOM-07); the history write maps them to seats.
+    drawing_reactions: dict[str, dict[str, str]] = field(default_factory=dict)
+    # The last game's durable id and where its history write got to. A recap
+    # reaction is a write to that game's row, so the handler needs to know
+    # the row exists before it tries: `pending` while the write is in the
+    # air, `recorded` once it landed, `failed` when it did not, `unrecorded`
+    # when there was nothing to write (too few seats, or no repository).
+    last_game_id: str | None = None
+    last_game_history: str = "none"
     departed_seats: dict[str, DepartedSeat] = field(default_factory=dict)
     restart_vote: RestartVote | None = None
     restart_vote_cooldown_until: float = 0
@@ -526,8 +541,38 @@ class Room:
 
     def drawing_recap_metadata(self) -> list[dict]:
         return [
-            drawing.metadata(index)
+            {
+                **drawing.metadata(index),
+                "reactions": self.drawing_reactions_for(drawing.turn_id),
+            }
             for index, drawing in enumerate(self.last_game_drawings)
+        ]
+
+    def set_drawing_reaction(
+        self, turn_id: str, token: str, emoji: str | None
+    ) -> str | None:
+        """Record one seat's reaction to one turn's drawing; return the previous.
+
+        ``None`` removes it. A turn left with no reactions drops its entry, so
+        the dict never lists a drawing nobody reacted to.
+        """
+        reactions = self.drawing_reactions.setdefault(turn_id, {})
+        previous = reactions.get(token)
+        if emoji is None:
+            reactions.pop(token, None)
+        else:
+            reactions[token] = emoji
+        if not reactions:
+            self.drawing_reactions.pop(turn_id, None)
+        return previous
+
+    def drawing_reactions_for(self, turn_id: str | None) -> list[dict]:
+        """The reactions on one drawing as a room payload: seat tokens only."""
+        if turn_id is None:
+            return []
+        return [
+            {"playerId": token, "emoji": emoji}
+            for token, emoji in self.drawing_reactions.get(turn_id, {}).items()
         ]
 
     def allocate_canvas_generation(self) -> int:

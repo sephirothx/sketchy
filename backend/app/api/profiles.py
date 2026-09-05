@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.serializers import (
     game_detail_payload,
@@ -17,7 +18,12 @@ from app.canvas_storage import (
     UnsupportedStoredDrawingError,
     stored_drawing_wire_payload,
 )
-from app.repositories.interfaces import GameHistoryRepository, UserRepository
+from app.domain_values import OFFERED_REACTION_EMOJI_CODES
+from app.repositories.interfaces import (
+    DrawingReactionResult,
+    GameHistoryRepository,
+    UserRepository,
+)
 
 # The largest page the client may ask for. Deliberately below the repository's
 # own clamp so that asking for one row past the page (how `hasMore` is answered)
@@ -31,6 +37,26 @@ DEFAULT_PAGE_SIZE = 20
 profile_limiter = RateLimiter(limit=120, window_seconds=60)
 
 logger = logging.getLogger("sketchy.api.profiles")
+
+
+class ReactionBody(BaseModel):
+    """The one field a reaction write carries: which emoji, by code."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    emoji: str = Field(min_length=1, max_length=16)
+
+
+def reaction_payload(result: DrawingReactionResult) -> dict:
+    return {
+        "turnId": result.turn_id,
+        "seatId": result.seat_id,
+        "emoji": result.emoji,
+        "reactions": [
+            {"seatId": reaction.seat_id, "emoji": reaction.emoji}
+            for reaction in result.reactions
+        ],
+    }
 
 
 def create_profile_router(
@@ -148,5 +174,40 @@ def create_profile_router(
                 "ETag": f'"{drawing.checksum_sha256}"',
             },
         )
+
+    async def _write_reaction(
+        game_id: str, turn_id: str, request: Request, emoji: str | None
+    ) -> dict:
+        """The shared body of the reaction routes.
+
+        Every refusal is a 404, the same rule as the drawing route above
+        (R-HIST-16): a stranger, a guest, the drawer, an erased drawing and a
+        game that does not exist all get the same answer, so the route never
+        says which. The repository applies the rules; this only asks.
+        """
+        throttle(request)
+        requesting_user_id = getattr(request.state, "user_id", None)
+        if not requesting_user_id:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        if emoji is not None and emoji not in OFFERED_REACTION_EMOJI_CODES:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        result = await game_history_repo.set_drawing_reaction(
+            game_id, turn_id, requesting_user_id=requesting_user_id, emoji=emoji
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        return reaction_payload(result)
+
+    @router.put("/games/{game_id}/turns/{turn_id}/reaction")
+    async def set_turn_reaction(
+        game_id: str, turn_id: str, body: ReactionBody, request: Request
+    ):
+        """Leave, or change, the signed-in player's reaction to a stored drawing."""
+        return await _write_reaction(game_id, turn_id, request, body.emoji)
+
+    @router.delete("/games/{game_id}/turns/{turn_id}/reaction")
+    async def clear_turn_reaction(game_id: str, turn_id: str, request: Request):
+        """Take the signed-in player's reaction back."""
+        return await _write_reaction(game_id, turn_id, request, None)
 
     return router

@@ -158,7 +158,7 @@ legitimate drawer produces and the budget decides how many are accepted.
 | `lobby_chat` | `send_lobby_chat` | 6 per 10 s — its own kind, because a lobby line reaches every open lobby rather than one room's seats |
 | `resync` | `request_sync_strokes` | 1 per 2 s |
 | `heartbeat` | `session_ping` | 20 per 10 s |
-| `action` | everything else | 30 per 10 s |
+| `action` | everything else, `react_to_drawing` included | 30 per 10 s |
 
 Windows are per socket and per **kind**, not per command, so two commands of one kind
 share the allowance that kind was given. The numbers follow the client's own cadence:
@@ -263,6 +263,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `update_room_settings` | `UpdateRoomSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_custom_prompts` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_recap_drawing` | `RecapDrawingPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
+| `react_to_drawing` | `ReactToDrawingPayload` | ✓ | [`reactions.py`](../backend/app/handlers/reactions.py) |
 | `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — `nameColor` must be a `#rrggbb` that reads at 1.8:1 on both themes' player-list panel (R-ACCT-08); anything else answers `{ ok: false, error: "Invalid player name color" }`, and a guest's colour is always refused |
 | `rename_player` | `RenamePlayerPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `become_player` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
@@ -289,6 +290,30 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+
+### `react_to_drawing`
+
+One registered seat's reaction to one drawing, named by the turn's durable id
+(#520). Addresses nothing by account: the reactor is the seat the socket holds,
+the drawing is a turn id the room handed out, and the broadcast that follows
+carries a seat token back (R-ROOM-07).
+
+```jsonc
+{ "turnId": "0192…", "emoji": "heart" }   // "emoji": null takes the reaction back
+```
+
+`emoji` ∈ `heart | laugh | wow | fire` — the offered **Reaction set**; a retired
+code is refused on the way in and still rendered from history. Two kinds of
+drawing accept one. The current turn's, while the phase is `drawing` or
+`turn_results`: the reaction lives on the room until the game's history is
+written. One in the recap, after the game ended: the row exists, so the handler
+writes through the same repository method the REST route uses, and answers
+*"That game is still being saved. Try again in a moment."* inside the window
+between `game_ended` and the history write landing, or *"That game was not
+recorded…"* when there is no row to write to. Guests are told to create an
+account; spectators, the drawer (by seat **and** by account), and any turn not
+on screen are refused. The acknowledgement carries `turnId`, `emoji` and the
+new `tally`. Answers to the `action` budget like any other pressed control.
 
 ### Room settings fields
 
@@ -379,10 +404,11 @@ the server resolves the seat against the live room and selects the evidence itse
 | `turn_starting` | `{drawerId, drawerNickname, drawerNameColor, roundNumber, totalRounds, seconds}` | room |
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
-| `turn_started` | `{drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend}` | **per socket** |
-| `sync_game` | same shape as `turn_payload` | one socket |
+| `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend}` | **per socket** |
+| `sync_game` | same shape as `turn_payload`, plus `turnId` and the turn's `reactions[]` | one socket |
 | `turn_ended` | `TurnEndedPayload` | room |
-| `game_ended` | `{scores, highlights, drawings}` | room |
+| `game_ended` | `{scores, highlights, drawings}` — each drawing carrying `turnId` and its `reactions[]` | room |
+| `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing | room, the drawer included |
 | `chat_message` | `ChatMessage` | room or a filtered recipient list |
 | `correct_guess` | `{playerId, nickname, points}` | room |
 | `you_guessed_correctly` | `{prompt, points, basePoints, hintSpend}` | guesser only |
@@ -551,7 +577,26 @@ sees their own line, and room state, players, scores, turns, correct-guess event
 votes, and announcements keep normal room-wide delivery. Blocking never creates a
 different game state per player.
 
-**`turn_ended`** carries `prompt`, `drawerId`, `drawerBonus`, `seconds`, the ordered
+**`DrawingReaction`** — delivered by `drawing_reaction` the moment `react_to_drawing`
+is accepted, to everyone in the room including the drawer:
+
+```jsonc
+{ "turnId": "0192…", "playerId": "seat-token", "nickname": "Ada", "nameColor": "#4f9",
+  "isAnonymous": false, "emoji": "fire",          // null when taken back
+  "tally": { "heart": 2, "fire": 1 } }            // the whole drawing, after this change
+```
+
+The reactor is a seat token with its presentation, like every other room payload;
+the tally is the full count rather than a delta so a client that missed an earlier
+event still converges. State payloads carry the **list** rather than the tally —
+`reactions: [{playerId, emoji}]` on `turn_started`, `sync_game`, `turn_ended`, and on
+every recap entry in `game_ended.drawings` and `room_state.lastGameDrawings` — because a
+reconnecting client has to find its own pick in it, and a list of seats is how the room
+names anybody. The client reduces the list to a tally itself
+([`lib/reactions.ts`](../frontend/src/lib/reactions.ts)). `emoji` is a stable code, never a
+glyph; the glyph table is the client's, so a code the server adds later still arrives.
+
+**`turn_ended`** carries `prompt`, `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
 `guesses[]` (each with the guesser's `seconds`), and `scores[]` — each entry carrying
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
 without recomputing ranks. Ranks use standard competition ranking (1, 2, 2, 4) via
@@ -1033,6 +1078,14 @@ replaced, not echoed.
 | `GET` | `/api/users/{user_id}/games` | `?includeAbandoned=true` to include games that stopped |
 | `GET` | `/api/games/{game_id}` | Participant-only detail: exact rule snapshot, offers, outcomes, ledger |
 | `GET` | `/api/games/{game_id}/turns/{turn_id}/drawing` | Participants only. **Every refusal is a 404**, so it never reveals whether a game exists |
+| `PUT` | `/api/games/{game_id}/turns/{turn_id}/reaction` | `{"emoji": "heart"}` — leave or change the signed-in player's reaction to a stored drawing (#520). Same 404 rule as the drawing route: stranger, guest, drawer, erased drawing, unknown code and unknown game are all `No such drawing.` Answers `{turnId, seatId, emoji, reactions: [{seatId, emoji}]}` |
+| `DELETE` | `/api/games/{game_id}/turns/{turn_id}/reaction` | Take the reaction back; same answer shape with `emoji: null`. Both share `set_drawing_reaction` with the socket's recap path, so the rules live once |
+
+`GET /api/games/{game_id}` carries each turn's `reactions: [{seatId, emoji}]` and the
+requester's own `mySeatId`, because the client cannot work its seat out from
+`participants`: a seat kept by a merged guest identity carries that identity's id, not
+the account the requester is signed in as. Names for reactors come from `participants`,
+whose frozen snapshots are already tombstoned on deletion.
 
 ### Prompt lists — [`backend/app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py)
 
@@ -1219,7 +1272,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (8) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (9) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

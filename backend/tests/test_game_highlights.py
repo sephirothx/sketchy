@@ -228,3 +228,119 @@ def test_every_highlight_carries_the_fields_a_name_renders_from():
         if highlight["kind"] == "hardest_prompt":
             continue
         assert set(highlight) >= {"nickname", "nameColor", "isAnonymous"}
+
+
+def reacted_turn(drawer_id: str, **kwargs) -> CompletedTurnStats:
+    """A turn with the id a real one carries; reactions are keyed by it."""
+    from dataclasses import replace
+
+    from app.identifiers import generate_uuid7
+
+    return replace(turn(drawer_id, **kwargs), id=str(generate_uuid7()))
+
+
+def recap(room, completed, *, drawer_id: str | None = None) -> None:
+    from app.rooms import DrawingRecapEntry
+
+    room.last_game_drawings.append(
+        DrawingRecapEntry(
+            turn_id=completed.id,
+            round_number=completed.round_number,
+            turn_number=completed.turn_number,
+            drawer_id=drawer_id or completed.drawer_token,
+            drawer_nickname="Drawer",
+            drawer_name_color=None,
+            prompt=completed.chosen_prompt,
+            action_count=3,
+            canvas_history=b"SKCH",
+        )
+    )
+
+
+def test_no_reactions_means_no_most_reacted_drawing():
+    _, room, players, game = build(("Ana", False), ("Bo", False))
+    first = reacted_turn(players["Ana"].id, number=1, correct=1, total=1)
+    game.completed_turns = [first]
+    recap(room, first)
+
+    assert "most_reacted_drawing" not in kinds(build_game_highlights(room, game))
+
+
+def test_the_most_reacted_drawing_is_the_biggest_count_then_the_earliest():
+    _, room, players, game = build(("Ana", False), ("Bo", False), ("Cy", False))
+    first = reacted_turn(players["Ana"].id, number=1, prompt="lighthouse", correct=2, total=2)
+    second = reacted_turn(players["Bo"].id, number=2, prompt="kite", correct=2, total=2)
+    third = reacted_turn(players["Cy"].id, number=3, prompt="anchor", correct=2, total=2)
+    game.completed_turns = [first, second, third]
+    for completed in (first, second, third):
+        recap(room, completed)
+    room.drawing_reactions = {
+        first.id: {players["Bo"].id: "heart"},
+        second.id: {players["Ana"].id: "fire", players["Cy"].id: "fire"},
+        third.id: {players["Ana"].id: "wow", players["Bo"].id: "laugh"},
+    }
+
+    most = only(build_game_highlights(room, game), "most_reacted_drawing")
+
+    assert most == {
+        "kind": "most_reacted_drawing",
+        "prompt": "kite",
+        "reactionCount": 2,
+        "drawingIndex": 1,
+        "turnId": second.id,
+        "nickname": "Bo",
+        "nameColor": players["Bo"].name_color,
+        "isAnonymous": players["Bo"].is_anonymous,
+    }
+
+
+def test_the_most_reacted_card_is_refreshed_in_place_after_the_game():
+    """A recap reaction lands after `room.game` is gone, so the card is
+    rebuilt from the room alone - and keeps its position among the others."""
+    from app.services.game_highlights import refresh_reaction_highlight
+
+    _, room, players, game = build(("Ana", False), ("Bo", False))
+    first = reacted_turn(players["Ana"].id, number=1, prompt="lighthouse", correct=1, total=1)
+    second = reacted_turn(players["Bo"].id, number=2, prompt="kite", correct=1, total=1)
+    game.completed_turns = [first, second]
+    recap(room, first)
+    recap(room, second)
+    room.last_game_highlights = [{"kind": "hardest_prompt", "prompt": "kite"}]
+    room.game = None
+
+    refresh_reaction_highlight(room)
+    assert kinds(room.last_game_highlights) == {"hardest_prompt"}
+
+    room.drawing_reactions = {first.id: {players["Bo"].id: "heart"}}
+    refresh_reaction_highlight(room)
+    assert [h["kind"] for h in room.last_game_highlights] == [
+        "hardest_prompt",
+        "most_reacted_drawing",
+    ]
+    assert room.last_game_highlights[1]["prompt"] == "lighthouse"
+
+    room.drawing_reactions[second.id] = {
+        players["Ana"].id: "fire",
+        "someone-who-left": "fire",
+    }
+    refresh_reaction_highlight(room)
+    assert room.last_game_highlights[1]["prompt"] == "kite"
+    assert room.last_game_highlights[1]["reactionCount"] == 2
+
+    room.drawing_reactions = {}
+    refresh_reaction_highlight(room)
+    assert kinds(room.last_game_highlights) == {"hardest_prompt"}
+
+
+def test_a_drawer_who_left_is_still_named_on_the_most_reacted_card():
+    _, room, players, game = build(("Ana", False), ("Bo", False))
+    first = reacted_turn(players["Ana"].id, number=1, correct=1, total=1)
+    game.completed_turns = [first]
+    recap(room, first)
+    room.players.pop(players["Ana"].id)
+    room.drawing_reactions = {first.id: {players["Bo"].id: "heart"}}
+
+    most = only(build_game_highlights(room, game), "most_reacted_drawing")
+
+    # No departed seat either: the recap entry's own snapshot is the fallback.
+    assert most["nickname"] == "Drawer"

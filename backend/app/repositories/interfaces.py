@@ -80,6 +80,7 @@ class UserStats:
     turns_played: int = 0
     prompts_guessed: int = 0
     drawings_made: int = 0
+    reactions_received: int = 0
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,39 @@ class TurnDrawingInput:
     turn_id: str
     payload: bytes | None
     unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class TurnDrawingReactionInput:
+    """One registered player's reaction to a turn's drawing, as it will be stored.
+
+    `user_id` is not a column - the seat carries identity - but it rides along so
+    the write can check the account exists and credit the projection.
+    """
+
+    turn_id: str
+    seat_id: str
+    user_id: str
+    emoji: str
+    set_version: int
+
+
+@dataclass(frozen=True)
+class TurnDrawingReactionDetail:
+    """One reaction as history shows it: the seat that gave it and the code."""
+
+    seat_id: str
+    emoji: str
+
+
+@dataclass(frozen=True)
+class DrawingReactionResult:
+    """What a reaction write leaves behind: the reactor's seat and the new state."""
+
+    turn_id: str
+    seat_id: str
+    emoji: str | None
+    reactions: tuple[TurnDrawingReactionDetail, ...]
 
 
 @dataclass(frozen=True)
@@ -318,6 +352,7 @@ class TurnDetail:
     participant_outcomes: list[TurnParticipantOutcomeDetail] = field(
         default_factory=list
     )
+    reactions: list[TurnDrawingReactionDetail] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -346,6 +381,10 @@ class GameDetail:
     summary: GameSummary
     turns: list[TurnDetail] = field(default_factory=list)
     score_events: list[ScoreEventDetail] = field(default_factory=list)
+    # The requester's own seat in this game. The client cannot work it out
+    # from `participants`: a seat kept by a merged guest identity carries that
+    # identity's id, not the account the requester is signed in as.
+    my_seat_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -658,8 +697,29 @@ class GameHistoryRepository(ABC):
         guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
         drawings: list[TurnDrawingInput] | None = None,
+        reactions: list[TurnDrawingReactionInput] | None = None,
     ) -> str:
         """Persist a completed game along with participants, turns, and guesses in a single transaction."""
+        ...
+
+    @abstractmethod
+    async def set_drawing_reaction(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+        emoji: str | None,
+    ) -> DrawingReactionResult | None:
+        """Set, change or (with ``None``) remove the requester's reaction.
+
+        The first mutable thing on a finished game, and deliberately kept away
+        from the score ledger (R-HIST-11). Every refusal - no such game or
+        turn, the requester was not a seat in it, is a guest, drew the
+        drawing, the drawing was erased, the code is unknown - answers
+        ``None``, so a caller can turn all of them into the same 404
+        (R-HIST-16) without learning which applied.
+        """
         ...
 
     @abstractmethod

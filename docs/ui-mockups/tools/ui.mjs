@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 // Shared design tokens, icons and small components for the redesign canvas.
 // Every artboard is generated from these so the system stays consistent.
 //
@@ -142,6 +146,7 @@ export const icon = {
   users: (s) => stroke('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5a3.5 3.5 0 0 1 0 6.7"/><path d="M17.5 14.4a6.5 6.5 0 0 1 4 5.6"/>', s),
   rounds: (s) => stroke('<path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/>', s),
   gear: (s) => stroke('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/>', s),
+  heart: (s) => stroke('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/>', s),
   download: (s) => stroke('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>', s),
   leave: (s) => stroke('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>', s),
   bulb: (s) => stroke('<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z"/>', s),
@@ -340,3 +345,11 @@ class Component extends DCLogic {
 </body>
 </html>
 `;
+
+// The reaction artwork the app bundles (frontend/src/assets/reactions, Fluent
+// Emoji, MIT), read from the one place it lives so the artboards cannot drift
+// from what ships. Images rather than emoji glyphs, for the reason the app
+// gives: every platform's emoji font sits on a different baseline.
+const reactionAssets = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'frontend', 'src', 'assets', 'reactions');
+export const reactionArt = (code, size) => readFileSync(join(reactionAssets, `${code}.svg`), 'utf8')
+  .replace('<svg width="32" height="32"', `<svg width="${size}" height="${size}" style="display: block; flex: none"`);

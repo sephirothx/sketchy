@@ -1379,3 +1379,39 @@ async def test_deleting_an_account_names_the_friends_it_takes_something_from(env
 
     # The friend, and nobody else - certainly not the account being deleted.
     assert result.friends_notified == (friend["id"],)
+
+
+async def test_deletion_takes_the_reactions_on_erased_drawings_and_keeps_the_ones_given(env):
+    """Reactions are facts about a drawing: gone with an erased one, kept - under
+    the tombstoned seat - on drawings other players made."""
+    http, users, history, factory = env
+    owner = await register(http, "ReactedDeleter")
+    other_guest = await users.create_anonymous("Other player")
+    other = await users.claim_account(other_guest.id, "otherplayer", "hashed")
+    game_id = await record_private_game(history, owner_id=owner["id"], other_id=other.id)
+    async with factory() as session:
+        turns = {
+            turn.drawer_user_id: turn
+            for turn in (
+                await session.scalars(select(TurnRecord).where(TurnRecord.game_id == UUID(game_id)))
+            ).all()
+        }
+    owner_turn = turns[UUID(owner["id"])]
+    other_turn = turns[UUID(other.id)]
+    assert await history.set_drawing_reaction(
+        game_id, str(owner_turn.id), requesting_user_id=other.id, emoji="heart"
+    )
+    assert await history.set_drawing_reaction(
+        game_id, str(other_turn.id), requesting_user_id=owner["id"], emoji="fire"
+    )
+
+    response = await http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
+    assert response.status_code == 200
+
+    detail = await history.get_game_detail(game_id, requesting_user_id=other.id)
+    by_turn = {turn.id: turn for turn in detail.turns}
+    assert by_turn[str(owner_turn.id)].reactions == [], "an erased drawing keeps no reactions"
+    [kept] = by_turn[str(other_turn.id)].reactions
+    assert kept.emoji == "fire"
+    seat = next(p for p in detail.summary.participants if p.seat_id == kept.seat_id)
+    assert seat.display_name == "Deleted player"

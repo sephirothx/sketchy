@@ -1,5 +1,7 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
+import { AuthDialog, type AuthMode } from "./AccountMenu";
 import { Canvas, type CanvasRef } from "./Canvas";
+import { DrawingReactionControl } from "./DrawingReactionControl";
 import { GuessPips } from "./GuessPips";
 import { ChoosingPromptOverlay } from "./ChoosingPromptOverlay";
 import { GameAnnouncer } from "./GameAnnouncer";
@@ -14,9 +16,78 @@ import { useToolbarState } from "../hooks/useToolbarState";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { rankGuesses } from "../lib/guessOrder";
 import { splitMaskedPrompt } from "../lib/maskedPrompt";
+import { reactionEligibility } from "../lib/reactions";
+import { sendDrawingReaction } from "../lib/reactionRequests";
 import { recordRender } from "../lib/renderDiagnostics";
+import { useAuthStore } from "../store/authStore";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
+import type { DrawingReaction } from "../types";
 import type { RoomShellMode } from "./RoomShell";
+
+const NO_REACTIONS: DrawingReaction[] = [];
+
+interface ConnectedDrawingReactionControlProps {
+  /** The drawing being shown, by turn id; nothing renders without one. */
+  turnId: string | null | undefined;
+  /** Who drew it, by seat token - the one seat that may not react. */
+  drawerId: string | null | undefined;
+  placement: "canvas" | "panel";
+  /** False for a recap entry whose bitmap the room gave up: nothing to react to. */
+  visible?: boolean;
+}
+
+/**
+ * The reaction control bound to the live room: the store for the tally, the
+ * socket for the send, and the account for whether the picker is offered.
+ * Guests are pointed at the claim dialog, which this renders itself so the
+ * control works wherever it is dropped.
+ */
+export function ConnectedDrawingReactionControl({
+  turnId,
+  drawerId,
+  placement,
+  visible = true,
+}: ConnectedDrawingReactionControlProps) {
+  const playerId = useGameStore((state) => state.playerId);
+  const isSpectator = useGameStore((state) => selectMe(state)?.isSpectator ?? false);
+  const reactions = useGameStore((state) =>
+    turnId ? state.drawingReactions[turnId] ?? NO_REACTIONS : NO_REACTIONS,
+  );
+  const lastEvent = useGameStore((state) => state.lastReactionEvent);
+  const user = useAuthStore((state) => state.user);
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  if (!turnId) return null;
+  const eligibility = reactionEligibility({
+    isRegistered: Boolean(user && !user.isAnonymous),
+    isSpectator,
+    isDrawer: Boolean(drawerId) && drawerId === playerId,
+    open: visible,
+  });
+  return (
+    <>
+      <DrawingReactionControl
+        reactions={reactions}
+        myReactorId={playerId}
+        eligibility={eligibility}
+        onReact={(emoji) => sendDrawingReaction(turnId, emoji)}
+        onRequestAccount={() => setAuthMode("claim")}
+        placement={placement}
+        incoming={lastEvent && lastEvent.turnId === turnId ? lastEvent : null}
+      />
+      {authMode && (
+        <AuthDialog
+          mode={authMode}
+          suggestedUsername={user?.displayName ?? ""}
+          onClose={() => setAuthMode(null)}
+          onSwitchMode={setAuthMode}
+          onSubmit={authMode === "login" ? login : register}
+        />
+      )}
+    </>
+  );
+}
 
 export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
   const players = useGameStore((state) => state.players);
@@ -183,6 +254,7 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
   const phaseDurationSeconds = useGameStore((state) => state.phaseDurationSeconds);
   const lastTurnResult = useGameStore((state) => state.lastTurnResult);
+  const currentTurnId = useGameStore((state) => state.currentTurnId);
   const spectatorsSeePrompt = useGameStore((state) => state.spectatorsSeePrompt);
   const me = useGameStore(selectMe);
   const drawerNickname = useGameStore((state) =>
@@ -287,17 +359,33 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
         downloadPrompt={downloadPrompt}
         label={canvasLabel}
         overlay={
-          phase === "choosing_prompt" && !amDrawer ? (
-            <ChoosingPromptOverlay
-              drawerNickname={drawerNickname || "The next player"}
-              drawerNameColor={drawerNameColor}
-            />
-          ) : null
+          <>
+            {phase === "choosing_prompt" && !amDrawer ? (
+              <ChoosingPromptOverlay
+                drawerNickname={drawerNickname || "The next player"}
+                drawerNameColor={drawerNameColor}
+              />
+            ) : null}
+            {phase === "drawing" && (
+              <ConnectedDrawingReactionControl
+                turnId={currentTurnId}
+                drawerId={drawerId}
+                placement="canvas"
+              />
+            )}
+          </>
         }
       />
       {phase === "turn_results" && lastTurnResult && (
         <TurnResultsOverlay
           prompt={lastTurnResult.prompt}
+          reactions={
+            <ConnectedDrawingReactionControl
+              turnId={lastTurnResult.turnId ?? currentTurnId}
+              drawerId={lastTurnResult.drawerId}
+              placement="panel"
+            />
+          }
           drawerId={lastTurnResult.drawerId}
           guesses={lastTurnResult.guesses}
           scores={lastTurnResult.scores}

@@ -430,3 +430,76 @@ async def test_a_turn_whose_drawing_was_never_kept_has_none_to_fetch(env):
     )
 
     assert response.status_code == 404
+
+
+async def _registered(users, name: str):
+    guest = await users.create_anonymous(display_name=name)
+    return await users.claim_account(guest.id, name.lower(), "hashed")
+
+
+async def test_a_participant_reacts_to_a_stored_drawing_and_sees_it_in_the_detail(env):
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    path = f"/api/games/{game_id}/turns/{turn_id}/reaction"
+
+    put = await http.put(path, json={"emoji": "heart"})
+    assert put.status_code == 200
+    body = put.json()
+    assert body["turnId"] == turn_id and body["emoji"] == "heart"
+    assert body["reactions"] == [{"seatId": body["seatId"], "emoji": "heart"}]
+
+    detail = (await http.get(f"/api/games/{game_id}")).json()
+    assert detail["turns"][0]["reactions"] == [{"seatId": body["seatId"], "emoji": "heart"}]
+    assert detail["mySeatId"] == body["seatId"]
+    stats = (await http.get(f"/api/users/{ann.id}/stats")).json()["stats"]
+    assert stats["reactionsReceived"] == 1
+
+    changed = await http.put(path, json={"emoji": "fire"})
+    assert changed.json()["reactions"] == [{"seatId": body["seatId"], "emoji": "fire"}]
+
+    cleared = await http.delete(path)
+    assert cleared.status_code == 200
+    assert cleared.json() == {
+        "turnId": turn_id,
+        "seatId": body["seatId"],
+        "emoji": None,
+        "reactions": [],
+    }
+    stats = (await http.get(f"/api/users/{ann.id}/stats")).json()["stats"]
+    assert stats["reactionsReceived"] == 0
+
+
+async def test_every_reaction_refusal_is_a_404(env):
+    """Stranger, guest, the drawer, signed out, an unknown code, a borrowed turn:
+    none of them learns whether the game exists (R-HIST-16)."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    guest = await users.create_anonymous(display_name="Guest")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    turn_id = record_game.last_turn_id
+    await record_game(history, users, winner=cid.id, loser=ann.id, index=1, drawing=_skch())
+    other_turn = record_game.last_turn_id
+    path = f"/api/games/{game_id}/turns/{turn_id}/reaction"
+
+    assert (await http.put(path, json={"emoji": "heart"})).status_code == 404, "signed out"
+    assert (await http.delete(path)).status_code == 404
+
+    for user, why in ((cid, "a stranger"), (guest, "a guest"), (ann, "the drawer")):
+        await sign_in_as(http, factory, user.id)
+        assert (await http.put(path, json={"emoji": "heart"})).status_code == 404, why
+
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put(path, json={"emoji": "thumbs_down"})).status_code == 404
+    assert (await http.put(path, json={"emoji": 1})).status_code == 422
+    assert (
+        await http.put(
+            f"/api/games/{game_id}/turns/{other_turn}/reaction", json={"emoji": "heart"}
+        )
+    ).status_code == 404
+    assert (await http.get(f"/api/games/{game_id}")).json()["turns"][0]["reactions"] == []

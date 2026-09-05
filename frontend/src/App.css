@@ -15,6 +15,7 @@
 @import "./styles/overlays.css" layer(components);
 @import "./styles/drawing-recap.css" layer(components);
 @import "./styles/game-results.css" layer(components);
+@import "./styles/reactions.css" layer(components);
 @import "./styles/player-list.css" layer(components);
 @import "./styles/dialogs.css" layer(components);
 @import "./styles/canvas.css" layer(components);
