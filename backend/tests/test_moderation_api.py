@@ -19,6 +19,7 @@ from app.api.moderation import create_moderation_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import (
+    UserBlock,
     AuditEvent,
     AuthSession,
     Base,
@@ -1330,3 +1331,87 @@ async def test_a_report_with_nothing_cited_has_no_context(env):
         if item["reportedUserId"] == target["id"]
     ]
     assert case["messageEvidence"] == []
+
+
+@pytest.mark.asyncio
+async def test_lobby_context_omits_authors_the_reporter_blocked(env):
+    """A lobby line by somebody the reporter muted was never delivered to
+    them (R-LCHAT-03). The retained row records no recipients, so the block
+    is re-applied when the context is chosen - otherwise a report about a
+    neighbouring line would copy the muted text into evidence the reporter
+    can export, which is exactly what the block withholds."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    muted_http = new_client()
+    other_http = new_client()
+    moderator_http = new_client()
+    reporter = await register(reporter_http, "BlkReporter")
+    target = await register(target_http, "BlkTarget")
+    muted = await register(muted_http, "BlkMuted")
+    other = await register(other_http, "BlkOther")
+    moderator = await register(moderator_http, "BlkMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    anchor = datetime.now(timezone.utc) - timedelta(minutes=5)
+    cited_id = generate_uuid()
+
+    def lobby_line(text, *, at, sender):
+        return RoomMessage(
+            id=generate_uuid(),
+            room_instance_id=None,
+            sender_user_id=UUID(sender["id"]),
+            sender_player_id=None,
+            sender_display_name_snapshot=sender["displayName"],
+            sender_is_anonymous_snapshot=False,
+            is_spectator=False,
+            message_kind="chat",
+            audience="lobby",
+            audience_user_ids=[],
+            near_miss_kind=None,
+            text=text,
+            created_at=at,
+            expires_at=at + timedelta(days=30),
+        )
+
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBlock(
+                    blocker_user_id=UUID(reporter["id"]),
+                    blocked_user_id=UUID(muted["id"]),
+                )
+            )
+            cited = lobby_line("the reported line", at=anchor, sender=target)
+            cited.id = cited_id
+            session.add_all(
+                [
+                    lobby_line("seen, said before", at=anchor - timedelta(minutes=2), sender=other),
+                    lobby_line("muted, said before", at=anchor - timedelta(minutes=1), sender=muted),
+                    cited,
+                    lobby_line("muted, said after", at=anchor + timedelta(minutes=1), sender=muted),
+                    lobby_line("seen, said after", at=anchor + timedelta(minutes=2), sender=other),
+                ]
+            )
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Read it in context.",
+            "messageIds": [str(cited_id)],
+        },
+    )
+    assert submitted.status_code == 201, submitted.text
+
+    listing = await moderator_http.get("/api/moderation/reports")
+    [case] = [
+        item
+        for item in listing.json()["reports"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    assert [(line["role"], line["text"]) for line in case["messageEvidence"]] == [
+        ("context", "seen, said before"),
+        ("cited", "the reported line"),
+        ("context", "seen, said after"),
+    ]

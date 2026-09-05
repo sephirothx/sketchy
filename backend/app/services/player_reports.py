@@ -27,6 +27,7 @@ from app.db.models import (
     PlayerReport,
     PlayerReportMessageEvidence,
     RoomMessage,
+    UserBlock,
     generate_uuid,
 )
 from app.domain_values import AuditTargetType
@@ -197,9 +198,14 @@ async def context_around(
     nothing still shows what was going on.
 
     Chosen here rather than sent by a client, for the reason the evidence is:
-    the reporter received every line copied (a lobby line by everyone; a
-    room line by its stored audience), which is checked here rather than
-    trusted. The cited lines themselves are left out so nothing is copied
+    the reporter received every line copied, which is checked here rather
+    than trusted. A room line records its audience, blocks already applied.
+    A lobby line records none - it was said to every open lobby, and a list
+    of who was around would be a directory (R-LCHAT-05) - so the block is
+    re-applied here from the block table: a line by an author the reporter
+    has muted was never delivered to them (R-LCHAT-03), and copying it into
+    a report they can later export would hand them the very text the block
+    withholds. The cited lines themselves are left out so nothing is copied
     twice, and the third-party lines this copies get the same tombstone on
     account deletion the cited ones do.
     """
@@ -214,11 +220,22 @@ async def context_around(
     base = select(RoomMessage).where(scope, RoomMessage.expires_at > checked_at)
     if cited_ids:
         base = base.where(RoomMessage.id.not_in(cited_ids))
+    muted_by_reporter: set[UUID] = set()
+    if room_instance_id is None:
+        muted_by_reporter = set(
+            (
+                await session.scalars(
+                    select(UserBlock.blocked_user_id).where(
+                        UserBlock.blocker_user_id == reporter_user_id
+                    )
+                )
+            ).all()
+        )
 
     def received(message: RoomMessage) -> bool:
-        return message.audience == "lobby" or str(reporter_user_id) in (
-            message.audience_user_ids or []
-        )
+        if message.audience == "lobby":
+            return message.sender_user_id not in muted_by_reporter
+        return str(reporter_user_id) in (message.audience_user_ids or [])
 
     before_rows = (
         await session.scalars(

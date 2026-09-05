@@ -615,7 +615,8 @@ for a list. The server copies those lines here before the ordinary rows expire.
 Those are the `cited` rows. Around them the server also copies **`context`**: what
 was said in the same room instance (or the lobby) up to **10 lines before and 5
 after** the latest cited line, within **12 hours** of it, by anyone, but only lines the
-reporter received — the same audience rule, applied by
+reporter received — the stored audience for a room line, and for a lobby line (which
+records no recipients) the reporter's `user_blocks` re-applied — by
 [`context_around`](../backend/app/services/player_reports.py) rather than trusted. A
 room report with nothing cited anchors on the report itself; a REST report with nothing
 cited has no place to look and copies nothing. Rows are positioned in the order the
