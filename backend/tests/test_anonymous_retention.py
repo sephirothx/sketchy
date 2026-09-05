@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import os
 from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.auth.retention import (
     purge_expired_auth_sessions,
@@ -17,14 +17,13 @@ from app.auth.sessions import create_session
 from app.db.models import (
     AuditEvent,
     AuthSession,
-    Base,
     DataExport,
     GameParticipant,
+    GameRecord,
     User,
     UserBan,
     generate_uuid,
 )
-from app.db import create_db_engine
 from app.repositories.interfaces import GameParticipantInput, GameRecordInput, TurnRecordInput
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlchemyUserRepository
 
@@ -33,10 +32,7 @@ from tests.dbfixtures import create_test_db
 
 @pytest.mark.asyncio
 async def test_retention_previews_then_removes_stale_guest_tiers():
-    engine = create_db_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
     now = datetime(2026, 8, 22, tzinfo=timezone.utc)
@@ -159,10 +155,7 @@ async def test_expired_sessions_go_but_revoked_live_ones_stay():
     """The condition is expiry, not revocation: a revoked but unexpired row is
     still what keeps a ban-time token recognisable rather than looking like a
     new cookieless guest, and rotation leaves one behind on purpose."""
-    engine = create_db_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     now = datetime.now(timezone.utc)
     try:
         async with factory() as session:
@@ -205,10 +198,7 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
     ban-time credential. A suspended account cannot log in to make a new
     session, so retention must not take away its only one - moderation may not
     erase privacy rights, and neither may a sweep."""
-    engine = create_db_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     now = datetime.now(timezone.utc)
     try:
         async with factory() as session:
@@ -281,10 +271,7 @@ async def test_an_uncollected_export_does_not_outlive_its_own_window():
     """An export used to go only when its owner asked for another one, so one
     generated and never collected kept the largest non-blob value in the
     schema indefinitely."""
-    engine = create_db_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     now = datetime.now(timezone.utc)
     try:
         async with factory() as session:
@@ -316,5 +303,164 @@ async def test_an_uncollected_export_does_not_outlive_its_own_window():
         async with factory() as session:
             surviving = set((await session.scalars(select(DataExport.id))).all())
         assert surviving == {live.id}
+    finally:
+        await engine.dispose()
+
+
+# --- #608: candidates are revalidated at the delete ---------------------------
+
+
+async def _stale_guest(users, factory, name: str, *, now: datetime, days: int):
+    guest = await users.create_anonymous(name)
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(User)
+                .where(User.id == UUID(guest.id))
+                .values(last_active_at=now - timedelta(days=days))
+            )
+    return guest
+
+
+@pytest.mark.asyncio
+async def test_a_candidate_claimed_between_selection_and_deletion_is_kept(monkeypatch):
+    """The delete repeats the predicates: a registration that lands after the
+    select is a registered account, and the sweep is for guests only."""
+    import app.auth.retention as retention
+
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    now = datetime(2026, 8, 22, tzinfo=timezone.utc)
+    try:
+        stale = await _stale_guest(users, factory, "Stale", now=now, days=40)
+        claimed = await _stale_guest(users, factory, "Claimed", now=now, days=45)
+        real = retention._select_candidates
+
+        async def select_then_claim(session, cutoff, **kwargs):
+            ids = await real(session, cutoff, **kwargs)
+            if UUID(claimed.id) in ids:
+                # In the sweep's own transaction: on PostgreSQL the row is
+                # locked by the select, so a claim from another session would
+                # wait for the sweep instead - this is the interleaving that
+                # a select-then-delete-by-id got wrong.
+                await session.execute(
+                    update(User)
+                    .where(User.id == UUID(claimed.id))
+                    .values(state="registered", username="claimed", password_hash="x")
+                )
+            return ids
+
+        monkeypatch.setattr(retention, "_select_candidates", select_then_claim)
+        result = await purge_stale_anonymous_accounts(factory, now=now, apply=True)
+
+        assert (result.unused_accounts, result.player_accounts) == (1, 0)
+        async with factory() as session:
+            assert await session.get(User, UUID(stale.id)) is None
+            survivor = await session.get(User, UUID(claimed.id))
+            assert survivor is not None and survivor.state == "registered"
+            event = await session.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.event_type == "retention.anonymous_purge"
+                )
+            )
+            assert event.details["unused_accounts"] == 1, "what was removed, not selected"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_candidate_seated_or_written_into_a_game_before_the_delete_is_kept(
+    monkeypatch,
+):
+    import app.auth.retention as retention
+
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    now = datetime(2026, 8, 22, tzinfo=timezone.utc)
+    try:
+        seated = await _stale_guest(users, factory, "Seated", now=now, days=40)
+        played = await _stale_guest(users, factory, "Played", now=now, days=40)
+        gone = await _stale_guest(users, factory, "Gone", now=now, days=40)
+        real = retention._select_candidates
+
+        async def select_then_move(session, cutoff, **kwargs):
+            ids = await real(session, cutoff, **kwargs)
+            if UUID(seated.id) in ids:
+                await session.execute(
+                    update(User)
+                    .where(User.id == UUID(seated.id))
+                    .values(last_active_at=now)
+                )
+                game_id = generate_uuid()
+                session.add(
+                    GameRecord(
+                        id=game_id,
+                        room_name="Just finished",
+                        scoring_mode="default",
+                        hint_mode="none",
+                        drawing_seconds=60,
+                        total_rounds=1,
+                        player_count=1,
+                        started_at=now - timedelta(minutes=10),
+                        finished_at=now,
+                    )
+                )
+                await session.flush()
+                session.add(
+                    GameParticipant(
+                        id=generate_uuid(),
+                        game_id=game_id,
+                        user_id=UUID(played.id),
+                        final_score=0,
+                        final_rank=1,
+                    )
+                )
+                await session.flush()
+            return ids
+
+        monkeypatch.setattr(retention, "_select_candidates", select_then_move)
+        result = await purge_stale_anonymous_accounts(factory, now=now, apply=True)
+
+        assert (result.unused_accounts, result.player_accounts) == (1, 0)
+        async with factory() as session:
+            assert await session.get(User, UUID(gone.id)) is None
+            assert await session.get(User, UUID(seated.id)) is not None
+            assert await session.get(User, UUID(played.id)) is not None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="skip-locked selection is only real on PostgreSQL",
+)
+@pytest.mark.asyncio
+async def test_a_sweep_skips_a_guest_another_write_holds_and_a_preview_never_waits():
+    """Whatever is holding the row - a claim, a merge, a seat, a game write -
+    the sweep leaves it for next time instead of queueing gameplay behind
+    retention; a preview counts it, because it takes no lock at all."""
+    import asyncio
+
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    now = datetime(2026, 8, 22, tzinfo=timezone.utc)
+    try:
+        held = await _stale_guest(users, factory, "Held", now=now, days=40)
+        async with factory() as holder:
+            async with holder.begin():
+                await holder.execute(
+                    select(User).where(User.id == UUID(held.id)).with_for_update()
+                )
+                preview = await asyncio.wait_for(
+                    purge_stale_anonymous_accounts(factory, now=now), timeout=5
+                )
+                assert preview.total == 1
+                applied = await asyncio.wait_for(
+                    purge_stale_anonymous_accounts(factory, now=now, apply=True),
+                    timeout=5,
+                )
+                assert applied.total == 0, "held rows are skipped, not waited for"
+        applied = await purge_stale_anonymous_accounts(factory, now=now, apply=True)
+        assert applied.total == 1
     finally:
         await engine.dispose()

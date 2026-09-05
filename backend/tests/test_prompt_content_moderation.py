@@ -9,20 +9,17 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.api.moderation import create_moderation_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import (
     AuditEvent,
-    Base,
     PromptContentReport,
     PromptList,
     PromptVersion,
     User,
 )
-from app.db import create_db_engine
 from app.domain_values import UserRole
 from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.repositories.interfaces import PromptListEntryInput, PromptListSelectionError
@@ -31,6 +28,8 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
 )
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
@@ -38,10 +37,7 @@ PASSWORD = "a-good-password"
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "prompt-moderation-test-secret")
-    engine = create_db_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     prompts = SqlAlchemyPromptListRepository(factory)
     app = FastAPI()

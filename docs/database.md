@@ -1317,7 +1317,13 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | `services.prompt_reclaim`; revisions a game pins stay for ever |
 
 Anonymous retention is based on `last_active_at` and is bounded to 500 accounts per run.
-It **previews by default** and records aggregate audit evidence when applied:
+It **previews by default** and records aggregate audit evidence when applied. A removal
+selects its candidates `FOR UPDATE SKIP LOCKED` in ascending activity order — a guest a
+claim, a merge, a seat or a finished-game write is holding is left for a later sweep, not
+waited for — and the delete repeats every eligibility predicate and returns the ids it
+removed, which are what the counts and the audit row report (#608). A preview takes no
+lock. On SQLite the lock is not rendered and the repeated predicates are the whole
+guarantee; the skip-locked behaviour is proven on PostgreSQL.
 
 ```bash
 cd backend

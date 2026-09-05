@@ -154,6 +154,61 @@ async def purge_expired_data_exports(
             return removed
 
 
+def _tier_predicates(cutoff: datetime, *, with_history: bool):
+    """What makes a guest a candidate for one tier, as the database evaluates it."""
+    has_game = exists(
+        select(GameParticipant.id).where(GameParticipant.user_id == User.id)
+    )
+    return (
+        User.state == AccountState.ANONYMOUS.value,
+        User.last_active_at < cutoff,
+        has_game if with_history else ~has_game,
+    )
+
+
+async def _select_candidates(
+    session: AsyncSession, cutoff: datetime, *, with_history: bool, limit: int, lock: bool
+) -> list:
+    """The oldest `limit` guests still eligible for a tier, oldest first.
+
+    When `lock` is set the rows come back locked `FOR UPDATE SKIP LOCKED`:
+    a guest a claim, a merge, a seat or a finished-game write is holding at
+    this moment is left for a later sweep rather than waited for, and the
+    ones returned cannot change under the delete that follows. A preview
+    takes no lock: it has no delete to protect and must not stall gameplay.
+    """
+    if limit < 1:
+        return []
+    statement = (
+        select(User.id)
+        .where(*_tier_predicates(cutoff, with_history=with_history))
+        .order_by(User.last_active_at, User.id)
+        .limit(limit)
+    )
+    if lock:
+        statement = statement.with_for_update(skip_locked=True)
+    return list((await session.scalars(statement)).all())
+
+
+async def _delete_candidates(
+    session: AsyncSession, candidate_ids: list, cutoff: datetime, *, with_history: bool
+) -> set:
+    """Delete the candidates that still qualify, and say which ones went.
+
+    The eligibility predicates are repeated on the delete itself, so even a
+    row that was not locked (SQLite renders no lock) is only removed if it is
+    still an unclaimed, unmerged, inactive guest of this tier at that moment.
+    """
+    if not candidate_ids:
+        return set()
+    result = await session.execute(
+        delete(User)
+        .where(User.id.in_(candidate_ids), *_tier_predicates(cutoff, with_history=with_history))
+        .returning(User.id)
+    )
+    return set(result.scalars().all())
+
+
 async def purge_stale_anonymous_accounts(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -163,7 +218,18 @@ async def purge_stale_anonymous_accounts(
     batch_size: int = DEFAULT_BATCH_SIZE,
     apply: bool = False,
 ) -> AnonymousRetentionResult:
-    """Find or remove one bounded batch according to explicit guest tiers."""
+    """Find or remove one bounded batch according to explicit guest tiers.
+
+    Selecting by id and then deleting by id alone is a race at READ
+    COMMITTED (#608): a guest that registered, was merged, took a seat or
+    had a game written between the two statements would be removed by a
+    sweep that is only meant for guests nobody has touched. So a removal
+    selects under `FOR UPDATE SKIP LOCKED` in ascending activity order -
+    identities anything else is writing are skipped, not waited for - and
+    the delete repeats every eligibility predicate and returns the ids it
+    removed, which are what the counts and the audit row report. A preview
+    only reads.
+    """
     if unused_retention_days < 1 or player_retention_days < 1:
         raise ValueError("retention windows must be positive")
     if batch_size < 1:
@@ -171,55 +237,45 @@ async def purge_stale_anonymous_accounts(
     checked_at = now or datetime.now(timezone.utc)
     unused_cutoff = checked_at - timedelta(days=unused_retention_days)
     player_cutoff = checked_at - timedelta(days=player_retention_days)
-    has_game = exists(
-        select(GameParticipant.id).where(GameParticipant.user_id == User.id)
-    )
 
     async with session_factory() as session:
         async with session.begin():
-            unused_ids = list(
-                (
-                    await session.scalars(
-                        select(User.id)
-                        .where(
-                            User.state == AccountState.ANONYMOUS.value,
-                            User.last_active_at < unused_cutoff,
-                            ~has_game,
-                        )
-                        .order_by(User.last_active_at)
-                        .limit(batch_size)
-                    )
-                ).all()
+            unused_ids = await _select_candidates(
+                session, unused_cutoff, with_history=False, limit=batch_size, lock=apply
             )
-            remaining = max(0, batch_size - len(unused_ids))
-            player_ids = (
-                list(
-                    (
-                        await session.scalars(
-                            select(User.id)
-                            .where(
-                                User.state == AccountState.ANONYMOUS.value,
-                                User.last_active_at < player_cutoff,
-                                has_game,
-                            )
-                            .order_by(User.last_active_at)
-                            .limit(remaining)
-                        )
-                    ).all()
+            player_ids = await _select_candidates(
+                session,
+                player_cutoff,
+                with_history=True,
+                limit=batch_size - len(unused_ids),
+                lock=apply,
+            )
+            if not apply:
+                return AnonymousRetentionResult(
+                    unused_accounts=len(unused_ids),
+                    player_accounts=len(player_ids),
+                    applied=False,
                 )
-                if remaining
-                else []
-            )
 
-            result = AnonymousRetentionResult(
-                unused_accounts=len(unused_ids),
-                player_accounts=len(player_ids),
-                applied=apply,
+            unused_removed = await _delete_candidates(
+                session, unused_ids, unused_cutoff, with_history=False
             )
-            if apply and result.total:
-                await session.execute(
-                    delete(User).where(User.id.in_((*unused_ids, *player_ids)))
+            player_removed = await _delete_candidates(
+                session, player_ids, player_cutoff, with_history=True
+            )
+            result = AnonymousRetentionResult(
+                unused_accounts=len(unused_removed),
+                player_accounts=len(player_removed),
+                applied=True,
+            )
+            skipped = len(unused_ids) + len(player_ids) - result.total
+            if skipped:
+                logger.info(
+                    "retention sweep: %d selected guests were no longer eligible "
+                    "by the time of the delete and were kept",
+                    skipped,
                 )
+            if result.total:
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
