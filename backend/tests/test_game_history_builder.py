@@ -1,13 +1,14 @@
 """Mapping a finished game onto the rows that record it."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET, GameOutcome
 from app.game import CompletedTurnStats, Game, TurnGuessRecord
 from app.identifiers import generate_uuid7
-from app.rooms import DrawingRecapEntry, RoomManager
+from app.rooms import DepartedSeat, DrawingRecapEntry, RoomManager
 from app.services.game_history import build_game_history
 
 FINISHED_AT = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
@@ -413,3 +414,106 @@ def test_an_abandoned_game_carries_no_placing_in_the_row():
     assert all(p.final_rank is None for p in history.participants)
     scores = {p.user_id: p.final_score for p in history.participants}
     assert scores == {"user-ann": 300, "user-bob": 100}
+
+
+def test_reactions_follow_the_turns_and_seats_actually_written():
+    """Like drawings: a reaction on a turn or from a token that does not
+    survive into the rows has nothing truthful to hang off."""
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+        ("Gus", "user-gus", 50, False),
+        ("Wat", "user-wat", 0, True),
+    )
+    for nickname in ("Ann", "Bob", "Wat"):
+        players[nickname].is_anonymous = False
+    first = turn(players["Ann"].id, number=1)
+    second = turn(players["Bob"].id, number=2)
+    skipped = turn("never-a-seat", number=3)
+    game.completed_turns = [first, second, skipped]
+    room.drawing_reactions = {
+        first.id: {
+            players["Bob"].id: "heart",
+            players["Ann"].id: "fire",  # the drawer, from their own seat
+            players["Gus"].id: "wow",  # a guest
+            players["Wat"].id: "wow",  # a spectator
+        },
+        second.id: {players["Ann"].id: "laugh"},
+        skipped.id: {players["Bob"].id: "heart"},
+    }
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    ann = next(p for p in history.participants if p.user_id == "user-ann")
+    bob = next(p for p in history.participants if p.user_id == "user-bob")
+    assert sorted(
+        (r.turn_id, r.seat_id, r.user_id, r.emoji, r.set_version)
+        for r in history.reactions
+    ) == sorted(
+        [
+            (first.id, bob.seat_id, "user-bob", "heart", 1),
+            (second.id, ann.seat_id, "user-ann", "laugh", 1),
+        ]
+    )
+
+
+def test_a_rejoined_reactor_coalesces_onto_the_seat_that_is_recorded():
+    """One account, two tokens, one row: the later token's pick wins, and a
+    drawer who came back on a new token still cannot react to their own turn."""
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    for player in players.values():
+        player.is_anonymous = False
+    completed = turn(players["Ann"].id, number=1)
+    game.completed_turns = [completed]
+    # Bob left and came back; Ann did too, and reacted to her own drawing from
+    # the new token.
+    bob_again = room.players.pop(players["Bob"].id)
+    room.departed_seats[bob_again.id] = DepartedSeat(
+        player_id=bob_again.id,
+        nickname="Bob",
+        user_id="user-bob",
+        is_spectator=False,
+        score=100,
+        name_color=None,
+        is_anonymous=False,
+    )
+    bob_new = room.players.setdefault(
+        "bob-new", replace(bob_again, id="bob-new", score=120)
+    )
+    ann_new = replace(players["Ann"], id="ann-new")
+    room.players["ann-new"] = ann_new
+    game.roster.extend(["bob-new", "ann-new"])
+    game.history_seat_ids["bob-new"] = str(generate_uuid7())
+    game.history_seat_ids["ann-new"] = str(generate_uuid7())
+    room.drawing_reactions = {
+        completed.id: {
+            bob_again.id: "heart",
+            bob_new.id: "fire",
+            ann_new.id: "wow",
+        }
+    }
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    bob = next(p for p in history.participants if p.user_id == "user-bob")
+    assert [(r.seat_id, r.emoji) for r in history.reactions] == [(bob.seat_id, "fire")]
+
+
+def test_an_abandoned_game_keeps_its_reactions():
+    _, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    players["Bob"].is_anonymous = False
+    completed = turn(players["Ann"].id)
+    game.completed_turns = [completed]
+    room.drawing_reactions = {completed.id: {players["Bob"].id: "laugh"}}
+
+    history = build_game_history(
+        room, game, finished_at=FINISHED_AT, outcome=GameOutcome.ABANDONED.value
+    )
+
+    assert [r.emoji for r in history.reactions] == ["laugh"]

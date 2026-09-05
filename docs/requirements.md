@@ -196,6 +196,29 @@ claim that an arbitrary host will sustain it.
 | **R-DRAW-09** | A player MUST be able to save the current canvas as a PNG at any time, produced by the browser. |
 | **R-DRAW-10** | The server MUST NOT rasterize. It stores and replays actions, never pixels. |
 
+### Reactions to drawings
+
+A **Reaction** is one emoji a registered player leaves on a turn's drawing (#520). It
+follows the drawing to every surface the drawing is shown on — the live canvas, turn
+results, the **Recap**, and game history — and is a fact *about the drawing*, which is
+what decides where it is stored and when it goes.
+
+| # | Requirement |
+| --- | --- |
+| **R-REACT-01** | Only an account with lifecycle `registered` MUST be able to react. Guests and cookieless seats see reactions but cannot give them. **Not** email verification: registering does not require an address, so a verified-email gate would lock out ordinary registered players. |
+| **R-REACT-02** | Spectators MUST NOT react. The drawer MUST NOT react to their own drawing — checked by seat **and** by account, because a drawer who left and rejoined holds a new seat. A seat ineligible to guess (AFK, disconnected at freeze) MAY react: they can see the drawing. |
+| **R-REACT-03** | One reaction per registered account per drawing, chosen from the fixed positive **Reaction set**, changeable and removable at any time. Uniqueness MUST be a database constraint on `(turn, participant seat)` with no alias resolution behind it — a game holds one seat per linked account, and guests bring none across a merge (R-ACCT-04). |
+| **R-REACT-04** | Reactions MUST be accepted from the moment the drawing is visible: during the Drawing phase and at turn results for the **current** turn only, in the Recap, and from game history at any later time. An earlier turn of a live game is no longer on anyone's screen and MUST be refused. |
+| **R-REACT-05** | A live reaction MUST be broadcast to the whole room, the drawer included, and room payloads MUST carry the reactor's seat token and presentation only — never an account id (R-ROOM-07). State payloads (`turn_started`, `sync_game`, `turn_ended`, recap metadata) MUST carry the reaction **list**, not only a tally, so a reconnecting client recovers its own pick. |
+| **R-REACT-06** | Reactions given while a game is live MUST be kept on the `Room` and folded into the all-or-nothing finished-game write (R-HIST-03), for a completed **and** an abandoned game (R-HIST-05). A game lost with the process loses them (R-SHUT-06). |
+| **R-REACT-07** | A reaction given from the Recap or from history is a write to a finished game and MUST go through one repository path shared by the socket and the REST route. It MUST refuse while the history write is still pending, and when the game was never recorded. It MUST NOT touch the score ledger (R-HIST-11): reactions are not scored. |
+| **R-REACT-08** | The REST write MUST sit beside the drawing route and **every refusal MUST be a 404** (R-HIST-16) — stranger, guest, drawer, erased drawing, unknown code and unknown game alike. |
+| **R-REACT-09** | Emoji MUST be stored as stable codes with the set version, never as glyphs. A code, once shipped, MUST NEVER be removed or reused (the stored-drawing rule, R-HIST-18): retiring one stops it being offered and nothing else, so old history keeps rendering. Adding one is additive and bumps the set version. |
+| **R-REACT-10** | A reaction hangs off the reactor's participant seat (R-PRIV-08), so a deleted reactor reads as **Deleted player** and still counts. An **Erased** drawing MUST take its reactions with it and accept no new ones; the turn and its scores remain. |
+| **R-REACT-11** | Lifetime reactions received MUST be served from the daily projection (R-HIST-20), credited to the drawer on the game's day and adjusted by delta on later writes, so a rebuild reproduces the same totals. A decrement MUST NOT drive an erased projection row negative (R-HIST-21). |
+| **R-REACT-12** | Reactions MUST answer to the existing per-caller `action` budget (R-RATE-08) and MUST NOT get a budget of their own. |
+| **R-REACT-13** | The picker MUST be offered only where pressing it can work: guests see the tally and one line on creating an account; spectators and the drawer see a see-through tally with no control, and nothing until there is something to count. Reactions MUST be drawn from bundled artwork in a fixed square box, never from the platform's emoji font: every emoji font sits its glyphs on a different baseline, so a count beside a Unicode emoji lands somewhere different in every browser, and no CSS nudge fixes all of them at once. |
+
 ---
 
 ## 3. Prompts
@@ -574,6 +597,7 @@ design, not a bug fix.
 | --- | --- | --- |
 | Game rules, scoring, hints, guess matching | [`app/game.py`](../backend/app/game.py) | `tests/test_game.py`, `test_standings.py`, `test_prompts.py` |
 | Room model, votes, recap budget | [`app/rooms.py`](../backend/app/rooms.py) | `tests/test_rooms.py`, `tests/handlers/test_rooms.py` |
+| Reactions to drawings | [`services/drawing_reactions.py`](../backend/app/services/drawing_reactions.py), [`handlers/reactions.py`](../backend/app/handlers/reactions.py), [`api/profiles.py`](../backend/app/api/profiles.py), [`lib/reactions.ts`](../frontend/src/lib/reactions.ts) | `tests/test_drawing_reactions.py`, `tests/handlers/test_reactions.py`, `tests/test_api_profiles.py`, `tests/test_game_history_builder.py`, `frontend/tests/reactions.test.mjs`, `tests/e2e/test_drawing_reactions.py` |
 | Friends | [`services/friends.py`](../backend/app/services/friends.py), [`api/friends.py`](../backend/app/api/friends.py), [`handlers/friends.py`](../backend/app/handlers/friends.py), [`services/friend_invites.py`](../backend/app/services/friend_invites.py) | `tests/test_friends.py`, `tests/test_friends_api.py`, `tests/handlers/test_friends.py`, `frontend/tests/friends.test.mjs`, `tests/e2e/test_friends.py` |
 | Lobby presence | [`app/services/presence.py`](../backend/app/services/presence.py), [`handlers/lobby.py`](../backend/app/handlers/lobby.py), [`lib/lobbyPresence.ts`](../frontend/src/lib/lobbyPresence.ts) | `tests/test_presence.py`, `tests/handlers/test_lobby_presence.py`, `frontend/tests/lobbyPresence.test.mjs`, `tests/e2e/test_lobby_online_players.py`, `fixtures/lobby_presence_v1.json` |
 | Lobby chat | [`services/lobby_chat.py`](../backend/app/services/lobby_chat.py), [`handlers/lobby.py`](../backend/app/handlers/lobby.py), [`lib/lobbyChat.ts`](../frontend/src/lib/lobbyChat.ts) | `tests/test_lobby_chat.py`, `tests/handlers/test_lobby_chat.py`, `frontend/tests/lobbyChat.test.mjs`, `tests/e2e/test_lobby_chat.py` |

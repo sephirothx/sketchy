@@ -13,6 +13,7 @@ from app.domain_values import (
     DRAWING_UNAVAILABLE_RECAP_BUDGET,
     GameOutcome,
     RuntimeEventType,
+    REACTION_SET_VERSION,
 )
 from app.services.runtime_metrics import metrics
 from app.game import (
@@ -28,6 +29,7 @@ from app.repositories.interfaces import (
     PromptOfferInput,
     ScoreEventInput,
     TurnDrawingInput,
+    TurnDrawingReactionInput,
     TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -58,6 +60,7 @@ class GameHistoryWrite:
     # editable waiting room the moment this function returns, for the same
     # reason the scores and highlights above are captured.
     drawings: list[TurnDrawingInput]
+    reactions: list[TurnDrawingReactionInput]
 
 
 @dataclass
@@ -284,6 +287,36 @@ def _drawings(room: Room, turn_ids: set[str]) -> list[TurnDrawingInput]:
     return drawings
 
 
+def _reactions(
+    room: Room, seats: dict[str, _Seat], turns: list[TurnRecordInput]
+) -> list[TurnDrawingReactionInput]:
+    """Pair the live reactions with the turns and seats actually being recorded.
+
+    Filtered the same way `_drawings` is, and for the same reason: a reaction on
+    a turn that did not survive, or from a token that never became a factual
+    seat, has nothing truthful to hang off. Two tokens of one account (a
+    reactor who left and rejoined) coalesce onto one participant seat, so the
+    later token wins; and a drawer who reacted from a second token to their
+    own turn is dropped here rather than refused by the database.
+    """
+    reactions: dict[tuple[str, str], TurnDrawingReactionInput] = {}
+    for turn in turns:
+        for token, emoji in room.drawing_reactions.get(turn.id, {}).items():
+            seat = seats.get(token)
+            if seat is None or seat.user_id is None or seat.is_anonymous:
+                continue
+            if seat.participant_id == turn.drawer_seat_id:
+                continue
+            reactions[(turn.id, seat.participant_id)] = TurnDrawingReactionInput(
+                turn_id=turn.id,
+                seat_id=seat.participant_id,
+                user_id=seat.user_id,
+                emoji=emoji,
+                set_version=REACTION_SET_VERSION,
+            )
+    return list(reactions.values())
+
+
 def build_game_history(
     room: Room,
     game: Game,
@@ -442,6 +475,7 @@ def build_game_history(
 
     return GameHistoryWrite(
         drawings=_drawings(room, {turn.id for turn in turns}),
+        reactions=_reactions(room, seats, turns),
         record=GameRecordInput(
             id=game.id,
             room_name=room.name,

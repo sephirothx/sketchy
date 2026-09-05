@@ -2,7 +2,7 @@
 // canvas position, display title, and grouping. Both the canvas build and
 // the explorer build read this, so they cannot drift apart.
 import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage, NotFoundPage, CrashPage } from './pages-entry.mjs';
-import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage } from './pages-room.mjs';
+import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage, RecapPage } from './pages-room.mjs';
 import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, AdminOpsTuningPage, AdminOpsAuditPage, ModerationPage } from './pages-library.mjs';
 import { BugReportMenuPage, BugReportDialogPage, BugReportsQueuePage } from './pages-support.mjs';
 
@@ -23,6 +23,7 @@ export const SCREENS = [
   { name: 'TurnResults', page: TurnResultsPage, w: 1240, h: 1000, x: 0, y: 3000, title: 'Turn results', group: 'After the turn' },
   { name: 'GameOver', page: GameOverPage, w: 1240, h: 960, x: 1330, y: 3000, title: 'Game over', group: 'After the turn' },
   { name: 'Highlights', page: HighlightsPage, w: 1240, h: 960, x: 2660, y: 3000, title: 'Highlights', group: 'After the turn' },
+  { name: 'Recap', page: RecapPage, w: 1240, h: 960, x: 3990, y: 3000, title: 'Drawing recap', group: 'After the turn' },
   // Row 4 — library and profile
   { name: 'PromptStats', page: PromptStatsPage, w: 920, h: 980, x: 0, y: 4180, title: 'Prompt stats', group: 'Library and profile' },
   { name: 'MyPromptLists', page: MyPromptListsPage, w: 1020, h: 1080, x: 1010, y: 4180, title: 'My prompt lists', group: 'Library and profile' },

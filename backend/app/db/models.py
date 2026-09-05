@@ -59,6 +59,7 @@ from app.domain_values import (
     PROMPT_LIST_VISIBILITIES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
+    REACTION_EMOJI_CODES,
     REPORT_REASONS,
     REPORT_STATUSES,
     RETAINED_MESSAGE_AUDIENCES,
@@ -354,7 +355,7 @@ class UserStatsDaily(Base):
             "games_played >= 0 AND games_won >= 0 "
             "AND games_won <= games_played AND turns_played >= 0 "
             "AND prompts_guessed >= 0 "
-            "AND drawings_made >= 0",
+            "AND drawings_made >= 0 AND reactions_received >= 0",
             name="ck_user_stats_daily_nonnegative",
         ),
         Index("ix_user_stats_daily_stat_date", "stat_date"),
@@ -382,6 +383,13 @@ class UserStatsDaily(Base):
         Integer, default=0, server_default=text("0"), nullable=False
     )
     drawings_made: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    # Reactions other players left on this account's drawings. Unlike the
+    # other counters it keeps moving after a game is written - a reaction can
+    # be given from the recap or from history - so it is adjusted by delta
+    # there and recomputed from `turn_drawing_reactions` on rebuild.
+    reactions_received: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
@@ -2035,6 +2043,10 @@ class TurnRecord(Base):
         back_populates="turn_record",
         cascade="all, delete-orphan",
     )
+    reactions: Mapped[list[TurnDrawingReaction]] = relationship(
+        back_populates="turn_record",
+        cascade="all, delete-orphan",
+    )
     # The relationships below exist for the unit of work as much as for
     # reads: composite table-level constraints alone give the flush no
     # ordering edge, so each references its parent through an explicit join.
@@ -2333,6 +2345,87 @@ class TurnParticipantOutcome(Base):
         uselist=False,
         primaryjoin=(
             "TurnParticipantOutcome.id == foreign(TurnGuess.outcome_id)"
+        ),
+    )
+
+
+class TurnDrawingReaction(Base):
+    """One registered player's reaction to the drawing made in one turn (#520).
+
+    A reaction is a fact about the drawing, so it hangs off the turn and the
+    reactor's participant seat rather than off an account: the seat already
+    carries the frozen presentation (R-PRIV-08) and becomes the **Deleted
+    player** tombstone with everything else, so a deleted reactor's reaction
+    keeps counting. The unique constraint is the one-per-account-per-drawing
+    rule - a game holds at most one seat per linked account, so no alias
+    resolution sits behind it. Guests cannot react, so a guest-to-account merge
+    (R-ACCT-04) brings none with it.
+
+    `emoji` is a stable code from `ReactionEmoji`, never the glyph, and
+    `set_version` says which version of the set it was chosen from; both follow
+    the stored-drawing rule (R-HIST-18) that a value shipped is never reused.
+    Reactions never touch the score ledger (R-HIST-11).
+    """
+
+    __tablename__ = "turn_drawing_reactions"
+    __table_args__ = (
+        UniqueConstraint(
+            "turn_id",
+            "participant_id",
+            name="uq_turn_drawing_reactions_turn_participant",
+        ),
+        # game_id is denormalized for the same reason as on the outcomes: the
+        # turn and the seat must belong to the same game as the reaction.
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_turn_drawing_reactions_turn_same_game",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "participant_id"],
+            ["game_participants.game_id", "game_participants.id"],
+            name="fk_turn_drawing_reactions_seat_same_game",
+            ondelete="CASCADE",
+        ),
+        _values_check(
+            "emoji", REACTION_EMOJI_CODES, "ck_turn_drawing_reactions_emoji"
+        ),
+        CheckConstraint(
+            "set_version >= 1", name="ck_turn_drawing_reactions_set_version"
+        ),
+        Index("ix_turn_drawing_reactions_game_id", "game_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+    )
+    emoji: Mapped[str] = mapped_column(String(16), nullable=False)
+    set_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    turn_record: Mapped[TurnRecord] = relationship(
+        back_populates="reactions",
+        foreign_keys=[game_id, turn_id],
+    )
+    # Flush-ordering edge (see TurnRecord.drawer_seat).
+    participant: Mapped[GameParticipant] = relationship(
+        primaryjoin=(
+            "GameParticipant.id == foreign(TurnDrawingReaction.participant_id)"
         ),
     )
 

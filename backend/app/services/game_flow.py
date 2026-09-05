@@ -558,6 +558,9 @@ class GameFlowService:
         room.last_game_scores = []
         room.last_game_highlights = []
         room.last_game_drawings = []
+        room.drawing_reactions = {}
+        room.last_game_id = None
+        room.last_game_history = "none"
         # Only this game's leavers matter to its history, and the room may
         # outlive many games.
         room.departed_seats = {}
@@ -713,7 +716,12 @@ class GameFlowService:
         if game.phase in (Phase.CHOOSING_PROMPT, Phase.DRAWING):
             await self._sio.emit(
                 "sync_game",
-                self._turn_payload(game, player, room.spectators_see_prompt),
+                self._turn_payload(
+                    game,
+                    player,
+                    room.spectators_see_prompt,
+                    reactions=room.drawing_reactions_for(game.current_turn_id),
+                ),
                 to=sid,
             )
             if sync_canvas:
@@ -830,8 +838,14 @@ class GameFlowService:
         )
         await self._sync_player_view(sid, room, player)
 
-    def _turn_payload(self, game: Game, player: Player | None = None, spectators_see_prompt: bool = False) -> dict:
-        return turn_payload(game, player, spectators_see_prompt)
+    def _turn_payload(
+        self,
+        game: Game,
+        player: Player | None = None,
+        spectators_see_prompt: bool = False,
+        reactions: list[dict] | None = None,
+    ) -> dict:
+        return turn_payload(game, player, spectators_see_prompt, reactions)
 
     async def _start_turn(self, room: Room) -> None:
         game = room.game
@@ -904,6 +918,7 @@ class GameFlowService:
             await self._sio.emit(
                 "turn_started",
                 {
+                    "turnId": game.current_turn_id,
                     "drawerId": game.current_drawer,
                     "maskedPrompt": game.masked_prompt(
                         p.id,
@@ -1048,8 +1063,22 @@ class GameFlowService:
             details={"round_number": game.round_number},
         )
         room.game = None
+        self._note_history_write_started(room, game, history)
         await self._persist_game_history(room, history)
         return True
+
+    @staticmethod
+    def _note_history_write_started(room: Room, game: Game, history) -> None:
+        """Tell the room which game it just held and whether a row is coming.
+
+        A reaction given from the recap is a write to that game's row, so the
+        handler has to know the row exists before trying (see
+        `handlers/reactions.py`). Set before the first await after
+        `room.game = None`, so no reaction can observe a room that has
+        forgotten its game but not yet said what became of it.
+        """
+        room.last_game_id = game.id
+        room.last_game_history = "pending" if history is not None else "unrecorded"
 
     async def _persist_game_history(self, room: Room, history) -> None:
         """Write a finished game's snapshot: the only write this epic makes.
@@ -1060,6 +1089,7 @@ class GameFlowService:
         reason: there is nothing a player could do about it.
         """
         if not self._ctx.game_history_repo or history is None:
+            # `_note_history_write_started` already said "unrecorded".
             return
         started = time.monotonic()
         try:
@@ -1071,6 +1101,7 @@ class GameFlowService:
                     history.guesses,
                     history.score_events,
                     history.drawings,
+                    history.reactions,
                 ),
                 timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
             )
@@ -1084,9 +1115,25 @@ class GameFlowService:
                 HISTORY_WRITE_TIMEOUT_SECONDS,
             )
             self._note_abandoned_write(room, "game", "timeout", started)
+            self._note_history_write_finished(room, history, "failed")
         except Exception:
             logger.exception("Failed to persist game history for room %s", room.id)
             self._note_abandoned_write(room, "game", "error", started)
+            self._note_history_write_finished(room, history, "failed")
+        else:
+            self._note_history_write_finished(room, history, "recorded")
+
+    @staticmethod
+    def _note_history_write_finished(room: Room, history, state: str) -> None:
+        """Record how the write went - for the game the room still calls its last.
+
+        The write is bounded at ten seconds, and a rematch can start and be
+        abandoned inside that. A completion arriving after the room has moved
+        on to a newer game must not speak for it: it would mark a row that is
+        still being written as recorded, or a recorded one as failed.
+        """
+        if room.last_game_id == history.record.id:
+            room.last_game_history = state
 
     @staticmethod
     def _note_abandoned_write(room: Room, kind: str, reason: str, started: float) -> None:
@@ -1184,6 +1231,7 @@ class GameFlowService:
             room.restart_vote_cooldown_until = 0
             room.state = "waiting"
             room.game = None
+            self._note_history_write_started(room, game, history)
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
             room.last_game_scores = [

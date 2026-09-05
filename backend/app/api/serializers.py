@@ -55,6 +55,7 @@ def stats_payload(stats: UserStats) -> dict:
         "turnsPlayed": stats.turns_played,
         "promptsGuessed": stats.prompts_guessed,
         "drawingsMade": stats.drawings_made,
+        "reactionsReceived": stats.reactions_received,
     }
 
 
@@ -93,6 +94,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
     return {
         **game_summary_payload(detail.summary),
         "ruleSnapshot": detail.summary.rule_snapshot,
+        "mySeatId": detail.my_seat_id,
         "scoreEvents": [
             {
                 "id": event.id,
@@ -163,6 +165,10 @@ def game_detail_payload(detail: GameDetail) -> dict:
                         "pointsSpentOnHints": outcome.points_spent_on_hints,
                     }
                     for outcome in r.participant_outcomes
+                ],
+                "reactions": [
+                    {"seatId": reaction.seat_id, "emoji": reaction.emoji}
+                    for reaction in r.reactions
                 ],
             }
             for r in detail.turns

@@ -158,6 +158,8 @@ Three different things, never used for one another:
 | **Color mode** | The room setting choosing which colors a drawer may use: **All colors**, **Palette only**, **Colorblind-safe**, or **Black and white**. Use those four labels verbatim. Every mode permits white, because that is what erasing sends. | color preset, palette mode, color restrictions |
 | **Save image** | Downloading the current canvas as a PNG. | export, download drawing, screenshot |
 | **Recap** | The gallery of every drawing from a finished game, shown on the game over screen. Individual entries are **drawings**, labeled by round and turn. | gallery, replay, history, snapshot |
+| **Reaction** | One emoji a registered player leaves on a drawing, from the **Reaction set**. Changeable and removable; one per player per drawing. Follows the drawing to the live canvas, turn results, the **Recap** and game history, and is kept as long as the game. Guests and **Spectators** see reactions but cannot give them; the **Drawer** cannot react to their own. | like, upvote, heart, vote, rating, kudos |
+| **Reaction set** | The fixed, positive emoji a **Reaction** is chosen from: ❤️ 😂 😮 🔥, stored as the codes `heart`, `laugh`, `wow`, `fire`, set version 1. A code is never removed or reused once shipped; retiring one only stops it being offered. Drawn from bundled artwork rather than the platform's emoji font, so a reaction looks the same in every browser. | emoji list, palette, reaction pack, sticker set |
 
 ## Scoring
 

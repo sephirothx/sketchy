@@ -196,6 +196,34 @@ class TurnDrawingStatus(StrEnum):
 
 TURN_DRAWING_STATUSES = tuple(status.value for status in TurnDrawingStatus)
 
+
+class ReactionEmoji(StrEnum):
+    """The fixed, positive set of reactions a drawing can be given (#520).
+
+    Codes are stored on the row and rendered by the client, so they follow the
+    rule stored-drawing decoders already follow (R-HIST-18): a code shipped is a
+    code forever. Retiring one means adding it to
+    ``RETIRED_REACTION_EMOJI_CODES`` so it is no longer offered; it is never
+    removed from this enum, or every row that carries it stops rendering.
+    Adding one is additive and bumps ``REACTION_SET_VERSION``.
+    """
+
+    HEART = "heart"
+    LAUGH = "laugh"
+    WOW = "wow"
+    FIRE = "fire"
+
+
+# Every code ever stored: what the database CHECK and a history read accept.
+REACTION_EMOJI_CODES = tuple(emoji.value for emoji in ReactionEmoji)
+# Stored and rendered, but no longer offered to a player. Empty so far.
+RETIRED_REACTION_EMOJI_CODES: frozenset[str] = frozenset()
+# What a player may pick today.
+OFFERED_REACTION_EMOJI_CODES = tuple(
+    code for code in REACTION_EMOJI_CODES if code not in RETIRED_REACTION_EMOJI_CODES
+)
+REACTION_SET_VERSION = 1
+
 # The recap drops a drawing's bytes once a room exceeds its per-game budget.
 # That turn is stored as unavailable so history matches what players saw.
 DRAWING_UNAVAILABLE_RECAP_BUDGET = "recap_budget"

@@ -28,8 +28,9 @@ const ROUTES = {
   Drawing: [['Settings', 'Settings'], ['Leave', 'Main']],
   Guessing: [['Send', 'TurnResults'], ['Settings', 'Settings'], ['Leave', 'Main']],
   TurnResults: [['Settings', 'Settings'], ['Leave', 'Main']],
-  GameOver: [['Highlights', 'Highlights'], ['Continue', 'WaitingRoom'], ['Stay here', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
-  Highlights: [['Back to results', 'GameOver'], ['Close highlights', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
+  GameOver: [['Highlights', 'Highlights'], ['Drawings', 'Recap'], ['Continue', 'WaitingRoom'], ['Stay here', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
+  Highlights: [['See it', 'Recap'], ['Back to results', 'GameOver'], ['Close highlights', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
+  Recap: [['Close', 'GameOver'], ['Settings', 'Settings'], ['Leave', 'Main']],
   PromptStats: [['Back to lobby', 'Main'], ['Marta', 'Profile']],
   MyPromptLists: [['Back to lobby', 'Main'], ['Marta', 'Profile']],
   Profile: [['Back to lobby', 'Main']],
@@ -43,7 +44,7 @@ const ROUTES = {
 };
 
 // The happy path a game actually follows, for the ◀ ▶ flow stepper.
-const FLOW = ['Main', 'CreateRoom', 'WaitingRoom', 'PromptChoice', 'Drawing', 'Guessing', 'TurnResults', 'GameOver', 'Highlights'];
+const FLOW = ['Main', 'CreateRoom', 'WaitingRoom', 'PromptChoice', 'Drawing', 'Guessing', 'TurnResults', 'GameOver', 'Highlights', 'Recap'];
 
 const groups = [...new Set(SCREENS.map((s) => s.group))];
 

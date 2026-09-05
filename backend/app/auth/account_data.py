@@ -57,6 +57,7 @@ from app.db.models import (
     RoomMessage,
     ScoreEvent,
     TurnDrawing,
+    TurnDrawingReaction,
     TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -1471,6 +1472,20 @@ async def anonymize_account(
                     format_version=None,
                     deleted_at=deleted_at,
                     updated_at=deleted_at,
+                )
+            )
+            # An erased drawing takes its reactions with it: they were about
+            # the drawing, and there is nothing left for them to be about.
+            # Reactions this account *gave* stay - they are facts about other
+            # players' drawings, attributed through the seat, which is
+            # tombstoned above like every other history identity.
+            await session.execute(
+                delete(TurnDrawingReaction).where(
+                    TurnDrawingReaction.turn_id.in_(
+                        select(TurnRecord.id).where(
+                            TurnRecord.drawer_user_id.in_(identity_ids)
+                        )
+                    )
                 )
             )
             await session.execute(

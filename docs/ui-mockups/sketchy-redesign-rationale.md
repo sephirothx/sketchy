@@ -424,7 +424,11 @@ them shipped with the redesign implementation:
 4. ~~Moderation's `width: 100%` selects break the action row.~~ Restyled with
    the shared field recipes.
 5. ~~Emoji-as-icons.~~ Every UI glyph is now an SVG from the shared icon set;
-   emoji remain only where they are player content.
+   emoji remain only where they are player content. Reactions to drawings
+   (#520) are that content: the four faces of the **Reaction set** appear in
+   the corner pill, the picker, the recap and the profile table, and nowhere
+   else — as bundled artwork (Fluent Emoji, MIT) rather than font glyphs, so
+   they sit the same beside a number in every browser.
 6. ~~Turn-results overlay content vs `TURN_RESULTS_SECONDS`.~~ The overlay
    slimmed to one readable card with a next-turn progress bar.
 7. ~~No choosing-phase screen existed.~~ The reference canvas covers it

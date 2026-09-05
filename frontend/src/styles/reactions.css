@@ -1,0 +1,290 @@
+/* Reactions to drawings (#520): one corner button carrying the tally, a small
+   picker above it, and glyphs that float up when a reaction lands. */
+
+.reaction-control {
+  --reaction-height: 26px;
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* Pinned inside .canvas-stack, which clips and positions it. Above the
+   preview canvas, below the choosing-prompt scrim. */
+.reaction-control-canvas {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+}
+
+/* The drawer's brush must never land on a control they cannot use. */
+.reaction-control-canvas.is-passive {
+  pointer-events: none;
+}
+
+/* Light in both themes: it sits over a white canvas, not over the page. Small
+   and quiet - it shares the frame with the drawing. */
+.reaction-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--reaction-height);
+  padding: 0 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #3a3a40;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+/* The read-only tally the drawer and spectators see: see-through, no control. */
+.reaction-tally {
+  background: rgba(255, 255, 255, 0.58);
+  border-color: rgba(0, 0, 0, 0.05);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* The artwork: a square image (see components/ReactionGlyph.tsx), or the text
+   glyph in a box of the same size when this build has no picture for a code. */
+.reaction-emoji {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.reaction-toggle:not(:disabled):hover,
+.reaction-control.is-open .reaction-toggle {
+  border-color: var(--primary);
+}
+
+.reaction-toggle.has-mine {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.reaction-toggle-empty {
+  display: inline-flex;
+  color: #6b6b72;
+}
+
+/* Image and number are two flex items centred on the same axis, so the pair
+   lines up the same in every browser: no baseline is involved anywhere. */
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.reaction-count {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* The strip: a dark pill of emoji and nothing else, like a chat app's. The
+   same dark in both themes, because it sits over a white canvas. */
+.reaction-picker {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--reaction-height) + 8px);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(32, 32, 36, 0.94);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  z-index: 4;
+  animation: reaction-picker-in 140ms ease-out;
+}
+
+.reaction-control-panel .reaction-picker {
+  right: auto;
+  left: 0;
+}
+
+.reaction-option {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* A cue, not a movement: the glyph stays put and its circle lights up. */
+.reaction-option:hover:not(:disabled),
+.reaction-option:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  outline: none;
+}
+
+.reaction-option.is-mine {
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.reaction-option:disabled {
+  cursor: default;
+}
+
+/* The guest's strip carries a sentence instead of emoji, so it is a card. */
+.reaction-picker-guest {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 190px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-raised);
+}
+
+.reaction-picker-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.reaction-claim {
+  margin-top: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--primary);
+  color: var(--card);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.reaction-floaters {
+  position: absolute;
+  right: 14px;
+  bottom: var(--reaction-height);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.reaction-floater {
+  --drift: 0px;
+  --rise: 180px;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: block;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+  transform: translate(-100%, 0);
+  animation: reaction-float 1.8s ease-out forwards;
+}
+
+/* Anchored by its right edge and drifting only left, it cannot leave the
+   frame sideways; --rise is measured from the frame so it cannot leave it
+   upwards either. */
+@keyframes reaction-float {
+  0% {
+    opacity: 0;
+    transform: translate(-100%, 0) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(calc(-100% + var(--drift) * 0.3), calc(var(--rise) * -0.1)) scale(1.15);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(calc(-100% + var(--drift) * 0.85), calc(var(--rise) * -0.8)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-100% + var(--drift)), calc(var(--rise) * -1)) scale(1);
+  }
+}
+
+@keyframes reaction-picker-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Where the control sits in a card rather than on the canvas. */
+.turn-results-reactions,
+.drawing-recap-reactions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.turn-results-reactions {
+  justify-content: center;
+  margin: 0 0 10px;
+}
+
+.turn-results-reactions .reaction-picker,
+.drawing-recap-reactions .reaction-picker {
+  bottom: auto;
+  top: calc(var(--reaction-height) + 8px);
+}
+
+.turn-results-reactions .reaction-floaters,
+.drawing-recap-reactions .reaction-floaters {
+  bottom: 0;
+}
+
+.drawing-recap-reactions {
+  margin-top: 6px;
+}
+
+/* The highlight card's way into the recap. */
+.game-highlights-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* History: a passive tally inside the turn table. */
+.profile-turn-reactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reaction-floater { display: none; }
+  .reaction-picker { animation: none; }
+}

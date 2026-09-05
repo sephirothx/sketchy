@@ -10,6 +10,7 @@ import { AccountMenu } from "../components/AccountMenu";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
+import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomMenuSheet } from "../components/RoomMenuSheet";
 import { BottomSheet } from "../components/ui/BottomSheet";
@@ -76,6 +77,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
+  const [recapIndex, setRecapIndex] = useState(0);
   const [highlightsOpen, setHighlightsOpen] = useState(false);
   const [playersSheetOpen, setPlayersSheetOpen] = useState(false);
   const [roomMenuOpen, setRoomMenuOpen] = useState(false);
@@ -483,13 +485,30 @@ export function ActiveGameRoom({ code }: { code: string }) {
           recapOpen && drawingRecap.length > 0 ? (
             <DrawingRecapGallery
               entries={drawingRecap}
-              onClose={() => setRecapOpen(false)}
+              initialIndex={recapIndex}
+              onClose={() => {
+                setRecapOpen(false);
+                setRecapIndex(0);
+              }}
               loadEntry={loadRecapDrawing}
+              renderReactions={(entry) => (
+                <ConnectedDrawingReactionControl
+                  turnId={entry.turnId}
+                  drawerId={entry.drawerId}
+                  placement="panel"
+                  visible={entry.available !== false}
+                />
+              )}
             />
           ) : highlightsOpen ? (
             <GameHighlightsPanel
               highlights={gameHighlights}
               onClose={() => setHighlightsOpen(false)}
+              onOpenDrawing={(index) => {
+                setHighlightsOpen(false);
+                setRecapIndex(index);
+                setRecapOpen(true);
+              }}
             />
           ) : roomView === "game-end" && finalScores ? (
             <GameEndOverlay

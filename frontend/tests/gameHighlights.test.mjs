@@ -80,9 +80,44 @@ test("every highlight presents a label and a value", () => {
     { kind: "fastest_guess", prompt: "x", seconds: 2, nickname: "Ana" },
     { kind: "best_drawer", guessRatio: 0.5, nickname: "Bo" },
     { kind: "quickest_average", seconds: 4, nickname: "Cy" },
+    {
+      kind: "most_reacted_drawing",
+      prompt: "x",
+      reactionCount: 2,
+      drawingIndex: 1,
+      turnId: "t",
+      nickname: "Di",
+    },
   ];
   for (const presented of presentHighlights(all)) {
     assert.ok(presented.label.length > 0, `${presented.kind} has no label`);
     assert.ok(presented.value.length > 0, `${presented.kind} has no value`);
   }
+});
+
+test("the most reacted drawing counts reactions and remembers where it is", () => {
+  const presented = presentHighlight({
+    kind: "most_reacted_drawing",
+    prompt: "lighthouse",
+    reactionCount: 3,
+    drawingIndex: 2,
+    turnId: "turn-3",
+    nickname: "Ana",
+  });
+  assert.equal(presented.label, "Most reacted drawing");
+  assert.equal(presented.value, "3 reactions");
+  assert.equal(presented.prompt, "lighthouse");
+  assert.equal(presented.name?.nickname, "Ana");
+  assert.equal(presented.drawingIndex, 2);
+  assert.equal(
+    presentHighlight({
+      kind: "most_reacted_drawing",
+      prompt: "kite",
+      reactionCount: 1,
+      drawingIndex: 0,
+      turnId: "turn-1",
+      nickname: "Bo",
+    }).value,
+    "1 reaction",
+  );
 });

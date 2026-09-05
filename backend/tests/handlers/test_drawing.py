@@ -553,6 +553,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
     assert response["ok"] is True
     assert response["drawing"] == {
         "index": 0,
+        "turnId": room.last_game_drawings[0].turn_id,
         "roundNumber": 2,
         "turnNumber": 4,
         "drawerId": player.id,

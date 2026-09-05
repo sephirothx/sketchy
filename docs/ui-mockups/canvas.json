@@ -105,6 +105,14 @@
       "title": "Highlights"
     },
     {
+      "file": "Recap.dc.html",
+      "x": 3990,
+      "y": 3000,
+      "w": 1240,
+      "h": 960,
+      "title": "Drawing recap"
+    },
+    {
       "file": "PromptStats.dc.html",
       "x": 0,
       "y": 4180,
@@ -205,7 +213,7 @@
       "x": 0,
       "y": 2830,
       "w": 460,
-      "text": "AFTER THE TURN — the 5-second results overlay is one readable card: prompt reveal, your outcome line, deltas and movement, plus a “next turn” progress bar. Game over gets a real podium, one primary action, and an escapable auto-continue. Highlights become four superlative cards."
+      "text": "AFTER THE TURN — the 5-second results overlay is one readable card: prompt reveal, your outcome line, deltas and movement, plus a “next turn” progress bar. Game over gets a real podium, one primary action, and an escapable auto-continue. Highlights become five superlative cards, the fifth the most reacted drawing. NEW: the drawing recap, one drawing at a time with the reactions it collected. Reactions (#520) are the one place literal emoji appear — they are player content: a corner pill on the canvas carrying the tally, a picker above it for registered guessers, a passive tally for the drawer and spectators."
     },
     {
       "id": "note-library",

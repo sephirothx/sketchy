@@ -1,5 +1,5 @@
 // Library, profile and operator artboards.
-import { T, P, icon, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark } from './ui.mjs';
+import { T, P, icon, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark, reactionArt } from './ui.mjs';
 
 const backBar = (label = 'Back to lobby') => `
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
@@ -229,6 +229,7 @@ export const ProfilePage = `
     ${smallStat('193', 'turns played')}
     ${smallStat('121', 'prompts guessed')}
     ${smallStat('52', 'drawings made')}
+    ${smallStat('137', 'reactions received')}
     ${smallStat('41,952', 'total score')}
   </div>
 
@@ -260,23 +261,26 @@ export const ProfilePage = `
             <table style="width: 100%; border-collapse: collapse">
               <thead>
                 <tr>
-                  ${['Round', 'Prompt', 'Drawn by', 'Drawing', 'Guesser outcomes'].map((h) => `<th scope="col" style="padding: 8px 12px; text-align: left; border-bottom: 1.5px solid ${T.line}; white-space: nowrap; color: ${T.faint}; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em">${h}</th>`).join('')}
+                  ${['Round', 'Prompt', 'Drawn by', 'Drawing', 'Reactions', 'Guesser outcomes'].map((h) => `<th scope="col" style="padding: 8px 12px; text-align: left; border-bottom: 1.5px solid ${T.line}; white-space: nowrap; color: ${T.faint}; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em">${h}</th>`).join('')}
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   ${turnCell('2')}${turnCell(`<strong style="color: ${T.ink}; font-weight: 800">lighthouse</strong>`)}${turnCell(pname(P.marta))}
                   ${turnCell(`<button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 8px; color: ${T.primary}; font-family: inherit; font-size: 12.5px; font-weight: 800; padding: 5px 11px">${icon.eye(13)}View</button>`)}
+                  ${turnCell(`<span style="display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: ${T.muted}">${[['fire', 2], ['heart', 1], ['wow', 1]].map(([code, count]) => `<span style="display: inline-flex; align-items: center; gap: 3px">${reactionArt(code, 14)}<span style="font-variant-numeric: tabular-nums; line-height: 1">${count}</span></span>`).join('')}</span>`)}
                   ${turnCell(`${pname(P.bruno)} <span style="color: ${T.success}">✓161</span> · ${pname(P.sparrow)} <span style="color: ${T.success}">✓153</span> · ${pname(P.yuki)} <span style="color: ${T.success}">✓141</span> · ${pname(P.ines)} <span style="color: ${T.faint}">away</span>`)}
                 </tr>
                 <tr>
                   ${turnCell('2')}${turnCell(`<strong style="color: ${T.ink}; font-weight: 800">roller coaster</strong>`)}${turnCell(pname(P.bruno))}
                   ${turnCell(`<button type="button" style="display: inline-flex; align-items: center; gap: 6px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 8px; color: ${T.primary}; font-family: inherit; font-size: 12.5px; font-weight: 800; padding: 5px 11px">${icon.eye(13)}View</button>`)}
+                  ${turnCell(`<span style="display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: ${T.muted}"><span style="display: inline-flex; align-items: center; gap: 3px">${reactionArt('laugh', 14)}<span style="font-variant-numeric: tabular-nums; line-height: 1">1</span></span></span>`)}
                   ${turnCell(`${pname(P.yuki)} <span style="color: ${T.success}">✓148</span> · ${pname(P.marta)} <span style="color: ${T.faint}">3 wrong</span> · ${pname(P.sparrow)} <span style="color: ${T.faint}">no attempt</span>`)}
                 </tr>
                 <tr>
                   ${turnCell('3')}${turnCell(`<strong style="color: ${T.ink}; font-weight: 800">bow and arrow</strong>`)}${turnCell(pname(P.yuki))}
                   ${turnCell(`<span style="color: ${T.faint}">not kept</span>`)}
+                  ${turnCell(`<span style="color: ${T.faint}">—</span>`)}
                   ${turnCell(`${pname(P.marta)} <span style="color: ${T.success}">✓174</span> · ${pname(P.bruno)} <span style="color: ${T.faint}">2 wrong</span>`)}
                 </tr>
               </tbody>

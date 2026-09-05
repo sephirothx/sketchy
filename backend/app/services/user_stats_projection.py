@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -18,6 +18,7 @@ from app.db.models import (
     GameParticipant,
     GameRecord,
     IdentityAlias,
+    TurnDrawingReaction,
     TurnGuess,
     TurnRecord,
     UserStatsDaily,
@@ -32,6 +33,7 @@ class _DailyTotals:
     turns_played: int = 0
     prompts_guessed: int = 0
     drawings_made: int = 0
+    reactions_received: int = 0
 
 
 def _utc_date(value: datetime) -> date:
@@ -68,8 +70,14 @@ async def increment_user_stats_projection(
     turn_drawer_ids: list[UUID | None],
     guess_user_ids: list[UUID | None],
     counts_as_played: bool = True,
+    reaction_drawer_ids: list[UUID | None] = (),
 ) -> None:
     """Atomically add one newly persisted game's facts to its daily rows.
+
+    `reaction_drawer_ids` names, once per reaction, the drawer whose drawing
+    it was left on; like `drawings_made` it counts for every outcome, because
+    the drawing was made and reacted to whether or not the game reached its
+    end.
 
     An abandoned game contributes the turns that were actually drawn and
     guessed, but not a game played, not a game won, and not a score. The turns
@@ -103,6 +111,11 @@ async def increment_user_stats_projection(
         for user_id in guess_user_ids
         if user_id is not None
     ]
+    canonical_reacted_drawers = [
+        aliases.get(user_id, user_id)
+        for user_id in reaction_drawer_ids
+        if user_id is not None
+    ]
     stat_date = _utc_date(finished_at)
     rows = [
         {
@@ -123,6 +136,7 @@ async def increment_user_stats_projection(
             "turns_played": len(turn_drawer_ids),
             "prompts_guessed": canonical_guessers.count(user_id),
             "drawings_made": canonical_drawers.count(user_id),
+            "reactions_received": canonical_reacted_drawers.count(user_id),
         }
         for user_id, standings in grouped.items()
     ]
@@ -142,8 +156,68 @@ async def increment_user_stats_projection(
                 + excluded.prompts_guessed,
                 "drawings_made": UserStatsDaily.drawings_made
                 + excluded.drawings_made,
+                "reactions_received": UserStatsDaily.reactions_received
+                + excluded.reactions_received,
                 "updated_at": func.now(),
             },
+        )
+    )
+
+
+async def adjust_reactions_received(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    finished_at: datetime,
+    delta: int,
+) -> None:
+    """Move one drawer's received-reactions count after their game was written.
+
+    A reaction given from the recap or from history lands on a game whose
+    projection rows already exist, so it is a delta rather than a row. The
+    day is the game's, not today's, so a rebuild - which only knows the game -
+    reproduces the same totals. A decrement is guarded rather than trusted:
+    the projection is disposable and may have been rebuilt or erased since the
+    reaction it is undoing was counted, and the non-negative CHECK would
+    otherwise turn a stale row into a failed write.
+    """
+    if delta == 0:
+        return
+    aliases = await _alias_map(session, {user_id})
+    canonical_id = aliases.get(user_id, user_id)
+    stat_date = _utc_date(finished_at)
+    if delta > 0:
+        statement = _projection_insert(session).values(
+            [
+                {
+                    "user_id": canonical_id,
+                    "stat_date": stat_date,
+                    "reactions_received": delta,
+                }
+            ]
+        )
+        excluded = statement.excluded
+        await session.execute(
+            statement.on_conflict_do_update(
+                index_elements=["user_id", "stat_date"],
+                set_={
+                    "reactions_received": UserStatsDaily.reactions_received
+                    + excluded.reactions_received,
+                    "updated_at": func.now(),
+                },
+            )
+        )
+        return
+    await session.execute(
+        update(UserStatsDaily)
+        .where(
+            UserStatsDaily.user_id == canonical_id,
+            UserStatsDaily.stat_date == stat_date,
+            UserStatsDaily.reactions_received >= -delta,
+        )
+        .values(
+            reactions_received=UserStatsDaily.reactions_received + delta,
+            updated_at=func.now(),
         )
     )
 
@@ -240,6 +314,29 @@ async def rebuild_user_stats_in_session(
                     (canonical_guesser, _utc_date(finished_at))
                 ].prompts_guessed += 1
 
+        reaction_statement = (
+            select(
+                TurnRecord.drawer_user_id,
+                TurnRecord.game_id,
+                GameRecord.finished_at,
+            )
+            .select_from(TurnDrawingReaction)
+            .join(TurnRecord, TurnRecord.id == TurnDrawingReaction.turn_id)
+            .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+            .where(
+                TurnRecord.drawer_user_id.is_not(None),
+                TurnRecord.game_id.in_(game_users),
+            )
+        )
+        for drawer_id, game_id, finished_at in (
+            await session.execute(reaction_statement)
+        ).all():
+            canonical_drawer = aliases.get(drawer_id, drawer_id)
+            if canonical_drawer in game_users[game_id]:
+                totals[
+                    (canonical_drawer, _utc_date(finished_at))
+                ].reactions_received += 1
+
     if identity_ids is None:
         await session.execute(delete(UserStatsDaily))
     else:
@@ -256,6 +353,7 @@ async def rebuild_user_stats_in_session(
             turns_played=daily.turns_played,
             prompts_guessed=daily.prompts_guessed,
             drawings_made=daily.drawings_made,
+            reactions_received=daily.reactions_received,
         )
         for (canonical_id, stat_date), daily in sorted(
             totals.items(), key=lambda item: (item[0][0].int, item[0][1])

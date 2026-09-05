@@ -13,6 +13,8 @@ export interface HighlightPresentation {
   value: string;
   prompt?: string;
   name?: HighlightName;
+  /** Where in the recap the card can take you, when it is about a drawing. */
+  drawingIndex?: number;
 }
 
 function seconds(value: number): string {
@@ -55,6 +57,15 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
         label: "Quickest on average",
         value: seconds(highlight.seconds),
         name: highlight,
+      };
+    case "most_reacted_drawing":
+      return {
+        kind: highlight.kind,
+        label: "Most reacted drawing",
+        value: `${highlight.reactionCount} ${highlight.reactionCount === 1 ? "reaction" : "reactions"}`,
+        prompt: highlight.prompt,
+        name: highlight,
+        drawingIndex: highlight.drawingIndex,
       };
   }
 }

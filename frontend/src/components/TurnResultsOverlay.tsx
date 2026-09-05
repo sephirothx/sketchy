@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { GuessBreakdown, TurnEndedPayload, TurnScoreEntry } from "../types";
 import { BrushIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
@@ -23,6 +23,8 @@ interface TurnResultsOverlayProps {
   /** The phase's full length. `nextTurnSeconds` is rebased to what remains
       when a sync arrives, so the bar's fraction divides by this instead. */
   nextTurnDurationSeconds?: number;
+  /** The reaction control for the drawing these results are about. */
+  reactions?: ReactNode;
 }
 
 // Must match the height of .turn-results-score-row in game-results.css - used to
@@ -59,6 +61,7 @@ export function TurnResultsOverlay({
   nextTurnSeconds = 0,
   nextTurnStartedAt = 0,
   nextTurnDurationSeconds = 0,
+  reactions,
 }: TurnResultsOverlayProps) {
   // Rows render in their final (new-rank) order the whole time, but start
   // visually offset to where they *used* to rank. After a short pause (so
@@ -125,6 +128,7 @@ export function TurnResultsOverlay({
         <p className="turn-results-prompt">
           The prompt was <strong>{prompt}</strong>
         </p>
+        {reactions && <div className="turn-results-reactions">{reactions}</div>}
         {showScores && mine && (
           <p className="turn-results-personal">
             Your turn:{" "}

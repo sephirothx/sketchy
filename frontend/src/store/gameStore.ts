@@ -1,9 +1,12 @@
 import { create } from "zustand";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
+import { applyReactionEvent } from "../lib/reactions";
 import type {
   ChatMessage,
   ColorblindSafeSuggestion,
   ColorMode,
+  DrawingReaction,
+  DrawingReactionEvent,
   DrawingToolGroup,
   DrawingRecapMetadata,
   GameEndedPayload,
@@ -77,6 +80,17 @@ interface GameStore {
   /** Set when I guess correctly; cleared when the next turn starts. */
   lastGuessBreakdown: GuessBreakdown | null;
 
+  /** The durable id of the turn on screen, once drawing starts; what a reaction names. */
+  currentTurnId: string | null;
+  /**
+   * Reactions per turn id, for the current turn and the last game's recap.
+   * Kept as the list rather than a tally so "mine" survives a reconnect: the
+   * state payloads carry the list, the broadcast carries both.
+   */
+  drawingReactions: Record<string, DrawingReaction[]>;
+  /** The latest broadcast, so a control can float a glyph for it. */
+  lastReactionEvent: (DrawingReactionEvent & { seq: number }) | null;
+
   messages: ChatMessage[];
   lastTurnResult: TurnEndedPayload | null;
   finalScores: GameEndedPayload["scores"] | null;
@@ -106,6 +120,8 @@ interface GameStore {
   setMyPromptChoices: (choices: string[], seconds: number) => void;
   startDrawing: (payload: {
     isSync?: boolean;
+    turnId?: string;
+    reactions?: DrawingReaction[];
     drawerId: string;
     maskedPrompt: string;
     roundNumber: number;
@@ -127,9 +143,20 @@ interface GameStore {
   }) => void;
   endTurn: (payload: TurnEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
+  applyDrawingReaction: (event: DrawingReactionEvent) => void;
+  clearDrawingReactions: () => void;
   dismissGameEnd: () => void;
   setError: (error: string | null) => void;
   reset: () => void;
+}
+
+/** The recap's per-entry reactions, re-keyed by turn id for the store. */
+function reactionsByTurn(entries: DrawingRecapMetadata[]): Record<string, DrawingReaction[]> {
+  const byTurn: Record<string, DrawingReaction[]> = {};
+  for (const entry of entries) {
+    if (entry.turnId) byTurn[entry.turnId] = entry.reactions ?? [];
+  }
+  return byTurn;
 }
 
 const initialGameFields = {
@@ -150,6 +177,9 @@ const initialGameFields = {
   hintSpend: 0,
   maxHintSpend: 300,
   lastGuessBreakdown: null as GuessBreakdown | null,
+  currentTurnId: null as string | null,
+  drawingReactions: {} as Record<string, DrawingReaction[]>,
+  lastReactionEvent: null as (DrawingReactionEvent & { seq: number }) | null,
   messages: [] as ChatMessage[],
   lastTurnResult: null as TurnEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
@@ -219,6 +249,9 @@ export const useGameStore = create<GameStore>((set) => ({
         ? payload.lastGameScores
         : payload.state === "playing" ? null : state.finalScores,
       drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
+      drawingReactions: payload.lastGameDrawings
+        ? { ...state.drawingReactions, ...reactionsByTurn(payload.lastGameDrawings) }
+        : state.drawingReactions,
       gameHighlights: payload.lastGameHighlights ?? state.gameHighlights,
       moderation: payload.moderation,
       restartVote: payload.restartVote ?? null,
@@ -276,9 +309,14 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: seconds,
     }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync }) =>
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions }) =>
     set((s) => ({
       phase: "drawing",
+      currentTurnId: turnId ?? s.currentTurnId,
+      drawingReactions:
+        turnId && reactions
+          ? { ...s.drawingReactions, [turnId]: reactions }
+          : s.drawingReactions,
       drawerId,
       maskedPrompt,
       roundNumber,
@@ -320,6 +358,11 @@ export const useGameStore = create<GameStore>((set) => ({
     set((s) => ({
       phase: "turn_results",
       lastTurnResult: payload,
+      currentTurnId: payload.turnId ?? s.currentTurnId,
+      drawingReactions:
+        payload.turnId && payload.reactions
+          ? { ...s.drawingReactions, [payload.turnId]: payload.reactions }
+          : s.drawingReactions,
       phaseSeconds: payload.seconds ?? 0,
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: payload.seconds ?? 0,
@@ -328,13 +371,24 @@ export const useGameStore = create<GameStore>((set) => ({
         return updated ? { ...p, score: updated.score } : p;
       }),
     })),
-  endGame: (payload) => set({
+  endGame: (payload) => set((s) => ({
     phase: "game_end",
     finalScores: payload.scores,
     drawingRecap: payload.drawings ?? [],
+    drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
     gameHighlights: payload.highlights ?? [],
     roomState: "waiting",
-  }),
+  })),
+  applyDrawingReaction: (event) =>
+    set((s) => ({
+      drawingReactions: {
+        ...s.drawingReactions,
+        [event.turnId]: applyReactionEvent(s.drawingReactions[event.turnId] ?? [], event),
+      },
+      lastReactionEvent: { ...event, seq: (s.lastReactionEvent?.seq ?? 0) + 1 },
+    })),
+  clearDrawingReactions: () =>
+    set({ drawingReactions: {}, currentTurnId: null, lastReactionEvent: null }),
   dismissGameEnd: () => set({ phase: "idle" }),
   setError: (error) => set({ error }),
   reset: () => set({
