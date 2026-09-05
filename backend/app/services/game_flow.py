@@ -1089,7 +1089,7 @@ class GameFlowService:
         reason: there is nothing a player could do about it.
         """
         if not self._ctx.game_history_repo or history is None:
-            room.last_game_history = "unrecorded"
+            # `_note_history_write_started` already said "unrecorded".
             return
         started = time.monotonic()
         try:
@@ -1115,13 +1115,25 @@ class GameFlowService:
                 HISTORY_WRITE_TIMEOUT_SECONDS,
             )
             self._note_abandoned_write(room, "game", "timeout", started)
-            room.last_game_history = "failed"
+            self._note_history_write_finished(room, history, "failed")
         except Exception:
             logger.exception("Failed to persist game history for room %s", room.id)
             self._note_abandoned_write(room, "game", "error", started)
-            room.last_game_history = "failed"
+            self._note_history_write_finished(room, history, "failed")
         else:
-            room.last_game_history = "recorded"
+            self._note_history_write_finished(room, history, "recorded")
+
+    @staticmethod
+    def _note_history_write_finished(room: Room, history, state: str) -> None:
+        """Record how the write went - for the game the room still calls its last.
+
+        The write is bounded at ten seconds, and a rematch can start and be
+        abandoned inside that. A completion arriving after the room has moved
+        on to a newer game must not speak for it: it would mark a row that is
+        still being written as recorded, or a recorded one as failed.
+        """
+        if room.last_game_id == history.record.id:
+            room.last_game_history = state
 
     @staticmethod
     def _note_abandoned_write(room: Room, kind: str, reason: str, started: float) -> None:

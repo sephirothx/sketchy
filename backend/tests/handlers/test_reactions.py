@@ -1,6 +1,7 @@
 """The `react_to_drawing` command: who may react, to what, and what the room hears."""
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -238,6 +239,32 @@ async def test_live_reactions_ride_on_the_turn_payloads_and_into_history():
     ]
     assert room.last_game_id == saved.record.id
     assert room.last_game_history == "recorded"
+
+
+async def test_a_late_write_from_an_earlier_game_does_not_speak_for_the_newer_one():
+    """The write is bounded at ten seconds; a rematch can start and stop inside
+    that. When the old write finally lands - or fails - the room has moved on,
+    and its verdict belongs to a game the room no longer calls its last."""
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    wire(ctx, room, players)
+    await play_to_completion(ctx, room, players)
+    assert room.last_game_history == "recorded"
+    newer = room.last_game_id
+
+    stale = SimpleNamespace(
+        record=SimpleNamespace(id="an-earlier-game"),
+        participants=[], turns=[], guesses=[], score_events=[], drawings=[], reactions=[],
+    )
+    history.fail = True
+    await ctx.game_flow._persist_game_history(room, stale)
+    assert (room.last_game_id, room.last_game_history) == (newer, "recorded")
+
+    history.fail = False
+    room.last_game_history = "pending"
+    await ctx.game_flow._persist_game_history(room, stale)
+    assert room.last_game_history == "pending", "a stale success must not open the recap"
 
 
 async def test_an_abandoned_game_carries_its_reactions_too():
