@@ -949,7 +949,13 @@ account made while leaving the row saying so.
 was in that game; **every refusal is a 404**, so the endpoint never reveals whether a
 game exists.
 
-Because a database column has no integrity check of its own:
+Because a database column has no integrity check of its own, an operator command walks
+the whole store (#610): a keyset over `(created_at, turn_id)` below a watermark taken at
+the start, metadata first and payloads in groups whose declared sizes fit a byte budget,
+checking each row's size and format metadata against the bytes, the checksum, the
+decoder registry and the decoded frame's structure. It can stop after `--max-rows` and
+resume from the cursor it printed. Before #610 it verified the oldest `batch_size` rows
+and reported the whole store clean.
 
 ```bash
 cd backend && .venv/bin/python -m app.services.drawing_storage --batch-size 2000

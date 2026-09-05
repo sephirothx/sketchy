@@ -157,15 +157,25 @@ registry keyed on the magic and version the blob declares, whose entries are
 never removed and whose decoders answer in the current wire format. Clients
 therefore never see a stored format at all, and the wire format stays free to
 change without rewriting a single stored row. Because a database column has no
-integrity check of its own, an operator command decodes stored drawings in
-bounded batches and reports any that fail their checksum or name a format this
-build cannot read:
+integrity check of its own, an operator command walks **every** stored drawing
+below a watermark taken when it starts and reports the rows whose bytes fail
+their checksum, disagree with their recorded size or format, name a format this
+build cannot read, or decode to something that is not a canvas history:
 
 ```bash
 cd backend
 .venv/bin/python -m app.services.drawing_storage
-.venv/bin/python -m app.services.drawing_storage --batch-size 2000
+.venv/bin/python -m app.services.drawing_storage --batch-size 2000 --byte-budget-mib 128
+.venv/bin/python -m app.services.drawing_storage --max-rows 100000   # prints a cursor
+.venv/bin/python -m app.services.drawing_storage --resume-from <created_at/turn_id>
 ```
+
+It reads metadata a batch at a time and fetches payloads in groups whose
+declared sizes fit the byte budget (64 MiB by default), so its working set is
+bounded by that budget rather than by the batch size times the 8 MiB row
+ceiling. The exit status says what happened: 0 complete and clean, 1 a failing
+row, 2 stopped by `--max-rows` (resume from the printed cursor), 3 complete but
+some rows need a decoder this build lacks.
 Each live game receives its stable UUIDv7 when it starts. The finished-game
 writer reuses that ID for the history row and prompt-usage batch, and stores a
 canonical SHA-256 payload digest with the history row. Retrying the same ID and
