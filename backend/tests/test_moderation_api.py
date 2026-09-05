@@ -19,6 +19,7 @@ from app.api.moderation import create_moderation_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import (
+    UserBlock,
     AuditEvent,
     AuthSession,
     Base,
@@ -239,6 +240,7 @@ async def test_report_pins_only_messages_the_reporter_received(env):
             "messageKind": "chat",
             "audience": "prompt_aware",
             "nearMissKind": None,
+            "role": "cited",
             "text": "Selected abusive message",
             "messageCreatedAt": now.isoformat(),
             "copiedAt": evidence[0]["copiedAt"],
@@ -1154,7 +1156,262 @@ async def test_a_lobby_line_is_evidence_on_its_own_terms(env):
         for item in listing.json()["reports"]
         if item["reportedUserId"] == target["id"]
     ]
-    [evidence] = pinned["messageEvidence"]
-    assert evidence["sourceMessageId"] == str(lobby_id)
-    assert evidence["audience"] == "lobby"
-    assert evidence["text"] == "Said to the whole lobby"
+    # The cited line, and around it the reporter's own lobby line as context:
+    # the lobby is one conversation, so that is where the context comes from,
+    # and the room line is nowhere in it.
+    copied = pinned["messageEvidence"]
+    assert [(line["role"], line["text"]) for line in copied] == [
+        ("cited", "Said to the whole lobby"),
+        ("context", "The reporter's own lobby line"),
+    ]
+    assert {line["audience"] for line in copied} == {"lobby"}
+    assert copied[0]["sourceMessageId"] == str(lobby_id)
+    assert copied[1]["sourceMessageId"] == str(reporters_own)
+
+
+@pytest.mark.asyncio
+async def test_a_report_carries_what_was_said_around_the_cited_line(env):
+    """A line on its own is often unreadable, so the server copies the
+    conversation around it: ten before and five after, within twelve hours,
+    from anyone, but only what the reporter actually received, and never the
+    cited line twice. The reported player is shown only their own words."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    other_http = new_client()
+    moderator_http = new_client()
+    reporter = await register(reporter_http, "CtxReporter")
+    target = await register(target_http, "CtxTarget")
+    other = await register(other_http, "CtxOther")
+    moderator = await register(moderator_http, "CtxMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    anchor = datetime.now(timezone.utc) - timedelta(hours=1)
+    room = generate_uuid()
+    cited_id = generate_uuid()
+
+    def row(text, *, at, sender, audience="room", received=True):
+        return RoomMessage(
+            id=generate_uuid(),
+            room_instance_id=room,
+            sender_user_id=UUID(sender["id"]),
+            sender_player_id=generate_uuid(),
+            sender_display_name_snapshot=sender["displayName"],
+            sender_is_anonymous_snapshot=False,
+            is_spectator=False,
+            message_kind="chat",
+            audience=audience,
+            audience_user_ids=(
+                [reporter["id"], target["id"], other["id"]]
+                if received
+                else [target["id"], other["id"]]
+            ),
+            near_miss_kind=None,
+            text=text,
+            created_at=at,
+            expires_at=at + timedelta(days=30),
+        )
+
+    async with factory() as session:
+        async with session.begin():
+            rows = [
+                # Twelve visible lines before: the ten nearest are kept.
+                *[
+                    row(f"before {index}", at=anchor - timedelta(minutes=12 - index), sender=other)
+                    for index in range(12)
+                ],
+                # Not received by the reporter, so not theirs to have copied.
+                row(
+                    "prompt-aware and never delivered",
+                    at=anchor - timedelta(seconds=30),
+                    sender=other,
+                    audience="prompt_aware",
+                    received=False,
+                ),
+                # Outside the window on either side.
+                row("thirteen hours before", at=anchor - timedelta(hours=13), sender=other),
+                row("thirteen hours after", at=anchor + timedelta(hours=13), sender=other),
+                # Six after: the five nearest are kept.
+                *[
+                    row(f"after {index}", at=anchor + timedelta(minutes=index + 1), sender=reporter)
+                    for index in range(6)
+                ],
+            ]
+            cited = row("the line itself", at=anchor, sender=target)
+            cited.id = cited_id
+            session.add_all([*rows, cited])
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Read it in context.",
+            "messageIds": [str(cited_id)],
+        },
+    )
+    assert submitted.status_code == 201, submitted.text
+
+    listing = await moderator_http.get("/api/moderation/reports")
+    [case] = [
+        item
+        for item in listing.json()["reports"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    copied = [(line["role"], line["text"]) for line in case["messageEvidence"]]
+    assert copied == [
+        *[("context", f"before {index}") for index in range(2, 12)],
+        ("cited", "the line itself"),
+        *[("context", f"after {index}") for index in range(5)],
+    ]
+    # Who said what survives the copy, so the thread reads as one.
+    by_text = {line["text"]: line for line in case["messageEvidence"]}
+    assert by_text["before 2"]["senderDisplayName"] == "CtxOther"
+    assert by_text["after 0"]["senderDisplayName"] == "CtxReporter"
+    assert by_text["the line itself"]["senderUserId"] == target["id"]
+
+    # A warning and a suspension from this report show the player their own
+    # reported words and nothing anybody else said (R-MOD-12).
+    warned = await moderator_http.post(
+        "/api/moderation/warnings",
+        json={"userId": target["id"], "reason": "Mind the tone.", "reportId": case["id"]},
+    )
+    assert warned.status_code == 201, warned.text
+    pending = await target_http.get("/api/warnings/pending")
+    assert [line["text"] for line in pending.json()["warning"]["messages"]] == [
+        "the line itself"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_report_with_nothing_cited_has_no_context(env):
+    """No cited line means no place to look: a REST report with no
+    messageIds copies nothing, rather than guessing a room."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "BareReporter")
+    target = await register(target_http, "BareTarget")
+    moderator = await register(moderator_http, "BareMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                RoomMessage(
+                    id=generate_uuid(),
+                    room_instance_id=None,
+                    sender_user_id=UUID(target["id"]),
+                    sender_player_id=None,
+                    sender_display_name_snapshot="BareTarget",
+                    sender_is_anonymous_snapshot=False,
+                    is_spectator=False,
+                    message_kind="chat",
+                    audience="lobby",
+                    audience_user_ids=[],
+                    near_miss_kind=None,
+                    text="A lobby line nobody cited",
+                    created_at=now,
+                    expires_at=now + timedelta(days=30),
+                )
+            )
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_name",
+            "details": "The name, not anything said.",
+        },
+    )
+    assert submitted.status_code == 201, submitted.text
+    listing = await moderator_http.get("/api/moderation/reports")
+    [case] = [
+        item
+        for item in listing.json()["reports"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    assert case["messageEvidence"] == []
+
+
+@pytest.mark.asyncio
+async def test_lobby_context_omits_authors_the_reporter_blocked(env):
+    """A lobby line by somebody the reporter muted was never delivered to
+    them (R-LCHAT-03). The retained row records no recipients, so the block
+    is re-applied when the context is chosen - otherwise a report about a
+    neighbouring line would copy the muted text into evidence the reporter
+    can export, which is exactly what the block withholds."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    muted_http = new_client()
+    other_http = new_client()
+    moderator_http = new_client()
+    reporter = await register(reporter_http, "BlkReporter")
+    target = await register(target_http, "BlkTarget")
+    muted = await register(muted_http, "BlkMuted")
+    other = await register(other_http, "BlkOther")
+    moderator = await register(moderator_http, "BlkMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    anchor = datetime.now(timezone.utc) - timedelta(minutes=5)
+    cited_id = generate_uuid()
+
+    def lobby_line(text, *, at, sender):
+        return RoomMessage(
+            id=generate_uuid(),
+            room_instance_id=None,
+            sender_user_id=UUID(sender["id"]),
+            sender_player_id=None,
+            sender_display_name_snapshot=sender["displayName"],
+            sender_is_anonymous_snapshot=False,
+            is_spectator=False,
+            message_kind="chat",
+            audience="lobby",
+            audience_user_ids=[],
+            near_miss_kind=None,
+            text=text,
+            created_at=at,
+            expires_at=at + timedelta(days=30),
+        )
+
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBlock(
+                    blocker_user_id=UUID(reporter["id"]),
+                    blocked_user_id=UUID(muted["id"]),
+                )
+            )
+            cited = lobby_line("the reported line", at=anchor, sender=target)
+            cited.id = cited_id
+            session.add_all(
+                [
+                    lobby_line("seen, said before", at=anchor - timedelta(minutes=2), sender=other),
+                    lobby_line("muted, said before", at=anchor - timedelta(minutes=1), sender=muted),
+                    cited,
+                    lobby_line("muted, said after", at=anchor + timedelta(minutes=1), sender=muted),
+                    lobby_line("seen, said after", at=anchor + timedelta(minutes=2), sender=other),
+                ]
+            )
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Read it in context.",
+            "messageIds": [str(cited_id)],
+        },
+    )
+    assert submitted.status_code == 201, submitted.text
+
+    listing = await moderator_http.get("/api/moderation/reports")
+    [case] = [
+        item
+        for item in listing.json()["reports"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    assert [(line["role"], line["text"]) for line in case["messageEvidence"]] == [
+        ("context", "seen, said before"),
+        ("cited", "the reported line"),
+        ("context", "seen, said after"),
+    ]

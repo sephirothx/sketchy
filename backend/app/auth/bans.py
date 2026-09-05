@@ -90,7 +90,12 @@ async def _reported_messages(
         rows = (
             await session.scalars(
                 select(PlayerReportMessageEvidence)
-                .where(PlayerReportMessageEvidence.report_id == ban.source_report_id)
+                .where(
+                    PlayerReportMessageEvidence.report_id == ban.source_report_id,
+                    # The lines the suspension is about, never the lines
+                    # other people said around them.
+                    PlayerReportMessageEvidence.role == "cited",
+                )
                 .order_by(PlayerReportMessageEvidence.position)
             )
         ).all()

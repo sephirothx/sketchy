@@ -8,6 +8,7 @@ import {
   applyChatLine,
   chatTimeLabel,
   parseLine,
+  reportableLine,
 } from "../src/lib/lobbyChat.ts";
 
 const SAID_AT = "2026-09-02T12:00:00+00:00";
@@ -116,4 +117,21 @@ test("the label says how fresh a line is, and no more than that", () => {
   assert.equal(chatTimeLabel(new Date(2026, 7, 3, 12, 0).getTime(), noon), "30d");
   // A clock behind the server's is a fresh line, not one from the future.
   assert.equal(chatTimeLabel(noon + 5 * minute, noon), "now");
+});
+
+test("a line is reportable only by a registered viewer, only when retained, and never by its author", () => {
+  const retained = { ...line(1), sentAt: Date.parse(SAID_AT), retainedMessageId: "row-1" };
+  const withheld = { ...line(2), sentAt: Date.parse(SAID_AT) };
+  const registered = { id: "user-bob", isAnonymous: false };
+
+  assert.equal(reportableLine(retained, registered), true);
+  // Nothing to cite: the row was never written, so the REST route would
+  // refuse it as unavailable. No action rather than a dead end.
+  assert.equal(reportableLine(withheld, registered), false);
+  // Your own line, and a guest viewer: the room's two rules.
+  assert.equal(reportableLine(retained, { id: "user-ada", isAnonymous: false }), false);
+  assert.equal(reportableLine(retained, { id: "user-bob", isAnonymous: true }), false);
+  // A socket with no account yet reads the lobby, and reports nothing.
+  assert.equal(reportableLine(retained, null), false);
+  assert.equal(reportableLine(retained, undefined), false);
 });

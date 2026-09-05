@@ -848,6 +848,26 @@
   color: var(--faint);
 }
 
+/* The cited lines carry the mark; the context around them is there to be
+   read past, so it recedes rather than competes. */
+.mod-evidence-line {
+  display: block;
+  padding: 2px 8px;
+  margin: 0 -8px;
+  border-radius: 4px;
+}
+
+.mod-evidence-line.is-cited {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--ink);
+}
+
+.mod-evidence-line.is-context,
+.mod-evidence-line.is-context strong {
+  color: var(--faint);
+  font-weight: 600;
+}
+
 .mod-evidence-caption {
   color: var(--faint);
   font-size: 12.5px;

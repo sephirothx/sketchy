@@ -363,9 +363,18 @@ export function ModerationPage() {
                   )}
                   {playerCase.messageEvidence.length > 0 && (
                     <>
+                      {/* One thread, in the order it was said: the cited
+                          lines marked, and around them what everyone else
+                          said, dimmed. A line on its own is often
+                          unreadable; the conversation is what a moderator
+                          judges. */}
                       <blockquote className="mod-evidence">
                         {playerCase.messageEvidence.map((line) => (
-                          <span key={line.sourceMessageId}>
+                          <span
+                            key={line.sourceMessageId}
+                            className={`mod-evidence-line is-${line.role}`}
+                            data-role={line.role}
+                          >
                             <strong>{line.senderDisplayName}:</strong> {line.text}
                             {/* The snapshot is the evidence. The live message
                                 may have been deleted since, which is the point
@@ -377,8 +386,11 @@ export function ModerationPage() {
                         ))}
                       </blockquote>
                       <p className="mod-evidence-caption">
-                        Pinned by the server exactly as the reporter received
-                        them — up to 20 messages.
+                        Marked lines are the ones reported — up to 20, pinned
+                        by the server exactly as the reporter received them.
+                        The rest is what was said around them: up to 10 lines
+                        before and 5 after, within 12 hours, as the reporter
+                        saw it.
                       </p>
                     </>
                   )}

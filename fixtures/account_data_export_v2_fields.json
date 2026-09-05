@@ -188,6 +188,7 @@
     "reportsSubmitted[].messageEvidence[].messageCreatedAt",
     "reportsSubmitted[].messageEvidence[].messageKind",
     "reportsSubmitted[].messageEvidence[].nearMissKind",
+    "reportsSubmitted[].messageEvidence[].role",
     "reportsSubmitted[].messageEvidence[].sourceMessageId",
     "reportsSubmitted[].messageEvidence[].text",
     "reportsSubmitted[].messageEvidence[].turnId",

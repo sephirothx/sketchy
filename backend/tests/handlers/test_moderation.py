@@ -364,6 +364,22 @@ async def test_reporting_names_a_seat_and_never_an_account():
                 now = datetime.now(timezone.utc)
                 session.add_all(
                     [
+                        # What the reporter said just before: context, so
+                        # the reported line reads as the answer it was.
+                        RoomMessage(
+                            id=generate_uuid(),
+                            room_instance_id=UUID(room.retention_scope_id),
+                            sender_user_id=reporter_id,
+                            sender_player_id=UUID(reporter.id),
+                            sender_display_name_snapshot="Reporter",
+                            sender_is_anonymous_snapshot=False,
+                            message_kind="chat",
+                            audience="room",
+                            text="nice drawing",
+                            audience_user_ids=[str(reporter_id), str(target_id)],
+                            created_at=now - timedelta(seconds=5),
+                            expires_at=now + timedelta(hours=1),
+                        ),
                         RoomMessage(
                             id=generate_uuid(),
                             room_instance_id=UUID(room.retention_scope_id),
@@ -414,7 +430,8 @@ async def test_reporting_names_a_seat_and_never_an_account():
         )
 
         assert result["ok"] is True
-        # Only the message the reporter actually received.
+        # Only the message the reporter actually received, and only the
+        # target's: the context around it is not counted as evidence.
         assert result["evidenceCount"] == 1
 
         async with factory() as session:
@@ -423,10 +440,18 @@ async def test_reporting_names_a_seat_and_never_an_account():
             assert report.reported_user_id == target_id
             assert report.reason == "harassment"
             evidence = (
-                await session.scalars(select(PlayerReportMessageEvidence))
+                await session.scalars(
+                    select(PlayerReportMessageEvidence).order_by(
+                        PlayerReportMessageEvidence.position
+                    )
+                )
             ).all()
-            assert [line.text_snapshot for line in evidence] == [
-                "something worth reporting"
+            # The thread, in the order it was said: the reporter's own line
+            # as context, the target's as the cited one, and the line the
+            # reporter never received in neither role.
+            assert [(line.role, line.text_snapshot) for line in evidence] == [
+                ("context", "nice drawing"),
+                ("cited", "something worth reporting"),
             ]
             event = await session.scalar(
                 select(AuditEvent).where(AuditEvent.event_type == "report.submitted")

@@ -49,7 +49,11 @@ async def pending_warning_payload(
                     select(PlayerReportMessageEvidence)
                     .where(
                         PlayerReportMessageEvidence.report_id
-                        == warning.source_report_id
+                        == warning.source_report_id,
+                        # Their own reported words (R-MOD-12). What others
+                        # said around them is a moderator's context, not
+                        # something to show the player back.
+                        PlayerReportMessageEvidence.role == "cited",
                     )
                     .order_by(PlayerReportMessageEvidence.position)
                 )

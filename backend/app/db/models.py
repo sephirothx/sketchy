@@ -60,6 +60,7 @@ from app.domain_values import (
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
     REACTION_EMOJI_CODES,
+    REPORT_EVIDENCE_ROLES,
     REPORT_REASONS,
     REPORT_STATUSES,
     RETAINED_MESSAGE_AUDIENCES,
@@ -911,6 +912,11 @@ class PlayerReportMessageEvidence(Base):
             NEAR_MISS_KINDS,
             "ck_report_message_evidence_near_miss_kind",
         ),
+        _values_check(
+            "role",
+            REPORT_EVIDENCE_ROLES,
+            "ck_report_message_evidence_role",
+        ),
         CheckConstraint(
             "message_kind = 'wrong_guess' OR near_miss_kind IS NULL",
             name="ck_report_message_evidence_near_miss_only_for_wrong_guess",
@@ -924,6 +930,13 @@ class PlayerReportMessageEvidence(Base):
         primary_key=True,
     )
     position: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # `cited`: what the report is about - selected by the reporter over REST
+    # or by the server for a seat. `context`: what was said around it, by
+    # anyone, chosen by the server so a moderator reads the line where it
+    # was said rather than on its own.
+    role: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="cited", server_default="cited"
+    )
     source_message_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("room_messages.id", ondelete="SET NULL"),

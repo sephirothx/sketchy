@@ -100,7 +100,7 @@ export function ReportPlayerDialog({
               <label htmlFor={`${titleId}-reason`}>What happened</label>
               <select
                 id={`${titleId}-reason`}
-                className="settings-select"
+                className="report-reason"
                 value={reason}
                 onChange={(change) => setReason(change.target.value as ReportReason)}
               >
@@ -127,7 +127,8 @@ export function ReportPlayerDialog({
                 required
               />
               <p className="auth-hint">
-                Their recent messages in this room are attached automatically.
+                Their recent messages in this room are attached automatically,
+                with what was said around them.
               </p>
 
               {error && (

@@ -1012,6 +1012,38 @@
   min-width: 0;
 }
 
+/* The author's name doubles as the way to report their line, so it is a
+   button drawn as the name: same weight and colour as the plain one beside
+   it, with the underline on hover and the focus ring the only tells. The
+   colour comes from the inline style a chosen name carries, or from
+   `.colored-player-name.is-guest` in account.css for a guest's grey - both
+   beat the `inherit` here, which only undoes the button default. */
+.lobby-chat-author {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  border-radius: 3px;
+}
+
+.lobby-chat-author:hover,
+.lobby-chat-author:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+.lobby-chat-author:focus-visible {
+  outline: 2px solid var(--primary-edge-soft);
+  outline-offset: 1px;
+}
+
 /* A margin note, not part of the message: small, quiet, and out at the edge
    so a long line wraps under the name rather than under the time. */
 .lobby-chat-time {

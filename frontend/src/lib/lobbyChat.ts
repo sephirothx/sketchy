@@ -122,6 +122,23 @@ export function applyChatBacklog(
   return next;
 }
 
+/** Whether this viewer may report this line from the lobby.
+
+A line is reported over REST, citing its retained row, because the lobby has
+no seat for the socket route to resolve. So there has to be a row to cite: a
+line retention withheld is shown like any other and simply offers nothing,
+rather than a dialog that would be refused on sending. The other two rules
+are the room's: nobody reports themselves, and a guest is offered no control
+because a report a moderator cannot follow up on helps nobody (R-MOD-06). */
+export function reportableLine(
+  line: LobbyChatLine,
+  viewer: { id: string; isAnonymous: boolean } | null | undefined,
+): boolean {
+  if (!viewer || viewer.isAnonymous) return false;
+  if (line.userId === viewer.id) return false;
+  return Boolean(line.retainedMessageId);
+}
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;

@@ -761,6 +761,7 @@ def _player_report_document(report: PlayerReport) -> dict:
                 "messageKind": evidence.message_kind,
                 "audience": evidence.audience,
                 "nearMissKind": evidence.near_miss_kind,
+                "role": evidence.role,
                 "text": evidence.text_snapshot,
                 "messageCreatedAt": _timestamp(evidence.message_created_at),
             }

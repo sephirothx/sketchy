@@ -142,6 +142,36 @@
   z-index: 1250;
 }
 
+/* A select inside a dialog form, drawn like the textarea beside it. The
+   report dialogs referred to a class nothing defined, so the control came
+   out native beside a styled textarea. Scoped to the form rather than to a
+   class each dialog has to remember. */
+.modal-card .auth-form select {
+  appearance: auto;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+/* The line being reported, quoted so the reporter sees what they are citing.
+   A quiet box rather than a chat bubble: it is evidence here, not a message. */
+.report-quoted-line {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--line-strong);
+  background: var(--field);
+  border-radius: 0 6px 6px 0;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 /* Above everything, including the drawer at 1200 and the report dialog at
    1250: there is nothing behind this worth reaching. */
 .modal-overlay.suspension-overlay {

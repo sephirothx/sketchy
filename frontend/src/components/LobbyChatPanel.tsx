@@ -2,13 +2,14 @@ import { useClock } from "../hooks/useClock";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import { chatTimeLabel } from "../lib/lobbyChat";
+import { chatTimeLabel, reportableLine, type LobbyChatLine } from "../lib/lobbyChat";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { useLobbyChatStore } from "../store/lobbyChatStore";
 import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
+import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
 without a new line arriving, which is the point of the label. */
@@ -31,12 +32,14 @@ export function LobbyChatPanel() {
   const { timeFormat, dateTime } = useClock();
   const lines = useLobbyChatStore((state) => state.chat.lines);
   const awaitingName = useAuthStore((state) => needsIdentity(state.user));
+  const viewer = useAuthStore((state) => state.user);
   const ensureIdentity = useAuthStore((state) => state.ensureIdentity);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [reporting, setReporting] = useState<LobbyChatLine | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -111,15 +114,34 @@ export function LobbyChatPanel() {
           ) : (
             lines.map((line) => {
               const at = new Date(line.sentAt);
+              const nameClass = playerNameClass(line.isAnonymous);
+              const nameStyle = playerNameStyle(line.nameColor ?? undefined, line.isAnonymous);
               return (
                 <div key={line.seq} className="chat-message lobby-chat-line">
                   <span className="lobby-chat-body">
-                    <strong
-                      className={playerNameClass(line.isAnonymous)}
-                      style={playerNameStyle(line.nameColor ?? undefined, line.isAnonymous)}
-                    >
-                      {line.displayName}:{" "}
-                    </strong>
+                    {/* The name is the way to report the line: there is no
+                        room menu here, and a line's author is the only
+                        thing on it worth acting on. A line that cannot be
+                        reported - our own, retention withheld its id, or we
+                        are a guest - keeps the name as plain text, with no
+                        explanation: nothing is owed for an action that was
+                        never offered. */}
+                    {reportableLine(line, viewer) ? (
+                      <button
+                        type="button"
+                        className={`lobby-chat-author ${nameClass}`}
+                        style={nameStyle}
+                        title={`Report this line by ${line.displayName}`}
+                        aria-label={`Report this line by ${line.displayName}`}
+                        onClick={() => setReporting(line)}
+                      >
+                        {line.displayName}:
+                      </button>
+                    ) : (
+                      <strong className={nameClass} style={nameStyle}>
+                        {line.displayName}:
+                      </strong>
+                    )}{" "}
                     {line.text}
                   </span>
                   {/* Fresh or stale at a glance; the whole instant on hover. */}
@@ -136,6 +158,13 @@ export function LobbyChatPanel() {
         <p className="waiting-chat-error" role="alert">
           {error}
         </p>
+      )}
+      {reporting?.retainedMessageId && (
+        <ReportLobbyLineDialog
+          line={reporting}
+          retainedMessageId={reporting.retainedMessageId}
+          onClose={() => setReporting(null)}
+        />
       )}
       {awaitingName ? (
         <button type="button" className="btn btn-secondary lobby-chat-name-prompt" onClick={() => void chooseName()}>

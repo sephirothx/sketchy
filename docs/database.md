@@ -599,7 +599,8 @@ counts still support difficulty and attempt analysis, and that bounded loss is t
 accepted privacy and storage-volume tradeoff.
 
 ### `player_report_message_evidence`
-`report_id` + `position` composite **PK** · `source_message_id` (`SET NULL`) ·
+`report_id` + `position` composite **PK** · `role` (`cited \| context`) ·
+`source_message_id` (`SET NULL`) ·
 `source_message_snapshot_id` · `game_id_snapshot` · `turn_id_snapshot` ·
 `sender_user_id` (`SET NULL`) · frozen sender presentation · `message_kind` ·
 `audience` · `near_miss_kind` · `text_snapshot` · `message_created_at` · `copied_at`.
@@ -611,9 +612,22 @@ client's claims. A lobby line answers the second question differently: it was sa
 everybody, so its `audience` value (`lobby`, carried across into the copy) stands in
 for a list. The server copies those lines here before the ordinary rows expire.
 
+Those are the `cited` rows. Around them the server also copies **`context`**: what
+was said in the same room instance (or the lobby) up to **10 lines before and 5
+after** the latest cited line, within **12 hours** of it, by anyone, but only lines the
+reporter received — the stored audience for a room line, and for a lobby line (which
+records no recipients) the reporter's `user_blocks` re-applied — by
+[`context_around`](../backend/app/services/player_reports.py) rather than trusted. A
+room report with nothing cited anchors on the report itself; a REST report with nothing
+cited has no place to look and copies nothing. Rows are positioned in the order the
+lines were said, so every reader gets one thread. The role matters to two readers: a
+**Warning** and a **Suspension** show the reported player only the `cited` rows — their
+own words, never what somebody else said around them.
+
 Account deletion erases ordinary authored messages immediately and **tombstones the
-presentation** on copied evidence; the evidence text continues under the protected
-report retention policy.
+presentation** on copied evidence, `context` rows included — a third party's line copied
+into somebody else's report loses its name the same way; the evidence text continues
+under the protected report retention policy.
 
 ### `prompt_content_reports`
 Player-authored prompt content has a separate, target-specific flow.

@@ -20,6 +20,7 @@ from app.db.models import PlayerReport
 from app.domain_values import ReportStatus
 from app.rooms import majority_of
 from app.services.player_reports import (
+    context_around,
     evidence_from_live_room,
     record_player_report,
 )
@@ -178,6 +179,12 @@ async def report_player(ctx: HandlerContext, sid, data):
                 reported_user_id=UUID(target.user_id),
                 reporter_user_id=UUID(reporter.user_id),
             )
+            context_messages = await context_around(
+                session,
+                cited=messages,
+                reporter_user_id=UUID(reporter.user_id),
+                room_instance_id=UUID(room.retention_scope_id),
+            )
             report = record_player_report(
                 session,
                 reporter_user_id=UUID(reporter.user_id),
@@ -190,6 +197,7 @@ async def report_player(ctx: HandlerContext, sid, data):
                 reason=payload.reason,
                 details=payload.details,
                 messages=messages,
+                context_messages=context_messages,
                 context_snapshot={
                     "source": "room",
                     "room_code": room.code,

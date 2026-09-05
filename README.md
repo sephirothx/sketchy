@@ -248,10 +248,15 @@ Expired rows are removed at startup and by bounded hourly cleanup during new
 writes. A report may select up to 20 unexpired `messageIds`, but only when the
 reported player authored them and the reporter was in each stored audience.
 The server copies those lines into immutable **Message evidence** before the
-ordinary rows expire. Account export includes a player's own unexpired authored
-messages and evidence they submitted. Account deletion erases ordinary authored
-messages immediately and tombstones the presentation on copied evidence; the
-evidence text continues under the protected report retention policy. Numeric
+ordinary rows expire, and around them the conversation they sat in: up to 10
+lines before and 5 after the latest cited line, within 12 hours, from anyone,
+but only lines the reporter received. A moderator reads one thread with the
+cited lines marked; the reported player, through a warning or suspension, is
+shown their own words only. Account export includes a player's own unexpired
+authored messages and evidence they submitted. Account deletion erases ordinary
+authored messages immediately and tombstones the presentation on copied
+evidence, a third party's context line included; the evidence text continues
+under the protected report retention policy. Numeric
 wrong/near-miss outcomes remain in game history independently, supporting game
 analysis without turning 30-day message text into lifetime player tracking.
 During that window, correlated wrong-guess text and its near-miss classification
@@ -673,6 +678,10 @@ cd backend
   --username Operator --reason "Initial production administrator"
 ```
 
+`./scripts/make-admin.sh <username> [reason]` runs the same command from the
+repository root, against `backend/sketchy.db` unless `DATABASE_URL` says
+otherwise, with a development reason filled in.
+
 Every entry in that log records who acted, the request it belonged to, a
 hashed client address, and what was acted on. The admin view renders names for
 both, resolved when the ledger is read and never written into it: the table is
@@ -712,12 +721,26 @@ not a reason to learn theirs, so the server resolves the seat against the live
 room. It also selects the evidence - the reported player's recent messages, as
 the reporter actually received them - which is what makes "is this message
 theirs" and "did you see it" true by construction rather than checks against a
-client's claims. Reporting requires an account, because a report a moderator
-cannot follow up on helps nobody. One reporter holds one open report per
+client's claims - and then what was said around them, by anyone, so the line
+is read where it was said. Reporting requires an account, because a report a
+moderator cannot follow up on helps nobody. One reporter holds one open report per
 player, the same rule content reports carry: saying it again while a moderator
 has yet to look adds no evidence and buries the queue, and once the report is
 decided the same reporter may raise a new one, because that is a new incident
 rather than the same complaint repeated.
+
+A line of the lobby's chat is reported from the line itself, by clicking its
+author's name. The lobby has no seat to resolve, so this goes the other way
+round from the room: the line already carries its author's account id (the
+lobby's one exception to the no-account-ids rule), and the report names that
+id over REST and cites the one line it was opened from; the server adds what
+the lobby said around it, as it does for a room. The dialog shows the line
+being cited, offers only the
+reasons a line of words can be true of (harassment, spam, inappropriate name),
+and can be sent without typing anything, since the line is the complaint. A
+line retention did not keep cannot be cited, so its author's name is plain text
+and nothing explains why; a player's own lines, and every line seen by a guest,
+are plain for the same reasons the room gives.
 
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
@@ -1103,6 +1126,7 @@ docs/
 scripts/
   serve.sh          Local development server
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
+  make-admin.sh     Promote a registered account to administrator on this checkout's database
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
   check-mockups-regenerated.sh  Refuses a hand-edited mockup artboard
   check-coverage.py   Per-module coverage floors on the risk-critical modules
