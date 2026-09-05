@@ -525,6 +525,8 @@ process. These deployment settings can be tuned without code changes:
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
 | `RETENTION_SWEEP_SECONDS` | `3600` | How often stale guest accounts are purged |
+| `EXPORT_SWEEP_SECONDS` | `60` | How often the export worker looks for jobs nobody woke it for, and reclaims ones a crash left behind |
+| `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
@@ -848,9 +850,15 @@ exports expire after seven days. The HTTP flow is `POST
 /api/auth/data-exports`, `GET /api/auth/data-exports/{id}`, then the returned
 `downloadUrl`; only the owning account may read any of those records.
 
-The application schedules generation after returning the request. Jobs are
-stored before work begins, so an operator can retry a bounded batch left
-pending—or processing for more than 15 minutes after a crash—with:
+Generation happens on the server's export worker, one document at a time,
+woken by the request: the job row is the queue, so a crash leaves a
+`processing` row the next process reclaims after 15 minutes and a planned
+restart hands it back at once. A document is built a page at a time and
+refused past `EXPORT_MAX_BYTES` (64 MiB of JSON by default) rather than built
+at any size; the dialog names that outcome, and the account may ask again once
+the operator has raised the ceiling. When the server is not running, an
+operator can build a bounded batch left pending—or processing for more than
+15 minutes—with:
 
 ```bash
 cd backend

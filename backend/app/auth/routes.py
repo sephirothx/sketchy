@@ -7,7 +7,8 @@ from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth.account_data import (
@@ -15,12 +16,11 @@ from app.auth.account_data import (
     ExportNotYetAllowed,
     anonymize_account,
     create_data_export,
-    decode_export_artifact,
     export_status_payload,
     get_data_export,
     list_data_exports,
     next_export_allowed_at,
-    process_data_export,
+    open_export_artifact,
 )
 from app.domain_values import DataExportStatus
 from app.auth.middleware import (
@@ -193,6 +193,7 @@ def create_auth_router(
     # the friend service's own announcement, so there is one implementation of
     # "tell them their lists moved" rather than one per caller.
     on_friends_changed: Callable[[Iterable[str]], Awaitable[None]] | None = None,
+    on_export_requested: Callable[[], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -637,10 +638,8 @@ def create_auth_router(
         return {"ok": True, "revoked": revoked}
 
     @router.post("/data-exports", status_code=202)
-    async def request_data_export(
-        request: Request, background_tasks: BackgroundTasks
-    ):
-        """Create a durable export job and generate it after responding."""
+    async def request_data_export(request: Request):
+        """Write a durable export job; the export worker builds it (R-PRIV-03)."""
         user = await require_user(request)
         try:
             job = await create_data_export(session_factory, user_id=user.id)
@@ -657,9 +656,9 @@ def create_auth_router(
             ) from error
         except AccountDataError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
-        background_tasks.add_task(
-            process_data_export, session_factory, export_id=job.id
-        )
+        # The row is the queue; this only says "now" rather than "next sweep".
+        if on_export_requested is not None:
+            on_export_requested()
         return export_status_payload(job)
 
     @router.get("/data-exports")
@@ -709,10 +708,13 @@ def create_auth_router(
             raise HTTPException(status_code=410, detail="Export has expired.")
         if job.status != "ready" or job.artifact is None:
             raise HTTPException(status_code=409, detail="Export is not ready.")
-        # The stored document is already JSON; decoding it here and serving the
-        # bytes avoids parsing it only to re-serialize the same text.
+        # The stored document is already JSON, already gzip: a client that
+        # accepts gzip gets the row's bytes untouched, and one that does not
+        # gets them decompressed a chunk at a time. Never parsed, never held
+        # whole, and never compressed twice - the response middleware leaves
+        # a body that already names its encoding alone (R-PRIV-14).
         try:
-            document = decode_export_artifact(job)
+            document = open_export_artifact(job)
         except AccountDataError as error:
             # A row flagged ready whose document cannot be read is the server's
             # fault, not the caller's, and the remedy is a fresh export rather
@@ -724,15 +726,29 @@ def create_auth_router(
                 status_code=500,
                 detail="Export document could not be read. Request a new export.",
             ) from error
-        return Response(
-            content=document,
+        headers = {
+            "Content-Disposition": (
+                f'attachment; filename="sketchy-data-export-{job.id}.json"'
+            ),
+            "Cache-Control": "private, no-store",
+        }
+        if "gzip" in request.headers.get("accept-encoding", "").lower():
+            return Response(
+                content=document.stored,
+                media_type="application/json",
+                headers={
+                    **headers,
+                    "Content-Encoding": "gzip",
+                    "Content-Length": str(len(document.stored)),
+                    # The middleware adds this on the bodies it encodes; a
+                    # body it leaves alone has to say so itself.
+                    "Vary": "Accept-Encoding",
+                },
+            )
+        return StreamingResponse(
+            document.chunks,
             media_type="application/json",
-            headers={
-                "Content-Disposition": (
-                    f'attachment; filename="sketchy-data-export-{job.id}.json"'
-                ),
-                "Cache-Control": "private, no-store",
-            },
+            headers={**headers, "Content-Length": str(document.size)},
         )
 
     @router.delete("/account")

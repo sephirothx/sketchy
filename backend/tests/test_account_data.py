@@ -5,7 +5,7 @@ import gzip
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import pytest
@@ -14,9 +14,9 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
+from tests.dbfixtures import create_test_db
 import app.auth.account_data as account_data_module
 from app.services.avatars import set_avatar
 from tests.png_fixture import png_bytes
@@ -32,7 +32,6 @@ from app.auth.routes import create_auth_router
 from app.db.models import (
     AuditEvent,
     AuthSession,
-    Base,
     BugReport,
     DataExport,
     Friendship,
@@ -85,22 +84,28 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "account-data-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    # PostgreSQL when TEST_DATABASE_URL says so: the streamed build uses a
+    # server-side cursor there, which SQLite only imitates.
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
     deletion_hook = AsyncMock()
+    # The router only writes the row and wakes the worker; the tests play the
+    # worker themselves, so a build happens exactly where a test says it does.
+    wake = Mock()
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(
-        create_auth_router(users, factory, on_account_deleted=deletion_hook)
+        create_auth_router(
+            users, factory, on_account_deleted=deletion_hook, on_export_requested=wake
+        )
     )
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as http:
         http._test_deletion_hook = deletion_hook
+        http._test_factory = factory
+        http._test_wake = wake
         yield http, users, history, factory
     await engine.dispose()
 
@@ -282,8 +287,12 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
 
 
 async def request_ready_export(http: AsyncClient) -> tuple[dict, dict]:
+    http._test_wake.reset_mock()
     requested = await http.post("/api/auth/data-exports")
     assert requested.status_code == 202
+    assert requested.json()["status"] == DataExportStatus.PENDING.value
+    http._test_wake.assert_called_once_with()
+    assert await process_pending_data_exports(http._test_factory) == 1
     status = await http.get(f"/api/auth/data-exports/{requested.json()['id']}")
     assert status.status_code == 200
     assert status.json()["status"] == DataExportStatus.READY.value
@@ -1121,6 +1130,223 @@ async def test_a_corrupt_export_document_is_refused_not_served(env):
         job.artifact = gzip.compress(b"")
         with pytest.raises(AccountDataError, match="decoded to nothing"):
             decode_export_artifact(job)
+
+
+async def test_the_writer_produces_the_same_bytes_as_a_whole_document_dump():
+    """The streamed encoding is the stored encoding: byte for byte what
+    `json.dumps(document, separators=(",", ":"))` would have produced, so
+    nothing that reads a stored export can tell the build was paged."""
+    from app.auth.account_data import _ExportWriter
+
+    document = {
+        "schemaVersion": 2,
+        "empty": [],
+        "nested": {"a": None, "b": [1, {"c": "dé\u2603"}], "d": {}},
+        "rows": [{"x": 1}, {"x": 2}, {"x": 3}],
+        "last": "value",
+    }
+    writer = _ExportWriter(max_bytes=10_000)
+    writer.begin_object()
+    writer.field("schemaVersion", 2)
+    writer.key("empty")
+    writer.begin_array()
+    writer.end_array()
+    writer.field("nested", document["nested"])
+    writer.key("rows")
+    writer.begin_array()
+    for row in document["rows"]:
+        writer.value(row)
+    writer.end_array()
+    writer.field("last", "value")
+    writer.end_object()
+
+    expected = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    assert gzip.decompress(writer.finish()) == expected
+    assert writer.written == len(expected)
+
+
+async def test_the_writer_refuses_at_the_ceiling_rather_than_after_it():
+    """The ceiling is checked on every write, so a build that will be refused
+    stops at the byte that crosses it instead of finishing first."""
+    from app.auth.account_data import ExportTooLarge, _ExportWriter
+
+    writer = _ExportWriter(max_bytes=40)
+    writer.begin_object()
+    writer.key("rows")
+    writer.begin_array()
+    written = 0
+    with pytest.raises(ExportTooLarge) as refused:
+        for _ in range(1000):
+            writer.value({"x": 1})
+            written += 1
+    assert refused.value.limit == 40
+    # A handful of rows, not a thousand: it stopped as soon as it knew.
+    assert written < 10
+
+
+async def test_a_document_past_the_ceiling_is_refused_not_built(env, monkeypatch):
+    """Past `EXPORT_MAX_BYTES` the job fails as `too_large` with no document
+    stored, the status says so, and - like any failed build - it does not
+    count against the week (R-PRIV-13)."""
+    http, _, _, factory = env
+    await register(http, "Prolific")
+    monkeypatch.setenv("EXPORT_MAX_BYTES", "256")
+
+    requested = await http.post("/api/auth/data-exports")
+    assert requested.status_code == 202
+    assert await process_pending_data_exports(factory) == 0
+
+    status = await http.get(f"/api/auth/data-exports/{requested.json()['id']}")
+    assert status.json()["status"] == DataExportStatus.FAILED.value
+    assert status.json()["failureCode"] == "too_large"
+    assert status.json()["downloadUrl"] is None
+    async with factory() as session:
+        job = await session.get(DataExport, UUID(requested.json()["id"]))
+        assert job.artifact is None
+        assert job.artifact_encoding is None
+
+    download = await http.get(f"/api/auth/data-exports/{requested.json()['id']}/download")
+    assert download.status_code == 409
+
+    # An operator raising the ceiling is the remedy; the account is not
+    # locked out for a week by a build that stored nothing.
+    monkeypatch.delenv("EXPORT_MAX_BYTES")
+    again = await http.post("/api/auth/data-exports")
+    assert again.status_code == 202
+    assert await process_pending_data_exports(factory) == 1
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("", 64 * 1024 * 1024), ("abc", 64 * 1024 * 1024), ("0", 64 * 1024 * 1024),
+     ("-5", 64 * 1024 * 1024), ("1024", 1024)],
+)
+async def test_the_ceiling_is_read_from_the_environment(raw, expected):
+    from app.auth.account_data import export_max_bytes
+
+    assert export_max_bytes({"EXPORT_MAX_BYTES": raw}) == expected
+
+
+async def test_the_build_pages_its_history_without_changing_the_document(env, monkeypatch):
+    """More rows than one page in several sections, read two at a time:
+    every row arrives, in order, and the bytes are the ones a single fetch
+    would have produced."""
+    from app.auth.account_data import _ExportWriter, _write_export_artifact
+
+    http, _, _, factory = env
+    owner = await register(http, "Paged")
+    for _ in range(4):
+        assert (
+            await http.post(
+                "/api/auth/login", json={"username": "Paged", "password": PASSWORD}
+            )
+        ).status_code == 200
+    async with factory() as session:
+        async with session.begin():
+            for index in range(5):
+                session.add(
+                    UserBlock(
+                        blocker_user_id=UUID(owner["id"]),
+                        blocked_user_id=generate_uuid(),
+                        created_at=STARTED + timedelta(minutes=index),
+                    )
+                )
+                session.add(
+                    RoomPreset(
+                        id=generate_uuid(),
+                        owner_user_id=UUID(owner["id"]),
+                        name=f"Preset {index}",
+                        name_key=f"preset {index}",
+                        room_name=f"Room {index}",
+                        is_public=False,
+                        max_players=8,
+                        rounds=3,
+                        drawing_seconds=60,
+                        hint_mode="none",
+                        scoring_mode="default",
+                        spectators_see_prompt=False,
+                        hide_masked_prompt=False,
+                        allowed_tools=["brush"],
+                        color_mode="colorblind_safe",
+                        prompt_list_ids=[],
+                        created_at=STARTED + timedelta(minutes=index),
+                        updated_at=STARTED + timedelta(minutes=index),
+                    )
+                )
+
+    async def build() -> bytes:
+        async with factory() as session:
+            writer = _ExportWriter(max_bytes=10_000_000)
+            await _write_export_artifact(
+                session, writer, user_id=UUID(owner["id"]), generated_at=STARTED
+            )
+            return gzip.decompress(writer.finish())
+
+    whole = await build()
+    monkeypatch.setattr(account_data_module, "EXPORT_PAGE_SIZE", 2)
+    paged = await build()
+
+    assert paged == whole
+    document = json.loads(paged)
+    assert len(document["blocks"]) == 5
+    assert len(document["roomPresets"]) == 5
+    assert len(document["sessions"]) == 5
+    assert [preset["name"] for preset in document["roomPresets"]] == [
+        f"Preset {index}" for index in range(5)
+    ]
+
+
+async def test_the_download_is_the_stored_bytes_or_a_streamed_decode(env):
+    """A client that accepts gzip gets the row's bytes untouched, with their
+    own length; one that does not gets the document decompressed a chunk at a
+    time with the length the gzip trailer records. Either way what arrives is
+    the compact JSON the row holds (R-PRIV-14)."""
+    from app.auth.account_data import decode_export_artifact, open_export_artifact
+
+    http, _, _, factory = env
+    await register(http)
+    status, artifact = await request_ready_export(http)
+    expected = json.dumps(artifact, separators=(",", ":")).encode("utf-8")
+    async with factory() as session:
+        job = await session.get(DataExport, UUID(status["id"]))
+        stored = bytes(job.artifact)
+
+    passthrough = await http.get(
+        f"/api/auth/data-exports/{status['id']}/download",
+        headers={"Accept-Encoding": "gzip"},
+    )
+    assert passthrough.status_code == 200
+    assert passthrough.headers["content-encoding"] == "gzip"
+    assert int(passthrough.headers["content-length"]) == len(stored)
+    assert passthrough.headers["vary"] == "Accept-Encoding"
+    # httpx decodes the transfer; the raw body is the row, byte for byte.
+    assert gzip.decompress(stored) == expected
+    assert passthrough.content == expected
+
+    plain = await http.get(
+        f"/api/auth/data-exports/{status['id']}/download",
+        headers={"Accept-Encoding": "identity"},
+    )
+    assert plain.status_code == 200
+    assert "content-encoding" not in plain.headers
+    assert int(plain.headers["content-length"]) == len(plain.content)
+    assert plain.content == expected
+
+    async with factory() as session:
+        job = await session.get(DataExport, UUID(status["id"]))
+        opened = open_export_artifact(job)
+        assert opened.stored == stored
+        chunks = list(opened.chunks)
+        assert b"".join(chunks) == decode_export_artifact(job)
+        assert opened.size == len(expected)
+        # A stored document that is not gzip at all is refused before a byte
+        # of it is served, the same as a truncated one.
+        job.artifact = b"{" + b"x" * 40
+        with pytest.raises(AccountDataError, match="could not be decompressed"):
+            open_export_artifact(job)
+        job.artifact = gzip.compress(b"")
+        with pytest.raises(AccountDataError, match="decoded to nothing"):
+            open_export_artifact(job)
 
 
 async def test_deleting_an_account_names_the_friends_it_takes_something_from(env):

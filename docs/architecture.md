@@ -344,7 +344,7 @@ revocation applies uniformly without a shared signing secret.
 6. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
 7. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
 8. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
-9. Start the mail-delivery, runtime-metrics, and retention loops, and hand each one to `readiness_probe.supervise()`
+9. Start the mail-delivery, runtime-metrics, retention, and export-worker loops, and hand each one to `readiness_probe.supervise()`
 10. `mark_ready()` — `GET /api/ready` starts answering 200
 
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
@@ -352,7 +352,7 @@ revocation applies uniformly without a shared signing secret.
 `/api/health` is liveness and stays process-only: a restart cannot fix a database
 outage the replacement comes back into, so a dependency failure must not be reported
 as "restart me". It does carry each background loop's run state, failure streak, and
-time since its last success — every supervised loop (mail delivery, metrics flush, retention, presence broadcast, the loop-lag sampler) swallows every exception but cancellation
+time since its last success — every supervised loop (mail delivery, the export worker, metrics flush, retention, presence broadcast, the loop-lag sampler) swallows every exception but cancellation
 and carry on for ever, which keeps one bad row from stopping every later sweep and also
 makes a loop failing on every iteration indistinguishable from a working one. These
 counters are that distinction.
@@ -861,6 +861,47 @@ expires are one message with one identity rather than two.
 past `MAX_ATTEMPTS` — kept as `failed` with its last error, so a silent mail
 misconfiguration is visible rather than merely quiet.
 
+### Account exports
+
+The `data_exports` table is the queue, and the export worker
+([`backend/app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py))
+is the one place a document is built while the server runs (R-PRIV-03). A request writes
+a `pending` row in its own transaction, answers `202`, and wakes the loop; the loop
+claims one row at a time with `SELECT … FOR UPDATE`, flips it to `processing`, builds,
+and records — the same claim / work / record shape as mail, with the claim a status
+rather than a lease because a build is minutes rather than seconds and a second
+claimant would be a second build.
+
+**One at a time, on purpose.** Two accounts asking together used to be two builds at
+once, each inside its request's background task; now they are one build and then the
+other. That is the memory bound the single-worker model needs (N-01): a build's working
+set is every player's latency, so what matters is how much one build holds and that
+there is only ever one.
+
+**Written, not assembled.** The builder never holds the document. Each list section is
+read a page at a time (`session.stream` with `yield_per`) and every row is encoded and
+handed to the compressor as it arrives, so what the build holds is one page of rows plus
+the compressed output. The JSON bytes are counted as they go, and the build stops at the
+byte that crosses `EXPORT_MAX_BYTES`, failing the job as `too_large` with nothing stored
+(R-PRIV-13). The bytes are exactly the compact `json.dumps` of the same document, so
+nothing that reads a stored export can tell it was paged. Encoding and gzip run on the
+event loop in page-sized slices with a database `await` between them — the accepted
+cost, and the loop-lag sampler is where it would show.
+
+**Woken or swept.** The request's wake is cleared *before* a sweep rather than after, so
+a row written between the sweep's query and its return is built next rather than after
+the whole interval. The interval sweep (`EXPORT_SWEEP_SECONDS`, 60 s) is also the retry:
+a row left `processing` by a process that died is reclaimed once it is 15 minutes stale,
+and a row written by the operator's CLI is found the same way. A planned shutdown
+cancels the loop, and a build in flight hands its row back to `pending` in a short
+transaction so the next process starts it at once rather than after the stale window.
+
+The download goes the other way and costs the process nothing it can avoid: a client
+that accepts gzip gets the row's bytes as they are (the response middleware leaves a body
+that already names its encoding alone), and one that does not gets them decompressed a
+chunk at a time with the length the gzip trailer records. Owning session only, never a
+bearer URL (R-PRIV-14).
+
 ### Chat delivery and the database
 
 **A message is delivered without waiting for the database.** Two things used to sit
@@ -1217,6 +1258,7 @@ already public.
 | Repository interfaces over ORM models | Handlers stay testable and swappable | Relational-by-nature services take a session factory instead, on purpose |
 | Identity-based prompt seeding | Text is not identity; a reword must not orphan statistics | Redeploying different content under a seen ID fails startup |
 | Facts, not counters | Ratings/seasons/achievements are a later product decision | Derived rows (the daily projection) are disposable and rebuildable |
+| Deferred work runs in the one worker | Mail, exports, retention and metrics are loops the process supervises; a table is the queue | No broker and no second process to deploy or health-check; an export build is serialised by construction (N-12) |
 
 ---
 
@@ -1321,6 +1363,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/rooms.py`](../backend/app/rooms.py) | In-memory Player/Room domain model and RoomManager. |
 | [`app/server.py`](../backend/app/server.py) | Production Uvicorn runner that drains before closing live WebSockets. |
 | [`app/services/__init__.py`](../backend/app/services/__init__.py) | Application services shared by Socket.IO handlers. |
+| [`app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py) | Build account data exports one at a time from the durable job table. |
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | Operator check that every stored drawing is still readable. |
 | [`app/services/game_flow.py`](../backend/app/services/game_flow.py) | Shared workflows used by the domain-specific Socket.IO handlers. |
 | [`app/services/game_highlights.py`](../backend/app/services/game_highlights.py) | Pick the few moments from a finished game worth putting on the final screen. |
