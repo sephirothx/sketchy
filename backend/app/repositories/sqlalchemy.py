@@ -208,6 +208,26 @@ def _erased_turn_drawing(turn_id: UUID, game_id: UUID) -> TurnDrawing:
     )
 
 
+def _same_membership(
+    previous: PromptListRevision, entries: Sequence[PromptListEntryInput]
+) -> bool:
+    """Whether `entries` restate the revision exactly: identity, answer, aliases, order."""
+    items = sorted(previous.items, key=lambda item: item.position)
+    if len(items) != len(entries):
+        return False
+    for item, entry in zip(items, entries, strict=True):
+        version = item.prompt_version
+        if entry.concept_id is None or UUID(entry.concept_id) != version.concept_id:
+            return False
+        if version.canonical_answer != entry.answer:
+            return False
+        if tuple(sorted(link.alias.answer for link in version.version_aliases)) != tuple(
+            sorted(entry.aliases)
+        ):
+            return False
+    return True
+
+
 def _to_user_data(user: User) -> UserData:
     """Convert a database User entity to a public UserData DTO (without password_hash)."""
     return UserData(
@@ -2566,13 +2586,26 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     raise PromptListConflictError(
                         "This list changed since you opened it. Reload before saving."
                     )
+                metadata_changed = (
+                    prompt_list.name != name
+                    or prompt_list.description != description
+                    or prompt_list.visibility != visibility
+                )
                 next_version = prompt_list.version + 1
-                await self._write_owned_revision(
+                written = await self._write_owned_revision(
                     session,
                     prompt_list=prompt_list,
                     entries=entries,
                     version=next_version,
+                    force=metadata_changed,
                 )
+                if not written:
+                    # An exact restatement of what is saved: nothing to
+                    # version, nothing to rewrite (#613). The list, its
+                    # revision and its optimistic version are as they were.
+                    result = await self._owned_with_entries(session, owner_id, list_id)
+                    assert result is not None
+                    return result
                 prompt_list.name = name
                 prompt_list.description = description
                 if visibility == PromptListVisibility.UNLISTED.value:
@@ -2620,7 +2653,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         prompt_list: PromptList,
         entries: Sequence[PromptListEntryInput],
         version: int,
-    ) -> None:
+        force: bool = False,
+    ) -> bool:
+        """Write the next revision, or say that nothing about the content changed.
+
+        Returns False, having written nothing, when every entry names its
+        current concept with its current answer and aliases in the current
+        order - the exact save an editor makes by pressing Save twice. Such
+        a save used to add a complete revision and rewrite every display row
+        (#613). `force` writes the revision anyway, for a metadata edit that
+        R-LIST-05 still records as a revision.
+        """
         previous = await session.scalar(
             select(PromptListRevision)
             .where(
@@ -2645,6 +2688,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListMutationError(
                 "A prompt identity does not belong to the current list revision."
             )
+
+        if not force and previous is not None and _same_membership(previous, entries):
+            return False
 
         alias_map: dict[tuple[UUID, str], PromptAlias] = {}
         if current_by_concept:
@@ -2762,6 +2808,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             for position, (_, prompt_version, _) in enumerate(resolved)
         )
 
+        # The display rows (`prompts`, unique on text within a list). Only a
+        # row whose text or version actually changes is written; a row whose
+        # new text is another retained row's current text - two answers
+        # swapped - takes a temporary text first so the unique index never
+        # sees both at once. Before #613 every retained row went through the
+        # temporary text and back, two writes per unchanged prompt.
         transitional_rows = (
             await session.scalars(
                 select(Prompt).where(Prompt.prompt_list_id == prompt_list.id)
@@ -2771,25 +2823,54 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             row.concept_id: row for row in transitional_rows if row.concept_id
         }
         retained = {concept_id for concept_id, _, _ in resolved}
-        for row in transitional_rows:
-            if row.concept_id not in retained:
-                await session.delete(row)
-            else:
+        removed = [row for row in transitional_rows if row.concept_id not in retained]
+        for row in removed:
+            await session.delete(row)
+        if removed:
+            # Gone before anything new is inserted: the unit of work would
+            # otherwise insert first, and a new prompt may reuse the text.
+            await session.flush()
+        occupied = {
+            row.text
+            for row in transitional_rows
+            if row.concept_id in retained
+        }
+        new_texts = {
+            entry.answer
+            for concept_id, _, entry in resolved
+            if concept_id not in rows_by_concept
+        }
+        changing = [
+            (row, prompt_version, entry)
+            for concept_id, prompt_version, entry in resolved
+            if (row := rows_by_concept.get(concept_id)) is not None
+            and (row.text != entry.answer or row.prompt_version_id != prompt_version.id)
+        ]
+        colliding = [
+            row
+            for row, _, entry in changing
+            if (entry.answer != row.text and entry.answer in occupied)
+            or row.text in new_texts
+        ]
+        if colliding:
+            for row in colliding:
                 row.text = f"__editing__{row.id}"
-        await session.flush()
-        for concept_id, prompt_version, entry in resolved:
-            row = rows_by_concept.get(concept_id)
-            if row is None:
-                row = Prompt(
-                    id=generate_uuid(),
-                    prompt_list_id=prompt_list.id,
-                    concept_id=concept_id,
-                    prompt_version_id=prompt_version.id,
-                    text=entry.answer,
-                )
-                session.add(row)
+            await session.flush()
+        for row, prompt_version, entry in changing:
             row.prompt_version_id = prompt_version.id
             row.text = entry.answer
+        for concept_id, prompt_version, entry in resolved:
+            if concept_id not in rows_by_concept:
+                session.add(
+                    Prompt(
+                        id=generate_uuid(),
+                        prompt_list_id=prompt_list.id,
+                        concept_id=concept_id,
+                        prompt_version_id=prompt_version.id,
+                        text=entry.answer,
+                    )
+                )
+        return True
 
     async def get_prompts(self, prompt_list_id: str) -> list[str]:
         db_prompt_list_id = _optional_entity_id(prompt_list_id)
@@ -3590,16 +3671,34 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     # A committed-after-timeout retry of the same finished game
                     # is harmless. One transaction means a batch is all-or-none.
                     return
-                memberships = (
-                    await session.execute(
-                        select(
-                            PromptListRevisionItem.revision_id,
-                            PromptListRevisionItem.prompt_version_id,
-                        ).where(
-                            PromptListRevisionItem.revision_id.in_(revision_ids)
-                        )
+                # Only the memberships the game actually touched: a pinned
+                # revision may hold five hundred prompts and the game offered
+                # a few dozen, so the SELECT is filtered by the offered and
+                # picked versions rather than by revision alone (#613). The
+                # revision predicate stays, so nothing outside the game's
+                # pinned sources can be credited.
+                touched_version_ids = [
+                    version_id
+                    for key in {*usage.offers, *usage.picks}
+                    if (version_id := _optional_entity_id(key)) is not None
+                ]
+                memberships: list[tuple[UUID, UUID]] = []
+                for start in range(0, len(touched_version_ids), 500):
+                    memberships.extend(
+                        (
+                            await session.execute(
+                                select(
+                                    PromptListRevisionItem.revision_id,
+                                    PromptListRevisionItem.prompt_version_id,
+                                ).where(
+                                    PromptListRevisionItem.revision_id.in_(revision_ids),
+                                    PromptListRevisionItem.prompt_version_id.in_(
+                                        touched_version_ids[start : start + 500]
+                                    ),
+                                )
+                            )
+                        ).all()
                     )
-                ).all()
                 facts: list[PromptUsageFact] = []
                 for revision_id, prompt_version_id in memberships:
                     version_key = _public_id(prompt_version_id)

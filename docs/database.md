@@ -1217,7 +1217,13 @@ The current *display* row for one prompt concept in one list.
 `(prompt_list_id, text)`.
 
 **Prompt-list counts are derived from membership on read**, so adding or removing a
-prompt cannot leave a cached total out of sync. During the transition to rebuildable
+prompt cannot leave a cached total out of sync. An edit rewrites only the display rows
+whose text or version actually changed; a row whose new text is another retained row's
+current text (two answers swapped, or a new prompt reusing a changed one's old text) takes
+a temporary text first, so the unique index never sees both. A save that restates the
+current revision exactly — same concepts, answers, aliases and order, same name,
+description and visibility — writes nothing at all and keeps the list's version; a
+metadata-only edit still creates the revision R-LIST-05 requires (#613). During the transition to rebuildable
 projections, this legacy counter row is linked by concept and updated in place when a
 new prompt version rewords it, preserving its existing statistics; old revisions keep
 referencing the old wording.
@@ -1232,9 +1238,12 @@ idempotency triple is the identity, so it is the key.
 
 **Flow.** Each finished game appends one idempotent fact per used prompt/version and
 pinned list revision, with the authoritative occurrence time plus scoring and hint modes
-(`batch_id` is the game's UUIDv7, which is what makes a retry idempotent). Stats are
-derived by **stable prompt concept**, so a later wording revision keeps its history
-without matching on display text.
+(`batch_id` is the game's UUIDv7, which is what makes a retry idempotent). The writer
+reads only the memberships the game touched — the pinned revisions intersected with the
+offered and picked versions, in chunks of 500 — rather than every membership of every
+pinned revision (#613); the revision predicate stays, so nothing outside the game's
+sources can be credited. Stats are derived by **stable prompt concept**, so a later
+wording revision keeps its history without matching on display text.
 
 The indexes support time-window and rule filters; the Prompt stats page offers all-time,
 30-day, and 90-day windows plus scoring/hint segmentation, and the minimum-guesser

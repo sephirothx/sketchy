@@ -4,7 +4,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.models import (
     PromptListRevision,
@@ -727,5 +727,211 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
             assert report.prompt_version_id == UUID(reported.prompt_version_id)
             assert report.prompt_list_id is None, "SET NULL: the list row is gone"
             assert report.list_name_snapshot == "Reported"
+    finally:
+        await engine.dispose()
+
+
+# --- #613: an unchanged save changes nothing, an edit rewrites only what moved
+
+
+def _capture(engine) -> list[str]:
+    from sqlalchemy import event
+
+    statements: list[str] = []
+
+    def before(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", before)
+    return statements
+
+
+def _display_updates(statements: list[str]) -> list[str]:
+    return [s for s in statements if s.lstrip().startswith("UPDATE prompts")]
+
+
+async def _big_list(repo, owner_id: str, size: int = 500):
+    return await repo.create_owned(
+        owner_id,
+        name="Big",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=tuple(PromptListEntryInput(answer=f"prompt {index:03d}") for index in range(size)),
+    )
+
+
+def _restated(saved) -> tuple[PromptListEntryInput, ...]:
+    return tuple(
+        PromptListEntryInput(answer=e.answer, concept_id=e.concept_id, aliases=e.aliases)
+        for e in saved.prompts
+    )
+
+
+async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Same",
+            description="d",
+            language="en",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="otter", aliases=("sea otter",)),
+                PromptListEntryInput(answer="heron"),
+            ),
+        )
+        statements = _capture(engine)
+        same = await repo.update_owned(
+            owner_id,
+            created.id,
+            expected_version=1,
+            name="Same",
+            description="d",
+            visibility="private",
+            prompts=_restated(created),
+        )
+        assert same.version == 1 and same.prompts == created.prompts
+        assert not [s for s in statements if s.lstrip().startswith(("INSERT", "UPDATE", "DELETE"))]
+        async with factory() as session:
+            assert (
+                await session.scalar(
+                    select(func.count(PromptListRevision.id)).where(
+                        PromptListRevision.prompt_list_id == UUID(created.id)
+                    )
+                )
+                == 1
+            )
+        # Optimistic concurrency still applies to a restatement.
+        with pytest.raises(PromptListConflictError):
+            await repo.update_owned(
+                owner_id, created.id, expected_version=7, name="Same", description="d",
+                visibility="private", prompts=_restated(created),
+            )
+        # A metadata-only edit is still an edit (R-LIST-05): a revision, a version.
+        renamed = await repo.update_owned(
+            owner_id, created.id, expected_version=1, name="Renamed", description="d",
+            visibility="private", prompts=_restated(created),
+        )
+        assert renamed.version == 2 and renamed.name == "Renamed"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_one_answer_edit_in_a_big_list_rewrites_one_display_row():
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await _big_list(repo, owner_id)
+        entries = list(_restated(created))
+        entries[250] = PromptListEntryInput(answer="prompt two-fifty", concept_id=entries[250].concept_id)
+        statements = _capture(engine)
+
+        updated = await repo.update_owned(
+            owner_id, created.id, expected_version=1, name="Big", description="",
+            visibility="private", prompts=tuple(entries),
+        )
+
+        assert updated.version == 2
+        assert updated.prompts[250].answer == "prompt two-fifty"
+        assert updated.prompts[250].concept_id == created.prompts[250].concept_id
+        updates = _display_updates(statements)
+        assert len(updates) == 1, updates
+        assert not any("__editing__" in s for s in statements), "no swap, no temporary text"
+    finally:
+        await engine.dispose()
+
+
+async def test_swapped_answers_and_alias_only_edits_still_land():
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id, name="Swap", description="", language="en", visibility="private",
+            prompts=(PromptListEntryInput(answer="one"), PromptListEntryInput(answer="two"),
+                     PromptListEntryInput(answer="three")),
+        )
+        one, two, three = created.prompts
+        swapped = await repo.update_owned(
+            owner_id, created.id, expected_version=1, name="Swap", description="",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="two", concept_id=one.concept_id),
+                PromptListEntryInput(answer="one", concept_id=two.concept_id),
+                PromptListEntryInput(answer="three", concept_id=three.concept_id),
+            ),
+        )
+        assert [e.answer for e in swapped.prompts] == ["two", "one", "three"]
+        assert swapped.prompts[0].concept_id == one.concept_id
+        assert await repo.get_prompts(created.id) == ["one", "three", "two"]
+
+        aliased = await repo.update_owned(
+            owner_id, created.id, expected_version=2, name="Swap", description="",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="two", concept_id=one.concept_id, aliases=("deux",)),
+                PromptListEntryInput(answer="one", concept_id=two.concept_id),
+                PromptListEntryInput(answer="three", concept_id=three.concept_id),
+            ),
+        )
+        assert aliased.version == 3 and aliased.prompts[0].aliases == ("deux",)
+        # A new prompt taking a removed prompt's text, and one taking a
+        # changed prompt's old text, both land.
+        reused = await repo.update_owned(
+            owner_id, created.id, expected_version=3, name="Swap", description="",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="four", concept_id=one.concept_id),
+                PromptListEntryInput(answer="two"),
+                PromptListEntryInput(answer="three", concept_id=three.concept_id),
+                PromptListEntryInput(answer="one"),
+            ),
+        )
+        assert [e.answer for e in reused.prompts] == ["four", "two", "three", "one"]
+        assert await repo.get_prompts(created.id) == ["four", "one", "three", "two"]
+    finally:
+        await engine.dispose()
+
+
+async def test_usage_reads_only_the_memberships_the_game_touched():
+    from datetime import datetime, timezone
+
+    from app.db.models import PromptUsageFact
+    from app.repositories.interfaces import PromptPickTotals, PromptUsage
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await _big_list(repo, owner_id, size=200)
+        revision_id = await _current_revision_id(factory, created.id)
+        offered = created.prompts[3].prompt_version_id
+        picked = created.prompts[7].prompt_version_id
+        usage = PromptUsage(
+            batch_id=str(generate_uuid()),
+            occurred_at=datetime.now(timezone.utc),
+            scoring_mode="default",
+            hint_mode="none",
+            offers={offered: 2, picked: 1},
+            picks={picked: PromptPickTotals(picks=1, correct_guesses=1, total_guessers=3)},
+        )
+        statements = _capture(engine)
+
+        await repo.record_prompt_usage([revision_id], usage)
+
+        membership_reads = [
+            s for s in statements
+            if s.lstrip().startswith("SELECT") and "prompt_list_revision_items" in s
+        ]
+        assert membership_reads and all(
+            "prompt_list_revision_items.prompt_version_id IN" in s for s in membership_reads
+        )
+        async with factory() as session:
+            facts = (await session.scalars(select(PromptUsageFact))).all()
+        assert {str(f.prompt_version_id).replace("-", "") for f in facts} == {
+            offered.replace("-", ""), picked.replace("-", "")
+        }
+        assert sum(f.offer_count for f in facts) == 3 and sum(f.pick_count for f in facts) == 1
     finally:
         await engine.dispose()
