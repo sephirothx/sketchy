@@ -40,6 +40,12 @@ from app.logging_config import configure_logging
 from app.db.models import RuntimeEvent, RuntimeStatsDaily
 from app.domain_values import RuntimeEventType
 from app.services.readiness import LoopHealth
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    sweep_budget_from_env,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -241,8 +247,9 @@ async def purge_expired_events(
     *,
     days: int | None = None,
     now: datetime | None = None,
-) -> int:
-    """Drop raw rows past the retention window.
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Drop raw rows past the retention window, a committed batch at a time.
 
     The aggregates they were rolled into are permanent, so what is lost is the
     ability to ask about one particular minute a month ago - not the trend.
@@ -252,12 +259,19 @@ async def purge_expired_events(
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(
         days=days if days is not None else retention_days()
     )
-    async with session_factory() as session:
-        async with session.begin():
-            result = await session.execute(
-                delete(RuntimeEvent).where(RuntimeEvent.occurred_at < cutoff)
-            )
-            return int(result.rowcount or 0)
+    return await delete_in_batches(
+        session_factory,
+        name="runtime_events",
+        candidates=select(RuntimeEvent.id)
+        .where(RuntimeEvent.occurred_at < cutoff)
+        .order_by(RuntimeEvent.occurred_at, RuntimeEvent.id),
+        delete_for=lambda ids: delete(RuntimeEvent).where(RuntimeEvent.id.in_(ids)),
+        budget=budget or sweep_budget_from_env(),
+        overdue=select(func.min(RuntimeEvent.occurred_at)).where(
+            RuntimeEvent.occurred_at < cutoff
+        ),
+        now=cutoff,
+    )
 
 
 async def run_metrics_loop(

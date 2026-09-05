@@ -14,10 +14,16 @@ import secrets
 from uuid import UUID
 
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import AuthToken
 from app.domain_values import AuthTokenPurpose
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    sweep_budget_from_env,
+)
 
 
 TOKEN_BYTES = 32
@@ -166,11 +172,25 @@ async def token_is_usable(
 
 
 async def purge_expired_tokens(
-    session: AsyncSession, *, now: datetime | None = None
-) -> int:
-    """Drop tokens nobody can use any more."""
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Drop tokens nobody can use any more, from the hourly retention sweep.
+
+    Consumption deletes a token on presentation, so this only ever finds
+    links nobody clicked; it existed before without anything calling it.
+    """
     checked_at = now or datetime.now(timezone.utc)
-    result = await session.execute(
-        delete(AuthToken).where(AuthToken.expires_at <= checked_at)
+    return await delete_in_batches(
+        session_factory,
+        name="auth_tokens",
+        candidates=select(AuthToken.token_hash)
+        .where(AuthToken.expires_at <= checked_at)
+        .order_by(AuthToken.expires_at, AuthToken.token_hash),
+        delete_for=lambda hashes: delete(AuthToken).where(
+            AuthToken.token_hash.in_(hashes)
+        ),
+        budget=budget or sweep_budget_from_env(),
     )
-    return int(result.rowcount or 0)

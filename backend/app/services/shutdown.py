@@ -13,6 +13,13 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    sweep_budget_from_env,
+)
+
 from app.db.models import PlannedShutdownAbandonment
 from app.rooms import Room, RoomManager
 
@@ -389,15 +396,19 @@ async def purge_expired_shutdown_abandonments(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     now: datetime | None = None,
-) -> int:
-    """Enforce the 90-day diagnostic-retention boundary at startup."""
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Enforce the 90-day diagnostic-retention boundary, from the hourly sweep."""
 
     cutoff = (now or datetime.now(timezone.utc)) - ABANDONMENT_RETENTION
-    async with session_factory() as session:
-        async with session.begin():
-            result = await session.execute(
-                delete(PlannedShutdownAbandonment).where(
-                    PlannedShutdownAbandonment.observed_at <= cutoff
-                )
-            )
-            return int(result.rowcount or 0)
+    return await delete_in_batches(
+        session_factory,
+        name="shutdown_abandonments",
+        candidates=select(PlannedShutdownAbandonment.id)
+        .where(PlannedShutdownAbandonment.observed_at <= cutoff)
+        .order_by(PlannedShutdownAbandonment.observed_at, PlannedShutdownAbandonment.id),
+        delete_for=lambda ids: delete(PlannedShutdownAbandonment).where(
+            PlannedShutdownAbandonment.id.in_(ids)
+        ),
+        budget=budget or sweep_budget_from_env(),
+    )

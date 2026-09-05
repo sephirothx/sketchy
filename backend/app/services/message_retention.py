@@ -7,16 +7,21 @@ from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.erasure import erased_identity_ids
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    sweep_budget_from_env,
+)
 from app.db.models import RoomMessage
 from app.identifiers import generate_uuid7
 
 
 MESSAGE_RETENTION = timedelta(days=30)
-CLEANUP_INTERVAL = timedelta(hours=1)
 # Deep enough to ride out a slow write without ever being the reason a room
 # goes quiet, shallow enough that a database that has stopped answering costs
 # bounded memory rather than growing until the process dies.
@@ -32,19 +37,29 @@ async def purge_expired_room_messages(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     now: datetime | None = None,
-) -> int:
+    budget: SweepBudget | None = None,
+) -> SweepReport:
     """Delete ordinary messages after their bounded retention window.
 
     Report evidence is a separate copied row, so this operation can never
-    erase content already selected for moderator review.
+    erase content already selected for moderator review. Batched and budgeted
+    (`services.sweeps`): oldest expiry first, one committed batch at a time,
+    never inside anybody's insert.
     """
     cutoff = now or datetime.now(timezone.utc)
-    async with session_factory() as session:
-        async with session.begin():
-            result = await session.execute(
-                delete(RoomMessage).where(RoomMessage.expires_at <= cutoff)
-            )
-            return int(result.rowcount or 0)
+    return await delete_in_batches(
+        session_factory,
+        name="room_messages",
+        candidates=select(RoomMessage.id)
+        .where(RoomMessage.expires_at <= cutoff)
+        .order_by(RoomMessage.expires_at, RoomMessage.id),
+        delete_for=lambda ids: delete(RoomMessage).where(RoomMessage.id.in_(ids)),
+        budget=budget or sweep_budget_from_env(),
+        overdue=select(func.min(RoomMessage.expires_at)).where(
+            RoomMessage.expires_at <= cutoff
+        ),
+        now=cutoff,
+    )
 
 
 class MessageRetentionService:
@@ -71,7 +86,6 @@ class MessageRetentionService:
         batch_size: int = WRITE_BATCH,
     ) -> None:
         self._session_factory = session_factory
-        self._last_cleanup_at: datetime | None = None
         self._queue: asyncio.Queue[RoomMessage] = asyncio.Queue(maxsize=queue_depth)
         self._batch_size = batch_size
         self._worker: asyncio.Task[None] | None = None
@@ -240,7 +254,9 @@ class MessageRetentionService:
                     self._queue.task_done()
 
     async def _write(self, batch: list[RoomMessage]) -> None:
-        now = batch[-1].created_at
+        """Insert one batch. Only insert: the expiry purge is the retention
+        sweep's, on its own schedule and budget, so a purge backlog can never
+        be the reason a room's lines are dropped (#550)."""
         async with self._session_factory() as session:
             async with session.begin():
                 # The erasure barrier (app.auth.erasure): a line was composed
@@ -259,14 +275,6 @@ class MessageRetentionService:
                         len(batch) - len(kept),
                     )
                 session.add_all(kept)
-                if (
-                    self._last_cleanup_at is None
-                    or now - self._last_cleanup_at >= CLEANUP_INTERVAL
-                ):
-                    await session.execute(
-                        delete(RoomMessage).where(RoomMessage.expires_at <= now)
-                    )
-                    self._last_cleanup_at = now
 
     async def drain(self) -> None:
         """Wait for everything taken so far to have been dealt with."""

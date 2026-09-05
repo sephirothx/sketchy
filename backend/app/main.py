@@ -51,12 +51,9 @@ from app.deployment import (
 from app.handlers import register_all_handlers
 from app.logging_config import configure_logging
 from app.auth.retention import (
-    purge_expired_auth_sessions,
-    purge_expired_data_exports,
     start_retention_loop,
     stop_retention_loop,
 )
-from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.data_export_worker import DataExportWorker, stop_export_worker
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
@@ -75,14 +72,12 @@ from app.client_config import client_config
 from app.client_routes import is_client_route
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
-from app.services.message_retention import purge_expired_room_messages
 from app.services.room_presets import RoomPresetService
 from app.services.config_store import read_prefixed
 from app.services.runtime_settings import CONFIG_PREFIX
 from app.services.tunables import build_runtime_settings
 from app.services.shutdown import (
     ShutdownCoordinator,
-    purge_expired_shutdown_abandonments,
 )
 
 
@@ -442,13 +437,10 @@ async def lifespan(_app: FastAPI):
         await init_db()
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
-        await purge_expired_room_messages(async_session_factory)
-        # After the purge, so nothing expired is handed to the first arrival.
+        # The restore reads only unexpired lines; every purge is the retention
+        # sweep's, whose first tick runs as soon as the loop starts below,
+        # bounded - so a backlog left by a long outage cannot delay startup.
         await restore_lobby_backlog(handler_context.lobby_chat, async_session_factory)
-        await purge_expired_outbox_entries(async_session_factory)
-        await purge_expired_auth_sessions(async_session_factory)
-        await purge_expired_data_exports(async_session_factory)
-        await purge_expired_shutdown_abandonments(async_session_factory)
         await seed_prompt_lists(prompt_list_repo)
         await adopt_stored_settings()
         # One worker owns everything (#382), so the outbox needs no scheduler

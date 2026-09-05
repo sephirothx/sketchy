@@ -16,6 +16,7 @@ from sqlalchemy import delete, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.sweeps import DEFAULT_SECONDS_BUDGET, SweepBudget, SweepReport, delete_in_batches
 from app.db.models import AppConfig, AuthRateLimitBucket
 
 
@@ -173,35 +174,28 @@ async def cleanup_expired_rate_limit_buckets(
     *,
     before: datetime | None = None,
     limit: int = 1000,
-) -> int:
-    """Remove one bounded batch so distinct historic addresses cannot accumulate."""
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Remove expired buckets so distinct historic addresses cannot accumulate.
+
+    Opportunistically one batch every so many checks, as before, and from
+    the hourly retention sweep with its budget, so a quiet server still
+    catches up (#550).
+    """
     if limit < 1:
-        return 0
+        return SweepReport(0, name="auth_rate_limit_buckets")
     cutoff = before or datetime.now(timezone.utc)
-    async with session_factory() as session:
-        async with session.begin():
-            keys = (
-                await session.execute(
-                    select(
-                        AuthRateLimitBucket.scope,
-                        AuthRateLimitBucket.key_hash,
-                    )
-                    .where(AuthRateLimitBucket.window_expires_at <= cutoff)
-                    .order_by(AuthRateLimitBucket.window_expires_at)
-                    .limit(limit)
-                )
-            ).all()
-            if not keys:
-                return 0
-            await session.execute(
-                delete(AuthRateLimitBucket).where(
-                    tuple_(
-                        AuthRateLimitBucket.scope,
-                        AuthRateLimitBucket.key_hash,
-                    ).in_(keys)
-                )
-            )
-            return len(keys)
+    resolved = budget or SweepBudget(rows=limit, batch=limit, seconds=DEFAULT_SECONDS_BUDGET)
+    key = tuple_(AuthRateLimitBucket.scope, AuthRateLimitBucket.key_hash)
+    return await delete_in_batches(
+        session_factory,
+        name="auth_rate_limit_buckets",
+        candidates=select(AuthRateLimitBucket.scope, AuthRateLimitBucket.key_hash)
+        .where(AuthRateLimitBucket.window_expires_at <= cutoff)
+        .order_by(AuthRateLimitBucket.window_expires_at, AuthRateLimitBucket.key_hash),
+        delete_for=lambda keys: delete(AuthRateLimitBucket).where(key.in_(keys)),
+        budget=resolved,
+    )
 
 
 def bucket_is_full(

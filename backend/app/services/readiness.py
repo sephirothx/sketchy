@@ -51,6 +51,10 @@ class LoopHealth:
     last_failure: float | None = None
     consecutive_failures: int = 0
     total_failures: int = 0
+    # What the loop's last iteration did, in the loop's own terms - the
+    # retention sweep puts each table's rows, batches, duration and backlog
+    # here - so the operations page can say more than "ran".
+    detail: dict[str, object] = field(default_factory=dict)
 
     def record_success(self) -> None:
         self.last_success = time.monotonic()
@@ -72,6 +76,7 @@ class LoopHealth:
             "seconds_since_failure": (
                 None if self.last_failure is None else round(now - self.last_failure, 3)
             ),
+            **({"detail": dict(self.detail)} if self.detail else {}),
         }
 
 

@@ -12,6 +12,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import RoomCodeReservation
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    sweep_budget_from_env,
+)
 
 
 ROOM_CODE_ALPHABET = string.ascii_uppercase + string.digits
@@ -140,14 +146,35 @@ class RoomCodeService:
         return retired_until is not None and retired_until > now
 
     async def purge_expired(self) -> int:
-        now = datetime.now(timezone.utc)
-        async with self._session_factory() as session:
-            async with session.begin():
-                result = await session.execute(
-                    delete(RoomCodeReservation).where(
-                        RoomCodeReservation.kind == "ephemeral",
-                        RoomCodeReservation.retired_until.is_not(None),
-                        RoomCodeReservation.retired_until <= now,
-                    )
-                )
-        return result.rowcount or 0
+        """Free codes whose retirement has lapsed, on a collision."""
+        return await purge_retired_room_codes(self._session_factory)
+
+
+async def purge_retired_room_codes(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Free ephemeral codes whose retirement lapsed, from the hourly sweep.
+
+    Before #550 this ran only when an allocation collided with a retired
+    code, so a quiet deployment kept every code it had ever retired.
+    Persistent codes never enter the pool again and are never selected.
+    """
+    checked_at = now or datetime.now(timezone.utc)
+    return await delete_in_batches(
+        session_factory,
+        name="room_code_reservations",
+        candidates=select(RoomCodeReservation.code)
+        .where(
+            RoomCodeReservation.kind == "ephemeral",
+            RoomCodeReservation.retired_until.is_not(None),
+            RoomCodeReservation.retired_until <= checked_at,
+        )
+        .order_by(RoomCodeReservation.retired_until, RoomCodeReservation.code),
+        delete_for=lambda codes: delete(RoomCodeReservation).where(
+            RoomCodeReservation.code.in_(codes)
+        ),
+        budget=budget or sweep_budget_from_env(),
+    )

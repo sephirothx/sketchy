@@ -539,7 +539,10 @@ process. These deployment settings can be tuned without code changes:
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
-| `RETENTION_SWEEP_SECONDS` | `3600` | How often stale guest accounts are purged |
+| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, room codes, retired lists, guests |
+| `RETENTION_SWEEP_ROW_BUDGET` | `5000` | Rows one sweep may delete per run; a run that spends it comes back after 5 s rather than an hour |
+| `RETENTION_SWEEP_BATCH_ROWS` | `500` | Rows per committed delete batch inside a sweep |
+| `RETENTION_SWEEP_SECONDS_BUDGET` | `30` | Seconds one sweep may spend per run |
 | `EXPORT_SWEEP_SECONDS` | `60` | How often the export worker looks for jobs nobody woke it for, and reclaims ones a crash left behind |
 | `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
@@ -661,7 +664,12 @@ ordinary profile writes. The default policy removes guests with no completed
 game after 30 inactive days and guests with history after 365 inactive days;
 history rows survive through frozen presentation snapshots. Cleanup is bounded
 to 500 accounts per run, previews by default, and records aggregate audit
-evidence when applied. The same hourly sweep reclaims deleted prompt lists:
+evidence when applied. Every sweep in that loop — messages, outbox mail,
+one-shot tokens, sessions, exports, shutdown abandonments, rate-limit
+buckets, retired room codes, retired prompt lists and guests — deletes in
+committed batches within a per-run row and time budget, reports what it
+removed and how far behind it is under `retention_sweep` in `/api/health`,
+and cannot stop the sweeps after it by failing. The same hourly sweep reclaims deleted prompt lists:
 deleting a list takes it out of reach at once, but a revision a finished game
 pinned stays for that game's history, and the rest — unpinned revisions, the
 list row, prompts nothing names any more — is removed a day later, once any
@@ -1296,6 +1304,10 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 
 # Backend performance micro-benchmarks
 backend/.venv/bin/python benchmarks/backend.py
+
+# PostgreSQL churn under the bounded retention sweep (disposable database only)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/retention_churn.py --rows 100000 --row-budget 5000
 backend/.venv/bin/python benchmarks/live_drawing.py
 backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 
@@ -1342,6 +1354,16 @@ the lobby's four-second room-list poll, it fast-forwards the page's own clock
 with Playwright's `page.clock` rather than spending the time. That keeps the
 interval a production constant instead of something bent for the tests, and it
 is the tool to reach for before making a timing value configurable.
+
+The retention churn benchmark inserts a backlog of expired messages into a
+disposable PostgreSQL database and runs the bounded purge until it is clean,
+sampling dead and live tuples, relation size and WAL bytes after every run.
+On local PostgreSQL 17 on 2026-09-06, 100,000 expired rows took 20 runs of
+5,000 (ten committed batches of 500 each), about 25 ms and 290 KiB of WAL
+per run; the 92 MB relation did not shrink until VACUUM, which took it to
+64 MB. `pg_stat_user_tables` counters lag the deletes by a stats-collector
+interval, so read the tuple columns as trend, not as the state of one run.
+It is a baseline for any table storage decision, not a threshold.
 
 The user-stat benchmark seeds deterministic finished-game facts, rebuilds the
 daily projection (reporting the rebuild's wall time and peak allocation), and

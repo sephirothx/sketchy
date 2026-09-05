@@ -295,6 +295,17 @@ async def _one_iteration(coroutine) -> None:
         await task
 
 
+def _only_the_worker(monkeypatch, module, worker: str) -> None:
+    """Narrow the retention loop's registry to the sweep that wraps `worker`."""
+    if not hasattr(module, "retention_sweeps"):
+        return
+    monkeypatch.setattr(
+        module,
+        "retention_sweeps",
+        lambda: (module.Sweep("anonymous_accounts", module._purge_guests),),
+    )
+
+
 @pytest.mark.parametrize(
     ("module_name", "worker", "runner", "value"),
     [
@@ -323,19 +334,10 @@ async def test_every_loop_records_the_sweep_it_just_did(
         return value
 
     monkeypatch.setattr(module, worker, succeed)
-    # The retention loop performs four sweeps per iteration; the parametrized
-    # worker is the one under test, and its siblings are stubbed so this stays
-    # a test about health recording rather than about a database.
-    async def swept_nothing(*_args, **_kwargs):
-        return 0
-
-    for sibling in (
-        "purge_expired_auth_sessions",
-        "purge_expired_data_exports",
-        "reclaim_retired_prompt_lists",
-    ):
-        if hasattr(module, sibling):
-            monkeypatch.setattr(module, sibling, swept_nothing)
+    # The retention loop runs every registered sweep per iteration; the
+    # parametrized worker is the one under test, so the registry is narrowed
+    # to it and this stays a test about health recording, not a database.
+    _only_the_worker(monkeypatch, module, worker)
     await _one_iteration(
         getattr(module, runner)(None, interval_seconds=1, health=health)
     )
@@ -362,6 +364,7 @@ async def test_a_sweep_that_raises_is_counted_rather_than_only_logged(
         raise RuntimeError("the sweep broke")
 
     monkeypatch.setattr(module, worker, fail)
+    _only_the_worker(monkeypatch, module, worker)
     await _one_iteration(
         getattr(module, runner)(None, interval_seconds=1, health=health)
     )

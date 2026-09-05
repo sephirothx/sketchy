@@ -29,9 +29,15 @@ from email.utils import parseaddr
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    sweep_budget_from_env,
+)
 from app.db.models import EmailOutboxEntry, generate_uuid
 from app.domain_values import EmailOutboxState, EmailTemplate
 
@@ -488,7 +494,8 @@ async def purge_expired_outbox_entries(
     *,
     now: datetime | None = None,
     batch_size: int = PURGE_BATCH_SIZE,
-) -> int:
+    budget: SweepBudget | None = None,
+) -> SweepReport:
     """Remove delivered and given-up rows past retention, in bounded batches.
 
     Only terminal rows: a pending row is still owed a delivery attempt or a
@@ -496,40 +503,42 @@ async def purge_expired_outbox_entries(
     Sent rows age from the moment they were sent; failed rows have no
     terminal timestamp of their own, so they age from creation - which by
     then trails the give-up by at most the backoff ladder, hours against a
-    thirty-day window.
+    thirty-day window. The two branches are written out rather than folded
+    into one `coalesce`, so each can use an index on its own column; the
+    meaning is the one `coalesce(sent_at, created_at) <= cutoff` had.
     """
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     cutoff = (now or datetime.now(timezone.utc)) - OUTBOX_RETENTION
-    removed = 0
-    while True:
-        async with session_factory() as session:
-            async with session.begin():
-                expired = (
-                    await session.scalars(
-                        select(EmailOutboxEntry.id)
-                        .where(
-                            EmailOutboxEntry.state.in_(
-                                (
-                                    EmailOutboxState.SENT.value,
-                                    EmailOutboxState.FAILED.value,
-                                )
-                            ),
-                            func.coalesce(
-                                EmailOutboxEntry.sent_at,
-                                EmailOutboxEntry.created_at,
-                            )
-                            <= cutoff,
-                        )
-                        .limit(batch_size)
-                    )
-                ).all()
-                if expired:
-                    await session.execute(
-                        delete(EmailOutboxEntry).where(
-                            EmailOutboxEntry.id.in_(expired)
-                        )
-                    )
-        removed += len(expired)
-        if len(expired) < batch_size:
-            return removed
+    expired = or_(
+        and_(
+            EmailOutboxEntry.state == EmailOutboxState.SENT.value,
+            EmailOutboxEntry.sent_at <= cutoff,
+        ),
+        and_(
+            EmailOutboxEntry.state == EmailOutboxState.FAILED.value,
+            EmailOutboxEntry.created_at <= cutoff,
+        ),
+    )
+    resolved = budget or sweep_budget_from_env()
+    return await delete_in_batches(
+        session_factory,
+        name="email_outbox",
+        candidates=select(EmailOutboxEntry.id)
+        .where(expired)
+        .order_by(
+            func.coalesce(EmailOutboxEntry.sent_at, EmailOutboxEntry.created_at),
+            EmailOutboxEntry.id,
+        ),
+        delete_for=lambda ids: delete(EmailOutboxEntry).where(
+            EmailOutboxEntry.id.in_(ids)
+        ),
+        budget=SweepBudget(
+            rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
+        ),
+        overdue=select(
+            func.min(func.coalesce(EmailOutboxEntry.sent_at, EmailOutboxEntry.created_at))
+        ).where(expired),
+        now=cutoff,
+    )
+

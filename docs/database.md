@@ -1317,25 +1317,51 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Data | Retention | Mechanism |
 | --- | --- | --- |
 | Friendships, including refusals | Indefinite | Deleted with either account (CASCADE), and on a block |
-| Retained messages, room and lobby alike | 30 days | `expires_at`; startup purge + bounded hourly cleanup. The lobby's live backlog (50 lines) is memory, re-seeded from these rows at startup |
-| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | Startup purge + hourly purge in the delivery sweep |
+| Retained messages, room and lobby alike | 30 days | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup |
+| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) |
+| Expired one-shot tokens | Until expiry; consumed on presentation | Hourly retention sweep (nothing scheduled it before #550) |
 | Pinned report evidence | Protected report policy (outlives the message) | Copied on report submission |
-| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged |
+| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged hourly from the metrics loop, bounded |
 | Daily runtime roll-ups | Permanent | — |
-| Shutdown abandonments | 90 days | Purged at startup |
+| Shutdown abandonments | 90 days | Hourly retention sweep (startup-only before #550) |
 | Bug report rows | Indefinite | — |
 | Bug report screenshots | Until the report is decided | Erased in the deciding transaction; `ck_bug_reports_screenshot_erased` |
-| Data exports | 7 days (format v1) | `expires_at`; startup purge + hourly retention sweep |
-| Expired sessions | 30 days past `expires_at` | Startup purge + hourly retention sweep; rows of a suspended account are kept |
-| Ephemeral room codes | 30 days retirement, then reusable | `retired_until` |
+| Data exports | 7 days (format v1) | `expires_at`; hourly retention sweep |
+| Expired sessions | 30 days past `expires_at` | Hourly retention sweep; rows of a suspended account are kept |
+| Expired rate-limit buckets | Their window | One batch every 100 checks, and the hourly retention sweep |
+| Ephemeral room codes | 30 days retirement, then reusable | `retired_until`; freed by the hourly retention sweep (collision-triggered only before #550) |
 | Codes from the removed persistent-room feature | Permanent | Never enter the reuse pool |
-| Guests with no completed game | 30 inactive days (default) | `app.auth.retention` |
-| Guests with history | 365 inactive days (default) | `app.auth.retention`; history survives via frozen snapshots |
+| Guests with no completed game | 30 inactive days (default) | `app.auth.retention`, hourly |
+| Guests with history | 365 inactive days (default) | `app.auth.retention`, hourly; history survives via frozen snapshots |
 | Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — |
 | Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | `services.prompt_reclaim`; revisions a game pins stay for ever |
 
-Anonymous retention is based on `last_active_at` and is bounded to 500 accounts per run.
-It **previews by default** and records aggregate audit evidence when applied. A removal
+**Every sweep is bounded, scheduled, observable and fault-isolated** (#550,
+[`services/sweeps.py`](../backend/app/services/sweeps.py)). The hourly retention loop
+runs the sweeps above in a fixed order, each through `delete_in_batches`: an indexed,
+deterministically ordered select of at most `RETENTION_SWEEP_BATCH_ROWS` (500) keys,
+deleted in a transaction of their own, repeated until the table is clean or the run's
+`RETENTION_SWEEP_ROW_BUDGET` (5,000 rows) or `RETENTION_SWEEP_SECONDS_BUDGET` (30 s) is
+spent. A sweep cut short reports so, with the age of the oldest row still overdue, and
+the loop comes back after `CATCH_UP_SECONDS` (5) instead of an hour until nothing is
+behind; a sweep that raises is logged and counted on the loop's health and the sweeps
+after it still run. Each sweep's rows, batches, duration and backlog appear under the
+`retention_sweep` loop in `/api/health`. Startup runs no purge of its own: the loop's
+first pass starts immediately, bounded, so a backlog left by a long outage cannot delay
+serving. The chat writer only inserts; before #550 its first batch also ran the message
+purge inside its own transaction.
+
+A PostgreSQL churn run (`benchmarks/retention_churn.py`, 100,000 expired messages,
+5,000-row budget, 500-row batches, local PostgreSQL 17) is the baseline for any table
+storage decision: see the README benchmark notes for the numbers. The shape it shows is
+the one to expect — each bounded run deletes its slice and leaves dead tuples behind, the
+relation does not shrink until autovacuum has been round, and WAL is proportional to rows
+deleted.
+
+Anonymous retention is based on `last_active_at` and is bounded to 500 accounts per run
+(each guest tier is offered half the batch and whatever the other cannot use, so a flood
+of never-played guests cannot starve the tier with history). It **previews by default**
+and records aggregate audit evidence when applied. A removal
 selects its candidates `FOR UPDATE SKIP LOCKED` in ascending activity order — a guest a
 claim, a merge, a seat or a finished-game write is holding is left for a later sweep, not
 waited for — and the delete repeats every eligibility predicate and returns the ids it
