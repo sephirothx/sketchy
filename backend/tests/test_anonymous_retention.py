@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.auth.retention import (
     purge_expired_auth_sessions,
@@ -27,6 +27,8 @@ from app.db.models import (
 from app.db import create_db_engine
 from app.repositories.interfaces import GameParticipantInput, GameRecordInput, TurnRecordInput
 from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlchemyUserRepository
+
+from tests.dbfixtures import create_test_db
 
 
 @pytest.mark.asyncio
@@ -119,10 +121,7 @@ async def test_retention_previews_then_removes_stale_guest_tiers():
 
 @pytest.mark.asyncio
 async def test_touch_last_active_is_distinct_from_login_activity():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     try:
         guest = await users.create_anonymous("Player")

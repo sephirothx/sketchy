@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.email import EmailAddressError, normalize_email
-from app.db.models import Base, User, generate_uuid
+from app.db.models import User, generate_uuid
 from app.domain_values import AccountState
+
+from tests.dbfixtures import create_test_db
 
 
 @pytest.mark.parametrize(
@@ -33,10 +34,7 @@ def test_invalid_email_is_rejected(raw):
 
 @pytest.mark.asyncio
 async def test_database_requires_normalized_unique_email_and_verification_source():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     try:
         async with factory() as session:
             async with session.begin():

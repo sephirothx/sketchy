@@ -3,10 +3,8 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
-    Base,
     PromptAlias,
     PromptConcept,
     PromptTag,
@@ -22,6 +20,8 @@ from app.prompt_content import (
     normalize_prompt_answer,
     validate_prompt_language,
 )
+
+from tests.dbfixtures import create_test_db
 
 
 def test_language_aware_match_keys_and_bounded_metadata():
@@ -77,10 +77,7 @@ def test_exact_version_aliases_are_accepted_and_drive_near_miss_hints():
 
 @pytest.mark.asyncio
 async def test_prompt_concepts_do_not_merge_by_equal_text_and_links_are_explicit():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     try:
         async with factory() as session:
             async with session.begin():

@@ -27,7 +27,7 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | Production | With `SKETCHY_ENV=production`, startup **refuses** a missing, blank, or SQLite `DATABASE_URL`. The zero-config default is a *relative* file, so a production deploy that forgot the variable would look healthy while writing accounts, moderation evidence, and history to storage the next container replacement discards. SQLite also serializes every writer, which caps such a server at one write at a time | [`deployment.py`](../backend/app/deployment.py) |
 | Indexes | **No standalone index on the leading column of a composite** on the same table — the composite already serves every lookup and scan on its own prefix. A single-column index that is *unique or partial* is exempt: it enforces an invariant rather than accelerating a lookup. Asserted by `test_no_index_duplicates_the_leading_column_of_a_composite` | [`db/models.py`](../backend/app/db/models.py) · [`tests/test_db_models.py`](../backend/tests/test_db_models.py) |
 | JSON columns | `jsonb` on PostgreSQL (parsed form, comparable, GIN-indexable), text on SQLite. A Python `None` stores as SQL `NULL`, never the JSON token `null` | [`db/models.py`](../backend/app/db/models.py) (`PortableJSON`) |
-| SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection | [`db/__init__.py:36`](../backend/app/db/__init__.py) |
+| SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection, test fixtures included | [`db/__init__.py:41`](../backend/app/db/__init__.py), [`tests/dbfixtures.py`](../backend/tests/dbfixtures.py) |
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
 | Pool (PostgreSQL) | 5 persistent + 5 overflow, pre-ping, 10 s timeout, 30 min recycle; all four tunable | [`db/__init__.py:25`](../backend/app/db/__init__.py) |
@@ -1357,12 +1357,24 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
   .venv/bin/pytest -q tests/test_migrations.py tests/test_repositories.py
 ```
 
-> The repository suite **deletes application rows** from `TEST_DATABASE_URL`. Never
-> point it at a development or production database.
+> Every persistence suite builds its database through
+> [`backend/tests/dbfixtures.py`](../backend/tests/dbfixtures.py), so `TEST_DATABASE_URL`
+> moves all of them onto PostgreSQL. The fixture **deletes application rows** from that
+> database and refuses a name without `test` in it. Never point it at a development or
+> production database.
+
+Without `TEST_DATABASE_URL` the same fixture hands out in-memory SQLite configured the
+way [`db/__init__.py`](../backend/app/db/__init__.py) configures the application's own
+connections, and checks `PRAGMA foreign_keys` on every connection it opens. A raw
+`create_async_engine` leaves SQLite's enforcement off, and a suite built on one passes
+deletion tests against constraints the database never applied — #612 found two
+deletion paths that only failed once enforcement was real.
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete migration
 chain **down and up** on both PostgreSQL and SQLite, checks schema drift and the
-hand-written username index, then runs the repository suite against the migrated schema.
+hand-written username index, then runs the whole backend suite against the migrated
+schema. A SQLite pass proves integrity, not concurrency: READ COMMITTED interleavings
+and row locks are only ever exercised on that job.
 
 ### Production deploy order
 

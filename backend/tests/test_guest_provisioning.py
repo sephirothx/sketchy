@@ -14,12 +14,13 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuthSession, Base, User
+from app.db.models import AuthSession, User
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+from tests.dbfixtures import create_test_db
 
 
 @contextlib.asynccontextmanager
@@ -27,10 +28,7 @@ async def build_site(monkeypatch, **limits):
     """A site whose provisioning ceilings the test chooses."""
     for name, value in limits.items():
         monkeypatch.setenv(name, str(value))
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))

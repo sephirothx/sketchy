@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError, SAWarning, StatementError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import (
+    IdentityAlias,
     AppConfig,
     Base,
     DataExport,
@@ -60,19 +61,17 @@ from app.domain_values import (
     UserRole,
 )
 
+from tests.dbfixtures import (
+    SQLITE_MEMORY_URL,
+    ForeignKeysOffError,
+    _assert_foreign_keys_enforced,
+    create_test_db,
+    create_test_engine,
+)
+
 pytestmark = pytest.mark.asyncio
 
 
-async def create_test_db():
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        connect_args={"check_same_thread": False},
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    return factory, engine
 
 
 async def test_app_config_crud():
@@ -196,6 +195,7 @@ async def test_retained_messages_enforce_kind_context_and_expiry():
         async with factory() as session:
             async with session.begin():
                 session.add(User(id=sender_id, display_name="Sender"))
+                await session.flush()
                 session.add(
                     RoomMessage(
                         id=generate_uuid(),
@@ -1100,6 +1100,7 @@ async def test_word_list_and_word_uniqueness():
                     version=1,
                 )
                 session.add(wl)
+                await session.flush()
 
                 def _identified(text_value):
                     concept = PromptConcept(id=generate_uuid())
@@ -1122,7 +1123,11 @@ async def test_word_list_and_word_uniqueness():
 
                 c1, v1, w1 = _identified("dog")
                 c2, v2, w2 = _identified("cat")
-                session.add_all([c1, v1, w1, c2, v2, w2])
+                session.add_all([c1, c2])
+                await session.flush()
+                session.add_all([v1, v2])
+                await session.flush()
+                session.add_all([w1, w2])
 
         async with factory() as session:
             stmt = select(Prompt).where(Prompt.prompt_list_id == wl_id)
@@ -1809,6 +1814,7 @@ async def test_a_lobby_line_has_no_room_and_no_seat_and_nothing_else_does():
         async with factory() as session:
             async with session.begin():
                 session.add(User(id=sender_id, display_name="Sender"))
+                await session.flush()
                 session.add(
                     RoomMessage(
                         id=generate_uuid(),
@@ -1875,5 +1881,86 @@ async def test_a_lobby_line_has_no_room_and_no_seat_and_nothing_else_does():
                 async with factory() as session:
                     async with session.begin():
                         session.add(invalid_row)
+    finally:
+        await engine.dispose()
+
+
+async def test_the_shared_fixture_rejects_a_dangling_reference_and_a_restricted_delete():
+    """A suite whose database ignores foreign keys proves nothing about deletion.
+
+    #612 found the persistence fixtures running SQLite with `foreign_keys`
+    off, so list and account deletions that violate RESTRICT constraints
+    passed anyway. Every fixture now comes from `tests.dbfixtures`, and this
+    is the proof that the database it hands out enforces both directions:
+    an insert naming a missing parent, and a delete a child forbids.
+    """
+    factory, engine = await create_test_db()
+    try:
+        async with factory() as session:
+            with pytest.raises(IntegrityError):
+                async with session.begin():
+                    session.add(
+                        RoomMessage(
+                            id=generate_uuid(),
+                            room_instance_id=generate_uuid(),
+                            sender_user_id=generate_uuid(),
+                            sender_player_id=generate_uuid(),
+                            sender_display_name_snapshot="Nobody",
+                            sender_is_anonymous_snapshot=True,
+                            is_spectator=False,
+                            message_kind="chat",
+                            audience="room",
+                            audience_user_ids=[],
+                            text="from an account that does not exist",
+                            created_at=datetime.now(timezone.utc),
+                            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                        )
+                    )
+
+        guest_id, account_id = generate_uuid(), generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(id=guest_id, display_name="Guest"),
+                        User(id=account_id, display_name="Account"),
+                    ]
+                )
+                await session.flush()
+                session.add(
+                    IdentityAlias(source_user_id=guest_id, target_user_id=account_id)
+                )
+
+        async with factory() as session:
+            with pytest.raises(IntegrityError):
+                async with session.begin():
+                    await session.execute(
+                        text("DELETE FROM users WHERE id = :id"),
+                        {"id": account_id.hex if engine.dialect.name == "sqlite" else account_id},
+                    )
+    finally:
+        await engine.dispose()
+
+
+def test_the_fixture_refuses_a_sqlite_connection_with_foreign_keys_off():
+    """The per-connection check is what makes the fixture's promise checkable."""
+    import sqlite3
+
+    raw = sqlite3.connect(":memory:")
+    try:
+        with pytest.raises(ForeignKeysOffError):
+            _assert_foreign_keys_enforced(raw, None)
+        raw.execute("PRAGMA foreign_keys=ON")
+        _assert_foreign_keys_enforced(raw, None)
+    finally:
+        raw.close()
+
+
+async def test_every_fixture_engine_is_configured_like_the_application():
+    """What `create_test_engine` hands out carries the production pragmas."""
+    engine = create_test_engine(SQLITE_MEMORY_URL)
+    try:
+        async with engine.connect() as conn:
+            assert (await conn.execute(text("PRAGMA foreign_keys"))).scalar_one() == 1
     finally:
         await engine.dispose()

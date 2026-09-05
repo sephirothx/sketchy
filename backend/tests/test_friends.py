@@ -318,9 +318,9 @@ async def test_blocking_removes_an_existing_friendship_in_the_same_transaction()
 async def _fill(factory, owner, count, status):
     async with factory() as session:
         async with session.begin():
-            for index in range(count):
-                other = generate_uuid()
-                session.add(
+            others = [generate_uuid() for _ in range(count)]
+            session.add_all(
+                [
                     User(
                         id=other,
                         display_name=f"Other{index}",
@@ -328,7 +328,13 @@ async def _fill(factory, owner, count, status):
                         password_hash="hash",
                         state=AccountState.REGISTERED.value,
                     )
-                )
+                    for index, other in enumerate(others)
+                ]
+            )
+            # Nothing relates the two mappers, so the unit of work has no
+            # order to flush them in; the users must exist first.
+            await session.flush()
+            for other in others:
                 low, high = friendship_key(owner, other)
                 session.add(
                     Friendship(
@@ -955,9 +961,9 @@ async def test_a_crowded_inbox_is_refused_without_describing_it():
         # Requests *to* them, from many different accounts.
         async with factory() as session:
             async with session.begin():
-                for index in range(MAX_PENDING_RECEIVED):
-                    other = generate_uuid()
-                    session.add(
+                askers = [generate_uuid() for _ in range(MAX_PENDING_RECEIVED)]
+                session.add_all(
+                    [
                         User(
                             id=other,
                             display_name=f"Asker{index}",
@@ -965,7 +971,11 @@ async def test_a_crowded_inbox_is_refused_without_describing_it():
                             password_hash="hash",
                             state=AccountState.REGISTERED.value,
                         )
-                    )
+                        for index, other in enumerate(askers)
+                    ]
+                )
+                await session.flush()
+                for other in askers:
                     low, high = friendship_key(popular, other)
                     session.add(
                         Friendship(

@@ -4,20 +4,19 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, RoomCodeReservation
+from app.db.models import RoomCodeReservation
 from app.services.room_codes import RoomCodeAllocationError, RoomCodeService
+
+from tests.dbfixtures import create_test_db
 
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _database():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    return engine, async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
+    return engine, factory
 
 
 async def test_database_primary_key_retries_a_cross_request_collision():

@@ -10,9 +10,8 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, GameRecord, PlannedShutdownAbandonment
+from app.db.models import GameRecord, PlannedShutdownAbandonment
 from app.game import Game
 from app.rooms import RoomManager
 from app.services.shutdown import (
@@ -21,16 +20,15 @@ from app.services.shutdown import (
     purge_expired_shutdown_abandonments,
 )
 
+from tests.dbfixtures import create_test_db
+
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
 async def env():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     rooms = RoomManager()
     coordinator = ShutdownCoordinator(factory, rooms)
     yield factory, rooms, coordinator

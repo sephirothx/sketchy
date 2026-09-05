@@ -5,10 +5,8 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
-    Base,
     PromptListRevision,
     PromptListRevisionItem,
     PromptVersion,
@@ -23,14 +21,13 @@ from app.repositories.interfaces import (
 )
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
 
 
 async def _database():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     owner_id = generate_uuid()
     other_id = generate_uuid()
     async with factory() as session:
@@ -374,5 +371,133 @@ async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says()
         first_counts, first_total = letter_histogram(["banjo", "kazoo"])
         assert first.letter_counts == first_counts
         assert first.letter_total == first_total
+    finally:
+        await engine.dispose()
+
+
+async def _pin_a_game_to(factory, owner_id: str, revision_id: str) -> None:
+    """A finished game that names the list's revision as a prompt source."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.repositories.interfaces import (
+        GameParticipantInput,
+        GameRecordInput,
+        TurnRecordInput,
+    )
+    from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
+
+    started = datetime.now(timezone.utc) - timedelta(minutes=10)
+    seat = str(generate_uuid())
+    await SqlAlchemyGameHistoryRepository(factory).save_game(
+        GameRecordInput(
+            room_name="Uses the list",
+            scoring_mode="default",
+            hint_mode="none",
+            drawing_seconds=60,
+            total_rounds=1,
+            player_count=1,
+            started_at=started,
+            finished_at=started + timedelta(minutes=5),
+            prompt_source_mode="lists",
+            prompt_source_revision_ids=(revision_id,),
+        ),
+        [
+            GameParticipantInput(
+                user_id=owner_id,
+                final_score=0,
+                final_rank=1,
+                seat_id=seat,
+                display_name="Owner",
+                is_anonymous=False,
+            )
+        ],
+        [
+            TurnRecordInput(
+                id=str(generate_uuid()),
+                round_number=1,
+                turn_number=1,
+                drawer_user_id=owner_id,
+                drawer_seat_id=seat,
+                prompt="otter",
+                duration_seconds=60,
+            )
+        ],
+        [],
+    )
+
+
+async def _current_revision_id(factory, list_id: str) -> str:
+    async with factory() as session:
+        revision = await session.scalar(
+            select(PromptListRevision)
+            .where(PromptListRevision.prompt_list_id == UUID(list_id))
+            .order_by(PromptListRevision.version.desc())
+        )
+    assert revision is not None
+    return str(revision.id)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="#605: game_prompt_sources RESTRICTs the revision the list deletion removes",
+)
+async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance():
+    """R-LIST-01 lets an owner delete a list; R-PRIV-05 keeps the game intact.
+
+    Found by #612: with foreign keys enforced, deleting a used list rolls the
+    whole transaction back because the game's pinned revision restricts it.
+    """
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Played once",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        revision_id = await _current_revision_id(factory, created.id)
+        await _pin_a_game_to(factory, owner_id, revision_id)
+
+        assert await repo.delete_owned(owner_id, created.id) is True
+
+        assert await repo.get_owned(owner_id, created.id) is None
+        async with factory() as session:
+            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="#605: account erasure deletes owned lists the same way, and fails the same way",
+)
+async def test_erasing_the_owner_of_a_used_list_succeeds():
+    """R-PRIV-05: the other players' history is never damaged, so erasure
+    cannot delete the revision their game pinned - and it cannot fail either."""
+    from app.auth.account_data import anonymize_account
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Played once",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        revision_id = await _current_revision_id(factory, created.id)
+        await _pin_a_game_to(factory, owner_id, revision_id)
+
+        await anonymize_account(factory, user_id=owner_id)
+
+        async with factory() as session:
+            owner = await session.get(User, UUID(owner_id))
+            assert owner is not None and owner.state == "deleted"
+            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
     finally:
         await engine.dispose()

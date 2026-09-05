@@ -8,6 +8,8 @@ import pytest
 
 from app.services.lobby_chat import LOBBY_CHAT_BACKLOG, LobbyChatLog
 
+from tests.dbfixtures import create_test_db
+
 NOON = datetime(2026, 9, 2, 12, 0, tzinfo=timezone.utc)
 
 
@@ -113,9 +115,8 @@ def test_a_smaller_ring_is_honoured():
 
 from uuid import UUID, uuid4  # noqa: E402
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
-from app.db.models import Base, RoomMessage, User, UserBan  # noqa: E402
+from app.db.models import RoomMessage, User, UserBan  # noqa: E402
 from app.services.lobby_chat import recent_lobby_lines, restore_lobby_backlog  # noqa: E402
 
 
@@ -141,10 +142,8 @@ def retained(author: UUID, text: str, *, at: datetime, audience="lobby", expired
 
 
 async def _database():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    return engine, async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
+    return engine, factory
 
 
 @pytest.mark.asyncio

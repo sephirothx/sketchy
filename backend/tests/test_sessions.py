@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.services.room_quotas import RoomCapacityService
@@ -24,18 +23,17 @@ from app.auth.sessions import (
     rotate_session,
     should_rotate,
 )
-from app.db.models import AuthSession, Base
+from app.db.models import AuthSession
 from app.handlers.connection import connect as socket_connect
 from app.protocol import PROTOCOL_VERSION
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
+from tests.dbfixtures import create_test_db
+
 
 @pytest_asyncio.fixture
 async def database():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     user = await SqlAlchemyUserRepository(factory).create_anonymous("Guest")
     try:
         yield factory, user

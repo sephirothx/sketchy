@@ -13,7 +13,6 @@ from httpx import ASGITransport, AsyncClient
 from socketio.exceptions import ConnectionRefusedError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.moderation import create_moderation_router
 from app.auth.middleware import SessionAuthMiddleware
@@ -22,7 +21,6 @@ from app.db.models import (
     UserBlock,
     AuditEvent,
     AuthSession,
-    Base,
     PlayerReport,
     PlayerReportMessageEvidence,
     RoomMessage,
@@ -37,6 +35,8 @@ from app.services.room_quotas import RoomCapacityService
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.message_retention import purge_expired_room_messages
 
+from tests.dbfixtures import create_test_db
+
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
@@ -45,10 +45,7 @@ PASSWORD = "a-good-password"
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     banned_callback = AsyncMock()
     warned_callback = AsyncMock()

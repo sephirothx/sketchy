@@ -10,6 +10,8 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 from app.db import data_directory, instrument_engine, pool_gauges
 from app.services.telemetry import Telemetry
 
+from tests.dbfixtures import create_test_db
+
 
 pytestmark = pytest.mark.asyncio
 
@@ -69,16 +71,11 @@ def test_the_data_directory_is_the_sqlite_file_folder_or_here(tmp_path, monkeypa
 
 async def test_the_queue_depths_are_answered_from_cache_inside_the_ttl():
     """A scraper and an open page together cost the database one pair of counts."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from app.db.models import Base
     from app.services.queue_depths import QueueDepths, _age
     from datetime import datetime, timedelta, timezone
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     store = Telemetry()
     instrument_engine(engine, store)
     now = [100.0]
@@ -104,15 +101,10 @@ async def test_the_queue_depths_are_answered_from_cache_inside_the_ttl():
 async def test_concurrent_queue_reads_share_one_query():
     import asyncio
 
-    from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    from app.db.models import Base
     from app.services.queue_depths import QueueDepths
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     store = Telemetry()
     instrument_engine(engine, store)
     depths = QueueDepths(factory, cache_seconds=10.0)

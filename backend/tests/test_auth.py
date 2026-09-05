@@ -6,7 +6,6 @@ import pytest_asyncio
 from argon2 import PasswordHasher
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.names import validate_name, NameError_
@@ -29,16 +28,14 @@ from app.auth.sessions import (
     session_token_from_cookie_header,
 )
 from app.auth.routes import create_auth_router
-from app.db.models import Base
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+from tests.dbfixtures import create_test_db
 
 
 @pytest_asyncio.fixture
 async def client():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory, engine = await create_test_db()
     repo = SqlAlchemyUserRepository(session_factory)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
@@ -218,10 +215,7 @@ async def test_auth_limit_persists_across_limiter_instances_and_hashes_keys(monk
     from app.db.models import AuthRateLimitBucket
 
     monkeypatch.setenv("IP_HASH_SECRET", "test-only-rate-limit-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     clock = FakeClock()
     # Persistent limiters use aware wall-clock values, unlike the local
     # limiter's monotonic float clock.

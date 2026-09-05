@@ -38,7 +38,7 @@ class DatabaseRevisionError(RuntimeError):
     """Raised when an externally managed database is not at Alembic head."""
 
 
-def _configure_sqlite_connection(dbapi_connection: Any, _: Any) -> None:
+def configure_sqlite_connection(dbapi_connection: Any, _: Any) -> None:
     """Apply SQLite integrity and concurrency settings to every connection."""
     cursor = dbapi_connection.cursor()
     try:
@@ -194,7 +194,7 @@ def create_db_engine(url: str | None = None) -> AsyncEngine:
         **pool_options,
     )
     if resolved_url.startswith("sqlite"):
-        event.listen(engine.sync_engine, "connect", _configure_sqlite_connection)
+        event.listen(engine.sync_engine, "connect", configure_sqlite_connection)
     instrument_engine(engine)
     return engine
 

@@ -1235,7 +1235,7 @@ older build is still found and still becomes disconnected.
 | Handler integration | `backend/tests/handlers/` | One asyncio suite per Socket.IO domain |
 | Payload/protocol | `test_payloads.py`, `test_canvas_history.py`, `test_live_drawing.py` | The exact wire shapes and their refusals |
 | Wire contract | `test_wire_contract.py` | Both sides still agree on every name |
-| Database | `test_db_models.py`, `test_migrations.py`, `test_repositories.py` | Schema, the full migration chain both directions, drift, and the repositories against PostgreSQL |
+| Database | `test_db_models.py`, `test_migrations.py`, `test_repositories.py`, and every suite on `tests/dbfixtures.py` | Schema, the full migration chain both directions, drift, and the repositories and lifecycle suites against PostgreSQL |
 | E2E | `backend/tests/e2e/` | Real multi-browser Playwright sessions across Chromium and Firefox |
 | Benchmarks | `benchmarks/`, `frontend/benchmarks/` | Diagnostic baselines, deliberately **not** CI thresholds |
 | Repository hygiene | `backend/tests/test_repo_artifacts.py` | No database, env file, or private key is tracked - by name or by bytes |
@@ -1246,9 +1246,19 @@ production interval it fast-forwards the page's own clock with Playwright's
 `page.clock` rather than spending the time — which keeps the interval a production
 constant instead of something bent for the tests.
 
+Every suite that persists rows gets its database from one place,
+[`backend/tests/dbfixtures.py`](../backend/tests/dbfixtures.py): PostgreSQL when
+`TEST_DATABASE_URL` is set, otherwise in-memory SQLite configured the way the
+application configures its own connections, with foreign-key enforcement checked on
+every connection. No test module builds its own engine, because one that did ran with
+enforcement off and passed deletion tests against constraints the database never
+applied. A SQLite pass proves integrity; only the PostgreSQL job proves row locks and
+READ COMMITTED interleavings.
+
 CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs five jobs: the
-repository artifact scan, backend lint and tests, PostgreSQL migrations and
-repositories, frontend test/lint/build, and the multi-browser E2E suite.
+repository artifact scan, backend lint and tests, PostgreSQL migrations and the whole
+backend suite again on PostgreSQL, frontend test/lint/build, and the multi-browser E2E
+suite.
 
 The artifact scan
 ([`scripts/check-tracked-artifacts.sh`](../scripts/check-tracked-artifacts.sh)) is the

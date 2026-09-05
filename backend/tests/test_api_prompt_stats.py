@@ -7,14 +7,13 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.prompt_lists import (
     MIN_RATED_GUESSERS,
     create_prompt_list_router,
     stats_limiter,
 )
-from app.db.models import Base, generate_uuid
+from app.db.models import generate_uuid
 from app.repositories.interfaces import (
     BundledPromptDefinition,
     PromptPickTotals,
@@ -22,15 +21,14 @@ from app.repositories.interfaces import (
 )
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
 async def env():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory, engine = await create_test_db()
     stats_limiter.reset()
 
     prompts = SqlAlchemyPromptListRepository(session_factory)

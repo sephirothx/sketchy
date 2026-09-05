@@ -185,7 +185,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
+      # Only the fixtures read this. DATABASE_URL is set on the one step that
+      # migrates: the application's module-level engine would otherwise point
+      # at PostgreSQL for every test, and an asyncpg connection shared across
+      # pytest's per-test event loops fails from wherever it is next used.
       TEST_DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
     defaults:
       run:
@@ -205,29 +208,21 @@ jobs:
 
       - name: Upgrade a fresh PostgreSQL database
         run: python -m app.db.migrate
+        env:
+          DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
 
       - name: Replay migrations in both directions and check schema drift
         run: pytest -q tests/test_migrations.py
 
-      # Constraints are the dialect-sensitive half of the schema: a CHECK that
-      # holds on SQLite's stored hex can behave differently against
-      # PostgreSQL's native types. Run the model suite here too, or the only
-      # engine those constraints are ever proven on is the one production does
-      # not use.
-      - name: Run schema constraints against PostgreSQL
-        run: pytest -q tests/test_db_models.py
-
-      - name: Run repositories against PostgreSQL
-        run: pytest -q tests/test_repositories.py
-
-      - name: Run row-locking services against PostgreSQL
-        run: pytest -q tests/test_room_presets.py tests/test_room_codes.py tests/test_rate_limit_atomicity.py
-
-      # The export builder streams each section through a server-side cursor
-      # (`session.stream` with `yield_per`), which asyncpg implements and
-      # SQLite only imitates; the row-locked claim is the same story.
-      - name: Run the export builder and worker against PostgreSQL
-        run: pytest -q tests/test_account_data.py tests/test_data_export_worker.py
+      # Everything else runs here too. Every persistence fixture comes from
+      # tests/dbfixtures.py and follows TEST_DATABASE_URL, so this is the one
+      # run in which constraints are proven on PostgreSQL's native types, the
+      # export builder's server-side cursors are real, row locks lock, and
+      # READ COMMITTED interleavings are the ones production will see. A
+      # SQLite pass (the backend job) proves integrity - foreign keys are
+      # enforced there too since #612 - but never concurrency.
+      - name: Run the backend suite against PostgreSQL
+        run: pytest -q --deselect tests/test_migrations.py
 
   frontend:
     name: Frontend test, lint & build

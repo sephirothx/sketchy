@@ -9,12 +9,11 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.operations import create_operations_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, Base, RuntimeEvent, RuntimeStatsDaily, User
+from app.db.models import AuditEvent, RuntimeEvent, RuntimeStatsDaily, User
 from app.domain_values import RuntimeEventType, UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.runtime_metrics import (
@@ -30,6 +29,8 @@ from app.services.queue_depths import QueueDepths
 from app.services.readiness import LoopHealth, ReadinessProbe
 from app.services.telemetry import RING_MINUTES, Telemetry
 
+from tests.dbfixtures import create_test_db
+
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
@@ -41,10 +42,7 @@ INJECTED: dict[str, object] = {}
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "analytics-test-secret")
     monkeypatch.delenv("METRICS_TOKEN", raising=False)
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     # Outermost, as in main.py: it is what gives the request the id the

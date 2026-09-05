@@ -13,17 +13,18 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.friends import create_friends_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import Base, UserBlock
+from app.db.models import UserBlock
 from app.domain_values import FriendshipState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.friends import FriendService, friendship_key
+
+from tests.dbfixtures import create_test_db
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
@@ -32,10 +33,7 @@ PASSWORD = "a-good-password"
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "friends-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     friends = FriendService(factory)
     blocks = BlockService(factory)
@@ -303,10 +301,7 @@ class Notifications:
 async def wired(monkeypatch):
     """The same app, with the friends-changed hook captured."""
     monkeypatch.setenv("IP_HASH_SECRET", "friends-notify-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     told = Notifications()
     # The announcement is the service's now, so both routers get it from one
     # place rather than each being handed its own.

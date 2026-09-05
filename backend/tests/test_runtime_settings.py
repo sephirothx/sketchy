@@ -11,9 +11,8 @@ bad row taking the others down with it.
 import logging
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import AppConfig, Base
+from app.db.models import AppConfig
 from app.services import config_store
 from app.services.runtime_settings import (
     CLIENT,
@@ -22,6 +21,8 @@ from app.services.runtime_settings import (
     Tunable,
     TunableError,
 )
+
+from tests.dbfixtures import create_test_db
 
 
 class Cell:
@@ -334,10 +335,8 @@ def test_a_stored_row_for_a_setting_that_no_longer_exists_is_ignored(caplog):
 
 
 async def _database():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    return engine, async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
+    return engine, factory
 
 
 @pytest.mark.asyncio

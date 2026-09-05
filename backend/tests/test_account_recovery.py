@@ -9,7 +9,6 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.auth.mail import MemoryTransport, deliver_pending
 from app.auth.middleware import SessionAuthMiddleware
@@ -34,7 +33,6 @@ from app.db.models import (
     AuditEvent,
     AuthSession,
     AuthToken,
-    Base,
     EmailOutboxEntry,
     User,
     UserSettings,
@@ -42,6 +40,8 @@ from app.db.models import (
 )
 from app.domain_values import EmailOutboxState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+from tests.dbfixtures import create_test_db
 
 
 pytestmark = pytest.mark.asyncio
@@ -53,10 +53,7 @@ NEW_PASSWORD = "an-even-better-password"
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "recovery-test-secret")
     monkeypatch.delenv("SMTP_HOST", raising=False)
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
