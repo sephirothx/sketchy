@@ -25,6 +25,17 @@ export type ReportReason =
   | "spam"
   | "inappropriate_avatar";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
+/** What was done about a case, in one word. Player reports close as
+    dismissed, warned, suspended or a plain resolved; content reports as
+    dismissed, hidden, left_up or resolved. Pending until then. */
+export type ReportOutcome =
+  | "pending"
+  | "dismissed"
+  | "resolved"
+  | "warned"
+  | "suspended"
+  | "hidden"
+  | "left_up";
 
 export interface PlayerReportMessageEvidence {
   sourceMessageId: string;
@@ -86,7 +97,11 @@ export interface PlayerReport {
       the one drawing at the time. */
   drawing: PlayerReportDrawing | null;
   status: ReportStatus;
+  outcome: ReportOutcome;
   reviewedByUserId: string | null;
+  /** The reviewer's name, resolved when the case is read; null until decided
+      or once the account is gone. */
+  reviewedBy: string | null;
   resolutionNote: string | null;
   createdAt: string;
   updatedAt: string;
@@ -223,6 +238,33 @@ export interface PendingWarning {
   createdAt: string;
   /** The reported messages behind it - the player's own words. */
   messages: { text: string; at: string | null }[];
+  /** The drawing the report carried, if one did - the player's own work. */
+  drawing: PlayerReportDrawing | null;
+}
+
+/** The drawing behind the caller's own warning. */
+export function fetchWarningDrawing(warningId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/warnings/${warningId}/drawing`);
+}
+
+/** The drawing behind the caller's own suspension, reachable while suspended. */
+export function fetchSuspensionDrawing(): Promise<ArrayBuffer> {
+  return apiBinaryRequest("/api/suspension/drawing");
+}
+
+/** Keep only a payload shaped like a drawing's metadata. */
+export function reportedDrawing(value: unknown): PlayerReportDrawing | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.prompt !== "string" || typeof row.turnId !== "string") return null;
+  return {
+    turnId: row.turnId,
+    roundNumber: typeof row.roundNumber === "number" ? row.roundNumber : 0,
+    prompt: row.prompt,
+    actionCount: typeof row.actionCount === "number" ? row.actionCount : 0,
+    byteSize: typeof row.byteSize === "number" ? row.byteSize : 0,
+    capturedAt: typeof row.capturedAt === "string" ? row.capturedAt : "",
+  };
 }
 
 export function createUserWarning(input: {
@@ -266,7 +308,9 @@ export interface PromptContentReport {
   reason: string;
   details: string;
   status: ReportStatus;
+  outcome: ReportOutcome;
   reviewedByUserId: string | null;
+  reviewedBy: string | null;
   resolutionNote: string | null;
   moderationState: "active" | "hidden" | null;
   createdAt: string;

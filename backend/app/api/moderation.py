@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
@@ -13,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload, undefer
+from sqlalchemy.orm import selectinload
 
 from app.auth.avatars import avatar_url
 from app.services.avatars import remove_avatar
@@ -29,7 +30,12 @@ from app.canvas_storage import (
     UnsupportedStoredDrawingError,
     stored_drawing_wire_payload,
 )
-from app.services.player_reports import context_around, record_player_report
+from app.services.player_reports import (
+    context_around,
+    drawing_evidence_for_report,
+    drawing_evidence_payload,
+    record_player_report,
+)
 from app.auth.sessions import revoke_all_sessions
 from app.auth.warnings import pending_warning_payload
 from app.db.models import (
@@ -85,7 +91,9 @@ class ReportBody(BaseModel):
     game_id: UUID | None = Field(default=None, alias="gameId")
     turn_id: UUID | None = Field(default=None, alias="turnId")
     reason: ReportReason
-    details: str = Field(min_length=1, max_length=MAX_REPORT_DETAILS)
+    # Optional, as it is over the socket: the cited lines are the complaint,
+    # and a lobby line reported from itself needs no words beside it.
+    details: str = Field(default="", max_length=MAX_REPORT_DETAILS)
     message_ids: list[UUID] = Field(
         default_factory=list, alias="messageIds", max_length=MAX_REPORT_MESSAGES
     )
@@ -94,10 +102,7 @@ class ReportBody(BaseModel):
     @field_validator("details")
     @classmethod
     def clean_details(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("details cannot be blank")
-        return cleaned
+        return value.strip()
 
     @field_validator("context_snapshot")
     @classmethod
@@ -280,18 +285,129 @@ async def _reported_player_context(
     }
 
 
-def _drawing_payload(evidence: PlayerReportDrawingEvidence | None) -> dict | None:
-    """The attached drawing by its metadata; the bytes have their own route."""
-    if evidence is None:
-        return None
-    return {
-        "turnId": str(evidence.turn_id_snapshot),
-        "roundNumber": evidence.round_number,
-        "prompt": evidence.prompt_snapshot,
-        "actionCount": evidence.action_count,
-        "byteSize": evidence.byte_size,
-        "capturedAt": evidence.captured_at.isoformat(),
+@dataclass(frozen=True)
+class _Decision:
+    """How a case was closed, and by whom, as the queue shows it."""
+
+    outcome: str
+    reviewed_by: str | None
+
+
+async def _decisions(
+    session: AsyncSession,
+    reports: list[PlayerReport],
+    content: list[PromptContentReport] = (),
+) -> dict[UUID, _Decision]:
+    """The outcome of each case, in one word, and the reviewer's name.
+
+    A report's own status only says decided or not. What was done about it
+    lives elsewhere - a warning or a suspension names its source report, a
+    content resolution records the state it set - so the outcome is read
+    from those, in three grouped queries rather than per report. The name is
+    resolved when the page is read, never stored beside the case (R-AUDIT-02).
+    """
+    report_ids = [report.id for report in reports]
+    warned: set[UUID] = set()
+    suspended: set[UUID] = set()
+    if report_ids:
+        warned = set(
+            (
+                await session.scalars(
+                    select(UserWarning.source_report_id).where(
+                        UserWarning.source_report_id.in_(report_ids)
+                    )
+                )
+            ).all()
+        )
+        suspended = set(
+            (
+                await session.scalars(
+                    select(UserBan.source_report_id).where(
+                        UserBan.source_report_id.in_(report_ids)
+                    )
+                )
+            ).all()
+        )
+    reviewer_ids = {
+        case.reviewed_by_user_id
+        for case in [*reports, *content]
+        if case.reviewed_by_user_id is not None
     }
+    names: dict[UUID, str] = {}
+    if reviewer_ids:
+        names = dict(
+            (
+                await session.execute(
+                    select(User.id, User.display_name).where(User.id.in_(reviewer_ids))
+                )
+            ).all()
+        )
+
+    def player_outcome(report: PlayerReport) -> str:
+        if report.status != ReportStatus.RESOLVED.value:
+            return report.status
+        if report.id in suspended:
+            return "suspended"
+        if report.id in warned:
+            return "warned"
+        return "resolved"
+
+    def content_outcome(report: PromptContentReport) -> str:
+        if report.status != ReportStatus.RESOLVED.value:
+            return report.status
+        if report.resolution_moderation_state == (
+            PromptContentModerationState.HIDDEN.value
+        ):
+            return "hidden"
+        if report.resolution_moderation_state == (
+            PromptContentModerationState.ACTIVE.value
+        ):
+            return "left_up"
+        return "resolved"
+
+    decided: dict[UUID, _Decision] = {}
+    for report in reports:
+        decided[report.id] = _Decision(
+            player_outcome(report), names.get(report.reviewed_by_user_id)
+        )
+    for report in content:
+        decided[report.id] = _Decision(
+            content_outcome(report), names.get(report.reviewed_by_user_id)
+        )
+    return decided
+
+
+def _drawing_response(evidence: PlayerReportDrawingEvidence | None, *, who: str) -> Response:
+    """The attached drawing's bytes in the current wire format, or a 404.
+
+    Shared by every reader of a report's drawing - the moderator, the warned
+    player, the suspended player - so the checksum is verified on every read
+    and no route can forget to. `who` names the caller in the log line.
+    """
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="No drawing.")
+    try:
+        payload = stored_drawing_wire_payload(
+            evidence.payload, checksum=evidence.checksum_sha256
+        )
+    except UnsupportedStoredDrawingError as error:
+        # A build older than the row it is reading. Answer as though the
+        # drawing is absent rather than claiming it is broken.
+        logger.error(
+            "Cannot decode report drawing %s for %s: %s", evidence.report_id, who, error
+        )
+        raise HTTPException(status_code=404, detail="No drawing.") from error
+    except CorruptStoredDrawingError as error:
+        logger.error("Report drawing %s failed its checksum", evidence.report_id)
+        raise HTTPException(
+            status_code=500, detail="That drawing could not be read."
+        ) from error
+    return Response(
+        content=payload,
+        media_type="application/octet-stream",
+        # Evidence, so never a shared cache.
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 # Everything a report payload reads off its row. Any query that ends in
@@ -309,8 +425,11 @@ def _decided_at(report: PlayerReport | PromptContentReport) -> datetime:
 
 
 def _report_payload(
-    report: PlayerReport, player_context: dict[UUID, dict] | None = None
+    report: PlayerReport,
+    player_context: dict[UUID, dict] | None = None,
+    decisions: dict[UUID, _Decision] | None = None,
 ) -> dict:
+    decision = (decisions or {}).get(report.id) or _Decision(report.status, None)
     return {
         "reportedPlayer": (
             (player_context or {}).get(report.reported_user_id)
@@ -361,11 +480,15 @@ def _report_payload(
             }
             for evidence in report.message_evidence
         ],
-        "drawing": _drawing_payload(report.drawing_evidence),
+        "drawing": drawing_evidence_payload(report.drawing_evidence),
         "status": report.status,
+        # One word for what was done: `dismissed`, `warned`, `suspended`, or a
+        # plain `resolved`; `pending` until then.
+        "outcome": decision.outcome,
         "reviewedByUserId": (
             str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
         ),
+        "reviewedBy": decision.reviewed_by,
         "resolutionNote": report.resolution_note,
         "createdAt": report.created_at.isoformat(),
         "updatedAt": report.updated_at.isoformat(),
@@ -373,7 +496,10 @@ def _report_payload(
     }
 
 
-def _prompt_content_report_payload(report: PromptContentReport) -> dict:
+def _prompt_content_report_payload(
+    report: PromptContentReport, decisions: dict[UUID, _Decision] | None = None
+) -> dict:
+    decision = (decisions or {}).get(report.id) or _Decision(report.status, None)
     return {
         "id": str(report.id),
         "reporterUserId": (
@@ -394,9 +520,13 @@ def _prompt_content_report_payload(report: PromptContentReport) -> dict:
         "reason": report.reason,
         "details": report.details,
         "status": report.status,
+        # `dismissed`, `hidden`, `left_up`, or a plain `resolved`; `pending`
+        # until then.
+        "outcome": decision.outcome,
         "reviewedByUserId": (
             str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
         ),
+        "reviewedBy": decision.reviewed_by,
         "resolutionNote": report.resolution_note,
         "moderationState": report.resolution_moderation_state,
         "createdAt": report.created_at.isoformat(),
@@ -850,9 +980,11 @@ def create_moderation_router(
                 )
             ).all()
             player_context = await _reported_player_context(session, list(reports))
+            decisions = await _decisions(session, list(reports))
             return {
                 "reports": [
-                    _report_payload(report, player_context) for report in reports
+                    _report_payload(report, player_context, decisions)
+                    for report in reports
                 ]
             }
 
@@ -894,34 +1026,10 @@ def create_moderation_router(
         """
         async with session_factory() as session:
             await _reviewer(session, request)
-            evidence = await session.scalar(
-                select(PlayerReportDrawingEvidence)
-                .where(PlayerReportDrawingEvidence.report_id == report_id)
-                .options(undefer(PlayerReportDrawingEvidence.payload))
+            evidence = await drawing_evidence_for_report(
+                session, report_id, with_bytes=True
             )
-        if evidence is None:
-            raise HTTPException(status_code=404, detail="No drawing.")
-        try:
-            payload = stored_drawing_wire_payload(
-                evidence.payload, checksum=evidence.checksum_sha256
-            )
-        except UnsupportedStoredDrawingError as error:
-            # A build older than the row it is reading. Answer as though the
-            # drawing is absent rather than claiming it is broken.
-            logger.error(
-                "Cannot decode report drawing %s: %s", report_id, error
-            )
-            raise HTTPException(status_code=404, detail="No drawing.") from error
-        except CorruptStoredDrawingError as error:
-            logger.error("Report drawing %s failed its checksum", report_id)
-            raise HTTPException(
-                status_code=500, detail="That drawing could not be read."
-            ) from error
-        return Response(
-            content=payload,
-            media_type="application/octet-stream",
-            headers={"Cache-Control": "private, no-store"},
-        )
+        return _drawing_response(evidence, who="moderator")
 
     @router.get("/moderation/closed-cases")
     async def list_closed_cases(
@@ -1009,16 +1117,19 @@ def create_moderation_router(
                 else []
             )
             player_context = await _reported_player_context(session, list(players))
+            decisions = await _decisions(session, list(players), list(content))
             # Back into the page's order: `IN` returns rows in whatever order
             # the database likes.
             players.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
             content.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
             return {
                 "players": [
-                    _report_payload(report, player_context) for report in players
+                    _report_payload(report, player_context, decisions)
+                    for report in players
                 ],
                 "content": [
-                    _prompt_content_report_payload(report) for report in content
+                    _prompt_content_report_payload(report, decisions)
+                    for report in content
                 ],
                 # False at the cap even when older rows exist: the page says
                 # what can be asked for next, and an Older that answers 422
@@ -1048,9 +1159,11 @@ def create_moderation_router(
                     .offset(offset)
                 )
             ).all()
+            decisions = await _decisions(session, [], list(reports))
             return {
                 "reports": [
-                    _prompt_content_report_payload(report) for report in reports
+                    _prompt_content_report_payload(report, decisions)
+                    for report in reports
                 ]
             }
 
@@ -1095,7 +1208,8 @@ def create_moderation_router(
                 await session.refresh(
                     report, attribute_names=["message_evidence", "drawing_evidence"]
                 )
-            return _report_payload(report)
+                decisions = await _decisions(session, [report])
+            return _report_payload(report, decisions=decisions)
 
     @router.patch("/moderation/prompt-content-reports/{report_id}")
     async def review_prompt_content_report(
@@ -1218,7 +1332,8 @@ def create_moderation_router(
                 )
                 await session.flush()
                 await session.refresh(report)
-            return _prompt_content_report_payload(report)
+                decisions = await _decisions(session, [], [report])
+            return _prompt_content_report_payload(report, decisions)
 
 
     async def _attach_and_resolve_report(
@@ -1553,6 +1668,46 @@ def create_moderation_router(
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
         return await pending_warning_payload(session_factory, user_id)
+
+    @router.get("/warnings/{warning_id}/drawing")
+    async def warning_drawing(warning_id: UUID, request: Request):
+        """The drawing behind the caller's own warning - their own work,
+        shown back for the reason their words are. Somebody else's warning
+        answers 404, as acknowledging one does."""
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        async with session_factory() as session:
+            warning = await session.get(UserWarning, warning_id)
+            if warning is None or warning.user_id != UUID(user_id):
+                raise HTTPException(status_code=404, detail="No such warning.")
+            evidence = await drawing_evidence_for_report(
+                session, warning.source_report_id, with_bytes=True
+            )
+        return _drawing_response(evidence, who="warned player")
+
+    @router.get("/suspension/drawing")
+    async def suspension_drawing(request: Request):
+        """The drawing behind the caller's own active suspension.
+
+        Reached through the ban-time credential: the middleware lets this one
+        path past the refusal (R-BAN-04's rule, for the notice's sake), and
+        `banned_user_id` is what it resolved. Anyone not suspended has no
+        suspension to ask about, and is told so.
+        """
+        banned_user_id = getattr(request.state, "banned_user_id", None)
+        if banned_user_id is None:
+            raise HTTPException(status_code=404, detail="No drawing.")
+        async with session_factory() as session:
+            ban = await active_ban_for_user(session, UUID(str(banned_user_id)))
+            evidence = (
+                await drawing_evidence_for_report(
+                    session, ban.source_report_id, with_bytes=True
+                )
+                if ban is not None
+                else None
+            )
+        return _drawing_response(evidence, who="suspended player")
 
     @router.post("/warnings/{warning_id}/acknowledge")
     async def acknowledge_warning(warning_id: UUID, request: Request):

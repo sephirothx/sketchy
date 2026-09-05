@@ -765,13 +765,17 @@ it, and leaving it open puts it back in front of the next moderator.
 **Moderation** is where reports are read and acted on - player reports with
 their preserved message evidence and, when one was attached, the drawing drawn
 from its stored frame beside the prompt the drawer was given, and
-prompt-content reports against a list or a single prompt. Resolving a content
+prompt-content reports against a list or a single prompt. A warned or
+suspended player is shown that same drawing with their own words: it is
+their work, and a reason with nothing behind it is easy to dismiss. Resolving a content
 report records that it was looked at; hiding the list or prompt is the separate
 decision that acts on it, and the owner is told when it happens if they have a
 confirmed address. Every review takes a note, so no decision is anonymous. A
 **Closed** queue lists every decided case, player and content together, newest
-decision first and a page at a time, with the note it was decided with - the
-open queues are small enough to show whole, but closed cases accumulate for as
+decision first and a page at a time, each with a chip saying how it ended -
+dismissed, warned, suspended; hidden or left up for content - and, opened, the
+decision itself: what was done, who did it, when, and the note. The open
+queues are small enough to show whole, but closed cases accumulate for as
 long as the server runs, and the newest are the ones worth finding.
 
 A suspended player is told before they are signed out. Suspending revokes every

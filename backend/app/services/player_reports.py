@@ -22,6 +22,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import undefer
 
 from app.canvas_storage import prepare_stored_drawing
 from app.db.models import (
@@ -110,6 +111,39 @@ def drawing_from_live_room(room: Room, target_player_id: str) -> CapturedDrawing
         format_version=version,
         checksum_sha256=checksum,
     )
+
+
+def drawing_evidence_payload(evidence: PlayerReportDrawingEvidence | None) -> dict | None:
+    """The attached drawing by its metadata; the bytes travel by their own route.
+
+    One shape for every reader - the moderator's queue, the warned player's
+    notice, the suspended player's refusal - so a drawing means the same
+    thing wherever it is shown.
+    """
+    if evidence is None:
+        return None
+    return {
+        "turnId": str(evidence.turn_id_snapshot),
+        "roundNumber": evidence.round_number,
+        "prompt": evidence.prompt_snapshot,
+        "actionCount": evidence.action_count,
+        "byteSize": evidence.byte_size,
+        "capturedAt": evidence.captured_at.isoformat(),
+    }
+
+
+async def drawing_evidence_for_report(
+    session: AsyncSession, report_id: UUID | None, *, with_bytes: bool = False
+) -> PlayerReportDrawingEvidence | None:
+    """The drawing a report carries, if any; `with_bytes` undefers the blob."""
+    if report_id is None:
+        return None
+    statement = select(PlayerReportDrawingEvidence).where(
+        PlayerReportDrawingEvidence.report_id == report_id
+    )
+    if with_bytes:
+        statement = statement.options(undefer(PlayerReportDrawingEvidence.payload))
+    return await session.scalar(statement)
 
 
 def record_player_report(

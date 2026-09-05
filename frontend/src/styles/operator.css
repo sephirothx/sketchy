@@ -888,6 +888,54 @@
   margin: 12px 0 0;
 }
 
+.mod-drawing .reported-drawing-status {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.mod-drawing .reported-drawing-caption {
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+/* The outcome beside a closed case's title, and at the head of its decision. */
+.mod-outcome-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+/* Its own row under the title in the list, hugging its text rather than
+   stretching across the grid cell. */
+.mod-queue-item-text .mod-outcome-chip {
+  display: inline-flex;
+  justify-self: start;
+  margin: 1px 0 2px;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.mod-decision-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.mod-decision-head h2 {
+  margin-bottom: 0;
+}
+
+.mod-decision .mod-case-meta {
+  margin-top: 8px;
+}
+
+.mod-decision .mod-resolution {
+  margin-top: 10px;
+}
+
 .mod-drawing .canvas-wrapper,
 .mod-drawing .canvas-stack {
   max-width: 520px;

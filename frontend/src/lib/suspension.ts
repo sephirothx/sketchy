@@ -9,6 +9,7 @@ signed out with no explanation at all.
 Both feed one notice, kept here rather than in a component so that `api.ts` can
 raise it without importing React. */
 import { formatDateTime, type TimeFormat } from "./clock.ts";
+import { reportedDrawing, type PlayerReportDrawing } from "./moderation.ts";
 
 
 export type ReportedMessage = {
@@ -24,6 +25,9 @@ export type Suspension = {
       is what makes the reason something they can weigh rather than just be
       told. Empty when the suspension was issued without a report. */
   messages: ReportedMessage[];
+  /** The drawing the report behind this was about - their own work - or
+      null; the bytes are fetched through the ban-time credential. */
+  drawing: PlayerReportDrawing | null;
 };
 
 type Listener = (suspension: Suspension) => void;
@@ -53,6 +57,7 @@ export function suspensionFromPayload(payload: unknown): Suspension | null {
     reason: typeof body.reason === "string" ? body.reason : null,
     expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
     messages: reportedMessages(body.messages),
+    drawing: reportedDrawing(body.drawing),
   };
 }
 

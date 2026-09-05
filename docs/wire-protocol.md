@@ -400,12 +400,13 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 > one that holds. What was copied is read back by a moderator over
 > `GET /api/moderation/reports/{report_id}/drawing` (R-MOD-14).
 
-> Note the deliberate asymmetry: the **socket** report bounds `details` at 1000 and lets
-> it be empty, while the **REST** `POST /api/reports` requires it, bounds it at
-> `MAX_REPORT_DETAILS` = 2000 and also
+> Note the deliberate asymmetry: the **socket** report bounds `details` at 1000, while
+> the **REST** `POST /api/reports` bounds it at `MAX_REPORT_DETAILS` = 2000 and also
 > accepts `contextSnapshot` (≤ 32 768 bytes) and `messageIds` (≤ 20, which must be
-> unique). The socket path exists so a player can report from the room without leaving
-> it, and the server selects the evidence itself. On both paths the server then copies
+> unique). On both, `details` is optional and stripped: the evidence is the
+> complaint, and the queue reads an empty one as *no details given* rather than as
+> words the reporter never wrote. The socket path exists so a player can report from
+> the room without leaving it, and the server selects the evidence itself. On both paths the server then copies
 > the conversation around the cited lines as `context` (R-MOD-13); the acknowledgement's
 > `evidenceCount` counts the cited lines only.
 
@@ -1145,9 +1146,9 @@ whose frozen snapshots are already tombstoned on deletion.
 
 | Method | Path | Role | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/reports` | any signed-in | ≤ 2000 chars detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
+| `POST` | `/api/reports` | any signed-in | ≤ 2000 chars of optional detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
 | `POST` | `/api/prompt-content-reports` | any signed-in | Targets a list or an exact `promptVersionId`. Official content and self-reports rejected |
-| `GET` | `/api/moderation/reports` | moderator+ | The queue, oldest first; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension), `messageEvidence` in the order it was said, each line with a `role` of `cited` or `context` (R-MOD-13), and `drawing` — the attached canvas by its metadata (`turnId`, `roundNumber`, `prompt`, `actionCount`, `byteSize`, `capturedAt`) or `null` (R-MOD-14) |
+| `GET` | `/api/moderation/reports` | moderator+ | The queue, oldest first; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension), `messageEvidence` in the order it was said, each line with a `role` of `cited` or `context` (R-MOD-13), `drawing` — the attached canvas by its metadata (`turnId`, `roundNumber`, `prompt`, `actionCount`, `byteSize`, `capturedAt`) or `null` (R-MOD-14) — and how it was closed: `outcome` (`pending`, `dismissed`, `resolved`, `warned`, `suspended`; a content report closes as `dismissed`, `hidden`, `left_up` or `resolved`) read from the warning or suspension that names the report rather than from its status, and `reviewedBy`, the reviewer's name resolved when read (R-MOD-15) |
 | `GET` | `/api/moderation/reports/{report_id}/drawing` | moderator+ | The attached drawing's bytes in the **current wire format** (`application/octet-stream`, `Cache-Control: private, no-store`), checksum verified on every read; `404` when the report has none |
 | `GET` | `/api/moderation/closed-cases` | moderator+ | Decided player and content reports as **one stream, newest decision first**, under `limit` (≤ 100) and `offset` (≤ 1000): `{ players, content, hasMore }`, each list already in that order and carrying what its open queue does; `hasMore` is `false` at the offset cap even when older rows exist, so the client is never pointed at a page it would be refused (R-MOD-15) |
 | `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | Review is one-way |
@@ -1156,7 +1157,9 @@ whose frozen snapshots are already tombstoned on deletion.
 | `GET`/`POST` | `/api/moderation/bans` | moderator+ | Moderators cannot suspend peers; administrators cannot be targeted. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
 | `POST` | `/api/moderation/bans/{ban_id}/revoke` | moderator+ | Preserves the historic record and reason |
 | `POST` | `/api/moderation/warnings` | moderator+ | Formal warning; same role boundaries as a suspension, restricts nothing. With `reportId`, resolves that report in the same transaction (`409` if already decided) |
-| `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it — the `cited` lines only, never the context around them |
+| `GET` | `/api/warnings/pending` | any signed-in | The caller's own oldest unacknowledged warning, with the reported messages behind it — the `cited` lines only, never the context around them — and `drawing`, the attached canvas by its metadata or `null` |
+| `GET` | `/api/warnings/{warning_id}/drawing` | any signed-in | The bytes of the drawing behind the caller's **own** warning, in the current wire format; `404` for anyone else's, as acknowledging is |
+| `GET` | `/api/suspension/drawing` | the suspended account | The bytes of the drawing behind the caller's own **active** suspension. The one path beside the privacy escape hatch that the ban-time credential may reach: the refusal names the drawing (`drawing` beside `messages` on the 403 body and the `account_suspended` event), and this is how the notice gets it. `404` when not suspended or when the suspension carries none |
 | `POST` | `/api/warnings/{warning_id}/acknowledge` | any signed-in | Own warnings only (`404` otherwise); records that the notice landed |
 | `GET` | `/api/role-notices/pending` | any signed-in | The caller's own **newest** unacknowledged role-change notice. Newest rather than oldest: a role is one current fact, so an account promoted and then demoted while it was away is told once, correctly |
 | `POST` | `/api/role-notices/{notice_id}/acknowledge` | any signed-in | Own notices only (`404` otherwise); settles that notice and every older one, since the account has just been shown where it stands |

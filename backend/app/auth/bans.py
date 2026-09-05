@@ -8,6 +8,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import PlayerReportMessageEvidence, UserBan
+from app.services.player_reports import (
+    drawing_evidence_for_report,
+    drawing_evidence_payload,
+)
 
 
 def active_ban_filter(now: datetime):
@@ -71,6 +75,13 @@ async def suspension_payload(
     body["reason"] = ban.reason
     body["expiresAt"] = ban.expires_at.isoformat() if ban.expires_at else None
     body["messages"] = await _reported_messages(session_factory, ban)
+    # The drawing the report carried, if one did: their own work, shown back
+    # for the reason the messages are. Metadata here; the bytes over
+    # `GET /api/suspension/drawing`, which the ban-time credential may reach.
+    async with session_factory() as session:
+        body["drawing"] = drawing_evidence_payload(
+            await drawing_evidence_for_report(session, ban.source_report_id)
+        )
     return body
 
 

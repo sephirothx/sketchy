@@ -1,13 +1,12 @@
 import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
-import { CanvasSnapshot } from "../components/CanvasSnapshot";
 import { NotFoundPage } from "./NotFoundPage";
-import { Chip } from "../components/ui/Chip";
+import { ReportedDrawing } from "../components/ReportedDrawing";
+import { Chip, type ChipKind } from "../components/ui/Chip";
 import { SectionLabel } from "../components/ui/Card";
 
 import { ApiError } from "../lib/api";
-import { decodeCanvasHistory, type DecodedCanvasAction } from "../lib/canvasHistory";
 import {
   CLOSED_CASES_PAGE_SIZE,
   createUserBan,
@@ -22,8 +21,8 @@ import {
   reviewModerationReport,
   reviewPromptContentReport,
   type PlayerReport,
-  type PlayerReportDrawing,
   type PromptContentReport,
+  type ReportOutcome,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
   type UserBan,
@@ -44,7 +43,53 @@ type QueueEntry = {
       for a closed one when it was decided. */
   at: string;
   dot: "danger" | "warning" | "neutral";
+  /** How a closed case ended; absent while it is still open. */
+  outcome?: ReportOutcome;
 };
+
+/** One chip per outcome: what was done, in the colour of how serious it was.
+    Green for a case that ended with nothing against anyone, orange for a
+    warning, red for a suspension or a takedown. */
+const OUTCOMES: Record<ReportOutcome, { label: string; kind: ChipKind }> = {
+  pending: { label: "Waiting", kind: "neutral" },
+  dismissed: { label: "Dismissed", kind: "success" },
+  resolved: { label: "Resolved", kind: "neutral" },
+  warned: { label: "Warned", kind: "warning" },
+  suspended: { label: "Suspended", kind: "danger" },
+  hidden: { label: "Hidden", kind: "danger" },
+  left_up: { label: "Left up", kind: "success" },
+};
+
+function OutcomeChip({ outcome }: { outcome: ReportOutcome }) {
+  const { label, kind } = OUTCOMES[outcome] ?? OUTCOMES.resolved;
+  return <Chip kind={kind} className="mod-outcome-chip">{label}</Chip>;
+}
+
+/** How a closed case was decided: the outcome, who decided it and when, and
+    the note they left. The note alone used to stand for all three. */
+function DecisionCard({
+  report,
+  dateTime,
+}: {
+  report: PlayerReport | PromptContentReport;
+  dateTime: (date: Date) => string;
+}) {
+  return (
+    <section className="ops-card mod-decision" aria-label="Decision" data-testid="mod-decision">
+      <div className="mod-decision-head">
+        <h2>Decision</h2>
+        <OutcomeChip outcome={report.outcome} />
+      </div>
+      <p className="mod-case-meta">
+        {report.reviewedBy ? `By ${report.reviewedBy}` : "Reviewer no longer has an account"}
+        {report.reviewedAt ? ` · ${formatWhen(report.reviewedAt, dateTime)}` : ""}
+      </p>
+      {report.resolutionNote && (
+        <p className="mod-resolution">{report.resolutionNote}</p>
+      )}
+    </section>
+  );
+}
 
 const FILTERS: { name: Filter; label: string }[] = [
   { name: "open", label: "All open" },
@@ -89,11 +134,7 @@ function accountAge(createdAt: string): string {
   return `${years} year${years === 1 ? "" : "s"}`;
 }
 
-/** The drawing a report carries, drawn from its stored frame.
-
-Fetched when the case is opened rather than with the queue: the bytes are
-the one heavy part of a report, and most cases carry none. Decoded with the
-same code a live canvas uses, so what a moderator sees is what the room saw. */
+/** The drawing a report carries, for the case view. */
 function ReportDrawing({
   reportId,
   drawing,
@@ -101,51 +142,25 @@ function ReportDrawing({
   dateTime,
 }: {
   reportId: string;
-  drawing: PlayerReportDrawing;
+  drawing: NonNullable<PlayerReport["drawing"]>;
   drawerName: string;
   dateTime: (date: Date) => string;
 }) {
-  // Mounted under a key of the report id, so a different case is a fresh
-  // instance and nothing here has to be reset by hand.
-  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let stale = false;
-    fetchReportDrawing(reportId)
-      .then((bytes) => {
-        if (stale) return;
-        const decoded = decodeCanvasHistory(bytes);
-        if (decoded) setActions(decoded);
-        else setError("This drawing could not be decoded.");
-      })
-      .catch(() => {
-        if (!stale) setError("The drawing could not be loaded.");
-      });
-    return () => {
-      stale = true;
-    };
-  }, [reportId]);
-
   return (
-    <figure className="mod-drawing" data-testid="mod-drawing">
-      {actions ? (
-        <CanvasSnapshot
-          actions={actions}
-          label={`${drawerName}'s drawing of ${drawing.prompt}, as it was when reported`}
-        />
-      ) : (
-        <p className="mod-case-details" role={error ? "alert" : "status"}>
-          {error ?? "Loading the drawing…"}
-        </p>
-      )}
-      <figcaption className="mod-evidence-caption">
-        The canvas when the report was sent, {formatWhen(drawing.capturedAt, dateTime)}:
-        round {drawing.roundNumber}, {drawing.actionCount} action
-        {drawing.actionCount === 1 ? "" : "s"}. They were asked to draw{" "}
-        <strong>{drawing.prompt || "nothing yet"}</strong>.
-      </figcaption>
-    </figure>
+    <ReportedDrawing
+      className="mod-drawing"
+      testId="mod-drawing"
+      load={() => fetchReportDrawing(reportId)}
+      label={`${drawerName}'s drawing of ${drawing.prompt}, as it was when reported`}
+      caption={
+        <>
+          The canvas when the report was sent, {formatWhen(drawing.capturedAt, dateTime)}:
+          round {drawing.roundNumber}, {drawing.actionCount} action
+          {drawing.actionCount === 1 ? "" : "s"}. They were asked to draw{" "}
+          <strong>{drawing.prompt || "nothing yet"}</strong>.
+        </>
+      }
+    />
   );
 }
 
@@ -239,6 +254,7 @@ export function ModerationPage() {
       snippet: report.details || "No details given.",
       at: showingClosed ? decidedAt(report) : report.createdAt,
       dot: showingClosed ? "neutral" : "danger",
+      outcome: showingClosed ? report.outcome : undefined,
     }));
     const contentEntries: QueueEntry[] = content.map((report) => ({
       kind: "content",
@@ -250,6 +266,7 @@ export function ModerationPage() {
           : `List “${report.listName}”`,
       at: showingClosed ? decidedAt(report) : report.createdAt,
       dot: showingClosed ? "neutral" : "warning",
+      outcome: showingClosed ? report.outcome : undefined,
     }));
     const banEntries: QueueEntry[] = bans.map((ban) => ({
       kind: "ban",
@@ -414,6 +431,7 @@ export function ModerationPage() {
                   />
                   <span className="mod-queue-item-text">
                     <strong>{entry.title}</strong>
+                    {entry.outcome && <OutcomeChip outcome={entry.outcome} />}
                     <span>{entry.snippet}</span>
                   </span>
                   <time dateTime={entry.at}>{age(entry.at)}</time>
@@ -715,9 +733,7 @@ export function ModerationPage() {
                   </div>
                 </>
               ) : (
-                playerCase.resolutionNote && (
-                  <p className="mod-resolution">{playerCase.resolutionNote}</p>
-                )
+                <DecisionCard report={playerCase} dateTime={dateTime} />
               )}
             </>
           )}
@@ -824,9 +840,7 @@ export function ModerationPage() {
                   </div>
                 </>
               ) : (
-                contentCase.resolutionNote && (
-                  <p className="mod-resolution">{contentCase.resolutionNote}</p>
-                )
+                <DecisionCard report={contentCase} dateTime={dateTime} />
               )}
             </>
           )}

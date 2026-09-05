@@ -140,9 +140,16 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await closed.wait_for()
             await closed.click()
             await moderator_page.locator('[data-testid="mod-drawing"] canvas').wait_for()
-            assert await moderator_page.locator(
+            # The decision, not only its note: what was done, by whom, when.
+            decision = moderator_page.locator('[data-testid="mod-decision"]')
+            await decision.wait_for()
+            assert await decision.locator(".chip", has_text="Dismissed").count() == 1
+            assert "By QueueModerator" in await decision.inner_text()
+            assert await decision.locator(
                 ".mod-resolution", has_text="Looked, and it was fine."
             ).count() == 1
+            # The chip sits beside the case in the list as well.
+            assert await closed.locator(".chip", has_text="Dismissed").count() == 1
             # The one page there is: nothing newer, nothing older.
             pager = moderator_page.get_by_role("navigation", name="Closed cases pages")
             await pager.wait_for()
