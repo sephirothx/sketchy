@@ -9,10 +9,10 @@ import json
 import secrets
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 
 from app.db.models import (
     AuditEvent,
@@ -247,8 +247,14 @@ async def _identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...
     return (canonical, *aliases)
 
 
-def _to_game_summary(game: GameRecord) -> GameSummary:
-    """Convert a stored game and its participants to the DTO both read paths return."""
+def _to_game_summary(game: GameRecord, *, with_rule_snapshot: bool = True) -> GameSummary:
+    """Convert a stored game and its participants to the DTO both read paths return.
+
+    Presentation comes from the frozen seat snapshots, never from the live
+    `User` rows (R-PRIV-08), so nothing here loads them. The rule snapshot
+    JSON is only serialised on the detail; a list read leaves it deferred
+    and passes `with_rule_snapshot=False` (#611).
+    """
     return GameSummary(
         id=_public_id(game.id),
         room_name=game.room_name,
@@ -256,7 +262,7 @@ def _to_game_summary(game: GameRecord) -> GameSummary:
         scoring_version=game.scoring_version,
         score_ledger_version=game.score_ledger_version,
         rule_snapshot_version=game.rule_snapshot_version,
-        rule_snapshot=game.rule_snapshot,
+        rule_snapshot=game.rule_snapshot if with_rule_snapshot else {},
         prompt_source_mode=game.prompt_source_mode,
         hint_mode=game.hint_mode,
         drawing_seconds=game.drawing_seconds,
@@ -1974,7 +1980,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     ),
                 )
                 .options(
-                    selectinload(GameRecord.participants).selectinload(GameParticipant.user)
+                    selectinload(GameRecord.participants),
+                    defer(GameRecord.rule_snapshot, raiseload=True),
                 )
                 .order_by(GameRecord.finished_at.desc())
                 .limit(clamped_limit)
@@ -1984,7 +1991,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             result = await session.execute(stmt)
             games = result.scalars().all()
 
-            return [_to_game_summary(g) for g in games]
+            return [_to_game_summary(g, with_rule_snapshot=False) for g in games]
 
     async def get_game_detail(
         self,
@@ -2001,18 +2008,28 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             requesting_identity_ids = await _identity_ids(
                 session, db_requesting_user_id
             )
+            # The prompts drawn, who guessed them and how fast belong to the
+            # players who were there, not to anyone holding the game id: the
+            # participation test is in the query, so a stranger's request
+            # answers 404 after one statement rather than after the dozen
+            # eager loads below (#611).
             stmt = (
                 select(GameRecord)
-                .where(GameRecord.id == db_game_id)
+                .where(
+                    GameRecord.id == db_game_id,
+                    exists().where(
+                        GameParticipant.game_id == GameRecord.id,
+                        GameParticipant.user_id.in_(requesting_identity_ids),
+                    ),
+                )
                 .options(
-                    selectinload(GameRecord.participants).selectinload(GameParticipant.user),
-                    selectinload(GameRecord.turns).selectinload(TurnRecord.drawer),
+                    selectinload(GameRecord.participants),
                     # Status only; the blob is fetched by its own route so a
                     # game detail never carries megabytes of canvas.
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.drawing
                     ).load_only(TurnDrawing.status),
-                    selectinload(GameRecord.turns).selectinload(TurnRecord.guesses).selectinload(TurnGuess.user),
+                    selectinload(GameRecord.turns).selectinload(TurnRecord.guesses),
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.participant_outcomes
                     ),
@@ -2030,8 +2047,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             if not g:
                 return None
 
-            # The prompts drawn, who guessed them and how fast belong to the
-            # players who were there, not to anyone holding the game id.
             requester_seats = sorted(
                 (p for p in g.participants if p.user_id in requesting_identity_ids),
                 key=lambda p: p.id,

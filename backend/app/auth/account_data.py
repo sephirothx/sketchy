@@ -29,7 +29,7 @@ from uuid import UUID
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
 from app.db import init_db, maintenance_engine
@@ -178,6 +178,9 @@ async def latest_counted_export(
     """The newest job that counts against the interval - a failed one does not."""
     return await session.scalar(
         select(DataExport)
+        # Status and timestamps decide the interval; the artifact - the
+        # largest non-blob value in the schema - is not read here (#611).
+        .options(defer(DataExport.artifact, raiseload=True))
         .where(
             DataExport.user_id == db_user_id,
             DataExport.status != DataExportStatus.FAILED.value,
@@ -1084,6 +1087,7 @@ async def _write_export_artifact(
         writer,
         session,
         select(BugReport)
+        .options(defer(BugReport.screenshot_payload, raiseload=True))
         .where(BugReport.reporter_user_id.in_(identity_ids))
         .order_by(BugReport.created_at, BugReport.id),
         _bug_report_document,
@@ -1178,6 +1182,7 @@ async def _write_export_artifact(
         writer,
         session,
         select(DataExport)
+        .options(defer(DataExport.artifact, raiseload=True))
         .where(DataExport.user_id == account.id)
         .order_by(DataExport.created_at, DataExport.id),
         _export_request_document,
@@ -1381,6 +1386,7 @@ async def list_data_exports(
             (
                 await session.scalars(
                     select(DataExport)
+                    .options(defer(DataExport.artifact, raiseload=True))
                     .where(DataExport.user_id == _entity_id(user_id))
                     .order_by(DataExport.created_at.desc(), DataExport.id.desc())
                     .limit(limit)
@@ -1646,7 +1652,12 @@ async def anonymize_account(
 
 
 def export_status_payload(job: DataExport) -> dict:
-    ready = job.status == DataExportStatus.READY.value and job.artifact is not None
+    # The encoding stands in for the bytes: `ck_data_exports_artifact_encoding_present`
+    # keeps the two present or absent together, and a status read must not
+    # fetch the artifact to learn that.
+    ready = (
+        job.status == DataExportStatus.READY.value and job.artifact_encoding is not None
+    )
     return {
         "id": str(job.id),
         "status": job.status,

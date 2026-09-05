@@ -446,6 +446,8 @@ turn, or guess fact tables.**
 `schema_version` · `artifact` (compressed bytes) · `artifact_encoding` (`gzip+json`) ·
 `failure_code` · `created_at` · `started_at` · `completed_at` · `expires_at`.
 
+Status, cooldown and listing reads defer `artifact` with `raiseload`; `export_status_payload` reads readiness from `artifact_encoding`, which the CHECK keeps present exactly when the bytes are. Only the download and the worker's completing write touch the artifact (#611).
+
 The document is stored **compressed** — around 3× smaller on a representative
 export, and it is the largest single non-blob value in the schema. The encoding is
 recorded beside it rather than assumed, so a later format is a new discriminator
@@ -761,6 +763,8 @@ digest, and rejects anything that is not a real PNG or WebP under 2 MB.
 `ck_bug_reports_screenshot_ready_identity` requires a `ready` row to hold the bytes and
 their identity; `ck_bug_reports_screenshot_erased` makes erasure **structural** — a
 decided report cannot retain pixels, whatever a future code path does.
+
+The admin queue and the account export read this table **without the screenshot column**: `screenshot_payload` is deferred with `raiseload`, so up to 200 rows of up to 2 MiB each are never transferred to serialise the shape of a picture nobody is looking at (#611, R-PLAT-14). Only the screenshot route selects the bytes.
 
 **Deciding is one-way.** A pending report receives one resolution with a required note,
 and the same transaction erases the screenshot. Submission and each decision append an

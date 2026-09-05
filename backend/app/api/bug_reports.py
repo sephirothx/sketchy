@@ -23,6 +23,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.orm import defer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -459,7 +460,16 @@ def create_bug_report_router(
         if status is not None and status not in {s.value for s in ReportStatus}:
             raise HTTPException(status_code=422, detail="Unknown status.")
         async with session_factory() as session:
-            query = select(BugReport).order_by(BugReport.created_at.desc())
+            # Metadata only: the queue names each screenshot's shape, never its
+            # bytes, and a `select(BugReport)` would haul up to 200 payloads of
+            # up to 2 MiB each into the process to serialise none of them
+            # (#611). `raiseload` makes touching the payload here an error
+            # rather than a silent lazy fetch.
+            query = (
+                select(BugReport)
+                .options(defer(BugReport.screenshot_payload, raiseload=True))
+                .order_by(BugReport.created_at.desc())
+            )
             if status is not None:
                 query = query.where(BugReport.status == status)
             reports = list((await session.scalars(query.limit(200))).all())
