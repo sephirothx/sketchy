@@ -390,6 +390,17 @@ the server resolves the seat against the live room and selects the evidence itse
 > unique). The socket path exists so a player can report from the room without leaving
 > it, and the server selects the evidence itself.
 
+> **Two routes, by where the reporter is.** A room reports a *seat* over this event. A
+> line of the lobby's chat has no seat, so the lobby reports over **REST** instead: the
+> client sends `POST /api/reports` with `reportedUserId` set to the `userId` the
+> `LobbyChatMessage` (§5) carries (the lobby's exception to R-ROOM-07),
+> `messageIds` naming that one line's `retainedMessageId`, and one of `harassment |
+> spam | inappropriate_name`. A line delivered without a `retainedMessageId` cannot be
+> cited and is offered no report action. The server checks the line the way R-LCHAT-05
+> says: the author must be the reported account, no audience check, and never mixed with
+> room lines. `report_player` never selects a lobby line. Client:
+> [`ReportLobbyLineDialog.tsx`](../frontend/src/components/ReportLobbyLineDialog.tsx).
+
 ---
 
 ## 5. Server → client events

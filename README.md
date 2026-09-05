@@ -719,6 +719,19 @@ has yet to look adds no evidence and buries the queue, and once the report is
 decided the same reporter may raise a new one, because that is a new incident
 rather than the same complaint repeated.
 
+A line of the lobby's chat is reported from the line itself, by clicking its
+author's name. The lobby has no seat to resolve, so this goes the other way
+round from the room: the line already carries its author's account id (the
+lobby's one exception to the no-account-ids rule), and the report names that
+id over REST and cites the one line it was opened from - nothing else is
+attached, because the lobby is one conversation rather than a room the server
+could gather from. The dialog shows the line being cited, offers only the
+reasons a line of words can be true of (harassment, spam, inappropriate name),
+and can be sent without typing anything, since the line is the complaint. A
+line retention did not keep cannot be cited, so its author's name is plain text
+and nothing explains why; a player's own lines, and every line seen by a guest,
+are plain for the same reasons the room gives.
+
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
 or none - and one with an end date lifts itself, because the list reports what
