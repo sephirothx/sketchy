@@ -6,6 +6,13 @@ export type LiveMetrics = {
   recorder: {
     buffered: number;
     dropped: number;
+    // The other ways a batch can be lost, counted apart (#614): a flush whose
+    // transaction failed or was cancelled keeps its batch for next time; a
+    // commit the driver could not report on lets its batch go.
+    failedFlushes: number;
+    interruptedFlushes: number;
+    ambiguousBatches: number;
+    lostToAmbiguity: number;
     storedEvents: number;
     startedAt: string;
   };
@@ -317,6 +324,22 @@ export function attentionReasons(live: LiveSnapshot): AttentionReason[] {
       "recorder",
       "Recorder dropped observations",
       `${live.recorder.dropped} observations were dropped by a full buffer.`,
+    );
+  }
+  if (live.recorder.lostToAmbiguity > 0) {
+    add(
+      "recorder-ambiguous",
+      "recorder",
+      "Recorder lost observations to an unknown commit",
+      `${live.recorder.lostToAmbiguity} observations in ${live.recorder.ambiguousBatches} batches were let go because the database never said whether it had written them.`,
+    );
+  }
+  if (live.recorder.failedFlushes > 0 || live.recorder.interruptedFlushes > 0) {
+    add(
+      "recorder-flush-failed",
+      "recorder",
+      "Recorder flushes failing",
+      `${live.recorder.failedFlushes} flushes failed and ${live.recorder.interruptedFlushes} were interrupted; their observations are still waiting to be written.`,
     );
   }
   const loops = Object.entries(live.loops ?? {});

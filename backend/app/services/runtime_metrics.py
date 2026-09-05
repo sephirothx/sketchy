@@ -291,8 +291,12 @@ async def flush_events(
                     for event in written
                 ]
                 for start in range(0, len(rows), INSERT_CHUNK_ROWS):
+                    # `inline()`: without it a one-row insert on PostgreSQL
+                    # fetches the generated id with RETURNING, which nothing
+                    # here reads.
                     await session.execute(
-                        insert(RuntimeEvent), rows[start : start + INSERT_CHUNK_ROWS]
+                        insert(RuntimeEvent).inline(),
+                        rows[start : start + INSERT_CHUNK_ROWS],
                     )
                 await _roll_up(session, written)
             except BaseException:

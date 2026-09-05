@@ -439,6 +439,24 @@ export function AdminOperationsPage() {
                 <strong>Dropped this window</strong>
                 <span>{live.recorder.dropped}</span>
               </div>
+              <div
+                className={`ops-health-row${live.recorder.failedFlushes + live.recorder.interruptedFlushes > 0 ? " is-warning" : ""}`}
+              >
+                <span className="ops-health-dot" aria-hidden="true" />
+                <strong>Flushes failed / interrupted</strong>
+                <span>
+                  {live.recorder.failedFlushes} / {live.recorder.interruptedFlushes}
+                </span>
+              </div>
+              <div
+                className={`ops-health-row${live.recorder.lostToAmbiguity > 0 ? " is-warning" : ""}`}
+              >
+                <span className="ops-health-dot" aria-hidden="true" />
+                <strong>Lost to unknown commits</strong>
+                <span>
+                  {live.recorder.lostToAmbiguity} in {live.recorder.ambiguousBatches} batches
+                </span>
+              </div>
               <div className="ops-attention">
                 <h3>Attention</h3>
                 {reasons.length === 0 ? (
