@@ -741,7 +741,8 @@
   color: var(--primary-ink);
 }
 
-.mod-queue-item-text span {
+/* The snippet only: a chip on the same rows keeps its own colour and weight. */
+.mod-queue-item-text span:not(.chip) {
   color: var(--muted);
   display: -webkit-box;
   font-size: 12px;
@@ -901,20 +902,12 @@
   margin-top: 10px;
 }
 
-/* The outcome beside a closed case's title, and at the head of its decision. */
-.mod-outcome-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-}
-
-/* Its own row under the title in the list, hugging its text rather than
-   stretching across the grid cell. */
+/* The outcome under a closed case's title, the same chip its decision card
+   carries: its own row, hugging its text rather than stretching across the
+   grid cell, and exempt from the snippet's line clamp. */
 .mod-queue-item-text .mod-outcome-chip {
-  display: inline-flex;
   justify-self: start;
-  margin: 1px 0 2px;
-  -webkit-line-clamp: unset;
-  overflow: visible;
+  margin: 2px 0 3px;
 }
 
 .mod-decision-head {
