@@ -402,6 +402,24 @@ overwrite one another and an idempotent retry does not increment twice. Guest-to
 merges rebuild the target and deduplicate games shared by its factual identities. Ratios
 and averages are derived on read, never stored.
 
+**Synchronization.** Every writer of an account's rows locks that account's `users`
+row first, in ascending id order: the finished-game write holds every seat's account
+`FOR UPDATE` (it also writes `last_active_at`), a merge holds source and target, and a
+rebuild holds every identity of the accounts it replaces. So a game that commits while a
+rebuild runs either committed before the rebuild read its facts, or waits and increments
+the rows the rebuild wrote — never the lost increment a read-then-replace allowed (#609).
+The incremental upsert lists its rows in ascending account id for the same reason: two
+games sharing accounts in opposite seat order take the projection rows in one order.
+
+A rebuild is **bounded per batch of accounts**, not per deployment: a full rebuild walks
+canonical accounts by keyset in batches of `REBUILD_BATCH_ACCOUNTS` (100), each batch its
+own transaction that locks only its identities, reads facts keyed by those identity ids
+(the games they played are a subquery, never a bind list, so an account with more games
+than asyncpg can bind still rebuilds) and streams them 1,000 rows at a time. An
+interrupted full rebuild leaves every finished batch correct and is simply run again; a
+batch that loses to a deadlock or serialization failure is retried whole. On a 40,000-game
+account the rebuild's peak allocation went from 63 MiB to 19 MiB (`benchmarks/user_stats.py`).
+
 `reactions_received` is the one counter that keeps moving after a game is written: a
 reaction given from the recap or from history adjusts the drawer's row for the **game's**
 day by a delta (`adjust_reactions_received`), so a rebuild — which only knows the game —

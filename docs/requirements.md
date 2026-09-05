@@ -480,7 +480,7 @@ what decides where it is stored and when it goes.
 | **R-HIST-18** | Every stored drawing format MUST keep its decoder forever, and every decoder MUST answer in the **current wire format** — so clients never learn a stored format exists and the wire format stays free to change without migrating a row. |
 | **R-HIST-19** | An operator command MUST be able to verify stored drawings in bounded batches, reporting checksum failures and unreadable formats, because a database column has no integrity check of its own. |
 | **R-HIST-20** | Lifetime profile summaries MUST be served from the rebuildable daily projection. **Profile reads MUST NOT query participant, turn, or guess fact tables.** |
-| **R-HIST-21** | The projection MUST be disposable: a missing or erased row reads as **zero** rather than silently falling back to an unbounded history scan. Operators repair drift explicitly. |
+| **R-HIST-21** | The projection MUST be disposable: a missing or erased row reads as **zero** rather than silently falling back to an unbounded history scan. Operators repair drift explicitly. A rebuild MUST lock the accounts it replaces (`FOR UPDATE`, ascending id, the order every writer of those rows uses) before reading their facts, so a game saved meanwhile waits and then increments rather than being replaced; a full rebuild MUST proceed in bounded batches of accounts, each its own transaction, with reads keyed by identity rather than by an unbounded list of game ids. [`services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) |
 | **R-HIST-22** | Prompt-list counts MUST be derived from membership on read, so adding or removing a prompt cannot leave a cached total out of sync. |
 
 ---

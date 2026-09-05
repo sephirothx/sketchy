@@ -11,9 +11,10 @@ from uuid import UUID
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.domain_values import GameOutcome
+from app.domain_values import AccountState, GameOutcome
 from app.db.models import (
     GameParticipant,
     GameRecord,
@@ -21,6 +22,7 @@ from app.db.models import (
     TurnDrawingReaction,
     TurnGuess,
     TurnRecord,
+    User,
     UserStatsDaily,
 )
 
@@ -138,7 +140,10 @@ async def increment_user_stats_projection(
             "drawings_made": canonical_drawers.count(user_id),
             "reactions_received": canonical_reacted_drawers.count(user_id),
         }
-        for user_id, standings in grouped.items()
+        # Ascending account id: two games sharing accounts in opposite seat
+        # order then take the projection rows in the same order, and cannot
+        # deadlock on them (#609).
+        for user_id, standings in sorted(grouped.items(), key=lambda item: item[0].int)
     ]
     statement = _projection_insert(session).values(rows)
     excluded = statement.excluded
@@ -222,20 +227,85 @@ async def adjust_reactions_received(
     )
 
 
-async def rebuild_user_stats_in_session(
-    session: AsyncSession, *, user_id: UUID | None = None
-) -> int:
-    """Replace all or one canonical account's rows from immutable history."""
-    aliases = await _alias_map(session)
-    target_id: UUID | None = None
-    identity_ids: set[UUID] | None = None
-    if user_id is not None:
-        target_id = aliases.get(user_id, user_id)
-        identity_ids = {
-            target_id,
-            *(source for source, target in aliases.items() if target == target_id),
-        }
+# How many canonical accounts one rebuild transaction covers. The working
+# set of a rebuild is proportional to this times the accounts' history, not
+# to the deployment's, and the bind lists it sends are the batch's identity
+# ids rather than every game those identities ever played (#609).
+REBUILD_BATCH_ACCOUNTS = 100
+# Deadlock and serialization failures are the two outcomes PostgreSQL asks a
+# caller to retry; each batch below is a whole idempotent transaction, so
+# retrying one is safe.
+_TRANSIENT_SQLSTATES = frozenset({"40001", "40P01"})
+REBUILD_RETRIES = 3
 
+
+def _is_transient(error: BaseException) -> bool:
+    origin = getattr(error, "orig", None)
+    return getattr(origin, "sqlstate", None) in _TRANSIENT_SQLSTATES
+
+
+# Rows per fetch when a rebuild streams facts: the reads below are keyed by
+# a batch of accounts but an account may have played for years, and the
+# totals need one pass, not the rows.
+REBUILD_FETCH_ROWS = 1_000
+
+
+async def _stream(session: AsyncSession, statement):
+    result = await session.stream(
+        statement, execution_options={"yield_per": REBUILD_FETCH_ROWS}
+    )
+    async for row in result:
+        yield row
+
+
+async def _identity_sets(
+    session: AsyncSession, account_ids: list[UUID]
+) -> dict[UUID, set[UUID]]:
+    """Each canonical account with every identity that resolves to it."""
+    sets = {account_id: {account_id} for account_id in account_ids}
+    for source_id, target_id in (
+        await session.execute(
+            select(IdentityAlias.source_user_id, IdentityAlias.target_user_id).where(
+                IdentityAlias.target_user_id.in_(account_ids)
+            )
+        )
+    ).all():
+        sets[target_id].add(source_id)
+    return sets
+
+
+async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> int:
+    """Replace the rows of one bounded batch of canonical accounts, locked.
+
+    The identities' `users` rows are locked `FOR UPDATE` in ascending id
+    order first - the same order the finished-game write locks them in - so
+    a game that commits while this runs either commits before the facts are
+    read here, or waits and increments the rows this writes. Without the
+    lock a game could commit between the read and the delete below and its
+    increment would be replaced by the older total.
+
+    Every query is keyed by the batch's identity ids; the games those
+    identities played are a subquery, never a bind list, so an account with
+    more games than the driver can bind still rebuilds in one statement.
+    """
+    if not account_ids:
+        return 0
+    identity_sets = await _identity_sets(session, account_ids)
+    canonical_of = {
+        identity: canonical
+        for canonical, identities in identity_sets.items()
+        for identity in identities
+    }
+    identity_ids = sorted(canonical_of, key=lambda value: value.int)
+    await session.execute(
+        select(User.id)
+        .where(User.id.in_(identity_ids))
+        .order_by(User.id)
+        .with_for_update()
+    )
+
+    totals: dict[tuple[UUID, date], _DailyTotals] = defaultdict(_DailyTotals)
+    game_users: dict[UUID, set[UUID]] = defaultdict(set)
     participant_statement = (
         select(
             GameParticipant.user_id,
@@ -246,21 +316,12 @@ async def rebuild_user_stats_in_session(
             GameRecord.outcome,
         )
         .join(GameRecord, GameRecord.id == GameParticipant.game_id)
-        .where(GameParticipant.user_id.is_not(None))
+        .where(GameParticipant.user_id.in_(identity_ids))
     )
-    if identity_ids is not None:
-        participant_statement = participant_statement.where(
-            GameParticipant.user_id.in_(identity_ids)
-        )
-
-    totals: dict[tuple[UUID, date], _DailyTotals] = defaultdict(_DailyTotals)
-    game_users: dict[UUID, set[UUID]] = defaultdict(set)
-    for source_id, game_id, rank, score, finished_at, outcome in (
-        await session.execute(participant_statement)
-    ).all():
-        canonical_id = aliases.get(source_id, source_id)
-        if target_id is not None and canonical_id != target_id:
-            continue
+    async for source_id, game_id, rank, score, finished_at, outcome in _stream(
+        session, participant_statement
+    ):
+        canonical_id = canonical_of[source_id]
         day = _utc_date(finished_at)
         daily = totals[(canonical_id, day)]
         # A game that stopped is still a seat somebody sat in, so their turns
@@ -275,74 +336,50 @@ async def rebuild_user_stats_in_session(
         game_users[game_id].add(canonical_id)
 
     if game_users:
-        turn_statement = (
-            select(
-                TurnRecord.id,
-                TurnRecord.game_id,
-                TurnRecord.drawer_user_id,
-                GameRecord.finished_at,
-            )
-            .join(GameRecord, GameRecord.id == TurnRecord.game_id)
-            .where(TurnRecord.game_id.in_(game_users))
+        batch_games = select(GameParticipant.game_id).where(
+            GameParticipant.user_id.in_(identity_ids)
         )
-        for _, game_id, drawer_id, finished_at in (
-            await session.execute(turn_statement)
-        ).all():
+        turn_statement = (
+            select(TurnRecord.game_id, TurnRecord.drawer_user_id, GameRecord.finished_at)
+            .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+            .where(TurnRecord.game_id.in_(batch_games))
+        )
+        async for game_id, drawer_id, finished_at in _stream(session, turn_statement):
             day = _utc_date(finished_at)
             for canonical_id in game_users[game_id]:
                 totals[(canonical_id, day)].turns_played += 1
-            if drawer_id is not None:
-                canonical_drawer = aliases.get(drawer_id, drawer_id)
-                if canonical_drawer in game_users[game_id]:
-                    totals[(canonical_drawer, day)].drawings_made += 1
+            canonical_drawer = canonical_of.get(drawer_id)
+            if canonical_drawer is not None and canonical_drawer in game_users[game_id]:
+                totals[(canonical_drawer, day)].drawings_made += 1
 
         guess_statement = (
             select(TurnGuess.user_id, TurnRecord.game_id, GameRecord.finished_at)
             .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
             .join(GameRecord, GameRecord.id == TurnRecord.game_id)
-            .where(
-                TurnGuess.user_id.is_not(None),
-                TurnRecord.game_id.in_(game_users),
-            )
+            .where(TurnGuess.user_id.in_(identity_ids))
         )
-        for guesser_id, game_id, finished_at in (
-            await session.execute(guess_statement)
-        ).all():
-            canonical_guesser = aliases.get(guesser_id, guesser_id)
+        async for guesser_id, game_id, finished_at in _stream(session, guess_statement):
+            canonical_guesser = canonical_of[guesser_id]
             if canonical_guesser in game_users[game_id]:
-                totals[
-                    (canonical_guesser, _utc_date(finished_at))
-                ].prompts_guessed += 1
+                totals[(canonical_guesser, _utc_date(finished_at))].prompts_guessed += 1
 
         reaction_statement = (
-            select(
-                TurnRecord.drawer_user_id,
-                TurnRecord.game_id,
-                GameRecord.finished_at,
-            )
+            select(TurnRecord.drawer_user_id, TurnRecord.game_id, GameRecord.finished_at)
             .select_from(TurnDrawingReaction)
             .join(TurnRecord, TurnRecord.id == TurnDrawingReaction.turn_id)
             .join(GameRecord, GameRecord.id == TurnRecord.game_id)
-            .where(
-                TurnRecord.drawer_user_id.is_not(None),
-                TurnRecord.game_id.in_(game_users),
-            )
+            .where(TurnRecord.drawer_user_id.in_(identity_ids))
         )
-        for drawer_id, game_id, finished_at in (
-            await session.execute(reaction_statement)
-        ).all():
-            canonical_drawer = aliases.get(drawer_id, drawer_id)
+        async for drawer_id, game_id, finished_at in _stream(
+            session, reaction_statement
+        ):
+            canonical_drawer = canonical_of[drawer_id]
             if canonical_drawer in game_users[game_id]:
-                totals[
-                    (canonical_drawer, _utc_date(finished_at))
-                ].reactions_received += 1
+                totals[(canonical_drawer, _utc_date(finished_at))].reactions_received += 1
 
-    if identity_ids is None:
-        await session.execute(delete(UserStatsDaily))
-    else:
-        await session.execute(
-            delete(UserStatsDaily).where(UserStatsDaily.user_id.in_(identity_ids))
-        )
+    await session.execute(
+        delete(UserStatsDaily).where(UserStatsDaily.user_id.in_(identity_ids))
+    )
     session.add_all(
         UserStatsDaily(
             user_id=canonical_id,
@@ -363,15 +400,85 @@ async def rebuild_user_stats_in_session(
     return len(totals)
 
 
+async def _canonical_account(session: AsyncSession, user_id: UUID) -> UUID:
+    target = await session.scalar(
+        select(IdentityAlias.target_user_id).where(
+            IdentityAlias.source_user_id == user_id
+        )
+    )
+    return target or user_id
+
+
+async def _account_batches(session: AsyncSession, batch_size: int):
+    """Canonical accounts in ascending id order, `batch_size` at a time, by keyset."""
+    last: UUID | None = None
+    while True:
+        statement = (
+            select(User.id)
+            .where(User.state != AccountState.MERGED.value)
+            .order_by(User.id)
+            .limit(batch_size)
+        )
+        if last is not None:
+            statement = statement.where(User.id > last)
+        batch = list((await session.scalars(statement)).all())
+        if not batch:
+            return
+        yield batch
+        last = batch[-1]
+
+
+async def rebuild_user_stats_in_session(
+    session: AsyncSession,
+    *,
+    user_id: UUID | None = None,
+    batch_size: int = REBUILD_BATCH_ACCOUNTS,
+) -> int:
+    """Replace one canonical account's rows, or every account's, in the caller's transaction.
+
+    A merge calls this for its target with the source and target rows
+    already locked, so the rebuild joins the merge's own transaction and the
+    merged identity's games are counted exactly once with it.
+    """
+    if user_id is not None:
+        return await _rebuild_accounts(session, [await _canonical_account(session, user_id)])
+    rows = 0
+    async for batch in _account_batches(session, batch_size):
+        rows += await _rebuild_accounts(session, batch)
+    return rows
+
+
 async def rebuild_user_stats_projection(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     user_id: UUID | None = None,
+    batch_size: int = REBUILD_BATCH_ACCOUNTS,
 ) -> int:
-    """Transactional maintenance entry point for a full or targeted rebuild."""
-    async with session_factory() as session:
-        async with session.begin():
-            return await rebuild_user_stats_in_session(session, user_id=user_id)
+    """Maintenance entry point: one account in one transaction, or every account in bounded ones.
+
+    A full rebuild is a sequence of independent batch transactions, each
+    holding only its accounts' rows and each complete in itself, so an
+    interrupted rebuild leaves every finished batch correct and is simply run
+    again. A batch that loses to a deadlock or serialization failure is
+    retried whole.
+    """
+    if user_id is not None:
+        async with session_factory() as session:
+            async with session.begin():
+                return await rebuild_user_stats_in_session(session, user_id=user_id)
+    rows = 0
+    async with session_factory() as cursor_session:
+        async for batch in _account_batches(cursor_session, batch_size):
+            for attempt in range(REBUILD_RETRIES):
+                try:
+                    async with session_factory() as session:
+                        async with session.begin():
+                            rows += await _rebuild_accounts(session, batch)
+                    break
+                except DBAPIError as error:
+                    if not _is_transient(error) or attempt == REBUILD_RETRIES - 1:
+                        raise
+    return rows
 
 
 async def _run_cli(user_id: UUID | None) -> None:

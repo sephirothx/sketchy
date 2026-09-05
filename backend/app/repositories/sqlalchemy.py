@@ -617,8 +617,24 @@ class SqlAlchemyUserRepository(UserRepository):
 
         async with self._session_factory() as session:
             async with session.begin():
-                source = await session.get(User, source_id)
-                target = await session.get(User, target_id)
+                # Both rows locked, ascending id first: the order every
+                # writer of these rows uses (app.auth.erasure), so a merge, a
+                # game save and a rebuild cannot wait on each other in a
+                # cycle, and the rebuild below joins this transaction with
+                # the source's games unable to move underneath it.
+                locked = {
+                    user.id: user
+                    for user in (
+                        await session.scalars(
+                            select(User)
+                            .where(User.id.in_([source_id, target_id]))
+                            .order_by(User.id)
+                            .with_for_update()
+                        )
+                    ).all()
+                }
+                source = locked.get(source_id)
+                target = locked.get(target_id)
                 existing_target = await session.scalar(
                     select(IdentityAlias.target_user_id).where(
                         IdentityAlias.source_user_id == source_id

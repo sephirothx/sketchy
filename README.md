@@ -1344,8 +1344,10 @@ interval a production constant instead of something bent for the tests, and it
 is the tool to reach for before making a timing value configurable.
 
 The user-stat benchmark seeds deterministic finished-game facts, rebuilds the
-daily projection, and compares the former four lifetime aggregates with the
-current repository read. On a local 10,000-game/10,000-turn SQLite run on
+daily projection (reporting the rebuild's wall time and peak allocation), and
+compares the former four lifetime aggregates with the current repository read.
+On a 40,000-game account the bounded, streamed rebuild of #609 measured
+1.76 s and 19.4 MiB peak against 2.0 s and 62.9 MiB before it. On a local 10,000-game/10,000-turn SQLite run on
 2026-08-23, 100 reads measured 6.85 ms versus 0.698 ms median (9.81×); treat
 those timings as a reproducible diagnostic, not a CI threshold or a PostgreSQL
 capacity claim. The structural invariant is tested separately: profile reads

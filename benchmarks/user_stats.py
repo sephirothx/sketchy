@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 import statistics
+from time import perf_counter
+import tracemalloc
 import sys
 import time
 
@@ -146,7 +148,15 @@ async def run(games: int, reads: int) -> dict:
             await session.execute(insert(GameRecord), game_rows)
             await session.execute(insert(GameParticipant), participant_rows)
             await session.execute(insert(TurnRecord), turn_rows)
+    # The rebuild itself: wall time and peak Python allocation, for the
+    # bounded-rebuild work in #609. Traced from a clean slate so the figure
+    # is the rebuild's own working set, not the fixture's.
+    tracemalloc.start()
+    rebuild_started = perf_counter()
     projection_rows = await rebuild_user_stats_projection(factory)
+    rebuild_seconds = perf_counter() - rebuild_started
+    _, rebuild_peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
     users = SqlAlchemyUserRepository(factory)
 
     await legacy_read(factory, user_id)
@@ -160,6 +170,8 @@ async def run(games: int, reads: int) -> dict:
         "turns": games,
         "projectionRows": projection_rows,
         "reads": reads,
+        "rebuildSeconds": round(rebuild_seconds, 3),
+        "rebuildPeakMiB": round(rebuild_peak / (1024 * 1024), 2),
         "legacyMedianMs": round(statistics.median(legacy_samples), 3),
         "projectionMedianMs": round(statistics.median(projection_samples), 3),
     }
