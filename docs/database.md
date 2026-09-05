@@ -1338,6 +1338,38 @@ The stable anonymized row, scores, prompts, and shared game structure **remain**
 another player's history is never damaged. Prompt usage facts carry no user identifier
 and are untouched.
 
+### The erasure barrier
+
+The deletion above erases what is in the database when it commits. What it cannot
+reach is content composed before it and written after it: a message still in the
+retention queue, a finished game still being written (or retried later, #541), an
+avatar upload, list save or report whose request passed the session middleware
+before the deletion committed. Each of those would write the erased name, text, or
+pixels back (#606: reproduced with one queued lobby line).
+
+So every writer of account-owned content re-reads the lifecycle of the accounts it
+writes for **inside its own transaction, under a shared lock on their rows, in
+ascending id order** ([`auth/erasure.py`](../backend/app/auth/erasure.py)). The
+deletion holds the account row `FOR UPDATE`; a writer that arrives while it is in
+flight waits and then reads `deleted`, and a deletion that arrives while a writer
+holds the shared lock waits for the commit and erases what was just written. Either
+order ends erased, and the ascending order is what keeps two writers, or a writer and
+two deletions, from waiting on each other in a cycle. A merged guest resolves to the
+account it was merged into; a row retention has already purged counts as erased.
+
+What each writer then does with an erased identity:
+
+| Writer | With an erased identity |
+| --- | --- |
+| Message retention queue (`_write`) | Drops the line; the rest of the batch is written |
+| Finished-game write (`save_game`) | Writes the game, the seats, the scores and the turns; the identity's snapshots carry the **Deleted player** tombstone, its drawings are written as `deleted` rows with no payload, reactions *on* those drawings are dropped and reactions it *gave* stay. The payload hash is taken from the input, so a retry of the same game is the same game, not a conflict |
+| Avatar upload, owned-list create/update, bug, player and content reports | Refused (`AccountErasedError`, 401 over HTTP): authentication before the deletion is not authorization after it |
+| Export request | Already locks the account row `FOR UPDATE` and refuses a deleted account |
+
+SQLite renders neither lock and has one writer at a time, so there the re-read alone
+is the barrier; both lock orders are proven on PostgreSQL in
+[`tests/test_erasure_barrier.py`](../backend/tests/test_erasure_barrier.py).
+
 ---
 
 ## 12. Recalculable competitive foundation

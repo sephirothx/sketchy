@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.auth.erasure import erased_identity_ids
 from app.db.models import RoomMessage
 from app.identifiers import generate_uuid7
 
@@ -242,7 +243,22 @@ class MessageRetentionService:
         now = batch[-1].created_at
         async with self._session_factory() as session:
             async with session.begin():
-                session.add_all(batch)
+                # The erasure barrier (app.auth.erasure): a line was composed
+                # with its author's name and text a moment ago, and the
+                # account may have been deleted since. Re-read under the
+                # shared lock and drop what an erased account said, rather
+                # than storing again what the deletion just removed.
+                erased = await erased_identity_ids(
+                    session,
+                    (row.sender_user_id for row in batch if row.sender_user_id),
+                )
+                kept = [row for row in batch if row.sender_user_id not in erased]
+                if len(kept) < len(batch):
+                    logger.info(
+                        "Dropped %d queued messages by erased accounts",
+                        len(batch) - len(kept),
+                    )
+                session.add_all(kept)
                 if (
                     self._last_cleanup_at is None
                     or now - self._last_cleanup_at >= CLEANUP_INTERVAL

@@ -68,6 +68,11 @@ from app.domain_values import (
     TurnDrawingStatus,
 )
 from app.auth.avatars import validate_avatar_key
+from app.auth.erasure import (
+    TOMBSTONE_SNAPSHOT,
+    erased_identity_ids,
+    require_live_account,
+)
 from app.services.user_stats_projection import (
     adjust_reactions_received,
     increment_user_stats_projection,
@@ -183,6 +188,22 @@ def _turn_drawing(
         byte_size=len(blob),
         checksum_sha256=checksum,
         stored_at=datetime.now(timezone.utc),
+    )
+
+
+def _erased_turn_drawing(turn_id: UUID, game_id: UUID) -> TurnDrawing:
+    """The row an erased account's drawing is written as: that it was, not what.
+
+    The same shape `anonymize_account` leaves behind for a drawing already
+    stored, so history reads identically whether the deletion came before
+    or after the game was written.
+    """
+    now = datetime.now(timezone.utc)
+    return TurnDrawing(
+        turn_id=turn_id,
+        game_id=game_id,
+        status=TurnDrawingStatus.DELETED.value,
+        deleted_at=now,
     )
 
 
@@ -989,7 +1010,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 )
                 users = (
                     await session.scalars(
-                        select(User).where(User.id.in_(referenced_user_ids))
+                        select(User)
+                        .where(User.id.in_(referenced_user_ids))
+                        .order_by(User.id)
+                        .with_for_update(read=True)
                     )
                 ).all()
                 users_by_id = {user.id: user for user in users}
@@ -999,6 +1023,19 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         "Cannot save game with unknown user ids: "
                         + ", ".join(sorted(str(value) for value in missing))
                     )
+                # The erasure barrier (app.auth.erasure): a game finishes in
+                # memory and is written a moment later, and a seat's account
+                # may have been deleted in between - or the write may be a
+                # retry from after the deletion. Every fact stays (the other
+                # players' history, R-PRIV-05); what the erased identity
+                # would have written back is what the deletion removed: its
+                # name and colour on every snapshot, its drawings' pixels,
+                # and the reactions those drawings had. The payload hash was
+                # taken from the input above, so a retry of the same game is
+                # still the same game and not a conflict.
+                erased_user_ids = await erased_identity_ids(
+                    session, referenced_user_ids
+                )
 
                 # The database refuses an unknown outcome too. This one names
                 # the offending value instead of surfacing an integrity error
@@ -1070,10 +1107,19 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         else participant_user.is_anonymous
                     )
                     participant_snapshots_by_id[participant_id] = (
+                        TOMBSTONE_SNAPSHOT
+                        if participant_user_id in erased_user_ids
+                        else (
+                            display_name_snapshot,
+                            name_color_snapshot,
+                            is_anonymous_snapshot,
+                        )
+                    )
+                    (
                         display_name_snapshot,
                         name_color_snapshot,
                         is_anonymous_snapshot,
-                    )
+                    ) = participant_snapshots_by_id[participant_id]
                     if participant_user_id is not None:
                         participant_ids_by_user[participant_user_id] = participant_id
                     session.add(
@@ -1342,6 +1388,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         raise ValueError(
                             f"Drawing references unknown turn_id '{drawing.turn_id}'"
                         )
+                    drawer_id = turn_inputs_by_id[drawing_turn_id].drawer_user_id
+                    if drawer_id and _entity_id(drawer_id) in erased_user_ids:
+                        session.add(
+                            _erased_turn_drawing(drawing_turn_id, record_id)
+                        )
+                        continue
                     session.add(
                         _turn_drawing(drawing, drawing_turn_id, record_id)
                     )
@@ -1398,6 +1450,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     reaction_drawer_ids.append(
                         _entity_id(drawer_user_id) if drawer_user_id else None
                     )
+                    if drawer_user_id and _entity_id(drawer_user_id) in erased_user_ids:
+                        # The drawing it was about is erased above; a
+                        # reaction to nothing is not kept (R-PRIV-05 keeps
+                        # the ones this seat *gave*, on other drawings).
+                        continue
                     session.add(
                         TurnDrawingReaction(
                             game_id=record_id,
@@ -2387,6 +2444,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
         async with self._session_factory() as session:
             async with session.begin():
+                await require_live_account(session, owner_id)
                 count = await session.scalar(
                     select(func.count(PromptList.id)).where(
                         PromptList.owner_user_id == owner_id,
@@ -2441,6 +2499,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListNotFoundError("Prompt list not found.")
         async with self._session_factory() as session:
             async with session.begin():
+                await require_live_account(session, owner_id)
                 prompt_list = await session.scalar(
                     select(PromptList)
                     .where(

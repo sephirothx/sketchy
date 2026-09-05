@@ -16,6 +16,7 @@ from app.handlers.payloads import (
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import PlayerReport
 from app.domain_values import ReportStatus
 from app.rooms import majority_of
@@ -164,6 +165,12 @@ async def report_player(ctx: HandlerContext, sid, data):
 
     async with ctx.session_factory() as session:
         async with session.begin():
+            # The erasure barrier (app.auth.erasure): the seat was
+            # authenticated when it sat down; the account may be gone since.
+            try:
+                await require_live_account(session, reporter.user_id)
+            except AccountErasedError:
+                return {"ok": False, "error": "Sign in first."}
             # The same rule the REST path and content reports carry: saying it
             # again while a moderator has yet to look adds no evidence and
             # buries the queue.

@@ -31,6 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
+from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
 from app.db import async_engine, async_session_factory, init_db
 from app.db.models import (
     AuditEvent,
@@ -92,7 +93,7 @@ EXPORT_TTL = timedelta(days=7)
 # copy on every click. A failed build does not count against the interval.
 EXPORT_INTERVAL = timedelta(days=7)
 STALE_PROCESSING_AFTER = timedelta(minutes=15)
-DELETED_DISPLAY_NAME = "Deleted player"
+DELETED_DISPLAY_NAME = _DELETED_DISPLAY_NAME
 # Not an address anyone owns, and not empty, so the not-null column keeps
 # saying a message went somewhere without saying where.
 DELETED_EMAIL_ADDRESS = "deleted@invalid"

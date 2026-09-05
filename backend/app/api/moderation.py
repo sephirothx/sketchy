@@ -38,6 +38,7 @@ from app.services.player_reports import (
 )
 from app.auth.sessions import revoke_all_sessions
 from app.auth.warnings import pending_warning_payload
+from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     AuditEvent,
     GameRecord,
@@ -632,6 +633,10 @@ def create_moderation_router(
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         async with session_factory() as session:
             async with session.begin():
+                try:
+                    await require_live_account(session, db_reporter_id)
+                except AccountErasedError:
+                    raise HTTPException(status_code=401, detail="Sign in first.") from None
                 prompt_list = await session.get(PromptList, body.prompt_list_id)
                 if (
                     prompt_list is None
@@ -779,6 +784,13 @@ def create_moderation_router(
 
         async with session_factory() as session:
             async with session.begin():
+                # The erasure barrier (app.auth.erasure): the reporter's
+                # session passed the middleware, but the account may have
+                # been deleted since.
+                try:
+                    await require_live_account(session, db_reporter_id)
+                except AccountErasedError:
+                    raise HTTPException(status_code=401, detail="Sign in first.") from None
                 target = await session.get(User, body.reported_user_id)
                 if target is None or target.state in {
                     AccountState.MERGED.value,
