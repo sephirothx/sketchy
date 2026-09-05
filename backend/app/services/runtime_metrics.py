@@ -24,7 +24,7 @@ recorded, so the gap is visible rather than silent.
 from __future__ import annotations
 
 from collections import Counter, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 import argparse
@@ -33,12 +33,15 @@ import contextlib
 import logging
 import os
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, insert, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.logging_config import configure_logging
 from app.db.models import RuntimeEvent, RuntimeStatsDaily
 from app.domain_values import RuntimeEventType
+from app.auth.erasure import erased_identity_ids
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
     SweepBudget,
@@ -106,7 +109,17 @@ class RuntimeMetrics:
         self._buffer: deque[PendingEvent] = deque(maxlen=max_buffered)
         self._totals: Counter[str] = Counter()
         self.gauges = Gauges()
+        # Four ways to lose an observation, counted apart (#614): the buffer
+        # overflowed, a flush's transaction failed before its commit (the
+        # batch stays buffered and goes next time - only overflow loses it),
+        # a flush was cancelled mid-way (same), or a commit's outcome was
+        # unknowable - the connection went away during COMMIT - and the batch
+        # was let go rather than written twice.
         self.dropped_events = 0
+        self.failed_flushes = 0
+        self.interrupted_flushes = 0
+        self.ambiguous_batches = 0
+        self.events_lost_to_ambiguity = 0
         self.started_at = datetime.now(timezone.utc)
 
     def record(
@@ -163,6 +176,21 @@ class RuntimeMetrics:
     def totals(self) -> dict[str, int]:
         return dict(self._totals)
 
+    def snapshot(self, limit: int | None = None) -> list[PendingEvent]:
+        """The oldest buffered events, still buffered: a flush takes them
+        off with `acknowledge` once their transaction has committed."""
+        if limit is None:
+            return list(self._buffer)
+        return [event for _, event in zip(range(limit), self._buffer, strict=False)]
+
+    def acknowledge(self, events: list[PendingEvent]) -> None:
+        """Forget events a flush has written. Only what is still buffered is
+        removed: the deque may have dropped some of them since the snapshot,
+        and those were counted as dropped when it did."""
+        written = {id(event) for event in events}
+        while self._buffer and id(self._buffer[0]) in written:
+            self._buffer.popleft()
+
     def drain(self) -> list[PendingEvent]:
         drained = list(self._buffer)
         self._buffer.clear()
@@ -183,63 +211,157 @@ def _utc_date(value: datetime) -> date:
     return value.astimezone(timezone.utc).date()
 
 
+# asyncpg binds at most 32,767 parameters per statement; the insert chunk is
+# sized from the table's own column count so adding a column shrinks the
+# chunk rather than breaking the flush.
+_PARAMETER_CEILING = 30_000
+INSERT_CHUNK_ROWS = max(1, _PARAMETER_CEILING // len(RuntimeEvent.__table__.columns))
+FLUSH_BATCH_EVENTS = 5_000
+
+
+class _CommitOutcomeUnknown(Exception):
+    """The COMMIT itself raised: the batch may or may not be on disk."""
+
+
+def _daily_insert(session: AsyncSession):
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        return postgresql_insert(RuntimeStatsDaily), func.greatest
+    if dialect == "sqlite":
+        return sqlite_insert(RuntimeStatsDaily), func.max
+    raise RuntimeError(f"Unsupported runtime metrics dialect: {dialect}")
+
+
+async def _normalize_account_references(
+    session: AsyncSession, pending: list[PendingEvent]
+) -> list[PendingEvent]:
+    """Detach an observation from an account that is gone or erased.
+
+    One buffered event naming a purged guest would fail the whole batch's
+    foreign key; the erasure barrier (app.auth.erasure) says which accounts
+    an observation may no longer point at, and the event keeps everything
+    but the reference.
+    """
+    referenced = {event.user_id for event in pending if event.user_id is not None}
+    if not referenced:
+        return pending
+    erased = await erased_identity_ids(session, referenced)
+    if not erased:
+        return pending
+    return [
+        replace(event, user_id=None) if event.user_id in erased else event
+        for event in pending
+    ]
+
+
 async def flush_events(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     recorder: RuntimeMetrics | None = None,
+    batch_size: int = FLUSH_BATCH_EVENTS,
 ) -> int:
     """Write buffered observations, and roll them into the daily totals.
 
     Both in one transaction: an event row that survives without its aggregate
-    would be lost the day retention removes it.
+    would be lost the day retention removes it. The batch stays buffered
+    until that transaction has committed, so a failure keeps it for the
+    next flush rather than losing it silently (#614); the raw rows go in
+    bounded chunks with no returned ids, and the daily totals are grouped
+    here and written as one ordered upsert per chunk instead of a read and
+    a write per day and metric.
     """
     source = recorder or metrics
-    pending = source.drain()
+    pending = source.snapshot(batch_size)
     if not pending:
         return 0
-    async with session_factory() as session:
-        async with session.begin():
-            session.add_all(
-                RuntimeEvent(
-                    event_type=event.event_type,
-                    occurred_at=event.occurred_at,
-                    room_id=event.room_id,
-                    user_id=event.user_id,
-                    value=event.value,
-                    details=event.details or None,
-                )
-                for event in pending
-            )
-            await _roll_up(session, pending)
+    try:
+        async with session_factory() as session:
+            await session.begin()
+            try:
+                written = await _normalize_account_references(session, pending)
+                rows = [
+                    {
+                        "event_type": event.event_type,
+                        "occurred_at": event.occurred_at,
+                        "room_id": event.room_id,
+                        "user_id": event.user_id,
+                        "value": event.value,
+                        "details": event.details or None,
+                    }
+                    for event in written
+                ]
+                for start in range(0, len(rows), INSERT_CHUNK_ROWS):
+                    await session.execute(
+                        insert(RuntimeEvent), rows[start : start + INSERT_CHUNK_ROWS]
+                    )
+                await _roll_up(session, written)
+            except BaseException:
+                await session.rollback()
+                raise
+            try:
+                await session.commit()
+            except Exception as error:
+                raise _CommitOutcomeUnknown() from error
+    except _CommitOutcomeUnknown:
+        source.acknowledge(pending)
+        source.ambiguous_batches += 1
+        source.events_lost_to_ambiguity += len(pending)
+        raise
+    except asyncio.CancelledError:
+        source.interrupted_flushes += 1
+        raise
+    except Exception:
+        source.failed_flushes += 1
+        raise
+    source.acknowledge(pending)
     return len(pending)
 
 
 async def _roll_up(session: AsyncSession, events: list[PendingEvent]) -> None:
-    """Add a batch to `runtime_stats_daily`, which is kept for ever."""
-    grouped: dict[tuple[date, str], list[int]] = {}
-    counts: Counter[tuple[date, str]] = Counter()
+    """Add a batch to `runtime_stats_daily`, which is kept for ever.
+
+    Grouped in memory by day and metric, then upserted in ascending
+    (day, metric) order - the same order every flush takes, so two writers
+    cannot deadlock on the rows - with additive occurrences and sum and a
+    greatest-of max, `updated_at` set explicitly in the assignment.
+    """
+    occurrences: Counter[tuple[date, str]] = Counter()
+    sums: Counter[tuple[date, str]] = Counter()
+    maxima: dict[tuple[date, str], int] = {}
     for event in events:
         key = (_utc_date(event.occurred_at), event.event_type)
-        counts[key] += 1
+        occurrences[key] += 1
         if event.value is not None:
-            grouped.setdefault(key, []).append(event.value)
-
-    for (stat_date, metric), occurrences in counts.items():
-        values = grouped.get((stat_date, metric), [])
-        row = await session.get(RuntimeStatsDaily, (stat_date, metric))
-        if row is None:
-            row = RuntimeStatsDaily(
-                stat_date=stat_date,
-                metric=metric,
-                occurrences=0,
-                value_sum=0,
-                value_max=None,
+            sums[key] += event.value
+            maxima[key] = max(maxima.get(key, event.value), event.value)
+    rows = [
+        {
+            "stat_date": stat_date,
+            "metric": metric,
+            "occurrences": count,
+            "value_sum": sums[(stat_date, metric)],
+            "value_max": maxima.get((stat_date, metric)),
+        }
+        for (stat_date, metric), count in sorted(occurrences.items())
+    ]
+    statement_for, greatest = _daily_insert(session)
+    for start in range(0, len(rows), INSERT_CHUNK_ROWS):
+        statement = statement_for.values(rows[start : start + INSERT_CHUNK_ROWS])
+        excluded = statement.excluded
+        await session.execute(
+            statement.on_conflict_do_update(
+                index_elements=["stat_date", "metric"],
+                set_={
+                    "occurrences": RuntimeStatsDaily.occurrences + excluded.occurrences,
+                    "value_sum": RuntimeStatsDaily.value_sum + excluded.value_sum,
+                    "value_max": greatest(
+                        func.coalesce(RuntimeStatsDaily.value_max, excluded.value_max),
+                        func.coalesce(excluded.value_max, RuntimeStatsDaily.value_max),
+                    ),
+                    "updated_at": func.now(),
+                },
             )
-            session.add(row)
-        row.occurrences += occurrences
-        row.value_sum += sum(values)
-        if values:
-            row.value_max = max(max(values), row.value_max or 0)
+        )
 
 
 async def purge_expired_events(

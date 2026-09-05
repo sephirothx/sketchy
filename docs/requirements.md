@@ -494,7 +494,7 @@ what decides where it is stored and when it goes.
 | --- | --- |
 | **R-OBS-01** | Live counts of rooms, players, and running games MUST be in memory and MUST vanish on restart — a live count is not a historical fact, and one worker owns all of it, so an in-process count is the true count. |
 | **R-OBS-02** | Observations MUST be buffered and written in batches; a database round trip per join would be felt as lag inside a drawing. |
-| **R-OBS-03** | The buffer MUST be bounded, drop oldest when full, and **count what it dropped**, so a gap is visible rather than silent. |
+| **R-OBS-03** | The buffer MUST be bounded, drop oldest when full, and **count what it dropped**, so a gap is visible rather than silent. A flush MUST keep its batch buffered until the transaction that wrote it has committed, MUST insert raw rows in bounded chunks without returning ids and roll them up with ordered additive upserts, MUST detach an observation from an erased or purged account rather than fail the batch, and MUST count apart what was lost to overflow, to a failed transaction (kept for the next flush), to a cancelled flush (kept), and to a commit of unknown outcome (let go rather than written twice) (#614). [`services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) |
 | **R-OBS-04** | Raw observations MUST be rolled into permanent daily totals **before** being purged. Unbounded event rows on embedded SQLite is a disk that fills up quietly. |
 | **R-OBS-05** | `GET /metrics` MUST be disabled entirely until `METRICS_TOKEN` is set, and MUST require that bearer token. |
 | **R-OBS-06** | The in-app operations page MUST require the administrator role. |

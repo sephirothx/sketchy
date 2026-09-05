@@ -1307,6 +1307,21 @@ full, **counting what it dropped**, so a gap is visible rather than silent. It i
 flushed on the way out of a planned shutdown, so the observations describing a restart
 are not the ones lost to it.
 
+A flush takes the oldest 5,000 events but leaves them buffered until its transaction has
+committed (#614): the raw rows go in as `executemany` chunks sized from the table's own
+column count (about 4,300 rows under asyncpg's 32,767-parameter ceiling) with no ids
+returned, the daily totals are grouped in memory and written as one ordered additive
+upsert per chunk with `updated_at` assigned explicitly, and an observation naming an
+account that was erased or purged since is detached from it (the erasure barrier,
+`app.auth.erasure`) rather than failing the batch's foreign key. What can still be lost
+is counted apart, on the recorder and on `/metrics`: overflow
+(`sketchy_events_dropped_total`), a transaction that failed before its commit
+(`sketchy_event_flushes_failed_total`, the batch stays for the next flush), a cancelled
+flush (`sketchy_event_flushes_interrupted_total`, kept too), and a commit whose outcome
+the driver could not report (`sketchy_event_batches_ambiguous_total`,
+`sketchy_events_lost_to_ambiguity_total`) — that batch is let go rather than retried,
+because a raw row has no identity that would make a second write a no-op.
+
 ### `runtime_stats_daily`
 `stat_date` + `metric` composite **PK** · `occurrences` · `value_sum` (BIGINT) ·
 `value_max` · `updated_at`.

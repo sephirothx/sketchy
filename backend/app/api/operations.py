@@ -187,6 +187,10 @@ def _prometheus_lines() -> list[str]:
         "# HELP sketchy_events_dropped_total Observations lost to a full buffer.",
         "# TYPE sketchy_events_dropped_total counter",
         f"sketchy_events_dropped_total {metrics.dropped_events}",
+        f"sketchy_event_flushes_failed_total {metrics.failed_flushes}",
+        f"sketchy_event_flushes_interrupted_total {metrics.interrupted_flushes}",
+        f"sketchy_event_batches_ambiguous_total {metrics.ambiguous_batches}",
+        f"sketchy_events_lost_to_ambiguity_total {metrics.events_lost_to_ambiguity}",
         "# HELP sketchy_events_total Observations recorded since start, by kind.",
         "# TYPE sketchy_events_total counter",
     ]
@@ -381,6 +385,10 @@ def create_operations_router(
             "recorder": {
                 "buffered": metrics.buffered,
                 "dropped": metrics.dropped_events,
+                "failedFlushes": metrics.failed_flushes,
+                "interruptedFlushes": metrics.interrupted_flushes,
+                "ambiguousBatches": metrics.ambiguous_batches,
+                "lostToAmbiguity": metrics.events_lost_to_ambiguity,
                 "storedEvents": stored,
                 "startedAt": metrics.started_at.isoformat(),
             },
