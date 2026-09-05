@@ -184,7 +184,6 @@
     "reportsSubmitted[].drawing.actionCount",
     "reportsSubmitted[].drawing.byteSize",
     "reportsSubmitted[].drawing.capturedAt",
-    "reportsSubmitted[].drawing.prompt",
     "reportsSubmitted[].drawing.roundNumber",
     "reportsSubmitted[].drawing.turnId",
     "reportsSubmitted[].gameId",

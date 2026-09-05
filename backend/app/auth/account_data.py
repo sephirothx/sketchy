@@ -767,14 +767,15 @@ def _player_report_document(report: PlayerReport) -> dict:
             }
             for evidence in report.message_evidence
         ],
-        # That a drawing was attached, and of which turn - not the drawing.
-        # The bytes are the reported player's work, kept for a moderator; the
-        # reporter's own record is that they asked for it to be included.
+        # That a drawing was attached, and of which turn - not the drawing,
+        # and not the prompt. The bytes are the reported player's work, kept
+        # for a moderator; the prompt is game state a guesser who reported
+        # mid-turn has not earned, and an export must not be the way to read
+        # it. The reporter's own record is that they asked for it to go.
         "drawing": (
             {
                 "turnId": str(report.drawing_evidence.turn_id_snapshot),
                 "roundNumber": report.drawing_evidence.round_number,
-                "prompt": report.drawing_evidence.prompt_snapshot,
                 "actionCount": report.drawing_evidence.action_count,
                 "byteSize": report.drawing_evidence.byte_size,
                 "capturedAt": _timestamp(report.drawing_evidence.captured_at),

@@ -664,7 +664,9 @@ reporter's own words it may be read as fact, and it is what makes an "offensive
 drawing" judgeable at all. No drawer name is snapshotted here: the report already
 names the reported account, and a name would be one more thing deletion had to
 reach. A reporter's data export records that a drawing was attached and of which
-turn, never the bytes (R-PRIV-02). The reported player sees it through a
+turn — never the bytes, and never the prompt, which a guesser who reported
+mid-turn has not earned and must not be able to read out of their own export
+(R-PRIV-02). The reported player sees it through a
 **Warning** or **Suspension** decided from the report, beside their cited
 words and for the same reason (R-MOD-12, R-BAN-08).
 

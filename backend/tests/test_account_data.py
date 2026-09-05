@@ -584,6 +584,12 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         "Requester-authored prompt report"
     )
     assert "reportedOwnerUserId" not in artifact["promptContentReportsSubmitted"][0]
+    # That a drawing went with the report, and of which turn - never the
+    # prompt, which a guesser reporting mid-turn has not earned.
+    drawing = artifact["reportsSubmitted"][0]["drawing"]
+    assert drawing["turnId"] == str(owner_turn.id)
+    assert "prompt" not in drawing
+    assert "cat" not in json.dumps(artifact["reportsSubmitted"])
 
     encoded = json.dumps(artifact)
     assert "Private Bob" not in encoded
