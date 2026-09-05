@@ -240,7 +240,7 @@ what decides where it is stored and when it goes.
 
 | # | Requirement |
 | --- | --- |
-| **R-LIST-01** | Registered players MUST be able to save, revise, reuse, and delete their own prompt lists. Prompts are pasted in batches (one per line or comma separated) and merged, with duplicates and overlong entries **reported rather than silently dropped**. |
+| **R-LIST-01** | Registered players MUST be able to save, revise, reuse, and delete their own prompt lists. Deleting one MUST take it out of reach at once — listing, opening, resolving, sharing, the allowance — and MUST NOT remove a revision a finished game pins or fail because one exists; the list is retired and the sweep reclaims what nothing pins after a grace long enough for a running room to finish (R-LIST-07, R-PRIV-05). [`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) Prompts are pasted in batches (one per line or comma separated) and merged, with duplicates and overlong entries **reported rather than silently dropped**. |
 | **R-LIST-02** | Owned lists MUST default to **Private**; **Unlisted** MUST require a unique cryptographically random share code. `public` is reserved for a future moderation-approved discovery feature and MUST NOT be user-selectable in v1. |
 | **R-LIST-03** | Share codes are **bearer capabilities**. They MUST be retained only in private in-memory room state and MUST NOT appear in room, history, preset, or log payloads. |
 | **R-LIST-04** | Limits: ≤ 25 lists per account, ≤ 500 prompts per list. |

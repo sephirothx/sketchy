@@ -48,7 +48,6 @@ from app.db.models import (
     PlayerReport,
     PlayerReportMessageEvidence,
     RoomPreset,
-    PromptConcept,
     PromptContentReport,
     PromptList,
     PromptListRevision,
@@ -71,6 +70,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.services.avatars import delete_avatars_for
+from app.services.prompt_reclaim import retire_owned_lists
 from app.domain_values import (
     DataExportArtifactEncoding,
     AccountState,
@@ -933,7 +933,7 @@ async def _write_export_artifact(
         writer,
         session,
         select(PromptList)
-        .where(PromptList.owner_user_id.in_(identity_ids))
+        .where(PromptList.owner_user_id.in_(identity_ids), PromptList.deleted_at.is_(None))
         .options(
             selectinload(PromptList.revisions)
             .selectinload(PromptListRevision.items)
@@ -1420,30 +1420,6 @@ async def anonymize_account(
             identity_ids = [account.id, *source_ids]
             friends_of: set[str] = set()
 
-            owned_concept_ids = list(
-                (
-                    await session.scalars(
-                        select(PromptVersion.concept_id)
-                        .join(
-                            PromptListRevisionItem,
-                            PromptListRevisionItem.prompt_version_id
-                            == PromptVersion.id,
-                        )
-                        .join(
-                            PromptListRevision,
-                            PromptListRevision.id
-                            == PromptListRevisionItem.revision_id,
-                        )
-                        .join(
-                            PromptList,
-                            PromptList.id == PromptListRevision.prompt_list_id,
-                        )
-                        .where(PromptList.owner_user_id.in_(identity_ids))
-                        .distinct()
-                    )
-                ).all()
-            )
-
             sessions = await session.execute(
                 update(AuthSession)
                 .where(
@@ -1566,16 +1542,11 @@ async def anonymize_account(
             await session.execute(
                 delete(RoomPreset).where(RoomPreset.owner_user_id.in_(identity_ids))
             )
-            # Player-authored lists are private account data, unlike shared game
-            # history. Remove their revisions and then their now-unreferenced
-            # prompt concepts instead of leaving ownerless content behind.
-            await session.execute(
-                delete(PromptList).where(PromptList.owner_user_id.in_(identity_ids))
-            )
-            if owned_concept_ids:
-                await session.execute(
-                    delete(PromptConcept).where(PromptConcept.id.in_(owned_concept_ids))
-                )
+            # Player-authored lists leave the account's view now and are
+            # reclaimed by the retention sweep once no finished game pins
+            # them (R-PRIV-05 keeps those games' provenance; #605). Their
+            # names go with the account; the prompts are shared content.
+            await retire_owned_lists(session, identity_ids, now=deleted_at)
             await session.execute(
                 delete(UserBlock).where(
                     or_(

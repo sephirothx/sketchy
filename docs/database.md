@@ -1111,7 +1111,27 @@ Deliberately relational rather than a JSON tag blob.
 `id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
 `language` · `is_bundled` · `visibility` (`private \| unlisted \| public`) ·
 `share_code` VARCHAR(24) **unique** · `moderation_state` · `moderated_by_user_id` ·
-`moderated_at` · `version` · timestamps.
+`moderated_at` · `version` · `deleted_at` (indexed, nullable) · timestamps.
+
+**Deleting a list retires it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py)):
+`deleted_at` is set, the share code is revoked, the visibility falls back to private
+and the current-display `prompts` rows go, in the same transaction. From then on
+nothing lists, opens, resolves, forks or counts it against the 25-list allowance. The
+revisions stay exactly as long as a finished game pins one (`game_prompt_sources`,
+`turn_prompt_offer_sources`, `prompt_usage_facts`): the `RESTRICT`s there are what
+keep another player's provenance from vanishing because its author tidied up
+(R-PRIV-05). Before #605 the delete removed the revisions and rolled back whole for
+every owner whose list a game had ever used.
+
+The hourly retention sweep reclaims what a retired list no longer needs, once
+`RETIRED_LIST_GRACE` (one day) has passed — long enough for a room that pinned the
+revision before the deletion to finish and write its game (R-LIST-07): the unpinned
+revisions and their items, then the list row itself once no revision is left, then the
+prompt versions and concepts that no revision, list, turn, offer, usage fact or content
+report names any more, aliases cascading with them. A list a game pinned stays as a
+non-discoverable tombstone (`deleted_at` set, no share code) and is examined again next
+sweep. Account erasure retires the account's lists the same way, with the name and
+description erased as authored copy.
 
 `ck_prompt_lists_bundled_owner` forbids an owner on a bundled list;
 `ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list.
@@ -1294,6 +1314,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Guests with no completed game | 30 inactive days (default) | `app.auth.retention` |
 | Guests with history | 365 inactive days (default) | `app.auth.retention`; history survives via frozen snapshots |
 | Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — |
+| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | `services.prompt_reclaim`; revisions a game pins stay for ever |
 
 Anonymous retention is based on `last_active_at` and is bounded to 500 accounts per run.
 It **previews by default** and records aggregate audit evidence when applied:
@@ -1326,8 +1347,9 @@ Deletion:
   on copied evidence;
 - removes every block owned by or targeting the anonymized identities;
 - removes every friendship and pending or refused request involving them;
-- deletes owned prompt lists and their owned prompt concepts, rather than leaving
-  ownerless content;
+- retires owned prompt lists — out of reach at once, name erased, revisions kept
+  only while a finished game pins them, the rest reclaimed by the sweep (see
+  `prompt_lists` in §8);
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;

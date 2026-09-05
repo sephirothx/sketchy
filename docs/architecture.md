@@ -1401,6 +1401,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py) | The loop that empties the email outbox. |
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
+| [`app/services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) | Retiring owned prompt lists without touching the games that played them. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |

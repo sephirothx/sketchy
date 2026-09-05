@@ -2937,6 +2937,12 @@ class PromptList(Base):
     version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
     )
+    # A retired list: out of every listing, resolution and share the moment
+    # this is set, physically reclaimed by `services.prompt_reclaim` once
+    # nothing pins its revisions (#605). Bundled lists are never retired.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

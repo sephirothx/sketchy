@@ -108,7 +108,11 @@ class RoomPresetService:
         owner_id: UUID,
     ) -> list[str]:
         rows = (
-            await session.scalars(select(PromptList).where(PromptList.slug.in_(slugs)))
+            await session.scalars(
+                select(PromptList).where(
+                    PromptList.slug.in_(slugs), PromptList.deleted_at.is_(None)
+                )
+            )
         ).all()
         by_slug = {row.slug: row for row in rows}
         if any(
@@ -137,7 +141,11 @@ class RoomPresetService:
             ) from error
         async with self._session_factory() as session:
             rows = (
-                await session.scalars(select(PromptList).where(PromptList.id.in_(ids)))
+                await session.scalars(
+                    select(PromptList).where(
+                        PromptList.id.in_(ids), PromptList.deleted_at.is_(None)
+                    )
+                )
             ).all()
         by_id = {str(item.id): item for item in rows}
         if any(

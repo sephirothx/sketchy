@@ -68,6 +68,7 @@ from app.domain_values import (
     TurnDrawingStatus,
 )
 from app.auth.avatars import validate_avatar_key
+from app.services.prompt_reclaim import retire_prompt_list
 from app.auth.erasure import (
     TOMBSTONE_SNAPSHOT,
     erased_identity_ids,
@@ -2318,6 +2319,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     .where(
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
                     )
                     .order_by(PromptList.updated_at.desc(), PromptList.name)
                 )
@@ -2335,6 +2337,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 PromptList.id == prompt_list_id,
                 PromptList.owner_user_id == owner_id,
                 PromptList.is_bundled.is_(False),
+                PromptList.deleted_at.is_(None),
             )
         )
         if prompt_list is None:
@@ -2385,6 +2388,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptList.moderation_state
                     == PromptContentModerationState.ACTIVE.value,
                     PromptList.is_bundled.is_(False),
+                    PromptList.deleted_at.is_(None),
                 )
             )
             if prompt_list is None:
@@ -2454,6 +2458,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     select(func.count(PromptList.id)).where(
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
                     )
                 )
                 if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
@@ -2511,6 +2516,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
                     )
                     .with_for_update()
                 )
@@ -2552,6 +2558,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return result
 
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
+        """Retire the list: gone from the owner's view and from every room now;
+        its pinned revisions stay for the games that played them, and the
+        sweep reclaims the rest (`services.prompt_reclaim`, #605)."""
         owner_id = _optional_entity_id(owner_user_id)
         list_id = _optional_entity_id(prompt_list_id)
         if owner_id is None or list_id is None:
@@ -2559,15 +2568,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             async with session.begin():
                 prompt_list = await session.scalar(
-                    select(PromptList).where(
+                    select(PromptList)
+                    .where(
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
                     )
+                    .with_for_update()
                 )
                 if prompt_list is None:
                     return False
-                await session.delete(prompt_list)
+                await retire_prompt_list(session, prompt_list)
             return True
 
     async def _write_owned_revision(
@@ -2791,7 +2803,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptList.share_code,
                     PromptList.moderation_state,
                 )
-                .where(PromptList.slug.in_(slugs))
+                .where(PromptList.slug.in_(slugs), PromptList.deleted_at.is_(None))
             )
         ).all()
         authorized_rows = [

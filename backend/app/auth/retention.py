@@ -23,6 +23,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AccountState
+from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.services.readiness import LoopHealth
 
 
@@ -278,6 +279,9 @@ async def run_retention_loop(
             result = await purge_stale_anonymous_accounts(session_factory, apply=True)
             sessions = await purge_expired_auth_sessions(session_factory)
             exports = await purge_expired_data_exports(session_factory)
+            # Retired prompt lists whose grace has passed: the revisions no
+            # finished game pins, then the tombstone, then orphan content.
+            await reclaim_retired_prompt_lists(session_factory)
             if health is not None:
                 health.record_success()
             if sessions or exports:

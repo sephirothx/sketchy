@@ -19,6 +19,7 @@ from app.auth.middleware import SessionAuthMiddleware
 from tests.dbfixtures import create_test_db
 import app.auth.account_data as account_data_module
 from app.services.avatars import set_avatar
+from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from tests.png_fixture import png_bytes
 from app.auth.account_data import (
     EXPORT_INTERVAL,
@@ -818,8 +819,18 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
         assert await session.scalar(select(func.count(UserBlock.blocked_user_id))) == 0
-        assert await session.scalar(select(func.count(PromptList.id))) == 0
+        # The list is retired with the account - out of reach, copy erased -
+        # and physically reclaimed by the sweep once its grace has passed
+        # (#605); nothing pinned it, so nothing of it survives that.
+        retired = await session.scalar(select(PromptList))
+        assert retired is not None and retired.deleted_at is not None
+        assert retired.name == "Deleted list" and retired.share_code is None
         assert await session.scalar(select(func.count(RoomPreset.id))) == 0
+    await reclaim_retired_prompt_lists(
+        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
+    )
+    async with factory() as session:
+        assert await session.scalar(select(func.count(PromptList.id))) == 0
         assert await session.scalar(select(func.count(PromptConcept.id))) == 0
         assert not list(
             (

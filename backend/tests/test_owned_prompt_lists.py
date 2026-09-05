@@ -398,7 +398,7 @@ async def _pin_a_game_to(factory, owner_id: str, revision_id: str) -> None:
             player_count=1,
             started_at=started,
             finished_at=started + timedelta(minutes=5),
-            prompt_source_mode="lists",
+            prompt_source_mode="curated",
             prompt_source_revision_ids=(revision_id,),
         ),
         [
@@ -437,15 +437,13 @@ async def _current_revision_id(factory, list_id: str) -> str:
     return str(revision.id)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#605: game_prompt_sources RESTRICTs the revision the list deletion removes",
-)
 async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance():
     """R-LIST-01 lets an owner delete a list; R-PRIV-05 keeps the game intact.
 
-    Found by #612: with foreign keys enforced, deleting a used list rolls the
-    whole transaction back because the game's pinned revision restricts it.
+    Found by #612: with foreign keys enforced, deleting a used list rolled the
+    whole transaction back because the game's pinned revision restricted it.
+    The list is retired instead (#605): gone from its owner, pinned revision
+    kept for the game.
     """
     factory, engine, owner_id, _ = await _database()
     try:
@@ -470,10 +468,6 @@ async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance(
         await engine.dispose()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#605: account erasure deletes owned lists the same way, and fails the same way",
-)
 async def test_erasing_the_owner_of_a_used_list_succeeds():
     """R-PRIV-05: the other players' history is never damaged, so erasure
     cannot delete the revision their game pinned - and it cannot fail either."""
@@ -499,5 +493,239 @@ async def test_erasing_the_owner_of_a_used_list_succeeds():
             owner = await session.get(User, UUID(owner_id))
             assert owner is not None and owner.state == "deleted"
             assert await session.get(PromptListRevision, UUID(revision_id)) is not None
+    finally:
+        await engine.dispose()
+
+
+# --- #605: retire, keep what games pin, reclaim the rest ---------------------
+
+
+async def _content_counts(factory) -> dict[str, int]:
+    from sqlalchemy import func
+
+    from app.db.models import (
+        PromptAlias,
+        PromptConcept,
+        PromptList,
+        PromptVersionAlias,
+    )
+
+    async with factory() as session:
+        return {
+            "lists": await session.scalar(select(func.count(PromptList.id))),
+            "revisions": await session.scalar(select(func.count(PromptListRevision.id))),
+            "items": await session.scalar(
+                select(func.count(PromptListRevisionItem.prompt_version_id))
+            ),
+            "versions": await session.scalar(select(func.count(PromptVersion.id))),
+            "concepts": await session.scalar(select(func.count(PromptConcept.id))),
+            "aliases": await session.scalar(select(func.count(PromptAlias.id))),
+            "version_aliases": await session.scalar(
+                select(func.count(PromptVersionAlias.prompt_version_id))
+            ),
+        }
+
+
+async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_stays():
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import GamePromptSource, PromptList
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Shared then gone",
+            description="",
+            language="en",
+            visibility="unlisted",
+            prompts=(PromptListEntryInput(answer="otter", aliases=("sea otter",)),),
+        )
+        assert created.share_code is not None
+        revision_id = await _current_revision_id(factory, created.id)
+        await _pin_a_game_to(factory, owner_id, revision_id)
+
+        assert await repo.delete_owned(owner_id, created.id) is True
+        assert await repo.delete_owned(owner_id, created.id) is False, "retired once"
+
+        # Gone from every way in: the owner's listing, the share code, a room.
+        assert await repo.list_owned(owner_id) == []
+        assert await repo.get_owned(owner_id, created.id) is None
+        assert await repo.get_shared(created.share_code) is None
+        with pytest.raises(PromptListSelectionError, match="not found"):
+            await repo.resolve_selection([created.slug], requesting_user_id=owner_id)
+        # A retired list does not count against the owner's allowance.
+        for index in range(25):
+            await repo.create_owned(
+                owner_id,
+                name=f"Fresh {index}",
+                description="",
+                language="en",
+                visibility="private",
+                prompts=(PromptListEntryInput(answer=f"answer {index}"),),
+            )
+
+        # The sweep, well after the grace: the pinned revision and its content
+        # stay, the tombstone row stays with them, the display rows are gone.
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        result = await reclaim_retired_prompt_lists(factory, now=later)
+        assert result.lists_examined == 1
+        assert result.revisions_deleted == 0 and result.lists_deleted == 0
+        async with factory() as session:
+            tombstone = await session.get(PromptList, UUID(created.id))
+            assert tombstone is not None and tombstone.share_code is None
+            assert tombstone.deleted_at is not None
+            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
+            assert (
+                await session.scalar(
+                    select(GamePromptSource).where(
+                        GamePromptSource.prompt_list_revision_id == UUID(revision_id)
+                    )
+                )
+                is not None
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_game():
+    """R-LIST-07: the pin is a revision id held in memory; the grace before
+    reclaim is what keeps that id valid until the game is written."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Played while deleted",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        pinned = await repo.authorize_selection([created.slug], requesting_user_id=owner_id)
+        (revision_id,) = pinned.revision_ids
+
+        assert await repo.delete_owned(owner_id, created.id) is True
+        # Within the grace, the sweep leaves the revision for the running game.
+        await reclaim_retired_prompt_lists(factory)
+        await _pin_a_game_to(factory, owner_id, revision_id)
+
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        await reclaim_retired_prompt_lists(factory, now=later)
+        async with factory() as session:
+            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
+    finally:
+        await engine.dispose()
+
+
+async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind():
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        for round_number in range(3):
+            created = await repo.create_owned(
+                owner_id,
+                name=f"Scratch {round_number}",
+                description="",
+                language="en",
+                visibility="private",
+                prompts=(
+                    PromptListEntryInput(answer="otter", aliases=("sea otter",)),
+                    PromptListEntryInput(answer="heron"),
+                ),
+            )
+            await repo.update_owned(
+                owner_id,
+                created.id,
+                expected_version=1,
+                name=f"Scratch {round_number}",
+                description="",
+                visibility="private",
+                prompts=(PromptListEntryInput(answer="heron"),),
+            )
+            assert await repo.delete_owned(owner_id, created.id) is True
+        before = await _content_counts(factory)
+        assert before["lists"] == 3 and before["revisions"] == 6
+
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        result = await reclaim_retired_prompt_lists(factory, now=later, limit=2)
+        assert result.lists_examined == 2 and result.lists_deleted == 2
+        assert (await _content_counts(factory))["lists"] == 1, "bounded batch"
+        await reclaim_retired_prompt_lists(factory, now=later)
+
+        assert await _content_counts(factory) == {
+            "lists": 0,
+            "revisions": 0,
+            "items": 0,
+            "versions": 0,
+            "concepts": 0,
+            "aliases": 0,
+            "version_aliases": 0,
+        }
+    finally:
+        await engine.dispose()
+
+
+async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibling():
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import PromptContentReport
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    factory, engine, owner_id, other_id = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id,
+            name="Reported",
+            description="",
+            language="en",
+            visibility="private",
+            prompts=(
+                PromptListEntryInput(answer="reported answer"),
+                PromptListEntryInput(answer="harmless answer"),
+            ),
+        )
+        reported = next(
+            entry for entry in created.prompts if entry.answer == "reported answer"
+        )
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    PromptContentReport(
+                        id=generate_uuid(),
+                        reporter_user_id=UUID(other_id),
+                        reported_owner_user_id=UUID(owner_id),
+                        prompt_list_id=UUID(created.id),
+                        prompt_version_id=UUID(reported.prompt_version_id),
+                        target_type="prompt",
+                        list_name_snapshot=created.name,
+                        prompt_snapshot="reported answer",
+                        reason="inappropriate",
+                        details="",
+                    )
+                )
+        assert await repo.delete_owned(owner_id, created.id) is True
+
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        result = await reclaim_retired_prompt_lists(factory, now=later)
+        assert result.lists_deleted == 1 and result.revisions_deleted == 1
+        assert result.versions_deleted == 1 and result.concepts_deleted == 1
+        async with factory() as session:
+            assert await session.get(PromptVersion, UUID(reported.prompt_version_id)) is not None
+            report = await session.scalar(select(PromptContentReport))
+            assert report.prompt_version_id == UUID(reported.prompt_version_id)
+            assert report.prompt_list_id is None, "SET NULL: the list row is gone"
+            assert report.list_name_snapshot == "Reported"
     finally:
         await engine.dispose()

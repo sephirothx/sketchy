@@ -1,6 +1,7 @@
 """Post-moderation reports and reversible list/prompt takedowns."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest
@@ -23,6 +24,7 @@ from app.db.models import (
 )
 from app.db import create_db_engine
 from app.domain_values import UserRole
+from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.repositories.interfaces import PromptListEntryInput, PromptListSelectionError
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
@@ -275,15 +277,34 @@ async def test_report_snapshots_survive_owner_deletion(env):
     )
     assert deleted.status_code == 200
 
-    async with factory() as session:
-        report = await session.get(PromptContentReport, UUID(response.json()["id"]))
-        assert report is not None
-        assert report.prompt_list_id is None
-        assert report.prompt_version_id is None
+    def _snapshots_intact(report):
         assert report.reported_owner_user_id == UUID(owner["id"])
         assert report.list_name_snapshot == "Evidence list"
         assert report.prompt_snapshot == "reported prompt"
         assert report.details == "Retain this evidence."
+
+    # The list is retired with the account (#605): the row stays as a
+    # tombstone until the sweep reclaims it, and the report still points at
+    # it and at the version it cites.
+    async with factory() as session:
+        report = await session.get(PromptContentReport, UUID(response.json()["id"]))
+        assert report is not None
+        assert report.prompt_list_id == UUID(prompt_list.id)
+        assert report.prompt_version_id == UUID(prompt_list.prompts[0].prompt_version_id)
+        retired = await session.get(PromptList, UUID(prompt_list.id))
+        assert retired.deleted_at is not None and retired.name == "Deleted list"
+        _snapshots_intact(report)
+
+    # Nothing pins the list, so the sweep drops it and the FK detaches; the
+    # version the report cites is kept for the report.
+    await reclaim_retired_prompt_lists(
+        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
+    )
+    async with factory() as session:
+        report = await session.get(PromptContentReport, UUID(response.json()["id"]))
+        assert report.prompt_list_id is None
+        assert report.prompt_version_id == UUID(prompt_list.prompts[0].prompt_version_id)
+        _snapshots_intact(report)
 
 
 async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):

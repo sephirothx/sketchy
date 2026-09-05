@@ -661,7 +661,11 @@ ordinary profile writes. The default policy removes guests with no completed
 game after 30 inactive days and guests with history after 365 inactive days;
 history rows survive through frozen presentation snapshots. Cleanup is bounded
 to 500 accounts per run, previews by default, and records aggregate audit
-evidence when applied:
+evidence when applied. The same hourly sweep reclaims deleted prompt lists:
+deleting a list takes it out of reach at once, but a revision a finished game
+pinned stays for that game's history, and the rest — unpinned revisions, the
+list row, prompts nothing names any more — is removed a day later, once any
+room that pinned it before the deletion has had time to finish:
 
 ```bash
 cd backend
