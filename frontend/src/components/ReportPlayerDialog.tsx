@@ -90,10 +90,6 @@ export function ReportPlayerDialog({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
-    if (!details.trim()) {
-      setError("Say what happened, so a moderator knows what to look for.");
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
@@ -167,7 +163,7 @@ export function ReportPlayerDialog({
                 ))}
               </select>
 
-              <label htmlFor={`${titleId}-details`}>Anything else</label>
+              <label htmlFor={`${titleId}-details`}>Anything else (optional)</label>
               <textarea
                 id={`${titleId}-details`}
                 ref={detailsRef}
@@ -180,11 +176,10 @@ export function ReportPlayerDialog({
                   setError(null);
                 }}
                 placeholder="What they said or drew, and when"
-                required
               />
               <p className="auth-hint">
                 Their recent messages in this room are attached automatically,
-                with what was said around them.
+                with what was said around them, so this can be left empty.
               </p>
               {drawingOffered && (
                 <label className="report-include-drawing">

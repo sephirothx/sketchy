@@ -729,7 +729,10 @@ holding the pen, and only while the canvas still shows the turn, so a report
 about a guesser or one sent after the turn goes without it and says so. The
 copy outlives the turn's own stored drawing, which is its final state and is
 erased with the drawer's account; what the reporter saw is what a moderator
-judges. Reporting requires an account, because a report a
+judges. Because the server attaches the evidence, the report's own text is
+optional: what they said or drew is usually the whole complaint, and a
+reporter mid-turn should not be made to write it out. Reporting requires an
+account, because a report a
 moderator cannot follow up on helps nobody. One reporter holds one open report per
 player, the same rule content reports carry: saying it again while a moderator
 has yet to look adds no evidence and buries the queue, and once the report is

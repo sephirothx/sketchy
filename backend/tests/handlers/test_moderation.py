@@ -780,3 +780,40 @@ async def test_the_canvas_is_copied_only_for_the_seat_that_is_drawing():
             )
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_room_report_needs_no_words_of_its_own():
+    """The server attaches the evidence, so the reporter's text is optional;
+    blank is stored as empty rather than refused or padded."""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db.models import Base, PlayerReport
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    room_manager, room, reporter, drawer = _report_room_with_a_drawer()
+
+    try:
+        await _users_for(factory, reporter, drawer)
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager)
+        ctx.session_factory = factory
+        sio.get_session = AsyncMock(
+            return_value={"room_id": room.id, "player_id": reporter.id}
+        )
+        sio.emit = AsyncMock()
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": drawer.id, "reason": "offensive_drawing", "details": "   "},
+        )
+        assert result["ok"] is True
+        async with factory() as session:
+            report = await session.scalar(select(PlayerReport))
+            assert report.details == ""
+    finally:
+        await engine.dispose()

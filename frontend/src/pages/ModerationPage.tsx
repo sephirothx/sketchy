@@ -235,7 +235,8 @@ export function ModerationPage() {
       kind: "player",
       id: report.id,
       title: humanize(report.reason),
-      snippet: report.details,
+      // A room report may say nothing beyond its evidence.
+      snippet: report.details || "No details given.",
       at: showingClosed ? decidedAt(report) : report.createdAt,
       dot: showingClosed ? "neutral" : "danger",
     }));
@@ -464,9 +465,9 @@ export function ModerationPage() {
               <div className="mod-case-columns">
                 <section className="ops-card" aria-label="Reported evidence">
                   <h2>Reported evidence</h2>
-                  {playerCase.details && (
-                    <p className="mod-case-details">{playerCase.details}</p>
-                  )}
+                  <p className="mod-case-details">
+                    {playerCase.details || "The reporter gave no details; the evidence is the complaint."}
+                  </p>
                   {playerCase.messageEvidence.length > 0 && (
                     <>
                       {/* One thread, in the order it was said: the cited

@@ -240,7 +240,8 @@ async def test_a_report_about_the_drawer_carries_the_drawing():
             await include.wait_for()
             assert await include.is_checked()
             assert await dialog.locator("select").input_value() == "offensive_drawing"
-            await dialog.locator("textarea").fill("That is not what the prompt asked for.")
+            # Nothing typed: the drawing is the complaint, and the details
+            # are optional wherever the server attaches the evidence itself.
             await dialog.get_by_role("button", name="Send report").click()
 
             sent = guesser.locator('.modal-card:has-text("Report sent")')

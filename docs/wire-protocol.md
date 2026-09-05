@@ -382,8 +382,10 @@ the server resolves the seat against the live room and selects the evidence itse
 ```
 
 `reason` ∈ `harassment | offensive_drawing | inappropriate_name | cheating | spam |
-inappropriate_avatar`; `details` is 1 – 1000 characters; `includeDrawing` (optional,
-default `false`) asks for the canvas to go with the report.
+inappropriate_avatar`; `details` is optional and at most 1000 characters (stripped, so
+blank is empty) — the server attaches the evidence itself, and from a room that is
+usually the whole complaint; `includeDrawing` (optional, default `false`) asks for the
+canvas to go with the report.
 
 Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 
@@ -398,8 +400,9 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 > one that holds. What was copied is read back by a moderator over
 > `GET /api/moderation/reports/{report_id}/drawing` (R-MOD-14).
 
-> Note the deliberate asymmetry: the **socket** report bounds `details` at 1000, while
-> the **REST** `POST /api/reports` bounds it at `MAX_REPORT_DETAILS` = 2000 and also
+> Note the deliberate asymmetry: the **socket** report bounds `details` at 1000 and lets
+> it be empty, while the **REST** `POST /api/reports` requires it, bounds it at
+> `MAX_REPORT_DETAILS` = 2000 and also
 > accepts `contextSnapshot` (≤ 32 768 bytes) and `messageIds` (≤ 20, which must be
 > unique). The socket path exists so a player can report from the room without leaving
 > it, and the server selects the evidence itself. On both paths the server then copies
