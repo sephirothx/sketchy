@@ -132,18 +132,8 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     monkeypatch.setattr(main.handler_context, "timers", timers)
     monkeypatch.setattr(main, "async_engine", SimpleNamespace(dispose=dispose))
     monkeypatch.setattr(main, "init_db", AsyncMock())
-    purge_messages = AsyncMock()
-    monkeypatch.setattr(main, "purge_expired_room_messages", purge_messages)
-    purge_abandonments = AsyncMock()
-    monkeypatch.setattr(
-        main, "purge_expired_shutdown_abandonments", purge_abandonments
-    )
-    purge_outbox = AsyncMock()
-    monkeypatch.setattr(main, "purge_expired_outbox_entries", purge_outbox)
-    purge_sessions = AsyncMock()
-    monkeypatch.setattr(main, "purge_expired_auth_sessions", purge_sessions)
-    purge_exports = AsyncMock()
-    monkeypatch.setattr(main, "purge_expired_data_exports", purge_exports)
+    # Startup runs no purge of its own since #550: every sweep belongs to
+    # the retention loop, which the lifespan starts and stops like the rest.
     monkeypatch.setattr(main, "seed_prompt_lists", AsyncMock())
     monkeypatch.setattr(main, "adopt_stored_settings", AsyncMock())
     retire_room_codes = AsyncMock()
@@ -173,11 +163,6 @@ async def test_application_lifespan_closes_timer_manager(monkeypatch):
     assert task.cancelled()
     assert timers.disconnect_timers == {}
     assert timers.restart_timers == {}
-    purge_messages.assert_awaited_once_with(main.async_session_factory)
-    purge_abandonments.assert_awaited_once_with(main.async_session_factory)
-    purge_outbox.assert_awaited_once_with(main.async_session_factory)
-    purge_sessions.assert_awaited_once_with(main.async_session_factory)
-    purge_exports.assert_awaited_once_with(main.async_session_factory)
     retire_room_codes.assert_awaited_once_with()
     dispose.assert_awaited_once_with()
     assert main.shutdown_coordinator.state == "stopped"

@@ -167,15 +167,21 @@ async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypat
                 stale.last_active_at = long_ago
                 assert stale.state == AccountState.ANONYMOUS.value
 
+        # The loop's first pass runs at once; its sleep afterwards is the
+        # signal that the pass is over. Waiting on that rather than polling
+        # the table keeps the test's own queries off the sweep's connection.
+        import app.auth.retention as retention
+
+        first_pass_over = asyncio.Event()
+
+        async def hold(_seconds):
+            first_pass_over.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(retention.asyncio, "sleep", hold)
         sweep = asyncio.create_task(run_retention_loop(factory, interval_seconds=3600))
         try:
-            # Polled on the condition rather than slept through: the driver
-            # runs its queries on a thread, so yielding alone never lets the
-            # sweep finish.
-            for _ in range(200):
-                if await count(factory, User) == 0:
-                    break
-                await asyncio.sleep(0.01)
+            await asyncio.wait_for(first_pass_over.wait(), timeout=10)
         finally:
             sweep.cancel()
             with contextlib.suppress(asyncio.CancelledError):
