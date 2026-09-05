@@ -131,7 +131,9 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
                 "button", name="Dismiss"
             ).click()
             await moderator_page.wait_for_selector('[role="status"]:has-text("Dismissed.")')
-            assert await case.count() == 0
+            # The status lands before the queue is fetched again, so the row
+            # leaves a moment later rather than at once.
+            await case.wait_for(state="detached")
 
             await moderator_page.get_by_role("button", name="Closed").click()
             closed = moderator_page.locator(".mod-queue-item", has_text="Offensive drawing")
