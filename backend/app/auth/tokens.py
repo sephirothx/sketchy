@@ -41,6 +41,15 @@ class IssuedToken:
     expires_at: datetime
 
 
+@dataclass(frozen=True)
+class ConsumedToken:
+    """What a spent token said, read back from the row the claim deleted."""
+
+    user_id: UUID
+    email: str | None
+    expires_at: datetime
+
+
 def hash_token(token: str) -> str:
     """One-way digest for a high-entropy token; raw tokens never enter storage."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -88,29 +97,40 @@ async def consume_token(
     token: str,
     purpose: AuthTokenPurpose,
     now: datetime | None = None,
-) -> AuthToken | None:
+) -> ConsumedToken | None:
     """Accept a token once, or refuse it.
+
+    The claim is one conditional `DELETE ... RETURNING`, so the database
+    decides who gets the row: two submissions of the same link, in two
+    transactions, both find it, but only the first delete returns it - the
+    second waits on the row lock and then deletes nothing (#607). A select
+    followed by an ORM delete let both callers walk away with the credential,
+    because neither delete had run when they were told yes.
 
     The row is deleted rather than marked consumed. `consumed_at` exists for a
     token that has to be shown as spent - none does today - and keeping the
-    table empty of spent rows is what stops it growing without bound.
+    table empty of spent rows is what stops it growing without bound. An
+    expired token presented is deleted on the way out too, so nothing waits
+    for the purge; it is still refused.
     """
     checked_at = now or datetime.now(timezone.utc)
-    record = await session.scalar(
-        select(AuthToken).where(
+    result = await session.execute(
+        delete(AuthToken)
+        .where(
             AuthToken.token_hash == hash_token(token),
             AuthToken.purpose == purpose.value,
         )
+        .returning(AuthToken.user_id, AuthToken.email, AuthToken.expires_at, AuthToken.consumed_at)
     )
-    if record is None:
+    row = result.one_or_none()
+    if row is None:
         return None
-    expires_at = record.expires_at
+    user_id, email, expires_at, consumed_at = row
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
-    await session.delete(record)
-    if expires_at <= checked_at or record.consumed_at is not None:
+    if expires_at <= checked_at or consumed_at is not None:
         return None
-    return record
+    return ConsumedToken(user_id=user_id, email=email, expires_at=expires_at)
 
 
 async def token_is_usable(

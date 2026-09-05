@@ -285,6 +285,21 @@ chooses a password only to be told the link was spent. Checking deliberately doe
 consume it, and is throttled separately from requesting a reset because it costs a
 lookup rather than somebody else's inbox.
 
+Spending a token is one conditional `DELETE … RETURNING` on `token_hash` and
+`purpose` ([`auth/tokens.py`](../backend/app/auth/tokens.py) `consume_token`), so the
+database decides who gets it: two submissions of one link in two transactions both
+find the row, but only the first delete returns it, and the second, having waited on
+the row lock, deletes nothing. A select followed by an ORM delete told both callers
+yes (#607). An expired token presented is deleted on the way out and still refused;
+a token presented under the wrong purpose is neither.
+
+The reset, the signed-in change, and the operator reset all commit the new password,
+the revocation of every live `auth_sessions` row, the audit event, and the queued
+mail in **one transaction**, with the account row locked (`FOR UPDATE`) so a reset
+and a change racing for one account apply in turn. A crash between the password and
+the revocation therefore leaves both undone and the link unspent, never a new
+password with every old device still signed in (R-AUTH-10, R-AUTH-17).
+
 ### `auth_rate_limit_buckets`
 `scope` + `key_hash` composite **PK** · `attempt_count` · `window_started_at` ·
 `window_expires_at` · `updated_at`.
