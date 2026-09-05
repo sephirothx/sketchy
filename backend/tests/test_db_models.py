@@ -1964,3 +1964,95 @@ async def test_every_fixture_engine_is_configured_like_the_application():
             assert (await conn.execute(text("PRAGMA foreign_keys"))).scalar_one() == 1
     finally:
         await engine.dispose()
+
+
+# --- #551: every foreign key a delete will walk has a path -----------------
+
+# Foreign keys deliberately left without a leading index, each with the
+# reason. A row here is a decision, not an oversight; delete it when the
+# reason stops being true.
+FK_INDEX_EXEMPTIONS: dict[tuple[str, tuple[str, ...]], str] = {
+    # #552 replaces the correction reference with a same-game event order;
+    # an index on the UUID would be created only to be dropped.
+    ("score_events", ("game_id", "corrects_event_id")): "replaced by #552",
+}
+
+
+def _uniquely_identifies(column) -> bool:
+    """Whether this parent column alone is a key of its table."""
+    from sqlalchemy import PrimaryKeyConstraint, UniqueConstraint
+
+    table = column.table
+    for constraint in table.constraints:
+        if isinstance(constraint, (PrimaryKeyConstraint, UniqueConstraint)):
+            if [c.name for c in constraint.columns] == [column.name]:
+                return True
+    return any(
+        index.unique and [c.name for c in index.columns] == [column.name]
+        for index in table.indexes
+    )
+
+
+def _fk_is_covered(table, constraint) -> bool:
+    """Whether some index, unique constraint or primary key serves this FK.
+
+    Full coverage: the FK columns are exactly the leading columns of an
+    index, in any order. Selective coverage, for a composite FK: one of its
+    columns references a parent column that is a key on its own (a globally
+    unique id), and the child has an index leading with that column - the
+    lookup is a point probe on that column, and the other columns are only
+    the same-game check. A partial index counts only when its predicate is
+    `column IS NOT NULL` - the rows a delete has to find are exactly the
+    ones with the reference set - never when it selects some other subset.
+    """
+    from sqlalchemy import PrimaryKeyConstraint, UniqueConstraint
+
+    fk_columns = tuple(c.name for c in constraint.columns)
+    wanted = set(fk_columns)
+    candidates: list[tuple[list[str], str | None]] = []
+    for index in table.indexes:
+        where = index.dialect_options.get("postgresql", {}).get("where")
+        candidates.append(
+            ([c.name for c in index.columns], str(where) if where is not None else None)
+        )
+    for other in table.constraints:
+        if isinstance(other, (PrimaryKeyConstraint, UniqueConstraint)):
+            candidates.append(([c.name for c in other.columns], None))
+    selective = {
+        element.parent.name
+        for element in constraint.elements
+        if _uniquely_identifies(element.column)
+    }
+    for columns, where in candidates:
+        if where is not None:
+            if len(wanted) != 1 or where.strip() != f"{fk_columns[0]} IS NOT NULL":
+                continue
+        if set(columns[: len(wanted)]) == wanted:
+            return True
+        if len(wanted) > 1 and columns and columns[0] in selective:
+            return True
+    return False
+
+
+def test_every_foreign_key_a_delete_walks_has_an_index_or_a_documented_reason():
+    """ON DELETE CASCADE / SET NULL / RESTRICT all mean PostgreSQL finds the
+    referencing rows when the referenced row goes; without an index leading
+    with the referencing column that is a scan of the whole child table per
+    deleted parent (#551)."""
+    from sqlalchemy import ForeignKeyConstraint
+
+    uncovered: list[str] = []
+    stale_exemptions = dict(FK_INDEX_EXEMPTIONS)
+    for table in Base.metadata.sorted_tables:
+        for constraint in table.constraints:
+            if not isinstance(constraint, ForeignKeyConstraint):
+                continue
+            columns = tuple(c.name for c in constraint.columns)
+            key = (table.name, columns)
+            if key in stale_exemptions:
+                stale_exemptions.pop(key)
+                continue
+            if not _fk_is_covered(table, constraint):
+                uncovered.append(f"{table.name}({', '.join(columns)})")
+    assert not uncovered, f"foreign keys without a leading index: {uncovered}"
+    assert not stale_exemptions, f"exemptions that no longer match a foreign key: {stale_exemptions}"

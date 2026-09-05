@@ -118,6 +118,22 @@ def generate_uuid() -> uuid.UUID:
     return generate_uuid7()
 
 
+def _actor_index(name: str, column: str) -> Index:
+    """An index over a nullable actor reference, only where it is set.
+
+    Moderator and issuer columns are NULL on almost every row and looked up
+    only when that account is deleted (ON DELETE SET NULL walks every
+    referencing row): a partial index costs one entry per action taken and
+    turns that walk into a probe (#551).
+    """
+    return Index(
+        name,
+        column,
+        postgresql_where=text(f"{column} IS NOT NULL"),
+        sqlite_where=text(f"{column} IS NOT NULL"),
+    )
+
+
 class Base(DeclarativeBase):
     """Base declarative class for all SQLAlchemy entities."""
     pass
@@ -1316,6 +1332,7 @@ class UserBan(Base):
 
     __tablename__ = "user_bans"
     __table_args__ = (
+        _actor_index("ix_user_bans_revoked_by", "revoked_by_user_id"),
         Index("ix_user_bans_user_active_expires", "user_id", "is_active", "expires_at"),
         CheckConstraint(
             "expires_at IS NULL OR expires_at > created_at",
@@ -1376,6 +1393,7 @@ class UserWarning(Base):
 
     __tablename__ = "user_warnings"
     __table_args__ = (
+        _actor_index("ix_user_warnings_issued_by", "issued_by_user_id"),
         Index("ix_user_warnings_user_pending", "user_id", "acknowledged_at"),
     )
 
@@ -2678,6 +2696,7 @@ class PromptVersion(Base):
 
     __tablename__ = "prompt_versions"
     __table_args__ = (
+        _actor_index("ix_prompt_versions_moderated_by", "moderated_by_user_id"),
         UniqueConstraint(
             "concept_id",
             "language",
@@ -2809,6 +2828,7 @@ class PromptVersionAlias(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_aliases.id", ondelete="CASCADE"),
         primary_key=True,
+        index=True,
     )
 
     prompt_version: Mapped[PromptVersion] = relationship(
@@ -2856,6 +2876,7 @@ class PromptVersionTag(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_tags.id", ondelete="CASCADE"),
         primary_key=True,
+        index=True,
     )
 
     prompt_version: Mapped[PromptVersion] = relationship(
@@ -2869,6 +2890,7 @@ class PromptList(Base):
 
     __tablename__ = "prompt_lists"
     __table_args__ = (
+        _actor_index("ix_prompt_lists_moderated_by", "moderated_by_user_id"),
         _values_check("language", PROMPT_LANGUAGES, "ck_prompt_lists_language"),
         _values_check(
             "visibility", PROMPT_LIST_VISIBILITIES, "ck_prompt_lists_visibility"
@@ -3045,10 +3067,13 @@ class PromptListRevisionItem(Base):
         ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    # Indexed on its own as well: the PK leads with the revision, and the
+    # RESTRICT check on a prompt version's deletion looks the other way (#551).
     prompt_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
         primary_key=True,
+        index=True,
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -3072,6 +3097,7 @@ class PromptListRevisionTag(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_tags.id", ondelete="CASCADE"),
         primary_key=True,
+        index=True,
     )
 
     revision: Mapped[PromptListRevision] = relationship(

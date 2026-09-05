@@ -1323,6 +1323,10 @@ backend/.venv/bin/python benchmarks/backend.py
 # PostgreSQL churn under the bounded retention sweep (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/retention_churn.py --rows 100000 --row-budget 5000
+
+# What deleting referenced rows costs PostgreSQL's foreign-key triggers (disposable database only)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/fk_delete_paths.py --rows 20000
 backend/.venv/bin/python benchmarks/live_drawing.py
 backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 
@@ -1379,6 +1383,15 @@ per run; the 92 MB relation did not shrink until VACUUM, which took it to
 64 MB. `pg_stat_user_tables` counters lag the deletes by a stats-collector
 interval, so read the tuple columns as trend, not as the state of one run.
 It is a baseline for any table storage decision, not a threshold.
+
+The foreign-key delete benchmark seeds 20,000 moderated prompt versions and
+20,000 issued warnings, then explains the deletes that make PostgreSQL walk
+those references and prints each trigger's time. Run at the revision before
+`b2c5a9d3e470` and at head on 2026-09-06, deleting 500 guests that referenced
+nothing went from 785 ms to 40 ms: the two `SET NULL` triggers on the actor
+columns fell from 489 ms and 253 ms (a scan of the child table per deleted
+row) to 3.8 ms and 3.2 ms. Deleting the moderator all 40,000 rows point at
+costs about 230 ms either way, which is the updates, not the lookup.
 
 The user-stat benchmark seeds deterministic finished-game facts, rebuilds the
 daily projection (reporting the rebuild's wall time and peak allocation), and
