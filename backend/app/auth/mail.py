@@ -29,7 +29,7 @@ from email.utils import parseaddr
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import delete, func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.sweeps import (
@@ -510,35 +510,59 @@ async def purge_expired_outbox_entries(
     if batch_size < 1:
         raise ValueError("batch_size must be positive")
     cutoff = (now or datetime.now(timezone.utc)) - OUTBOX_RETENTION
-    expired = or_(
-        and_(
-            EmailOutboxEntry.state == EmailOutboxState.SENT.value,
-            EmailOutboxEntry.sent_at <= cutoff,
-        ),
-        and_(
-            EmailOutboxEntry.state == EmailOutboxState.FAILED.value,
-            EmailOutboxEntry.created_at <= cutoff,
-        ),
-    )
     resolved = budget or sweep_budget_from_env()
-    return await delete_in_batches(
+    branch_budget = SweepBudget(
+        rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
+    )
+    # Literal states rather than bound ones: the partial index over sent
+    # rows only matches a plan whose predicate names 'sent' (#554).
+    sent = await delete_in_batches(
         session_factory,
         name="email_outbox",
         candidates=select(EmailOutboxEntry.id)
-        .where(expired)
-        .order_by(
-            func.coalesce(EmailOutboxEntry.sent_at, EmailOutboxEntry.created_at),
-            EmailOutboxEntry.id,
+        .where(
+            EmailOutboxEntry.state == literal(EmailOutboxState.SENT.value, literal_execute=True),
+            EmailOutboxEntry.sent_at <= cutoff,
+        )
+        .order_by(EmailOutboxEntry.sent_at, EmailOutboxEntry.id),
+        delete_for=lambda ids: delete(EmailOutboxEntry).where(EmailOutboxEntry.id.in_(ids)),
+        budget=branch_budget,
+        overdue=select(func.min(EmailOutboxEntry.sent_at)).where(
+            EmailOutboxEntry.state == literal(EmailOutboxState.SENT.value, literal_execute=True),
+            EmailOutboxEntry.sent_at <= cutoff,
         ),
-        delete_for=lambda ids: delete(EmailOutboxEntry).where(
-            EmailOutboxEntry.id.in_(ids)
-        ),
-        budget=SweepBudget(
-            rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
-        ),
-        overdue=select(
-            func.min(func.coalesce(EmailOutboxEntry.sent_at, EmailOutboxEntry.created_at))
-        ).where(expired),
         now=cutoff,
+    )
+    failed = await delete_in_batches(
+        session_factory,
+        name="email_outbox",
+        candidates=select(EmailOutboxEntry.id)
+        .where(
+            EmailOutboxEntry.state == literal(EmailOutboxState.FAILED.value, literal_execute=True),
+            EmailOutboxEntry.created_at <= cutoff,
+        )
+        .order_by(EmailOutboxEntry.created_at, EmailOutboxEntry.id),
+        delete_for=lambda ids: delete(EmailOutboxEntry).where(EmailOutboxEntry.id.in_(ids)),
+        budget=SweepBudget(
+            rows=max(1, resolved.rows - int(sent)),
+            batch=branch_budget.batch,
+            seconds=max(0.001, resolved.seconds - sent.seconds),
+        ),
+        overdue=select(func.min(EmailOutboxEntry.created_at)).where(
+            EmailOutboxEntry.state == literal(EmailOutboxState.FAILED.value, literal_execute=True),
+            EmailOutboxEntry.created_at <= cutoff,
+        ),
+        now=cutoff,
+    )
+    return SweepReport(
+        int(sent) + int(failed),
+        name="email_outbox",
+        batches=sent.batches + failed.batches,
+        seconds=sent.seconds + failed.seconds,
+        exhausted=sent.exhausted or failed.exhausted,
+        oldest_overdue_seconds=max(
+            (value for value in (sent.oldest_overdue_seconds, failed.oldest_overdue_seconds) if value is not None),
+            default=None,
+        ),
     )
 

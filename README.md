@@ -1327,6 +1327,10 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 # What deleting referenced rows costs PostgreSQL's foreign-key triggers (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/fk_delete_paths.py --rows 20000
+
+# EXPLAIN (ANALYZE, BUFFERS) for the admin, moderation and queue reads (disposable database only)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/index_plans.py --scale 1
 backend/.venv/bin/python benchmarks/live_drawing.py
 backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 
@@ -1392,6 +1396,20 @@ nothing went from 785 ms to 40 ms: the two `SET NULL` triggers on the actor
 columns fell from 489 ms and 253 ms (a scan of the child table per deleted
 row) to 3.8 ms and 3.2 ms. Deleting the moderator all 40,000 rows point at
 costs about 230 ms either way, which is the updates, not the lookup.
+
+The index-plan benchmark seeds a skewed population (200,000 room messages of
+which one in forty is a lobby line, 100,000 audit events, 20,000 mostly
+revoked bans, 50,000 mostly delivered outbox rows, 20,000 registered players)
+and explains the real admin, moderation and queue reads. On PostgreSQL 17 on
+2026-09-06 the four reads that changed went from a sort of the whole table to
+a bounded index walk: the lobby restore 6.8 ms and 3,729 buffers to 0.02 ms
+and 39, the active-ban queue 0.54 ms and 267 to 0.01 ms and 16, the outbox
+sweep's sent branch 3.7 ms and 820 to 0.04 ms and 7, and a rare audit event
+type 202 buffers to 105. The reads that already walked an index (outbox due
+rows, room evidence, the export queue, player search) were left alone, as was
+`pg_trgm` for the player search: at this population a `display_name ILIKE`
+over registered players is a third of a millisecond, and the extension needs
+installation rights the deployment may not have.
 
 The user-stat benchmark seeds deterministic finished-game facts, rebuilds the
 daily projection (reporting the rebuild's wall time and peak allocation), and

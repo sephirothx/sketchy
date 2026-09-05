@@ -630,6 +630,18 @@ class EmailOutboxEntry(Base):
         ),
         CheckConstraint("attempts >= 0", name="ck_email_outbox_attempts"),
         Index("ix_email_outbox_ready", "state", "next_attempt_at"),
+        # The retention sweep's sent branch (#550) ages rows by sent_at, and
+        # sent rows are most of the outbox: a partial over them turns that
+        # scan into an ordered walk (#554). The failed branch is few rows and
+        # already served by the ready index's state prefix; pending rows are
+        # the ready index's too.
+        Index(
+            "ix_email_outbox_sent_at_sent",
+            "sent_at",
+            "id",
+            postgresql_where=text("state = 'sent'"),
+            sqlite_where=text("state = 'sent'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -677,12 +689,16 @@ class AuditEvent(Base):
             name="ck_audit_events_target_type",
         ),
         Index("ix_audit_events_target", "target_type", "target_id"),
+        # The ledger filtered by one event type, newest first: a rare type
+        # otherwise walks the time index past every other type's rows (#554).
+        Index("ix_audit_events_type_created_at", "event_type", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    # No standalone index: `ix_audit_events_type_created_at` leads with it.
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -853,6 +869,17 @@ class RoomMessage(Base):
         Index("ix_room_messages_expires_at", "expires_at"),
         Index("ix_room_messages_game_turn_created", "game_id", "turn_id", "created_at"),
         Index("ix_room_messages_sender_created", "sender_user_id", "created_at"),
+        # The lobby restore at startup: newest 50 lobby lines. One row in
+        # forty is a lobby line, so a partial index over just those makes the
+        # read a bounded walk from the newest end instead of a sort of every
+        # retained message (#554: 8 ms and 3,700 buffers to 0.02 ms and 5).
+        Index(
+            "ix_room_messages_lobby_newest",
+            "created_at",
+            "id",
+            postgresql_where=text("audience = 'lobby'"),
+            sqlite_where=text("audience = 'lobby'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1334,6 +1361,14 @@ class UserBan(Base):
     __table_args__ = (
         _actor_index("ix_user_bans_revoked_by", "revoked_by_user_id"),
         Index("ix_user_bans_user_active_expires", "user_id", "is_active", "expires_at"),
+        # The moderation queue: newest active bans first. Most bans are
+        # revoked, so the queue's rows are a small partial (#554).
+        Index(
+            "ix_user_bans_active_newest",
+            "created_at",
+            postgresql_where=text("is_active IS TRUE"),
+            sqlite_where=text("is_active IS TRUE"),
+        ),
         CheckConstraint(
             "expires_at IS NULL OR expires_at > created_at",
             name="ck_user_bans_expiry_after_creation",

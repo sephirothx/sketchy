@@ -501,6 +501,8 @@ pinned by [`fixtures/account_data_export_v2_fields.json`](../fixtures/account_da
 `state` (`pending \| sent \| failed`) · `attempts` · `last_error` · `next_attempt_at` ·
 `created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`.
 
+`ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
+
 Templates: `verify_email`, `reset_password`, `password_changed`, `account_banned`,
 `content_hidden`. **Nothing else is ever sent to a player's address.**
 
@@ -549,6 +551,8 @@ provider-login API is enabled until identity-linking flows ship.
 ### `audit_events`
 Append-only record of every security- and moderation-sensitive action.
 
+`ix_audit_events_type_created_at` replaces the standalone `event_type` index (#554): the ledger filtered by one type, newest first, walks it in order instead of collecting every row of a rare type and sorting them, and the composite serves the plain equality the standalone did.
+
 `id` · `event_type` · `actor_user_id` (`SET NULL`) · `target_user_id` (`SET NULL`) ·
 `target_type` · `target_id` · `request_id` · `ip_hash` · `details` (JSON) · `created_at`.
 
@@ -590,6 +594,8 @@ pending report receives one resolution and cannot later be silently rewritten.
 ### `room_messages`
 Accepted player-authored chat, wrong guesses, and correct-guess text, kept **30 days**
 in an audience-aware store — and, since #533, the lobby's chat too.
+
+**Indexes chosen from plans** (#554, `benchmarks/index_plans.py`): `ix_room_messages_lobby_newest` is a partial `(created_at, id) WHERE audience = 'lobby'` for the startup restore of the newest 50 lobby lines — one row in forty is a lobby line, and without it the restore sorted every retained message. The application inlines the literal `'lobby'` in that query: a generic plan for a prepared statement cannot prove a bound `audience = $1` implies the index's predicate, so the literal is what keeps the index in use once asyncpg stops planning per value.
 
 | Column | Notes |
 | --- | --- |
@@ -775,6 +781,8 @@ audit event naming the report; the ledger never records what the report said.
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
 `source_report_id` (FK → `player_reports`, `SET NULL`) · `expires_at` · `is_active` ·
 `created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason`.
+
+`ix_user_bans_active_newest` is a partial `(created_at) WHERE is_active` for the moderation queue's newest active bans (#554): most bans are revoked, so the queue's rows are a small partial rather than a sort of the table. #553's unified not-revoked-and-not-expired predicate replaces this one when it lands.
 
 **Flow.** Creating a suspension revokes every signed-in device and removes any live room
 seat immediately. Correct-password login, authenticated HTTP requests, and Socket.IO

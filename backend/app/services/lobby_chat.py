@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.bans import active_ban_filter
@@ -184,7 +184,9 @@ async def recent_lobby_lines(
         await session.scalars(
             select(RoomMessage)
             .where(
-                RoomMessage.audience == "lobby",
+                # Inlined, not bound: the partial index over lobby lines only
+                # matches a plan whose predicate names the literal (#554).
+                RoomMessage.audience == literal("lobby", literal_execute=True),
                 RoomMessage.expires_at > checked_at,
                 RoomMessage.sender_user_id.is_not(None),
                 RoomMessage.sender_user_id.not_in(suspended),
