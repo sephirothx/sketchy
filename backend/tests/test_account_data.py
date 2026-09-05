@@ -1233,7 +1233,7 @@ async def test_the_build_pages_its_history_without_changing_the_document(env, mo
     would have produced."""
     from app.auth.account_data import _ExportWriter, _write_export_artifact
 
-    http, _, _, factory = env
+    http, users, _, factory = env
     owner = await register(http, "Paged")
     for _ in range(4):
         assert (
@@ -1241,13 +1241,16 @@ async def test_the_build_pages_its_history_without_changing_the_document(env, mo
                 "/api/auth/login", json={"username": "Paged", "password": PASSWORD}
             )
         ).status_code == 200
+    # Real accounts on the other side of each block: PostgreSQL enforces the
+    # foreign key that SQLite lets a test forget.
+    blocked = [await users.create_anonymous(f"Blocked{index}") for index in range(5)]
     async with factory() as session:
         async with session.begin():
             for index in range(5):
                 session.add(
                     UserBlock(
                         blocker_user_id=UUID(owner["id"]),
-                        blocked_user_id=generate_uuid(),
+                        blocked_user_id=UUID(str(blocked[index].id)),
                         created_at=STARTED + timedelta(minutes=index),
                     )
                 )

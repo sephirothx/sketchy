@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 import app.auth.account_data as account_data_module
 import app.services.data_export_worker as worker_module
 from app.auth.account_data import create_data_export
-from app.db.models import DataExport
+from app.db import create_db_engine
+from app.db.models import Base, DataExport
 from app.domain_values import DataExportStatus
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.data_export_worker import (
@@ -26,9 +29,20 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def env(monkeypatch):
+async def env(monkeypatch, tmp_path):
     monkeypatch.setenv("IP_HASH_SECRET", "export-worker-test-secret")
-    factory, engine = await create_test_db()
+    if os.environ.get("TEST_DATABASE_URL"):
+        factory, engine = await create_test_db()
+    else:
+        # A file, not `:memory:`: the in-memory engine shares one connection
+        # between every session, and these tests read the table while the
+        # worker is writing it - on one connection the reader's rollback lands
+        # on the writer's transaction. The app's own engine factory gives the
+        # file WAL and a busy timeout, which is what lets the two coexist.
+        engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'exports.db'}")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        factory = async_sessionmaker(engine, expire_on_commit=False)
     users = SqlAlchemyUserRepository(factory)
     yield factory, users
     await engine.dispose()
@@ -57,6 +71,17 @@ def ready(factory, job_id):
     return check
 
 
+def succeeded(health: LoopHealth):
+    """The sweep has finished and said so - the row turns ready a moment
+    before the loop records its success, so a test that reads the health
+    waits for this rather than for the row."""
+
+    async def check() -> bool:
+        return health.snapshot()["seconds_since_success"] is not None
+
+    return check
+
+
 async def test_a_woken_worker_builds_the_pending_job(env):
     """A request writes the row and says "now"; the build happens on the
     loop, and readiness sees a loop that is running and succeeding."""
@@ -68,8 +93,8 @@ async def test_a_woken_worker_builds_the_pending_job(env):
     task = worker.start(health=health)
     try:
         await wait_until(ready(factory, job.id))
+        await wait_until(succeeded(health))
         assert health.snapshot()["consecutive_failures"] == 0
-        assert health.snapshot()["seconds_since_success"] is not None
 
         # Idle now: a second wake with nothing due is a cheap sweep, not a
         # rebuild - the ready row stays ready.
@@ -149,6 +174,7 @@ async def test_a_failing_sweep_is_counted_and_the_loop_carries_on(env, monkeypat
     task = worker.start(health=health)
     try:
         await wait_until(ready(factory, job.id))
+        await wait_until(succeeded(health))
         snapshot = health.snapshot()
         assert snapshot["total_failures"] == 2
         assert snapshot["consecutive_failures"] == 0
