@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.admin_auth import admin_gate
 from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import PersistentRateLimiter, client_key
+from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import AuditEvent, BugReport, User, generate_uuid
 from app.domain_values import (
     AuditTargetType,
@@ -375,6 +376,12 @@ def create_bug_report_router(
 
         async with session_factory() as session:
             async with session.begin():
+                # The erasure barrier: a session that passed the middleware
+                # may belong to an account deleted since (app.auth.erasure).
+                try:
+                    await require_live_account(session, db_reporter_id)
+                except AccountErasedError:
+                    raise HTTPException(status_code=401, detail="Sign in first.") from None
                 reporter = await session.get(User, db_reporter_id)
                 if reporter is not None:
                     server_context["account"] = {

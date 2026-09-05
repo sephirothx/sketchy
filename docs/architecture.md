@@ -1337,6 +1337,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/auth/avatars.py`](../backend/app/auth/avatars.py) | Canonical keys for avatar visuals hosted by the Sketchy deployment. |
 | [`app/auth/bans.py`](../backend/app/auth/bans.py) | Shared active-ban queries for HTTP, Socket.IO, login, and moderation. |
 | [`app/auth/blocks.py`](../backend/app/auth/blocks.py) | Low-latency lookup cache for directional player blocks. |
+| [`app/auth/erasure.py`](../backend/app/auth/erasure.py) | The erasure barrier: what a writer of account-owned content checks first. |
 | [`app/auth/email.py`](../backend/app/auth/email.py) | Provider-agnostic normalization for account email identities. |
 | [`app/auth/mail.py`](../backend/app/auth/mail.py) | Queueing and delivery for the few messages this game ever sends. |
 | [`app/auth/middleware.py`](../backend/app/auth/middleware.py) | Session cookie plumbing for HTTP requests and Socket.IO handshakes. |

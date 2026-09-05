@@ -42,7 +42,9 @@ def _aware(value: datetime | None) -> datetime | None:
 
 
 async def _registered(session: AsyncSession, user_id: UUID) -> User:
-    user = await session.get(User, user_id)
+    # Locked (shared) so an upload that passed authentication before a
+    # deletion cannot commit after it: see app.auth.erasure.
+    user = await session.get(User, user_id, with_for_update={"read": True})
     if user is None or user.state == AccountState.DELETED.value:
         raise AvatarError("account not found")
     if user.state != AccountState.REGISTERED.value:
