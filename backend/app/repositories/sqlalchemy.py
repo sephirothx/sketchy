@@ -1008,12 +1008,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 referenced_user_ids.update(
                     _entity_id(reaction.user_id) for reaction in reactions
                 )
+                # FOR UPDATE, not FOR SHARE: this transaction goes on to
+                # write last_active_at on these rows, and two saves sharing a
+                # player that both held the shared lock would deadlock on the
+                # upgrade. Ascending id order is the erasure barrier's rule
+                # (app.auth.erasure), so a save and a deletion cannot cycle.
                 users = (
                     await session.scalars(
                         select(User)
                         .where(User.id.in_(referenced_user_ids))
                         .order_by(User.id)
-                        .with_for_update(read=True)
+                        .with_for_update()
                     )
                 ).all()
                 users_by_id = {user.id: user for user in users}

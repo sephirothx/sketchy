@@ -1348,8 +1348,11 @@ before the deletion committed. Each of those would write the erased name, text, 
 pixels back (#606: reproduced with one queued lobby line).
 
 So every writer of account-owned content re-reads the lifecycle of the accounts it
-writes for **inside its own transaction, under a shared lock on their rows, in
-ascending id order** ([`auth/erasure.py`](../backend/app/auth/erasure.py)). The
+writes for **inside its own transaction, under a lock on their rows, in ascending id
+order** ([`auth/erasure.py`](../backend/app/auth/erasure.py)) — a shared lock when it
+only reads the account, `FOR UPDATE` when it goes on to write the row (the finished-game
+write touches `last_active_at`, an avatar upload the avatar key), because two shared
+holders that both update deadlock on the upgrade. The
 deletion holds the account row `FOR UPDATE`; a writer that arrives while it is in
 flight waits and then reads `deleted`, and a deletion that arrives while a writer
 holds the shared lock waits for the commit and erases what was just written. Either

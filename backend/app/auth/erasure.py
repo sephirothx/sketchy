@@ -11,13 +11,17 @@ Authentication performed before a deletion is not authorization to commit
 after it.
 
 So every such writer, inside its own transaction, re-reads the lifecycle of
-the accounts it is about to write for under a **shared lock** on their rows,
-in ascending id order. Against a deletion in flight the shared lock waits for
-the `FOR UPDATE` and then sees `deleted`; against a deletion that starts
-later, the deletion's `FOR UPDATE` waits for the writer's commit and then
-erases what was just written. Either order ends erased. Ordering the locks by
-id is what keeps two writers, or a writer and two deletions, from waiting on
-each other in a cycle.
+the accounts it is about to write for under a lock on their rows, in
+ascending id order: a **shared lock** when it only reads the account (queued
+messages, list saves, reports), `FOR UPDATE` when it will write the row too
+(the finished-game write touches `last_active_at`, an avatar upload the
+avatar key), because two holders of a shared lock that both go on to update
+deadlock on the upgrade. Against a deletion in flight the lock waits for the
+deletion's `FOR UPDATE` and then sees `deleted`; against a deletion that
+starts later, the deletion waits for the writer's commit and then erases what
+was just written. Either order ends erased. Ordering the locks by id is what
+keeps two writers, or a writer and two deletions, from waiting on each other
+in a cycle.
 
 SQLite renders neither lock and has one writer at a time, so there the
 re-read alone is the barrier; the ordering guarantees are proven on
