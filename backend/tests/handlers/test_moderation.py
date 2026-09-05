@@ -595,3 +595,188 @@ async def test_a_guest_is_told_to_claim_an_account_first():
 
     assert result["ok"] is False
     assert "account" in result["error"]
+
+
+def _report_room_with_a_drawer():
+    """A registered reporter watching a registered drawer mid-turn."""
+    from uuid import uuid4
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(
+        room, "Reporter", user_id=str(uuid4()), is_anonymous=False
+    )
+    drawer = room_manager.add_player(
+        room, "Drawer", user_id=str(uuid4()), is_anonymous=False
+    )
+    reporter.sid, drawer.sid = "reporter-sid", "drawer-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, reporter.id], rounds_total=1)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    assert room.game.current_drawer == drawer.id
+    room.game.phase = Phase.DRAWING
+    room.game.prompt = "cat"
+    canvas = room.game.canvas
+    assert canvas.record_stroke(
+        "draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4}
+    )
+    assert canvas.record_stroke("draw_end", {})
+    return room_manager, room, reporter, drawer
+
+
+async def _users_for(factory, *players):
+    from uuid import UUID
+
+    from app.db.models import User
+
+    async with factory() as session:
+        async with session.begin():
+            session.add_all(
+                User(
+                    id=UUID(player.user_id),
+                    username=player.nickname,
+                    password_hash="hash",
+                    display_name=player.nickname,
+                    state="registered",
+                )
+                for player in players
+            )
+
+
+@pytest.mark.asyncio
+async def test_a_report_about_the_drawer_can_carry_the_canvas():
+    """Asked for by the reporter, taken by the server: the frame is the one
+    on the canvas at the moment of the report, and it is the drawer's by
+    construction because only the seat holding the pen is copied."""
+    from uuid import UUID
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.orm import undefer
+
+    from app.canvas_storage import stored_drawing_checksum
+    from app.db.models import AuditEvent, Base, PlayerReportDrawingEvidence
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    room_manager, room, reporter, drawer = _report_room_with_a_drawer()
+    frame = room.game.canvas.sync_payload()
+
+    try:
+        await _users_for(factory, reporter, drawer)
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager)
+        ctx.session_factory = factory
+        sio.get_session = AsyncMock(
+            return_value={"room_id": room.id, "player_id": reporter.id}
+        )
+        sio.emit = AsyncMock()
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {
+                "targetPlayerId": drawer.id,
+                "reason": "offensive_drawing",
+                "details": "Look at what they drew.",
+                "includeDrawing": True,
+            },
+        )
+
+        assert result["ok"] is True
+        assert result["drawingAttached"] is True
+
+        async with factory() as session:
+            evidence = await session.scalar(
+                select(PlayerReportDrawingEvidence).options(
+                    undefer(PlayerReportDrawingEvidence.payload)
+                )
+            )
+            assert evidence is not None
+            assert evidence.report_id == UUID(result["id"])
+            assert evidence.payload == frame
+            assert evidence.byte_size == len(frame)
+            assert evidence.checksum_sha256 == stored_drawing_checksum(frame)
+            assert (evidence.format_magic, evidence.format_version) == ("SKCH", 1)
+            assert evidence.turn_id_snapshot == UUID(room.game.current_turn_id)
+            assert evidence.round_number == 1
+            assert evidence.prompt_snapshot == "cat"
+            assert evidence.action_count == 1
+            event = await session.scalar(
+                select(AuditEvent).where(AuditEvent.event_type == "report.submitted")
+            )
+            # The ledger says a drawing was attached and never what it shows.
+            assert event.details["has_drawing"] is True
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_the_canvas_is_copied_only_for_the_seat_that_is_drawing():
+    """A guesser has nothing on the canvas that is theirs, and once the next
+    drawer is choosing a prompt the canvas no longer shows the turn. Both
+    are refused quietly: the report is filed and the acknowledgement says
+    the drawing did not come with it."""
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db.models import Base, PlayerReport, PlayerReportDrawingEvidence
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    room_manager, room, reporter, drawer = _report_room_with_a_drawer()
+
+    try:
+        await _users_for(factory, reporter, drawer)
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager)
+        ctx.session_factory = factory
+        sio.emit = AsyncMock()
+        report_player = sio.handlers["/"]["report_player"]
+
+        # The drawer reports the guesser, drawing included: nothing to copy.
+        sio.get_session = AsyncMock(
+            return_value={"room_id": room.id, "player_id": drawer.id}
+        )
+        about_a_guesser = await report_player(
+            "drawer-sid",
+            {
+                "targetPlayerId": reporter.id,
+                "reason": "harassment",
+                "details": "Rude in chat.",
+                "includeDrawing": True,
+            },
+        )
+        assert about_a_guesser["ok"] is True
+        assert about_a_guesser["drawingAttached"] is False
+
+        # The guesser reports the drawer, but the turn has moved on.
+        room.game.phase = Phase.CHOOSING_PROMPT
+        sio.get_session = AsyncMock(
+            return_value={"room_id": room.id, "player_id": reporter.id}
+        )
+        after_the_turn = await report_player(
+            "reporter-sid",
+            {
+                "targetPlayerId": drawer.id,
+                "reason": "offensive_drawing",
+                "details": "What they drew just now.",
+                "includeDrawing": True,
+            },
+        )
+        assert after_the_turn["ok"] is True
+        assert after_the_turn["drawingAttached"] is False
+
+        async with factory() as session:
+            assert await session.scalar(select(func.count(PlayerReport.id))) == 2
+            assert (
+                await session.scalar(
+                    select(func.count(PlayerReportDrawingEvidence.report_id))
+                )
+                == 0
+            )
+    finally:
+        await engine.dispose()

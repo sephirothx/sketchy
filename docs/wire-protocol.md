@@ -378,11 +378,25 @@ deliberately carry no account IDs, so a client could not name one even if it wan
 the server resolves the seat against the live room and selects the evidence itself.
 
 ```jsonc
-{ "targetPlayerId": "…", "reason": "harassment", "details": "…" }
+{ "targetPlayerId": "…", "reason": "harassment", "details": "…", "includeDrawing": false }
 ```
 
-`reason` ∈ `harassment | offensive_drawing | inappropriate_name | cheating | spam`;
-`details` is 1 – 1000 characters.
+`reason` ∈ `harassment | offensive_drawing | inappropriate_name | cheating | spam |
+inappropriate_avatar`; `details` is 1 – 1000 characters; `includeDrawing` (optional,
+default `false`) asks for the canvas to go with the report.
+
+Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
+
+> **The drawing is asked for, never sent.** `includeDrawing` is a request: the server
+> copies the room's own canvas frame (the same `SKCH` bytes a `sync_strokes` carries)
+> and only when the reported seat is the one drawing this turn and the canvas still
+> shows it (drawing phase or turn results). A report about a guesser, or one filed once
+> the next drawer is choosing, is accepted with `drawingAttached: false`, which the
+> dialog tells the reporter — the turn can end between opening the dialog and sending.
+> The client offers the box only where the server would copy (`canAttachDrawing` in
+> [`lib/moderation.ts`](../frontend/src/lib/moderation.ts)); the server's rule is the
+> one that holds. What was copied is read back by a moderator over
+> `GET /api/moderation/reports/{report_id}/drawing` (R-MOD-14).
 
 > Note the deliberate asymmetry: the **socket** report bounds `details` at 1000, while
 > the **REST** `POST /api/reports` bounds it at `MAX_REPORT_DETAILS` = 2000 and also
@@ -1130,7 +1144,9 @@ whose frozen snapshots are already tombstoned on deletion.
 | --- | --- | --- | --- |
 | `POST` | `/api/reports` | any signed-in | ≤ 2000 chars detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
 | `POST` | `/api/prompt-content-reports` | any signed-in | Targets a list or an exact `promptVersionId`. Official content and self-reports rejected |
-| `GET` | `/api/moderation/reports` | moderator+ | The queue; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension) and `messageEvidence` in the order it was said, each line with a `role` of `cited` or `context` (R-MOD-13) |
+| `GET` | `/api/moderation/reports` | moderator+ | The queue, oldest first; each report carries `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension), `messageEvidence` in the order it was said, each line with a `role` of `cited` or `context` (R-MOD-13), and `drawing` — the attached canvas by its metadata (`turnId`, `roundNumber`, `prompt`, `actionCount`, `byteSize`, `capturedAt`) or `null` (R-MOD-14) |
+| `GET` | `/api/moderation/reports/{report_id}/drawing` | moderator+ | The attached drawing's bytes in the **current wire format** (`application/octet-stream`, `Cache-Control: private, no-store`), checksum verified on every read; `404` when the report has none |
+| `GET` | `/api/moderation/closed-cases` | moderator+ | Decided player and content reports as **one stream, newest decision first**, under `limit` (≤ 100) and `offset` (≤ 1000): `{ players, content, hasMore }`, each list already in that order and carrying what its open queue does (R-MOD-15) |
 | `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | Review is one-way |
 | `GET` | `/api/moderation/prompt-content-reports` | moderator+ | The queue |
 | `PATCH` | `/api/moderation/prompt-content-reports/{report_id}` | moderator+ | A resolution chooses Active or Hidden; a dismissal cannot mutate content |

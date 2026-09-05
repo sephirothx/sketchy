@@ -310,3 +310,28 @@ button.player-vote-chip-kick:focus-visible {
   padding: 8px 10px;
   resize: vertical;
 }
+
+/* Offered only when the reported seat is drawing; reads like the bug
+   report's own "description only" row. */
+.report-include-drawing {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+}
+
+.report-include-drawing input { flex: none; margin-top: 2px; }
+
+.report-include-drawing > span {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.report-include-drawing > span > span {
+  color: var(--faint);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}

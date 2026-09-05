@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 
 from app.auth.avatars import avatar_url
 from app.services.avatars import remove_avatar
@@ -23,6 +24,11 @@ from app.auth.rate_limit import (
 from app.auth.audit import audit_coordinates
 from app.auth.bans import active_ban_filter, active_ban_for_user
 from app.auth.mail import queue_email
+from app.canvas_storage import (
+    CorruptStoredDrawingError,
+    UnsupportedStoredDrawingError,
+    stored_drawing_wire_payload,
+)
 from app.services.player_reports import context_around, record_player_report
 from app.auth.sessions import revoke_all_sessions
 from app.auth.warnings import pending_warning_payload
@@ -30,6 +36,7 @@ from app.db.models import (
     AuditEvent,
     GameRecord,
     PlayerReport,
+    PlayerReportDrawingEvidence,
     PromptContentReport,
     PromptList,
     PromptListRevision,
@@ -55,10 +62,18 @@ from app.domain_values import (
 )
 
 
+logger = logging.getLogger(__name__)
+
 MAX_REPORT_CONTEXT_BYTES = 32_768
 MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
+# How far back the closed queue can be paged. Bounded because each page is
+# answered by merging the two report tables in memory from their newest
+# decided row down to the page asked for; forty pages of twenty-five is
+# further back than a case is looked for, and past that the ledger is the
+# record.
+MAX_CLOSED_CASES_OFFSET = 1_000
 OnUserBanned = Callable[[str], Awaitable[None]]
 OnUserWarned = Callable[[str], Awaitable[None]]
 
@@ -265,6 +280,34 @@ async def _reported_player_context(
     }
 
 
+def _drawing_payload(evidence: PlayerReportDrawingEvidence | None) -> dict | None:
+    """The attached drawing by its metadata; the bytes have their own route."""
+    if evidence is None:
+        return None
+    return {
+        "turnId": str(evidence.turn_id_snapshot),
+        "roundNumber": evidence.round_number,
+        "prompt": evidence.prompt_snapshot,
+        "actionCount": evidence.action_count,
+        "byteSize": evidence.byte_size,
+        "capturedAt": evidence.captured_at.isoformat(),
+    }
+
+
+# Everything a report payload reads off its row. Any query that ends in
+# `_report_payload` needs both, since a lazy load is an error on an async
+# session; the drawing's bytes stay deferred behind them.
+_REPORT_PAYLOAD_LOADS = (
+    selectinload(PlayerReport.message_evidence),
+    selectinload(PlayerReport.drawing_evidence),
+)
+
+
+def _decided_at(report: PlayerReport | PromptContentReport) -> datetime:
+    """When a case was closed: the review, or failing that the last write."""
+    return report.reviewed_at or report.updated_at
+
+
 def _report_payload(
     report: PlayerReport, player_context: dict[UUID, dict] | None = None
 ) -> dict:
@@ -318,6 +361,7 @@ def _report_payload(
             }
             for evidence in report.message_evidence
         ],
+        "drawing": _drawing_payload(report.drawing_evidence),
         "status": report.status,
         "reviewedByUserId": (
             str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
@@ -795,9 +839,7 @@ def create_moderation_router(
     ):
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PlayerReport).options(
-                selectinload(PlayerReport.message_evidence)
-            )
+            statement = select(PlayerReport).options(*_REPORT_PAYLOAD_LOADS)
             if status is not None:
                 statement = statement.where(PlayerReport.status == status.value)
             reports = (
@@ -842,6 +884,145 @@ def create_moderation_router(
             await on_avatar_changed(str(report.reported_user_id), None)
         return {"ok": True, "removed": removed}
 
+    @router.get("/moderation/reports/{report_id}/drawing")
+    async def report_drawing(report_id: UUID, request: Request):
+        """The drawing a report carries, as it stood when the report was filed.
+
+        Answered in the current wire format, so the moderation page decodes
+        it with exactly the code a live canvas uses. Evidence, so it is never
+        cached anywhere shared, and never answered to anyone but a reviewer.
+        """
+        async with session_factory() as session:
+            await _reviewer(session, request)
+            evidence = await session.scalar(
+                select(PlayerReportDrawingEvidence)
+                .where(PlayerReportDrawingEvidence.report_id == report_id)
+                .options(undefer(PlayerReportDrawingEvidence.payload))
+            )
+        if evidence is None:
+            raise HTTPException(status_code=404, detail="No drawing.")
+        try:
+            payload = stored_drawing_wire_payload(
+                evidence.payload, checksum=evidence.checksum_sha256
+            )
+        except UnsupportedStoredDrawingError as error:
+            # A build older than the row it is reading. Answer as though the
+            # drawing is absent rather than claiming it is broken.
+            logger.error(
+                "Cannot decode report drawing %s: %s", report_id, error
+            )
+            raise HTTPException(status_code=404, detail="No drawing.") from error
+        except CorruptStoredDrawingError as error:
+            logger.error("Report drawing %s failed its checksum", report_id)
+            raise HTTPException(
+                status_code=500, detail="That drawing could not be read."
+            ) from error
+        return Response(
+            content=payload,
+            media_type="application/octet-stream",
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    @router.get("/moderation/closed-cases")
+    async def list_closed_cases(
+        request: Request,
+        limit: int = Query(default=25, ge=1, le=100),
+        offset: int = Query(default=0, ge=0, le=MAX_CLOSED_CASES_OFFSET),
+    ):
+        """Decided player and content reports as one stream, newest decision first.
+
+        The open queues are small and the page merges them itself; closed
+        cases accumulate for as long as the service runs, so the merge has to
+        happen here, under a page, or the newest decisions would be the ones
+        a moderator could never reach. Two light queries pick the page's ids
+        from each table before any evidence is loaded for the rows on it.
+        """
+        window = offset + limit + 1
+        decided = ReportStatus.PENDING.value
+        async with session_factory() as session:
+            await _reviewer(session, request)
+            player_keys = (
+                await session.execute(
+                    select(
+                        PlayerReport.id,
+                        func.coalesce(PlayerReport.reviewed_at, PlayerReport.updated_at),
+                    )
+                    .where(PlayerReport.status != decided)
+                    .order_by(
+                        func.coalesce(
+                            PlayerReport.reviewed_at, PlayerReport.updated_at
+                        ).desc(),
+                        PlayerReport.id.desc(),
+                    )
+                    .limit(window)
+                )
+            ).all()
+            content_keys = (
+                await session.execute(
+                    select(
+                        PromptContentReport.id,
+                        func.coalesce(
+                            PromptContentReport.reviewed_at,
+                            PromptContentReport.updated_at,
+                        ),
+                    )
+                    .where(PromptContentReport.status != decided)
+                    .order_by(
+                        func.coalesce(
+                            PromptContentReport.reviewed_at,
+                            PromptContentReport.updated_at,
+                        ).desc(),
+                        PromptContentReport.id.desc(),
+                    )
+                    .limit(window)
+                )
+            ).all()
+            merged = sorted(
+                [("player", row_id, at) for row_id, at in player_keys]
+                + [("content", row_id, at) for row_id, at in content_keys],
+                key=lambda entry: (entry[2], entry[1]),
+                reverse=True,
+            )
+            page = merged[offset : offset + limit]
+            player_ids = [row_id for kind, row_id, _ in page if kind == "player"]
+            content_ids = [row_id for kind, row_id, _ in page if kind == "content"]
+            players = (
+                (
+                    await session.scalars(
+                        select(PlayerReport)
+                        .where(PlayerReport.id.in_(player_ids))
+                        .options(*_REPORT_PAYLOAD_LOADS)
+                    )
+                ).all()
+                if player_ids
+                else []
+            )
+            content = (
+                (
+                    await session.scalars(
+                        select(PromptContentReport).where(
+                            PromptContentReport.id.in_(content_ids)
+                        )
+                    )
+                ).all()
+                if content_ids
+                else []
+            )
+            player_context = await _reported_player_context(session, list(players))
+            # Back into the page's order: `IN` returns rows in whatever order
+            # the database likes.
+            players.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
+            content.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
+            return {
+                "players": [
+                    _report_payload(report, player_context) for report in players
+                ],
+                "content": [
+                    _prompt_content_report_payload(report) for report in content
+                ],
+                "hasMore": len(merged) > offset + limit,
+            }
+
     @router.get("/moderation/prompt-content-reports")
     async def list_prompt_content_reports(
         request: Request,
@@ -877,7 +1058,7 @@ def create_moderation_router(
                 report = await session.scalar(
                     select(PlayerReport)
                     .where(PlayerReport.id == report_id)
-                    .options(selectinload(PlayerReport.message_evidence))
+                    .options(*_REPORT_PAYLOAD_LOADS)
                     .with_for_update()
                 )
                 if report is None:
@@ -905,7 +1086,9 @@ def create_moderation_router(
                 )
                 await session.flush()
                 await session.refresh(report)
-                await session.refresh(report, attribute_names=["message_evidence"])
+                await session.refresh(
+                    report, attribute_names=["message_evidence", "drawing_evidence"]
+                )
             return _report_payload(report)
 
     @router.patch("/moderation/prompt-content-reports/{report_id}")

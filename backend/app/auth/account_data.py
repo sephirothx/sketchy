@@ -767,6 +767,21 @@ def _player_report_document(report: PlayerReport) -> dict:
             }
             for evidence in report.message_evidence
         ],
+        # That a drawing was attached, and of which turn - not the drawing.
+        # The bytes are the reported player's work, kept for a moderator; the
+        # reporter's own record is that they asked for it to be included.
+        "drawing": (
+            {
+                "turnId": str(report.drawing_evidence.turn_id_snapshot),
+                "roundNumber": report.drawing_evidence.round_number,
+                "prompt": report.drawing_evidence.prompt_snapshot,
+                "actionCount": report.drawing_evidence.action_count,
+                "byteSize": report.drawing_evidence.byte_size,
+                "capturedAt": _timestamp(report.drawing_evidence.captured_at),
+            }
+            if report.drawing_evidence is not None
+            else None
+        ),
         "status": report.status,
         "createdAt": _timestamp(report.created_at),
         "updatedAt": _timestamp(report.updated_at),
@@ -1046,7 +1061,10 @@ async def _write_export_artifact(
         session,
         select(PlayerReport)
         .where(PlayerReport.reporter_user_id.in_(identity_ids))
-        .options(selectinload(PlayerReport.message_evidence))
+        .options(
+            selectinload(PlayerReport.message_evidence),
+            selectinload(PlayerReport.drawing_evidence),
+        )
         .order_by(PlayerReport.created_at, PlayerReport.id),
         _player_report_document,
     )

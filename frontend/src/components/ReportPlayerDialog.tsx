@@ -5,6 +5,32 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
 
+/** What went with the report, in one sentence.
+
+Each part is stated from the acknowledgement rather than from what was asked
+for: the turn can end between opening the dialog and sending, and a reporter
+who ticked the box should hear that the drawing did not make it. */
+function sentSummary(
+  sent: { messages: number; drawing: boolean },
+  drawingRequested: boolean,
+): string {
+  const messages =
+    sent.messages > 0
+      ? `${sent.messages} of their recent message${sent.messages === 1 ? "" : "s"}`
+      : null;
+  if (sent.drawing) {
+    return messages
+      ? `Sent, with their drawing and ${messages} attached.`
+      : "Sent, with their drawing attached.";
+  }
+  const base = messages
+    ? `Sent, with ${messages} attached.`
+    : "Sent. They had said nothing in this room, so there are no messages attached.";
+  return drawingRequested
+    ? `${base} The turn had ended, so the drawing could not be attached.`
+    : base;
+}
+
 const REASONS: { value: ReportReason; label: string }[] = [
   { value: "harassment", label: "Harassment or abuse" },
   { value: "offensive_drawing", label: "Offensive drawing" },
@@ -19,24 +45,35 @@ const REASONS: { value: ReportReason; label: string }[] = [
 The reported player is named by their seat; their account is never mentioned
 here because the room never tells anyone what it is. Their recent messages are
 attached by the server rather than picked here - a reporter should not have to
-assemble evidence, and evidence they assembled would have to be checked. */
+assemble evidence, and evidence they assembled would have to be checked. The
+drawing is the same: when the reported player is the one drawing, the dialog
+offers to include it, and the server copies the canvas as it is right now. */
 export function ReportPlayerDialog({
   targetPlayerId,
   nickname,
+  drawingOffered = false,
   onClose,
 }: {
   targetPlayerId: string;
   nickname: string;
+  /** Whether this seat is drawing right now, so the canvas can be attached. */
+  drawingOffered?: boolean;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
   const titleId = useId();
-  const [reason, setReason] = useState<ReportReason>("harassment");
+  const [reason, setReason] = useState<ReportReason>(
+    drawingOffered ? "offensive_drawing" : "harassment",
+  );
   const [details, setDetails] = useState("");
+  // On by default when offered: a complaint about the player drawing is
+  // almost always about the drawing, and a reporter in a hurry should not
+  // have to find the box.
+  const [includeDrawing, setIncludeDrawing] = useState(drawingOffered);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<number | null>(null);
+  const [sent, setSent] = useState<{ messages: number; drawing: boolean } | null>(null);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: detailsRef });
 
@@ -54,12 +91,16 @@ export function ReportPlayerDialog({
         targetPlayerId,
         reason,
         details: details.trim(),
+        includeDrawing: drawingOffered && includeDrawing,
       });
       if (!result.ok) {
         setError(result.error ?? "That report could not be sent.");
         return;
       }
-      setSent(result.evidenceCount ?? 0);
+      setSent({
+        messages: result.evidenceCount ?? 0,
+        drawing: result.drawingAttached ?? false,
+      });
     } catch (problem) {
       setError(socketRequestErrorMessage(problem, "send that report"));
     } finally {
@@ -130,6 +171,22 @@ export function ReportPlayerDialog({
                 Their recent messages in this room are attached automatically,
                 with what was said around them.
               </p>
+              {drawingOffered && (
+                <label className="report-include-drawing">
+                  <input
+                    type="checkbox"
+                    checked={includeDrawing}
+                    onChange={(change) => setIncludeDrawing(change.target.checked)}
+                  />
+                  <span>
+                    Include their drawing
+                    <span>
+                      The canvas as it is right now, so a moderator sees what
+                      you saw.
+                    </span>
+                  </span>
+                </label>
+              )}
 
               {error && (
                 <p className="auth-error" role="alert">
@@ -144,9 +201,7 @@ export function ReportPlayerDialog({
         ) : (
           <>
             <p className="modal-body">
-              {sent > 0
-                ? `Sent, with ${sent} of their recent message${sent === 1 ? "" : "s"} attached.`
-                : "Sent. They had said nothing in this room, so there are no messages attached."}
+              {sentSummary(sent, drawingOffered && includeDrawing)}
             </p>
             <button type="button" className="modal-button" onClick={onClose}>
               Done

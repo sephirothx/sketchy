@@ -448,6 +448,10 @@ class ReportPlayerPayload(RequestModel):
         "inappropriate_avatar",
     ]
     details: str = Field(min_length=1, max_length=1000)
+    # A request, not a payload: the reporter asks for the canvas to be copied
+    # and never sends it. The server takes the frame from the room's own state
+    # and only when the reported seat is the one drawing on it.
+    include_drawing: bool = Field(default=False, alias="includeDrawing")
 
 
 class RestartVotePayload(RequestModel):

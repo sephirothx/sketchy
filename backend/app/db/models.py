@@ -787,6 +787,9 @@ class PlayerReport(Base):
         cascade="all, delete-orphan",
         order_by="PlayerReportMessageEvidence.position",
     )
+    drawing_evidence: Mapped[PlayerReportDrawingEvidence | None] = relationship(
+        back_populates="report", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class RoomMessage(Base):
@@ -979,6 +982,69 @@ class PlayerReportMessageEvidence(Base):
     )
 
     report: Mapped[PlayerReport] = relationship(back_populates="message_evidence")
+
+
+class PlayerReportDrawingEvidence(Base):
+    """The canvas as it stood when a report about its drawer was filed.
+
+    Copied, never referenced: the drawing on the canvas keeps changing after
+    the report - the drawer can add to it, undo the part complained about, or
+    clear it - and the turn's own ``turn_drawings`` row is written only when
+    the game ends, holds the turn's *final* state, and is erased when the
+    drawer's account is deleted. What a moderator has to judge is what the
+    reporter saw, so that is what is kept, for as long as the report is.
+
+    The bytes are the same SKCH frame ``turn_drawings`` stores, under the same
+    ``canvas_storage`` rules: the format is named in the row so a decoder can
+    be found without parsing, and the checksum is verified on every read.
+    """
+
+    __tablename__ = "player_report_drawing_evidence"
+    __table_args__ = (
+        # The same structural sanity bound `turn_drawings` carries, for the
+        # same reason: not the protocol limit, which is derived from the
+        # action and point caps and must stay free to move without a migration.
+        CheckConstraint(
+            "byte_size > 0 AND byte_size <= 8388608",
+            name="ck_report_drawing_evidence_byte_size",
+        ),
+        CheckConstraint(
+            "round_number >= 1 AND action_count >= 0",
+            name="ck_report_drawing_evidence_counts",
+        ),
+    )
+
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("player_reports.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # The turn's durable id, recorded without a foreign key: the report is
+    # filed while the game is still being played, before any history row
+    # exists, and a game abandoned before it ends never writes one.
+    turn_id_snapshot: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    # What the drawer was asked to draw. Server-held, so unlike the reporter's
+    # own words it may be read as fact; it is what makes an "offensive
+    # drawing" judgeable at all, since the picture is only offensive against
+    # what was asked for.
+    prompt_snapshot: Mapped[str] = mapped_column(String(64), nullable=False)
+    action_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    format_magic: Mapped[str] = mapped_column(String(4), nullable=False)
+    format_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Deferred: the queue and the export list a drawing by its metadata, and
+    # only the moderator's drawing route reads the bytes - with `undefer`,
+    # since an implicit load is an error on an async session.
+    payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    report: Mapped[PlayerReport] = relationship(back_populates="drawing_evidence")
 
 
 class PromptContentReport(Base):

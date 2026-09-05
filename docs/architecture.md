@@ -933,6 +933,16 @@ lobby line is public by construction, so the "did you receive it" check does not
 apply, the author must still be the reported account, and a report never mixes lobby
 and room lines. `evidence_from_live_room` is scoped to a room and never picks them.
 
+A drawing takes no queue at all. `drawing_from_live_room` in
+[`services/player_reports.py`](../backend/app/services/player_reports.py) is pure: when
+a `report_player` asks for the canvas (`includeDrawing`), the handler reads the room's
+own `CanvasSession` frame before touching the database, and only if the reported seat
+is the drawer in a phase where the canvas still shows the turn. The frame is validated
+the way a stored drawing is on ingest and written beside the report as
+`player_report_drawing_evidence`, deferred bytes and all, so the queue lists it by its
+metadata and only the moderator's drawing route reads it back — in the current wire
+format, through the same `canvas_storage` decoders a stored turn drawing goes through.
+
 The block filter is answered from memory. `BlockService` caches who has muted a sender
 and is invalidated on every change, and the entry path warms a player's entry when they
 take a seat — where waiting is what entering a room already does — so the chat path is

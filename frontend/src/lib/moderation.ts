@@ -1,6 +1,6 @@
-import { apiRequest } from "./api.ts";
+import { apiBinaryRequest, apiRequest } from "./api.ts";
 import { emitWithAck } from "./socket.ts";
-import type { ModerationState } from "../types";
+import type { GamePhase, ModerationState } from "../types";
 
 export function canCastModerationVote(
   moderation: ModerationState,
@@ -46,6 +46,18 @@ export interface PlayerReportMessageEvidence {
   copiedAt: string;
 }
 
+/** The canvas as it stood when the report was sent, by its metadata. The
+    bytes come from `fetchReportDrawing`, in the wire format a live canvas uses. */
+export interface PlayerReportDrawing {
+  turnId: string;
+  roundNumber: number;
+  /** What the drawer was asked to draw - server-held, so it may be read as fact. */
+  prompt: string;
+  actionCount: number;
+  byteSize: number;
+  capturedAt: string;
+}
+
 /** The reported player's standing, as a moderator weighs the case. */
 export interface ReportedPlayerContext {
   displayName: string;
@@ -70,6 +82,9 @@ export interface PlayerReport {
   details: string;
   contextSnapshot: Record<string, unknown>;
   messageEvidence: PlayerReportMessageEvidence[];
+  /** Null unless the reporter asked for the drawing and the reported seat was
+      the one drawing at the time. */
+  drawing: PlayerReportDrawing | null;
   status: ReportStatus;
   reviewedByUserId: string | null;
   resolutionNote: string | null;
@@ -94,17 +109,40 @@ export interface UserBan {
   revokeReason: string | null;
 }
 
+/** Whether a report about this seat can carry the drawing on the canvas.
+
+Only the drawer's own work is worth attaching, and only while the canvas still
+shows it: during the drawing and on the results screen that follows. The
+server applies the same rule to what it actually copies, so this decides what
+is offered and never what is sent. */
+export function canAttachDrawing(
+  phase: GamePhase,
+  drawerId: string | null | undefined,
+  targetPlayerId: string,
+): boolean {
+  if (phase !== "drawing" && phase !== "turn_results") return false;
+  return Boolean(drawerId) && drawerId === targetPlayerId;
+}
+
 /** Report somebody in the room you are both in.
 
 Addressed by room seat, not by account: the room's payloads deliberately carry
 no account ids, and filing a complaint is not a reason to learn one. The server
 resolves the seat and gathers the chat evidence itself, so nothing here has to
-be trusted. */
+be trusted. `includeDrawing` asks for the canvas to be copied too; the server
+takes it from the room's own state, and only if that seat is the one drawing. */
 export function reportPlayerInRoom(input: {
   targetPlayerId: string;
   reason: ReportReason;
   details: string;
-}): Promise<{ ok: boolean; id?: string; evidenceCount?: number; error?: string }> {
+  includeDrawing?: boolean;
+}): Promise<{
+  ok: boolean;
+  id?: string;
+  evidenceCount?: number;
+  drawingAttached?: boolean;
+  error?: string;
+}> {
   return emitWithAck("report_player", input);
 }
 
@@ -125,6 +163,28 @@ export function listModerationReports(status?: ReportStatus): Promise<{
 }> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiRequest(`/api/moderation/reports${query}`);
+}
+
+/** The drawing a report carries, in the wire format a live canvas uses. */
+export function fetchReportDrawing(reportId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/moderation/reports/${reportId}/drawing`);
+}
+
+/** How many closed cases one page of the queue shows. */
+export const CLOSED_CASES_PAGE_SIZE = 25;
+
+/** Decided player and content reports as one stream, newest decision first.
+
+Paged by the server rather than merged here, because closed cases accumulate
+for as long as the service runs and the newest are the ones worth reaching. */
+export function listClosedCases(input: { limit?: number; offset?: number } = {}): Promise<{
+  players: PlayerReport[];
+  content: PromptContentReport[];
+  hasMore: boolean;
+}> {
+  const limit = input.limit ?? CLOSED_CASES_PAGE_SIZE;
+  const offset = input.offset ?? 0;
+  return apiRequest(`/api/moderation/closed-cases?limit=${limit}&offset=${offset}`);
 }
 
 export function reviewModerationReport(

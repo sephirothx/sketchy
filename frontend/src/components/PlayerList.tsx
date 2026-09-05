@@ -5,8 +5,13 @@ import { emitWithAck, emitTransient } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
+import { useGameStore } from "../store/gameStore";
 import { competitionRanks } from "../lib/standings";
-import { canCastModerationVote, eligibleModerationVotes } from "../lib/moderation";
+import {
+  canAttachDrawing,
+  canCastModerationVote,
+  eligibleModerationVotes,
+} from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
@@ -72,6 +77,9 @@ export function PlayerList({
     (state) => Boolean(state.user && !state.user.isAnonymous),
   );
   const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
+  // Read here rather than passed down: the phase decides one thing on this
+  // list - whether a report about the drawer can carry the canvas.
+  const phase = useGameStore((state) => state.phase);
   const { notify } = useToast();
 
   /** Friend somebody by their seat, so no account id crosses the wire.
@@ -268,6 +276,7 @@ export function PlayerList({
         <ReportPlayerDialog
           targetPlayerId={reporting.playerId}
           nickname={reporting.nickname}
+          drawingOffered={canAttachDrawing(phase, drawerId, reporting.playerId)}
           onClose={() => setReporting(null)}
         />
       )}

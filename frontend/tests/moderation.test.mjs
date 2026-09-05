@@ -52,3 +52,24 @@ test("an unrecognised duration does not silently become permanent", () => {
     ["24h", "7d", "30d", "forever"],
   );
 });
+
+// Whether a report can carry the canvas: only about the seat holding the pen,
+// and only while the canvas still shows that turn.
+import { canAttachDrawing } from "../src/lib/moderation.ts";
+
+test("the drawing is offered against the drawer while the canvas shows the turn", () => {
+  assert.equal(canAttachDrawing("drawing", "drawer", "drawer"), true);
+  assert.equal(canAttachDrawing("turn_results", "drawer", "drawer"), true);
+});
+
+test("the drawing is not offered against a guesser, or when nobody is drawing", () => {
+  assert.equal(canAttachDrawing("drawing", "drawer", "guesser"), false);
+  assert.equal(canAttachDrawing("drawing", null, "drawer"), false);
+  assert.equal(canAttachDrawing("drawing", undefined, "drawer"), false);
+});
+
+test("the drawing is not offered while a prompt is being chosen or the game is over", () => {
+  assert.equal(canAttachDrawing("choosing_prompt", "drawer", "drawer"), false);
+  assert.equal(canAttachDrawing("game_end", "drawer", "drawer"), false);
+  assert.equal(canAttachDrawing("idle", "drawer", "drawer"), false);
+});
