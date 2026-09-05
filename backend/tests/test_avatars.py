@@ -11,19 +11,20 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.avatars import create_avatar_router
 from app.api.moderation import create_moderation_router
 from app.auth.avatars import AVATAR_REUPLOAD_BLOCK, MAX_AVATAR_BYTES, avatar_key_for
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, Base, UploadedAvatarAsset, User
+from app.db.models import AuditEvent, UploadedAvatarAsset, User
 from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import AvatarBlocked, remove_avatar, set_avatar
 from tests.png_fixture import png_bytes
 from tests.webp_fixture import webp_bytes
+
+from tests.dbfixtures import create_test_db
 
 PASSWORD = "a-good-password"
 pytestmark = pytest.mark.asyncio
@@ -32,10 +33,7 @@ pytestmark = pytest.mark.asyncio
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "avatar-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     changed = AsyncMock()
     app = FastAPI()

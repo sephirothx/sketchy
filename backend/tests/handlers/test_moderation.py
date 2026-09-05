@@ -10,6 +10,8 @@ from app.handlers import register_all_handlers as register_handlers
 from app.game import Game, Phase
 from app.rooms import RoomManager
 
+from tests.dbfixtures import create_test_db
+
 
 @pytest.mark.asyncio
 async def test_toggle_afk_socket_handler_and_not_waited_for():
@@ -312,11 +314,9 @@ async def test_reporting_names_a_seat_and_never_an_account():
     from uuid import UUID, uuid4
 
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     from app.db.models import (
         AuditEvent,
-        Base,
         PlayerReport,
         PlayerReportMessageEvidence,
         RoomMessage,
@@ -324,10 +324,7 @@ async def test_reporting_names_a_seat_and_never_an_account():
         generate_uuid,
     )
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
 
     reporter_id, target_id = uuid4(), uuid4()
     room_manager = RoomManager()
@@ -361,6 +358,7 @@ async def test_reporting_names_a_seat_and_never_an_account():
                         ),
                     ]
                 )
+                await session.flush()
                 now = datetime.now(timezone.utc)
                 session.add_all(
                     [
@@ -469,15 +467,11 @@ async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
     from uuid import uuid4
 
     from sqlalchemy import func, select
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    from app.db.models import Base, PlayerReport, User
+    from app.db.models import PlayerReport, User
     from app.domain_values import ReportStatus
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
 
     reporter_id, target_id = uuid4(), uuid4()
     room_manager = RoomManager()
@@ -651,16 +645,12 @@ async def test_a_report_about_the_drawer_can_carry_the_canvas():
     from uuid import UUID
 
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.orm import undefer
 
     from app.canvas_storage import stored_drawing_checksum
-    from app.db.models import AuditEvent, Base, PlayerReportDrawingEvidence
+    from app.db.models import AuditEvent, PlayerReportDrawingEvidence
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     room_manager, room, reporter, drawer = _report_room_with_a_drawer()
     frame = room.game.canvas.sync_payload()
 
@@ -719,14 +709,10 @@ async def test_the_canvas_is_copied_only_for_the_seat_that_is_drawing():
     are refused quietly: the report is filed and the acknowledgement says
     the drawing did not come with it."""
     from sqlalchemy import func, select
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    from app.db.models import Base, PlayerReport, PlayerReportDrawingEvidence
+    from app.db.models import PlayerReport, PlayerReportDrawingEvidence
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     room_manager, room, reporter, drawer = _report_room_with_a_drawer()
 
     try:
@@ -787,14 +773,10 @@ async def test_a_room_report_needs_no_words_of_its_own():
     """The server attaches the evidence, so the reporter's text is optional;
     blank is stored as empty rather than refused or padded."""
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    from app.db.models import Base, PlayerReport
+    from app.db.models import PlayerReport
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     room_manager, room, reporter, drawer = _report_room_with_a_drawer()
 
     try:

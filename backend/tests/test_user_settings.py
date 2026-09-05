@@ -9,7 +9,6 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.user_settings import (
     DEFAULT_KEY_BINDINGS,
@@ -19,8 +18,10 @@ from app.api.user_settings import (
 )
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import Base, UserSettings
+from app.db.models import UserSettings
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+from tests.dbfixtures import create_test_db
 
 
 pytestmark = pytest.mark.asyncio
@@ -30,10 +31,7 @@ PASSWORD = "a-good-password"
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "settings-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)

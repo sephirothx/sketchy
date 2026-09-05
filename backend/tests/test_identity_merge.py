@@ -6,11 +6,9 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
     AuditEvent,
-    Base,
     IdentityAlias,
     User,
     UserStatsDaily,
@@ -29,13 +27,12 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
 )
 
+from tests.dbfixtures import create_test_db
+
 
 @pytest.mark.asyncio
 async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
     try:

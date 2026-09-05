@@ -6,9 +6,8 @@ from uuid import uuid4
 
 import pytest
 import socketio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, User, UserSettings
+from app.db.models import User, UserSettings
 from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.handlers.payloads import (
@@ -21,6 +20,8 @@ from app.handlers.payloads import (
 from app.presenters import editable_room_settings_payload, session_payload
 from app.rooms import RoomManager
 from tests.fake_user_repo import FakeUserRepository
+
+from tests.dbfixtures import create_test_db
 
 
 def _contains_key(value: object, forbidden: str) -> bool:
@@ -171,10 +172,7 @@ def test_colorblind_preference_boundary_requires_a_real_boolean(model, payload):
 @pytest.mark.asyncio
 async def test_registered_preference_is_server_authoritative_and_can_be_unset():
     user_id = uuid4()
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     async with factory() as session:
         async with session.begin():
             session.add(

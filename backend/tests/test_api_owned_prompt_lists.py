@@ -5,26 +5,23 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.prompt_lists import create_prompt_list_router, share_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import Base
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
     SqlAlchemyUserRepository,
 )
+
+from tests.dbfixtures import create_test_db
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
 async def env():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     prompts = SqlAlchemyPromptListRepository(factory)
     app = FastAPI()

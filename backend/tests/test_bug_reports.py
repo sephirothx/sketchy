@@ -11,16 +11,17 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.bug_reports import MAX_SCREENSHOT_BASE64, create_bug_report_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, Base, BugReport, User, generate_uuid
+from app.db.models import AuditEvent, BugReport, User, generate_uuid
 from app.domain_values import UserRole
 from app.game import Game
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.rooms import RoomManager
+
+from tests.dbfixtures import create_test_db
 
 
 pytestmark = pytest.mark.asyncio
@@ -43,10 +44,7 @@ def encoded(payload: bytes) -> str:
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "bug-report-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     room_manager = RoomManager()
     app = FastAPI()

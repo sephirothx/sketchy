@@ -9,10 +9,8 @@ from uuid import UUID
 import pytest
 import socketio
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
-    Base,
     GameParticipant,
     GameRecord,
     RoomMessage,
@@ -30,15 +28,14 @@ from app.services.message_retention import (
     purge_expired_room_messages,
 )
 
+from tests.dbfixtures import create_test_db
+
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_wrong_guess_is_retained_with_runtime_ids_and_actual_audience():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     room_manager = RoomManager()
     try:
         user_ids = [UUID(int=index + 1) for index in range(3)]
@@ -104,10 +101,7 @@ async def test_wrong_guess_is_retained_with_runtime_ids_and_actual_audience():
 
 
 async def test_near_miss_audience_excludes_prompt_unaware_players_and_cleanup_is_bounded():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     room_manager = RoomManager()
     try:
         user_ids = [UUID(int=index + 10) for index in range(3)]
@@ -168,10 +162,7 @@ async def test_near_miss_audience_excludes_prompt_unaware_players_and_cleanup_is
 
 
 async def test_wrong_guess_text_expires_but_per_seat_outcomes_remain():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     now = datetime.now(timezone.utc)
     drawer_id = generate_uuid()
     guesser_id = generate_uuid()
@@ -186,6 +177,11 @@ async def test_wrong_guess_text_expires_but_per_seat_outcomes_remain():
                     [
                         User(id=drawer_id, display_name="Drawer"),
                         User(id=guesser_id, display_name="Guesser"),
+                    ]
+                )
+                await session.flush()
+                session.add_all(
+                    [
                         GameRecord(
                             id=game_id,
                             room_name="Retention decision",
@@ -361,14 +357,15 @@ async def test_a_message_is_not_promised_when_the_queue_is_already_full():
 
 
 async def test_what_is_still_queued_at_shutdown_is_written():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     room_manager = RoomManager()
     try:
         room = room_manager.create_room(name="Last words")
-        player = room_manager.add_player(room, "Talker", user_id=str(generate_uuid()))
+        talker_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=talker_id, display_name="Talker"))
+        player = room_manager.add_player(room, "Talker", user_id=str(talker_id))
         player.sid = "sid-talker"
         service = MessageRetentionService(factory)
 
@@ -395,10 +392,7 @@ async def test_a_lobby_line_is_kept_with_no_room_and_a_public_audience():
     """Said to every lobby that was open: no room to scope it to, no seat that
     said it, and no recipient list worth writing down - the audience value is
     what the moderation API reads instead."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     try:
         speaker = UUID(int=7)
         async with factory() as session:

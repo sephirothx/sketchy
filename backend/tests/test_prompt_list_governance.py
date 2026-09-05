@@ -4,10 +4,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import (
-    Base,
     PromptList,
     PromptListRevision,
     PromptListRevisionTag,
@@ -16,14 +14,13 @@ from app.db.models import (
     generate_uuid,
 )
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
 
 
 async def _database():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    return async_sessionmaker(engine, expire_on_commit=False), engine
+    return await create_test_db()
 
 
 async def test_user_list_defaults_are_private_owned_and_actively_moderated():
@@ -33,6 +30,7 @@ async def test_user_list_defaults_are_private_owned_and_actively_moderated():
         async with factory() as session:
             async with session.begin():
                 session.add(User(id=owner_id, display_name="Owner"))
+                await session.flush()
                 prompt_list = PromptList(
                     slug="owners-list",
                     name="Owner's list",
@@ -83,6 +81,7 @@ async def test_unlisted_share_provenance_and_tags_are_structured():
         async with factory() as session:
             async with session.begin():
                 session.add(User(id=owner_id, display_name="Owner"))
+                await session.flush()
                 source = PromptList(
                     slug="source-list",
                     name="Source",

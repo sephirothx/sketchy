@@ -9,12 +9,11 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.profiles import create_profile_router, profile_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import Base, generate_uuid
+from app.db.models import generate_uuid
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -29,6 +28,8 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
 )
 
+from tests.dbfixtures import create_test_db
+
 pytestmark = pytest.mark.asyncio
 
 START = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
@@ -36,10 +37,7 @@ START = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
 
 @pytest_asyncio.fixture
 async def env():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    session_factory, engine = await create_test_db()
     profile_limiter.reset()
 
     users = SqlAlchemyUserRepository(session_factory)

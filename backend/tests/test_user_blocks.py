@@ -13,16 +13,17 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, Base, UserBlock, generate_uuid
+from app.db.models import AuditEvent, UserBlock, generate_uuid
 from app.handlers import register_all_handlers
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.rooms import RoomManager
+
+from tests.dbfixtures import create_test_db
 
 
 pytestmark = pytest.mark.asyncio
@@ -32,10 +33,7 @@ PASSWORD = "a-good-password"
 @pytest_asyncio.fixture
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "blocks-test-secret")
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     blocks = BlockService(factory, max_cached_senders=2)
     app = FastAPI()

@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import delete, event, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db import create_db_engine
 from app.db.models import Base, UserStatsDaily, generate_uuid
@@ -23,6 +23,8 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
 )
 from app.services.user_stats_projection import rebuild_user_stats_projection
+
+from tests.dbfixtures import create_test_db
 
 
 pytestmark = pytest.mark.asyncio
@@ -115,10 +117,7 @@ async def _save_game(history, *, finished_at, first, second, first_wins):
 
 
 async def test_daily_projection_is_incremental_idempotent_and_bounded_on_read():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
     try:
@@ -186,10 +185,7 @@ async def test_daily_projection_is_incremental_idempotent_and_bounded_on_read():
 
 
 async def test_projection_rebuild_restores_exact_source_derived_totals():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
     try:

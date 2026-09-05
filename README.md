@@ -552,7 +552,7 @@ process. These deployment settings can be tuned without code changes:
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
 migration chain down and up on PostgreSQL and SQLite, checks schema drift and
-the hand-written username index, then runs the repository suite against the
+the hand-written username index, then runs the whole backend suite against the
 migrated schema. To reproduce the PostgreSQL checks locally, point both
 variables at a disposable test database:
 
@@ -564,8 +564,17 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
   .venv/bin/pytest -q tests/test_migrations.py tests/test_repositories.py
 ```
 
-The repository suite deletes application rows from `TEST_DATABASE_URL`; never
-point it at a development or production database.
+Every suite that persists rows builds its database through
+`backend/tests/dbfixtures.py`, so `TEST_DATABASE_URL` moves all of them, not just
+the repository suite, onto PostgreSQL. Without it they run on in-memory SQLite
+configured exactly as the application configures its own connections — foreign
+keys enforced, checked on every connection — because a raw engine leaves SQLite's
+enforcement off and a deletion test then passes against constraints the database
+never applied.
+
+The fixture deletes application rows from `TEST_DATABASE_URL`, and refuses a URL
+whose database name does not contain `test`; never point it at a development or
+production database.
 
 ### Accounts
 
