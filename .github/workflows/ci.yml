@@ -223,6 +223,12 @@ jobs:
       - name: Run row-locking services against PostgreSQL
         run: pytest -q tests/test_room_presets.py tests/test_room_codes.py tests/test_rate_limit_atomicity.py
 
+      # The export builder streams each section through a server-side cursor
+      # (`session.stream` with `yield_per`), which asyncpg implements and
+      # SQLite only imitates; the row-locked claim is the same story.
+      - name: Run the export builder and worker against PostgreSQL
+        run: pytest -q tests/test_account_data.py tests/test_data_export_worker.py
+
   frontend:
     name: Frontend test, lint & build
     runs-on: ubuntu-latest

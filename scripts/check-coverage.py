@@ -72,6 +72,7 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     "app/auth/blocks.py": (98.0, 98.0),
     # Privacy: export and deletion have to be right the first time.
     "app/auth/account_data.py": (81.0, 73.0),
+    "app/services/data_export_worker.py": (90.0, 80.0),
     # Moderation is the safety surface, and its API is the staff-facing one.
     "app/api/moderation.py": (90.0, 73.0),
     # Abuse ceilings and payload validation - the untrusted-traffic boundary.

@@ -305,6 +305,7 @@
 .account-export-list li { align-items: center; border: 1px solid var(--line-strong); border-radius: 10px; display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
 .account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
+.account-export-note { color: var(--ink); line-height: 1.4; }
 .account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--card); text-decoration: none; }
 .account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }

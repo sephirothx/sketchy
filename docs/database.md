@@ -406,8 +406,15 @@ export, and it is the largest single non-blob value in the schema. The encoding 
 recorded beside it rather than assumed, so a later format is a new discriminator
 rather than a migration, the same rule `canvas_storage` applies to drawings.
 `ck_data_exports_artifact_encoding_present` keeps the pair honest: a stored document
-says how to read itself, and a row with no document claims no encoding. The download
-endpoint decodes and serves the JSON bytes without reparsing them.
+says how to read itself, and a row with no document claims no encoding.
+
+A document is written, not assembled: the builder reads each section a page at a time
+and hands every row to the compressor as it comes, counting the JSON bytes against
+`EXPORT_MAX_BYTES` (64 MiB before compression by default, R-PRIV-13). Past it the job is
+failed as `too_large` with no document stored; `generation_failed` is anything else.
+The download hands a client that accepts gzip the stored bytes untouched, and one that
+does not the same bytes decompressed a chunk at a time with the length the gzip trailer
+records — never parsed, never held whole, never compressed twice (R-PRIV-14).
 
 `uq_data_exports_one_live_per_user` is a partial unique index on `user_id` where the
 status is `pending` or `processing`: one live job per account (R-PRIV-12), held by the
@@ -421,7 +428,13 @@ row was removed only when its owner requested another export or a worker re-proc
 the job — so a document that was generated and never collected outlived its seven-day
 window indefinitely.
 
-Jobs are stored **before** work begins, so a crash leaves a retryable row:
+Jobs are stored **before** work begins, so a crash leaves a retryable row, and the
+table is the queue: the export worker
+([`app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py))
+builds `pending` rows one at a time, woken by the request and sweeping every
+`EXPORT_SWEEP_SECONDS`. The sweep also reclaims a row left `processing` for more than
+15 minutes by a process that died, and a planned shutdown hands a claimed row back to
+`pending`. The same batch can be run by hand when the server is not up:
 
 ```bash
 cd backend && .venv/bin/python -m app.auth.account_data --limit 25

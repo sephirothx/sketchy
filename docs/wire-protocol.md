@@ -1021,8 +1021,8 @@ replaced, not echoed.
 | `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
-| `GET` | `/api/auth/data-exports/{export_id}` | Job status |
-| `GET` | `/api/auth/data-exports/{export_id}/download` | The artifact. Owner-only; v1 exports expire after 7 days |
+| `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
+| `GET` | `/api/auth/data-exports/{export_id}/download` | The document: the stored gzip bytes as `Content-Encoding: gzip` when the request accepts it, else decompressed as it streams; `Content-Length` either way. Owner-only through the session, never a bearer URL (R-PRIV-14); v1 exports expire after 7 days |
 | `DELETE` | `/api/auth/account` | Password required for a registered account |
 
 ### Profiles and history — [`backend/app/api/profiles.py`](../backend/app/api/profiles.py)

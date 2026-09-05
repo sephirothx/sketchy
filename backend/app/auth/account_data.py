@@ -1,12 +1,26 @@
-"""Versioned account exports and history-safe account anonymization."""
+"""Versioned account exports and history-safe account anonymization.
+
+An export is a row first and a document second (R-PRIV-03): the request
+writes a `pending` job and returns, and the export worker
+(`app/services/data_export_worker.py`) builds it - one at a time, so two
+accounts asking together cost one build's memory rather than two. The build
+streams: every list section is read a page at a time and written straight
+into the compressor, the JSON bytes are counted as they go, and a document
+that would pass the deployment's ceiling is refused as `too_large` rather
+than built at any size (R-PRIV-13). The download streams the other way, a
+chunk at a time, to the owning session only (R-PRIV-14).
+"""
 from __future__ import annotations
 
 import argparse
 import asyncio
 import base64
 import gzip
+import io
 import json
+import os
 import zlib
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -82,6 +96,35 @@ DELETED_DISPLAY_NAME = "Deleted player"
 # saying a message went somewhere without saying where.
 DELETED_EMAIL_ADDRESS = "deleted@invalid"
 DEFAULT_EXPORT_BATCH_SIZE = 25
+# Rows fetched per page while a document is written. The build streams every
+# list section, so this - not the size of the account's history - is what one
+# build holds in memory besides its compressed output.
+EXPORT_PAGE_SIZE = 500
+# The ceiling on one document, in JSON bytes before compression (R-PRIV-13).
+# One worker (N-01) means a build's working set is every player's latency, so
+# a document is refused past the ceiling rather than built at any size; an
+# operator raises it per deployment with `EXPORT_MAX_BYTES`. Generous on
+# purpose - a heavy account's history is tens of megabytes, not hundreds - so
+# the right to a copy (R-PRIV-01) is met well inside it.
+DEFAULT_EXPORT_MAX_BYTES = 64 * 1024 * 1024
+DOWNLOAD_CHUNK_BYTES = 64 * 1024
+GZIP_MAGIC = b"\x1f\x8b"
+# The smallest gzip member: a 10-byte header and an 8-byte trailer.
+GZIP_MIN_BYTES = 18
+FAILURE_GENERATION = "generation_failed"
+FAILURE_TOO_LARGE = "too_large"
+
+
+def export_max_bytes(environ: dict[str, str] | None = None) -> int:
+    values = os.environ if environ is None else environ
+    raw = values.get("EXPORT_MAX_BYTES", "").strip()
+    if not raw:
+        return DEFAULT_EXPORT_MAX_BYTES
+    try:
+        limit = int(raw)
+    except ValueError:
+        return DEFAULT_EXPORT_MAX_BYTES
+    return limit if limit > 0 else DEFAULT_EXPORT_MAX_BYTES
 
 logger = logging.getLogger(__name__)
 
@@ -294,223 +337,528 @@ def decode_export_artifact(job: DataExport) -> bytes:
     return document
 
 
-async def _build_export_artifact(
-    session: AsyncSession, *, user_id: UUID, generated_at: datetime
-) -> dict:
-    """Build a requester-only document without credentials or third-party bodies."""
+@dataclass(frozen=True)
+class ExportDocumentStream:
+    """A stored document opened for download.
+
+    `stored` is the gzip member exactly as the row holds it, for a client that
+    accepts gzip - the cheapest download there is, since nothing is
+    decompressed and nothing is compressed again. `chunks` decodes it a piece
+    at a time for a client that does not, and `size` is the decoded length
+    the trailer records, so either answer can declare its `Content-Length`.
+    """
+
+    stored: bytes
+    size: int
+    chunks: Iterator[bytes]
+
+
+def open_export_artifact(job: DataExport) -> ExportDocumentStream:
+    """Open the stored document for serving (R-PRIV-14).
+
+    The download never holds the decoded document whole: a client that accepts
+    gzip is handed the stored bytes as they are, and one that does not gets
+    them decompressed a chunk at a time, with the gzip trailer's record of the
+    decoded length as the `Content-Length`. What can be checked up front is
+    checked here - the encoding, the gzip framing, and that the first chunk
+    decodes to something - so an unreadable row is refused before a byte is
+    sent rather than cut off mid-body; corruption further in ends the body
+    short of the promised length, which the client sees as a failed download.
+    """
+    if job.artifact is None:
+        raise AccountDataError("export has no stored document")
+    if job.artifact_encoding != DataExportArtifactEncoding.GZIP_JSON.value:
+        raise AccountDataError(
+            f"export document has unreadable encoding {job.artifact_encoding!r}"
+        )
+    data = bytes(job.artifact)
+    if len(data) < GZIP_MIN_BYTES or data[:2] != GZIP_MAGIC:
+        raise AccountDataError("export document could not be decompressed")
+    stream = gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb")
+    try:
+        first = stream.read(DOWNLOAD_CHUNK_BYTES)
+    except (OSError, EOFError, zlib.error) as error:
+        raise AccountDataError("export document could not be decompressed") from error
+    if not first:
+        raise AccountDataError("export document decoded to nothing")
+
+    def chunks() -> Iterator[bytes]:
+        yield first
+        try:
+            while True:
+                chunk = stream.read(DOWNLOAD_CHUNK_BYTES)
+                if not chunk:
+                    return
+                yield chunk
+        except (OSError, EOFError, zlib.error):
+            logger.exception(
+                "Data export %s is unreadable past its first chunk", job.id
+            )
+        finally:
+            stream.close()
+
+    # ISIZE: the decoded length modulo 2**32, which is the length itself for
+    # anything under the ceiling.
+    return ExportDocumentStream(
+        stored=data, size=int.from_bytes(data[-4:], "little"), chunks=chunks()
+    )
+
+
+class ExportTooLarge(AccountDataError):
+    """The document would pass the deployment's ceiling (R-PRIV-13)."""
+
+    def __init__(self, limit: int):
+        super().__init__(f"export document would exceed {limit} bytes")
+        self.limit = limit
+
+
+class _ExportWriter:
+    """Write one JSON document straight into gzip, counting the JSON bytes.
+
+    The document never exists whole: each row is encoded as it arrives from
+    the database and handed to the compressor, so what the build holds is one
+    page of rows plus the compressed output. The count is of the JSON as it
+    would have been, which is what the ceiling is stated in, and the ceiling
+    is checked on every write so a build that is going to be refused is
+    refused as soon as it is known rather than after it has finished.
+
+    The bytes it produces are exactly `json.dumps(document, separators=(",",
+    ":"))` for the same document, so the stored encoding is unchanged.
+    """
+
+    def __init__(self, *, max_bytes: int):
+        self._buffer = io.BytesIO()
+        self._gzip = gzip.GzipFile(fileobj=self._buffer, mode="wb")
+        self._max_bytes = max_bytes
+        # One flag per open container: whether its next member is the first.
+        self._first: list[bool] = []
+        self._after_key = False
+        self.written = 0
+
+    def _emit(self, text: str) -> None:
+        data = text.encode("utf-8")
+        self.written += len(data)
+        if self.written > self._max_bytes:
+            # Nothing of this build is kept, so the compressor is released
+            # here rather than by whoever catches the refusal.
+            self._gzip.close()
+            raise ExportTooLarge(self._max_bytes)
+        self._gzip.write(data)
+
+    def _separator(self) -> None:
+        if self._after_key:
+            self._after_key = False
+            return
+        if self._first:
+            if not self._first[-1]:
+                self._emit(",")
+            self._first[-1] = False
+
+    def begin_object(self) -> None:
+        self._separator()
+        self._emit("{")
+        self._first.append(True)
+
+    def end_object(self) -> None:
+        self._first.pop()
+        self._emit("}")
+
+    def begin_array(self) -> None:
+        self._separator()
+        self._emit("[")
+        self._first.append(True)
+
+    def end_array(self) -> None:
+        self._first.pop()
+        self._emit("]")
+
+    def key(self, name: str) -> None:
+        self._separator()
+        self._emit(json.dumps(name) + ":")
+        self._after_key = True
+
+    def value(self, item: object) -> None:
+        self._separator()
+        self._emit(json.dumps(item, separators=(",", ":")))
+
+    def field(self, name: str, item: object) -> None:
+        self.key(name)
+        self.value(item)
+
+    def finish(self) -> bytes:
+        self._gzip.close()
+        return self._buffer.getvalue()
+
+
+async def _write_rows(
+    writer: _ExportWriter,
+    session: AsyncSession,
+    statement,
+    mapper,
+    *,
+    scalars: bool = True,
+) -> None:
+    """Stream one list section: a page of rows at a time, each row written as it comes."""
+    writer.begin_array()
+    result = await session.stream(
+        statement.execution_options(yield_per=EXPORT_PAGE_SIZE)
+    )
+    rows = result.scalars() if scalars else result
+    async for row in rows:
+        writer.value(mapper(row))
+    writer.end_array()
+
+
+def _prompt_list_document(prompt_list: PromptList) -> dict:
+    return {
+        "id": str(prompt_list.id),
+        "slug": prompt_list.slug,
+        "name": prompt_list.name,
+        "description": prompt_list.description,
+        "language": prompt_list.language,
+        "visibility": prompt_list.visibility,
+        "shareCode": prompt_list.share_code,
+        "moderationState": prompt_list.moderation_state,
+        "version": prompt_list.version,
+        "createdAt": _timestamp(prompt_list.created_at),
+        "updatedAt": _timestamp(prompt_list.updated_at),
+        "revisions": [
+            {
+                "id": str(revision.id),
+                "version": revision.version,
+                "language": revision.language,
+                "contentHash": revision.content_hash,
+                "createdAt": _timestamp(revision.created_at),
+                "prompts": [
+                    {
+                        "conceptId": str(item.prompt_version.concept_id),
+                        "promptVersionId": str(item.prompt_version.id),
+                        "promptVersion": item.prompt_version.version,
+                        "prompt": item.prompt_version.canonical_answer,
+                        "aliases": sorted(
+                            link.alias.answer
+                            for link in item.prompt_version.version_aliases
+                        ),
+                        "position": item.position,
+                    }
+                    for item in revision.items
+                ],
+            }
+            for revision in sorted(prompt_list.revisions, key=lambda item: item.version)
+        ],
+    }
+
+
+def _room_preset_document(preset: RoomPreset) -> dict:
+    return {
+        "id": str(preset.id),
+        "name": preset.name,
+        "roomName": preset.room_name,
+        "isPublic": preset.is_public,
+        "maxPlayers": preset.max_players,
+        "rounds": preset.rounds,
+        "drawingSeconds": preset.drawing_seconds,
+        "hintMode": preset.hint_mode,
+        "scoringMode": preset.scoring_mode,
+        "spectatorsSeePrompt": preset.spectators_see_prompt,
+        "hideMaskedPrompt": preset.hide_masked_prompt,
+        "allowedTools": preset.allowed_tools,
+        "colorMode": preset.color_mode,
+        "promptListIds": preset.prompt_list_ids,
+        "version": preset.version,
+        "createdAt": _timestamp(preset.created_at),
+        "updatedAt": _timestamp(preset.updated_at),
+    }
+
+
+def _session_document(record: AuthSession) -> dict:
+    return {
+        "id": str(record.id),
+        "deviceLabel": record.device_label,
+        "rotatedFromId": (
+            str(record.rotated_from_id) if record.rotated_from_id else None
+        ),
+        "createdAt": _timestamp(record.created_at),
+        "lastUsedAt": _timestamp(record.last_used_at),
+        "expiresAt": _timestamp(record.expires_at),
+        "revokedAt": _timestamp(record.revoked_at),
+    }
+
+
+def _participation_document(row) -> dict:
+    seat, game = row
+    return {
+        "game": {
+            "id": str(game.id),
+            "roomName": game.room_name,
+            "scoringMode": game.scoring_mode,
+            "scoringVersion": game.scoring_version,
+            "scoreLedgerVersion": game.score_ledger_version,
+            "ruleSnapshotVersion": game.rule_snapshot_version,
+            "ruleSnapshot": game.rule_snapshot,
+            "promptSourceMode": game.prompt_source_mode,
+            "hintMode": game.hint_mode,
+            "drawingSeconds": game.drawing_seconds,
+            "totalRounds": game.total_rounds,
+            "playerCount": game.player_count,
+            "startedAt": _timestamp(game.started_at),
+            "finishedAt": _timestamp(game.finished_at),
+        },
+        "participation": {
+            "seatId": str(seat.id),
+            "identityId": str(seat.user_id) if seat.user_id else None,
+            "displayName": seat.display_name_snapshot,
+            "nameColor": seat.name_color_snapshot,
+            "wasAnonymous": seat.is_anonymous_snapshot,
+            "finalScore": seat.final_score,
+            "finalRank": seat.final_rank,
+            "turnsPlayed": seat.turns_played,
+        },
+    }
+
+
+def _drawn_turn_document(turn: TurnRecord) -> dict:
+    return {
+        "turnId": str(turn.id),
+        "gameId": str(turn.game_id),
+        "identityId": str(turn.drawer_user_id) if turn.drawer_user_id else None,
+        "participantSeatId": (
+            str(turn.drawer_participant_id) if turn.drawer_participant_id else None
+        ),
+        "roundNumber": turn.round_number,
+        "turnNumber": turn.turn_number,
+        "prompt": turn.prompt,
+        "promptVersionId": (
+            str(turn.prompt_version_id) if turn.prompt_version_id else None
+        ),
+        "promptSourceKind": turn.prompt_source_kind,
+        "durationSeconds": turn.duration_seconds,
+        "guesserCount": turn.guesser_count,
+        "promptAutoPicked": turn.prompt_auto_picked,
+        "strokeCount": turn.stroke_count,
+        "endReason": turn.end_reason,
+        "wrongGuessCount": turn.wrong_guess_count,
+        "nearMissCount": turn.near_miss_count,
+        "promptOffers": [
+            {
+                "position": offer.position,
+                "prompt": offer.prompt_snapshot,
+                "selected": offer.selected,
+                "sourceKind": offer.source_kind,
+                "promptVersionId": (
+                    str(offer.prompt_version_id) if offer.prompt_version_id else None
+                ),
+                "sourceRevisionIds": [
+                    str(source.prompt_list_revision_id) for source in offer.sources
+                ],
+            }
+            for offer in turn.prompt_offers
+        ],
+    }
+
+
+def _correct_guess_document(row) -> dict:
+    guess, turn, outcome = row
+    return {
+        "guessId": str(guess.id),
+        "turnId": str(turn.id),
+        "gameId": str(turn.game_id),
+        "identityId": str(guess.user_id) if guess.user_id else None,
+        "participantSeatId": (
+            str(guess.participant_id) if guess.participant_id else None
+        ),
+        "roundNumber": turn.round_number,
+        "turnNumber": turn.turn_number,
+        "prompt": turn.prompt,
+        "pointsAwarded": guess.points_awarded,
+        "guessTimeSeconds": guess.guess_time_seconds,
+        "hintsUsed": outcome.hints_used,
+        "pointsSpentOnHints": outcome.points_spent_on_hints,
+        "wrongGuessesBefore": outcome.wrong_guess_count,
+    }
+
+
+def _turn_outcome_document(row) -> dict:
+    outcome, turn = row
+    return {
+        "outcomeId": str(outcome.id),
+        "turnId": str(turn.id),
+        "gameId": str(turn.game_id),
+        "participantSeatId": str(outcome.participant_id),
+        "roundNumber": turn.round_number,
+        "turnNumber": turn.turn_number,
+        "prompt": turn.prompt,
+        "eligible": outcome.eligible,
+        "eligibilityReason": outcome.eligibility_reason,
+        "outcome": outcome.outcome,
+        "terminalState": outcome.terminal_state,
+        "correctGuessTimeSeconds": outcome.correct_guess_time_seconds,
+        "wrongGuessCount": outcome.wrong_guess_count,
+        "nearMissCount": outcome.near_miss_count,
+        "hintsUsed": outcome.hints_used,
+        "pointsSpentOnHints": outcome.points_spent_on_hints,
+    }
+
+
+def _score_event_document(row) -> dict:
+    event, participant = row
+    return {
+        "eventId": str(event.id),
+        "gameId": str(event.game_id),
+        "turnId": str(event.turn_id) if event.turn_id else None,
+        "participantSeatId": str(event.participant_id),
+        "identityId": str(participant.user_id) if participant.user_id else None,
+        "eventOrder": event.event_order,
+        "eventType": event.event_type,
+        "pointsDelta": event.points_delta,
+        "scoringVersion": event.scoring_version,
+        "ruleSnapshotVersion": event.rule_snapshot_version,
+        "correctsEventId": (
+            str(event.corrects_event_id) if event.corrects_event_id else None
+        ),
+        "createdAt": _timestamp(event.created_at),
+    }
+
+
+def _retained_message_document(message: RoomMessage) -> dict:
+    return {
+        "messageId": str(message.id),
+        "gameId": str(message.game_id) if message.game_id else None,
+        "turnId": str(message.turn_id) if message.turn_id else None,
+        "participantSeatId": (
+            str(message.sender_seat_id) if message.sender_seat_id else None
+        ),
+        "messageKind": message.message_kind,
+        "audience": message.audience,
+        "nearMissKind": message.near_miss_kind,
+        "text": message.text,
+        "createdAt": _timestamp(message.created_at),
+        "expiresAt": _timestamp(message.expires_at),
+    }
+
+
+def _player_report_document(report: PlayerReport) -> dict:
+    # A reporter's own text and submitted evidence belongs in their export.
+    # The reported account id, reviewer id, and internal resolution note do
+    # not: those are other people's or moderation-workflow data.
+    return {
+        "id": str(report.id),
+        "gameId": str(report.game_id) if report.game_id else None,
+        "turnId": str(report.turn_id) if report.turn_id else None,
+        "reason": report.reason,
+        "details": report.details,
+        "contextSnapshot": report.context_snapshot,
+        "messageEvidence": [
+            {
+                "sourceMessageId": str(evidence.source_message_snapshot_id),
+                "gameId": (
+                    str(evidence.game_id_snapshot) if evidence.game_id_snapshot else None
+                ),
+                "turnId": (
+                    str(evidence.turn_id_snapshot) if evidence.turn_id_snapshot else None
+                ),
+                "messageKind": evidence.message_kind,
+                "audience": evidence.audience,
+                "nearMissKind": evidence.near_miss_kind,
+                "text": evidence.text_snapshot,
+                "messageCreatedAt": _timestamp(evidence.message_created_at),
+            }
+            for evidence in report.message_evidence
+        ],
+        "status": report.status,
+        "createdAt": _timestamp(report.created_at),
+        "updatedAt": _timestamp(report.updated_at),
+        "reviewedAt": _timestamp(report.reviewed_at),
+    }
+
+
+def _prompt_content_report_document(report: PromptContentReport) -> dict:
+    # The requester gets their own report text and immutable evidence
+    # snapshots. Owner/reviewer identities and internal notes stay private.
+    return {
+        "id": str(report.id),
+        "promptListId": str(report.prompt_list_id) if report.prompt_list_id else None,
+        "promptVersionId": (
+            str(report.prompt_version_id) if report.prompt_version_id else None
+        ),
+        "targetType": report.target_type,
+        "listName": report.list_name_snapshot,
+        "prompt": report.prompt_snapshot,
+        "reason": report.reason,
+        "details": report.details,
+        "status": report.status,
+        "moderationState": report.resolution_moderation_state,
+        "createdAt": _timestamp(report.created_at),
+        "updatedAt": _timestamp(report.updated_at),
+        "reviewedAt": _timestamp(report.reviewed_at),
+    }
+
+
+def _bug_report_document(report: BugReport) -> dict:
+    # A bug report is the requester's own words about the software plus the
+    # diagnostics their browser volunteered, so all of it comes back. The
+    # administrator's note and identity do not: those are the operator's
+    # record of what was done, the same line the suspensions block draws.
+    # The screenshot is reported by shape rather than embedded - it is
+    # erased when the report is decided, and an export is not a way to keep
+    # a copy of it alive.
+    return {
+        "id": str(report.id),
+        "area": report.area,
+        "severity": report.severity,
+        "summary": report.summary,
+        "details": report.details,
+        "buildSha": report.build_sha,
+        "route": report.route,
+        "roomCode": report.room_code,
+        "clientContext": report.client_context,
+        "screenshotStatus": report.screenshot_status,
+        "screenshotByteSize": report.screenshot_byte_size,
+        "status": report.status,
+        "createdAt": _timestamp(report.created_at),
+        "updatedAt": _timestamp(report.updated_at),
+        "reviewedAt": _timestamp(report.reviewed_at),
+    }
+
+
+def _export_request_document(job: DataExport) -> dict:
+    return {
+        "id": str(job.id),
+        "status": job.status,
+        "schemaVersion": job.schema_version,
+        "createdAt": _timestamp(job.created_at),
+        "startedAt": _timestamp(job.started_at),
+        "completedAt": _timestamp(job.completed_at),
+        "expiresAt": _timestamp(job.expires_at),
+    }
+
+
+async def _write_export_artifact(
+    session: AsyncSession,
+    writer: _ExportWriter,
+    *,
+    user_id: UUID,
+    generated_at: datetime,
+) -> None:
+    """Write a requester-only document without credentials or third-party bodies.
+
+    Sections are written in a fixed order, each list streamed a page at a time
+    (`_write_rows`), so the build never holds the account's history at once.
+    """
     account, aliases = await _identity_rows(session, user_id)
     identity_users = [account, *(source for _, source in aliases)]
     identity_ids = [user.id for user in identity_users]
-
-    sessions = list(
-        (
-            await session.scalars(
-                select(AuthSession)
-                .where(AuthSession.user_id.in_(identity_ids))
-                .order_by(AuthSession.created_at, AuthSession.id)
-            )
-        ).all()
-    )
-    participations = list(
-        (
-            await session.execute(
-                select(GameParticipant, GameRecord)
-                .join(GameRecord, GameRecord.id == GameParticipant.game_id)
-                .where(GameParticipant.user_id.in_(identity_ids))
-                .order_by(GameRecord.finished_at, GameParticipant.id)
-            )
-        ).all()
-    )
-    drawings = list(
-        (
-            await session.scalars(
-                select(TurnRecord)
-                .where(TurnRecord.drawer_user_id.in_(identity_ids))
-                .options(
-                    selectinload(TurnRecord.prompt_offers).selectinload(
-                        TurnPromptOffer.sources
-                    )
-                )
-                .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number)
-            )
-        ).all()
-    )
-    guesses = list(
-        (
-            await session.execute(
-                # The attempt/hint numbers live on the outcome row alone now;
-                # the export keeps its fields by reading them through the join.
-                select(TurnGuess, TurnRecord, TurnParticipantOutcome)
-                .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
-                .join(
-                    TurnParticipantOutcome,
-                    TurnParticipantOutcome.id == TurnGuess.outcome_id,
-                )
-                .where(TurnGuess.user_id.in_(identity_ids))
-                .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number)
-            )
-        ).all()
-    )
-    turn_outcomes = list(
-        (
-            await session.execute(
-                select(TurnParticipantOutcome, TurnRecord)
-                .join(TurnRecord, TurnRecord.id == TurnParticipantOutcome.turn_id)
-                .join(
-                    GameParticipant,
-                    GameParticipant.id == TurnParticipantOutcome.participant_id,
-                )
-                .where(GameParticipant.user_id.in_(identity_ids))
-                .order_by(
-                    TurnRecord.game_id,
-                    TurnRecord.round_number,
-                    TurnRecord.turn_number,
-                )
-            )
-        ).all()
-    )
-    score_events = list(
-        (
-            await session.execute(
-                select(ScoreEvent, GameParticipant)
-                .join(
-                    GameParticipant,
-                    GameParticipant.id == ScoreEvent.participant_id,
-                )
-                .where(GameParticipant.user_id.in_(identity_ids))
-                .order_by(ScoreEvent.game_id, ScoreEvent.event_order)
-            )
-        ).all()
-    )
-    audit_events = list(
-        (
-            await session.scalars(
-                select(AuditEvent)
-                .where(
-                    or_(
-                        AuditEvent.actor_user_id.in_(identity_ids),
-                        AuditEvent.target_user_id.in_(identity_ids),
-                    )
-                )
-                .order_by(AuditEvent.created_at, AuditEvent.id)
-            )
-        ).all()
-    )
-    submitted_reports = list(
-        (
-            await session.scalars(
-                select(PlayerReport)
-                .where(PlayerReport.reporter_user_id.in_(identity_ids))
-                .options(selectinload(PlayerReport.message_evidence))
-                .order_by(PlayerReport.created_at, PlayerReport.id)
-            )
-        ).all()
-    )
-    retained_messages = list(
-        (
-            await session.scalars(
-                select(RoomMessage)
-                .where(
-                    RoomMessage.sender_user_id.in_(identity_ids),
-                    RoomMessage.expires_at > generated_at,
-                )
-                .order_by(RoomMessage.created_at, RoomMessage.id)
-            )
-        ).all()
-    )
-    submitted_prompt_content_reports = list(
-        (
-            await session.scalars(
-                select(PromptContentReport)
-                .where(PromptContentReport.reporter_user_id.in_(identity_ids))
-                .order_by(PromptContentReport.created_at, PromptContentReport.id)
-            )
-        ).all()
-    )
-    submitted_bug_reports = list(
-        (
-            await session.scalars(
-                select(BugReport)
-                .where(BugReport.reporter_user_id.in_(identity_ids))
-                .order_by(BugReport.created_at, BugReport.id)
-            )
-        ).all()
-    )
-    suspensions = list(
-        (
-            await session.scalars(
-                select(UserBan)
-                .where(UserBan.user_id.in_(identity_ids))
-                .order_by(UserBan.created_at, UserBan.id)
-            )
-        ).all()
-    )
-    blocks = list(
-        (
-            await session.scalars(
-                select(UserBlock)
-                .where(UserBlock.blocker_user_id.in_(identity_ids))
-                .order_by(UserBlock.created_at, UserBlock.blocked_user_id)
-            )
-        ).all()
-    )
-    friendships = list(
-        (
-            await session.scalars(
-                select(Friendship)
-                .where(
-                    or_(
-                        Friendship.user_low_id.in_(identity_ids),
-                        Friendship.user_high_id.in_(identity_ids),
-                    )
-                )
-                .order_by(Friendship.created_at, Friendship.user_low_id)
-            )
-        ).all()
-    )
-    export_jobs = list(
-        (
-            await session.scalars(
-                select(DataExport)
-                .where(DataExport.user_id == account.id)
-                .order_by(DataExport.created_at, DataExport.id)
-            )
-        ).all()
-    )
     settings = await session.get(UserSettings, account.id)
-    prompt_lists = list(
-        (
-            await session.scalars(
-                select(PromptList)
-                .where(PromptList.owner_user_id.in_(identity_ids))
-                .options(
-                    selectinload(PromptList.revisions)
-                    .selectinload(PromptListRevision.items)
-                    .selectinload(PromptListRevisionItem.prompt_version)
-                    .selectinload(PromptVersion.version_aliases)
-                    .selectinload(PromptVersionAlias.alias)
-                )
-                .order_by(PromptList.created_at, PromptList.id)
-            )
-        ).all()
-    )
-    room_presets = list(
-        (
-            await session.scalars(
-                select(RoomPreset)
-                .where(RoomPreset.owner_user_id.in_(identity_ids))
-                .order_by(RoomPreset.created_at, RoomPreset.id)
-            )
-        ).all()
-    )
     avatar_asset = await session.scalar(
         select(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == account.id)
     )
 
-    return {
-        "schemaVersion": EXPORT_SCHEMA_VERSION,
-        "generatedAt": _timestamp(generated_at),
-        "account": {
+    writer.begin_object()
+    writer.field("schemaVersion", EXPORT_SCHEMA_VERSION)
+    writer.field("generatedAt", _timestamp(generated_at))
+    writer.field(
+        "account",
+        {
             "id": str(account.id),
             "username": account.username,
             "email": account.email,
@@ -529,7 +877,9 @@ async def _build_export_artifact(
                     "width": avatar_asset.width,
                     "height": avatar_asset.height,
                     "createdAt": _timestamp(avatar_asset.created_at),
-                    "imageBase64": base64.b64encode(bytes(avatar_asset.payload)).decode("ascii"),
+                    "imageBase64": base64.b64encode(
+                        bytes(avatar_asset.payload)
+                    ).decode("ascii"),
                 }
                 if avatar_asset is not None
                 else None
@@ -541,87 +891,52 @@ async def _build_export_artifact(
             "lastLoginAt": _timestamp(account.last_login_at),
             "lastActiveAt": _timestamp(account.last_active_at),
         },
-        "settings": (
-            {
-                "theme": settings.theme,
-                "soundEffects": settings.sound_effects,
-                "confettiEffects": settings.confetti_effects,
-                "volume": settings.sound_effects_volume,
-                "brushCursor": settings.brush_cursor,
-                "keyBindings": settings.key_bindings,
-                "colorblindSafeColors": settings.colorblind_safe_colors,
-                "timeFormat": settings.time_format,
-                "createdAt": _timestamp(settings.created_at),
-                "updatedAt": _timestamp(settings.updated_at),
-            }
-            if settings is not None
-            else None
-        ),
-        "promptLists": [
-            {
-                "id": str(prompt_list.id),
-                "slug": prompt_list.slug,
-                "name": prompt_list.name,
-                "description": prompt_list.description,
-                "language": prompt_list.language,
-                "visibility": prompt_list.visibility,
-                "shareCode": prompt_list.share_code,
-                "moderationState": prompt_list.moderation_state,
-                "version": prompt_list.version,
-                "createdAt": _timestamp(prompt_list.created_at),
-                "updatedAt": _timestamp(prompt_list.updated_at),
-                "revisions": [
-                    {
-                        "id": str(revision.id),
-                        "version": revision.version,
-                        "language": revision.language,
-                        "contentHash": revision.content_hash,
-                        "createdAt": _timestamp(revision.created_at),
-                        "prompts": [
-                            {
-                                "conceptId": str(item.prompt_version.concept_id),
-                                "promptVersionId": str(item.prompt_version.id),
-                                "promptVersion": item.prompt_version.version,
-                                "prompt": item.prompt_version.canonical_answer,
-                                "aliases": sorted(
-                                    link.alias.answer
-                                    for link in item.prompt_version.version_aliases
-                                ),
-                                "position": item.position,
-                            }
-                            for item in revision.items
-                        ],
-                    }
-                    for revision in sorted(
-                        prompt_list.revisions, key=lambda item: item.version
-                    )
-                ],
-            }
-            for prompt_list in prompt_lists
-        ],
-        "roomPresets": [
-            {
-                "id": str(preset.id),
-                "name": preset.name,
-                "roomName": preset.room_name,
-                "isPublic": preset.is_public,
-                "maxPlayers": preset.max_players,
-                "rounds": preset.rounds,
-                "drawingSeconds": preset.drawing_seconds,
-                "hintMode": preset.hint_mode,
-                "scoringMode": preset.scoring_mode,
-                "spectatorsSeePrompt": preset.spectators_see_prompt,
-                "hideMaskedPrompt": preset.hide_masked_prompt,
-                "allowedTools": preset.allowed_tools,
-                "colorMode": preset.color_mode,
-                "promptListIds": preset.prompt_list_ids,
-                "version": preset.version,
-                "createdAt": _timestamp(preset.created_at),
-                "updatedAt": _timestamp(preset.updated_at),
-            }
-            for preset in room_presets
-        ],
-        "linkedIdentities": [
+    )
+    writer.field(
+        "settings",
+        {
+            "theme": settings.theme,
+            "soundEffects": settings.sound_effects,
+            "confettiEffects": settings.confetti_effects,
+            "volume": settings.sound_effects_volume,
+            "brushCursor": settings.brush_cursor,
+            "keyBindings": settings.key_bindings,
+            "colorblindSafeColors": settings.colorblind_safe_colors,
+            "timeFormat": settings.time_format,
+            "createdAt": _timestamp(settings.created_at),
+            "updatedAt": _timestamp(settings.updated_at),
+        }
+        if settings is not None
+        else None,
+    )
+    writer.key("promptLists")
+    await _write_rows(
+        writer,
+        session,
+        select(PromptList)
+        .where(PromptList.owner_user_id.in_(identity_ids))
+        .options(
+            selectinload(PromptList.revisions)
+            .selectinload(PromptListRevision.items)
+            .selectinload(PromptListRevisionItem.prompt_version)
+            .selectinload(PromptVersion.version_aliases)
+            .selectinload(PromptVersionAlias.alias)
+        )
+        .order_by(PromptList.created_at, PromptList.id),
+        _prompt_list_document,
+    )
+    writer.key("roomPresets")
+    await _write_rows(
+        writer,
+        session,
+        select(RoomPreset)
+        .where(RoomPreset.owner_user_id.in_(identity_ids))
+        .order_by(RoomPreset.created_at, RoomPreset.id),
+        _room_preset_document,
+    )
+    writer.field(
+        "linkedIdentities",
+        [
             {
                 "id": str(source.id),
                 "displayName": source.display_name,
@@ -633,342 +948,219 @@ async def _build_export_artifact(
             }
             for alias, source in aliases
         ],
-        "sessions": [
-            {
-                "id": str(record.id),
-                "deviceLabel": record.device_label,
-                "rotatedFromId": (
-                    str(record.rotated_from_id) if record.rotated_from_id else None
-                ),
-                "createdAt": _timestamp(record.created_at),
-                "lastUsedAt": _timestamp(record.last_used_at),
-                "expiresAt": _timestamp(record.expires_at),
-                "revokedAt": _timestamp(record.revoked_at),
-            }
-            for record in sessions
-        ],
-        "gameParticipations": [
-            {
-                "game": {
-                    "id": str(game.id),
-                    "roomName": game.room_name,
-                    "scoringMode": game.scoring_mode,
-                    "scoringVersion": game.scoring_version,
-                    "scoreLedgerVersion": game.score_ledger_version,
-                    "ruleSnapshotVersion": game.rule_snapshot_version,
-                    "ruleSnapshot": game.rule_snapshot,
-                    "promptSourceMode": game.prompt_source_mode,
-                    "hintMode": game.hint_mode,
-                    "drawingSeconds": game.drawing_seconds,
-                    "totalRounds": game.total_rounds,
-                    "playerCount": game.player_count,
-                    "startedAt": _timestamp(game.started_at),
-                    "finishedAt": _timestamp(game.finished_at),
-                },
-                "participation": {
-                    "seatId": str(seat.id),
-                    "identityId": str(seat.user_id) if seat.user_id else None,
-                    "displayName": seat.display_name_snapshot,
-                    "nameColor": seat.name_color_snapshot,
-                    "wasAnonymous": seat.is_anonymous_snapshot,
-                    "finalScore": seat.final_score,
-                    "finalRank": seat.final_rank,
-                    "turnsPlayed": seat.turns_played,
-                },
-            }
-            for seat, game in participations
-        ],
-        "drawnTurns": [
-            {
-                "turnId": str(turn.id),
-                "gameId": str(turn.game_id),
-                "identityId": str(turn.drawer_user_id) if turn.drawer_user_id else None,
-                "participantSeatId": (
-                    str(turn.drawer_participant_id)
-                    if turn.drawer_participant_id
-                    else None
-                ),
-                "roundNumber": turn.round_number,
-                "turnNumber": turn.turn_number,
-                "prompt": turn.prompt,
-                "promptVersionId": (
-                    str(turn.prompt_version_id) if turn.prompt_version_id else None
-                ),
-                "promptSourceKind": turn.prompt_source_kind,
-                "durationSeconds": turn.duration_seconds,
-                "guesserCount": turn.guesser_count,
-                "promptAutoPicked": turn.prompt_auto_picked,
-                "strokeCount": turn.stroke_count,
-                "endReason": turn.end_reason,
-                "wrongGuessCount": turn.wrong_guess_count,
-                "nearMissCount": turn.near_miss_count,
-                "promptOffers": [
-                    {
-                        "position": offer.position,
-                        "prompt": offer.prompt_snapshot,
-                        "selected": offer.selected,
-                        "sourceKind": offer.source_kind,
-                        "promptVersionId": (
-                            str(offer.prompt_version_id)
-                            if offer.prompt_version_id
-                            else None
-                        ),
-                        "sourceRevisionIds": [
-                            str(source.prompt_list_revision_id)
-                            for source in offer.sources
-                        ],
-                    }
-                    for offer in turn.prompt_offers
-                ],
-            }
-            for turn in drawings
-        ],
-        "correctGuesses": [
-            {
-                "guessId": str(guess.id),
-                "turnId": str(turn.id),
-                "gameId": str(turn.game_id),
-                "identityId": str(guess.user_id) if guess.user_id else None,
-                "participantSeatId": (
-                    str(guess.participant_id) if guess.participant_id else None
-                ),
-                "roundNumber": turn.round_number,
-                "turnNumber": turn.turn_number,
-                "prompt": turn.prompt,
-                "pointsAwarded": guess.points_awarded,
-                "guessTimeSeconds": guess.guess_time_seconds,
-                "hintsUsed": outcome.hints_used,
-                "pointsSpentOnHints": outcome.points_spent_on_hints,
-                "wrongGuessesBefore": outcome.wrong_guess_count,
-            }
-            for guess, turn, outcome in guesses
-        ],
-        "turnOutcomes": [
-            {
-                "outcomeId": str(outcome.id),
-                "turnId": str(turn.id),
-                "gameId": str(turn.game_id),
-                "participantSeatId": str(outcome.participant_id),
-                "roundNumber": turn.round_number,
-                "turnNumber": turn.turn_number,
-                "prompt": turn.prompt,
-                "eligible": outcome.eligible,
-                "eligibilityReason": outcome.eligibility_reason,
-                "outcome": outcome.outcome,
-                "terminalState": outcome.terminal_state,
-                "correctGuessTimeSeconds": outcome.correct_guess_time_seconds,
-                "wrongGuessCount": outcome.wrong_guess_count,
-                "nearMissCount": outcome.near_miss_count,
-                "hintsUsed": outcome.hints_used,
-                "pointsSpentOnHints": outcome.points_spent_on_hints,
-            }
-            for outcome, turn in turn_outcomes
-        ],
-        "scoreEvents": [
-            {
-                "eventId": str(event.id),
-                "gameId": str(event.game_id),
-                "turnId": str(event.turn_id) if event.turn_id else None,
-                "participantSeatId": str(event.participant_id),
-                "identityId": (
-                    str(participant.user_id) if participant.user_id else None
-                ),
-                "eventOrder": event.event_order,
-                "eventType": event.event_type,
-                "pointsDelta": event.points_delta,
-                "scoringVersion": event.scoring_version,
-                "ruleSnapshotVersion": event.rule_snapshot_version,
-                "correctsEventId": (
-                    str(event.corrects_event_id)
-                    if event.corrects_event_id
-                    else None
-                ),
-                "createdAt": _timestamp(event.created_at),
-            }
-            for event, participant in score_events
-        ],
-        "retainedMessages": [
-            {
-                "messageId": str(message.id),
-                "gameId": str(message.game_id) if message.game_id else None,
-                "turnId": str(message.turn_id) if message.turn_id else None,
-                "participantSeatId": (
-                    str(message.sender_seat_id) if message.sender_seat_id else None
-                ),
-                "messageKind": message.message_kind,
-                "audience": message.audience,
-                "nearMissKind": message.near_miss_kind,
-                "text": message.text,
-                "createdAt": _timestamp(message.created_at),
-                "expiresAt": _timestamp(message.expires_at),
-            }
-            for message in retained_messages
-        ],
-        # A reporter's own text and submitted evidence belongs in their export.
-        # The reported account id, reviewer id, and internal resolution note do
-        # not: those are other people's or moderation-workflow data.
-        "reportsSubmitted": [
-            {
-                "id": str(report.id),
-                "gameId": str(report.game_id) if report.game_id else None,
-                "turnId": str(report.turn_id) if report.turn_id else None,
-                "reason": report.reason,
-                "details": report.details,
-                "contextSnapshot": report.context_snapshot,
-                "messageEvidence": [
-                    {
-                        "sourceMessageId": str(
-                            evidence.source_message_snapshot_id
-                        ),
-                        "gameId": (
-                            str(evidence.game_id_snapshot)
-                            if evidence.game_id_snapshot
-                            else None
-                        ),
-                        "turnId": (
-                            str(evidence.turn_id_snapshot)
-                            if evidence.turn_id_snapshot
-                            else None
-                        ),
-                        "messageKind": evidence.message_kind,
-                        "audience": evidence.audience,
-                        "nearMissKind": evidence.near_miss_kind,
-                        "text": evidence.text_snapshot,
-                        "messageCreatedAt": _timestamp(
-                            evidence.message_created_at
-                        ),
-                    }
-                    for evidence in report.message_evidence
-                ],
-                "status": report.status,
-                "createdAt": _timestamp(report.created_at),
-                "updatedAt": _timestamp(report.updated_at),
-                "reviewedAt": _timestamp(report.reviewed_at),
-            }
-            for report in submitted_reports
-        ],
-        # The requester gets their own report text and immutable evidence
-        # snapshots. Owner/reviewer identities and internal notes stay private.
-        "promptContentReportsSubmitted": [
-            {
-                "id": str(report.id),
-                "promptListId": (
-                    str(report.prompt_list_id) if report.prompt_list_id else None
-                ),
-                "promptVersionId": (
-                    str(report.prompt_version_id)
-                    if report.prompt_version_id
-                    else None
-                ),
-                "targetType": report.target_type,
-                "listName": report.list_name_snapshot,
-                "prompt": report.prompt_snapshot,
-                "reason": report.reason,
-                "details": report.details,
-                "status": report.status,
-                "moderationState": report.resolution_moderation_state,
-                "createdAt": _timestamp(report.created_at),
-                "updatedAt": _timestamp(report.updated_at),
-                "reviewedAt": _timestamp(report.reviewed_at),
-            }
-            for report in submitted_prompt_content_reports
-        ],
-        # A bug report is the requester's own words about the software plus the
-        # diagnostics their browser volunteered, so all of it comes back. The
-        # administrator's note and identity do not: those are the operator's
-        # record of what was done, the same line the suspensions block draws.
-        # The screenshot is reported by shape rather than embedded - it is
-        # erased when the report is decided, and an export is not a way to keep
-        # a copy of it alive.
-        "bugReportsSubmitted": [
-            {
-                "id": str(report.id),
-                "area": report.area,
-                "severity": report.severity,
-                "summary": report.summary,
-                "details": report.details,
-                "buildSha": report.build_sha,
-                "route": report.route,
-                "roomCode": report.room_code,
-                "clientContext": report.client_context,
-                "screenshotStatus": report.screenshot_status,
-                "screenshotByteSize": report.screenshot_byte_size,
-                "status": report.status,
-                "createdAt": _timestamp(report.created_at),
-                "updatedAt": _timestamp(report.updated_at),
-                "reviewedAt": _timestamp(report.reviewed_at),
-            }
-            for report in submitted_bug_reports
-        ],
-        # Suspension history is requester data, but moderator identities and
-        # internal revocation notes remain private.
-        "suspensions": [
-            {
-                "id": str(ban.id),
-                "reason": ban.reason,
-                "expiresAt": _timestamp(ban.expires_at),
-                "isActive": ban.is_active and (
-                    ban.expires_at is None or ban.expires_at > generated_at
-                ),
-                "createdAt": _timestamp(ban.created_at),
-                "revokedAt": _timestamp(ban.revoked_at),
-            }
-            for ban in suspensions
-        ],
-        "blocks": [
-            {
-                "blockedUserId": str(block.blocked_user_id),
-                "createdAt": _timestamp(block.created_at),
-            }
-            for block in blocks
-        ],
-        "friends": [
-            {
-                "userId": str(
-                    friendship.user_high_id
-                    if friendship.user_low_id in identity_ids
-                    else friendship.user_low_id
-                ),
-                "status": friendship.status,
-                # A boolean rather than the requester's id. Which of the two
-                # asked is a fact about this pair and the reader is one of
-                # them, but a raw third-party account id in a downloadable
-                # document travels further than it needs to - the blocks
-                # export above avoids the same thing.
-                "requestedByMe": friendship.requested_by_id in identity_ids,
-                "createdAt": _timestamp(friendship.created_at),
-                "respondedAt": _timestamp(friendship.responded_at)
-                if friendship.responded_at
-                else None,
-            }
-            for friendship in friendships
-        ],
-        # Audit details and other actor identifiers are deliberately omitted:
-        # they can contain moderator or third-party data. This still exposes
-        # every security event in which the requester participated.
-        "accountEvents": [
-            {
-                "id": str(event.id),
-                "eventType": event.event_type,
-                "requesterWasActor": event.actor_user_id in identity_ids,
-                "requesterWasTarget": event.target_user_id in identity_ids,
-                "createdAt": _timestamp(event.created_at),
-            }
-            for event in audit_events
-        ],
-        "exportRequests": [
-            {
-                "id": str(job.id),
-                "status": job.status,
-                "schemaVersion": job.schema_version,
-                "createdAt": _timestamp(job.created_at),
-                "startedAt": _timestamp(job.started_at),
-                "completedAt": _timestamp(job.completed_at),
-                "expiresAt": _timestamp(job.expires_at),
-            }
-            for job in export_jobs
-        ],
-    }
+    )
+    writer.key("sessions")
+    await _write_rows(
+        writer,
+        session,
+        select(AuthSession)
+        .where(AuthSession.user_id.in_(identity_ids))
+        .order_by(AuthSession.created_at, AuthSession.id),
+        _session_document,
+    )
+    writer.key("gameParticipations")
+    await _write_rows(
+        writer,
+        session,
+        select(GameParticipant, GameRecord)
+        .join(GameRecord, GameRecord.id == GameParticipant.game_id)
+        .where(GameParticipant.user_id.in_(identity_ids))
+        .order_by(GameRecord.finished_at, GameParticipant.id),
+        _participation_document,
+        scalars=False,
+    )
+    writer.key("drawnTurns")
+    await _write_rows(
+        writer,
+        session,
+        select(TurnRecord)
+        .where(TurnRecord.drawer_user_id.in_(identity_ids))
+        .options(
+            selectinload(TurnRecord.prompt_offers).selectinload(
+                TurnPromptOffer.sources
+            )
+        )
+        .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number),
+        _drawn_turn_document,
+    )
+    writer.key("correctGuesses")
+    await _write_rows(
+        writer,
+        session,
+        # The attempt/hint numbers live on the outcome row alone now; the
+        # export keeps its fields by reading them through the join.
+        select(TurnGuess, TurnRecord, TurnParticipantOutcome)
+        .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
+        .join(
+            TurnParticipantOutcome,
+            TurnParticipantOutcome.id == TurnGuess.outcome_id,
+        )
+        .where(TurnGuess.user_id.in_(identity_ids))
+        .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number),
+        _correct_guess_document,
+        scalars=False,
+    )
+    writer.key("turnOutcomes")
+    await _write_rows(
+        writer,
+        session,
+        select(TurnParticipantOutcome, TurnRecord)
+        .join(TurnRecord, TurnRecord.id == TurnParticipantOutcome.turn_id)
+        .join(
+            GameParticipant,
+            GameParticipant.id == TurnParticipantOutcome.participant_id,
+        )
+        .where(GameParticipant.user_id.in_(identity_ids))
+        .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number),
+        _turn_outcome_document,
+        scalars=False,
+    )
+    writer.key("scoreEvents")
+    await _write_rows(
+        writer,
+        session,
+        select(ScoreEvent, GameParticipant)
+        .join(GameParticipant, GameParticipant.id == ScoreEvent.participant_id)
+        .where(GameParticipant.user_id.in_(identity_ids))
+        .order_by(ScoreEvent.game_id, ScoreEvent.event_order),
+        _score_event_document,
+        scalars=False,
+    )
+    writer.key("retainedMessages")
+    await _write_rows(
+        writer,
+        session,
+        select(RoomMessage)
+        .where(
+            RoomMessage.sender_user_id.in_(identity_ids),
+            RoomMessage.expires_at > generated_at,
+        )
+        .order_by(RoomMessage.created_at, RoomMessage.id),
+        _retained_message_document,
+    )
+    writer.key("reportsSubmitted")
+    await _write_rows(
+        writer,
+        session,
+        select(PlayerReport)
+        .where(PlayerReport.reporter_user_id.in_(identity_ids))
+        .options(selectinload(PlayerReport.message_evidence))
+        .order_by(PlayerReport.created_at, PlayerReport.id),
+        _player_report_document,
+    )
+    writer.key("promptContentReportsSubmitted")
+    await _write_rows(
+        writer,
+        session,
+        select(PromptContentReport)
+        .where(PromptContentReport.reporter_user_id.in_(identity_ids))
+        .order_by(PromptContentReport.created_at, PromptContentReport.id),
+        _prompt_content_report_document,
+    )
+    writer.key("bugReportsSubmitted")
+    await _write_rows(
+        writer,
+        session,
+        select(BugReport)
+        .where(BugReport.reporter_user_id.in_(identity_ids))
+        .order_by(BugReport.created_at, BugReport.id),
+        _bug_report_document,
+    )
+    # Suspension history is requester data, but moderator identities and
+    # internal revocation notes remain private.
+    writer.key("suspensions")
+    await _write_rows(
+        writer,
+        session,
+        select(UserBan)
+        .where(UserBan.user_id.in_(identity_ids))
+        .order_by(UserBan.created_at, UserBan.id),
+        lambda ban: {
+            "id": str(ban.id),
+            "reason": ban.reason,
+            "expiresAt": _timestamp(ban.expires_at),
+            "isActive": ban.is_active
+            and (ban.expires_at is None or ban.expires_at > generated_at),
+            "createdAt": _timestamp(ban.created_at),
+            "revokedAt": _timestamp(ban.revoked_at),
+        },
+    )
+    writer.key("blocks")
+    await _write_rows(
+        writer,
+        session,
+        select(UserBlock)
+        .where(UserBlock.blocker_user_id.in_(identity_ids))
+        .order_by(UserBlock.created_at, UserBlock.blocked_user_id),
+        lambda block: {
+            "blockedUserId": str(block.blocked_user_id),
+            "createdAt": _timestamp(block.created_at),
+        },
+    )
+    writer.key("friends")
+    await _write_rows(
+        writer,
+        session,
+        select(Friendship)
+        .where(
+            or_(
+                Friendship.user_low_id.in_(identity_ids),
+                Friendship.user_high_id.in_(identity_ids),
+            )
+        )
+        .order_by(Friendship.created_at, Friendship.user_low_id),
+        lambda friendship: {
+            "userId": str(
+                friendship.user_high_id
+                if friendship.user_low_id in identity_ids
+                else friendship.user_low_id
+            ),
+            "status": friendship.status,
+            # A boolean rather than the requester's id. Which of the two
+            # asked is a fact about this pair and the reader is one of
+            # them, but a raw third-party account id in a downloadable
+            # document travels further than it needs to - the blocks
+            # export above avoids the same thing.
+            "requestedByMe": friendship.requested_by_id in identity_ids,
+            "createdAt": _timestamp(friendship.created_at),
+            "respondedAt": _timestamp(friendship.responded_at)
+            if friendship.responded_at
+            else None,
+        },
+    )
+    # Audit details and other actor identifiers are deliberately omitted:
+    # they can contain moderator or third-party data. This still exposes
+    # every security event in which the requester participated.
+    writer.key("accountEvents")
+    await _write_rows(
+        writer,
+        session,
+        select(AuditEvent)
+        .where(
+            or_(
+                AuditEvent.actor_user_id.in_(identity_ids),
+                AuditEvent.target_user_id.in_(identity_ids),
+            )
+        )
+        .order_by(AuditEvent.created_at, AuditEvent.id),
+        lambda event: {
+            "id": str(event.id),
+            "eventType": event.event_type,
+            "requesterWasActor": event.actor_user_id in identity_ids,
+            "requesterWasTarget": event.target_user_id in identity_ids,
+            "createdAt": _timestamp(event.created_at),
+        },
+    )
+    writer.key("exportRequests")
+    await _write_rows(
+        writer,
+        session,
+        select(DataExport)
+        .where(DataExport.user_id == account.id)
+        .order_by(DataExport.created_at, DataExport.id),
+        _export_request_document,
+    )
+    writer.end_object()
 
 
 async def process_data_export(
@@ -1010,9 +1202,11 @@ async def process_data_export(
 
     try:
         async with session_factory() as session:
-            artifact = await _build_export_artifact(
-                session, user_id=owner_id, generated_at=processed_at
+            writer = _ExportWriter(max_bytes=export_max_bytes())
+            await _write_export_artifact(
+                session, writer, user_id=owner_id, generated_at=processed_at
             )
+            artifact = writer.finish()
         async with session_factory() as session:
             async with session.begin():
                 job = await session.scalar(
@@ -1025,27 +1219,71 @@ async def process_data_export(
                 completed_at = (
                     processed_at if now is not None else datetime.now(timezone.utc)
                 )
-                job.artifact, job.artifact_encoding = encode_export_artifact(
-                    artifact
-                )
+                job.artifact = artifact
+                job.artifact_encoding = DataExportArtifactEncoding.GZIP_JSON.value
                 job.status = DataExportStatus.READY.value
                 job.completed_at = completed_at
                 job.failure_code = None
         return True
+    except asyncio.CancelledError:
+        # A planned shutdown, not a failure: hand the job back so the next
+        # process builds it at once rather than after the stale window.
+        await _release_export_claim(session_factory, db_export_id)
+        raise
+    except ExportTooLarge as error:
+        logger.warning(
+            "Account data export %s refused: document past %d bytes",
+            db_export_id,
+            error.limit,
+        )
+        await _mark_export_failed(
+            session_factory, db_export_id, FAILURE_TOO_LARGE, now=now, at=processed_at
+        )
+        return False
     except Exception:
         logger.exception("Account data export %s failed", db_export_id)
+        await _mark_export_failed(
+            session_factory, db_export_id, FAILURE_GENERATION, now=now, at=processed_at
+        )
+        return False
+
+
+async def _mark_export_failed(
+    session_factory: async_sessionmaker[AsyncSession],
+    db_export_id: UUID,
+    failure_code: str,
+    *,
+    now: datetime | None,
+    at: datetime,
+) -> None:
+    async with session_factory() as session:
+        async with session.begin():
+            job = await session.get(DataExport, db_export_id)
+            if job is not None and job.status == DataExportStatus.PROCESSING.value:
+                job.artifact = None
+                job.artifact_encoding = None
+                job.status = DataExportStatus.FAILED.value
+                job.completed_at = at if now is not None else datetime.now(timezone.utc)
+                job.failure_code = failure_code
+
+
+async def _release_export_claim(
+    session_factory: async_sessionmaker[AsyncSession], db_export_id: UUID
+) -> None:
+    """Return a job this process claimed to `pending`, if it still holds it."""
+    try:
         async with session_factory() as session:
             async with session.begin():
                 job = await session.get(DataExport, db_export_id)
                 if job is not None and job.status == DataExportStatus.PROCESSING.value:
-                    job.artifact = None
-                    job.artifact_encoding = None
-                    job.status = DataExportStatus.FAILED.value
-                    job.completed_at = (
-                        processed_at if now is not None else datetime.now(timezone.utc)
-                    )
-                    job.failure_code = "generation_failed"
-        return False
+                    job.status = DataExportStatus.PENDING.value
+                    job.started_at = None
+                    job.completed_at = None
+                    job.failure_code = None
+    except Exception:
+        # Best effort on the way out: a claim not handed back is reclaimed
+        # by the stale rule, which is the path a hard crash takes anyway.
+        logger.exception("Could not hand back account data export %s", db_export_id)
 
 
 async def process_pending_data_exports(

@@ -58,6 +58,7 @@ from app.auth.retention import (
 )
 from app.auth.mail import purge_expired_outbox_entries
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
+from app.services.data_export_worker import DataExportWorker, stop_export_worker
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
 from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
@@ -180,6 +181,9 @@ friend_service = FriendService(
     announce=push_friends_changed,
 )
 room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
+# Built at import so the auth router can hold its wake handle; started in
+# the lifespan alongside the other supervised loops.
+export_worker = DataExportWorker(async_session_factory)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
 
@@ -416,11 +420,13 @@ async def lifespan(_app: FastAPI):
         drain_seconds=shutdown_drain_seconds()
     )
     mail_delivery = None
+    export_build = None
     metrics_flush = None
     retention_sweep = None
     presence_broadcast = None
     lag_sampler = None
     mail_health = LoopHealth("mail_delivery")
+    exports_health = LoopHealth("data_exports")
     metrics_health = LoopHealth("runtime_metrics")
     retention_health = LoopHealth("retention_sweep")
     presence_health = LoopHealth("presence_broadcast")
@@ -456,6 +462,9 @@ async def lifespan(_app: FastAPI):
         retention_sweep = start_retention_loop(
             async_session_factory, health=retention_health
         )
+        # Same shape as the outbox: the table is the queue, this is the one
+        # place a document is built, and the request only wakes it.
+        export_build = export_worker.start(health=exports_health)
         # No database of its own: it rebuilds from the presence registry and
         # the live rooms every tick, and broadcasts only when the two say
         # something different from the last time it looked.
@@ -469,6 +478,7 @@ async def lifespan(_app: FastAPI):
         readiness_probe.supervise("mail_delivery", mail_delivery, mail_health)
         readiness_probe.supervise("runtime_metrics", metrics_flush, metrics_health)
         readiness_probe.supervise("retention_sweep", retention_sweep, retention_health)
+        readiness_probe.supervise("data_exports", export_build, exports_health)
         readiness_probe.supervise(
             "presence_broadcast", presence_broadcast, presence_health
         )
@@ -488,6 +498,9 @@ async def lifespan(_app: FastAPI):
         # Flushed on the way out, so the observations describing a planned
         # restart are not the ones lost to it.
         await stop_retention_loop(retention_sweep)
+        # A build in flight hands its job back rather than finishing it: the
+        # drain is for games, not for a document nobody is waiting on yet.
+        await stop_export_worker(export_build)
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
@@ -522,6 +535,7 @@ api.include_router(
         on_identity_merged=forget_merged_identities,
         on_profile_changed=forget_presence_identity,
         on_friends_changed=friend_service.announce_to,
+        on_export_requested=export_worker.wake,
     )
 )
 api.include_router(

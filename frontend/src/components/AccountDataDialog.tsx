@@ -2,7 +2,10 @@ import { useClock } from "../hooks/useClock";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import {
+  exportFailureNote,
+  exportLabel,
   fetchDataExports,
+  pollDelayMs,
   requestDataExport,
   type DataExportJob,
 } from "../lib/accountData";
@@ -10,13 +13,6 @@ import { ApiError } from "../lib/api";
 
 function dateLabel(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
-}
-
-function exportLabel(job: DataExportJob): string {
-  if (job.status === "pending") return "Queued";
-  if (job.status === "processing") return "Preparing…";
-  if (job.status === "ready") return "Ready";
-  return "Could not prepare";
 }
 
 /**
@@ -65,15 +61,28 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
   const hasWork = exports.some((job) => job.status === "pending" || job.status === "processing");
   useEffect(() => {
     if (!hasWork) return;
-    const timer = window.setInterval(() => {
+    // One build at a time on the server, so a queued job can sit behind
+    // another account's: poll briskly while that is unlikely, then settle.
+    const startedAt = Date.now();
+    let timer = 0;
+    let active = true;
+    const tick = () => {
       void fetchDataExports()
         .then((result) => {
+          if (!active) return;
           setExports(result.exports);
           setNextRequestAt(result.nextRequestAt);
         })
-        .catch(() => {});
-    }, 1_000);
-    return () => window.clearInterval(timer);
+        .catch(() => {})
+        .finally(() => {
+          if (active) timer = window.setTimeout(tick, pollDelayMs(Date.now() - startedAt));
+        });
+    };
+    timer = window.setTimeout(tick, pollDelayMs(0));
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [hasWork]);
 
   async function startExport() {
@@ -141,6 +150,9 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
                     <small>
                       Requested {dateLabel(job.createdAt, dateTime)} · format v{job.schemaVersion}
                     </small>
+                    {exportFailureNote(job) && (
+                      <small className="account-export-note">{exportFailureNote(job)}</small>
+                    )}
                   </span>
                   {job.downloadUrl && (
                     <a href={job.downloadUrl} download>Download</a>

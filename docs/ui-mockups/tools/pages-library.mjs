@@ -400,6 +400,7 @@ const overviewSignals = `
   ${signalPanel('Queues and loops', 'span 2', 'Work written down for later, and the loops that carry it out', [
     ['Mail outbox', '0 pending · swept every 30 s'],
     ['Account exports', '0 pending'],
+    ['data_exports', 'ok 12 s ago'],
     ['loop_lag', 'ok 1 s ago'],
     ['mail_delivery', 'ok 12 s ago'],
     ['presence_broadcast', 'ok 0 s ago'],
