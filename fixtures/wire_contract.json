@@ -1044,6 +1044,14 @@
     "historyHash"
    ]
   },
+  "canvas_stale": {
+   "layout": [
+    "generation",
+    "sequence",
+    "reason",
+    "retryAfterMs"
+   ]
+  },
   "canvas_undo": {
    "layout": [
     "generation",
@@ -2322,7 +2330,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 12,
+ "protocolVersion": 13,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -18,6 +18,12 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
         payload = parse_draw_payload(data, action_identity)
     except PayloadError as error:
+        # Nobody awaits a `draw`, so the acknowledgement never leaves the
+        # server; what does is one coalesced notice that this client's canvas
+        # and the server's have parted (#562).
+        current = await ctx.game_flow.require_current_player(sid)
+        if current and current[0].game:
+            await ctx.game_flow._emit_canvas_stale(current[0], sid, "invalid_frame")
         return error.acknowledgement()
     packet = payload.packet
     current = await ctx.game_flow.require_current_player(sid)
@@ -42,7 +48,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             room.game.canvas.discarding_draw_sequence = True
         elif packet.event not in {"draw_shape", "draw_fill"}:
             return
-        await ctx.game_flow._emit_canvas_sync(room, sid)
+        await ctx.game_flow._emit_canvas_stale(room, sid, "refused_tool")
         return
     starts_action = packet.event in {
         "draw_start",
@@ -58,7 +64,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         if generation != room.game.canvas.generation:
             if packet.event == "draw_start":
                 room.game.canvas.discarding_draw_sequence = True
-            await ctx.game_flow._emit_canvas_sync(room, sid)
+            await ctx.game_flow._emit_canvas_stale(room, sid, "stale_generation", sequence=sequence)
             return
         if room.game.canvas.active_draw_sequence is not None:
             if (
@@ -82,7 +88,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             if commit and commit[2] == "action":
                 await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
             else:
-                await ctx.game_flow._emit_canvas_sync(room, sid)
+                await ctx.game_flow._emit_canvas_stale(room, sid, "unknown_sequence", sequence=sequence)
             return
         expected_sequence = room.game.canvas.sequence + 1
         if sequence != expected_sequence:
@@ -176,7 +182,8 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
     generation = payload.generation
     sequence = payload.sequence
     if generation != room.game.canvas.generation:
-        await ctx.game_flow._emit_canvas_sync(room, sid)
+        # The acknowledgement is awaited and the client resyncs on it through
+        # its budgeted transaction; a dump here on top was the amplification.
         return {"ok": False, "errorCode": ErrorCode.CANVAS_STALE_GENERATION, "error": "Canvas generation is out of date"}
     if sequence <= room.game.canvas.sequence:
         commit = room.game.canvas.get_commit(sequence)
@@ -194,7 +201,6 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
         )
         return {"ok": False, "errorCode": ErrorCode.CANVAS_OUT_OF_SEQUENCE, "error": "Drawing actions are out of sequence"}
     if payload.revision != room.game.canvas.revision or payload.history_hash != room.game.canvas.hash:
-        await ctx.game_flow._emit_canvas_sync(room, sid)
         return {"ok": False, "errorCode": ErrorCode.CANVAS_OUT_OF_SYNC, "error": "Canvas history is out of sync"}
     if room.game.canvas.undo_last_stroke():
         room.game.canvas.commit_sequence(sequence, "undo")
@@ -233,7 +239,8 @@ async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
             retry_after_ms=NO_CANVAS_RETRY_MS,
         )
     room, _ = current
-    await ctx.game_flow._emit_canvas_sync(room, sid, request.holds, request_id=request.request_id)
+    # The command guard spent the resync window; the reply does not spend it twice.
+    await ctx.game_flow._emit_canvas_sync(room, sid, request.holds, request_id=request.request_id, budgeted=False)
     return {"ok": True}
 
 

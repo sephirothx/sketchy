@@ -239,7 +239,7 @@ async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
     assert room.game.canvas.history == []
     assert room.game.canvas.sequence == 0
     assert any(
-        call.args[0] == "sync_strokes" and call.kwargs.get("to") == "drawer-sid"
+        call.args[0] == "canvas_stale" and call.kwargs.get("to") == "drawer-sid"
         for call in sio.emit.await_args_list
     )
 
@@ -325,7 +325,7 @@ async def test_retransmission_older_than_commit_window_gets_authoritative_sync(
 
     assert room.game.canvas.sequence == 2
     assert any(
-        call.args[0] == "sync_strokes"
+        call.args[0] == "canvas_stale"
         and call.kwargs.get("to") == "drawer-sid"
         for call in sio.emit.await_args_list
     )
@@ -370,11 +370,10 @@ async def test_draw_retransmission_for_undo_commit_gets_authoritative_sync():
     sio.emit.reset_mock()
     await draw("drawer-sid", fill, [room.game.canvas.generation, 2])
 
-    assert any(
-        call.args[0] == "sync_strokes"
-        and call.kwargs.get("to") == "drawer-sid"
-        for call in sio.emit.await_args_list
-    )
+    # A retransmitted opener whose sequence the server committed as an undo is
+    # answered with a notice, never with the history (#562).
+    assert any(call.args[0] == "canvas_stale" for call in sio.emit.await_args_list)
+    assert not any(call.args[0] == "sync_strokes" for call in sio.emit.await_args_list)
     assert not any(
         call.args[0] in {"canvas_commit", "canvas_undo"}
         for call in sio.emit.await_args_list
@@ -458,10 +457,9 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
 
     assert response == {"ok": False, "errorCode": "canvas_out_of_sync", "error": "Canvas history is out of sync"}
     assert len(room.game.canvas.history) == 1
-    assert any(
-        call.args[0] == "sync_strokes" and call.kwargs.get("to") == "drawer-sid"
-        for call in sio.emit.await_args_list
-    )
+    # The awaited refusal is the signal; the client resyncs through its
+    # budgeted transaction, so no history rides along (#562).
+    assert not any(call.args[0] == "sync_strokes" for call in sio.emit.await_args_list)
 
 @pytest.mark.asyncio
 async def test_finished_drawing_turn_is_captured_for_recap():
@@ -850,7 +848,8 @@ async def test_a_tool_the_room_disallows_is_never_recorded_or_rebroadcast():
     assert room.game.canvas.history == []
     assert "draw" not in _emitted_events(sio)
     # The drawer already painted it locally, so they are put back on server truth.
-    assert "sync_strokes" in _emitted_events(sio)
+    assert "canvas_stale" in _emitted_events(sio)
+    assert "sync_strokes" not in _emitted_events(sio), "a notice, never a dump (#562)"
 
 
 @pytest.mark.asyncio
@@ -913,7 +912,8 @@ async def test_the_points_trailing_a_refused_path_are_dropped_in_silence():
     await draw("drawer-sid", encode_live_drawing("draw_end", {}))
 
     assert room.game.canvas.history == []
-    assert _emitted_events(sio).count("sync_strokes") == 1
+    assert _emitted_events(sio).count("canvas_stale") == 1
+    assert "sync_strokes" not in _emitted_events(sio)
 
 
 @pytest.mark.asyncio

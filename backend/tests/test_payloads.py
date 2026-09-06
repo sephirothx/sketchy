@@ -198,7 +198,11 @@ async def test_malformed_canvas_requests_do_not_partially_mutate_history():
     assert undo_response["ok"] is False
     assert room.game.canvas.history == []
     assert room.game.canvas.sequence == 0
-    sio.emit.assert_not_awaited()
+    # Nothing of the malformed frame reached the room. The one thing sent is
+    # the coalesced recovery notice to the sender itself (#562).
+    assert [call.args[0] for call in sio.emit.await_args_list] == ["canvas_stale"]
+    assert sio.emit.await_args.args[1][2] == "invalid_frame"
+    assert sio.emit.await_args.kwargs == {"to": "drawer-sid"}
 
 
 @pytest.mark.parametrize(

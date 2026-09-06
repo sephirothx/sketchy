@@ -292,3 +292,29 @@ export function onSessionRebindRequested(listener: RebindListener): () => void {
     rebindListeners.delete(listener);
   };
 }
+
+/** What to do about a `canvas_stale` notice (#562).
+
+The server no longer pushes the whole history at a refused opening, a stale
+generation or a disagreement: it sends one small notice per window and the
+client asks through its sync transaction, which is budgeted and can claim a
+verified prefix. Every reason but `deferred` means this client applied
+something the server refused, so its pending work is a guess to discard;
+`deferred` only means "ask again in a moment" and pending work stays. */
+export interface StaleNoticeAction {
+  discardPending: boolean;
+  delayMs: number;
+}
+
+export function staleNoticeAction(payload: unknown, ownGeneration: number | null): StaleNoticeAction | null {
+  if (!Array.isArray(payload) || payload.length < 4) return null;
+  const [generation, , reason, retryAfterMs] = payload;
+  if (!Number.isSafeInteger(generation) || typeof reason !== "string") return null;
+  const delayMs = typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs) && retryAfterMs > 0
+    ? retryAfterMs
+    : 0;
+  if (reason === "deferred") return { discardPending: false, delayMs };
+  // A notice about another generation still says this canvas is behind.
+  void ownGeneration;
+  return { discardPending: true, delayMs: 0 };
+}
