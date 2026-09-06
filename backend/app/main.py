@@ -70,6 +70,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
 )
 from app.client_config import client_config
+from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
 from app.flow_timing import timing as flow_timing
 from app.state import room_manager
@@ -211,6 +212,11 @@ runtime_settings = build_runtime_settings(
 )
 
 
+# The notice carries the drawing allowance a client's frames spend (#597); it
+# has to be the live one, so the config reads the policy rather than a copy.
+client_config.drawing_budget = lambda: handler_context.command_budgets.for_command("draw")
+
+
 async def announce_client_config(changed) -> None:
     """Tell every connected client when one of *its* cadences moves.
 
@@ -218,7 +224,10 @@ async def announce_client_config(changed) -> None:
     everybody in the building for a change to a server-side ceiling they
     cannot observe is noise on the wire and noise in a network panel.
     """
-    if any(settings_name.startswith("client.") for settings_name in changed):
+    if any(
+        settings_name.startswith("client.") or settings_name == f"budget.{DRAWING.name}"
+        for settings_name in changed
+    ):
         await sio.emit("client_config", client_config.payload())
 
 

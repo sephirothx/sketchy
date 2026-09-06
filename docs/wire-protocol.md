@@ -592,7 +592,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
-| `client_config` | `ClientConfig` — cadences the client runs at | one socket at handshake; every socket when one changes |
+| `client_config` | `ClientConfig` — cadences the client runs at, and since version 3 the drawing allowance its frames spend (`drawingFramesPerWindow`, `drawingWindowSeconds`), so a replay can pace itself under it (§7) | one socket at handshake; every socket when a cadence or the drawing budget changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
@@ -1023,6 +1023,46 @@ drawer                                     server                       everyone
 
 `sync_strokes` is emitted as a **tuple**:
 `(binaryHistory, revision, generation, sequence, historyHash)`.
+
+### Replaying what the server did not get
+
+Every frame a drawer sends is saved with its pending action until the server confirms
+it, and a recovery — a `request_canvas_actions` for a gap, or a `sync_strokes` that
+leaves some actions still unconfirmed — resends those actions. Before #597 the client
+resent every saved frame in one synchronous loop, and those frames spend the same
+drawing budget as live drawing (R-RATE-08), with the refusal silent because nobody
+awaits a `draw`: a six-second stroke replayed as 152 frames had exactly 100 accepted,
+the end dropped, and the path left open on the server with nothing to ever close it.
+A larger allowance is not a fix, since a longer stroke exceeds any live allowance.
+
+Recovery now lives in [`frontend/src/lib/canvasRecovery.ts`](../frontend/src/lib/canvasRecovery.ts),
+pure and tested, wired by `useCanvasProtocol`:
+
+- **Repacked.** Both histories store a path as one point list, so the 40 ms batch
+  boundaries were never part of the record. A saved path is resent as its opener, one
+  frame per 256 points, and its end — the same points in the same order, so the
+  canonical action and the history hash are identical. The reproduced stroke becomes 3
+  frames; 750 points become 5.
+- **Paced.** Frames leave under the allowance `client_config` advertises, after a burst
+  of 8, at `(framesPerWindow × 0.75) / windowSeconds` with the rest of the window's
+  share reserved for controls a person may press meanwhile. Repeated requests for one
+  sequence are coalesced; a replay is dropped in favour of a full sync past 5,000
+  points; a reset, a new authority, a generation mismatch or a lost connection cancels
+  it. Sending starts on the next tick so a run of sequences leaves in order.
+- **Never into a dead socket.** A `draw` is emitted only while the socket is connected.
+  Socket.IO would otherwise buffer it and flush that buffer on reconnect before the seat
+  is rebound, into whatever the canvas has become; a frame dropped this way is recovered
+  by the sync that follows the rebind.
+- **A deadline for a finished action.** A completed path, a shape, a fill, a clear or an
+  undo the server has not confirmed is resent after 2 s, again after 4 s, again after
+  8 s, then the client requests authoritative state. One resend resolves both a lost end
+  frame and a lost commit: the server replays the stored `canvas_commit` for an action
+  it has (`sequence` ≤ committed, above) and accepts one it never saw. The heartbeat's
+  `[generation, sequence]` fires the resend early when the server already reports the
+  action committed. The terminal step is silent by decision: the canvas simply shows
+  what the room has.
+
+Ordinary live drawing is unchanged; the client_config bytes grow by two fields.
 
 ### Incremental resync
 
@@ -1457,7 +1497,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (9) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (11) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
@@ -1466,7 +1506,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `score_ledger_version` | The score-event ledger contract | The ledger's semantics change |
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
-| `contractVersion` on `client_config` (2) | The client-cadence notice | A cadence is added, removed or renamed |
+| `contractVersion` on `client_config` (3) | The client-cadence notice | A cadence is added, removed or renamed |
 | Data export `schema_version` (4) | The export document, pinned by [`fixtures/account_data_export_v4_fields.json`](../fixtures/account_data_export_v4_fields.json) | The export's field surface changes |
 
 ### The contract as a document

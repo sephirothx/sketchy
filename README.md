@@ -1822,6 +1822,8 @@ cd backend
 
 ### Reconnection & disconnection
 
+A drawer who reconnects, or whose frames the server asked for again, replays what the server has not confirmed at a pace under the drawing allowance the server advertises, with each saved stroke repacked into the fewest frames its points fit in, so a long stroke converges instead of being cut off by the very budget that protects live drawing. A finished stroke the server never confirms is resent a few times with backoff and then replaced by the server's canvas.
+
 - On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
   their score and place in the turn order. A successful reconnect replaces the player's active
   socket, so the superseded socket can no longer issue commands.

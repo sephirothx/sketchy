@@ -1870,6 +1870,8 @@
   ],
   "client_config:payload": [
    "contractVersion",
+   "drawingFramesPerWindow",
+   "drawingWindowSeconds",
    "flushIntervalMs"
   ],
   "game:rule_snapshot": [
@@ -2317,7 +2319,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 10,
+ "protocolVersion": 11,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2412,7 +2414,7 @@
  },
  "versions": {
   "CANVAS_HISTORY_VERSION": 1,
-  "CLIENT_CONFIG_CONTRACT_VERSION": 2,
+  "CLIENT_CONFIG_CONTRACT_VERSION": 3,
   "LIVE_DRAWING_VERSION": 1,
   "PAUSE_NOTICE_CONTRACT_VERSION": 1,
   "SHUTDOWN_NOTICE_CONTRACT_VERSION": 1
