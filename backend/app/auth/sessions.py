@@ -161,7 +161,7 @@ async def resolve_session_status(
                 select(UserBan.created_at)
                 .where(
                     UserBan.user_id == AuthSession.user_id,
-                    UserBan.is_active.is_(True),
+                    UserBan.revoked_at.is_(None),
                     or_(
                         UserBan.expires_at.is_(None),
                         UserBan.expires_at > checked_at,

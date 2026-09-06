@@ -589,10 +589,12 @@ async def _seed_registered(factory, names: list[str]) -> list[str]:
     created: list[str] = []
     async with factory() as session:
         async with session.begin():
-            for name in names:
+            for index, name in enumerate(names):
                 user = User(
                     id=generate_uuid(),
                     display_name=name,
+                    username=f"{name.lower()}{index}",
+                    password_hash="hash",
                     state=AccountState.REGISTERED.value,
                     role=UserRole.USER.value,
                 )
@@ -812,6 +814,8 @@ async def test_a_refused_role_change_announces_nothing(env, role_pushes):
         async with session.begin():
             user = await session.get(User, UUID(guest["id"]))
             user.state = AccountState.ANONYMOUS.value
+            user.username = None
+            user.password_hash = None
 
     for target, role in ((me["id"], "user"), (guest["id"], "moderator")):
         response = await admin.patch(
@@ -887,6 +891,8 @@ async def test_a_guest_cannot_hold_a_role(env):
         async with session.begin():
             user = await session.get(User, UUID(subject["id"]))
             user.state = AccountState.ANONYMOUS.value
+            user.username = None
+            user.password_hash = None
 
     response = await admin.patch(
         f"/api/admin/players/{subject['id']}/role",

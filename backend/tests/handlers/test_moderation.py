@@ -528,6 +528,7 @@ async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
             async with session.begin():
                 report = await session.scalar(select(PlayerReport))
                 report.status = ReportStatus.DISMISSED.value
+                report.reviewed_at = datetime.now(timezone.utc)
 
         third = await sio.handlers["/"]["report_player"]("reporter-sid", body)
         assert third["ok"] is True

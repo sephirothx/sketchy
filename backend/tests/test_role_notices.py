@@ -224,6 +224,8 @@ async def test_a_deleted_account_leaves_nothing_readable_behind(env):
             notice.user_id = None
             user = await session.get(User, UUID(account["id"]))
             user.state = AccountState.DELETED.value
+            user.username = None
+            user.password_hash = None
 
     assert await pending_role_notice_payload(factory, account["id"]) == {"notice": None}
 

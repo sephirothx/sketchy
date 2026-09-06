@@ -562,7 +562,7 @@ def _ban_payload(ban: UserBan, display_name: str | None = None) -> dict:
     an anonymised account no longer has one to show.
     """
     now = datetime.now(timezone.utc)
-    effectively_active = ban.is_active and (
+    effectively_active = ban.revoked_at is None and (
         ban.expires_at is None or ban.expires_at > now
     )
     return {
@@ -1516,7 +1516,7 @@ def create_moderation_router(
             elif active is False:
                 statement = statement.where(
                     or_(
-                        UserBan.is_active.is_(False),
+                        UserBan.revoked_at.is_not(None),
                         UserBan.expires_at <= now,
                     )
                 )
@@ -1558,11 +1558,10 @@ def create_moderation_router(
                 )
                 if ban is None:
                     raise HTTPException(status_code=404, detail="No such suspension.")
-                if not ban.is_active:
+                if ban.revoked_at is not None:
                     raise HTTPException(
                         status_code=409, detail="This suspension was already revoked."
                     )
-                ban.is_active = False
                 ban.revoked_at = now
                 ban.revoked_by_user_id = reviewer.id
                 ban.revoke_reason = body.reason

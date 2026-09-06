@@ -382,6 +382,7 @@ async def test_purge_removes_old_terminal_rows_and_keeps_the_rest(tmp_path):
                 fresh_sent.state = EmailOutboxState.SENT.value
                 fresh_sent.sent_at = fresh
                 old_failed.state = EmailOutboxState.FAILED.value
+                old_failed.last_error = "given up"
                 old_failed.created_at = old
                 old_pending.created_at = old
 

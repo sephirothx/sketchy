@@ -395,6 +395,7 @@ async def test_writes_authorized_before_a_deletion_are_refused_after_it():
                 row = await session.get(User, UUID(owner.id))
                 row.state = "registered"
                 row.username = "registered"
+                row.password_hash = "hash"
         lists = SqlAlchemyPromptListRepository(factory)
         created = await lists.create_owned(
             owner.id,

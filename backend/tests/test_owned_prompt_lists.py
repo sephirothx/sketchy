@@ -37,6 +37,7 @@ async def _database():
                     User(
                         id=owner_id,
                         username="owner",
+                        password_hash="hash",
                         display_name="Owner",
                         is_anonymous=False,
                         state="registered",
@@ -44,6 +45,7 @@ async def _database():
                     User(
                         id=other_id,
                         username="other",
+                        password_hash="hash",
                         display_name="Other",
                         is_anonymous=False,
                         state="registered",

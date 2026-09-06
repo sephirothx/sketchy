@@ -213,8 +213,10 @@ async def test_metadata_that_disagrees_with_the_bytes_and_a_frame_that_is_no_his
         lying, hollow, fine = await _store(factory, 3)
         async with factory() as session:
             async with session.begin():
+                # The declared size is held to the bytes by the database now
+                # (#553); the format metadata is the disagreement left to find.
                 await session.execute(
-                    update(TurnDrawing).where(TurnDrawing.turn_id == lying).values(byte_size=7)
+                    update(TurnDrawing).where(TurnDrawing.turn_id == lying).values(format_version=9)
                 )
                 row = await session.get(TurnDrawing, hollow)
                 # A well-formed header over garbage, checksum recomputed: the

@@ -416,6 +416,7 @@ async def test_an_erased_drawing_keeps_no_reactions_and_takes_none(repos):
         async with session.begin():
             drawing = await session.get(TurnDrawing, UUID(recorded.turn_id))
             drawing.status = TurnDrawingStatus.DELETED.value
+            drawing.deleted_at = datetime.now(timezone.utc)
             drawing.payload = None
             drawing.checksum_sha256 = None
             drawing.byte_size = None

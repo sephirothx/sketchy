@@ -1105,7 +1105,7 @@ async def _write_export_artifact(
             "id": str(ban.id),
             "reason": ban.reason,
             "expiresAt": _timestamp(ban.expires_at),
-            "isActive": ban.is_active
+            "isActive": ban.revoked_at is None
             and (ban.expires_at is None or ban.expires_at > generated_at),
             "createdAt": _timestamp(ban.created_at),
             "revokedAt": _timestamp(ban.revoked_at),

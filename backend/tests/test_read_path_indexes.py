@@ -25,7 +25,7 @@ def test_the_indexes_named_here_exist_in_the_metadata():
     names = {index.name for table in Base.metadata.sorted_tables for index in table.indexes}
     assert {
         "ix_room_messages_lobby_newest",
-        "ix_user_bans_active_newest",
+        "ix_user_bans_unrevoked_newest",
         "ix_email_outbox_sent_at_sent",
         "ix_audit_events_type_created_at",
     } <= names
@@ -117,7 +117,7 @@ async def _seed(factory, now: datetime) -> None:
                         "user_id": speaker,
                         "banned_by_user_id": speaker,
                         "reason": "spam",
-                        "is_active": i % 20 == 0,
+                        "revoked_at": None if i % 20 == 0 else now - timedelta(minutes=i),
                         "expires_at": None,
                         "created_at": now - timedelta(minutes=i),
                     }
@@ -176,7 +176,7 @@ async def test_the_lobby_restore_and_the_sent_purge_use_their_partial_indexes():
                 .order_by(UserBan.created_at.desc())
                 .limit(50)
             )
-            assert "ix_user_bans_active_newest" in await _plan_of(session, bans)
+            assert "ix_user_bans_unrevoked_newest" in await _plan_of(session, bans)
             assert func is not None
     finally:
         await engine.dispose()

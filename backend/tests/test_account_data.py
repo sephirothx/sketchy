@@ -366,7 +366,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
                     user_id=UUID(linked_guest.id),
                     banned_by_user_id=other_row.id,
                     reason="Historic suspension",
-                    is_active=False,
+                    revoked_at=STARTED,
                 )
             )
             session.add(
@@ -1045,6 +1045,9 @@ async def test_a_failed_export_does_not_count_against_the_week(env):
     async with factory() as session:
         stored = await session.get(DataExport, job.id)
         stored.status = DataExportStatus.FAILED.value
+        stored.started_at = datetime.now(timezone.utc)
+        stored.completed_at = datetime.now(timezone.utc)
+        stored.failure_code = "build_failed"
         await session.commit()
     retry = await http.post("/api/auth/data-exports")
     assert retry.status_code == 202
@@ -1064,6 +1067,8 @@ async def test_an_export_cannot_be_requested_for_a_deleted_account(env):
     async with factory() as session:
         account = await session.get(User, user_id)
         account.state = AccountState.DELETED.value
+        account.username = None
+        account.password_hash = None
         await session.commit()
 
     with pytest.raises(AccountDataError, match="account not found"):
@@ -1084,6 +1089,8 @@ async def test_anonymising_an_already_deleted_account_is_refused(env):
     async with factory() as session:
         account = await session.get(User, user_id)
         account.state = AccountState.DELETED.value
+        account.username = None
+        account.password_hash = None
         await session.commit()
 
     with pytest.raises(AccountDataError, match="account not found"):
@@ -1099,6 +1106,8 @@ async def test_a_merged_identity_must_be_deleted_through_its_own_account(env):
     async with factory() as session:
         account = await session.get(User, user_id)
         account.state = AccountState.MERGED.value
+        account.username = None
+        account.password_hash = None
         await session.commit()
 
     with pytest.raises(AccountDataError, match="merged identities"):
@@ -1410,6 +1419,7 @@ async def test_deleting_an_account_names_the_friends_it_takes_something_from(env
                         user_high_id=high,
                         requested_by_id=UUID(owner["id"]),
                         status=FriendshipState.ACCEPTED.value,
+                        responded_at=datetime.now(timezone.utc),
                     )
                 )
 

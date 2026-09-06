@@ -179,6 +179,7 @@ async def test_registered_preference_is_server_authoritative_and_can_be_unset():
                 User(
                     id=user_id,
                     username="Painter",
+                    password_hash="hash",
                     display_name="Painter",
                     state="registered",
                 )

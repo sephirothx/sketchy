@@ -15,8 +15,10 @@ from app.services.player_reports import (
 
 
 def active_ban_filter(now: datetime):
+    # The one definition of an active suspension: not revoked, not past its
+    # expiry (#553). Every reader takes it from here.
     return (
-        UserBan.is_active.is_(True),
+        UserBan.revoked_at.is_(None),
         or_(UserBan.expires_at.is_(None), UserBan.expires_at > now),
     )
 

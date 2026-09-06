@@ -96,7 +96,7 @@ async def purge_expired_auth_sessions(
     # predicate never true, which would silently purge nothing at all.
     protected = select(UserBan.user_id).where(
         UserBan.user_id.is_not(None),
-        UserBan.is_active.is_(True),
+        UserBan.revoked_at.is_(None),
         or_(
             UserBan.expires_at.is_(None),
             UserBan.expires_at > checked_at,

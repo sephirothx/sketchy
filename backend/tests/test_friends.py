@@ -28,6 +28,12 @@ from tests.dbfixtures import create_test_db
 pytestmark = pytest.mark.asyncio
 
 
+def _now():
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc)
+
+
 async def make_account(factory, name, *, guest=False, deleted=False):
     user_id = generate_uuid()
     async with factory() as session:
@@ -36,8 +42,8 @@ async def make_account(factory, name, *, guest=False, deleted=False):
                 User(
                     id=user_id,
                     display_name=name,
-                    username=None if guest else name.lower(),
-                    password_hash=None if guest else "hash",
+                    username=None if (guest or deleted) else name.lower(),
+                    password_hash=None if (guest or deleted) else "hash",
                     state=(
                         AccountState.DELETED.value
                         if deleted
@@ -342,6 +348,7 @@ async def _fill(factory, owner, count, status):
                         user_high_id=high,
                         requested_by_id=owner,
                         status=status,
+                        responded_at=None if status == FriendshipState.PENDING.value else _now(),
                     )
                 )
 
@@ -422,6 +429,7 @@ async def _add_row(factory, a, b, requested_by, status):
                     user_high_id=high,
                     requested_by_id=requested_by,
                     status=status,
+                    responded_at=None if status == FriendshipState.PENDING.value else _now(),
                 )
             )
 

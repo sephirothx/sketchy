@@ -280,6 +280,13 @@ class User(Base):
             sqlite_where=text("email IS NOT NULL"),
         ),
         _values_check("state", ACCOUNT_STATES, "ck_users_state"),
+        # A registered account is the one with credentials; a guest, a merged
+        # guest and a deleted account have none. A future sign-in provider
+        # (N-07) would widen this deliberately, not by accident (#553).
+        CheckConstraint(
+            "(state = 'registered') = (username IS NOT NULL AND password_hash IS NOT NULL)",
+            name="ck_users_registered_credentials",
+        ),
         _values_check("role", USER_ROLES, "ck_users_role"),
         Index("ix_users_state_last_active_at", "state", "last_active_at"),
         CheckConstraint(
@@ -629,6 +636,11 @@ class EmailOutboxEntry(Base):
             name="ck_email_outbox_sent_at",
         ),
         CheckConstraint("attempts >= 0", name="ck_email_outbox_attempts"),
+        # A message given up on says why, within the column's bound (#553).
+        CheckConstraint(
+            "state <> 'failed' OR last_error IS NOT NULL",
+            name="ck_email_outbox_failed_has_error",
+        ),
         Index("ix_email_outbox_ready", "state", "next_attempt_at"),
         # The retention sweep's sent branch (#550) ages rows by sent_at, and
         # sent rows are most of the outbox: a partial over them turns that
@@ -736,6 +748,12 @@ class PlayerReport(Base):
     __table_args__ = (
         _values_check("reason", REPORT_REASONS, "ck_player_reports_reason"),
         _values_check("status", REPORT_STATUSES, "ck_player_reports_status"),
+        # A decision is a decision: a reviewed row carries when (#553). Who
+        # may become NULL when the moderator's account is deleted.
+        CheckConstraint(
+            "status = 'pending' OR reviewed_at IS NOT NULL",
+            name="ck_player_reports_reviewed_identity",
+        ),
         Index("ix_player_reports_status_created_at", "status", "created_at"),
         CheckConstraint(
             "reporter_user_id IS NULL OR reported_user_id IS NULL "
@@ -1103,6 +1121,10 @@ class PromptContentReport(Base):
         _values_check(
             "status", REPORT_STATUSES, "ck_prompt_content_reports_status"
         ),
+        CheckConstraint(
+            "status = 'pending' OR reviewed_at IS NOT NULL",
+            name="ck_prompt_content_reports_reviewed_identity",
+        ),
         _values_check(
             "resolution_moderation_state",
             PROMPT_CONTENT_MODERATION_STATES,
@@ -1360,14 +1382,25 @@ class UserBan(Base):
     __tablename__ = "user_bans"
     __table_args__ = (
         _actor_index("ix_user_bans_revoked_by", "revoked_by_user_id"),
-        Index("ix_user_bans_user_active_expires", "user_id", "is_active", "expires_at"),
-        # The moderation queue: newest active bans first. Most bans are
-        # revoked, so the queue's rows are a small partial (#554).
+        # "Active" is one predicate everywhere: not revoked, and not past its
+        # expiry. `is_active` used to record only the first half, so an
+        # expired-but-unrevoked ban was "active" in one reader and not in
+        # another (#553). The account lookup leads with the account and is
+        # not partial: deleting the account walks every ban that names it
+        # (#551). The moderation queue is a partial over the unrevoked rows,
+        # newest first (#554). Expired but unrevoked bans stay as history.
+        Index("ix_user_bans_user_expires", "user_id", "expires_at"),
         Index(
-            "ix_user_bans_active_newest",
+            "ix_user_bans_unrevoked_newest",
             "created_at",
-            postgresql_where=text("is_active IS TRUE"),
-            sqlite_where=text("is_active IS TRUE"),
+            postgresql_where=text("revoked_at IS NULL"),
+            sqlite_where=text("revoked_at IS NULL"),
+        ),
+        # A revocation's actor and reason belong to a revocation; the actor
+        # may still become NULL when that moderator's account is deleted.
+        CheckConstraint(
+            "revoked_at IS NOT NULL OR (revoked_by_user_id IS NULL AND revoke_reason IS NULL)",
+            name="ck_user_bans_revocation_identity",
         ),
         CheckConstraint(
             "expires_at IS NULL OR expires_at > created_at",
@@ -1402,9 +1435,6 @@ class UserBan(Base):
         index=True,
     )
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default=true(), nullable=False
-    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -1565,6 +1595,11 @@ class Friendship(Base):
             name="ck_friendships_requester_is_a_member",
         ),
         _values_check("status", FRIENDSHIP_STATES, "ck_friendships_status"),
+        # Answered iff not pending (#553).
+        CheckConstraint(
+            "(status = 'pending') = (responded_at IS NULL)",
+            name="ck_friendships_pending_unanswered",
+        ),
         Index("ix_friendships_user_high_id", "user_high_id"),
         Index("ix_friendships_requested_by_id", "requested_by_id"),
     )
@@ -1634,6 +1669,15 @@ class UploadedAvatarAsset(Base):
     """
 
     __tablename__ = "uploaded_avatar_assets"
+    __table_args__ = (
+        # What R-AVA validation admits, held by the row (#553): a picture has
+        # bytes within the upload ceiling and positive dimensions.
+        CheckConstraint(
+            "byte_size > 0 AND byte_size <= 131072",
+            name="ck_uploaded_avatar_assets_byte_size",
+        ),
+        CheckConstraint("width > 0 AND height > 0", name="ck_uploaded_avatar_assets_dimensions"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -1685,6 +1729,13 @@ class AuthSession(Base):
     """Revocable server-side session identified by a hashed opaque token."""
 
     __tablename__ = "auth_sessions"
+    __table_args__ = (
+        # A session that expired before it existed is a bug in a writer, not
+        # a state (#553).
+        CheckConstraint(
+            "expires_at > created_at", name="ck_auth_sessions_expiry_after_creation"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
@@ -1724,7 +1775,27 @@ class DataExport(Base):
 
     __tablename__ = "data_exports"
     __table_args__ = (
+
         _values_check("status", DATA_EXPORT_STATUSES, "ck_data_exports_status"),
+        # The lifecycle the worker walks, held by the row (#553): ready has
+        # its document, failed its code, both a completion time, and anything
+        # past pending a start time.
+        CheckConstraint(
+            "status <> 'ready' OR (artifact IS NOT NULL AND artifact_encoding IS NOT NULL)",
+            name="ck_data_exports_ready_has_artifact",
+        ),
+        CheckConstraint(
+            "status <> 'failed' OR failure_code IS NOT NULL",
+            name="ck_data_exports_failed_has_code",
+        ),
+        CheckConstraint(
+            "status NOT IN ('ready', 'failed') OR completed_at IS NOT NULL",
+            name="ck_data_exports_terminal_completed",
+        ),
+        CheckConstraint(
+            "status = 'pending' OR started_at IS NOT NULL",
+            name="ck_data_exports_started",
+        ),
         _values_check(
             "artifact_encoding",
             DATA_EXPORT_ARTIFACT_ENCODINGS,
@@ -2190,6 +2261,7 @@ class TurnRecord(Base):
         back_populates="turn_record",
         cascade="all, delete-orphan",
         uselist=False,
+        foreign_keys="[TurnDrawing.game_id, TurnDrawing.turn_id]",
     )
 
 
@@ -2214,8 +2286,31 @@ class TurnDrawing(Base):
         # Erasure is structural, not procedural: no future code path can leave
         # bytes behind on a row that says the drawing is gone.
         CheckConstraint(
-            "status NOT IN ('unavailable', 'deleted') OR payload IS NULL",
+            "status NOT IN ('unavailable', 'deleted') OR (payload IS NULL AND object_key IS NULL)",
             name="ck_turn_drawings_erased",
+        ),
+        # A stored drawing says when; an erased one says when (#553).
+        CheckConstraint(
+            "status <> 'ready' OR stored_at IS NOT NULL",
+            name="ck_turn_drawings_ready_stored_at",
+        ),
+        CheckConstraint(
+            "status <> 'deleted' OR deleted_at IS NOT NULL",
+            name="ck_turn_drawings_deleted_at",
+        ),
+        # The declared size is the inline payload's size, on both engines
+        # (`length` of a blob is bytes on SQLite and on PostgreSQL's bytea).
+        CheckConstraint(
+            "payload IS NULL OR byte_size IS NULL OR length(payload) = byte_size",
+            name="ck_turn_drawings_byte_size_matches",
+        ),
+        # A drawing belongs to a turn of its own game: the pair is a key on
+        # turn_records, so a row cannot name another game's turn (#553).
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_turn_drawings_turn_same_game",
+            ondelete="CASCADE",
         ),
         CheckConstraint(
             "(status = 'unavailable') = (unavailable_reason IS NOT NULL)",
@@ -2265,7 +2360,9 @@ class TurnDrawing(Base):
     stored_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
-    turn_record: Mapped[TurnRecord] = relationship(back_populates="drawing")
+    turn_record: Mapped[TurnRecord] = relationship(
+        back_populates="drawing", foreign_keys=[game_id, turn_id]
+    )
 
 
 class ScoreEvent(Base):
@@ -2571,6 +2668,13 @@ class TurnPromptOffer(Base):
             "turn_id", "position", name="uq_turn_prompt_offers_turn_position"
         ),
         CheckConstraint("position >= 0", name="ck_turn_prompt_offers_position"),
+        # A curated offer names the version it came from; a custom or
+        # built-in one cannot, or a display-text collision could credit
+        # curated statistics (R-STAT-04, #553).
+        CheckConstraint(
+            "(source_kind = 'curated') = (prompt_version_id IS NOT NULL)",
+            name="ck_turn_prompt_offers_curated_version",
+        ),
         _values_check(
             "source_kind",
             PROMPT_OFFER_SOURCE_KINDS,
@@ -2939,6 +3043,11 @@ class PromptList(Base):
             "is_bundled = false OR owner_user_id IS NULL",
             name="ck_prompt_lists_bundled_owner",
         ),
+        # Public is reserved for the official catalogue (R-LIST-02, N-04).
+        CheckConstraint(
+            "visibility <> 'public' OR is_bundled = true",
+            name="ck_prompt_lists_public_is_bundled",
+        ),
         CheckConstraint(
             "visibility != 'unlisted' OR share_code IS NOT NULL",
             name="ck_prompt_lists_unlisted_share_code",
@@ -3185,6 +3294,15 @@ class PromptUsageFact(Base):
         CheckConstraint(
             "total_guesser_count >= 0",
             name="ck_prompt_usage_facts_total_guessers",
+        ),
+        # A prompt is picked at most as often as it is offered, and guessed
+        # correctly by at most everyone who faced it (#553).
+        CheckConstraint(
+            "pick_count <= offer_count", name="ck_prompt_usage_facts_picks_within_offers"
+        ),
+        CheckConstraint(
+            "correct_guess_count <= total_guesser_count",
+            name="ck_prompt_usage_facts_correct_within_guessers",
         ),
         _values_check(
             "scoring_mode", SCORING_MODES, "ck_prompt_usage_facts_scoring_mode"

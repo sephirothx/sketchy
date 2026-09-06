@@ -42,6 +42,8 @@ async def test_database_requires_normalized_unique_email_and_verification_source
                     User(
                         id=generate_uuid(),
                         display_name="One",
+                        username="one",
+                        password_hash="hash",
                         state=AccountState.REGISTERED.value,
                         email="one@example.com",
                     )

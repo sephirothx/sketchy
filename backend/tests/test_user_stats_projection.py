@@ -394,6 +394,7 @@ async def test_a_game_saved_during_a_guest_merge_waits_and_lands_on_the_account(
                 row = await session.get(User, UUID(account.id))
                 row.state = "registered"
                 row.username = "account"
+                row.password_hash = "hash"
         day = datetime(2026, 8, 20, 12, tzinfo=timezone.utc)
         await _save_game(history, finished_at=day, first=guest.id, second=other.id, first_wins=True)
 

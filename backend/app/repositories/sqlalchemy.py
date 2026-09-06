@@ -447,6 +447,9 @@ async def _merge_friendships(session, source_id, target_id) -> None:
                     user_high_id=high,
                     requested_by_id=requested_by,
                     status=row.status,
+                    # The answer moves with the status: an accepted or declined
+                    # row says when (ck_friendships_pending_unanswered).
+                    responded_at=row.responded_at,
                 )
             )
             continue
@@ -456,8 +459,12 @@ async def _merge_friendships(session, source_id, target_id) -> None:
             and existing.requested_by_id != requested_by
         )
         if crossing:
+            # Two pending requests towards each other are an acceptance, made
+            # now: neither row had been answered, so neither has the time.
             existing.status = FriendshipState.ACCEPTED.value
-            existing.responded_at = row.responded_at or existing.responded_at
+            existing.responded_at = (
+                row.responded_at or existing.responded_at or datetime.now(timezone.utc)
+            )
         elif ranking[row.status] > ranking[existing.status]:
             existing.status = row.status
             existing.requested_by_id = requested_by

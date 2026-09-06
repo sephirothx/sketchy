@@ -161,7 +161,7 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
                         User(id=ada, display_name="Ada"),
                         User(id=bob, display_name="Bob"),
                         User(id=banned, display_name="Banned"),
-                        UserBan(id=uuid4(), user_id=banned, reason="spam", is_active=True),
+                        UserBan(id=uuid4(), user_id=banned, reason="spam"),
                     ]
                 )
             async with session.begin():

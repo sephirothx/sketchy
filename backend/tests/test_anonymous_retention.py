@@ -143,6 +143,8 @@ async def _session_row(session, user_id, *, expires_at, revoked_at=None):
         user_id=user_id,
         token_hash=generate_uuid().hex,
         device_label="test",
+        # Created before it expires, as the row now insists (#553).
+        created_at=expires_at - timedelta(days=30),
         expires_at=expires_at,
         revoked_at=revoked_at,
     )
@@ -225,7 +227,6 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
                             id=generate_uuid(),
                             user_id=suspended.id,
                             reason="harassment",
-                            is_active=True,
                             expires_at=None,
                         )
                     )
@@ -238,7 +239,6 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
                         id=generate_uuid(),
                         user_id=None,
                         reason="account deleted",
-                        is_active=True,
                         expires_at=None,
                     )
                 )
@@ -247,7 +247,6 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
                         id=generate_uuid(),
                         user_id=lapsed.id,
                         reason="spam",
-                        is_active=True,
                         created_at=now - timedelta(days=30),
                         expires_at=now - timedelta(days=1),
                     )
@@ -285,6 +284,8 @@ async def test_an_uncollected_export_does_not_outlive_its_own_window():
                     status="ready",
                     artifact=b"\x1f\x8b" + b"x" * 20,
                     artifact_encoding="gzip+json",
+                    started_at=now - timedelta(days=8),
+                    completed_at=now - timedelta(days=8),
                     expires_at=now - timedelta(days=1),
                 )
                 live = DataExport(
@@ -293,6 +294,8 @@ async def test_an_uncollected_export_does_not_outlive_its_own_window():
                     status="ready",
                     artifact=b"\x1f\x8b" + b"y" * 20,
                     artifact_encoding="gzip+json",
+                    started_at=now - timedelta(days=1),
+                    completed_at=now - timedelta(days=1),
                     expires_at=now + timedelta(days=6),
                 )
                 session.add_all([stale, live])
