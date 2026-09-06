@@ -65,7 +65,7 @@ payload in isolation. Two more rules, each learned from a wrong number (#563):
   therefore measures a recording of a hand drawing through the production client
   ([`fixtures/live_stroke_trace_v1.json`](../fixtures/live_stroke_trace_v1.json), made by
   [`benchmarks/record_stroke.sh --manual`](../benchmarks/record_stroke.sh)): on it, context
-  takeover saves about **half** of the drawing's packet bytes, not the 70% the repeated
+  takeover saves **40–50%** of the drawing's packet bytes, not the 70% the repeated
   batch suggested (a scripted 120 Hz pen saved only a third), and it saves *less* once
   the same context has also carried a `room_state` and some chat.
 - **Strip the flush suffix.** Every message's deflate block ends in `00 00 ff ff` from

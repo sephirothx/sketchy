@@ -15,9 +15,9 @@
    "width": 629,
    "height": 471
   },
-  "commit": "14e60eb"
+  "commit": "6b43433"
  },
- "frames": 464,
+ "frames": 727,
  "strokes": [
   {
    "frames": [
@@ -27,145 +27,257 @@
       1,
       1
      ],
-     "frame": "EAAAAAYBA/4B",
+     "frame": "EAAAAAYtAyIG",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 114.0,
-     "frame": "Fv8C/gH8APwA+gA=",
+     "atMs": 95.2,
+     "frame": "ES0DIAY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 134.9,
+     "frame": "Fi0DBwYA4gDWANQAqA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 175.2,
+     "frame": "Fi0DHwUA3ADTANYA2Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 215.4,
+     "frame": "Fi0DWgQA4QDmAOY=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 153.6,
-     "frame": "FuwC/gH5APgB+QL5BQ==",
+     "atMs": 254.9,
+     "frame": "Fi0D8QMA7gD3APkA9w==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 193.2,
-     "frame": "FscCDgL5CfwG/AX6CQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 233.5,
-     "frame": "Fq0CNQL8DP4J/wr/EA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 273.1,
-     "frame": "FqMCcQIADwASABg=",
+     "atMs": 296.0,
+     "frame": "Fi0DvgMA+wD9AP4=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 313.7,
-     "frame": "FqMCswIADQMOCBALEQ==",
+     "atMs": 336.2,
+     "frame": "ES0DsgM=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 5
+     "points": 1
     },
     {
-     "atMs": 353.0,
-     "frame": "FsYC/gINDA4LEwwTCg==",
+     "atMs": 374.8,
+     "frame": "ES4DsQM=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 5
+     "points": 1
     },
     {
-     "atMs": 393.3,
-     "frame": "FhwDMwMWBxkEFAISAw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 433.7,
-     "frame": "FokDRgMUARIBFQA=",
+     "atMs": 414.9,
+     "frame": "Fi8DsAME/RrxHPI=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 473.0,
-     "frame": "FtgDSAMSAA4AC/8K/Q==",
+     "atMs": 454.5,
+     "frame": "FpIDewMz6j7pNuw+7g==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 513.5,
-     "frame": "FhwENwMG9wfyBPIE7g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 553.1,
-     "frame": "FjME6wIA6QDn/+j45g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 593.4,
-     "frame": "Fh0EbgLx6O/q8+/08Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 633.7,
-     "frame": "FtcDEAL08/Lz8/I=",
+     "atMs": 495.3,
+     "frame": "FscEEgNU8Ff0QPk=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 673.1,
-     "frame": "FqED2gH09PX39vn3+Q==",
+     "atMs": 534.8,
+     "frame": "Fu8F6wJH/UQAPAA0AA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 713.6,
-     "frame": "Fm8DsgH0+/sA+f/3AA==",
+     "atMs": 575.5,
+     "frame": "FjcH6AITABYAGgAYAA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 753.0,
-     "frame": "FkMDrAH1AvQG8grwCw==",
+     "atMs": 614.8,
+     "frame": "FqYH6AIQAA4ACgAJAA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 793.4,
-     "frame": "FgID0QH3B/UI+Ab7BQ==",
+     "atMs": 655.0,
+     "frame": "Ft8H6AIIAQcABAEEAQ==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 822.0,
-     "frame": "Ft0C7wH7BvsI",
+     "atMs": 694.8,
+     "frame": "FvsH7AIEAAUBAwE=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 3
+     "points": 4
     },
     {
-     "atMs": 822.3,
+     "atMs": 735.1,
+     "frame": "FgsI7gIDAAMAAwEBAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 775.8,
+     "frame": "FhYI8AIDAAAAAQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 814.6,
+     "frame": "FhoI8wIAAQADAAg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 855.2,
+     "frame": "FhoIDAMAFwAjACD+Jg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 894.9,
+     "frame": "FhYItwMAL/82ADQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 935.1,
+     "frame": "FhUIhgQAMAIpAyYDJQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 975.0,
+     "frame": "FiEITQUFOQIYABcAFA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1014.7,
+     "frame": "FikI3wUAEgAOAAoACA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1054.8,
+     "frame": "FikIFgYAAgACAAI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 1174.8,
+     "frame": "ESgIHAY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 1214.9,
+     "frame": "FiQIHAb3AOsA3gDhAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1255.4,
+     "frame": "FpQHHAbLAMMAuALUBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1295.3,
+     "frame": "FosGJAbEBLYDvQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 1334.8,
+     "frame": "FnoFLQbGAMwAxf7E+g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1375.2,
+     "frame": "FmAEHQbU+7v57v7r/Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1414.7,
+     "frame": "FrEDCwbs/vD+8v30/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1454.3,
+     "frame": "FmcDAAb2/vb99//4/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1495.8,
+     "frame": "FjwD+AX6APr/+v/8/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 1535.9,
+     "frame": "ESMD9QU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 1549.4,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -173,157 +285,192 @@
    ],
    "kind": "path",
    "label": "stroke 1",
-   "points": 89,
-   "moveFrames": 19,
-   "durationMs": 822.3
+   "points": 145,
+   "moveFrames": 35,
+   "durationMs": 1549.4
   },
   {
    "frames": [
     {
-     "atMs": 1490.8,
+     "atMs": 2625.6,
      "identity": [
       1,
       2
      ],
-     "frame": "EAAAAAZ6A0cD",
+     "frame": "EAAAAAZTA6sD",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 1634.0,
-     "frame": "FnoDRwMABA==",
+     "atMs": 2656.2,
+     "frame": "EVMDqgM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 2734.5,
+     "frame": "FlMDpwMC9wXx",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 2775.3,
+     "frame": "FnQDXwML6w3r",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 2814.7,
+     "frame": "Fp0DGgMg0RDtE+oR6w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 2854.5,
+     "frame": "FgMEmgIP8Qr2CfgJ9w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 2895.2,
+     "frame": "FjUEaQIE/AL8AgA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 2935.3,
+     "frame": "Fj4EYQIBAA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 2
     },
     {
-     "atMs": 1673.3,
-     "frame": "FnoDUwMADAAOAA8ADw==",
+     "atMs": 3015.5,
+     "frame": "FkIEYQIIAA==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 5
+     "points": 2
     },
     {
-     "atMs": 1714.0,
-     "frame": "FnoDnAMACwAJACYACg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 1753.2,
-     "frame": "FnoD7wMAEAATABYAFw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 1793.5,
-     "frame": "FnoDUgQADgARABIADw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 1833.0,
-     "frame": "FnoDmgQACQALAAs=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 1873.7,
-     "frame": "FnoDwwQACgAKAAoACg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 1913.3,
-     "frame": "FnoD+QT/D/4M/iD+Eg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 1953.9,
-     "frame": "FnADXgX+Hf4g/yD/Hw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 1993.1,
-     "frame": "FmoD8gUAEwATAAwACA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 2033.5,
-     "frame": "FmoDMQYAAwACAAE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 2073.7,
-     "frame": "EWkDOAY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 2113.2,
-     "frame": "EWgDOQY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 2154.2,
-     "frame": "EWcDOQY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 2193.0,
-     "frame": "FmYDOQb8APgC",
+     "atMs": 3054.8,
+     "frame": "FnwEYQJX9zb+",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 2233.0,
-     "frame": "Fk8DQQbwDPAM7BHiGQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 2273.0,
-     "frame": "Ft0CnwbeH+Ef5B0=",
+     "atMs": 3094.6,
+     "frame": "Fj0FVQIvADwAOQA=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 2312.9,
-     "frame": "Fm0CDwfxD/IP9wr3Cw==",
+     "atMs": 3134.8,
+     "frame": "FgoGVQInAC0ALAAuAA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 2354.2,
-     "frame": "FjwCRAf+A/8B",
+     "atMs": 3175.2,
+     "frame": "FuUGVQIqACYCIAEgAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3214.8,
+     "frame": "FosHXAIRACMCDgAQAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3255.2,
+     "frame": "FuoHXgIOAAsACgAKAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3295.6,
+     "frame": "FiEIXgILAAsACwAJAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3334.4,
+     "frame": "FlQIXgIMAAsADAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 3374.5,
+     "frame": "FoIIXgIIAAYABQACAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3416.2,
+     "frame": "FpkIXgIBAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 3454.8,
+     "frame": "FpsIXwIAAQAB",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 2372.4,
+     "atMs": 3495.2,
+     "frame": "FpkIYwL7BvgL9wr6CA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3535.1,
+     "frame": "FngIjgL4CfcM9wz4Cg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3574.9,
+     "frame": "Fk4IwgL6B/kG+wY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 3615.3,
+     "frame": "FjcI2gL8BPoF/gL+Ag==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 3655.7,
+     "frame": "FicI6AL/Ag==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 3783.5,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -331,73 +478,136 @@
    ],
    "kind": "path",
    "label": "stroke 2",
-   "points": 73,
-   "moveFrames": 19,
-   "durationMs": 881.6
+   "points": 92,
+   "moveFrames": 24,
+   "durationMs": 1157.9
   },
   {
    "frames": [
     {
-     "atMs": 3114.4,
+     "atMs": 4308.9,
      "identity": [
       1,
       3
      ],
-     "frame": "EAAAAAZfA0QG",
+     "frame": "EAAAAAafCHQC",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 3153.8,
-     "frame": "EV8DRAY=",
+     "atMs": 4374.9,
+     "frame": "EZ8IdQI=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 3193.2,
-     "frame": "EWEDRwY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 3234.2,
-     "frame": "FmUDUQYIEQYOBw4IDw==",
+     "atMs": 4415.2,
+     "frame": "Fp8IegIACwAQABIAIQ==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 3273.1,
-     "frame": "FocDmwYHEggQBQ0=",
+     "atMs": 4454.7,
+     "frame": "Fp8I1gIAFAAVABUAFw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4495.3,
+     "frame": "Fp8IQwMAGQAaABgAFw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4535.1,
+     "frame": "Fp8IuQMADAAKAA0ADQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4575.0,
+     "frame": "Fp8I9QMACgAJAAk=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 3313.9,
-     "frame": "FqID1wYGDAYMCA0JDQ==",
+     "atMs": 4614.7,
+     "frame": "Fp8IGQQACgAKAA0AHA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 3353.0,
-     "frame": "FsUDEwcPFAQFBQcGCA==",
+     "atMs": 4655.3,
+     "frame": "Fp8IZAQAFQAaACAAIw==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 3372.1,
-     "frame": "EekDQgc=",
+     "atMs": 4695.2,
+     "frame": "FqEI+AQCGAMXBBg=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 1
+     "points": 4
     },
     {
-     "atMs": 3372.2,
+     "atMs": 4734.9,
+     "frame": "Fq4ITgUCCQIHAQQAAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4775.5,
+     "frame": "FrMIZgUAAv4B",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 4815.1,
+     "frame": "Fq8IagX8APoA+QD6AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4855.6,
+     "frame": "FosIbAX6AvcD9Qb2CA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4895.2,
+     "frame": "FlsIiQXzDvIQ8BQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 4934.8,
+     "frame": "FiAIzgX2DfgL+Av6CQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4974.3,
+     "frame": "FvoHBAb8B/0H/wX/BA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 4974.4,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -405,66 +615,59 @@
    ],
    "kind": "path",
    "label": "stroke 3",
-   "points": 22,
-   "moveFrames": 7,
-   "durationMs": 257.8
+   "points": 71,
+   "moveFrames": 16,
+   "durationMs": 665.5
   },
   {
    "frames": [
     {
-     "atMs": 3956.2,
+     "atMs": 5532.9,
      "identity": [
       1,
       4
      ],
-     "frame": "EAAAAAaBA4QD",
+     "frame": "EAAAAAZWCHoE",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 4073.7,
-     "frame": "EYADhAM=",
+     "atMs": 5615.5,
+     "frame": "EVYIfAQ=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 4113.7,
-     "frame": "Fn0DhAP1BeET6hM=",
+     "atMs": 5654.8,
+     "frame": "FlYIgwQACwARAA4=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 4153.1,
-     "frame": "FioDvgPyDe0T3iH1DQ==",
+     "atMs": 5694.9,
+     "frame": "FlYItAQACAAGAAUABg==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 4193.4,
-     "frame": "FtICFwT4CfgL9wj6Bw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 4233.8,
-     "frame": "Fq0CQAT7Bf0C/QI=",
+     "atMs": 5735.4,
+     "frame": "FlYI0gQABAACAAI=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 4273.6,
-     "frame": "FqECSwT/AQ==",
+     "atMs": 5775.6,
+     "frame": "EVYI3AQ=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 2
+     "points": 1
     },
     {
-     "atMs": 4280.5,
+     "atMs": 5808.3,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -472,59 +675,66 @@
    ],
    "kind": "path",
    "label": "stroke 4",
-   "points": 21,
-   "moveFrames": 6,
-   "durationMs": 324.3
+   "points": 15,
+   "moveFrames": 5,
+   "durationMs": 275.4
   },
   {
    "frames": [
     {
-     "atMs": 4973.3,
+     "atMs": 6625.0,
      "identity": [
       1,
       5
      ],
-     "frame": "EAAAAAZrA44D",
+     "frame": "EAAAAAb4BKkC",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 5114.1,
-     "frame": "FmwDjgMYCw==",
+     "atMs": 6734.5,
+     "frame": "FvgEqQIOABsAJAA=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 2
+     "points": 4
     },
     {
-     "atMs": 5153.0,
-     "frame": "FpgDpQMaExoWExAOEQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 5193.5,
-     "frame": "FhQEEwQHCQgICwoICQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 5234.3,
-     "frame": "FjwEPQQDBAIC",
+     "atMs": 6775.6,
+     "frame": "FokFqQIWACEA",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 5272.1,
-     "frame": "EUIEQgQ=",
+     "atMs": 6814.8,
+     "frame": "FuUFqQIhACAAGwAZAA==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 1
+     "points": 5
     },
     {
-     "atMs": 5272.3,
+     "atMs": 6855.3,
+     "frame": "Fm8GqQIMAAgACwAMAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 6894.3,
+     "frame": "FpwGqQIDAAIAAQA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 6935.3,
+     "frame": "FqQGqQIDAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 6940.8,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -532,24 +742,206 @@
    ],
    "kind": "path",
    "label": "stroke 5",
-   "points": 16,
-   "moveFrames": 5,
-   "durationMs": 299.0
+   "points": 23,
+   "moveFrames": 6,
+   "durationMs": 315.8
   },
   {
    "frames": [
     {
-     "atMs": 5864.6,
+     "atMs": 7743.1,
      "identity": [
       1,
       6
      ],
-     "frame": "EAAAAAYnA0YC",
+     "frame": "EAAAAAYqBY8C",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 5981.5,
+     "atMs": 7895.3,
+     "frame": "FioFjgIA/gD9APw=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 7934.3,
+     "frame": "FioFgAIA/AD6APoA+w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 7974.5,
+     "frame": "FioFZwIA/AD8APo=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 8015.1,
+     "frame": "FioFVAIA/AD5APkA+Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8055.0,
+     "frame": "FioFMwIA+AD4APgA9g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8095.2,
+     "frame": "FioFCgIA9AD7APoA+Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8134.3,
+     "frame": "FioF5AEA+QD3APcC+A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8175.5,
+     "frame": "Fi4FuwEC+QL4A/o=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 8215.3,
+     "frame": "FjgFogEF+Qn2CvgL9w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8254.8,
+     "frame": "FmgFdgEN+Az5EvcU+A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8294.4,
+     "frame": "FrcFUgEe+Qr/Dv4O/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8335.2,
+     "frame": "FgcGRgELAAwACgAJAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8374.5,
+     "frame": "FjkGRgEJAAcACQM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 8415.4,
+     "frame": "FlkGTgEGBQkHBwYGBg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8454.7,
+     "frame": "FnoGawEDBAMDAgQCBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8494.4,
+     "frame": "FoUGgAEBBQMSAAsADg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8535.2,
+     "frame": "FokGvAEADQAOAA8ADg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8575.4,
+     "frame": "FokG/wEACgAHAAc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 8615.5,
+     "frame": "FokGHQIABQAHAAYABg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8654.9,
+     "frame": "FokGPAIABwAHAAcABw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8695.2,
+     "frame": "FokGYAIACP4OAAT/BA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8734.7,
+     "frame": "FoUGggIAAwADAAIAAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8774.4,
+     "frame": "EYUGjQI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 8814.6,
+     "frame": "FoUGjgIAAQAD",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 8855.2,
+     "frame": "FoUGlwL/Bf8FAAUAAw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 8890.9,
+     "frame": "FoMGrQIAAgAC",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 8891.0,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -557,1036 +949,386 @@
    ],
    "kind": "path",
    "label": "stroke 6",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 116.9
+   "points": 117,
+   "moveFrames": 26,
+   "durationMs": 1147.9
   },
   {
    "frames": [
     {
-     "atMs": 6189.4,
+     "atMs": 12800.2,
      "identity": [
       1,
       7
      ],
-     "frame": "EAAAAAanA0YC",
+     "frame": "FHrJ6GkBNwE=",
      "shape": "base64",
-     "event": "draw_start"
-    },
-    {
-     "atMs": 6289.9,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
+     "event": "draw_fill"
     }
    ],
-   "kind": "path",
-   "label": "stroke 7",
+   "kind": "fill",
+   "label": "fill 7",
    "points": 0,
    "moveFrames": 0,
-   "durationMs": 100.5
+   "durationMs": 0.0
   },
   {
    "frames": [
     {
-     "atMs": 6781.1,
+     "atMs": 14037.4,
      "identity": [
       1,
       8
      ],
-     "frame": "EAAAAAYPA5YC",
+     "frame": "FHrJ6BoC/AA=",
      "shape": "base64",
-     "event": "draw_start"
-    },
-    {
-     "atMs": 6793.4,
-     "frame": "EQ8DlgI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 6953.2,
-     "frame": "Fg8DmgIABwAKAAg=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 6993.3,
-     "frame": "Fg8DuwIACQAJAAYABw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 7033.7,
-     "frame": "Fg8D3AIAAQECAgE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 7073.0,
-     "frame": "FhQD4QIFAQQDBwEIAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 7113.6,
-     "frame": "FjUD6QIKAw0CCgIKAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 7153.0,
-     "frame": "FmwD8wINAA0ACwAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 7193.7,
-     "frame": "FqUD8wIK/Av7CPsJ+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 7233.7,
-     "frame": "FtkD0gIF+wb6Bfs=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 7273.1,
-     "frame": "Fu0DvQIE/AL9Av4B/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 7314.6,
-     "frame": "FvcDsQIA/wD/",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 7353.9,
-     "frame": "EfcDrgI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 7497.7,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
+     "event": "draw_fill"
     }
    ],
-   "kind": "path",
-   "label": "stroke 8",
-   "points": 47,
-   "moveFrames": 12,
-   "durationMs": 716.6
+   "kind": "fill",
+   "label": "fill 8",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
   },
   {
    "frames": [
     {
-     "atMs": 8723.0,
+     "atMs": 14629.6,
      "identity": [
       1,
       9
      ],
-     "frame": "EAAAAAadCPQG",
+     "frame": "FHrJ6AICrAA=",
      "shape": "base64",
-     "event": "draw_start"
-    },
-    {
-     "atMs": 8833.2,
-     "frame": "Fp0I8wYA9QT5",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 8874.1,
-     "frame": "FqcI0wYR4Qvx",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 8913.4,
-     "frame": "Fs4ImAYJ8AfxBfkE+g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 8953.6,
-     "frame": "FuwIYwYD/AL8AvsC/A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 8993.9,
-     "frame": "FvcITgYC/QL9Af0C/Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9033.8,
-     "frame": "FgEJPQYC/QP8B/c=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 9073.0,
-     "frame": "FhAJKAYF+QT6BfoF+A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9113.5,
-     "frame": "FicJBwYE+gT6A/sB/Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9153.7,
-     "frame": "FjUJ8AUB/gH/Af8=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 9193.0,
-     "frame": "FjkJ6wUA/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 9353.5,
-     "frame": "FjoJ6gUDBgQHCAsLEQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9392.9,
-     "frame": "FmAJJgYPFxIcDhQMEg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9433.4,
-     "frame": "FqgJkgYJDgUJBgoBAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9473.6,
-     "frame": "Fr4JtwYCAQECAAE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 9513.4,
-     "frame": "FsIJvAYAAQEBAQM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 9553.9,
-     "frame": "FsYJxAYCAwMCAgMCAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 9563.6,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
+     "event": "draw_fill"
     }
    ],
-   "kind": "path",
-   "label": "stroke 9",
-   "points": 69,
-   "moveFrames": 16,
-   "durationMs": 840.6
+   "kind": "fill",
+   "label": "fill 9",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
   },
   {
    "frames": [
     {
-     "atMs": 10623.8,
+     "atMs": 16952.1,
      "identity": [
       1,
       10
      ],
-     "frame": "EAAAAAZCCQEG",
+     "frame": "FMacbW8BowA=",
      "shape": "base64",
-     "event": "draw_start"
-    },
-    {
-     "atMs": 10793.4,
-     "frame": "FkIJ/wUA/AD5APcA+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 10834.0,
-     "frame": "FkIJ2QUA8wD5APM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 10873.4,
-     "frame": "FkIJpwUA9QDpAPQA7w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 10913.5,
-     "frame": "FkIJWQUA8QDwAPMA8A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 10953.2,
-     "frame": "FkIJDAUA7wDwAPAA8w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 10993.0,
-     "frame": "FkIJxAQA9gD1APE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 11033.7,
-     "frame": "FkIJkQQA7wDrAPMA9A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11073.6,
-     "frame": "FkIJQgQA8gDnAfgB9g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11113.3,
-     "frame": "FkQJAQQA+gD7APwA/g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11154.6,
-     "frame": "FkQJ7gMA/g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 11193.1,
-     "frame": "FkQJ6wMA/wD+Af0=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 11233.0,
-     "frame": "FkYJ3QMB9gH2AfQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 11273.7,
-     "frame": "FkoJrgMA8wD1AO4A/A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11312.8,
-     "frame": "FkoJfAMA/QD+AP4=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 11353.4,
-     "frame": "EUoJdAM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 11394.0,
-     "frame": "EUoJcgM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 11674.6,
-     "frame": "EUoJcQM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 11833.2,
-     "frame": "EUoJbwM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 11873.4,
-     "frame": "FkkJcAP+Av4D+wXyCw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11913.7,
-     "frame": "FisJiwP2CvIL8g3xDQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11953.4,
-     "frame": "FuYIxwPvDvEM9QrxDg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 11993.0,
-     "frame": "Fp8IBQT4CfgJ+Qc=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 12033.2,
-     "frame": "FoEIJgT6B/sF/QP+Aw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 12073.3,
-     "frame": "FnAIOgQAAf8CAAH/AQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 12113.9,
-     "frame": "FmsIQgT9A/4E/QM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 12130.2,
-     "frame": "EWEITwQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 12130.3,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
+     "event": "draw_fill"
     }
    ],
-   "kind": "path",
-   "label": "stroke 10",
-   "points": 100,
-   "moveFrames": 26,
-   "durationMs": 1506.5
+   "kind": "fill",
+   "label": "fill 10",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
   },
   {
    "frames": [
     {
-     "atMs": 12806.5,
+     "atMs": 17393.0,
      "identity": [
       1,
       11
      ],
-     "frame": "EAAAAAZHCWYD",
+     "frame": "FMacbXMBdAA=",
      "shape": "base64",
-     "event": "draw_start"
-    },
-    {
-     "atMs": 12913.1,
-     "frame": "FkcJZQMAAQADAwQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 12953.6,
-     "frame": "Fk8JcwMDBgQGBQcFCA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 12992.9,
-     "frame": "FmMJlQMFCAUHBAUFBw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 13033.5,
-     "frame": "FnsJuAMHCQcJCAkICQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 13073.2,
-     "frame": "FqIJ6QMJDQUIBQc=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 13114.1,
-     "frame": "FsMJHQQGCQcJBggHCA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 13153.6,
-     "frame": "FuIJRQQDBQMDAwIBAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 13194.0,
-     "frame": "Fu0JUgQBAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 13233.0,
-     "frame": "Fu4JVAQBAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 13246.9,
-     "frame": "EfAJVgQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 13247.0,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
+     "event": "draw_fill"
     }
    ],
-   "kind": "path",
-   "label": "stroke 11",
-   "points": 38,
-   "moveFrames": 10,
-   "durationMs": 440.5
+   "kind": "fill",
+   "label": "fill 11",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
   },
   {
    "frames": [
     {
-     "atMs": 13888.8,
+     "atMs": 20773.6,
      "identity": [
       1,
       12
      ],
-     "frame": "EAAAAAZVCVoD",
+     "frame": "FMHBwVUBGAE=",
      "shape": "base64",
-     "event": "draw_start"
-    },
-    {
-     "atMs": 14032.7,
-     "frame": "EVYJWgM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 14073.1,
-     "frame": "FloJWgMHAAgACgAKAAkA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 6
-    },
-    {
-     "atMs": 14113.1,
-     "frame": "FpIJWgMHAAj8Cvs=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 14153.6,
-     "frame": "FrEJTgMH/Af5BfkE+g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14194.0,
-     "frame": "Fs8JLgMH9gX3A/gC9w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14233.2,
-     "frame": "FuYJ/QIB+gH4AfgA+A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14272.9,
-     "frame": "FukJ1wIA9//4/Pj7+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14313.4,
-     "frame": "FtoJrgL4+fj4+fj5+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14353.6,
-     "frame": "FrAJhwLy9vL38/c=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 14393.6,
-     "frame": "FncJYwLu+O/58vvz+w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14433.5,
-     "frame": "FikJRQLi+vb+8/7z/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14473.8,
-     "frame": "FtsIOQL2APcA+QD7AA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14513.1,
-     "frame": "FrgIOQL+AP8A/wAAAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14553.3,
-     "frame": "FrMIPAL/Bf4H+ws=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 14593.6,
-     "frame": "FqYIYQL4EPkV+xL7Dw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14633.3,
-     "frame": "FocIugL4G/4K/wsACA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14672.9,
-     "frame": "FnsI+gIABwAHAAYABg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14714.0,
-     "frame": "FnwIGQMDBgUFBAYEBA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14753.4,
-     "frame": "FpEIMwMHBQcFCQc=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 14793.5,
-     "frame": "FrEISgMKBQoECgQJAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14832.9,
-     "frame": "FuIIWwMQBAkBCgAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14873.6,
-     "frame": "FhoJYAMLAAoACgAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 14913.4,
-     "frame": "FkoJYAMGAAQAAwA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 14953.9,
-     "frame": "FlkJYAMBAAIAAQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 14959.5,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
+     "event": "draw_fill"
     }
    ],
-   "kind": "path",
-   "label": "stroke 12",
-   "points": 111,
-   "moveFrames": 24,
-   "durationMs": 1070.7
+   "kind": "fill",
+   "label": "fill 12",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
   },
   {
    "frames": [
     {
-     "atMs": 15651.4,
+     "atMs": 21284.7,
      "identity": [
       1,
       13
      ],
-     "frame": "EAAAAAa0CCAC",
+     "frame": "FMHBwS0BvAA=",
+     "shape": "base64",
+     "event": "draw_fill"
+    }
+   ],
+   "kind": "fill",
+   "label": "fill 13",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
+  },
+  {
+   "frames": [
+    {
+     "atMs": 21982.6,
+     "identity": [
+      1,
+      14
+     ],
+     "frame": "FMHBwRYC1wA=",
+     "shape": "base64",
+     "event": "draw_fill"
+    }
+   ],
+   "kind": "fill",
+   "label": "fill 14",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 0.0
+  },
+  {
+   "frames": [
+    {
+     "atMs": 23907.9,
+     "identity": [
+      1,
+      15
+     ],
+     "frame": "EMHBwQYaAnUH",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 15872.7,
-     "frame": "FrQIIAIA/wD8",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 15913.4,
-     "frame": "FrQIFAIA9wDzAPQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 15953.7,
-     "frame": "FrQI6gEA+gD6APgA+A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 15993.4,
-     "frame": "FrQIxQEA+AD4APc=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 16033.9,
-     "frame": "FrQIpQEA+QD6APsA/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16073.9,
-     "frame": "EbQIkQE=",
+     "atMs": 23935.4,
+     "frame": "ERgCdQc=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 16153.7,
-     "frame": "FrQIkAEBAAAB",
+     "atMs": 24015.2,
+     "frame": "ERYCdgc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 24054.8,
+     "frame": "FhYChgcADQAUABYAGQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24094.7,
+     "frame": "FhYC8AcAFgYaDxYRBQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24134.2,
+     "frame": "FlwCPghPBB4AJvsl8Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24174.9,
+     "frame": "Fi8DHQgZ6BfkEOU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 24215.2,
+     "frame": "FnkDuQcE8gLvAvMA+Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24254.8,
+     "frame": "FoEDgQf+/f7+/gD+AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24295.5,
+     "frame": "FncDewcAAf8ECBA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 24335.2,
+     "frame": "Fo0DowcqIhcOHhA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 24375.7,
+     "frame": "Fg4E7QcuBCgCG/sh7w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24414.7,
+     "frame": "Fr8ExAcS6gztC+4I8w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24456.3,
+     "frame": "FvIEdQcC/QH9",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 16193.6,
-     "frame": "FrYIkQEEAAMABwA=",
+     "atMs": 24494.6,
+     "frame": "FvQEbgf/AAAFAAsACw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24534.8,
+     "frame": "FvgEmQcUE0QlKw0=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 16233.4,
-     "frame": "Fs4IkQENAA8ADQAYAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16273.8,
-     "frame": "FhoJkQEOAA4ADAAMAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16314.4,
-     "frame": "FlkJkQEMAAoACAAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16353.5,
-     "frame": "FocJkQEHAAUABQA=",
+     "atMs": 24575.0,
+     "frame": "FqwF6AcvBnYFJ/c=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 16393.9,
-     "frame": "FpwJkQEFAAUAAwABAA==",
+     "atMs": 24615.1,
+     "frame": "FpYG3QcU8xXyDfUG+Q==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 16433.2,
-     "frame": "Fq0JkQECAAMAAgAEAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16473.8,
-     "frame": "FrwJkQEEAAQABQADAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16513.7,
-     "frame": "Fs8JkQEDAAIAAQE=",
+     "atMs": 24655.6,
+     "frame": "FtUGqwcC/gH+Av8=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 16553.2,
-     "frame": "FtYJkgECAAAB",
+     "atMs": 24695.2,
+     "frame": "FtsGpgcC/wUACwA=",
      "shape": "base64",
      "event": "draw_move",
-     "points": 3
+     "points": 4
     },
     {
-     "atMs": 16593.3,
-     "frame": "FtgJlAEAAQ==",
+     "atMs": 24734.8,
+     "frame": "Fv4GpQceAB4AWfYd8g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24775.4,
+     "frame": "FtIHdwcm5SHhFugN8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24815.0,
+     "frame": "FkcIBQcH9QL6AvwB/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 24855.3,
+     "frame": "FlUI7wYBAA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 2
     },
     {
-     "atMs": 16633.8,
-     "frame": "FtgJlgEAAgAB",
+     "atMs": 24894.7,
+     "frame": "FlkI7wYHAA/+Hfkk8w==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 3
+     "points": 5
     },
     {
-     "atMs": 16673.6,
-     "frame": "FtgJmgEAAQAGAAc=",
+     "atMs": 24934.5,
+     "frame": "FtkIyAYi7R/qQMs=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 16713.5,
-     "frame": "FtgJsgEACwAPAA8=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 16753.5,
-     "frame": "FtgJ6AEADAAPAAoABw==",
+     "atMs": 24974.8,
+     "frame": "FmYJWwYR7g7yCPUF+g==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 16793.8,
-     "frame": "FtgJHQL/BwAF/wMAAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16833.1,
-     "frame": "FtYJMAIAAQACAAEAAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16873.3,
-     "frame": "FtYJNgIAAgACAAU=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 16913.7,
-     "frame": "FtUJRgL/CAAKAAoACA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 16953.3,
-     "frame": "FtQJeQIAAwAD",
+     "atMs": 25015.5,
+     "frame": "FpUJKAYBAQIG",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 16994.5,
-     "frame": "FtQJgQIAAgAB",
+     "atMs": 25054.9,
+     "frame": "FpsJOgYFCAsIEAgTBg==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 3
+     "points": 5
     },
     {
-     "atMs": 17326.5,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
-    }
-   ],
-   "kind": "path",
-   "label": "stroke 13",
-   "points": 113,
-   "moveFrames": 28,
-   "durationMs": 1675.1
-  },
-  {
-   "frames": [
-    {
-     "atMs": 17677.3,
-     "identity": [
-      1,
-      14
-     ],
-     "frame": "EAAAAAbUCYQC",
+     "atMs": 25094.9,
+     "frame": "FuUJWwYRAg8BDwA=",
      "shape": "base64",
-     "event": "draw_start"
+     "event": "draw_move",
+     "points": 4
     },
     {
-     "atMs": 17793.3,
-     "frame": 18,
-     "shape": "int",
-     "event": "draw_end"
-    }
-   ],
-   "kind": "path",
-   "label": "stroke 14",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 116.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 18769.4,
-     "identity": [
-      1,
-      15
-     ],
-     "frame": "EAAAAAboCM8C",
+     "atMs": 25135.7,
+     "frame": "Fh8KXgYHAAX/AwABAA==",
      "shape": "base64",
-     "event": "draw_start"
+     "event": "draw_move",
+     "points": 5
     },
     {
-     "atMs": 18859.6,
+     "atMs": 25182.5,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -1594,24 +1336,143 @@
    ],
    "kind": "path",
    "label": "stroke 15",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 90.2
+   "points": 126,
+   "moveFrames": 30,
+   "durationMs": 1274.6
   },
   {
    "frames": [
     {
-     "atMs": 19102.8,
+     "atMs": 25734.2,
      "identity": [
       1,
       16
      ],
-     "frame": "EAAAAAZQCc8C",
+     "frame": "EMHBwQY8AdYD",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 19203.3,
+     "atMs": 25814.8,
+     "frame": "FjwB1QMA9gCwCbQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 25855.0,
+     "frame": "Fl4B0QIRtwvLE7kPwg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 25894.5,
+     "frame": "FqIBrwEF4gXmAvAA9w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 25975.8,
+     "frame": "Fq4BXgEABQMUCSA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 26015.4,
+     "frame": "FssBwAEYOx1EJEoaNQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26054.8,
+     "frame": "FlMC6QISJAoZDBcIDQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26095.5,
+     "frame": "FokCVwMEBwIF+QM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 26134.5,
+     "frame": "Fm4CZQPV98XruOI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 26175.2,
+     "frame": "Fj4B7ALY6cjh1+rf7g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26214.9,
+     "frame": "FnUAfgLt9vX5+/z+/A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26255.2,
+     "frame": "Fk8AYgIQ+zTyPOw07Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26295.5,
+     "frame": "Fk8BDwJm3mnbT+Mv8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26334.8,
+     "frame": "FswCigEy7yH2FPo=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 26375.3,
+     "frame": "Fj4DZwEH/wEAAQH+Bg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26414.7,
+     "frame": "FjcDgQHoH+Iq2jLVPA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26455.2,
+     "frame": "Fn8CfgLLRs9C3S3qHA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26495.6,
+     "frame": "FssBagPsG+4a8hP3Dg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 26499.4,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -1619,80 +1480,178 @@
    ],
    "kind": "path",
    "label": "stroke 16",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 100.5
+   "points": 80,
+   "moveFrames": 17,
+   "durationMs": 765.2
   },
   {
    "frames": [
     {
-     "atMs": 19810.5,
+     "atMs": 27608.9,
      "identity": [
       1,
       17
      ],
-     "frame": "EAAAAAbvCP4C",
+     "frame": "EMHBwQZpCUUB",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 19953.3,
-     "frame": "Fu8I/wIAAw==",
+     "atMs": 27695.0,
+     "frame": "FmkJRgEABgARBRs=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 27734.3,
+     "frame": "FoUJsgEZOBkuJEIoQQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 27774.8,
+     "frame": "FikK2AIXJh46BQw=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 27815.7,
+     "frame": "Fm4KVgMIDgQJAwQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 27855.0,
+     "frame": "EX0KbwM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 27895.4,
+     "frame": "Fn4KYgMC6gnYEcQbsg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 27935.5,
+     "frame": "FtgKOgIomiGvHbgZxA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 27975.0,
+     "frame": "FmsL0wAT1QrlB/ED9w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 28015.3,
+     "frame": "FpULbgAC+w==",
      "shape": "base64",
      "event": "draw_move",
      "points": 2
     },
     {
-     "atMs": 19994.0,
-     "frame": "Fu8IBgMABAAEAAMAAg==",
+     "atMs": 28054.4,
+     "frame": "FpcLZwD3/+wC3gy7Hg==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 20113.5,
-     "frame": "FvAIFQMGAAUABQAIAA==",
+     "atMs": 28094.7,
+     "frame": "FrUKwQCACwodAb4muCy+KA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 20153.7,
-     "frame": "FhAJFQMOAAYA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 20193.5,
-     "frame": "FisJFQMGAAX/Bf4E/Q==",
+     "atMs": 28134.6,
+     "frame": "FgQJuQHUGtYa5BHuCw==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 20233.4,
-     "frame": "FkQJCwMF/AX7BPsD+g==",
+     "atMs": 28174.7,
+     "frame": "FnYIDwL8Av8C/wE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 28214.5,
+     "frame": "FnEIFQIKABYAJf46/Q==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 20273.9,
-     "frame": "FlcJ8wIC/AL9Af8B/g==",
+     "atMs": 28254.5,
+     "frame": "FjwJCwJZ/WkAbwA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 28295.9,
+     "frame": "FtUKCAJqASYEJwYoBw==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 20313.4,
-     "frame": "Fl0J5wIA/w==",
+     "atMs": 28335.1,
+     "frame": "FtMLIAIWBQsCBgIEAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 28375.4,
+     "frame": "Fv0LLAL3AA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 2
     },
     {
-     "atMs": 20367.7,
+     "atMs": 28414.5,
+     "frame": "FuMLKALj8sfiwt8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 28454.3,
+     "frame": "FgYLtAGgz53PodS95s7v",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 6
+    },
+    {
+     "atMs": 28495.3,
+     "frame": "FkkJ7wDL8fH88/w=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 28535.9,
+     "frame": "Fu8I1gD7AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 28545.1,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -1700,24 +1659,815 @@
    ],
    "kind": "path",
    "label": "stroke 17",
-   "points": 32,
-   "moveFrames": 8,
-   "durationMs": 557.2
+   "points": 91,
+   "moveFrames": 22,
+   "durationMs": 936.2
   },
   {
    "frames": [
     {
-     "atMs": 26538.2,
+     "atMs": 29363.1,
      "identity": [
       1,
       18
      ],
-     "frame": "EFs6HgYKAG4G",
+     "frame": "EMHBwQYTAwII",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 26543.2,
+     "atMs": 29455.6,
+     "frame": "FhMDBAgADQAV",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 29494.7,
+     "frame": "FhMDNwgAFQAbACcEDA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29535.3,
+     "frame": "FiUDpQgYBCECKAEq/Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29574.5,
+     "frame": "FtwDmQgg7BnqHeIS4w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29614.8,
+     "frame": "FkoEIQgB8ALsAPI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 29654.7,
+     "frame": "FkwE5gf7/Pj/9f/zBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29694.8,
+     "frame": "FhgE8Qf2E/kl/FMMHw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29735.4,
+     "frame": "Fi0ExAgtKDokRRpKEg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29774.7,
+     "frame": "Fm4FQwlLAUf2MOwj5w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29814.8,
+     "frame": "FngG7QgV6ArsB+s=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 29854.6,
+     "frame": "FqEGmQgC8f329vvx/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29894.9,
+     "frame": "FnQGeAjvAvMJ+A/8IA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29935.6,
+     "frame": "FksGxggMGB0TKQ83Cg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 29974.7,
+     "frame": "FhcHDglOAVTyU9843w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30015.2,
+     "frame": "Fm4Imwgq2hLsB/I=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 30054.4,
+     "frame": "FrwIOggI6QLy/vj7/Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30095.0,
+     "frame": "FrcICQj4APkA/AD+Ag==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30134.4,
+     "frame": "FqIIDggHBhEHFwUdAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30174.7,
+     "frame": "Fh0JIwgz/SvwKOIa4w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30215.1,
+     "frame": "Fs8JuAcR2QjfAuU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 30254.4,
+     "frame": "FuoJOAf86PPt7fbp/A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30295.0,
+     "frame": "FpcJ/gbpA/AJ9wr4DA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30334.6,
+     "frame": "FlcJOgcABgsLGgspBg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30374.6,
+     "frame": "FtkJYQdAA0YAR/429g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30414.3,
+     "frame": "FgILRQcf7g/0F+s=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 30455.2,
+     "frame": "FlsL+gYI7QPx//b0+Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30494.8,
+     "frame": "FkELxQbl/+sA8QHxBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30535.2,
+     "frame": "FucK0wb+BQAECgMfBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30574.6,
+     "frame": "FjEL5QYgACYBJvch7g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30614.8,
+     "frame": "FtsLtgYV5g3kB+k=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 30654.5,
+     "frame": "FgYMRwb91evZ2NnJ3Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30694.9,
+     "frame": "FkkLjwWu7cD34f/iAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30735.1,
+     "frame": "FksKcgX3APkAAAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 30774.4,
+     "frame": "FkwKcgUf/h/5IPIm6w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30815.0,
+     "frame": "FvEKKwUa5A/mCOoD6w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30855.3,
+     "frame": "FiQLqQTy2uHh1OY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 30894.9,
+     "frame": "FqAKOATT9tn74ADiAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 30935.3,
+     "frame": "FvEJKQT6AP8A",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 30974.7,
+     "frame": "FvkJKQQfAB8AIv0v8g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31015.1,
+     "frame": "FrUKBgQl7BXxDvQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 31054.5,
+     "frame": "Fg0LxAMK7gXx/PDs8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31094.9,
+     "frame": "FuEKegPO/cb/xQTWCg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31134.6,
+     "frame": "FvsJjwPUGfQK9wn6Cg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31174.7,
+     "frame": "FrMJzQMDBA0CGAAcAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31215.0,
+     "frame": "FhUKzwMX9hD2EPQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 31255.2,
+     "frame": "FlgKogMI9AT1APb59w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31294.6,
+     "frame": "FkoKbwPm+Ov77vzr+g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31335.3,
+     "frame": "FuQJUwPr9/r5+/b/8g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31375.0,
+     "frame": "FsMJGAP/6ADiAtwF1g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31414.7,
+     "frame": "Fs8JZwID0wTUAtg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 31454.5,
+     "frame": "FtgJyQH96fjl9u728w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31494.9,
+     "frame": "Fq4JbAH49vn5/Pz+/A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31535.3,
+     "frame": "FpgJTwEA9QD3APMB7g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31574.6,
+     "frame": "FpoJDQEB8ADu/fH29w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31615.1,
+     "frame": "Fn0JzQDp/uMA4AA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 31654.3,
+     "frame": "FgYJ0QDeDdoR1RbhEA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31694.9,
+     "frame": "FlgIIgHZDt0K5wPoAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31735.5,
+     "frame": "FscHPgHu/Nno7vLm7w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31774.7,
+     "frame": "FkgH8gDl8OHz3fPZ9Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31815.2,
+     "frame": "FpkGsgDT9tP42Pk=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 31855.4,
+     "frame": "FvkFlQDj/OD76P7q/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31894.8,
+     "frame": "FnYFhgDkAOUA6gDoAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31935.5,
+     "frame": "FvsEkADqDtcp7hTwFA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 31974.6,
+     "frame": "Fo0EAAH1EfgM+gj8BQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32015.1,
+     "frame": "Fm0ELAH9AfwA+v8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 32054.4,
+     "frame": "FlYEKQH1/O/+3//V/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32094.6,
+     "frame": "FrsDIQHGCdIP1RDOEw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32134.6,
+     "frame": "FtMCagHnC+cM4hH7BQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32174.6,
+     "frame": "FnkCnQH+CP8I/wkDBg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32214.5,
+     "frame": "Fn4CwgEJBwgFBAM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 32254.7,
+     "frame": "FpUC1QECBgEF+AreGQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32294.7,
+     "frame": "Fj8CIgLFLK48p0S7OQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32335.3,
+     "frame": "Ft0ANgPXJuca1yr5Dg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32374.7,
+     "frame": "FmYAugP+BQYCEAEVAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32415.1,
+     "frame": "FqEAwQMQ/A/8Cv4=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 32454.8,
+     "frame": "FtIAtQMF/wIAAQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 32495.7,
+     "frame": "FtcAuwPxFOcg7R/tIQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32535.1,
+     "frame": "FnQAWATwJvkY/DgACw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32574.5,
+     "frame": "Fl4A5QQMCBUEGgMh/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32614.6,
+     "frame": "Ft4A6gQi7xb0EPcQ9g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32654.4,
+     "frame": "Fj8BsgQD+wL8",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 32694.9,
+     "frame": "FkIBpgT4//ED7QvqFQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32735.5,
+     "frame": "FukA5QTsIfIm9yn/Xw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32774.6,
+     "frame": "FssA0QUiJi0ZOBA7BQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32815.3,
+     "frame": "FrsBJAYo8yHvF/A=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 32854.5,
+     "frame": "Fi8C5gUN8Afy/vrw/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32895.0,
+     "frame": "Fg4CvwXS/8UHwBjBIQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32935.5,
+     "frame": "FuwAJgbNMdo25jTvSw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 32974.7,
+     "frame": "FmcARQf/NwclHTIiIA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33015.1,
+     "frame": "FtcABAg2DSICH/k=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 33055.2,
+     "frame": "FmgB/wcQ8hbqDewA9w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33094.7,
+     "frame": "FpkBsQfy9uP81//a/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33135.3,
+     "frame": "FuoArAe+HNIi2SvjPg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33174.5,
+     "frame": "FiwAgwj6OQUrGCcuIA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33214.5,
+     "frame": "FrEAQwlMB1YCXu8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 33254.3,
+     "frame": "Fg0CDwk72yrbHuMQ7g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33294.7,
+     "frame": "FrkCdAgR4AbsAPP2+g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33335.3,
+     "frame": "FrUCKgjr/+sD7A3lJA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33374.7,
+     "frame": "FlcCbwj+Fv8VAhISEw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33415.2,
+     "frame": "FosCzQgxBEP/c98=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 33454.4,
+     "frame": "FtcDfwhMzly9M9Qf3w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33494.9,
+     "frame": "FvEEmQcY4xXiDeUH7Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33535.5,
+     "frame": "FjQFKQf7/u0B5Q/lIA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33574.7,
+     "frame": "FskEjQf0JPYs/C0CMw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33615.1,
+     "frame": "FsQEawgoHTgUags=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 33654.3,
+     "frame": "FhUGqwh774ASB2sIVdVE1g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33695.0,
+     "frame": "FvYH5gc/0zXYIOQg5A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33735.3,
+     "frame": "Fr0IRgcJ8wP6Af7/AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33774.7,
+     "frame": "FrwIPQf5Evkm+yb+KQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33815.1,
+     "frame": "FrII8wcbJC4dWh0=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 33854.4,
+     "frame": "FrMJZAh0AXX+Wu1H6Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33894.8,
+     "frame": "FnELJAg36ivtLO0h8Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 33920.2,
+     "frame": "FjcMzwcL+QX+",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 33920.4,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -1725,213 +2475,192 @@
    ],
    "kind": "path",
    "label": "stroke 18",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 5.0
+   "points": 534,
+   "moveFrames": 113,
+   "durationMs": 4557.3
   },
   {
    "frames": [
     {
-     "atMs": 26727.6,
+     "atMs": 36063.3,
      "identity": [
       1,
       19
      ],
-     "frame": "EFs6HgYKAG4G",
+     "frame": "EO0cJAakBK4F",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 26914.0,
-     "frame": "FgwAbgYEAAcA",
+     "atMs": 36174.9,
+     "frame": "FqQErQUJ2iO7",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 26953.0,
-     "frame": "FiIAbgYLAAsAEgA=",
+     "atMs": 36215.4,
+     "frame": "FuUEFwUcyRTWEd0=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 26993.6,
-     "frame": "FmgAbgYOABIAFAARAA==",
+     "atMs": 36254.5,
+     "frame": "FjQFdAQJ7QjsBPQB+g==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 27033.5,
-     "frame": "FroAbgYRAA8ADgANAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27072.7,
-     "frame": "Fv8AbgYJAAkABAAGAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27113.8,
-     "frame": "FiABbgYGAAUABgA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 27153.5,
-     "frame": "FjgBbgYHAAYABwAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27193.6,
-     "frame": "FlsBbgYVAAkADgASAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27233.4,
-     "frame": "FqoBbQYT/hMADgAPAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27273.0,
-     "frame": "Fv0BawYRABAACwALAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27313.5,
-     "frame": "FkICawYNAAwACgAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27353.5,
-     "frame": "FngCawYHAAYABQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 27393.8,
-     "frame": "FpACawYIAAMBAwADAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27433.3,
-     "frame": "FqQCbQYBAAIBAQACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27473.9,
-     "frame": "EasCbwY=",
+     "atMs": 36295.7,
+     "frame": "EUsFOAQ=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 27513.8,
-     "frame": "EasCbwY=",
+     "atMs": 36374.8,
+     "frame": "EUsFOgQ=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 27593.4,
-     "frame": "FqwCbwYBAAIAAgA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 27633.8,
-     "frame": "FrQCbwYFAAQABAAEAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27673.3,
-     "frame": "FsgCbwYDAQMBAQABAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 27713.8,
-     "frame": "EdECcQY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 27953.3,
-     "frame": "FtMCcQYBAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 27993.4,
-     "frame": "FtUCcQYDAAMAAwADAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 28033.9,
-     "frame": "FuQCcQYDAAMAAgABAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 28074.2,
-     "frame": "Fu8CcQYBAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 28113.2,
-     "frame": "FvECcAYAAAEA",
+     "atMs": 36414.6,
+     "frame": "FkwFUAQYPyhY",
      "shape": "base64",
      "event": "draw_move",
      "points": 3
     },
     {
-     "atMs": 28153.5,
-     "frame": "FvQCbwYBAAEAAgABAA==",
+     "atMs": 36454.6,
+     "frame": "FqIFEwUYLhQlGSkQGQ==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 28193.4,
-     "frame": "FvsCbwYBAAEAAwA=",
+     "atMs": 36495.3,
+     "frame": "FgIGuQULEQgMBQYCAw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 36535.9,
+     "frame": "Fh0G4QUCAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 36574.8,
+     "frame": "Fh8G4wX6/evu",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 36615.1,
+     "frame": "FvAFvAW9xufs3eU=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 28318.1,
+     "atMs": 36655.0,
+     "frame": "FkkFOAXX5Nrp5/M=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 36695.2,
+     "frame": "Fs4E7gTp9vD69fz5/Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 36736.1,
+     "frame": "Fo4E1gT7//0A",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 36774.3,
+     "frame": "EYsE1QQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 36814.9,
+     "frame": "Fp0E1QQhACsAOABAAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 36854.6,
+     "frame": "FqYF1QQ4/jL7KPk=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 36894.8,
+     "frame": "FlYGwQQe+xT8C/0G/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 36935.4,
+     "frame": "Fp4GswQE/wMA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 36974.5,
+     "frame": "FqQGsgT8AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 37014.5,
+     "frame": "FowGvATvCuIT2BvTHw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 37054.5,
+     "frame": "FtYFNAXXHNgc0x8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 37094.7,
+     "frame": "Fj0FngXqD+wQ9Qn4BQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 37135.5,
+     "frame": "FvkE0AX8A/0C/gI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 37195.2,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -1939,227 +2668,52 @@
    ],
    "kind": "path",
    "label": "stroke 19",
-   "points": 108,
-   "moveFrames": 27,
-   "durationMs": 1590.5
+   "points": 86,
+   "moveFrames": 24,
+   "durationMs": 1131.9
   },
   {
    "frames": [
     {
-     "atMs": 29701.7,
+     "atMs": 38213.3,
      "identity": [
       1,
       20
      ],
-     "frame": "EFs6HgaNA2oG",
+     "frame": "EO0cJAbfAZgA",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 29913.9,
-     "frame": "FpADagYKAAwA",
+     "atMs": 38295.6,
+     "frame": "Ft8BmwAADg==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 3
+     "points": 2
     },
     {
-     "atMs": 29953.6,
-     "frame": "FrYDagYXABkAGgAbAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 29993.8,
-     "frame": "FjgEagYYABgAGAAWAA==",
+     "atMs": 38334.9,
+     "frame": "Ft8BxAAAHQAlADEALA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 30033.3,
-     "frame": "Fr4EaQYS/hX+Ff0S/g==",
+     "atMs": 38374.4,
+     "frame": "FuEBjwEFLwMeARIAFA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 30073.8,
-     "frame": "Fh0FXwYU/RP9Ev4R/Q==",
+     "atMs": 38415.1,
+     "frame": "FuoBDQIABg==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 5
+     "points": 2
     },
     {
-     "atMs": 30113.8,
-     "frame": "FnYFUQYS/g7+BwA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 30153.3,
-     "frame": "FqgFSwYN/gz9DP8M/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30193.8,
-     "frame": "FuQFQgYM/Qr+CP8I/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30233.3,
-     "frame": "FhkGOQYGAAj+CP8IAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30273.5,
-     "frame": "FkEGNgYJAAkACAAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30313.7,
-     "frame": "FnAGNgYKAAkACQAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30352.9,
-     "frame": "Fp8GNgYLAAsADAA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 30393.4,
-     "frame": "FssGNgYLAAoACQAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30433.0,
-     "frame": "FgIHNgYHAAkACAAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30473.7,
-     "frame": "FiwHNwYKAQgACQAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30513.9,
-     "frame": "FlcHOQYIAQoABwAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30552.9,
-     "frame": "FoIHOgYLAAsACwA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 30593.5,
-     "frame": "Fq8HOgYNAAwACQAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30633.4,
-     "frame": "FuEHOgYIAAIAAwABAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30673.8,
-     "frame": "FvEHOgYBAAIAAQACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30714.0,
-     "frame": "FvkHOgYDAAQABQAFAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30753.4,
-     "frame": "FhAIOgYIAAsACgE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 30793.4,
-     "frame": "FjYIPAYMAAoACgAKAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30833.3,
-     "frame": "FmkIPgYPAAQABQADAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30873.4,
-     "frame": "FocIPgYDAAIAAgA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 30913.2,
-     "frame": "Fo8IPgYBAAEA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 30953.9,
-     "frame": "FpIIPgYCAAEAAQACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 30992.7,
-     "frame": "FpoIPgYCAAIA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 31034.2,
-     "frame": "EZ8IPgY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 31227.1,
+     "atMs": 38420.1,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2167,87 +2721,52 @@
    ],
    "kind": "path",
    "label": "stroke 20",
-   "points": 130,
-   "moveFrames": 29,
-   "durationMs": 1525.4
+   "points": 14,
+   "moveFrames": 4,
+   "durationMs": 206.8
   },
   {
    "frames": [
     {
-     "atMs": 31477.8,
+     "atMs": 38845.5,
      "identity": [
       1,
       21
      ],
-     "frame": "EFs6HgafCD4G",
+     "frame": "EO0cJAaTApMA",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 31673.2,
-     "frame": "EaEIPgY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 31713.4,
-     "frame": "FqQIPgYDAAMAAwA=",
+     "atMs": 38935.0,
+     "frame": "FpMClQAAGwAeACE=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 31753.9,
-     "frame": "Fq8IPgYBAAEA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 31794.6,
-     "frame": "EbMIPgY=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 31833.7,
-     "frame": "FrQIPgYBAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 31873.4,
-     "frame": "FrYIPgYCAAUABAA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 31913.6,
-     "frame": "FscIPgYEAAMAAwAEAA==",
+     "atMs": 38975.3,
+     "frame": "FpMCGAEAHwAdACQAHg==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 31954.0,
-     "frame": "FtcIPgYBAAEAAQA=",
+     "atMs": 39015.2,
+     "frame": "FpMCqAEADAANAA8=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 31993.9,
-     "frame": "EdwIPgY=",
+     "atMs": 39036.8,
+     "frame": "FpMC0wEABQ==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 1
+     "points": 2
     },
     {
-     "atMs": 32167.8,
+     "atMs": 39036.9,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2255,164 +2774,52 @@
    ],
    "kind": "path",
    "label": "stroke 21",
-   "points": 25,
-   "moveFrames": 9,
-   "durationMs": 690.0
+   "points": 15,
+   "moveFrames": 4,
+   "durationMs": 191.4
   },
   {
    "frames": [
     {
-     "atMs": 33261.4,
+     "atMs": 39537.5,
      "identity": [
       1,
       22
      ],
-     "frame": "EFs6HgaLCT4G",
+     "frame": "EO0cJAbUAW8B",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 33273.8,
-     "frame": "EYsJPQY=",
+     "atMs": 39575.3,
+     "frame": "EdQBbwE=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 33433.9,
-     "frame": "FowJPAYPAA==",
+     "atMs": 39654.9,
+     "frame": "FuQBbgEaAFYA",
      "shape": "base64",
      "event": "draw_move",
-     "points": 2
+     "points": 3
     },
     {
-     "atMs": 33473.5,
-     "frame": "FqgJPAYVABkAHAAcAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33513.4,
-     "frame": "FikKPAYYABgAGAATAA==",
+     "atMs": 39695.1,
+     "frame": "FnECbgEcABcAFQAVAA==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 33552.7,
-     "frame": "FpQKPAYUABEACwANAA==",
+     "atMs": 39735.5,
+     "frame": "FtwCbgEIAAQA",
      "shape": "base64",
      "event": "draw_move",
-     "points": 5
+     "points": 3
     },
     {
-     "atMs": 33593.5,
-     "frame": "FuEKPAYSABH/EP8=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 33633.0,
-     "frame": "FiILOQYM/wwAC/8K/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33673.4,
-     "frame": "FmELMwYJAAkADAAMAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33713.2,
-     "frame": "FpcLMgYM/w0ADf8L/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33753.2,
-     "frame": "FtMLLgYK/wn/Cf8JAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33793.0,
-     "frame": "FgEMKwYJ/wr/CQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 33833.8,
-     "frame": "FigMKQYKAAoACQAKAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33873.4,
-     "frame": "FmEMKQYIAAkABwAGAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33913.6,
-     "frame": "FoIMKQYEAAIAAgABAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33953.6,
-     "frame": "Fo0MKQYBAAEAAQACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 33992.7,
-     "frame": "FpYMKQYEAAQABQAEAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 34033.9,
-     "frame": "FqsMKQYCAAMAAQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 34073.9,
-     "frame": "FrQMKQYBAAEAAv8C/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 34112.9,
-     "frame": "Fr0MJwYDAAL/AgACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 34143.2,
-     "frame": "FsgMJgYCAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 34143.4,
+     "atMs": 39787.3,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2420,24 +2827,108 @@
    ],
    "kind": "path",
    "label": "stroke 22",
-   "points": 87,
-   "moveFrames": 20,
-   "durationMs": 882.0
+   "points": 12,
+   "moveFrames": 4,
+   "durationMs": 249.8
   },
   {
    "frames": [
     {
-     "atMs": 36256.7,
+     "atMs": 40271.0,
      "identity": [
       1,
       23
      ],
-     "frame": "EFs6HgbmCDwG",
+     "frame": "EO0cJAZnA24B",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 36352.4,
+     "atMs": 40375.1,
+     "frame": "FmgDbgEEAAYA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 40415.4,
+     "frame": "FnkDbgEJAAkABwAHAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40454.6,
+     "frame": "FqEDbgEE/AP7",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 40495.7,
+     "frame": "FqgDYQEB+QD4APcA9g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40535.0,
+     "frame": "FqgDOQH5/Pb+8/73/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40574.7,
+     "frame": "FnoDMAHyAO8A7wPuCQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40614.7,
+     "frame": "FiUDSgHtFO4X8hf4Dw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40654.6,
+     "frame": "Ft8CtwH9Cv4MAAo=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 40695.7,
+     "frame": "FtkC4AEABwUGDAQOAw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40735.1,
+     "frame": "FgsD9QEXABYAGfoW9Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40774.5,
+     "frame": "FnwD2AEW8hDzDvUN9A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 40803.5,
+     "frame": "FsYDngEF/AP9",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 40803.6,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2445,31 +2936,59 @@
    ],
    "kind": "path",
    "label": "stroke 23",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 95.7
+   "points": 53,
+   "moveFrames": 12,
+   "durationMs": 532.6
   },
   {
    "frames": [
     {
-     "atMs": 37685.7,
+     "atMs": 41312.1,
      "identity": [
       1,
       24
      ],
-     "frame": "EFs6HgYSCRwH",
+     "frame": "EO0cJAY8BGQA",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 37713.8,
-     "frame": "ERIJHAc=",
+     "atMs": 41374.4,
+     "frame": "FjwEZQAABA==",
      "shape": "base64",
      "event": "draw_move",
-     "points": 1
+     "points": 2
     },
     {
-     "atMs": 37768.4,
+     "atMs": 41415.0,
+     "frame": "FjwEcgAADQARABEAEQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 41454.6,
+     "frame": "FjwEvwAACAANAAY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 41495.2,
+     "frame": "FjwE4QAABwAHAAYABg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 41528.4,
+     "frame": "FjwEAAEABwAG",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 41528.6,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2477,97 +2996,193 @@
    ],
    "kind": "path",
    "label": "stroke 24",
-   "points": 1,
-   "moveFrames": 1,
-   "durationMs": 82.7
+   "points": 19,
+   "moveFrames": 5,
+   "durationMs": 216.5
   },
   {
    "frames": [
     {
-     "atMs": 40254.3,
+     "atMs": 42054.2,
      "identity": [
       1,
       25
      ],
-     "frame": "FFs6HkUCGQI=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 25",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 44023.0,
-     "identity": [
-      1,
-      26
-     ],
-     "frame": "FHrJ6CsBfwE=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 26",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 48306.3,
-     "identity": [
-      1,
-      27
-     ],
-     "frame": "EO0cJAY7CccB",
+     "frame": "EO0cJAbABE0A",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 48514.3,
-     "frame": "FjsJyAEAAgALAAY=",
+     "atMs": 42135.0,
+     "frame": "FsAETwAABwALAA0=",
      "shape": "base64",
      "event": "draw_move",
      "points": 4
     },
     {
-     "atMs": 48553.5,
-     "frame": "FjsJ4AEAAwAFAAMAAQ==",
+     "atMs": 42174.5,
+     "frame": "FsAEfgAADAAKAA0ADw==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 48593.1,
-     "frame": "FjsJ7wEAAgABAAIAAg==",
+     "atMs": 42214.6,
+     "frame": "FsAEvQAADgAMAAsADw==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 48633.0,
-     "frame": "FjsJ+gEAAgACAAIAAg==",
+     "atMs": 42254.3,
+     "frame": "FsAEAQEACQAJABIABw==",
      "shape": "base64",
      "event": "draw_move",
      "points": 5
     },
     {
-     "atMs": 48673.8,
-     "frame": "FjsJBQIAAg==",
+     "atMs": 42295.2,
+     "frame": "FsAEMgEABQAF",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 42295.3,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 25",
+   "points": 22,
+   "moveFrames": 5,
+   "durationMs": 241.1
+  },
+  {
+   "frames": [
+    {
+     "atMs": 42883.8,
+     "identity": [
+      1,
+      26
+     ],
+     "frame": "EO0cJAa1BZoA",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 42895.7,
+     "frame": "EbAFnAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 43014.5,
+     "frame": "FqwFoAAABAAF",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 43054.5,
+     "frame": "FqwFtAAABAAGAAc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 43095.0,
+     "frame": "FqwFyAACAgUABwAKAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43135.5,
+     "frame": "FtAFygANAA8ADAAJAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43175.0,
+     "frame": "FgwGygAN/gz8BvwF/A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43215.1,
+     "frame": "FjUGtgAH9wf0BfUD9Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43254.3,
+     "frame": "Fk0GfgAC9QD0APUA8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43295.3,
+     "frame": "Fk4GRwD9+vr6+Ps=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 43334.7,
+     "frame": "FjIGMgD1/fb/9AD1AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43375.3,
+     "frame": "FvsFLgD0AvUJ9Qr5Cw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 43403.4,
+     "frame": "FsgFXQD2Fg==",
      "shape": "base64",
      "event": "draw_move",
      "points": 2
     },
     {
-     "atMs": 48915.1,
+     "atMs": 43403.4,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 26",
+   "points": 49,
+   "moveFrames": 12,
+   "durationMs": 519.6
+  },
+  {
+   "frames": [
+    {
+     "atMs": 46138.6,
+     "identity": [
+      1,
+      27
+     ],
+     "frame": "EAAAAAaLBQ0C",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 46187.4,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2575,101 +3190,24 @@
    ],
    "kind": "path",
    "label": "stroke 27",
-   "points": 21,
-   "moveFrames": 5,
-   "durationMs": 608.8
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 48.8
   },
   {
    "frames": [
     {
-     "atMs": 49774.0,
+     "atMs": 46636.9,
      "identity": [
       1,
       28
      ],
-     "frame": "EO0cJAYZCeQB",
+     "frame": "EAAAAAaEBcoB",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 49993.0,
-     "frame": "ERoJ5AE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 50033.8,
-     "frame": "Fh0J5AECAAMABQADAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 50072.8,
-     "frame": "Fi0J5AEDAAIAAwADAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 50113.3,
-     "frame": "FjwJ5AEBAAIAAgABAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 50153.5,
-     "frame": "FkMJ5AECAAEA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 50193.1,
-     "frame": "EUgJ5AE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 50233.3,
-     "frame": "FkoJ5AEBAAIA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 50273.7,
-     "frame": "Fk4J5AEBAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 50313.4,
-     "frame": "EVEJ5AE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 50353.4,
-     "frame": "FlIJ5AEBAAEA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 50393.1,
-     "frame": "EVUJ5QE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 50506.4,
+     "atMs": 46712.5,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -2677,458 +3215,24 @@
    ],
    "kind": "path",
    "label": "stroke 28",
-   "points": 30,
-   "moveFrames": 11,
-   "durationMs": 732.4
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 75.6
   },
   {
    "frames": [
     {
-     "atMs": 59635.5,
+     "atMs": 47042.8,
      "identity": [
       1,
       29
      ],
-     "frame": "EAAAAAarBFoG",
+     "frame": "EAAAAAaqBakB",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 59833.3,
-     "frame": "FqsEVwYA9wDx",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 59873.8,
-     "frame": "FqsEKgYA5wDnANgA7A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 59913.5,
-     "frame": "FqsEpgUA8wDxAO0=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 59953.1,
-     "frame": "FqsEaAUA9QD2APYA+A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 59993.7,
-     "frame": "FqsEOQUA+wD6APkA+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 60033.3,
-     "frame": "FqsEGAUA+QD5APkA+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 60073.8,
-     "frame": "FqsE9gQA+wD5APQA+w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 60113.1,
-     "frame": "FqsE0gQA+QD8Afs=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 60153.9,
-     "frame": "FqwEvgQA/QD+AP4A/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61073.5,
-     "frame": "FqwEtQQA/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 61113.1,
-     "frame": "FqwEswQA/gD9",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 61152.8,
-     "frame": "FqwErAQA+QDrAPAB8A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61193.1,
-     "frame": "FrAEYQQB8AH0Afc=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 61233.7,
-     "frame": "FrMEMgQA+AD8APwA/Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61273.4,
-     "frame": "FrMEHQQA/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 61313.9,
-     "frame": "EbMEGwQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 61353.6,
-     "frame": "FrMEGQQA/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 61394.1,
-     "frame": "FrMEFgQA+gD6AfkB+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61432.9,
-     "frame": "FrYE9QMB9gD2APgA+Q==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61473.3,
-     "frame": "FrcEywMA/AD9AP4=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 61514.5,
-     "frame": "EbcEwQM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 61633.6,
-     "frame": "FrgEwAMDAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 61673.3,
-     "frame": "FsEEwAMJAAoADQANAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61713.9,
-     "frame": "FgsFwAMNABMAFQASAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61752.7,
-     "frame": "FmAFwAMPABAADwAQAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61793.1,
-     "frame": "FqsFwAMMAA0ACQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 61833.9,
-     "frame": "FtUFwAMLAAv+DP4NAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61873.6,
-     "frame": "FhEGvAMN/g3/DP8L/g==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61913.3,
-     "frame": "FlkGtQMJ/wr/EAAPAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61953.8,
-     "frame": "FpgGswMPAA8ADwAPAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 61993.4,
-     "frame": "FuEGswMLAAsACAA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62034.0,
-     "frame": "FgUHswMIAAcAB/8H/w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62073.4,
-     "frame": "FikHsQMHAAf/BwAFAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62112.9,
-     "frame": "FkoHsAMMAAUABwAGAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62153.4,
-     "frame": "Fm4HsAMGAAYABAACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62193.1,
-     "frame": "FoIHsAMCAAEAAQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62233.2,
-     "frame": "FocHsAMCAAEAAQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62272.8,
-     "frame": "Fo4HsAMDAAIAAgEBAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62313.4,
-     "frame": "FpcHsgMDAAEA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 62394.1,
-     "frame": "EZwHtAM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 62433.7,
-     "frame": "EZwHtQM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 62473.3,
-     "frame": "Fp0HtQMBAQEB",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 62514.1,
-     "frame": "FqIHuAMDAgIAAgE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62553.0,
-     "frame": "FqwHuwMBAAIAAQE=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62594.6,
-     "frame": "EbIHvAM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 62713.0,
-     "frame": "EbIHvQM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 62753.1,
-     "frame": "FrIHvgMABAAHABQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62793.2,
-     "frame": "FrIH6QMAEgASABQ=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 62833.7,
-     "frame": "FrIHMwQAEQAWABYAFw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62873.4,
-     "frame": "FrIHnAQAEAASAA8ADg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62913.4,
-     "frame": "FrIH5AQAEQAFAAYABw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62952.7,
-     "frame": "FrIHDwUACAAI/w7+Dg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 62993.4,
-     "frame": "FqwHSQX/EQANAAs=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 63033.7,
-     "frame": "FqoHfQX/CgALAAsACw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 63073.4,
-     "frame": "FqkHsQUABwAGAAb/Bg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 63113.1,
-     "frame": "FqcHzgX/CAAD/wUABQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 63153.6,
-     "frame": "FqQH6AUABAAG/wT/BA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 63193.3,
-     "frame": "FqIH/AUAAgABAAI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 63234.2,
-     "frame": "FqIHAgYAAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 63472.7,
-     "frame": "FqIHBQYAAw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 63513.6,
-     "frame": "FqIHCwYABAAHAAQAAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 63553.1,
-     "frame": "FqIHHwYAAgACAAI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 63827.0,
+     "atMs": 47100.0,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -3136,199 +3240,24 @@
    ],
    "kind": "path",
    "label": "stroke 29",
-   "points": 245,
-   "moveFrames": 62,
-   "durationMs": 4191.5
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 57.2
   },
   {
    "frames": [
     {
-     "atMs": 64811.7,
+     "atMs": 47325.1,
      "identity": [
       1,
       30
      ],
-     "frame": "EAAAAAaIBboD",
+     "frame": "EAAAAAYcBqkB",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 64953.9,
-     "frame": "FogFuAMA/QD3",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 64993.5,
-     "frame": "FogFogMA6gD3APU=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 65033.7,
-     "frame": "FogFcAMA+gD9AP0A+w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65073.5,
-     "frame": "FogFXAMA/AD8APwA/A==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65113.0,
-     "frame": "FogFRgMA+QD6APIA9w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65152.7,
-     "frame": "FogFFwMA9QD1APQA9w==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65193.3,
-     "frame": "FogF5gIA+wD+AP4=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 65393.9,
-     "frame": "EYgF3AI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 65433.5,
-     "frame": "FpQF3AIMABAADwASAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65473.1,
-     "frame": "FucF3AISABMAGgAWAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65513.8,
-     "frame": "FlMG3AITAA4AEAA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 65553.6,
-     "frame": "FpoG3AIKAAoACQAJAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65594.0,
-     "frame": "FscG3AIGAAYABgAFAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65633.5,
-     "frame": "FuQG3AIEAAMAAgACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65673.4,
-     "frame": "FvEG3AIBAAIAAQA=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 65833.4,
-     "frame": "FvYG3QIAAwAE/wg=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 65872.8,
-     "frame": "FvUG9QL/CgAM/wz/Dg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65913.7,
-     "frame": "FvIGMQMADv8N/wo=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 65952.9,
-     "frame": "Fu4GZwP/Bv8HAAYABQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 65993.4,
-     "frame": "FuwGggMAAwACAAH/Ag==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 66033.2,
-     "frame": "FusGiwMAAQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 2
-    },
-    {
-     "atMs": 66074.3,
-     "frame": "EesGjgM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 66113.6,
-     "frame": "FusGjwMAAgAJ",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 66153.5,
-     "frame": "FusGoAMADwAEAAU=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 66193.3,
-     "frame": "FusGuwMABAACAAI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 66335.4,
+     "atMs": 47391.8,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -3336,119 +3265,149 @@
    ],
    "kind": "path",
    "label": "stroke 30",
-   "points": 102,
-   "moveFrames": 25,
-   "durationMs": 1523.7
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 66.7
   },
   {
    "frames": [
     {
-     "atMs": 70007.1,
+     "atMs": 47699.8,
      "identity": [
       1,
       31
      ],
-     "frame": "FP///2EBcgE=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 31",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 70618.9,
-     "identity": [
-      1,
-      32
-     ],
-     "frame": "FP///5AB3wA=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 32",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 71929.3,
-     "identity": [
-      1,
-      33
-     ],
-     "frame": "FMHBwUABrQE=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 33",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 73105.5,
-     "identity": [
-      1,
-      35
-     ],
-     "frame": "FMHBwXkBWwE=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 34",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 73830.4,
-     "identity": [
-      1,
-      36
-     ],
-     "frame": "FMHBwZMBywA=",
-     "shape": "base64",
-     "event": "draw_fill"
-    }
-   ],
-   "kind": "fill",
-   "label": "fill 35",
-   "points": 0,
-   "moveFrames": 0,
-   "durationMs": 0.0
-  },
-  {
-   "frames": [
-    {
-     "atMs": 77227.3,
-     "identity": [
-      1,
-      37
-     ],
-     "frame": "EO0cJAY5Bu8C",
+     "frame": "EAAAAAbsBeIB",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 77302.1,
+     "atMs": 47791.2,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 31",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 91.4
+  },
+  {
+   "frames": [
+    {
+     "atMs": 48000.8,
+     "identity": [
+      1,
+      32
+     ],
+     "frame": "EAAAAAYWBvsB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 48091.3,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 32",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 90.5
+  },
+  {
+   "frames": [
+    {
+     "atMs": 52383.2,
+     "identity": [
+      1,
+      39
+     ],
+     "frame": "EAAAAAZjBQoC",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 52466.6,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 33",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 83.4
+  },
+  {
+   "frames": [
+    {
+     "atMs": 52908.2,
+     "identity": [
+      1,
+      40
+     ],
+     "frame": "EAAAAAa8BdUB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 52999.4,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 34",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 91.2
+  },
+  {
+   "frames": [
+    {
+     "atMs": 53300.5,
+     "identity": [
+      1,
+      41
+     ],
+     "frame": "EAAAAAaJBcUB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 53391.6,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 35",
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 91.1
+  },
+  {
+   "frames": [
+    {
+     "atMs": 53641.9,
+     "identity": [
+      1,
+      42
+     ],
+     "frame": "EAAAAAYDBoQB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 53741.3,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -3458,85 +3417,22 @@
    "label": "stroke 36",
    "points": 0,
    "moveFrames": 0,
-   "durationMs": 74.8
+   "durationMs": 99.4
   },
   {
    "frames": [
     {
-     "atMs": 77911.4,
+     "atMs": 54058.7,
      "identity": [
       1,
-      38
+      43
      ],
-     "frame": "EO0cJAY5BgwD",
+     "frame": "EAAAAAbZBaYB",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 78113.2,
-     "frame": "FjkGDQMAAwAEAAM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 78154.0,
-     "frame": "FjkGGQMAAgABAAI=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 78273.5,
-     "frame": "ETkGHwM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 78314.3,
-     "frame": "FjkGJgMABQAHAAgACA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 78353.3,
-     "frame": "FjkGSAMABgAHAAc=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 4
-    },
-    {
-     "atMs": 78393.1,
-     "frame": "FjkGYgMBBAEDAAEAAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 78433.7,
-     "frame": "ETsGbQM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 78473.8,
-     "frame": "ETsGbwM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 78513.3,
-     "frame": "ETsGbwM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 78601.5,
+     "atMs": 54158.5,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -3544,87 +3440,24 @@
    ],
    "kind": "path",
    "label": "stroke 37",
-   "points": 26,
-   "moveFrames": 9,
-   "durationMs": 690.1
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 99.8
   },
   {
    "frames": [
     {
-     "atMs": 79986.0,
+     "atMs": 54425.1,
      "identity": [
       1,
-      41
+      44
      ],
-     "frame": "EO0cJAYzBhsD",
+     "frame": "EAAAAAYTBggC",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 80193.6,
-     "frame": "ETMGGwM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 80233.0,
-     "frame": "FjMGHQMABAAHAAcACw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 80273.7,
-     "frame": "FjMGPQMABQAFAAQABA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 80314.4,
-     "frame": "FjMGUQMAAgADAAEAAg==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 80353.0,
-     "frame": "FjMGWgMAAQAB",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 80393.4,
-     "frame": "FjMGXgMABAAFAAQABQ==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 80433.9,
-     "frame": "FjMGdAMAAwACAQIBAw==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 80513.9,
-     "frame": "ETUGfwM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 80576.9,
-     "frame": "ETUGgAM=",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 1
-    },
-    {
-     "atMs": 80577.1,
+     "atMs": 54508.3,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -3632,66 +3465,185 @@
    ],
    "kind": "path",
    "label": "stroke 38",
-   "points": 31,
-   "moveFrames": 9,
-   "durationMs": 591.1
+   "points": 0,
+   "moveFrames": 0,
+   "durationMs": 83.2
   },
   {
    "frames": [
     {
-     "atMs": 81635.7,
+     "atMs": 56425.2,
      "identity": [
       1,
-      42
+      45
      ],
-     "frame": "EO0cJAYIBk4D",
+     "frame": "EAAAAAbsAnAH",
      "shape": "base64",
      "event": "draw_start"
     },
     {
-     "atMs": 81913.6,
-     "frame": "FgoGTgMEAAMA",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 3
-    },
-    {
-     "atMs": 81953.8,
-     "frame": "FhcGTgMIAAcABwAIAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 81993.3,
-     "frame": "FjsGTgMFAAcABgAFAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 82032.9,
-     "frame": "FlcGTgMFAAMABAACAA==",
-     "shape": "base64",
-     "event": "draw_move",
-     "points": 5
-    },
-    {
-     "atMs": 82074.4,
-     "frame": "FmcGTgMCAA==",
+     "atMs": 56494.5,
+     "frame": "FuwCcwcAEQ==",
      "shape": "base64",
      "event": "draw_move",
      "points": 2
     },
     {
-     "atMs": 82112.9,
-     "frame": "EWoGTgM=",
+     "atMs": 56534.5,
+     "frame": "FuwCnQcALwASABs=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 56575.4,
+     "frame": "FuwCGwgBIAgVFg8fCA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56614.6,
+     "frame": "FlEDbAgwADQAL/0s7w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56655.0,
+     "frame": "FjEEQgga5RbmEeQQ3g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56695.1,
+     "frame": "FogEuAcC8ADsAfE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 56734.8,
+     "frame": "FogEgQf4APEA4Qn0DQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56775.3,
+     "frame": "FjkEqgf2FvsV/xQAEg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56815.0,
+     "frame": "FjoEDggmEDALOQREAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56855.3,
+     "frame": "FkcFKgg78EbiNuAu3A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56895.5,
+     "frame": "Fk8GmAcV5hbdC+MC8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 56934.9,
+     "frame": "FoMGJgfz/toA8wE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 56975.1,
+     "frame": "FjYGKwf0CPUN+Q//Dg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57014.9,
+     "frame": "FiAGagcdDjALQQdLBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57055.2,
+     "frame": "FkwHkQdD/C7zMuwr6w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57095.5,
+     "frame": "FjsIRAcc6hXqDewD9g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57134.8,
+     "frame": "FnsI9Qb2/t8A9wE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 57175.5,
+     "frame": "Fj0I9wb3B/gK+wv/Cg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57214.6,
+     "frame": "FioIKAcNChoLLQw1CA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57255.3,
+     "frame": "FugIUgckAB4AKvsf9g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57295.4,
+     "frame": "FowJOAcY9BD3C/oF/A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 57335.3,
+     "frame": "FscJFgcB/wIA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 57357.4,
+     "frame": "EcsJFQc=",
      "shape": "base64",
      "event": "draw_move",
      "points": 1
     },
     {
-     "atMs": 82343.1,
+     "atMs": 57357.5,
      "frame": 18,
      "shape": "int",
      "event": "draw_end"
@@ -3699,9 +3651,2097 @@
    ],
    "kind": "path",
    "label": "stroke 39",
-   "points": 21,
+   "points": 102,
+   "moveFrames": 23,
+   "durationMs": 932.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 57849.6,
+     "identity": [
+      1,
+      46
+     ],
+     "frame": "EAAAAAZzC3IB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 57854.8,
+     "frame": "EXMLcQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 57935.1,
+     "frame": "FnELcAH7AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 57974.8,
+     "frame": "FmULcAHvAPQA4wA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 58015.2,
+     "frame": "FhQLcAHgBuQQ4RriIg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58055.0,
+     "frame": "FooK3wH1G/Ya+hb8Gw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58094.7,
+     "frame": "FmoKXAL/EQMNCQcTAw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58134.9,
+     "frame": "Fq4KhAItAR8AHfU15g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58174.7,
+     "frame": "FlYLVwIL9gr1Bvc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 58215.1,
+     "frame": "FnILNALz/uQA3QbVFA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58254.7,
+     "frame": "FtkKZALlG+kZ9BL0FA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58294.7,
+     "frame": "FoUK1QL6Gf0UAgwLCQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58335.3,
+     "frame": "Fp4KHQMeBCEEFgEgAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58374.5,
+     "frame": "FhwLJgMIAP4A",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 58415.3,
+     "frame": "Fg8LKAPfB9YSzh8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 58454.7,
+     "frame": "FmAKiAPgIukj7SP1Fg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58495.3,
+     "frame": "FgMKHQT5Iv0eAhAKCg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58534.8,
+     "frame": "FiIKfwQiBSAAG/8S+w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58574.8,
+     "frame": "Fq4KcAQI+wX7Av0=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 58615.1,
+     "frame": "FrQKYQTqAOAI1xXeFw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58654.8,
+     "frame": "FhYKsAThIuYm8h75Fw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58694.6,
+     "frame": "FsUJSAUAIAweGxUpEg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58735.2,
+     "frame": "Fj0KtwUpBzQGNAYiBQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58775.2,
+     "frame": "FiAL1QUOAhAECgY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 58815.4,
+     "frame": "Fk0L5wUCCAAH/wb7Bg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 58832.5,
+     "frame": "EUMLCAY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 58832.6,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 40",
+   "points": 107,
+   "moveFrames": 25,
+   "durationMs": 983.0
+  },
+  {
+   "frames": [
+    {
+     "atMs": 59642.1,
+     "identity": [
+      1,
+      47
+     ],
+     "frame": "EAAAAAYCAqQB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 59655.1,
+     "frame": "EQICpAE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 59734.3,
+     "frame": "FgECpAHuAPUB",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 59775.1,
+     "frame": "FtgBqgH0Ceoa/A/8Fg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 59815.0,
+     "frame": "FqkBEwL9Hv8YABoADw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 59855.3,
+     "frame": "FqUBfQIAEQELBgMMAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 59895.3,
+     "frame": "FsYBnQIQABQAEP8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 59935.3,
+     "frame": "FggCmQIO/An8B/wD/Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 59974.9,
+     "frame": "FioCiQLx/+sA2wfUEw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60015.1,
+     "frame": "FpQBtwLjGuEi5Cg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 60054.7,
+     "frame": "FiUBRwPyKPkl/hgAGA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60094.5,
+     "frame": "Fg4B2wMFCwsMDAgLBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60134.9,
+     "frame": "FkIBAAQMAQwACQAFAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60174.5,
+     "frame": "FmsBAQQCAAEA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 60215.3,
+     "frame": "FmoBAgT3B+8V6SI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 60254.8,
+     "frame": "FiMBawTyKvYr9y/6Kw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60294.7,
+     "frame": "FvoAQAUAFwMOCg0RCA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60335.0,
+     "frame": "FjcBfQUgAhv8I/IZ8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60374.8,
+     "frame": "Fr4BTwUP8BHfAPk=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 60415.4,
+     "frame": "FtoBEAXw+t763f3dAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60454.8,
+     "frame": "FjgBBAXaC94S5hXtGQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60494.6,
+     "frame": "FrcAbQX6If4f/yIFJw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60535.2,
+     "frame": "FsEAHAYNGw0WEBYQEQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60574.8,
+     "frame": "FgcBfwYJCAoIAwI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 60615.4,
+     "frame": "FiABlQYDBgQLBA0GDw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60654.8,
+     "frame": "FjYBzgYGDAoNCwsKCQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 60674.3,
+     "frame": "EWwBAgc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 60674.4,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 41",
+   "points": 113,
+   "moveFrames": 26,
+   "durationMs": 1032.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 61675.9,
+     "identity": [
+      1,
+      48
+     ],
+     "frame": "EAAAAAY+A1QA",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 61815.4,
+     "frame": "Fj4DVwAABQAIBAk=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 61855.1,
+     "frame": "Fm0DkAAXBSUCLQA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 61894.9,
+     "frame": "FgsElwA8AC/+G/o=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 61935.2,
+     "frame": "FrQEgwAo7RnwEPMN8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 61975.1,
+     "frame": "FhoFMgAF8wH7/f72AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62014.5,
+     "frame": "FvUEIwDyEfAW9hn6HA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62055.3,
+     "frame": "FsYEmQADFhUcJxwxEA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62095.6,
+     "frame": "FncFAAFLBU8CPwAs/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62134.9,
+     "frame": "FqAG/wAi9yP2H/I=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 62175.0,
+     "frame": "FhcH0gAF+gH9///6AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62214.7,
+     "frame": "FggHyAD7APsA/QH/AQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62255.2,
+     "frame": "FvkGywAIAhMDGwEhAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62294.7,
+     "frame": "FnQH0AAj+BX2DvoQ+Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62335.0,
+     "frame": "FtoHqAAL+gj7Bf0=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 62375.3,
+     "frame": "FvUHmQAC/wEA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 62414.7,
+     "frame": "FvwHmAASARYCIwMhAw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62455.3,
+     "frame": "FowIoQAtACEAGgAbAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62495.5,
+     "frame": "FiQJoQAPAAgABAABAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 62516.1,
+     "frame": "EUEJowA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 62516.2,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 42",
+   "points": 84,
+   "moveFrames": 19,
+   "durationMs": 840.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 65800.6,
+     "identity": [
+      1,
+      53
+     ],
+     "frame": "EAAAAAb/AoUI",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 65855.1,
+     "frame": "Ef4ChQg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 65934.9,
+     "frame": "Fv4ChQgA9wDuA+UVuw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 65975.1,
+     "frame": "FiQD5gcM4A3hC+k=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 66015.2,
+     "frame": "Fk4DfwcH7ATzA/oB/Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 66116.9,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 43",
+   "points": 15,
+   "moveFrames": 4,
+   "durationMs": 316.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 66516.7,
+     "identity": [
+      1,
+      54
+     ],
+     "frame": "EAAAAAYkA0MH",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 66694.6,
+     "frame": "ESQDQQc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 66734.3,
+     "frame": "FiQDPgcK8xHrDPI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 66775.1,
+     "frame": "FlwD/gYT8Az1C/UL9Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 66815.2,
+     "frame": "FpsDwwYH+gb9Av0B/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 66855.8,
+     "frame": "EawDtQY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 66894.4,
+     "frame": "Fq0DtQYBAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 66935.2,
+     "frame": "Fq4DugYABgELAhE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 66974.9,
+     "frame": "FrID7gYCEQEQAhICEw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 67014.7,
+     "frame": "FrwDRQcBDgEJAgcABA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 67016.0,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 44",
+   "points": 32,
+   "moveFrames": 9,
+   "durationMs": 499.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 67675.4,
+     "identity": [
+      1,
+      55
+     ],
+     "frame": "EAAAAAZKB8AG",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 67696.3,
+     "frame": "EUoHvwY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 67734.8,
+     "frame": "EUoHwwY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 67775.3,
+     "frame": "FkoHzgYAEgESBBQFFg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 67815.1,
+     "frame": "FlgHMwcFGwYYBBcDFA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 67855.4,
+     "frame": "Fm0HogcACAAHABAABA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 67895.3,
+     "frame": "EW0HyQc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 67907.7,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 45",
+   "points": 18,
    "moveFrames": 6,
-   "durationMs": 707.4
+   "durationMs": 232.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 68534.0,
+     "identity": [
+      1,
+      56
+     ],
+     "frame": "EAAAAAY7B9UG",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 68615.6,
+     "frame": "ETsH1wY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 68654.4,
+     "frame": "FjsH4wYACgALABE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 68695.3,
+     "frame": "FjsHCwcABAAE",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 68815.2,
+     "frame": "FjsHEwcA+gP0",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 68855.4,
+     "frame": "FkYH8AYL6g/nEeIP5Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 68895.7,
+     "frame": "FpIHbAYH8wf1BvYE+Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 68935.7,
+     "frame": "FqwHQAYC/gH+Av8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 68975.8,
+     "frame": "EbIHOwY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 69015.4,
+     "frame": "FrMHPAYBAgMFBAg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 69055.0,
+     "frame": "FsMHVgYMDg0SDhILDQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 69094.9,
+     "frame": "FgkIqwYGBwcIBQU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 69135.4,
+     "frame": "Fh4IwwYCAwICAQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 69149.2,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 46",
+   "points": 43,
+   "moveFrames": 12,
+   "durationMs": 615.2
+  },
+  {
+   "frames": [
+    {
+     "atMs": 69833.3,
+     "identity": [
+      1,
+      57
+     ],
+     "frame": "EAAAAAbXCl8D",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 69856.3,
+     "frame": "EdcKXwM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 69895.4,
+     "frame": "EdUKXgM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 69935.2,
+     "frame": "Fs4KXgP1APMA8AA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 69975.0,
+     "frame": "FpEKXgPsAOsA7ADuAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70014.7,
+     "frame": "FjQKXgPxAO0A6ADnAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70055.1,
+     "frame": "FtAJXgPzAfQB9wD6AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70094.6,
+     "frame": "EaQJYAM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 70294.4,
+     "frame": "EaIJYAM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 70334.5,
+     "frame": "Fp8JYAP9AfoE8Qg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 70374.5,
+     "frame": "Fn8JcAP3BfgE+AM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 70415.4,
+     "frame": "Fl8JfgP8Af0B/gL+AQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70455.3,
+     "frame": "FlIJgwP/AQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 70536.1,
+     "frame": "EVEJhQM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 70615.2,
+     "frame": "FlEJhAMA/QP6",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 70655.3,
+     "frame": "FloJcgMK8wzuEegW4Q==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70695.6,
+     "frame": "FrAJ+wIY4SXUC/MN8A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70734.9,
+     "frame": "Fg8KhgIH9gX6A/0=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 70775.3,
+     "frame": "ESEKcAI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 70815.3,
+     "frame": "FiIKcQL8B/UN",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 70854.9,
+     "frame": "FgEKmwLmIOIn5yPnJA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70895.3,
+     "frame": "FoIJRgPzE/EW8hb9BA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 70935.5,
+     "frame": "FlMJjgP/A/8C",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 71054.9,
+     "frame": "EVIJlAM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 71094.6,
+     "frame": "FlgJlgMKBxgRNSoVEQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 71134.3,
+     "frame": "FuMJBAQYFRYTFhMRDg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 71174.8,
+     "frame": "FkMKWAQHBgQEAwM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 71215.3,
+     "frame": "FlIKZgQBAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 71249.9,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 47",
+   "points": 90,
+   "moveFrames": 27,
+   "durationMs": 1416.6
+  },
+  {
+   "frames": [
+    {
+     "atMs": 71916.5,
+     "identity": [
+      1,
+      58
+     ],
+     "frame": "EAAAAAbBCIAA",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 72015.1,
+     "frame": "FsEIggAAFg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 72054.3,
+     "frame": "FsAIqQD9E/oX+Rj5GA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72095.2,
+     "frame": "FqMIGQH6EvwK/wY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 72136.0,
+     "frame": "FpcIQgEABg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 72254.8,
+     "frame": "FpYISgH9BA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 72295.0,
+     "frame": "Fo0IVgH3CvYP9gz3Cw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72335.3,
+     "frame": "FlkIlwH7BvsF/QX+Ag==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72375.7,
+     "frame": "FkkIqgEAAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 72456.1,
+     "frame": "EUgIrQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 72535.1,
+     "frame": "FkcIrQH/AP//",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 72575.1,
+     "frame": "FkUIqwEA///+AP7//g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72615.6,
+     "frame": "FkMIogH/+/74/ff9+A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72655.0,
+     "frame": "FjYIdwH67vvx+vL68g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72695.0,
+     "frame": "FhkILgH79/37/vw=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 72734.7,
+     "frame": "Fg4IGwH/AQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 72775.5,
+     "frame": "Fg0IIgEACgAPABU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 72815.3,
+     "frame": "Fg0IagEAGwEZAxECDA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72855.4,
+     "frame": "FhUIywEDDwQNAwoDBg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72895.5,
+     "frame": "FiQI+wEBAwIBAgADAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 72934.7,
+     "frame": "FjAI/wESAA39E/k=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 72975.6,
+     "frame": "FnoI6gEc8hzvFfIP9g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 73014.6,
+     "frame": "FuUIqAEL9wf7BP0B/g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 73055.7,
+     "frame": "Ef0IlAE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 73082.7,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 48",
+   "points": 86,
+   "moveFrames": 23,
+   "durationMs": 1166.2
+  },
+  {
+   "frames": [
+    {
+     "atMs": 73700.3,
+     "identity": [
+      1,
+      59
+     ],
+     "frame": "EAAAAAbRA+IA",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 73774.9,
+     "frame": "EdED5AA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 73814.9,
+     "frame": "FtMD7AAIDw0cChM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 73855.4,
+     "frame": "FvkDNwEHDAQJAwcEBw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 73895.6,
+     "frame": "Fg4EYQECBQAEAAQBAw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 73935.0,
+     "frame": "FhMEdAEBBgIIAQU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 73975.0,
+     "frame": "FhgEiwECBAADAAMBAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 74015.6,
+     "frame": "ERsElwE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 74032.6,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 49",
+   "points": 25,
+   "moveFrames": 7,
+   "durationMs": 332.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 74408.4,
+     "identity": [
+      1,
+      60
+     ],
+     "frame": "EAAAAAbiA5cB",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 74535.1,
+     "frame": "FuMDlwEDAQQG",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 74574.7,
+     "frame": "FuwDoAEDAgIDAgIBAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 74614.8,
+     "frame": "EfUDqQE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 74775.0,
+     "frame": "FvcDqgEFAxEQ",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 74814.7,
+     "frame": "FhYExQEYFgkGCgg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 74855.4,
+     "frame": "FkcE7wEDBAMCAgEBAg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 74975.3,
+     "frame": "FlEE+AEB/wD7APc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 75015.4,
+     "frame": "FlIE3QEA2wDvAfI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 75054.8,
+     "frame": "FlQEiwEB8QH3APsB+g==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 75095.2,
+     "frame": "FlgEYwEA/QD+",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 75150.3,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 50",
+   "points": 37,
+   "moveFrames": 10,
+   "durationMs": 741.9
+  },
+  {
+   "frames": [
+    {
+     "atMs": 75750.4,
+     "identity": [
+      1,
+      61
+     ],
+     "frame": "EAAAAAZ2AZgE",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 75775.0,
+     "frame": "EXYBmAQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 75815.5,
+     "frame": "FnkBlwQJAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 75855.2,
+     "frame": "Fo4BlwQRABQAEgAPAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 75894.6,
+     "frame": "FuYBlwQSABEADAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 75935.6,
+     "frame": "Fh8ClwQLAAUAAwA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 76055.4,
+     "frame": "FjUClwQEAAQABgAGAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 76095.0,
+     "frame": "FlAClwQJAAcACAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 76135.6,
+     "frame": "Fm4CmAQEAQQAAgECAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 76175.9,
+     "frame": "EXoCmwQ=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 76182.5,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 51",
+   "points": 31,
+   "moveFrames": 9,
+   "durationMs": 432.1
+  },
+  {
+   "frames": [
+    {
+     "atMs": 76666.5,
+     "identity": [
+      1,
+      62
+     ],
+     "frame": "EAAAAAZyAmEE",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 76775.0,
+     "frame": "FnICYQQDAAgAFAE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 76815.2,
+     "frame": "FqcCZgQGAgQCBgE=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 76854.8,
+     "frame": "FrwCbgQFAwIBAgA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 77014.5,
+     "frame": "FsYCcwT8AvcE8wrvDQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 77055.0,
+     "frame": "FocCngToEuYT6RPxDQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 77095.0,
+     "frame": "FiUC7ATzCfQJ9wg=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 77135.4,
+     "frame": "Fv0BCwX8A/0C",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 77159.3,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 52",
+   "points": 29,
+   "moveFrames": 7,
+   "durationMs": 492.8
+  },
+  {
+   "frames": [
+    {
+     "atMs": 82158.8,
+     "identity": [
+      1,
+      73
+     ],
+     "frame": "EAAAAAbyAv0G",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 82175.1,
+     "frame": "EfIC/QY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 82255.4,
+     "frame": "FvMC/QYNAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 82295.3,
+     "frame": "EYoD/QYcBP0GzwX9BskG/QY=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 82334.8,
+     "frame": "FpAH/QaATgj9BoAXCf0GeQBbAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 82375.1,
+     "frame": "FkkK/QZOADEALQA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 82407.5,
+     "frame": "Fg8L/QYOAAcA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 82407.5,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 53",
+   "points": 19,
+   "moveFrames": 6,
+   "durationMs": 248.7
+  },
+  {
+   "frames": [
+    {
+     "atMs": 82950.5,
+     "identity": [
+      1,
+      74
+     ],
+     "frame": "EAAAAAa0A9sH",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 82976.3,
+     "frame": "EbID2wc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 83054.4,
+     "frame": "FsID2wcqAD0AUAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 83095.3,
+     "frame": "FuQE2weAawXbB4D3BdsHaAA8AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 83135.4,
+     "frame": "FtkG2wcwAB4AIAASAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 83174.8,
+     "frame": "FmIH2wcHAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 83266.4,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 54",
+   "points": 17,
+   "moveFrames": 5,
+   "durationMs": 315.9
+  },
+  {
+   "frames": [
+    {
+     "atMs": 83667.4,
+     "identity": [
+      1,
+      75
+     ],
+     "frame": "EAAAAAaWBV4I",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 83854.4,
+     "frame": "FpcFXggGAAwAJgAUAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 83895.3,
+     "frame": "FvUFXggQABIACwA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 83935.4,
+     "frame": "FisGXggHAAIAAgA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 84007.9,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 55",
+   "points": 13,
+   "moveFrames": 3,
+   "durationMs": 340.5
+  },
+  {
+   "frames": [
+    {
+     "atMs": 84633.0,
+     "identity": [
+      1,
+      76
+     ],
+     "frame": "EAAAAAbSCl4C",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 84655.3,
+     "frame": "EdEKXgI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 84735.6,
+     "frame": "Ec4KXQI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 84775.1,
+     "frame": "FskKXQLzAO8F8wrvDg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 84815.2,
+     "frame": "FngKkQLpIOko7iv3JA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 84855.3,
+     "frame": "Fi0KTQMAKAAhABsBHg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 84895.3,
+     "frame": "Fj8K2wMWCxYEHgM=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 84934.9,
+     "frame": "FqoK7gMYABMAE/8O/w==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 84974.8,
+     "frame": "FgAL6gME/AL9AP3//A==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85014.5,
+     "frame": "Fv0K2gPw/+0A5wDkBw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85055.0,
+     "frame": "FogK8wPjGeUh6SPlQA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85094.8,
+     "frame": "FhkKqgT9IP8dARc=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 85135.3,
+     "frame": "Fh8KEQUPDQ4IDQUPBA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85175.2,
+     "frame": "FmUKMQUJAgcBBAABAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85215.3,
+     "frame": "FngKNAX3AA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 85254.7,
+     "frame": "Fl8KNQXuBewK7w3wGA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85294.7,
+     "frame": "FhMKcwX9EP0RAQsSDA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85335.3,
+     "frame": "FkIKtgUrBzcELwMuAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 85374.8,
+     "frame": "FjQLxAUeABEAEwA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 85415.6,
+     "frame": "FokLxAUMAAgABAA=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 85424.3,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 56",
+   "points": 80,
+   "moveFrames": 19,
+   "durationMs": 791.3
+  },
+  {
+   "frames": [
+    {
+     "atMs": 86191.3,
+     "identity": [
+      1,
+      77
+     ],
+     "frame": "EAAAAAZuAr4C",
+     "shape": "base64",
+     "event": "draw_start"
+    },
+    {
+     "atMs": 86255.0,
+     "frame": "EW0CvgI=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 1
+    },
+    {
+     "atMs": 86295.7,
+     "frame": "FmoCvgL1APoC7Q8=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 86334.3,
+     "frame": "Fj8C2gLzIv0I",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 86374.9,
+     "frame": "Fi8CDAMADwAQAAcABQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86415.2,
+     "frame": "Fi8COAMEAgUABgEGAA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86456.0,
+     "frame": "FkoCOwMFAAQA",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 86495.0,
+     "frame": "FlICOwP8APgG",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 3
+    },
+    {
+     "atMs": 86535.3,
+     "frame": "FjsCTAPzEPMV9Rn2Hw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86574.5,
+     "frame": "FgMCyAP8Hv4dABU=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 86615.4,
+     "frame": "Fv0BLAQAFQYUCxILDA==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86654.8,
+     "frame": "FiMCfAQLBwkGBgQDAQ==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86694.7,
+     "frame": "FkECkAQBAvoD8QfrCw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86735.3,
+     "frame": "FgACtQTnE9gi3SPpHg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86775.8,
+     "frame": "Fm0BUAXzF/oP+w0=",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 4
+    },
+    {
+     "atMs": 86815.4,
+     "frame": "FlMBjgX/EAANAwsJCg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86855.0,
+     "frame": "FmgByQUQCxEKCwgNCw==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 5
+    },
+    {
+     "atMs": 86874.1,
+     "frame": "Fq0B/AUMCg==",
+     "shape": "base64",
+     "event": "draw_move",
+     "points": 2
+    },
+    {
+     "atMs": 86874.2,
+     "frame": 18,
+     "shape": "int",
+     "event": "draw_end"
+    }
+   ],
+   "kind": "path",
+   "label": "stroke 57",
+   "points": 69,
+   "moveFrames": 17,
+   "durationMs": 682.9
   }
  ]
 }
