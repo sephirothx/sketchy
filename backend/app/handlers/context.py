@@ -190,16 +190,20 @@ class HandlerContext:
 
         self.sio.on(command, handler=guarded)
 
-    def spend_canvas_sync(self, sid: str) -> bool:
-        """Spend one full-history reply from this socket's resync window.
+    def spend_canvas_push(self, sid: str) -> bool:
+        """Spend one *pushed* full-history reply from this socket's window.
 
-        The same window `request_sync_strokes` spends, keyed the same way, so
-        a snapshot the server decides to push (a join) and one the client asks
-        for draw on one allowance: no path is a way around the floor (#562).
+        Pushes (a join, a reconnect) and requests (`request_sync_strokes`)
+        each get one per resync window, accounted apart. Apart, because on a
+        fresh join the push leaves before the join acknowledgement - before
+        the canvas has mounted to receive it - and the mount's own request is
+        what actually loads the drawing: charging both to one allowance made
+        every entry into a running game wait out the window (4 s measured).
+        Repeated joins still cannot force more than one push per window, and
+        requests keep their own floor (#562).
         """
         budget = self.command_budgets.for_command("request_sync_strokes")
-        key = f"{sid}:{self.command_budgets.class_of('request_sync_strokes')}"
-        return self._command_windows.check(key, budget)
+        return self._command_windows.check(f"{sid}:canvas_push", budget)
 
     def allow_canvas_notice(self, sid: str) -> bool:
         """At most one recovery notice per socket per resync window.

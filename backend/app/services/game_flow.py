@@ -629,11 +629,11 @@ class GameFlowService:
     ) -> None:
         """Send the canvas history, or only the part the client is missing.
 
-        `budgeted` spends the socket's resync window first (#562): a snapshot
-        the server pushes on a join shares the allowance a requested one does,
-        and inside a spent window the socket gets a `canvas_stale` notice
-        saying when to ask instead of a dump. The request path passes
-        `budgeted=False`, since the command guard already spent it.
+        `budgeted` spends the socket's *push* window first (#562): a snapshot
+        the server pushes on a join is one per resync window, and inside a
+        spent window the socket gets a `canvas_stale` notice saying when to
+        ask instead of a dump. Requests have their own window, spent by the
+        command guard, so the request path passes `budgeted=False`.
 
         `request_id` is echoed last on the reply: the id the client gave the
         request it is answering, or 0 for a sync the server decided to send
@@ -652,7 +652,7 @@ class GameFlowService:
         if not room.game:
             return
         canvas = room.game.canvas
-        if budgeted and not self._ctx.spend_canvas_sync(sid):
+        if budgeted and not self._ctx.spend_canvas_push(sid):
             await self._emit_canvas_stale(room, sid, "deferred")
             return
         if holds is not None:

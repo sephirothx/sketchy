@@ -106,20 +106,23 @@ async def test_a_join_snapshot_spends_the_resync_window_and_a_rejoin_inside_it_i
     deferred = _events(sio, "canvas_stale")
     assert len(deferred) == 1 and deferred[0].args[1][2] == "deferred"
     assert deferred[0].args[1][3] == int(RESYNC.default.window_seconds * 1000)
-    # The client's own request inside the window is refused with the same delay.
+    # The client's own request inside the same window is answered: on a fresh
+    # join the push leaves before the canvas has mounted, and this request is
+    # what loads the drawing. Pushes and requests are accounted apart.
     request = sio.handlers["/"]["request_sync_strokes"]
-    refused = await request("drawer-sid", [1])
+    assert await request("drawer-sid", [1]) == {"ok": True}
+    assert len(_events(sio, "sync_strokes")) == 2
+    # A second request inside the window is what the request floor refuses.
+    refused = await request("drawer-sid", [2])
     assert refused["errorCode"] == "too_fast" and refused["retryAfterMs"] == int(RESYNC.default.window_seconds * 1000)
-    # Once the window opens, the request is answered - and the reply is not budgeted twice.
-    ctx.clear_command_budget("drawer-sid")
-    assert await request("drawer-sid", [2]) == {"ok": True}
     assert len(_events(sio, "sync_strokes")) == 2
 
 
 @pytest.mark.asyncio
 async def test_the_amplification_is_bounded_per_window_across_every_path():
     """The number the issue asked for: how many full dumps one socket can
-    make the server send per resync window, whatever it sends."""
+    make the server send per resync window, whatever it sends - one pushed
+    (a join) and one requested."""
     room, drawer, sio, ctx = _game()
     draw = sio.handlers["/"]["draw"]
     request = sio.handlers["/"]["request_sync_strokes"]
@@ -130,5 +133,6 @@ async def test_the_amplification_is_bounded_per_window_across_every_path():
         await ctx.game_flow._sync_player_view("drawer-sid", room, drawer)
     for _ in range(5):
         await request("drawer-sid", [9])
-    assert len(_events(sio, "sync_strokes")) == RESYNC.default.limit
+    # One pushed and one requested reply per window, whatever else is sent.
+    assert len(_events(sio, "sync_strokes")) == 2 * RESYNC.default.limit
     assert len(_events(sio, "canvas_stale")) == 1
