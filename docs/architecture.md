@@ -1088,7 +1088,10 @@ Engine.IO packet received and every one sent (per recipient, which is what a fan
 costs) is counted at its wire size, and every command received and every `emit` is sized
 once by event name into a payload-size histogram — all before compression, so the
 numbers overstate what the network carries and answer "which command is the chatty one"
-rather than a bandwidth bill. What each WebSocket negotiated is counted once at the
+rather than a bandwidth bill. Every inbound packet is judged at
+[`backend/app/socket_server.py`](../backend/app/socket_server.py) before a byte of it
+is kept — the envelope, the attachment size, the assembly's age, the socket's packet
+rate — and a refusal is a counter by reason, never a reply (R-RATE-10). What each WebSocket negotiated is counted once at the
 upgrade (`sketchy_socket_transport_total{compression}`,
 [`backend/app/ws_transport.py`](../backend/app/ws_transport.py)), so a deployment whose
 proxy strips permessage-deflate is visible as a label rather than as byte counters that
@@ -1401,6 +1404,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/repositories/sqlalchemy.py`](../backend/app/repositories/sqlalchemy.py) | SQLAlchemy implementations of domain repository interfaces. |
 | [`app/rooms.py`](../backend/app/rooms.py) | In-memory Player/Room domain model and RoomManager. |
 | [`app/server.py`](../backend/app/server.py) | Production Uvicorn runner that drains before closing live WebSockets. |
+| [`app/socket_server.py`](../backend/app/socket_server.py) | The Socket.IO server with the inbound envelope checked before anything is kept. |
 | [`app/services/__init__.py`](../backend/app/services/__init__.py) | Application services shared by Socket.IO handlers. |
 | [`app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py) | Build account data exports one at a time from the durable job table. |
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | Operator check that every stored drawing is still readable. |

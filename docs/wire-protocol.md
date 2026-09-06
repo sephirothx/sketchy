@@ -320,6 +320,41 @@ carries a binary frame (or a bare integer control) plus an optional two-integer 
 identity, and `undo_stroke` carries a fixed four-integer array. Both have dedicated
 parsers.
 
+### Before dispatch: the envelope
+
+Everything above runs inside a handler, after python-socketio has rebuilt the event.
+A *binary* event is rebuilt from a text header that declares how many attachments
+follow plus that many binary messages, and the library keeps every attachment until
+the declared count is met — so a header declaring 1,000 attachments followed by three
+1 KiB chunks left 3 KiB waiting for the other 997 with no handler run and no budget
+spent (#596), and the header syntax allows ten billion. R-RATE-08's budgets cannot act
+on what has not been dispatched yet, so
+[`backend/app/socket_server.py`](../backend/app/socket_server.py) judges the envelope
+at `_handle_eio_message`, the one door every inbound packet uses, before a byte is
+kept:
+
+| Rule | Bound | Why this value |
+| --- | --- | --- |
+| Binary events | `draw` only, `BINARY_EVENT` only | The one command that carries bytes; the server never asks a client for an acknowledgement, so a `BINARY_ACK` cannot be ours |
+| Attachments per event | exactly 1 (`MAX_ATTACHMENTS`) | A frame is one attachment; the codec cannot spread it over two |
+| Placeholder | `{"_placeholder": true, "num": 0}` in argument 1, then at most the action identity, never a second placeholder | The exact shape the client emits |
+| Attachment size | `MAX_FRAME_BYTES` = 1 + 256 × 4 = 1,025 B | The largest frame the codec produces (a full absolute path-points frame) |
+| Assembly age | `ASSEMBLY_DEADLINE_SECONDS` = 5 s | The two messages leave the client back to back; seconds apart means the second is not coming |
+| Text mid-assembly | dropped with the assembly, then judged on its own | A protocol violation, but the text may itself be a well-formed command |
+| Packets per socket | `MAX_PACKETS_PER_WINDOW` = the drawing budget's tunable maximum + 100 (500 today) per second, counted before decoding; a frame's attachment does not count | An administrator may raise drawing to `DRAWING.maximum` frames per window and a client bunches frames after a stall, so the whole allowance can land in one second; the margin is the seat's other traffic. This stops a flood, the budgets are the limits |
+| Packet size | `MAX_PACKET_BYTES` = 1 MiB (engineio's per-packet ceiling, made explicit) | #566 owns its sizing; a custom-prompts blob is the largest JSON command |
+| Arguments per command | one payload; `draw` may add its action identity | Checked in `HandlerContext.on` before the handler, refused as `invalid_payload` rather than raising `TypeError` inside the library |
+
+A refused packet is **dropped, never answered** — an answer per malformed packet is the
+amplification a flood wants — and counted once per reason
+(`sketchy_socket_packets_rejected_total{reason}`, §9). A socket refused more than
+`MAX_REJECTIONS` (20) times in a second is closed: it is not speaking this protocol.
+What one socket can hold in assembly is therefore one frame, and the per-packet ceiling
+bounds one text command; neither depends on what the client declares. Long-polling
+delivers the same bytes to the same door — engineio decodes a polling POST's base64
+attachment before handing it over — so the rules are one set, not two. No stored format
+is involved.
+
 Shared bounds:
 
 | Constant | Value | Source |
@@ -1182,7 +1217,7 @@ replaced, not echoed.
 | `GET` | `/api/health` | Liveness, process-only — never fails on a dependency, because a restart cannot fix an outage the replacement comes back into. `{"status":"ok","readiness":…,"paused":…,"loops":{…}}`, where each supervised background loop reports `running`, `consecutive_failures`, `total_failures`, `seconds_since_success`, `seconds_since_failure` |
 | `GET` | `/api/ready` | 200 only when startup finished, no drain has begun, no supervised loop has stopped, and the database answers `SELECT 1` inside 1 s (result cached ~5 s). 503 otherwise, with `detail.reason` naming which of the three it was. A loop that is merely *erroring* stays ready — see `docs/architecture.md` §Health and readiness |
 | `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`). No longer polled by anything — the lobby is pushed this list on its channel (#462) — but kept as a plain public read for operators and tests. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
-| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_socket_transport_total{compression}` (WebSocket upgrades accepted, by the permessage-deflate window they negotiated — `deflate-15` — or `none`; a proxy stripping the extension shows up here first), `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
+| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_socket_packets_rejected_total{reason}` (inbound packets dropped at the envelope check, §3 — `flood`, `attachment_count`, `attachment_size`, `envelope`, `binary_event`, `binary_ack`, `text_in_assembly`, `stale_assembly`, `unexpected_binary`; anything but zero on a healthy deployment is a client that is not ours), `sketchy_socket_transport_total{compression}` (WebSocket upgrades accepted, by the permessage-deflate window they negotiated — `deflate-15` — or `none`; a proxy stripping the extension shows up here first), `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
 
 ### Accounts and sessions — [`backend/app/auth/routes.py`](../backend/app/auth/routes.py)
 

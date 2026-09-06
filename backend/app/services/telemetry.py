@@ -609,6 +609,11 @@ class Telemetry:
             "WebSocket connections accepted, by the compression they negotiated.",
             ("compression",),
         )
+        self.socket_packets_rejected = LabelledCounter(
+            "sketchy_socket_packets_rejected_total",
+            "Inbound packets dropped before dispatch, by reason.",
+            ("reason",),
+        )
         self.socket_bytes_in = LabelledCounter(
             "sketchy_socket_bytes_in_total",
             "Socket.IO packet bytes received, before compression.",
@@ -690,6 +695,9 @@ class Telemetry:
             self.socket_minutes.bump(now, field=3)
         if seconds is not None:
             self.socket_duration.observe(seconds, (event,), now=now)
+
+    def note_socket_packet_rejected(self, reason: str) -> None:
+        self.socket_packets_rejected.inc((reason,))
 
     def note_socket_transport(self, compression: str) -> None:
         self.socket_transports.inc((compression,))
@@ -808,6 +816,9 @@ class Telemetry:
                 "bytesOutPerMinute": round(socket_bytes_out / minutes),
                 "bytesInTotal": self.socket_bytes_in.total(),
                 "bytesOutTotal": self.socket_bytes_out.total(),
+                "packetsRejected": {
+                    labels[0]: count for labels, count in self.socket_packets_rejected.items()
+                },
                 "transports": {
                     labels[0]: count for labels, count in self.socket_transports.items()
                 },
@@ -874,6 +885,7 @@ class Telemetry:
         lines += self.socket_duration.lines()
         lines += self.socket_connections.lines()
         lines += self.socket_transports.lines()
+        lines += self.socket_packets_rejected.lines()
         lines += self.socket_bytes_in.lines()
         lines += self.socket_bytes_out.lines()
         lines += self.socket_command_bytes.lines()

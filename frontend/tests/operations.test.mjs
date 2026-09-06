@@ -55,7 +55,7 @@ function healthy(overrides = {}) {
     http: { perMinute: 10, errorRate: 0, p50Ms: 3, p95Ms: 20, p99Ms: 50, inFlight: 0, total: 100 },
     socket: {
       perMinute: 100, errorRate: 0, refusedRate: 0, throttledPerMinute: 0, p95Ms: 2, connected: 4, total: 1000,
-      bytesInPerMinute: 0, bytesOutPerMinute: 0, bytesInTotal: 0, bytesOutTotal: 0, commandSizes: [], emitSizes: [],
+      bytesInPerMinute: 0, bytesOutPerMinute: 0, bytesInTotal: 0, bytesOutTotal: 0, commandSizes: [], emitSizes: [], transports: {}, packetsRejected: {},
     },
     process: {
       loopLagMs: 1, loopLagP95Ms: 3, cpuPercent: 2, rssBytes: 100e6, rssIsPeak: false,
