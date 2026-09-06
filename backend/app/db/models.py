@@ -2464,11 +2464,16 @@ class ScoreEvent(Base):
     turn_record: Mapped[TurnRecord | None] = relationship(
         primaryjoin="TurnRecord.id == foreign(ScoreEvent.turn_id)",
     )
+    # Flush-ordering edge for the self-reference: a correction is inserted
+    # after its target and, when a game is removed through the ORM, deleted
+    # before it. The join shares game_id with the game relationship, which
+    # is the one that really writes it; `overlaps` says that is intended.
     corrected_event: Mapped[ScoreEvent | None] = relationship(
         primaryjoin=(
             "and_(remote(ScoreEvent.game_id) == foreign(ScoreEvent.game_id), "
             "remote(ScoreEvent.event_order) == foreign(ScoreEvent.corrects_event_order))"
         ),
+        overlaps="game,score_events",
     )
 
 

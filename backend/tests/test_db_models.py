@@ -2032,3 +2032,28 @@ def test_every_foreign_key_a_delete_walks_has_an_index_or_a_documented_reason():
                 uncovered.append(f"{table.name}({', '.join(columns)})")
     assert not uncovered, f"foreign keys without a leading index: {uncovered}"
     assert not stale_exemptions, f"exemptions that no longer match a foreign key: {stale_exemptions}"
+
+
+def test_the_mappers_configure_without_a_warning():
+    """A relationship whose join claims a column another relationship writes
+    makes SQLAlchemy warn once, at first use, in whichever process configures
+    the mappers first - an operator command, as it happened for the ledger's
+    self-reference. In a fresh interpreter every warning is an error."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-W",
+            "error",
+            "-c",
+            "from sqlalchemy.orm import configure_mappers; "
+            "import app.db.models; configure_mappers()",
+        ],
+        cwd=Path(__file__).parents[1],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
