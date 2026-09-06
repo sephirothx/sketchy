@@ -54,6 +54,29 @@ TIMER_OVERRUN_REPORT_MS = 250
 # Long enough for a healthy write on a loaded server, short enough that a hung
 # database cannot pin the coroutine that ends a game.
 HISTORY_WRITE_TIMEOUT_SECONDS = 10
+# A finished-game write holds every seat's account row, and the web role's
+# lock budget (app.db.POSTGRES_ROLE_BUDGETS) is a few seconds: a deletion, a
+# projection rebuild or another save can make it lose that wait. Losing it
+# is transient, so the write is tried again a bounded number of times before
+# the game is given up as unrecorded.
+HISTORY_WRITE_ATTEMPTS = 3
+HISTORY_WRITE_RETRY_SECONDS = 0.5
+# SQLSTATEs that say "try again", not "this game cannot be written": lock
+# wait exceeded, deadlock chosen as victim, serialization failure.
+_TRANSIENT_SQLSTATES = frozenset({"55P03", "40P01", "40001"})
+
+
+def _is_transient_lock_failure(error: BaseException) -> bool:
+    """Whether a save failed on a lock the next attempt may get."""
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        for attribute in ("sqlstate", "pgcode"):
+            if getattr(current, attribute, None) in _TRANSIENT_SQLSTATES:
+                return True
+        current = getattr(current, "orig", None) or current.__cause__
+    return False
 # Prompt-usage metrics are a separate transaction from the history write, so
 # they get their own budget - but the same ceiling, so the two post-game
 # writes together cannot pin the coroutine for longer than a player would
@@ -1093,17 +1116,31 @@ class GameFlowService:
             return
         started = time.monotonic()
         try:
-            await asyncio.wait_for(
-                self._ctx.game_history_repo.save_game(
-                    history.record,
-                    history.participants,
-                    history.turns,
-                    history.score_events,
-                    history.drawings,
-                    history.reactions,
-                ),
-                timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
-            )
+            for attempt in range(1, HISTORY_WRITE_ATTEMPTS + 1):
+                try:
+                    await asyncio.wait_for(
+                        self._ctx.game_history_repo.save_game(
+                            history.record,
+                            history.participants,
+                            history.turns,
+                            history.score_events,
+                            history.drawings,
+                            history.reactions,
+                        ),
+                        timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
+                    )
+                except Exception as error:
+                    if attempt == HISTORY_WRITE_ATTEMPTS or not _is_transient_lock_failure(error):
+                        raise
+                    logger.warning(
+                        "Game history write for room %s lost a lock (attempt %s of %s); retrying",
+                        room.id,
+                        attempt,
+                        HISTORY_WRITE_ATTEMPTS,
+                    )
+                    await asyncio.sleep(HISTORY_WRITE_RETRY_SECONDS * attempt)
+                else:
+                    break
         except asyncio.TimeoutError:
             # save_game runs in one transaction, so the cancellation this
             # raises rolls the partial write back rather than leaving half

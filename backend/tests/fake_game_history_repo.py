@@ -37,12 +37,26 @@ class ReactionWrite:
     emoji: str | None
 
 
+def _lock_not_available() -> Exception:
+    """What SQLAlchemy raises when asyncpg reports a lock wait past the budget."""
+    from sqlalchemy.exc import OperationalError
+
+    class _Driver(Exception):
+        sqlstate = "55P03"
+
+    return OperationalError("UPDATE users", {}, _Driver("canceling statement due to lock timeout"))
+
+
 class FakeGameHistoryRepository(GameHistoryRepository):
     """Captures `save_game` calls so tests can assert on what was persisted."""
 
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, fail: bool = False, lost_locks: int = 0) -> None:
         self.saved: list[SavedGame] = []
         self.fail = fail
+        # How many saves in a row lose their lock wait the way PostgreSQL
+        # reports it (SQLSTATE 55P03), before one goes through.
+        self.lost_locks = lost_locks
+        self.attempts = 0
         # Later reaction writes, and what the next one answers. `None` is the
         # repository's own refusal shape; a test that wants the write to
         # succeed sets `reaction_result`.
@@ -60,8 +74,12 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         drawings: list[TurnDrawingInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
     ) -> str:
+        self.attempts += 1
         if self.fail:
             raise RuntimeError("database unavailable")
+        if self.lost_locks:
+            self.lost_locks -= 1
+            raise _lock_not_available()
         record_id = game_record.id or f"game-{len(self.saved) + 1}"
         self.saved.append(
             SavedGame(

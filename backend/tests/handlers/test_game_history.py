@@ -465,6 +465,50 @@ async def test_a_failing_write_does_not_break_the_end_of_the_game():
     assert "game_ended" in emitted
 
 
+async def test_a_write_that_lost_its_lock_is_tried_again(monkeypatch):
+    """A lock wait past the web role's budget is transient: a deletion or a
+    rebuild held the seat's account for a moment. The game is written on
+    the next attempt rather than given up as unrecorded."""
+    from app.services import game_flow
+
+    monkeypatch.setattr(game_flow, "HISTORY_WRITE_RETRY_SECONDS", 0)
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository(lost_locks=2)
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, players)
+
+    assert history.attempts == 3
+    assert len(history.saved) == 1
+    assert room.last_game_history == "recorded"
+
+
+async def test_a_write_that_keeps_losing_its_lock_is_given_up_and_counted(monkeypatch):
+    from app.services import game_flow
+
+    monkeypatch.setattr(game_flow, "HISTORY_WRITE_RETRY_SECONDS", 0)
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository(lost_locks=10)
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, players)
+
+    assert history.attempts == game_flow.HISTORY_WRITE_ATTEMPTS
+    assert history.saved == []
+    assert room.last_game_history == "failed"
+
+
+async def test_an_ordinary_failure_is_not_retried():
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository(fail=True)
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, players)
+
+    assert history.attempts == 1
+    assert room.last_game_history == "failed"
+
+
 async def test_history_is_skipped_entirely_without_a_repository():
     room_manager, room, players = build_room(rounds=1)
     sio = socketio.AsyncServer(async_mode="asgi")
