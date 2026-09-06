@@ -103,6 +103,15 @@ def _limit(name: str, default: int) -> int:
 # each one would mean a write per visitor per load.
 LAST_LOGIN_THROTTLE_SECONDS = 300
 
+
+def login_touch_is_due(last_login_at, min_interval_seconds: float) -> bool:
+    """Whether recording a login now would move the recorded time."""
+    if last_login_at is None or min_interval_seconds <= 0:
+        return True
+    if last_login_at.tzinfo is None:
+        last_login_at = last_login_at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - last_login_at).total_seconds() >= min_interval_seconds
+
 # One bucket for the whole deployment, so the daily ceiling is a property of
 # the service rather than of whoever happens to be calling. The bucket is a
 # database row, so replicas share the number rather than each getting one.
@@ -327,9 +336,15 @@ def create_auth_router(
         if user is None:
             return None
 
-        refreshed = await user_repo.touch_last_login(
-            user.id, min_interval_seconds=LAST_LOGIN_THROTTLE_SECONDS
-        )
+        # The row just read says whether the login touch is due; when it is
+        # not, no statement is sent for it at all (#556). The repository
+        # repeats the check inside the UPDATE, so two page loads landing
+        # together still write once.
+        refreshed = None
+        if login_touch_is_due(user.last_login_at, LAST_LOGIN_THROTTLE_SECONDS):
+            refreshed = await user_repo.touch_last_login(
+                user.id, min_interval_seconds=LAST_LOGIN_THROTTLE_SECONDS
+            )
         auth_session = getattr(request.state, "auth_session", None)
         # Rotate rather than merely extending the same credential, limiting
         # how long a copied token remains useful while preserving active guests.

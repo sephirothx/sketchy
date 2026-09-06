@@ -257,6 +257,11 @@ class User(Base):
     """Persistent player identity (both anonymous guests and registered users)."""
 
     __tablename__ = "users"
+    # Server-generated values (updated_at on every UPDATE, the timestamps on
+    # INSERT) come back in the statement's RETURNING rather than through a
+    # SELECT afterwards, so a writer never needs `session.refresh` to hand
+    # back a current row (#556).
+    __mapper_args__ = {"eager_defaults": True}
 
     # Expression-based, so `alembic revision --autogenerate` cannot see it on
     # SQLite - the dialect has no way to reflect such an index, and skips it

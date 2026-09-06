@@ -226,6 +226,8 @@ finished-history writes and crash-safe retry are a separate concern.
 ### `users`
 One row per player identity, guest or registered.
 
+**What one page load costs** (#556): `GET /api/auth/me` sends two statements in the steady state — the session (with its suspension check) and the account, whose canonical id is resolved inside the same query through a `coalesce` over the alias table — and a third, one conditional `UPDATE … RETURNING`, only when the login touch is due; the route decides that from the row it already read, and the update repeats the check so two page loads landing together write once. Writers of `users` never `refresh`: the mapper fetches server-generated defaults in the statement's own `RETURNING` (`eager_defaults`). Before #556 the same request sent five selects. `tests/test_me_query_shape.py` pins the counts.
+
 | Column | Notes |
 | --- | --- |
 | `id` | UUIDv7 |

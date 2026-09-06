@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from collections.abc import Collection, Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import secrets
@@ -498,7 +498,6 @@ class SqlAlchemyUserRepository(UserRepository):
                     state=AccountState.ANONYMOUS.value,
                 )
                 session.add(user)
-            await session.refresh(user)
             return _to_user_data(user)
 
     async def get_by_id(self, user_id: str) -> UserData | None:
@@ -506,10 +505,15 @@ class SqlAlchemyUserRepository(UserRepository):
         if db_user_id is None:
             return None
         async with self._session_factory() as session:
-            canonical = await _canonical_user_id(session, db_user_id)
-            stmt = select(User).where(User.id == canonical)
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
+            # One statement: the canonical id is the alias target if the id
+            # is a merged guest's, else the id itself (#556).
+            canonical = func.coalesce(
+                select(IdentityAlias.target_user_id)
+                .where(IdentityAlias.source_user_id == db_user_id)
+                .scalar_subquery(),
+                db_user_id,
+            )
+            user = await session.scalar(select(User).where(User.id == canonical))
             return _to_user_data(user) if user else None
 
     async def get_by_username(self, username: str) -> UserData | None:
@@ -586,7 +590,6 @@ class SqlAlchemyUserRepository(UserRepository):
                     raise UsernameTakenError(
                         f"Username '{clean_username}' is already taken"
                     ) from error
-            await session.refresh(user)
             return _to_user_data(user)
 
     async def update_profile(
@@ -619,7 +622,6 @@ class SqlAlchemyUserRepository(UserRepository):
                     user.name_color = name_color
                 if avatar_key is not None:
                     user.avatar_key = validated_avatar
-            await session.refresh(user)
             return _to_user_data(user)
 
     async def replace_password_hash(
@@ -756,7 +758,6 @@ class SqlAlchemyUserRepository(UserRepository):
                 await rebuild_user_stats_in_session(
                     session, user_id=target.id
                 )
-            await session.refresh(target)
             return _to_user_data(target)
 
     async def touch_last_login(
@@ -765,23 +766,24 @@ class SqlAlchemyUserRepository(UserRepository):
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return None
+        now = datetime.now(timezone.utc)
         async with self._session_factory() as session:
             async with session.begin():
-                stmt = select(User).where(User.id == db_user_id)
-                user = (await session.execute(stmt)).scalar_one_or_none()
-                if not user:
-                    return None
-                now = datetime.now(timezone.utc)
-                previous = user.last_login_at
-                is_recent = (
-                    min_interval_seconds > 0
-                    and previous is not None
-                    and (now - previous).total_seconds() < min_interval_seconds
+                # One conditional UPDATE with the row returned, rather than a
+                # select, a write and a refresh (#556). Nothing comes back
+                # when the last login is within the interval - the caller
+                # already holds the row it read - or the account is gone.
+                due = or_(
+                    User.last_login_at.is_(None),
+                    User.last_login_at < now - timedelta(seconds=min_interval_seconds),
                 )
-                if not is_recent:
-                    user.last_login_at = now
-            await session.refresh(user)
-            return _to_user_data(user)
+                user = await session.scalar(
+                    update(User)
+                    .where(User.id == db_user_id, *(() if min_interval_seconds <= 0 else (due,)))
+                    .values(last_login_at=now)
+                    .returning(User)
+                )
+            return _to_user_data(user) if user else None
 
     async def touch_last_active(self, user_id: str) -> UserData | None:
         db_user_id = _optional_entity_id(user_id)
@@ -793,7 +795,6 @@ class SqlAlchemyUserRepository(UserRepository):
                 if user is None:
                     return None
                 user.last_active_at = datetime.now(timezone.utc)
-            await session.refresh(user)
             return _to_user_data(user)
 
     async def get_stats(self, user_id: str) -> UserStats:
