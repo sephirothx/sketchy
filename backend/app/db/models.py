@@ -2371,12 +2371,17 @@ class TurnDrawing(Base):
 
 
 class ScoreEvent(Base):
-    """Ordered append-only point delta beside a participant's cached score."""
+    """Ordered append-only point delta beside a participant's cached score.
+
+    Keyed by the game and the event's place in that game's ledger (#552):
+    the order is the identity the writer already proves consecutive and the
+    readers already sort by, so a surrogate UUID beside it bought two extra
+    index structures and a wider correction reference for nothing. Rule
+    versions live on the game; every event of a game was scored under them.
+    """
 
     __tablename__ = "score_events"
     __table_args__ = (
-        UniqueConstraint("game_id", "event_order", name="uq_score_events_game_order"),
-        UniqueConstraint("game_id", "id", name="uq_score_events_game_id_id"),
         # Same-game coherence, structurally: an event cannot award points to a
         # seat, charge a turn, or correct an entry that belongs to another
         # game. The writer proves the arithmetic; these prove the addressing.
@@ -2393,18 +2398,24 @@ class ScoreEvent(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["game_id", "corrects_event_id"],
-            ["score_events.game_id", "score_events.id"],
+            ["game_id", "corrects_event_order"],
+            ["score_events.game_id", "score_events.event_order"],
             name="fk_score_events_correction_same_game",
             ondelete="RESTRICT",
+        ),
+        # Corrections are rare (no writer produces one yet) and the RESTRICT
+        # above has to find them when a game is deleted: index only the rows
+        # that carry a target (#551).
+        Index(
+            "ix_score_events_correction",
+            "game_id",
+            "corrects_event_order",
+            postgresql_where=text("corrects_event_order IS NOT NULL"),
+            sqlite_where=text("corrects_event_order IS NOT NULL"),
         ),
         _values_check("event_type", SCORE_EVENT_TYPES, "ck_score_events_event_type"),
         CheckConstraint("event_order > 0", name="ck_score_events_order_positive"),
         CheckConstraint("points_delta != 0", name="ck_score_events_delta_nonzero"),
-        CheckConstraint(
-            "scoring_version >= 0 AND rule_snapshot_version >= 0",
-            name="ck_score_events_versions_nonnegative",
-        ),
         CheckConstraint(
             "(event_type IN ('guess_award', 'drawer_bonus') AND points_delta > 0) "
             "OR (event_type = 'hint_charge' AND points_delta < 0) "
@@ -2412,42 +2423,37 @@ class ScoreEvent(Base):
             name="ck_score_events_delta_direction",
         ),
         CheckConstraint(
-            "(event_type = 'correction' AND corrects_event_id IS NOT NULL) OR "
-            "(event_type != 'correction' AND corrects_event_id IS NULL)",
+            "(event_type = 'correction' AND corrects_event_order IS NOT NULL) OR "
+            "(event_type != 'correction' AND corrects_event_order IS NULL)",
             name="ck_score_events_correction_target",
         ),
         CheckConstraint(
             "event_type = 'correction' OR turn_id IS NOT NULL",
             name="ck_score_events_turn_required",
         ),
+        # A correction names an earlier entry: never itself, never one that
+        # has not happened yet. Append-only reads forward.
         CheckConstraint(
-            "corrects_event_id IS NULL OR id != corrects_event_id",
-            name="ck_score_events_not_self_correction",
+            "corrects_event_order IS NULL OR corrects_event_order < event_order",
+            name="ck_score_events_corrects_earlier",
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
-        nullable=False,
+        primary_key=True,
     )
+    event_order: Mapped[int] = mapped_column(Integer, primary_key=True)
     participant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
     turn_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True, index=True
     )
-    event_order: Mapped[int] = mapped_column(Integer, nullable=False)
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
     points_delta: Mapped[int] = mapped_column(Integer, nullable=False)
-    scoring_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    rule_snapshot_version: Mapped[int] = mapped_column(Integer, nullable=False)
-    corrects_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=True
-    )
+    corrects_event_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -2463,7 +2469,10 @@ class ScoreEvent(Base):
         primaryjoin="TurnRecord.id == foreign(ScoreEvent.turn_id)",
     )
     corrected_event: Mapped[ScoreEvent | None] = relationship(
-        primaryjoin="remote(ScoreEvent.id) == foreign(ScoreEvent.corrects_event_id)",
+        primaryjoin=(
+            "and_(remote(ScoreEvent.game_id) == foreign(ScoreEvent.game_id), "
+            "remote(ScoreEvent.event_order) == foreign(ScoreEvent.corrects_event_order))"
+        ),
     )
 
 

@@ -275,10 +275,11 @@ raw strings intentionally cannot be replayed through a new matcher: durable
 per-seat and per-turn counts still support difficulty and attempt analysis, and
 that bounded loss is the accepted privacy and storage-volume tradeoff.
 Scored games additionally keep an ordered, append-only **score-event ledger**.
-Each UUIDv7 event identifies the participant seat and turn, carries the scoring
-and rule-snapshot versions, and records one signed delta as a gross guess award,
-hint charge, drawer bonus, or later correction. Corrections point to an earlier
-event and append a new delta; prior events are never rewritten. The history
+Each event is identified by its place in the game's ledger, names the
+participant seat and turn, and records one signed delta as a gross guess award,
+hint charge, drawer bonus, or later correction; the scoring and rule-snapshot
+versions are the game's. Corrections name an earlier event by its order and
+append a new delta; prior events are never rewritten. The history
 writer proves the gameplay events agree with correct guesses and hint spend,
 then requires every participant's ledger sum to equal the cached final score in
 the same transaction. Legacy games explicitly use ledger version `0` because
@@ -1337,6 +1338,10 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
   backend/.venv/bin/python benchmarks/recipient_array_sizes.py
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/history_row_footprint.py --games 200
+
+# The score-event ledger's bytes, write time and read cost per game (#552)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
 
 # What a storage-only compressed drawing format would save (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py

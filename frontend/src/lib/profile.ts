@@ -77,7 +77,6 @@ export interface TurnParticipantOutcome {
 }
 
 export interface ScoreEvent {
-  id: string;
   participantSeatId: string;
   participantUserId: string | null;
   turnId: string | null;
@@ -86,7 +85,7 @@ export interface ScoreEvent {
   pointsDelta: number;
   scoringVersion: number;
   ruleSnapshotVersion: number;
-  correctsEventId: string | null;
+  correctsEventOrder: number | null;
 }
 
 export interface GameTurn {

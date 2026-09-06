@@ -302,7 +302,8 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
         -price,
         awarded,
     ]
-    assert all(event.scoring_version == game.scoring_version for event in first_turn_events)
+    # Rule versions are the game's, once (#552): the events carry none.
+    assert saved.record.scoring_version == game.scoring_version
 
     # Both players were in the rotation for both turns.
     assert {p.turns_played for p in saved.participants} == {2}

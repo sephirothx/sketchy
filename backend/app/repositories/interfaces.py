@@ -231,18 +231,19 @@ class TurnGuessInput:
 
 @dataclass(frozen=True)
 class ScoreEventInput:
-    """One ordered, append-only point change in a finished game."""
+    """One ordered, append-only point change in a finished game.
 
-    id: str
+    Identified by its place in the game's ledger; a correction names the
+    earlier entry's order. Rule versions are the game's (#552).
+    """
+
     participant_seat_id: str
     participant_user_id: str | None
     event_order: int
     event_type: str
     points_delta: int
-    scoring_version: int
-    rule_snapshot_version: int
     turn_id: str | None = None
-    corrects_event_id: str | None = None
+    corrects_event_order: int | None = None
 
 
 @dataclass(frozen=True)
@@ -311,9 +312,8 @@ class TurnParticipantOutcomeDetail:
 
 @dataclass(frozen=True)
 class ScoreEventDetail:
-    """Participant-visible auditable score change."""
+    """Participant-visible auditable score change, keyed by its order."""
 
-    id: str
     participant_seat_id: str
     participant_user_id: str | None
     event_order: int
@@ -322,7 +322,7 @@ class ScoreEventDetail:
     scoring_version: int
     rule_snapshot_version: int
     turn_id: str | None
-    corrects_event_id: str | None
+    corrects_event_order: int | None
 
 
 @dataclass(frozen=True)

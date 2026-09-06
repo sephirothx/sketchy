@@ -97,7 +97,6 @@ def game_detail_payload(detail: GameDetail) -> dict:
         "mySeatId": detail.my_seat_id,
         "scoreEvents": [
             {
-                "id": event.id,
                 "participantSeatId": event.participant_seat_id,
                 "participantUserId": event.participant_user_id,
                 "turnId": event.turn_id,
@@ -106,7 +105,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "pointsDelta": event.points_delta,
                 "scoringVersion": event.scoring_version,
                 "ruleSnapshotVersion": event.rule_snapshot_version,
-                "correctsEventId": event.corrects_event_id,
+                "correctsEventOrder": event.corrects_event_order,
             }
             for event in detail.score_events
         ],

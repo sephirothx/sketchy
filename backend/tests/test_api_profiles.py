@@ -66,7 +66,6 @@ async def record_game(
     loser_seat = str(generate_uuid())
     turn_id = str(generate_uuid())
     record_game.last_turn_id = turn_id
-    drawer_bonus_event_id = str(generate_uuid())
     return await history.save_game(
         GameRecordInput(
             room_name=f"Studio {index}",
@@ -131,37 +130,28 @@ async def record_game(
         ],
         [
             ScoreEventInput(
-                id=str(generate_uuid()),
                 participant_seat_id=loser_seat,
                 participant_user_id=loser,
                 turn_id=turn_id,
                 event_order=1,
                 event_type="guess_award",
                 points_delta=100,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=drawer_bonus_event_id,
                 participant_seat_id=winner_seat,
                 participant_user_id=winner,
                 turn_id=turn_id,
                 event_order=2,
                 event_type="drawer_bonus",
                 points_delta=100,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=str(generate_uuid()),
                 participant_seat_id=winner_seat,
                 participant_user_id=winner,
                 event_order=3,
                 event_type="correction",
                 points_delta=200,
-                scoring_version=1,
-                rule_snapshot_version=1,
-                corrects_event_id=drawer_bonus_event_id,
+                corrects_event_order=2,
             ),
         ],
         [TurnDrawingInput(turn_id=turn_id, payload=drawing)] if drawing else None,
@@ -277,7 +267,8 @@ async def test_participants_see_the_turn_by_turn_detail(env):
         for event in body["scoreEvents"]
         if event["participantUserId"] == ann.id
     ) == 300
-    assert body["scoreEvents"][2]["correctsEventId"] == body["scoreEvents"][1]["id"]
+    assert body["scoreEvents"][2]["correctsEventOrder"] == body["scoreEvents"][1]["eventOrder"]
+    assert "id" not in body["scoreEvents"][0]
     assert body["promptSourceMode"] == "custom"
     assert len(body["turns"]) == 1
     assert body["turns"][0]["prompt"] == "jackpot"

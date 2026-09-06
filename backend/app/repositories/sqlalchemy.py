@@ -971,16 +971,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             "score_events": sorted(
                 (
                     {
-                        "id": item.id,
                         "participant_seat_id": item.participant_seat_id,
                         "participant_user_id": item.participant_user_id,
                         "turn_id": item.turn_id,
                         "event_order": item.event_order,
                         "event_type": item.event_type,
                         "points_delta": item.points_delta,
-                        "scoring_version": item.scoring_version,
-                        "rule_snapshot_version": item.rule_snapshot_version,
-                        "corrects_event_id": item.corrects_event_id,
+                        "corrects_event_order": item.corrects_event_order,
                     }
                     for item in score_events or []
                 ),
@@ -1633,15 +1630,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             "Score event order must be unique and consecutive from one"
                         )
 
-                    event_inputs_by_id: dict[UUID, ScoreEventInput] = {}
+                    event_inputs_by_order: dict[int, ScoreEventInput] = {}
                     actual_gameplay: defaultdict[
                         tuple[str, UUID, UUID], list[int]
                     ] = defaultdict(list)
                     ledger_totals: defaultdict[UUID, int] = defaultdict(int)
                     for event in ordered_events:
-                        event_id = _entity_id(event.id)
-                        if event_id in event_inputs_by_id:
-                            raise ValueError("Duplicate score event id")
                         participant_id = _entity_id(event.participant_seat_id)
                         participant = participant_inputs_by_id.get(participant_id)
                         if participant is None:
@@ -1662,24 +1656,19 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             and event.points_delta > 0
                         ):
                             raise ValueError("Score event delta is invalid for its type")
-                        if (
-                            event.scoring_version != game_record.scoring_version
-                            or event.rule_snapshot_version
-                            != game_record.rule_snapshot_version
-                        ):
-                            raise ValueError(
-                                "Score event rule versions disagree with the game"
-                            )
                         turn_id = _entity_id(event.turn_id) if event.turn_id else None
                         if turn_id is not None and turn_id not in turn_inputs_by_id:
                             raise ValueError("Score event references an unknown turn")
-                        correction_id = (
-                            _entity_id(event.corrects_event_id)
-                            if event.corrects_event_id
-                            else None
-                        )
+                        correction_order = event.corrects_event_order
                         if event.event_type == "correction":
-                            corrected = event_inputs_by_id.get(correction_id)
+                            # Only entries already walked are targets, so a
+                            # forward or self reference is unknown here and
+                            # ck_score_events_corrects_earlier agrees below.
+                            corrected = (
+                                event_inputs_by_order.get(correction_order)
+                                if correction_order is not None
+                                else None
+                            )
                             if corrected is None:
                                 raise ValueError(
                                     "A correction must target an earlier score event"
@@ -1691,7 +1680,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 raise ValueError(
                                     "A correction must target the same participant"
                                 )
-                        elif correction_id is not None or turn_id is None:
+                        elif correction_order is not None or turn_id is None:
                             raise ValueError(
                                 "Gameplay score events require a turn and cannot correct"
                             )
@@ -1700,20 +1689,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 (event.event_type, turn_id, participant_id)
                             ].append(event.points_delta)
 
-                        event_inputs_by_id[event_id] = event
+                        event_inputs_by_order[event.event_order] = event
                         ledger_totals[participant_id] += event.points_delta
                         session.add(
                             ScoreEvent(
-                                id=event_id,
                                 game_id=record_id,
                                 participant_id=participant_id,
                                 turn_id=turn_id,
                                 event_order=event.event_order,
                                 event_type=event.event_type,
                                 points_delta=event.points_delta,
-                                scoring_version=event.scoring_version,
-                                rule_snapshot_version=event.rule_snapshot_version,
-                                corrects_event_id=correction_id,
+                                corrects_event_order=correction_order,
                             )
                         )
 
@@ -2190,7 +2176,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             }
             score_event_details = [
                 ScoreEventDetail(
-                    id=_public_id(event.id),
                     participant_seat_id=_public_id(event.participant_id),
                     participant_user_id=(
                         _public_id(participants_by_id[event.participant_id].user_id)
@@ -2201,13 +2186,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     event_order=event.event_order,
                     event_type=event.event_type,
                     points_delta=event.points_delta,
-                    scoring_version=event.scoring_version,
-                    rule_snapshot_version=event.rule_snapshot_version,
-                    corrects_event_id=(
-                        _public_id(event.corrects_event_id)
-                        if event.corrects_event_id
-                        else None
-                    ),
+                    scoring_version=g.scoring_version,
+                    rule_snapshot_version=g.rule_snapshot_version,
+                    corrects_event_order=event.corrects_event_order,
                 )
                 for event in sorted(g.score_events, key=lambda item: item.event_order)
             ]

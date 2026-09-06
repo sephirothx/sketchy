@@ -66,9 +66,7 @@ def test_recalculable_competitive_foundation_is_present_without_product_tables()
             "event_order",
             "event_type",
             "points_delta",
-            "scoring_version",
-            "rule_snapshot_version",
-            "corrects_event_id",
+            "corrects_event_order",
         },
     }
 

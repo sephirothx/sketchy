@@ -871,98 +871,115 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
         await engine.dispose()
 
 
+def _ledger_game(game_id, user_id, seat_id, turn_id, *, room_name="Ledger"):
+    now = datetime.now(timezone.utc)
+    return [
+        User(id=user_id, display_name="Scorer"),
+        GameRecord(
+            id=game_id,
+            room_name=room_name,
+            scoring_mode="default",
+            scoring_version=1,
+            score_ledger_version=1,
+            rule_snapshot_version=1,
+            hint_mode="none",
+            drawing_seconds=90,
+            total_rounds=1,
+            player_count=1,
+            started_at=now,
+            finished_at=now,
+        ),
+        GameParticipant(
+            id=seat_id,
+            game_id=game_id,
+            user_id=user_id,
+            final_score=100,
+            final_rank=1,
+        ),
+        TurnRecord(
+            id=turn_id,
+            game_id=game_id,
+            round_number=1,
+            turn_number=1,
+            drawer_user_id=user_id,
+            drawer_participant_id=seat_id,
+            prompt="anchor",
+            duration_seconds=30,
+        ),
+    ]
+
+
 async def test_score_events_constrain_order_reason_direction_and_corrections():
+    """The ledger's identity is (game, order) (#552): the row refuses a
+    duplicate order, a wrong-signed delta, a correction without a target,
+    and a correction naming itself, a later entry, or another game's entry."""
     factory, engine = await create_test_db()
     game_id = generate_uuid()
+    other_game_id = generate_uuid()
     turn_id = generate_uuid()
     user_id = generate_uuid()
     seat_id = generate_uuid()
-    event_id = generate_uuid()
-    now = datetime.now(timezone.utc)
+    other_seat_id = generate_uuid()
     try:
         async with factory() as session:
             async with session.begin():
+                session.add_all(_ledger_game(game_id, user_id, seat_id, turn_id))
                 session.add_all(
-                    [
-                        User(id=user_id, display_name="Scorer"),
-                        GameRecord(
-                            id=game_id,
-                            room_name="Ledger",
-                            scoring_mode="default",
-                            scoring_version=1,
-                            score_ledger_version=1,
-                            rule_snapshot_version=1,
-                            hint_mode="none",
-                            drawing_seconds=90,
-                            total_rounds=1,
-                            player_count=1,
-                            started_at=now,
-                            finished_at=now,
-                        ),
-                        GameParticipant(
-                            id=seat_id,
-                            game_id=game_id,
-                            user_id=user_id,
-                            final_score=100,
-                            final_rank=1,
-                        ),
-                        TurnRecord(
-                            id=turn_id,
-                            game_id=game_id,
-                            round_number=1,
-                            turn_number=1,
-                            drawer_user_id=user_id,
-                            drawer_participant_id=seat_id,
-                            prompt="anchor",
-                            duration_seconds=30,
-                        ),
-                        ScoreEvent(
-                            id=event_id,
-                            game_id=game_id,
-                            participant_id=seat_id,
-                            turn_id=turn_id,
-                            event_order=1,
-                            event_type="guess_award",
-                            points_delta=100,
-                            scoring_version=1,
-                            rule_snapshot_version=1,
-                        ),
-                    ]
+                    _ledger_game(
+                        other_game_id, generate_uuid(), other_seat_id, generate_uuid(),
+                        room_name="Other ledger",
+                    )
+                )
+                session.add(
+                    ScoreEvent(
+                        game_id=game_id,
+                        participant_id=seat_id,
+                        turn_id=turn_id,
+                        event_order=1,
+                        event_type="guess_award",
+                        points_delta=100,
+                    )
                 )
 
+        def correction(**overrides):
+            row = dict(
+                game_id=game_id,
+                participant_id=seat_id,
+                event_order=2,
+                event_type="correction",
+                points_delta=-10,
+                corrects_event_order=1,
+            )
+            row.update(overrides)
+            return ScoreEvent(**row)
+
         invalid_rows = (
+            # A positive hint charge.
             ScoreEvent(
-                id=generate_uuid(),
                 game_id=game_id,
                 participant_id=seat_id,
                 turn_id=turn_id,
                 event_order=2,
                 event_type="hint_charge",
                 points_delta=10,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
+            # A correction with no target.
+            correction(corrects_event_order=None),
+            # The same order twice.
             ScoreEvent(
-                id=generate_uuid(),
-                game_id=game_id,
-                participant_id=seat_id,
-                event_order=2,
-                event_type="correction",
-                points_delta=-10,
-                scoring_version=1,
-                rule_snapshot_version=1,
-            ),
-            ScoreEvent(
-                id=generate_uuid(),
                 game_id=game_id,
                 participant_id=seat_id,
                 turn_id=turn_id,
                 event_order=1,
                 event_type="drawer_bonus",
                 points_delta=1,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
+            # A correction of itself, and of an entry that has not happened.
+            correction(corrects_event_order=2),
+            correction(corrects_event_order=3),
+            # A correction of the other game's first entry: the same-game key
+            # does not exist there.
+            correction(game_id=other_game_id, participant_id=other_seat_id),
         )
         for invalid_row in invalid_rows:
             with pytest.raises(IntegrityError):
@@ -972,19 +989,24 @@ async def test_score_events_constrain_order_reason_direction_and_corrections():
 
         async with factory() as session:
             async with session.begin():
-                session.add(
-                    ScoreEvent(
-                        id=generate_uuid(),
-                        game_id=game_id,
-                        participant_id=seat_id,
-                        event_order=2,
-                        event_type="correction",
-                        points_delta=-10,
-                        scoring_version=1,
-                        rule_snapshot_version=1,
-                        corrects_event_id=event_id,
+                session.add(correction())
+
+        # Deleting the whole game takes the corrected entry and its
+        # correction together: the self-referencing RESTRICT is about a
+        # correction outliving its target, not about the game's lifecycle.
+        async with factory() as session:
+            async with session.begin():
+                game = await session.get(GameRecord, game_id)
+                assert game is not None
+                await session.delete(game)
+        async with factory() as session:
+            assert (
+                await session.scalar(
+                    select(text("count(*)")).select_from(ScoreEvent).where(
+                        ScoreEvent.game_id == game_id
                     )
                 )
+            ) == 0
     finally:
         await engine.dispose()
 
@@ -1533,27 +1555,21 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
             ),
             # An award to a seat from the other game.
             ScoreEvent(
-                id=generate_uuid(),
                 game_id=game_a,
                 participant_id=seat_b,
                 turn_id=turn_a,
                 event_order=1,
                 event_type="guess_award",
                 points_delta=10,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             # A charge against the other game's turn.
             ScoreEvent(
-                id=generate_uuid(),
                 game_id=game_a,
                 participant_id=seat_a,
                 turn_id=turn_b,
                 event_order=1,
                 event_type="guess_award",
                 points_delta=10,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             # An outcome whose seat belongs to the other game.
             TurnParticipantOutcome(
@@ -1971,11 +1987,7 @@ async def test_every_fixture_engine_is_configured_like_the_application():
 # Foreign keys deliberately left without a leading index, each with the
 # reason. A row here is a decision, not an oversight; delete it when the
 # reason stops being true.
-FK_INDEX_EXEMPTIONS: dict[tuple[str, tuple[str, ...]], str] = {
-    # #552 replaces the correction reference with a same-game event order;
-    # an index on the UUID would be created only to be dropped.
-    ("score_events", ("game_id", "corrects_event_id")): "replaced by #552",
-}
+FK_INDEX_EXEMPTIONS: dict[tuple[str, tuple[str, ...]], str] = {}
 
 
 def _uniquely_identifies(column) -> bool:
@@ -2002,8 +2014,9 @@ def _fk_is_covered(table, constraint) -> bool:
     unique id), and the child has an index leading with that column - the
     lookup is a point probe on that column, and the other columns are only
     the same-game check. A partial index counts only when its predicate is
-    `column IS NOT NULL` - the rows a delete has to find are exactly the
-    ones with the reference set - never when it selects some other subset.
+    `column IS NOT NULL` for one of the FK's own columns - the rows a delete
+    has to find are exactly the ones with the reference set - never when it
+    selects some other subset.
     """
     from sqlalchemy import PrimaryKeyConstraint, UniqueConstraint
 
@@ -2024,9 +2037,10 @@ def _fk_is_covered(table, constraint) -> bool:
         if _uniquely_identifies(element.column)
     }
     for columns, where in candidates:
-        if where is not None:
-            if len(wanted) != 1 or where.strip() != f"{fk_columns[0]} IS NOT NULL":
-                continue
+        if where is not None and where.strip() not in {
+            f"{column} IS NOT NULL" for column in fk_columns
+        }:
+            continue
         if set(columns[: len(wanted)]) == wanted:
             return True
         if len(wanted) > 1 and columns and columns[0] in selective:

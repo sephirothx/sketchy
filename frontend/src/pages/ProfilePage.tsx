@@ -415,7 +415,7 @@ function GameRow({
                 </thead>
                 <tbody>
                   {detail.scoreEvents.map((event) => (
-                    <tr key={event.id}>
+                    <tr key={event.eventOrder}>
                       <td>{event.eventOrder}</td>
                       <td>{named(event.participantSeatId, "Unknown player")}</td>
                       <td>{event.eventType.replaceAll("_", " ")}</td>

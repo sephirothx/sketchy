@@ -523,7 +523,6 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
         drawer_seat = str(generate_uuid())
         guesser_seat = str(generate_uuid())
         turn_id = str(generate_uuid())
-        event_ids = [str(generate_uuid()) for _ in range(3)]
         stable_game_id = str(generate_uuid())
         now = datetime.now(timezone.utc)
         record = GameRecordInput(
@@ -590,37 +589,28 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
         ]
         events = [
             ScoreEventInput(
-                id=event_ids[0],
                 participant_seat_id=guesser_seat,
                 participant_user_id=guesser.id,
                 turn_id=turn_id,
                 event_order=1,
                 event_type="guess_award",
                 points_delta=300,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=event_ids[1],
                 participant_seat_id=guesser_seat,
                 participant_user_id=guesser.id,
                 turn_id=turn_id,
                 event_order=2,
                 event_type="hint_charge",
                 points_delta=-50,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=event_ids[2],
                 participant_seat_id=drawer_seat,
                 participant_user_id=drawer.id,
                 turn_id=turn_id,
                 event_order=3,
                 event_type="drawer_bonus",
                 points_delta=250,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
         ]
 
@@ -644,10 +634,11 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
         detail = await history.get_game_detail(game_id, drawer.id)
         assert detail is not None
         assert detail.summary.score_ledger_version == 1
-        assert [event.id for event in detail.score_events] == event_ids
+        assert [event.event_order for event in detail.score_events] == [1, 2, 3]
+        assert [event.scoring_version for event in detail.score_events] == [1, 1, 1]
         assert [event.points_delta for event in detail.score_events] == [300, -50, 250]
         async with factory() as session:
-            assert await session.scalar(select(func.count(ScoreEvent.id))) == 3
+            assert await session.scalar(select(func.count(ScoreEvent.event_order))) == 3
     finally:
         await engine.dispose()
 

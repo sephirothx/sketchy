@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -234,9 +234,8 @@
     "roomPresets[].version",
     "schemaVersion",
     "scoreEvents",
-    "scoreEvents[].correctsEventId",
+    "scoreEvents[].correctsEventOrder",
     "scoreEvents[].createdAt",
-    "scoreEvents[].eventId",
     "scoreEvents[].eventOrder",
     "scoreEvents[].eventType",
     "scoreEvents[].gameId",

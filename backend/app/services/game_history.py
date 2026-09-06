@@ -430,30 +430,24 @@ def build_game_history(
                     score_event_order += 1
                     score_events.append(
                         ScoreEventInput(
-                            id=str(generate_uuid7()),
                             participant_seat_id=guesser.participant_id,
                             participant_user_id=guesser.user_id,
                             turn_id=turn_id,
                             event_order=score_event_order,
                             event_type="guess_award",
                             points_delta=gross_award,
-                            scoring_version=game.scoring_version,
-                            rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
                         )
                     )
                 if guess.points_spent_on_hints > 0:
                     score_event_order += 1
                     score_events.append(
                         ScoreEventInput(
-                            id=str(generate_uuid7()),
                             participant_seat_id=guesser.participant_id,
                             participant_user_id=guesser.user_id,
                             turn_id=turn_id,
                             event_order=score_event_order,
                             event_type="hint_charge",
                             points_delta=-guess.points_spent_on_hints,
-                            scoring_version=game.scoring_version,
-                            rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
                         )
                     )
         drawer_bonus = sum(guess.points_awarded for guess in turn.guesses)
@@ -461,15 +455,12 @@ def build_game_history(
             score_event_order += 1
             score_events.append(
                 ScoreEventInput(
-                    id=str(generate_uuid7()),
                     participant_seat_id=drawer.participant_id,
                     participant_user_id=drawer.user_id,
                     turn_id=turn_id,
                     event_order=score_event_order,
                     event_type="drawer_bonus",
                     points_delta=drawer_bonus,
-                    scoring_version=game.scoring_version,
-                    rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
                 )
             )
 

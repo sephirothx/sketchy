@@ -497,7 +497,7 @@ guesses, prompt-list revision history, unexpired authored retained messages, sub
 evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v2_fields.json`](../fixtures/account_data_export_v2_fields.json).
+pinned by [`fixtures/account_data_export_v3_fields.json`](../fixtures/account_data_export_v3_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1050,14 +1050,26 @@ relationship from the positions of two independently ordered lists.
 ### `score_events`
 The ordered, **append-only** point ledger for a scored game.
 
-`id` · `game_id` (CASCADE) · `participant_id` (CASCADE) · `turn_id` (CASCADE) ·
-`event_order` · `event_type` · `points_delta` · `scoring_version` ·
-`rule_snapshot_version` · `corrects_event_id` (self-FK, RESTRICT) · `created_at`.
+`game_id` (CASCADE) · `event_order` · `participant_id` (CASCADE) · `turn_id`
+(CASCADE) · `event_type` · `points_delta` · `corrects_event_order` (same-game self-FK,
+RESTRICT) · `created_at`. Primary key `(game_id, event_order)`.
+
+**An event is identified by its place in its game's ledger (#552).** The writer proves
+the order consecutive from one and every reader sorts by it, so a surrogate UUID beside
+it bought two index structures - its own key and a `(game_id, id)` pair for the
+same-game correction key - and a 16-byte correction reference, for an identity nothing
+outside the row ever used. Rule versions (`scoring_version`, `rule_snapshot_version`)
+are the game's: every event of a game was scored under them, so the detail and export
+views read them from `game_records` rather than from a copy on each row.
 
 `event_type` ∈ `guess_award \| hint_charge \| drawer_bonus \| correction`, with
 `CHECK`s that pin the sign of each: awards and bonuses positive, hint charges negative,
-corrections either but never zero. A `correction` must name an earlier event; nothing
-else may. `uq_score_events_game_order` keeps the order unique per game.
+corrections either but never zero. A `correction` must name an earlier event by its
+order (`ck_score_events_corrects_earlier`: strictly smaller, so never itself and never
+one that has not happened yet); nothing else may. The self-FK's `RESTRICT` is about a
+correction outliving its target, not the game's lifecycle: deleting the game cascades
+both away in one statement. Corrections are rare, so the index that serves that
+`RESTRICT` (`ix_score_events_correction`) is partial over the rows that carry a target.
 
 **Corrections append; prior events are never rewritten.** The history writer proves the
 gameplay events agree with the correct guesses and hint spend, then requires every

@@ -239,48 +239,36 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
         ],
         [
             ScoreEventInput(
-                id=str(generate_uuid()),
                 participant_seat_id=other_seat,
                 participant_user_id=other_id,
                 turn_id=owner_turn,
                 event_order=1,
                 event_type="guess_award",
                 points_delta=100,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=str(generate_uuid()),
                 participant_seat_id=owner_seat,
                 participant_user_id=owner_id,
                 turn_id=owner_turn,
                 event_order=2,
                 event_type="drawer_bonus",
                 points_delta=100,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=str(generate_uuid()),
                 participant_seat_id=owner_seat,
                 participant_user_id=owner_id,
                 turn_id=other_turn,
                 event_order=3,
                 event_type="guess_award",
                 points_delta=150,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
             ScoreEventInput(
-                id=str(generate_uuid()),
                 participant_seat_id=other_seat,
                 participant_user_id=other_id,
                 turn_id=other_turn,
                 event_order=4,
                 event_type="drawer_bonus",
                 points_delta=150,
-                scoring_version=1,
-                rule_snapshot_version=1,
             ),
         ],
         [
@@ -531,8 +519,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 2
-    assert artifact["schemaVersion"] == 2
+    assert status["schemaVersion"] == 3
+    assert artifact["schemaVersion"] == 3
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -599,7 +587,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "$argon2" not in encoded
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v2_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v3_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -804,7 +792,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert owner_guess.display_name_snapshot == "Deleted player"
         assert owner_guess.points_awarded == 150
         assert await session.scalar(select(func.count(GameRecord.id))) == 1
-        assert await session.scalar(select(func.count(ScoreEvent.id))) == 4
+        assert await session.scalar(select(func.count(ScoreEvent.event_order))) == 4
         assert await session.scalar(select(func.count(RoomMessage.id))) == 0
         evidence = await session.scalar(
             select(PlayerReportMessageEvidence).where(

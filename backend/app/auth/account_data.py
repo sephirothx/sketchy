@@ -82,10 +82,12 @@ from app.domain_values import (
 )
 
 
-# Bumped to 2 when friendships joined the export. Additive counts: the
+# Bumped to 2 when friendships joined the export, to 3 when score events
+# became keyed by their order in the game's ledger (#552): `eventId` and
+# `correctsEventId` went, `correctsEventOrder` came. Additive counts too: the
 # document's field surface changed, and a reader that keys off the version
 # should be able to tell which shape it has.
-EXPORT_SCHEMA_VERSION = 2
+EXPORT_SCHEMA_VERSION = 3
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -706,9 +708,8 @@ def _turn_outcome_document(row) -> dict:
 
 
 def _score_event_document(row) -> dict:
-    event, participant = row
+    event, participant, game = row
     return {
-        "eventId": str(event.id),
         "gameId": str(event.game_id),
         "turnId": str(event.turn_id) if event.turn_id else None,
         "participantSeatId": str(event.participant_id),
@@ -716,11 +717,9 @@ def _score_event_document(row) -> dict:
         "eventOrder": event.event_order,
         "eventType": event.event_type,
         "pointsDelta": event.points_delta,
-        "scoringVersion": event.scoring_version,
-        "ruleSnapshotVersion": event.rule_snapshot_version,
-        "correctsEventId": (
-            str(event.corrects_event_id) if event.corrects_event_id else None
-        ),
+        "scoringVersion": game.scoring_version,
+        "ruleSnapshotVersion": game.rule_snapshot_version,
+        "correctsEventOrder": event.corrects_event_order,
         "createdAt": _timestamp(event.created_at),
     }
 
@@ -1041,8 +1040,9 @@ async def _write_export_artifact(
     await _write_rows(
         writer,
         session,
-        select(ScoreEvent, GameParticipant)
+        select(ScoreEvent, GameParticipant, GameRecord)
         .join(GameParticipant, GameParticipant.id == ScoreEvent.participant_id)
+        .join(GameRecord, GameRecord.id == ScoreEvent.game_id)
         .where(GameParticipant.user_id.in_(identity_ids))
         .order_by(ScoreEvent.game_id, ScoreEvent.event_order),
         _score_event_document,

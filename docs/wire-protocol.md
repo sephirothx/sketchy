@@ -1118,6 +1118,10 @@ requester's own `mySeatId`, because the client cannot work its seat out from
 the account the requester is signed in as. Names for reactors come from `participants`,
 whose frozen snapshots are already tombstoned on deletion.
 
+Its `scoreEvents` are identified by `eventOrder` within the game (#552): there is no
+per-event id on the wire, and a `correction` names its target as `correctsEventOrder`.
+The private export's `scoreEvents` (schema version 3) use the same identity.
+
 ### Prompt lists — [`backend/app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py)
 
 | Method | Path | Notes |
@@ -1317,7 +1321,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (2) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (2) | The export document, pinned by [`fixtures/account_data_export_v2_fields.json`](../fixtures/account_data_export_v2_fields.json) | The export's field surface changes |
+| Data export `schema_version` (3) | The export document, pinned by [`fixtures/account_data_export_v3_fields.json`](../fixtures/account_data_export_v3_fields.json) | The export's field surface changes |
 
 ### Before the first deployment
 
