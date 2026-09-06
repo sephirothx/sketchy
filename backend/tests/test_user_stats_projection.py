@@ -15,7 +15,6 @@ from app.db.models import Base, User, UserStatsDaily, generate_uuid
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -100,21 +99,13 @@ async def _save_game(history, *, finished_at, first, second, first_wins):
                     outcome="correct",
                     terminal_state="active",
                     correct_guess_time_seconds=10,
+                    points_awarded=50,
                 ),
             ),
         ),
     ]
-    guesses = [
-        TurnGuessInput(
-            turn_id=second_turn,
-            user_id=first,
-            seat_id=first_seat,
-            points_awarded=50,
-            guess_time_seconds=10,
-        )
-    ]
-    game_id = await history.save_game(record, participants, turns, guesses)
-    return game_id, record, participants, turns, guesses
+    game_id = await history.save_game(record, participants, turns)
+    return game_id, record, participants, turns
 
 
 async def test_daily_projection_is_incremental_idempotent_and_bounded_on_read():
@@ -141,8 +132,8 @@ async def test_daily_projection_is_incremental_idempotent_and_bounded_on_read():
         )
 
         # An idempotent game retry must not increment the projection twice.
-        game_id, record, participants, turns, guesses = saved
-        assert await history.save_game(record, participants, turns, guesses) == game_id
+        game_id, record, participants, turns = saved
+        assert await history.save_game(record, participants, turns) == game_id
 
         statements: list[str] = []
 

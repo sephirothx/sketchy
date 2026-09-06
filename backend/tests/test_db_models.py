@@ -23,7 +23,6 @@ from app.db.models import (
     GameRecord,
     PlayerReport,
     RoomMessage,
-    TurnGuess,
     TurnParticipantOutcome,
     TurnRecord,
     User,
@@ -349,9 +348,8 @@ async def test_entity_ids_are_time_ordered_uuidv7_with_native_postgresql_type():
         TurnRecord.id,
         TurnRecord.game_id,
         TurnRecord.drawer_user_id,
-        TurnGuess.id,
-        TurnGuess.turn_id,
-        TurnGuess.user_id,
+        TurnParticipantOutcome.turn_id,
+        TurnParticipantOutcome.participant_id,
         PromptList.id,
         Prompt.id,
         Prompt.prompt_list_id,
@@ -513,10 +511,8 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         duration_seconds=10,
                     )
                 )
-                outcome_id = generate_uuid()
                 session.add(
                     TurnParticipantOutcome(
-                        id=outcome_id,
                         game_id=game_id,
                         turn_id=turn_id,
                         participant_id=seat_id,
@@ -525,18 +521,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         outcome="correct",
                         terminal_state="active",
                         correct_guess_time_seconds=5,
-                    )
-                )
-                session.add(
-                    TurnGuess(
-                        id=generate_uuid(),
-                        turn_id=turn_id,
-                        user_id=user_id,
-                        participant_id=seat_id,
-                        outcome_id=outcome_id,
-                        display_name_snapshot="Cascade test",
                         points_awarded=10,
-                        guess_time_seconds=5,
                     )
                 )
 
@@ -561,14 +546,15 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                     )
                 )
             ).one()
-            guess = (
+            outcome = (
                 await conn.execute(
-                    text("SELECT user_id, display_name_snapshot FROM turn_guesses")
+                    text("SELECT participant_id, points_awarded FROM turn_participant_outcomes")
                 )
             ).one()
         assert participant == (None, "Cascade test")
         assert turn == (None, "Cascade test")
-        assert guess == (None, "Cascade test")
+        # The award is a fact of the seat, which the deletion tombstoned above.
+        assert outcome == (seat_id.hex, 10)
     finally:
         await engine.dispose()
 
@@ -629,7 +615,6 @@ async def test_game_record_cascade_and_relationships():
                 session.add(r1)
 
                 o1 = TurnParticipantOutcome(
-                    id=generate_uuid(),
                     game_id=game_id,
                     turn_id=r1.id,
                     participant_id=p2.id,
@@ -638,18 +623,9 @@ async def test_game_record_cascade_and_relationships():
                     outcome="correct",
                     terminal_state="active",
                     correct_guess_time_seconds=12.3,
+                    points_awarded=250,
                 )
                 session.add(o1)
-                g1 = TurnGuess(
-                    id=generate_uuid(),
-                    turn_id=r1.id,
-                    user_id=u2_id,
-                    participant_id=p2.id,
-                    outcome_id=o1.id,
-                    points_awarded=250,
-                    guess_time_seconds=12.3,
-                )
-                session.add(g1)
 
         async with factory() as session:
             stmt = select(GameRecord).where(GameRecord.id == game_id)
@@ -668,7 +644,6 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
     drawer_seat_id = generate_uuid()
     guesser_seat_id = generate_uuid()
     turn_id = generate_uuid()
-    outcome_id = generate_uuid()
     now = datetime.now(timezone.utc)
 
     try:
@@ -714,7 +689,6 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             duration_seconds=30,
                         ),
                         TurnParticipantOutcome(
-                            id=outcome_id,
                             game_id=game_id,
                             turn_id=turn_id,
                             participant_id=guesser_seat_id,
@@ -723,15 +697,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                             outcome="correct",
                             terminal_state="active",
                             correct_guess_time_seconds=10,
-                        ),
-                        TurnGuess(
-                            id=generate_uuid(),
-                            turn_id=turn_id,
-                            user_id=guesser_id,
-                            participant_id=guesser_seat_id,
-                            outcome_id=outcome_id,
                             points_awarded=200,
-                            guess_time_seconds=10,
                         ),
                     ]
                 )
@@ -754,16 +720,16 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                 prompt="duplicate",
                 duration_seconds=20,
             ),
-            # Reuses the original outcome: one correct outcome cannot have two
-            # scoring children, and the same seat cannot guess twice in a turn.
-            TurnGuess(
-                id=generate_uuid(),
+            # The same seat cannot have two outcomes in a turn: the pair is the
+            # primary key (#548).
+            TurnParticipantOutcome(
+                game_id=game_id,
                 turn_id=turn_id,
-                user_id=guesser_id,
                 participant_id=guesser_seat_id,
-                outcome_id=outcome_id,
-                points_awarded=999,
-                guess_time_seconds=1,
+                eligible=True,
+                eligibility_reason="eligible",
+                outcome="no_attempt",
+                terminal_state="active",
             ),
         )
         for duplicate in duplicates:
@@ -771,6 +737,30 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                 async with factory() as session:
                     async with session.begin():
                         session.add(duplicate)
+
+        # An award on anything but a correct outcome, a correct outcome
+        # without one, or a negative one, is refused by the row itself.
+        for outcome, points, time in (
+            ("no_attempt", 5, None),
+            ("correct", None, 3.0),
+            ("correct", -1, 3.0),
+        ):
+            with pytest.raises(IntegrityError):
+                async with factory() as session:
+                    async with session.begin():
+                        session.add(
+                            TurnParticipantOutcome(
+                                game_id=game_id,
+                                turn_id=turn_id,
+                                participant_id=drawer_seat_id,
+                                eligible=True,
+                                eligibility_reason="eligible",
+                                outcome=outcome,
+                                terminal_state="active",
+                                correct_guess_time_seconds=time,
+                                points_awarded=points,
+                            )
+                        )
     finally:
         await engine.dispose()
 
@@ -827,7 +817,6 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
                             duration_seconds=30,
                         ),
                         TurnParticipantOutcome(
-                            id=generate_uuid(),
                             game_id=game_id,
                             turn_id=turn_id,
                             participant_id=guesser_seat_id,
@@ -836,13 +825,13 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
                             outcome="correct",
                             terminal_state="active",
                             correct_guess_time_seconds=10,
+                            points_awarded=100,
                         ),
                     ]
                 )
 
         invalid_rows = (
             TurnParticipantOutcome(
-                id=generate_uuid(),
                 game_id=game_id,
                 turn_id=turn_id,
                 participant_id=guesser_seat_id,
@@ -852,7 +841,6 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
                 terminal_state="active",
             ),
             TurnParticipantOutcome(
-                id=generate_uuid(),
                 game_id=game_id,
                 turn_id=turn_id,
                 participant_id=drawer_seat_id,
@@ -1488,7 +1476,6 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
     game_a, game_b = generate_uuid(), generate_uuid()
     seat_a, seat_b = generate_uuid(), generate_uuid()
     turn_a, turn_b = generate_uuid(), generate_uuid()
-    outcome_a = generate_uuid()
     try:
         async with factory() as session:
             async with session.begin():
@@ -1515,7 +1502,6 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
                     )
                 session.add(
                     TurnParticipantOutcome(
-                        id=outcome_a,
                         game_id=game_a,
                         turn_id=turn_a,
                         participant_id=seat_a,
@@ -1524,6 +1510,7 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
                         outcome="correct",
                         terminal_state="active",
                         correct_guess_time_seconds=5,
+                        points_awarded=10,
                     )
                 )
 
@@ -1558,7 +1545,6 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
             ),
             # An outcome whose seat belongs to the other game.
             TurnParticipantOutcome(
-                id=generate_uuid(),
                 game_id=game_a,
                 turn_id=turn_a,
                 participant_id=seat_b,
@@ -1566,15 +1552,6 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
                 eligibility_reason="eligible",
                 outcome="no_attempt",
                 terminal_state="active",
-            ),
-            # A guess scoring an outcome from a different turn.
-            TurnGuess(
-                id=generate_uuid(),
-                turn_id=turn_b,
-                participant_id=seat_b,
-                outcome_id=outcome_a,
-                points_awarded=10,
-                guess_time_seconds=5,
             ),
         )
         for incoherent in incoherent_rows:

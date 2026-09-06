@@ -271,7 +271,7 @@ function GameRow({
               );
             };
             const outcomeLabel = (outcome: GameTurn["participantOutcomes"][number]) => {
-              if (outcome.outcome === "correct") return "correct";
+              if (outcome.outcome === "correct") return `correct, ${outcome.pointsAwarded ?? 0}`;
               if (outcome.outcome === "incorrect") {
                 return `${outcome.wrongGuessCount} wrong`;
               }
@@ -376,23 +376,10 @@ function GameRow({
                         ? turn.participantOutcomes.map((outcome, index) => (
                             <span key={outcome.seatId}>
                               {index > 0 && ", "}
-                              {named(outcome.seatId, "Unknown player")} ({
-                                outcome.outcome === "correct"
-                                  ? `correct, ${turn.guesses.find((guess) => guess.seatId === outcome.seatId)?.pointsAwarded ?? 0}`
-                                  : outcomeLabel(outcome)
-                              })
+                              {named(outcome.seatId, "Unknown player")} ({outcomeLabel(outcome)})
                             </span>
                           ))
-                        : turn.guesses.length === 0
-                          ? "unknown"
-                          : turn.guesses.map((g, index) => (
-                              <span key={g.seatId ?? `legacy-${index}`}>
-                                {index > 0 && ", "}
-                                <span style={{ color: g.nameColor ?? undefined }}>
-                                  {named(g.seatId, g.displayName)}
-                                </span>{" "}(correct, {g.pointsAwarded})
-                              </span>
-                            ))}
+                        : "unknown"}
                     </td>
                   </tr>
                 ))}

@@ -63,7 +63,6 @@ async def test_retention_previews_then_removes_stale_guest_tiers():
                     duration_seconds=10,
                 )
             ],
-            [],
         )
 
         async with factory() as session:

@@ -35,7 +35,6 @@ from app.db.models import (
     ScoreEvent,
     TurnDrawing,
     TurnDrawingReaction,
-    TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnPromptOfferSource,
@@ -103,8 +102,6 @@ from app.repositories.interfaces import (
     TurnDrawingInput,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
-    TurnGuessDetail,
-    TurnGuessInput,
     TurnParticipantOutcomeDetail,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
@@ -848,7 +845,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         game_record: GameRecordInput,
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
-        guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
     ) -> str:
@@ -938,6 +934,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 "points_spent_on_hints": (
                                     outcome.points_spent_on_hints
                                 ),
+                                "points_awarded": outcome.points_awarded,
                             }
                             for outcome in sorted(
                                 item.participant_outcomes,
@@ -948,40 +945,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     for item in turns
                 ),
                 key=lambda item: item["id"],
-            ),
-            "guesses": sorted(
-                (
-                    {
-                        "turn_id": item.turn_id,
-                        "user_id": item.user_id,
-                        "seat_id": item.seat_id,
-                        "points_awarded": item.points_awarded,
-                        "guess_time_seconds": item.guess_time_seconds,
-                        "hints_used": item.hints_used,
-                        "points_spent_on_hints": item.points_spent_on_hints,
-                        "wrong_guesses_before": item.wrong_guesses_before,
-                    }
-                    for item in guesses
-                ),
-                key=lambda item: (
-                    item["turn_id"],
-                    item["seat_id"] or item["user_id"] or "",
-                ),
-            ),
-            "score_events": sorted(
-                (
-                    {
-                        "participant_seat_id": item.participant_seat_id,
-                        "participant_user_id": item.participant_user_id,
-                        "turn_id": item.turn_id,
-                        "event_order": item.event_order,
-                        "event_type": item.event_type,
-                        "points_delta": item.points_delta,
-                        "corrects_event_order": item.corrects_event_order,
-                    }
-                    for item in score_events or []
-                ),
-                key=lambda item: item["event_order"],
             ),
             # Part of the digest so that a retry carrying different reactions
             # is a conflict rather than a silent success returning the old id.
@@ -1008,7 +971,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         game_record: GameRecordInput,
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
-        guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
         drawings: list[TurnDrawingInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
@@ -1025,7 +987,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
             raise ValueError("Unknown game prompt source mode")
         payload_hash = self._payload_hash(
-            game_record, participants, turns, guesses, score_events, reactions
+            game_record, participants, turns, score_events, reactions
         )
         try:
             async with self._session_factory() as session:
@@ -1051,7 +1013,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     if turn.drawer_user_id
                 )
                 referenced_user_ids.update(
-                    _entity_id(guess.user_id) for guess in guesses if guess.user_id
+                    _entity_id(outcome.user_id)
+                    for turn in turns
+                    for outcome in turn.participant_outcomes
+                    if outcome.user_id
                 )
                 referenced_user_ids.update(
                     _entity_id(reaction.user_id) for reaction in reactions
@@ -1192,7 +1157,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 created_turn_ids: set[UUID] = set()
                 turn_inputs_by_id: dict[UUID, TurnRecordInput] = {}
                 drawer_participant_ids_by_turn: dict[UUID, UUID] = {}
-                outcome_ids_by_key: dict[tuple[UUID, UUID], UUID] = {}
                 outcome_inputs_by_key: dict[
                     tuple[UUID, UUID], TurnParticipantOutcomeInput
                 ] = {}
@@ -1398,17 +1362,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             raise ValueError(
                                 f"Turn '{r.id}' outcome contains invalid counters or time"
                             )
+                        if (outcome.outcome == "correct") != (
+                            outcome.points_awarded is not None
+                        ) or (outcome.points_awarded or 0) < 0:
+                            raise ValueError(
+                                f"Turn '{r.id}' outcome and awarded points disagree"
+                            )
                         key = (rid, participant_id)
-                        if key in outcome_ids_by_key:
+                        if key in outcome_inputs_by_key:
                             raise ValueError(
                                 f"Turn '{r.id}' contains duplicate participant outcomes"
                             )
-                        outcome_id = generate_uuid()
-                        outcome_ids_by_key[key] = outcome_id
                         outcome_inputs_by_key[key] = outcome
                         session.add(
                             TurnParticipantOutcome(
-                                id=outcome_id,
                                 game_id=record_id,
                                 turn_id=rid,
                                 participant_id=participant_id,
@@ -1425,6 +1392,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 points_spent_on_hints=(
                                     outcome.points_spent_on_hints
                                 ),
+                                points_awarded=outcome.points_awarded,
                             )
                         )
 
@@ -1516,93 +1484,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             emoji=reaction.emoji,
                             set_version=reaction.set_version,
                         )
-                    )
-
-                guess_outcome_keys: set[tuple[UUID, UUID]] = set()
-                guess_inputs_by_key: dict[tuple[UUID, UUID], TurnGuessInput] = {}
-                for g in guesses:
-                    try:
-                        target_turn_id = _entity_id(g.turn_id)
-                    except (ValueError, AttributeError, TypeError) as error:
-                        raise ValueError(
-                            f"Invalid guess turn_id '{g.turn_id}'"
-                        ) from error
-                    if target_turn_id not in created_turn_ids:
-                        raise ValueError(
-                            f"Guess references unknown turn_id '{g.turn_id}'"
-                        )
-                    guess_user_id = _entity_id(g.user_id) if g.user_id else None
-                    guess_participant_id = (
-                        _entity_id(g.seat_id)
-                        if g.seat_id
-                        else participant_ids_by_user.get(guess_user_id)
-                    )
-                    guess_participant = (
-                        participant_inputs_by_id.get(guess_participant_id)
-                        if guess_participant_id is not None
-                        else None
-                    )
-                    if guess_participant is None:
-                        raise ValueError(
-                            f"Guess references an unknown participant seat '{g.seat_id}'"
-                        )
-                    if guess_participant.user_id != g.user_id:
-                        raise ValueError(
-                            "Guess participant seat and user identity disagree"
-                        )
-                    guess_snapshot = participant_snapshots_by_id[
-                        guess_participant_id
-                    ]
-                    outcome_key = (target_turn_id, guess_participant_id)
-                    if outcome_key in guess_inputs_by_key:
-                        raise ValueError(
-                            "A participant seat cannot have two correct guesses in one turn"
-                        )
-                    guess_inputs_by_key[outcome_key] = g
-                    outcome_input = outcome_inputs_by_key.get(outcome_key)
-                    # Unconditional: a guess is the scoring child of a correct
-                    # outcome, and turns without outcome rows are no longer a
-                    # writable shape now that pre-outcome history cannot exist.
-                    if outcome_input is None or outcome_input.outcome != "correct":
-                        raise ValueError(
-                            "Correct guess lacks its participant outcome"
-                        )
-                    if (
-                        outcome_input.correct_guess_time_seconds
-                        != g.guess_time_seconds
-                        or outcome_input.hints_used != g.hints_used
-                        or outcome_input.points_spent_on_hints
-                        != g.points_spent_on_hints
-                        or outcome_input.wrong_guess_count
-                        != g.wrong_guesses_before
-                    ):
-                        raise ValueError(
-                            "Correct guess and participant outcome disagree"
-                        )
-                    guess_outcome_keys.add(outcome_key)
-                    session.add(
-                        TurnGuess(
-                            id=generate_uuid(),
-                            turn_id=target_turn_id,
-                            user_id=guess_user_id,
-                            participant_id=guess_participant_id,
-                            outcome_id=outcome_ids_by_key[outcome_key],
-                            display_name_snapshot=guess_snapshot[0],
-                            name_color_snapshot=guess_snapshot[1],
-                            is_anonymous_snapshot=guess_snapshot[2],
-                            points_awarded=g.points_awarded,
-                            guess_time_seconds=g.guess_time_seconds,
-                        )
-                    )
-
-                expected_correct_outcomes = {
-                    key
-                    for key, outcome in outcome_inputs_by_key.items()
-                    if outcome.outcome == "correct"
-                }
-                if guess_outcome_keys != expected_correct_outcomes:
-                    raise ValueError(
-                        "Correct participant outcomes and guess rows disagree"
                     )
 
                 if game_record.score_ledger_version not in (0, 1):
@@ -1710,21 +1591,23 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         drawer_bonuses: defaultdict[tuple[UUID, UUID], int] = (
                             defaultdict(int)
                         )
-                        for (turn_id, participant_id), guess in guess_inputs_by_key.items():
+                        for (turn_id, participant_id), outcome in outcome_inputs_by_key.items():
+                            if outcome.outcome != "correct":
+                                continue
                             gross_award = (
-                                guess.points_awarded + guess.points_spent_on_hints
+                                outcome.points_awarded + outcome.points_spent_on_hints
                             )
                             if gross_award > 0:
                                 expected_gameplay[
                                     ("guess_award", turn_id, participant_id)
                                 ].append(gross_award)
-                            if guess.points_spent_on_hints > 0:
+                            if outcome.points_spent_on_hints > 0:
                                 expected_gameplay[
                                     ("hint_charge", turn_id, participant_id)
-                                ].append(-guess.points_spent_on_hints)
+                                ].append(-outcome.points_spent_on_hints)
                             drawer_bonuses[
                                 (turn_id, drawer_participant_ids_by_turn[turn_id])
-                            ] += guess.points_awarded
+                            ] += outcome.points_awarded
                         for (turn_id, drawer_id), bonus in drawer_bonuses.items():
                             if bonus > 0:
                                 expected_gameplay[
@@ -1763,8 +1646,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         for turn in turns
                     ],
                     guess_user_ids=[
-                        _entity_id(guess.user_id) if guess.user_id else None
-                        for guess in guesses
+                        _entity_id(outcome.user_id) if outcome.user_id else None
+                        for turn in turns
+                        for outcome in turn.participant_outcomes
+                        if outcome.outcome == "correct"
                     ],
                     reaction_drawer_ids=reaction_drawer_ids,
                 )
@@ -2043,7 +1928,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.drawing
                     ).load_only(TurnDrawing.status),
-                    selectinload(GameRecord.turns).selectinload(TurnRecord.guesses),
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.participant_outcomes
                     ),
@@ -2072,22 +1956,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
             turn_details: list[TurnDetail] = []
             for r in sorted(g.turns, key=lambda x: (x.round_number, x.turn_number)):
-                guess_details = [
-                    TurnGuessDetail(
-                        user_id=_public_id(guess.user_id) if guess.user_id else None,
-                        seat_id=(
-                            _public_id(guess.participant_id)
-                            if guess.participant_id
-                            else None
-                        ),
-                        display_name=guess.display_name_snapshot,
-                        name_color=guess.name_color_snapshot,
-                        is_anonymous=guess.is_anonymous_snapshot,
-                        points_awarded=guess.points_awarded,
-                        guess_time_seconds=guess.guess_time_seconds,
-                    )
-                    for guess in sorted(r.guesses, key=lambda x: x.guess_time_seconds)
-                ]
                 outcome_details = [
                     TurnParticipantOutcomeDetail(
                         seat_id=_public_id(outcome.participant_id),
@@ -2102,6 +1970,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         near_miss_count=outcome.near_miss_count,
                         hints_used=outcome.hints_used,
                         points_spent_on_hints=outcome.points_spent_on_hints,
+                        points_awarded=outcome.points_awarded,
                     )
                     for outcome in sorted(
                         r.participant_outcomes,
@@ -2136,7 +2005,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             else None
                         ),
                         prompt_source_kind=r.prompt_source_kind,
-                        guesses=guess_details,
                         participant_outcomes=outcome_details,
                         reactions=[
                             TurnDrawingReactionDetail(

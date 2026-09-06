@@ -27,7 +27,6 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     ScoreEventInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -53,7 +52,7 @@ def _event(**kwargs) -> ScoreEventInput:
 
 def _seed_inputs(players, started):
     seats = [str(generate_uuid()) for _ in players]
-    turns, guesses, events = [], [], []
+    turns, events = [], []
     totals = [0] * SEATS
     for index in range(TURNS):
         drawer = index % SEATS
@@ -62,11 +61,9 @@ def _seed_inputs(players, started):
         for seat_index, seat in enumerate(seats):
             if seat_index == drawer:
                 continue
-            guesses.append(TurnGuessInput(turn_id=turn_id, user_id=players[seat_index], seat_id=seat,
-                                          points_awarded=AWARD, guess_time_seconds=5.0))
             outcomes.append(TurnParticipantOutcomeInput(
                 seat_id=seat, user_id=players[seat_index], eligible=True, eligibility_reason="eligible",
-                outcome="correct", terminal_state="active", correct_guess_time_seconds=5.0))
+                outcome="correct", terminal_state="active", correct_guess_time_seconds=5.0, points_awarded=AWARD))
             events.append(_event(participant_seat_id=seat, participant_user_id=players[seat_index], turn_id=turn_id,
                                  event_order=len(events) + 1, event_type="guess_award", points_delta=AWARD))
             totals[seat_index] += AWARD
@@ -84,7 +81,7 @@ def _seed_inputs(players, started):
                              total_rounds=3, player_count=SEATS, started_at=started,
                              finished_at=started + timedelta(minutes=20), scoring_version=1,
                              score_ledger_version=1, rule_snapshot_version=1, prompt_source_mode="custom")
-    return record, participants, turns, guesses, events
+    return record, participants, turns, events
 
 
 async def run(games: int) -> dict:

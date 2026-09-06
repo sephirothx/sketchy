@@ -15,7 +15,6 @@ from app.repositories.interfaces import (
     TurnDrawingInput,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
-    TurnGuessInput,
     TurnRecordInput,
 )
 
@@ -25,7 +24,6 @@ class SavedGame:
     record: GameRecordInput
     participants: list[GameParticipantInput]
     turns: list[TurnRecordInput]
-    guesses: list[TurnGuessInput]
     score_events: list[ScoreEventInput]
     drawings: list[TurnDrawingInput]
     reactions: list[TurnDrawingReactionInput]
@@ -58,7 +56,6 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         game_record: GameRecordInput,
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
-        guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
         drawings: list[TurnDrawingInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
@@ -71,7 +68,6 @@ class FakeGameHistoryRepository(GameHistoryRepository):
                 record=game_record,
                 participants=list(participants),
                 turns=list(turns),
-                guesses=list(guesses),
                 score_events=list(score_events or []),
                 drawings=list(drawings or []),
                 reactions=list(reactions or []),

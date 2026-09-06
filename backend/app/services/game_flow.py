@@ -1098,7 +1098,6 @@ class GameFlowService:
                     history.record,
                     history.participants,
                     history.turns,
-                    history.guesses,
                     history.score_events,
                     history.drawings,
                     history.reactions,

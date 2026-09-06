@@ -39,6 +39,7 @@ from app.db.models import (
     DataExport,
     Friendship,
     GameParticipant,
+    TurnParticipantOutcome,
     GameRecord,
     IdentityAlias,
     PlayerReport,
@@ -51,7 +52,6 @@ from app.db.models import (
     RoomPreset,
     ScoreEvent,
     TurnDrawing,
-    TurnGuess,
     TurnRecord,
     User,
     UserBan,
@@ -67,7 +67,6 @@ from app.repositories.interfaces import (
     PromptOfferInput,
     ScoreEventInput,
     TurnDrawingInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
     PromptListEntryInput,
@@ -195,6 +194,7 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                         outcome="correct",
                         terminal_state="active",
                         correct_guess_time_seconds=10,
+                        points_awarded=100,
                     ),
                 ),
             ),
@@ -217,24 +217,9 @@ async def record_private_game(history, *, owner_id: str, other_id: str) -> str:
                         outcome="correct",
                         terminal_state="active",
                         correct_guess_time_seconds=12,
+                        points_awarded=150,
                     ),
                 ),
-            ),
-        ],
-        [
-            TurnGuessInput(
-                turn_id=owner_turn,
-                user_id=other_id,
-                seat_id=other_seat,
-                points_awarded=100,
-                guess_time_seconds=10,
-            ),
-            TurnGuessInput(
-                turn_id=other_turn,
-                user_id=owner_id,
-                seat_id=owner_seat,
-                points_awarded=150,
-                guess_time_seconds=12,
             ),
         ],
         [
@@ -519,8 +504,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 3
-    assert artifact["schemaVersion"] == 3
+    assert status["schemaVersion"] == 4
+    assert artifact["schemaVersion"] == 4
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -538,7 +523,12 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["drawnTurns"][0]["promptVersionId"] is None
     assert artifact["drawnTurns"][0]["promptSourceKind"] == "custom"
     assert artifact["drawnTurns"][0]["prompt"] == "owner prompt"
-    assert artifact["correctGuesses"][0]["prompt"] == "requester guessed this"
+    assert "correctGuesses" not in artifact
+    assert [
+        (outcome["prompt"], outcome["pointsAwarded"])
+        for outcome in artifact["turnOutcomes"]
+        if outcome["outcome"] == "correct"
+    ] == [("requester guessed this", 150)]
     assert artifact["turnOutcomes"][0]["participantSeatId"]
     assert [event["eventType"] for event in artifact["scoreEvents"]] == [
         "drawer_bonus",
@@ -587,7 +577,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "$argon2" not in encoded
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v3_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v4_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -783,14 +773,15 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
             select(TurnRecord).where(TurnRecord.drawer_user_id == account.id)
         )
         owner_guess = await session.scalar(
-            select(TurnGuess).where(TurnGuess.user_id == account.id)
+            select(TurnParticipantOutcome)
+            .join(GameParticipant, GameParticipant.id == TurnParticipantOutcome.participant_id)
+            .where(GameParticipant.user_id == account.id, TurnParticipantOutcome.outcome == "correct")
         )
         assert owner_turn is not None
         assert owner_turn.drawer_display_name_snapshot == "Deleted player"
         assert owner_turn.prompt == "owner prompt"
         assert owner_guess is not None
-        assert owner_guess.display_name_snapshot == "Deleted player"
-        assert owner_guess.points_awarded == 150
+        assert owner_guess.points_awarded == 150, "awards are facts, and they stay"
         assert await session.scalar(select(func.count(GameRecord.id))) == 1
         assert await session.scalar(select(func.count(ScoreEvent.event_order))) == 4
         assert await session.scalar(select(func.count(RoomMessage.id))) == 0

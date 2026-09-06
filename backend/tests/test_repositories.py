@@ -21,7 +21,6 @@ from app.db.models import (
     PromptList,
     ScoreEvent,
     TurnDrawing,
-    TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnPromptOfferSource,
@@ -39,7 +38,6 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     InvalidProfileDataError,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnDrawingInput,
     TurnRecordInput,
@@ -211,21 +209,13 @@ async def test_game_history_repository():
                         outcome="correct",
                         terminal_state="active",
                         correct_guess_time_seconds=10.0,
+                        points_awarded=200,
                     ),
                 ),
             )
         ]
-        guesses = [
-            TurnGuessInput(
-                turn_id=turn_id,
-                user_id=u2.id,
-                seat_id=u2_seat,
-                points_awarded=200,
-                guess_time_seconds=10.0,
-            )
-        ]
 
-        game_id = await history_repo.save_game(game_input, participants, rounds, guesses)
+        game_id = await history_repo.save_game(game_input, participants, rounds)
         assert game_id is not None
         async with factory() as session:
             stored_game = await session.get(GameRecord, UUID(game_id))
@@ -237,25 +227,44 @@ async def test_game_history_repository():
                 )
             ).all()
             stored_turn = await session.get(TurnRecord, UUID(turn_id))
-            stored_guess = await session.scalar(
-                select(TurnGuess).where(TurnGuess.turn_id == UUID(turn_id))
+            stored_outcome = await session.scalar(
+                select(TurnParticipantOutcome).where(
+                    TurnParticipantOutcome.turn_id == UUID(turn_id)
+                )
             )
             assert stored_game is not None and stored_game.persisted_at is not None
             assert all(item.created_at is not None for item in stored_participants)
             assert stored_turn is not None and stored_turn.created_at is not None
-            assert stored_guess is not None and stored_guess.created_at is not None
+            assert stored_outcome is not None and stored_outcome.created_at is not None
+            assert stored_outcome.points_awarded == 200
 
-        # A guess cannot reference a turn outside this write.
-        invalid_guesses = [
-            TurnGuessInput(
-                turn_id=str(generate_uuid()),
-                user_id=u2.id,
-                points_awarded=100,
-                guess_time_seconds=5.0,
+        # An award rides only on a correct outcome, and every correct outcome
+        # carries one (#548).
+        for outcome, points in (("correct", None), ("no_attempt", 100), ("correct", -1)):
+            broken = TurnRecordInput(
+                id=turn_id,
+                round_number=1,
+                turn_number=1,
+                drawer_user_id=u1.id,
+                drawer_seat_id=u1_seat,
+                prompt="guitar",
+                duration_seconds=30.0,
+                guesser_count=1,
+                participant_outcomes=(
+                    TurnParticipantOutcomeInput(
+                        seat_id=u2_seat,
+                        user_id=u2.id,
+                        eligible=True,
+                        eligibility_reason="eligible",
+                        outcome=outcome,
+                        terminal_state="active",
+                        correct_guess_time_seconds=10.0 if outcome == "correct" else None,
+                        points_awarded=points,
+                    ),
+                ),
             )
-        ]
-        with pytest.raises(ValueError, match="unknown turn_id"):
-            await history_repo.save_game(game_input, participants, rounds, invalid_guesses)
+            with pytest.raises(ValueError, match="awarded points disagree"):
+                await history_repo.save_game(game_input, participants, [broken])
 
         await user_repo.update_profile(
             u1.id,
@@ -290,12 +299,10 @@ async def test_game_history_repository():
         assert detail.turns[0].drawer_name_color == "#b8730f"
         assert detail.turns[0].drawer_is_anonymous
         assert detail.turns[0].drawer_user_id == u1.id
-        assert len(detail.turns[0].guesses) == 1
-        assert detail.turns[0].guesses[0].user_id == u2.id
-        assert detail.turns[0].guesses[0].display_name == "Player2"
-        assert detail.turns[0].guesses[0].name_color == "#1c8ac6"
-        assert detail.turns[0].guesses[0].is_anonymous
-        assert detail.turns[0].guesses[0].points_awarded == 200
+        (outcome,) = detail.turns[0].participant_outcomes
+        assert outcome.seat_id == u2_seat
+        assert outcome.outcome == "correct"
+        assert outcome.points_awarded == 200
 
         # Check game detail for non-participant (scoped out)
         unauthorized_detail = await history_repo.get_game_detail(game_id, requesting_user_id=u3.id)
@@ -387,6 +394,7 @@ async def test_game_history_preserves_distinct_accountless_seats():
                             terminal_state="active",
                             correct_guess_time_seconds=8.0,
                             wrong_guess_count=1,
+                            points_awarded=200,
                         ),
                         TurnParticipantOutcomeInput(
                             seat_id=account_seat_id,
@@ -397,16 +405,6 @@ async def test_game_history_preserves_distinct_accountless_seats():
                             terminal_state="active",
                         ),
                     ),
-                )
-            ],
-            [
-                TurnGuessInput(
-                    turn_id=turn_id,
-                    user_id=None,
-                    seat_id=guesser_seat_id,
-                    points_awarded=200,
-                    guess_time_seconds=8.0,
-                    wrong_guesses_before=1,
                 )
             ],
         )
@@ -425,22 +423,18 @@ async def test_game_history_preserves_distinct_accountless_seats():
         assert detail.turns[0].drawer_user_id is None
         assert detail.turns[0].drawer_seat_id == drawer_seat_id
         assert detail.turns[0].drawer_display_name == "No-cookie drawer"
-        assert detail.turns[0].guesses[0].user_id is None
-        assert detail.turns[0].guesses[0].seat_id == guesser_seat_id
-        assert detail.turns[0].guesses[0].display_name == "No-cookie guesser"
         outcomes = {
             outcome.seat_id: outcome
             for outcome in detail.turns[0].participant_outcomes
         }
         assert outcomes[guesser_seat_id].outcome == "correct"
         assert outcomes[guesser_seat_id].wrong_guess_count == 1
+        assert outcomes[guesser_seat_id].points_awarded == 200
         assert outcomes[account_seat_id].outcome == "no_attempt"
+        assert outcomes[account_seat_id].points_awarded is None
 
         async with factory() as session:
             stored_turn = await session.get(TurnRecord, UUID(turn_id))
-            stored_guess = await session.scalar(
-                select(TurnGuess).where(TurnGuess.turn_id == UUID(turn_id))
-            )
             stored_outcomes = (
                 await session.scalars(
                     select(TurnParticipantOutcome).where(
@@ -451,11 +445,11 @@ async def test_game_history_preserves_distinct_accountless_seats():
         assert stored_turn is not None
         assert stored_turn.drawer_user_id is None
         assert str(stored_turn.drawer_participant_id) == drawer_seat_id
-        assert stored_guess is not None
-        assert stored_guess.user_id is None
-        assert str(stored_guess.participant_id) == guesser_seat_id
-        assert stored_guess.outcome_id is not None
         assert len(stored_outcomes) == 2
+        assert {str(row.participant_id) for row in stored_outcomes} == {
+            guesser_seat_id,
+            account_seat_id,
+        }
     finally:
         await engine.dispose()
 
@@ -485,9 +479,9 @@ async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
             GameParticipantInput(second.id, 50, 2),
         ]
 
-        assert await history.save_game(record, participants, [], []) == game_id
+        assert await history.save_game(record, participants, []) == game_id
         assert (
-            await history.save_game(record, list(reversed(participants)), [], [])
+            await history.save_game(record, list(reversed(participants)), [])
             == game_id
         )
         async with factory() as session:
@@ -508,7 +502,7 @@ async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
             finished_at=record.finished_at,
         )
         with pytest.raises(GameHistoryConflictError, match="different content"):
-            await history.save_game(changed, participants, [], [])
+            await history.save_game(changed, participants, [])
     finally:
         await engine.dispose()
 
@@ -572,19 +566,9 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
                         correct_guess_time_seconds=10,
                         hints_used=1,
                         points_spent_on_hints=50,
+                        points_awarded=250,
                     ),
                 ),
-            )
-        ]
-        guesses = [
-            TurnGuessInput(
-                turn_id=turn_id,
-                user_id=guesser.id,
-                seat_id=guesser_seat,
-                points_awarded=250,
-                guess_time_seconds=10,
-                hints_used=1,
-                points_spent_on_hints=50,
             )
         ]
         events = [
@@ -615,7 +599,7 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
         ]
 
         with pytest.raises(ValueError, match="does not reconcile"):
-            await history.save_game(record, participants, turns, guesses, events)
+            await history.save_game(record, participants, turns, events)
 
         participants[1] = GameParticipantInput(
             guesser.id,
@@ -624,10 +608,10 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
             seat_id=guesser_seat,
             display_name="Ledger guesser",
         )
-        game_id = await history.save_game(record, participants, turns, guesses, events)
+        game_id = await history.save_game(record, participants, turns, events)
         assert (
             await history.save_game(
-                record, participants, turns, guesses, list(reversed(events))
+                record, participants, turns, list(reversed(events))
             )
             == game_id
         )
@@ -708,7 +692,6 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
                     ),
                 )
             ],
-            [],
         )
 
         async with factory() as session:
@@ -1039,20 +1022,9 @@ async def test_save_game_persists_the_analytics_columns():
                             near_miss_count=3,
                             hints_used=2,
                             points_spent_on_hints=36,
+                            points_awarded=200,
                         ),
                     ),
-                )
-            ],
-            [
-                TurnGuessInput(
-                    turn_id=turn_id,
-                    user_id=guesser.id,
-                    seat_id=guesser_seat,
-                    points_awarded=200,
-                    guess_time_seconds=12.5,
-                    hints_used=2,
-                    points_spent_on_hints=36,
-                    wrong_guesses_before=5,
                 )
             ],
         )
@@ -1070,18 +1042,14 @@ async def test_save_game_persists_the_analytics_columns():
             assert round_row.wrong_guess_count == 5
             assert round_row.near_miss_count == 3
 
-            guess_row = (
-                await session.execute(
-                    select(TurnGuess).where(TurnGuess.turn_id == round_row.id)
-                )
-            ).scalar_one()
             outcome_row = (
                 await session.execute(
                     select(TurnParticipantOutcome).where(
-                        TurnParticipantOutcome.id == guess_row.outcome_id
+                        TurnParticipantOutcome.turn_id == round_row.id
                     )
                 )
             ).scalar_one()
+            assert outcome_row.points_awarded == 200
             assert outcome_row.hints_used == 2
             assert outcome_row.points_spent_on_hints == 36
             assert outcome_row.wrong_guess_count == 5
@@ -1319,7 +1287,6 @@ async def _save_game_with_drawings(history_repo, user_repo, drawings_for):
                 duration_seconds=30.0,
             )
         ],
-        [],
         None,
         drawings_for(turn_id),
     )

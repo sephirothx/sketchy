@@ -213,12 +213,12 @@ only their factual text snapshot. Database checks and the history writer keep
 the selected offer, turn text, source kind, and version identical. Rows from
 before provenance coverage use `legacy_unknown`, never a fabricated source.
 Finished games also enforce at most one participant seat per linked account,
-one turn per game/round/turn number, and one correct guess per participant seat
-and turn at the database layer. Multiple accountless seats remain distinct.
-Participant, drawer, and guess rows freeze the player's display name, name
-color, and guest status when the game is saved. Their account foreign keys are
-nullable and use `ON DELETE SET NULL`; even a physical user-row removal cannot
-cascade away turns, guesses, or another player's game. The history API uses a
+one turn per game/round/turn number, and one outcome per participant seat and
+turn at the database layer. Multiple accountless seats remain distinct.
+Participant and drawer rows freeze the player's display name, name color, and
+guest status when the game is saved. Their account foreign keys are nullable
+and use `ON DELETE SET NULL`; even a physical user-row removal cannot cascade
+away turns, outcomes, or another player's game. The history API uses a
 stable participant seat ID and renders the frozen presentation when an account
 link is absent. A live player receives that UUIDv7 seat identity when the game
 starts even if no session cookie supplied an account. Such a player still
@@ -240,8 +240,8 @@ than a guess that could reveal the prompt. Every completed turn stores one
 participant outcome per current or late-arriving non-drawer seat: eligibility
 and its reason, correct/incorrect/no-attempt/ineligible result, terminal
 active/AFK/disconnected/left state, correct time when applicable, and per-seat
-wrong, near-miss, and hint totals. The successful-guess row is the optional
-scoring child of a correct outcome. Ordinary history retains these numeric
+wrong, near-miss, and hint totals, and the net points awarded when the seat
+guessed right. Ordinary history retains these numeric
 facts but not guess text; text retention and evidence are governed separately.
 No-scoring games record the same factual outcomes with zero awarded points and
 never invent hypothetical score awards.

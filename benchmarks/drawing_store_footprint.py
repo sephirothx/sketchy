@@ -30,7 +30,6 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     TurnDrawingInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -47,7 +46,7 @@ SEATS, TURNS = 4, 8
 
 def _seed_inputs(players, started, frame):
     seats = [str(generate_uuid()) for _ in players]
-    turns, guesses, drawings = [], [], []
+    turns, drawings = [], []
     for index in range(TURNS):
         drawer = index % SEATS
         turn_id = str(generate_uuid())
@@ -55,11 +54,9 @@ def _seed_inputs(players, started, frame):
         for seat_index, seat in enumerate(seats):
             if seat_index == drawer:
                 continue
-            guesses.append(TurnGuessInput(turn_id=turn_id, user_id=players[seat_index], seat_id=seat,
-                                          points_awarded=10, guess_time_seconds=5.0))
             outcomes.append(TurnParticipantOutcomeInput(
                 seat_id=seat, user_id=players[seat_index], eligible=True, eligibility_reason="eligible",
-                outcome="correct", terminal_state="active", correct_guess_time_seconds=5.0))
+                outcome="correct", terminal_state="active", correct_guess_time_seconds=5.0, points_awarded=10))
         turns.append(TurnRecordInput(id=turn_id, round_number=index // SEATS + 1, turn_number=index + 1,
                                      drawer_user_id=players[drawer], drawer_seat_id=seats[drawer],
                                      prompt=f"prompt {index}", duration_seconds=60, prompt_source_kind="custom",
@@ -71,7 +68,7 @@ def _seed_inputs(players, started, frame):
     record = GameRecordInput(room_name="Drawings", scoring_mode="default", hint_mode="none", drawing_seconds=60,
                              total_rounds=2, player_count=SEATS, started_at=started,
                              finished_at=started + timedelta(minutes=10), prompt_source_mode="custom")
-    return record, participants, turns, guesses, drawings
+    return record, participants, turns, drawings
 
 
 async def run(games: int) -> dict:
@@ -93,8 +90,8 @@ async def run(games: int) -> dict:
     write_seconds = 0.0
     for g in range(games):
         began = time.perf_counter()
-        record, participants, turns, guesses, drawings = _seed_inputs(players, started + timedelta(hours=g), frame)
-        await history.save_game(record, participants, turns, guesses, drawings=drawings)
+        record, participants, turns, drawings = _seed_inputs(players, started + timedelta(hours=g), frame)
+        await history.save_game(record, participants, turns, drawings=drawings)
         write_seconds += time.perf_counter() - began
     async with engine.connect() as conn:
         await conn.execution_options(isolation_level="AUTOCOMMIT")

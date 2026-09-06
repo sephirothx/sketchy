@@ -18,7 +18,6 @@ from app.domain_values import AccountState
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -90,6 +89,7 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
                             outcome="correct",
                             terminal_state="active",
                             correct_guess_time_seconds=10,
+                            points_awarded=100,
                         ),
                     ),
                 ),
@@ -113,15 +113,6 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
                         ),
                     ),
                 ),
-            ],
-            [
-                TurnGuessInput(
-                    turn_id=first_turn,
-                    user_id=account.id,
-                    seat_id=account_seat,
-                    points_awarded=100,
-                    guess_time_seconds=10,
-                )
             ],
         )
 

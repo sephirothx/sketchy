@@ -30,7 +30,7 @@ from app.db.models import (  # noqa: E402
     Base,
     GameParticipant,
     GameRecord,
-    TurnGuess,
+    TurnParticipantOutcome,
     TurnRecord,
     User,
     generate_uuid,
@@ -70,7 +70,13 @@ async def legacy_read(factory, user_id) -> None:
             )
         )
         await session.execute(
-            select(func.count(TurnGuess.id)).where(TurnGuess.user_id == user_id)
+            select(func.count())
+            .select_from(TurnParticipantOutcome)
+            .join(GameParticipant, GameParticipant.id == TurnParticipantOutcome.participant_id)
+            .where(
+                TurnParticipantOutcome.outcome == "correct",
+                GameParticipant.user_id == user_id,
+            )
         )
         await session.execute(
             select(func.count(TurnRecord.id)).where(

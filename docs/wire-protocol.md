@@ -1138,7 +1138,9 @@ whose frozen snapshots are already tombstoned on deletion.
 
 Its `scoreEvents` are identified by `eventOrder` within the game (#552): there is no
 per-event id on the wire, and a `correction` names its target as `correctsEventOrder`.
-The private export's `scoreEvents` (schema version 3) use the same identity.
+Each turn's `participantOutcomes[]` carries the seat's `pointsAwarded` (null unless the
+outcome is `correct`); there is no separate `guesses[]` list (#548).
+The private export's `scoreEvents` (schema version 4) use the same identity.
 
 ### Prompt lists — [`backend/app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py)
 
@@ -1339,7 +1341,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (2) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (3) | The export document, pinned by [`fixtures/account_data_export_v3_fields.json`](../fixtures/account_data_export_v3_fields.json) | The export's field surface changes |
+| Data export `schema_version` (4) | The export document, pinned by [`fixtures/account_data_export_v4_fields.json`](../fixtures/account_data_export_v4_fields.json) | The export's field surface changes |
 
 ### Before the first deployment
 

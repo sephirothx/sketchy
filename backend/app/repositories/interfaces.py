@@ -136,6 +136,8 @@ class TurnParticipantOutcomeInput:
     near_miss_count: int = 0
     hints_used: int = 0
     points_spent_on_hints: int = 0
+    # Net points for a correct outcome; None on every other outcome (#548).
+    points_awarded: int | None = None
 
 
 @dataclass(frozen=True)
@@ -216,20 +218,6 @@ class PromptOfferInput:
 
 
 @dataclass(frozen=True)
-class TurnGuessInput:
-    """Input payload for a correct guess in a round."""
-
-    turn_id: str
-    user_id: str | None
-    points_awarded: int
-    guess_time_seconds: float
-    hints_used: int = 0
-    points_spent_on_hints: int = 0
-    wrong_guesses_before: int = 0
-    seat_id: str | None = None
-
-
-@dataclass(frozen=True)
 class ScoreEventInput:
     """One ordered, append-only point change in a finished game.
 
@@ -282,19 +270,6 @@ class GameSummary:
 
 
 @dataclass(frozen=True)
-class TurnGuessDetail:
-    """Detailed guess event in a past round."""
-
-    user_id: str | None
-    seat_id: str | None
-    display_name: str
-    name_color: str | None
-    is_anonymous: bool
-    points_awarded: int
-    guess_time_seconds: float
-
-
-@dataclass(frozen=True)
 class TurnParticipantOutcomeDetail:
     """Participant-visible factual outcome for one seat and turn."""
 
@@ -308,6 +283,7 @@ class TurnParticipantOutcomeDetail:
     near_miss_count: int
     hints_used: int
     points_spent_on_hints: int
+    points_awarded: int | None = None
 
 
 @dataclass(frozen=True)
@@ -347,7 +323,6 @@ class TurnDetail:
     # None when no drawing row exists at all, which is every turn played
     # before drawings were persisted.
     drawing_status: str | None = None
-    guesses: list[TurnGuessDetail] = field(default_factory=list)
     prompt_offers: list[PromptOfferDetail] = field(default_factory=list)
     participant_outcomes: list[TurnParticipantOutcomeDetail] = field(
         default_factory=list
@@ -694,12 +669,11 @@ class GameHistoryRepository(ABC):
         game_record: GameRecordInput,
         participants: list[GameParticipantInput],
         turns: list[TurnRecordInput],
-        guesses: list[TurnGuessInput],
         score_events: list[ScoreEventInput] | None = None,
         drawings: list[TurnDrawingInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
     ) -> str:
-        """Persist a completed game along with participants, turns, and guesses in a single transaction."""
+        """Persist a completed game with its participants, turns and outcomes in one transaction."""
         ...
 
     @abstractmethod

@@ -58,7 +58,6 @@ from app.db.models import (
     ScoreEvent,
     TurnDrawing,
     TurnDrawingReaction,
-    TurnGuess,
     TurnParticipantOutcome,
     TurnPromptOffer,
     TurnRecord,
@@ -84,10 +83,12 @@ from app.domain_values import (
 
 # Bumped to 2 when friendships joined the export, to 3 when score events
 # became keyed by their order in the game's ledger (#552): `eventId` and
-# `correctsEventId` went, `correctsEventOrder` came. Additive counts too: the
+# `correctsEventId` went, `correctsEventOrder` came. To 4 when the correct
+# guess folded into its outcome (#548): `correctGuesses` went, `turnOutcomes`
+# gained `pointsAwarded` and lost `outcomeId`. Additive counts too: the
 # document's field surface changed, and a reader that keys off the version
 # should be able to tell which shape it has.
-EXPORT_SCHEMA_VERSION = 3
+EXPORT_SCHEMA_VERSION = 4
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -664,31 +665,9 @@ def _drawn_turn_document(turn: TurnRecord) -> dict:
     }
 
 
-def _correct_guess_document(row) -> dict:
-    guess, turn, outcome = row
-    return {
-        "guessId": str(guess.id),
-        "turnId": str(turn.id),
-        "gameId": str(turn.game_id),
-        "identityId": str(guess.user_id) if guess.user_id else None,
-        "participantSeatId": (
-            str(guess.participant_id) if guess.participant_id else None
-        ),
-        "roundNumber": turn.round_number,
-        "turnNumber": turn.turn_number,
-        "prompt": turn.prompt,
-        "pointsAwarded": guess.points_awarded,
-        "guessTimeSeconds": guess.guess_time_seconds,
-        "hintsUsed": outcome.hints_used,
-        "pointsSpentOnHints": outcome.points_spent_on_hints,
-        "wrongGuessesBefore": outcome.wrong_guess_count,
-    }
-
-
 def _turn_outcome_document(row) -> dict:
     outcome, turn = row
     return {
-        "outcomeId": str(outcome.id),
         "turnId": str(turn.id),
         "gameId": str(turn.game_id),
         "participantSeatId": str(outcome.participant_id),
@@ -704,6 +683,7 @@ def _turn_outcome_document(row) -> dict:
         "nearMissCount": outcome.near_miss_count,
         "hintsUsed": outcome.hints_used,
         "pointsSpentOnHints": outcome.points_spent_on_hints,
+        "pointsAwarded": outcome.points_awarded,
     }
 
 
@@ -1003,23 +983,6 @@ async def _write_export_artifact(
         )
         .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number),
         _drawn_turn_document,
-    )
-    writer.key("correctGuesses")
-    await _write_rows(
-        writer,
-        session,
-        # The attempt/hint numbers live on the outcome row alone now; the
-        # export keeps its fields by reading them through the join.
-        select(TurnGuess, TurnRecord, TurnParticipantOutcome)
-        .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
-        .join(
-            TurnParticipantOutcome,
-            TurnParticipantOutcome.id == TurnGuess.outcome_id,
-        )
-        .where(TurnGuess.user_id.in_(identity_ids))
-        .order_by(TurnRecord.game_id, TurnRecord.round_number, TurnRecord.turn_number),
-        _correct_guess_document,
-        scalars=False,
     )
     writer.key("turnOutcomes")
     await _write_rows(
@@ -1489,15 +1452,6 @@ async def anonymize_account(
                             TurnRecord.drawer_user_id.in_(identity_ids)
                         )
                     )
-                )
-            )
-            await session.execute(
-                update(TurnGuess)
-                .where(TurnGuess.user_id.in_(identity_ids))
-                .values(
-                    display_name_snapshot=DELETED_DISPLAY_NAME,
-                    name_color_snapshot=None,
-                    is_anonymous_snapshot=True,
                 )
             )
             # Ordinary retained messages are short-lived user content and are

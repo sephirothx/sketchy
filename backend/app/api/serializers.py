@@ -136,18 +136,6 @@ def game_detail_payload(detail: GameDetail) -> dict:
                     }
                     for offer in r.prompt_offers
                 ],
-                "guesses": [
-                    {
-                        "userId": g.user_id,
-                        "seatId": g.seat_id,
-                        "displayName": g.display_name,
-                        "nameColor": g.name_color,
-                        "isAnonymous": g.is_anonymous,
-                        "pointsAwarded": g.points_awarded,
-                        "guessTimeSeconds": g.guess_time_seconds,
-                    }
-                    for g in r.guesses
-                ],
                 "participantOutcomes": [
                     {
                         "seatId": outcome.seat_id,
@@ -162,6 +150,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                         "nearMissCount": outcome.near_miss_count,
                         "hintsUsed": outcome.hints_used,
                         "pointsSpentOnHints": outcome.points_spent_on_hints,
+                        "pointsAwarded": outcome.points_awarded,
                     }
                     for outcome in r.participant_outcomes
                 ],

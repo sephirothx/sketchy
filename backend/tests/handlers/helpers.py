@@ -97,6 +97,11 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
     while room.game is not None:
         game = room.game
         game.force_prompt_choice()
+        # What `_begin_drawing` does: freeze who may guess, so the turn ends
+        # with an outcome per seat and the award has a row to ride on (#548).
+        game.snapshot_turn_participants(
+            {p.id: "eligible" for p in room.player_list() if p.id != game.current_drawer}
+        )
         game.set_phase_deadline(game.drawing_seconds)
         for player in room.player_list():
             if player.id == game.current_drawer:

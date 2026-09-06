@@ -1,11 +1,12 @@
-"""Physical size of the finished-game tables #548 and #549 propose to trim.
+"""Physical size of the finished-game tables #548 and #549 proposed to trim.
 
 Seeds a batch of finished games of one shape (8 seats, 24 turns, the 72 correct
 guesses an alternating rule yields, two curated sources per offered prompt) through the real writer
 into a disposable PostgreSQL database, then reports heap and index bytes
-for turn_guesses, turn_participant_outcomes, turn_records and
-turn_prompt_offer_sources per game, and explains the join that would
-derive offer sources from memberships. Measurement only.
+for turn_participant_outcomes (and turn_guesses, on a checkout that still has
+it), turn_records and turn_prompt_offer_sources per game, and explains the
+join that would derive offer sources from memberships. Runs unchanged before
+and after #548, so the two can be compared.
 
     TEST_DATABASE_URL=postgresql+asyncpg://... backend/.venv/bin/python benchmarks/history_row_footprint.py --games 50
 """
@@ -30,10 +31,14 @@ from app.repositories.interfaces import (
     GameRecordInput,
     PromptListEntryInput,
     PromptOfferInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
+
+try:  # The guess row exists only before #548.
+    from app.repositories.interfaces import TurnGuessInput
+except ImportError:
+    TurnGuessInput = None
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyPromptListRepository,
@@ -43,7 +48,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 SEATS, TURNS, CORRECT = 8, 24, 92
-TABLES = ("turn_guesses", "turn_participant_outcomes", "turn_records", "turn_prompt_offers", "turn_prompt_offer_sources", "score_events", "game_participants")
+TABLES = (("turn_guesses",) if TurnGuessInput else ()) + ("turn_participant_outcomes", "turn_records", "turn_prompt_offers", "turn_prompt_offer_sources", "score_events", "game_participants")
 
 
 async def _seed_game(history, players, sources, versions, started):
@@ -60,12 +65,16 @@ async def _seed_game(history, players, sources, versions, started):
             correct = correct_left > 0 and (index + seat_index) % 2 == 0
             if correct:
                 correct_left -= 1
-                guesses.append(TurnGuessInput(turn_id=turn_id, user_id=players[seat_index], seat_id=seat,
-                                              points_awarded=10, guess_time_seconds=5.0))
-            outcomes.append(TurnParticipantOutcomeInput(
+                if TurnGuessInput:
+                    guesses.append(TurnGuessInput(turn_id=turn_id, user_id=players[seat_index], seat_id=seat,
+                                                  points_awarded=10, guess_time_seconds=5.0))
+            outcome = dict(
                 seat_id=seat, user_id=players[seat_index], eligible=True, eligibility_reason="eligible",
                 outcome="correct" if correct else "incorrect", terminal_state="active",
-                correct_guess_time_seconds=5.0 if correct else None, wrong_guess_count=0 if correct else 1))
+                correct_guess_time_seconds=5.0 if correct else None, wrong_guess_count=0 if correct else 1)
+            if not TurnGuessInput:
+                outcome["points_awarded"] = 10 if correct else None
+            outcomes.append(TurnParticipantOutcomeInput(**outcome))
         offers = tuple(
             PromptOfferInput(position, f"prompt {index}-{position}", position == 0, "curated",
                              prompt_version_id=versions[(index * 3 + position) % len(versions)],
@@ -86,7 +95,7 @@ async def _seed_game(history, players, sources, versions, started):
         GameRecordInput(room_name="Footprint", scoring_mode="default", hint_mode="none", drawing_seconds=60,
                         total_rounds=3, player_count=SEATS, started_at=started, finished_at=started + timedelta(minutes=20),
                         prompt_source_mode="curated", prompt_source_revision_ids=tuple(sources)),
-        participants, turns, guesses)
+        participants, turns, *([guesses] if TurnGuessInput else []))
 
 
 async def run(games: int) -> dict:

@@ -19,7 +19,6 @@ from app.repositories.interfaces import (
     GameRecordInput,
     ScoreEventInput,
     TurnDrawingInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -115,17 +114,9 @@ async def record_game(
                         outcome="correct",
                         terminal_state="active",
                         correct_guess_time_seconds=12.0,
+                        points_awarded=100,
                     ),
                 ),
-            )
-        ],
-        [
-            TurnGuessInput(
-                turn_id=turn_id,
-                user_id=loser,
-                seat_id=loser_seat,
-                points_awarded=100,
-                guess_time_seconds=12.0,
             )
         ],
         [
@@ -278,13 +269,13 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["drawerNameColor"] is None
     assert body["turns"][0]["drawerIsAnonymous"] is True
-    assert body["turns"][0]["guesses"][0]["displayName"] == "Bob"
-    assert body["turns"][0]["guesses"][0]["nameColor"] is None
-    assert body["turns"][0]["guesses"][0]["isAnonymous"] is True
-    assert body["turns"][0]["guesses"][0]["pointsAwarded"] == 100
+    assert "guesses" not in body["turns"][0]
+    loser_seat = next(
+        seat["seatId"] for seat in body["participants"] if seat["displayName"] == "Bob"
+    )
     assert body["turns"][0]["participantOutcomes"] == [
         {
-            "seatId": body["turns"][0]["guesses"][0]["seatId"],
+            "seatId": loser_seat,
             "eligible": True,
             "eligibilityReason": "eligible",
             "outcome": "correct",
@@ -294,6 +285,7 @@ async def test_participants_see_the_turn_by_turn_detail(env):
             "nearMissCount": 0,
             "hintsUsed": 0,
             "pointsSpentOnHints": 0,
+            "pointsAwarded": 100,
         }
     ]
 

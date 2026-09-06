@@ -255,7 +255,7 @@ async def test_a_late_write_from_an_earlier_game_does_not_speak_for_the_newer_on
 
     stale = SimpleNamespace(
         record=SimpleNamespace(id="an-earlier-game"),
-        participants=[], turns=[], guesses=[], score_events=[], drawings=[], reactions=[],
+        participants=[], turns=[], score_events=[], drawings=[], reactions=[],
     )
     history.fail = True
     await ctx.game_flow._persist_game_history(room, stale)

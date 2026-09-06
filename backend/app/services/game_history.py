@@ -30,7 +30,6 @@ from app.repositories.interfaces import (
     ScoreEventInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
-    TurnGuessInput,
     TurnParticipantOutcomeInput,
     TurnRecordInput,
 )
@@ -54,7 +53,6 @@ class GameHistoryWrite:
     record: GameRecordInput
     participants: list[GameParticipantInput]
     turns: list[TurnRecordInput]
-    guesses: list[TurnGuessInput]
     score_events: list[ScoreEventInput]
     # Captured here rather than read later because the room reverts to an
     # editable waiting room the moment this function returns, for the same
@@ -183,12 +181,23 @@ def _turn_participant_outcomes(
     turn: CompletedTurnStats,
     seats: dict[str, _Seat],
 ) -> tuple[TurnParticipantOutcomeInput, ...]:
-    """Resolve runtime tokens to one factual outcome per historical seat."""
+    """Resolve runtime tokens to one factual outcome per historical seat.
+
+    The net award of a correct guess rides on the outcome (#548); a seat
+    that guessed right under more than one token in the turn keeps the sum.
+    """
     grouped: dict[str, list[TurnParticipantOutcomeRecord]] = {}
     for outcome in turn.participant_outcomes:
         seat = seats.get(outcome.token)
         if seat is not None:
             grouped.setdefault(seat.participant_id, []).append(outcome)
+    awarded: dict[str, int] = {}
+    for guess in turn.guesses:
+        guesser = seats.get(guess.token)
+        if guesser is not None:
+            awarded[guesser.participant_id] = (
+                awarded.get(guesser.participant_id, 0) + guess.points_awarded
+            )
 
     outcome_priority = {
         "ineligible": 0,
@@ -243,6 +252,9 @@ def _turn_participant_outcomes(
                 hints_used=sum(row.hints_used for row in records),
                 points_spent_on_hints=sum(
                     row.points_spent_on_hints for row in records
+                ),
+                points_awarded=(
+                    awarded.get(seat_id, 0) if outcome == "correct" else None
                 ),
             )
         )
@@ -340,7 +352,6 @@ def build_game_history(
         return None
 
     turns: list[TurnRecordInput] = []
-    guesses: list[TurnGuessInput] = []
     score_events: list[ScoreEventInput] = []
     score_event_order = 0
     rule_snapshot = game.rule_snapshot()
@@ -412,18 +423,6 @@ def build_game_history(
             guesser = seats.get(guess.token)
             if guesser is None:
                 continue
-            guesses.append(
-                TurnGuessInput(
-                    turn_id=turn_id,
-                    user_id=guesser.user_id,
-                    seat_id=guesser.participant_id,
-                    points_awarded=guess.points_awarded,
-                    guess_time_seconds=guess.guess_time_seconds,
-                    hints_used=guess.hints_used,
-                    points_spent_on_hints=guess.points_spent_on_hints,
-                    wrong_guesses_before=guess.wrong_guesses_before,
-                )
-            )
             if game.scoring_mode != "none":
                 gross_award = guess.points_awarded + guess.points_spent_on_hints
                 if gross_award > 0:
@@ -487,6 +486,5 @@ def build_game_history(
         ),
         participants=participants,
         turns=turns,
-        guesses=guesses,
         score_events=score_events,
     )

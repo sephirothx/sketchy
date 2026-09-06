@@ -424,7 +424,6 @@ async def _pin_a_game_to(factory, owner_id: str, revision_id: str) -> None:
                 duration_seconds=60,
             )
         ],
-        [],
     )
 
 

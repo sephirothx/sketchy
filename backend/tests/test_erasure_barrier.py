@@ -29,7 +29,6 @@ from app.db.models import (
     RoomMessage,
     TurnDrawing,
     TurnDrawingReaction,
-    TurnGuess,
     TurnRecord,
     User,
     generate_uuid,
@@ -85,17 +84,10 @@ async def _seat_rows(factory, game_id: str):
                 select(TurnDrawing).where(TurnDrawing.game_id == UUID(game_id))
             )
         ).all()
-        guesses = (
-            await session.scalars(
-                select(TurnGuess).where(
-                    TurnGuess.turn_id.in_([turn.id for turn in turns])
-                )
-            )
-        ).all()
-    return seats, turns, drawings, guesses
+    return seats, turns, drawings
 
 
-def _assert_erased_only_for(owner_id: str, seats, turns, drawings, guesses):
+def _assert_erased_only_for(owner_id: str, seats, turns, drawings):
     owner = UUID(owner_id)
     by_drawer = {turn.drawer_user_id: turn for turn in turns}
     for seat in seats:
@@ -115,10 +107,6 @@ def _assert_erased_only_for(owner_id: str, seats, turns, drawings, guesses):
             assert drawing.deleted_at is not None
         else:
             assert drawing.status == "ready" and drawing.payload is not None
-    for guess in guesses:
-        if guess.user_id == owner:
-            assert guess.display_name_snapshot == DELETED_DISPLAY_NAME
-        assert guess.points_awarded is not None
 
 
 # --- queued messages ---------------------------------------------------------
@@ -304,7 +292,6 @@ def _same_game_every_time(owner_id: str, other_id: str) -> dict:
                 duration_seconds=60,
             ),
         ],
-        guesses=[],
         drawings=[
             TurnDrawingInput(turn_id=owner_turn, payload=_skch_drawing()),
             TurnDrawingInput(turn_id=other_turn, payload=_skch_drawing()),

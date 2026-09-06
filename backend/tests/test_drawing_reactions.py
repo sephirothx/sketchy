@@ -165,7 +165,6 @@ async def record_game(
                 ),
             )
         ],
-        [],
         None,
         [TurnDrawingInput(turn_id=turn_id, payload=SKCH)] if drawing else None,
         reactions,

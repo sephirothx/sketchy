@@ -52,17 +52,6 @@ export interface GameSummary {
   participants: GameParticipant[];
 }
 
-export interface TurnGuess {
-  userId: string | null;
-  seatId: string | null;
-  displayName: string;
-  nameColor: string | null;
-  avatarUrl?: string | null;
-  isAnonymous: boolean;
-  pointsAwarded: number;
-  guessTimeSeconds: number;
-}
-
 export interface TurnParticipantOutcome {
   seatId: string;
   eligible: boolean;
@@ -74,6 +63,8 @@ export interface TurnParticipantOutcome {
   nearMissCount: number;
   hintsUsed: number;
   pointsSpentOnHints: number;
+  /** Net points for a correct outcome; null on every other outcome. */
+  pointsAwarded: number | null;
 }
 
 export interface ScoreEvent {
@@ -105,7 +96,6 @@ export interface GameTurn {
   /** Absent for turns played before drawings were kept. */
   drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;
   promptOffers: PromptOffer[];
-  guesses: TurnGuess[];
   participantOutcomes: TurnParticipantOutcome[];
   reactions: HistoryReaction[];
 }

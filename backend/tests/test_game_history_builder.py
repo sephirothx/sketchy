@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET, GameOutcome
-from app.game import CompletedTurnStats, Game, TurnGuessRecord
+from app.game import CompletedTurnStats, Game, TurnGuessRecord, TurnParticipantOutcomeRecord
 from app.identifiers import generate_uuid7
 from app.rooms import DepartedSeat, DrawingRecapEntry, RoomManager
 from app.services.game_history import build_game_history
@@ -53,6 +53,19 @@ def turn(
         guesses=tuple(
             TurnGuessRecord(token=token, points_awarded=points, guess_time_seconds=t)
             for token, points, t in guesses
+        ),
+        # A live turn ends with an outcome per frozen seat; the award rides
+        # on the correct ones (#548).
+        participant_outcomes=tuple(
+            TurnParticipantOutcomeRecord(
+                token=token,
+                eligible=True,
+                eligibility_reason="eligible",
+                outcome="correct",
+                terminal_state="active",
+                correct_guess_time_seconds=t,
+            )
+            for token, _, t in guesses
         ),
         present_tokens=tuple(present),
     )
@@ -105,10 +118,15 @@ def test_guess_ids_follow_the_turns_actually_written():
     history = build_game_history(room, game, finished_at=FINISHED_AT)
 
     assert [r.turn_number for r in history.turns] == [1, 2, 3]
-    assert [(g.turn_id, g.user_id) for g in history.guesses] == [
-        (history.turns[0].id, "user-bob"),
-        (history.turns[1].id, "user-ann"),
-        (history.turns[2].id, "user-ann"),
+    assert [
+        (turn.id, outcome.user_id, outcome.points_awarded)
+        for turn in history.turns
+        for outcome in turn.participant_outcomes
+        if outcome.outcome == "correct"
+    ] == [
+        (history.turns[0].id, "user-bob", 200),
+        (history.turns[1].id, "user-ann", 150),
+        (history.turns[2].id, "user-ann", 250),
     ]
     cid = next(participant for participant in history.participants if participant.user_id is None)
     assert cid.display_name == "Cid"
@@ -269,6 +287,19 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
                     wrong_guesses_before=4,
                 ),
             ),
+            participant_outcomes=(
+                TurnParticipantOutcomeRecord(
+                    token=bob,
+                    eligible=True,
+                    eligibility_reason="eligible",
+                    outcome="correct",
+                    terminal_state="active",
+                    correct_guess_time_seconds=30.0,
+                    wrong_guess_count=4,
+                    hints_used=2,
+                    points_spent_on_hints=36,
+                ),
+            ),
             prompt_auto_picked=True,
             stroke_count=17,
             end_reason="timeout",
@@ -288,10 +319,13 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
     assert turn_record.wrong_guess_count == 6
     assert turn_record.near_miss_count == 2
 
-    guess = history.guesses[0]
-    assert guess.hints_used == 2
-    assert guess.points_spent_on_hints == 36
-    assert guess.wrong_guesses_before == 4
+    (outcome,) = [
+        outcome for outcome in turn_record.participant_outcomes if outcome.outcome == "correct"
+    ]
+    assert outcome.points_awarded == 180
+    assert outcome.hints_used == 2
+    assert outcome.points_spent_on_hints == 36
+    assert outcome.wrong_guess_count == 4
 
 
 def test_turns_played_separates_a_walkout_from_a_full_game():

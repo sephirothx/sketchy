@@ -2233,10 +2233,6 @@ class TurnRecord(Base):
 
     game: Mapped[GameRecord] = relationship(back_populates="turns")
     drawer: Mapped[User | None] = relationship()
-    guesses: Mapped[list[TurnGuess]] = relationship(
-        back_populates="turn_record",
-        cascade="all, delete-orphan",
-    )
     prompt_offers: Mapped[list[TurnPromptOffer]] = relationship(
         back_populates="turn_record",
         cascade="all, delete-orphan",
@@ -2474,18 +2470,10 @@ class ScoreEvent(Base):
 
 
 class TurnParticipantOutcome(Base):
-    """One participant seat's eligibility and terminal result for a turn."""
+    """One participant seat's eligibility, terminal result and award for a turn."""
 
     __tablename__ = "turn_participant_outcomes"
     __table_args__ = (
-        UniqueConstraint(
-            "turn_id",
-            "participant_id",
-            name="uq_turn_participant_outcomes_turn_participant",
-        ),
-        UniqueConstraint(
-            "turn_id", "id", name="uq_turn_participant_outcomes_turn_id_id"
-        ),
         # game_id is denormalized precisely so these can exist: the turn and
         # the seat must belong to the same game as the outcome that joins
         # them, and each other by transitivity.
@@ -2533,19 +2521,26 @@ class TurnParticipantOutcome(Base):
             "AND hints_used >= 0 AND points_spent_on_hints >= 0",
             name="ck_turn_participant_outcomes_nonnegative",
         ),
+        # The award is the scoring fact of a correct outcome and of nothing
+        # else (#548): it used to be a row of its own, in turn_guesses, and
+        # two records of one fact were two chances to disagree.
+        CheckConstraint(
+            "((outcome = 'correct') = (points_awarded IS NOT NULL)) "
+            "AND (points_awarded IS NULL OR points_awarded >= 0)",
+            name="ck_turn_participant_outcomes_points",
+        ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    # One row per seat per turn is the identity, not a fact beside it: the
+    # pair is the primary key (#548).
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    )
+    participant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, index=True
     )
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False
-    )
-    turn_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False
-    )
-    participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
     eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     eligibility_reason: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -2566,6 +2561,9 @@ class TurnParticipantOutcome(Base):
     points_spent_on_hints: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
+    # Net points the seat was awarded for guessing right; NULL on every
+    # other outcome. The gross award and the hint charge are the ledger's.
+    points_awarded: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -2578,13 +2576,6 @@ class TurnParticipantOutcome(Base):
     participant: Mapped[GameParticipant] = relationship(
         primaryjoin=(
             "GameParticipant.id == foreign(TurnParticipantOutcome.participant_id)"
-        ),
-    )
-    correct_guess: Mapped[TurnGuess | None] = relationship(
-        back_populates="outcome",
-        uselist=False,
-        primaryjoin=(
-            "TurnParticipantOutcome.id == foreign(TurnGuess.outcome_id)"
         ),
     )
 
@@ -2746,79 +2737,6 @@ class TurnPromptOfferSource(Base):
     )
 
     offer: Mapped[TurnPromptOffer] = relationship(back_populates="sources")
-
-
-class TurnGuess(Base):
-    """Optional scoring child for a participant's correct turn outcome."""
-
-    __tablename__ = "turn_guesses"
-    __table_args__ = (
-        Index(
-            "uq_turn_guesses_turn_participant",
-            "turn_id",
-            "participant_id",
-            unique=True,
-        ),
-        Index("uq_turn_guesses_outcome", "outcome_id", unique=True),
-        # The outcome must belong to the same turn as the guess it scores.
-        ForeignKeyConstraint(
-            ["turn_id", "outcome_id"],
-            ["turn_participant_outcomes.turn_id", "turn_participant_outcomes.id"],
-            name="fk_turn_guesses_outcome_same_turn",
-            ondelete="CASCADE",
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
-    turn_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("turn_records.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    participant_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("game_participants.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    outcome_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False
-    )
-    display_name_snapshot: Mapped[str] = mapped_column(
-        String(32), default="Unknown", nullable=False
-    )
-    name_color_snapshot: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    is_anonymous_snapshot: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False
-    )
-    points_awarded: Mapped[int] = mapped_column(Integer, nullable=False)
-    guess_time_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    # Attempt and hint facts live on the parent outcome row alone - two
-    # records of one fact were two chances to disagree.
-    created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=False
-    )
-
-    turn_record: Mapped[TurnRecord] = relationship(
-        back_populates="guesses", foreign_keys=[turn_id]
-    )
-    # Flush-ordering edge (see TurnRecord.drawer_seat): outcomes must land
-    # before the guesses that reference them.
-    outcome: Mapped[TurnParticipantOutcome] = relationship(
-        back_populates="correct_guess",
-        primaryjoin=(
-            "TurnParticipantOutcome.id == foreign(TurnGuess.outcome_id)"
-        ),
-    )
-    user: Mapped[User | None] = relationship()
 
 
 class PromptConcept(Base):

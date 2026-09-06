@@ -20,7 +20,7 @@ from app.db.models import (
     GameRecord,
     IdentityAlias,
     TurnDrawingReaction,
-    TurnGuess,
+    TurnParticipantOutcome,
     TurnRecord,
     User,
     UserStatsDaily,
@@ -353,10 +353,18 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
                 totals[(canonical_drawer, day)].drawings_made += 1
 
         guess_statement = (
-            select(TurnGuess.user_id, TurnRecord.game_id, GameRecord.finished_at)
-            .join(TurnRecord, TurnRecord.id == TurnGuess.turn_id)
+            select(GameParticipant.user_id, TurnRecord.game_id, GameRecord.finished_at)
+            .select_from(TurnParticipantOutcome)
+            .join(TurnRecord, TurnRecord.id == TurnParticipantOutcome.turn_id)
             .join(GameRecord, GameRecord.id == TurnRecord.game_id)
-            .where(TurnGuess.user_id.in_(identity_ids))
+            .join(
+                GameParticipant,
+                GameParticipant.id == TurnParticipantOutcome.participant_id,
+            )
+            .where(
+                TurnParticipantOutcome.outcome == "correct",
+                GameParticipant.user_id.in_(identity_ids),
+            )
         )
         async for guesser_id, game_id, finished_at in _stream(session, guess_statement):
             canonical_guesser = canonical_of[guesser_id]

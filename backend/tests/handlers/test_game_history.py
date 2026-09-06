@@ -53,8 +53,14 @@ async def test_completed_game_records_every_round_with_participants_and_guesses(
     assert saved.record.total_rounds == 2
     assert saved.record.finished_at >= saved.record.started_at
     # Every turn has exactly one eligible guesser, and they all guessed.
-    assert len(saved.guesses) == 4
-    assert {g.turn_id for g in saved.guesses} == {turn.id for turn in saved.turns}
+    correct = [
+        (turn.id, outcome)
+        for turn in saved.turns
+        for outcome in turn.participant_outcomes
+        if outcome.outcome == "correct"
+    ]
+    assert len(correct) == 4
+    assert {turn_id for turn_id, _ in correct} == {turn.id for turn in saved.turns}
     assert saved.record.score_ledger_version == 1
     assert [event.event_order for event in saved.score_events] == list(
         range(1, len(saved.score_events) + 1)
@@ -99,8 +105,10 @@ async def test_seat_without_an_account_is_fully_preserved():
         for turn in saved.turns
     )
     assert any(
-        guess.user_id is None and guess.seat_id == cid.seat_id
-        for guess in saved.guesses
+        outcome.user_id is None and outcome.seat_id == cid.seat_id
+        and outcome.outcome == "correct"
+        for turn in saved.turns
+        for outcome in turn.participant_outcomes
     )
 
 
@@ -273,18 +281,14 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     assert first_round.end_reason == "all_guessed"
     assert first_round.wrong_guess_count == 1
 
-    hinted = next(g for g in saved.guesses if g.turn_id == first_round.id)
-    assert hinted.hints_used == 1
-    assert hinted.points_spent_on_hints == price
-    # What lands in history is what the player actually banked: net of hints.
-    assert hinted.points_awarded == awarded == gross - price
-    assert hinted.wrong_guesses_before == 1
     outcome = first_round.participant_outcomes[0]
     assert outcome.eligible is True
     assert outcome.eligibility_reason == "eligible"
     assert outcome.outcome == "correct"
     assert outcome.terminal_state == "active"
-    assert outcome.correct_guess_time_seconds == hinted.guess_time_seconds
+    # What lands in history is what the player actually banked: net of hints.
+    assert outcome.points_awarded == awarded == gross - price
+    assert outcome.correct_guess_time_seconds is not None
     assert outcome.wrong_guess_count == 1
     assert outcome.hints_used == 1
     assert outcome.points_spent_on_hints == price
@@ -356,9 +360,9 @@ async def test_a_player_who_never_guesses_correctly_keeps_attempt_and_hint_facts
     await ctx.timers.close()
 
     first_turn = history.saved[0].turns[0]
-    assert history.saved[0].guesses == []
     outcome = first_turn.participant_outcomes[0]
     assert outcome.outcome == "incorrect"
+    assert outcome.points_awarded is None
     assert outcome.correct_guess_time_seconds is None
     assert outcome.wrong_guess_count == 1
     assert outcome.hints_used == 1

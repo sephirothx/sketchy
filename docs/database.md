@@ -83,7 +83,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-51 tables in eight domains.
+52 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -106,7 +106,6 @@ erDiagram
     turn_records ||--o| turn_drawings : "drawing"
     turn_records ||--o{ turn_participant_outcomes : "per seat"
     turn_records ||--o{ turn_prompt_offers : "options"
-    turn_participant_outcomes ||--o| turn_guesses : "scoring child"
     game_participants ||--o{ turn_participant_outcomes : "seat"
     turn_records ||--o{ turn_drawing_reactions : "reactions"
     game_participants ||--o{ turn_drawing_reactions : "reactor seat"
@@ -132,7 +131,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `turn_guesses`, `score_events`, `game_prompt_sources` |
+| **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
@@ -368,7 +367,7 @@ The immutable mapping from a merged guest identity to its account. **Chains are 
 load-bearing application invariant**: a merge target is never itself a source, so
 resolution never depends on traversal order — the schema cannot express this without a
 trigger, so the merge path enforces it. Historical
-participant, drawer, and guess rows keep their original IDs and presentation, so a game
+participant and drawer rows keep their original IDs and presentation, so a game
 containing both identities keeps **two factual seats** rather than violating a
 uniqueness rule or losing a player. Account history and statistics resolve the account
 plus all of its aliases; the guest's sessions are revoked during the merge.
@@ -497,7 +496,7 @@ guesses, prompt-list revision history, unexpired authored retained messages, sub
 evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v3_fields.json`](../fixtures/account_data_export_v3_fields.json).
+pinned by [`fixtures/account_data_export_v4_fields.json`](../fixtures/account_data_export_v4_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1014,17 +1013,28 @@ account *gave* stay, attributed through the tombstoned seat.
 ### `turn_participant_outcomes`
 One row per current or late-arriving non-drawer seat, per turn.
 
-`id` · `game_id` · `turn_id` · `participant_id` (same-game composite FKs, CASCADE) ·
-`eligible` ·
+`turn_id` · `participant_id` (**primary key**, and same-game composite FKs with
+`game_id`, CASCADE) · `eligible` ·
 `eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`, the last written only by games finished before a mid-turn arrival became an ordinary guesser) ·
 `outcome` (`correct \| incorrect \| no_attempt \| ineligible`) ·
 `terminal_state` (`active \| afk \| disconnected \| left`) ·
 `correct_guess_time_seconds` · `wrong_guess_count` · `near_miss_count` ·
-`hints_used` · `points_spent_on_hints` · `created_at`.
+`hints_used` · `points_spent_on_hints` · `points_awarded` · `created_at`.
 
-`uq_turn_participant_outcomes_turn_participant` gives exactly one row per seat per turn.
-Paired `CHECK`s keep the record coherent: eligibility and its reason must agree with the
-outcome, and a correct time exists **iff** the outcome is `correct`.
+One row per seat per turn is the identity: the pair is the primary key (#548). Paired
+`CHECK`s keep the record coherent: eligibility and its reason must agree with the
+outcome, a correct time exists **iff** the outcome is `correct`, and so does
+`points_awarded` (`ck_turn_participant_outcomes_points`, never negative).
+
+**The correct guess is the outcome, not a row beside it (#548).** Until #548 a correct
+outcome had a scoring child in `turn_guesses`: a surrogate key, a link back to the
+outcome, the seat's presentation copied from `game_participants`, the guess time copied
+from the outcome, and the net award. Two records of one fact were two chances to
+disagree, and the writer spent a proof keeping them equal; the row cost about 20 KB and
+72 rows per game of 8 seats × 24 turns, with five index structures. The award now rides
+on the outcome as `points_awarded`, NULL on every outcome but `correct`; the gross award
+and the hint charge stay the ledger's (`score_events`), which the writer still proves
+against these rows. Everything else the guess row held is on the outcome or the seat.
 
 **When drawing begins, the server freezes the eligible guesser seats**
 ([`backend/app/services/game_flow.py`](../backend/app/services/game_flow.py)). Players who
@@ -1037,19 +1047,6 @@ numeric facts but **not guess text** — text retention and evidence are governe
 (§5).
 No-scoring games record the same factual outcomes with zero awarded points and never
 invent hypothetical score awards.
-
-### `turn_guesses`
-The **optional scoring child** of a correct outcome.
-
-`id` · `turn_id` (CASCADE) · `user_id` / `participant_id` (`SET NULL`) ·
-`outcome_id` (same-turn composite FK → `turn_participant_outcomes`, CASCADE,
-**unique**) · frozen presentation · `points_awarded` · `guess_time_seconds` ·
-`created_at`, with `uq_turn_guesses_turn_participant`. Attempt and hint facts live on
-the parent outcome row alone — two records of one fact were two chances to disagree.
-
-One correct guess per participant seat and turn, at the database layer. Finished-game
-guesses reference the UUID of their turn **explicitly** — persistence never infers that
-relationship from the positions of two independently ordered lists.
 
 ### `score_events`
 The ordered, **append-only** point ledger for a scored game.
@@ -1082,14 +1079,11 @@ participant's ledger sum to equal the cached final score **in the same transacti
 **Same-game coherence is structural.** Composite foreign keys pair cross-row
 references with their `game_id` (or `turn_id`): an event cannot award to a seat, charge
 a turn, or correct an entry belonging to another game; a turn's drawer seat must belong
-to the turn's game; an outcome's turn and seat must share a game
+to the turn's game; and an outcome's turn and seat must share a game
 (`turn_participant_outcomes` carries a denormalized `game_id` precisely so that is
-expressible); and a guess's outcome must belong to the guess's turn. The one reference
-left single-column is `turn_guesses.participant_id`: its `ON DELETE SET NULL` in a
-composite form would null the turn alongside the seat, and the guess's seat is already
-same-turn-constrained transitively through its outcome. The writer's
-transactional proofs cover the arithmetic; these constraints cover the addressing, so
-a second writer, a repair script, or a partial restore cannot silently disagree.
+expressible). The writer's transactional proofs cover the arithmetic; these constraints
+cover the addressing, so a second writer, a repair script, or a partial restore cannot
+silently disagree.
 
 Legacy games explicitly use ledger version `0`, because gross awards and drawer bonuses
 cannot be reconstructed from their net totals. No-scoring games use the current version
