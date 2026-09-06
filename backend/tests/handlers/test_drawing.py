@@ -757,7 +757,7 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     sio.emit = AsyncMock()
 
     request_handler = sio.handlers["/"]["request_sync_strokes"]
-    await request_handler("joiner-sid")
+    assert await request_handler("joiner-sid", [7]) == {"ok": True}
 
     # Check sync_strokes payload sent to joiner
     emitted_sync = [
@@ -765,9 +765,10 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
         if call.args[0] == "sync_strokes" and call.kwargs.get("to") == "joiner-sid"
     ]
     assert len(emitted_sync) == 1
-    history_payload, revision, generation, sequence, history_hash = (
+    history_payload, revision, generation, sequence, history_hash, request_id = (
         emitted_sync[0].args[1]
     )
+    assert request_id == 7, "the reply names the request it answers"
     decoded = decode_binary_canvas_history(history_payload)
     assert revision == room.game.canvas.revision
     assert generation == room.game.canvas.generation
@@ -794,13 +795,13 @@ async def test_request_sync_strokes_seeds_empty_history_revision():
     )
     sio.emit = AsyncMock()
 
-    await sio.handlers["/"]["request_sync_strokes"]("player-sid")
+    await sio.handlers["/"]["request_sync_strokes"]("player-sid", [1])
 
     sync_call = next(
         call for call in sio.emit.await_args_list
         if call.args[0] == "sync_strokes"
     )
-    history_payload, revision, generation, sequence, history_hash = sync_call.args[1]
+    history_payload, revision, generation, sequence, history_hash, _request_id = sync_call.args[1]
     assert decode_binary_canvas_history(history_payload) == []
     assert revision == room.game.canvas.revision
     assert generation == room.game.canvas.generation
@@ -1001,10 +1002,11 @@ async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
 
     # Claiming the first three actions, with the hash the server itself
     # computed for that prefix.
-    await sync("drawer-sid", [canvas.generation, 3, canvas.hashes[2]])
+    await sync("drawer-sid", [5, canvas.generation, 3, canvas.hashes[2]])
     event, payload = sio.emit.await_args.args
     assert event == "sync_strokes_tail"
     assert payload[1] == 3
+    assert payload[-1] == 5, "the tail names the request it answers"
     tail = decode_binary_canvas_history(payload[0])
     assert len(tail) == 2
     assert list(tail) == list(canvas.history)[3:]
@@ -1012,10 +1014,10 @@ async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
     # Anything that does not check out falls back to the whole history, which
     # is what keeps the claim an optimization rather than a trust boundary.
     for bad in (
-        [canvas.generation, 3, 999],
-        [canvas.generation + 1, 3, canvas.hashes[2]],
-        [canvas.generation, 99, canvas.hashes[2]],
-        None,
+        [6, canvas.generation, 3, 999],
+        [6, canvas.generation + 1, 3, canvas.hashes[2]],
+        [6, canvas.generation, 99, canvas.hashes[2]],
+        [6],
     ):
         sio.emit.reset_mock()
         # This is about the answer, not the rate: a resync floor holds one
@@ -1024,3 +1026,42 @@ async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
         ctx.clear_command_budget("drawer-sid")
         await sync("drawer-sid", bad)
         assert sio.emit.await_args.args[0] == "sync_strokes", bad
+
+
+@pytest.mark.asyncio
+async def test_a_sync_request_is_acknowledged_and_refused_with_a_retry_when_there_is_no_canvas():
+    """#598: a request the server cannot answer says so, and when to ask again,
+    instead of being dropped in silence on a quiet canvas."""
+    from app.handlers.drawing import NO_CANVAS_RETRY_MS
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    player = room_manager.add_player(room, "Player")
+    player.sid = "player-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": player.id})
+    sio.emit = AsyncMock()
+    handler = sio.handlers["/"]["request_sync_strokes"]
+
+    async def sync(sid, payload):
+        # About the answers, not the rate: the resync floor is its own test.
+        ctx.clear_command_budget(sid)
+        return await handler(sid, payload)
+
+    # Between games there is no canvas: refused, with a retry delay.
+    refused = await sync("player-sid", [3])
+    assert refused["errorCode"] == "not_in_game" and refused["retryAfterMs"] == NO_CANVAS_RETRY_MS
+    sio.emit.assert_not_awaited()
+
+    # Malformed: refused before anything is looked up.
+    for bad in (None, [], [0], ["1"], [1, 2], [1, 1, 2, 3, 4]):
+        assert (await sync("player-sid", bad))["errorCode"] == "invalid_payload", bad
+
+    # Once the turn is on, the same request is answered and acknowledged.
+    room.game = Game(turn_order=[player.id])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    assert await sync("player-sid", [4]) == {"ok": True}
+    assert sio.emit.await_args.args[0] == "sync_strokes"
+    assert sio.emit.await_args.args[1][-1] == 4

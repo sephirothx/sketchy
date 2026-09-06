@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { observeServerCanvasSequence } from "../lib/canvasRecovery";
+import { observeServerCanvasSequence, onSessionRebindRequested } from "../lib/canvasRecovery";
 import { emitWithAck, socket } from "../lib/socket";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -210,6 +210,11 @@ export function useRoomSessionReconnect() {
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     document.addEventListener("visibilitychange", onVisibility);
+    // The canvas protocol exhausted its sync retries (#598): the seat binding
+    // is suspect, and a transport restart is the one recovery that resets it.
+    const stopRebindRequests = onSessionRebindRequested(() => {
+      queueRebind({ forceTransportRestart: true });
+    });
     const stallTimer = window.setInterval(checkPhaseStall, STALL_CHECK_MS);
     const heartbeatTimer = window.setInterval(() => {
       void runHeartbeat();
@@ -221,6 +226,7 @@ export function useRoomSessionReconnect() {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       document.removeEventListener("visibilitychange", onVisibility);
+      stopRebindRequests();
       window.clearInterval(stallTimer);
       window.clearInterval(heartbeatTimer);
     };

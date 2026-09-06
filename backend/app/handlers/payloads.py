@@ -572,20 +572,34 @@ def parse_draw_payload(data: Any, action_identity: Any = None) -> DrawPayload:
     return DrawPayload(packet=packet, wire_data=wire_data, action_identity=identity)
 
 
-def parse_sync_request_payload(data: Any) -> tuple[int, int, int] | None:
-    """Read a client's claim about the canvas prefix it already holds.
+@dataclass(frozen=True, slots=True)
+class SyncRequest:
+    """One `request_sync_strokes`: which request, and what the client holds."""
 
-    `None` means "send everything", which is what an empty payload has always
-    meant and what a client with anything uncommitted still sends. A claim is
-    only ever an optimization: it is verified against the authoritative history
-    before it is honoured, and any doubt falls back to the full dump.
+    request_id: int
+    holds: tuple[int, int, int] | None
+
+
+def parse_sync_request_payload(data: Any) -> SyncRequest:
+    """Read a client's sync request: its id, and a claim about the prefix it holds.
+
+    `[requestId]` means "send everything", which a client with anything
+    uncommitted still sends. `[requestId, generation, actionCount, historyHash]`
+    is a claim, only ever an optimization: it is verified against the
+    authoritative history before it is honoured, and any doubt falls back to
+    the full dump. The id is echoed on the reply so the client can tell the
+    answer to *this* request from one to an earlier request it has since
+    abandoned (#598); a server-initiated sync carries id 0.
     """
-    if data is None or data == {}:
-        return None
-    if not isinstance(data, list) or len(data) != 3:
+    if not isinstance(data, list) or len(data) not in (1, 4):
         raise PayloadError("Invalid canvas sync request")
-    generation = _canvas_sequence(data[0])
-    count, history_hash = data[1], data[2]
+    request_id = _canvas_sequence(data[0])
+    if request_id is None:
+        raise PayloadError("Invalid canvas sync request")
+    if len(data) == 1:
+        return SyncRequest(request_id, None)
+    generation = _canvas_sequence(data[1])
+    count, history_hash = data[2], data[3]
     if (
         generation is None
         or isinstance(count, bool)
@@ -596,7 +610,7 @@ def parse_sync_request_payload(data: Any) -> tuple[int, int, int] | None:
         or not 0 <= history_hash <= 0xFFFFFFFF
     ):
         raise PayloadError("Invalid canvas sync request")
-    return generation, count, history_hash
+    return SyncRequest(request_id, (generation, count, history_hash))
 
 
 def parse_undo_payload(data: Any) -> UndoPayload:

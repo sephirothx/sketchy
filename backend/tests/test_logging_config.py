@@ -11,9 +11,12 @@ from app.logging_config import (
     ACCESS_LOGGER,
     FORMAT,
     JsonFormatter,
+    TREES,
+    UVICORN_TREES,
+    _detach,
     configure_logging,
-    make_formatter,
     log_format,
+    make_formatter,
     redact,
 )
 
@@ -129,6 +132,13 @@ def test_secrets_and_addresses_never_reach_the_line(text, expected):
 def test_configure_logging_is_idempotent_and_can_change_format(monkeypatch):
     monkeypatch.delenv("LOG_FORMAT", raising=False)
     monkeypatch.delenv("SKETCHY_ENV", raising=False)
+    # From a clean slate, whatever earlier tests in this process attached: the
+    # first call must install and the second must find what it installed, and
+    # that has to hold inside this test rather than depend on which worker ran
+    # what before it (the coverage floor was missed under sharding for that).
+    for name in (*TREES, *UVICORN_TREES):
+        _detach(name)
+    assert not any(getattr(h, "_sketchy_handler", False) for h in logging.getLogger("app").handlers)
     configure_logging(fmt="text")
     configure_logging(fmt="text")
     app_logger = logging.getLogger("app")
@@ -177,3 +187,15 @@ def test_records_written_inside_a_request_are_stamped_with_it():
     outside = next(line for line in lines if line["msg"] == "outside")
     assert inside["request_id"] == "rid-42"
     assert "request_id" not in outside
+
+
+def test_an_exception_already_rendered_as_text_is_carried_as_the_exc_field():
+    """A record whose traceback was formatted upstream carries `exc_text` and no
+    `exc_info`; the line must still carry it, redacted like everything else."""
+    record = logging.LogRecord("app", logging.ERROR, __file__, 1, "boom", None, None)
+    # Password-shaped rather than key-shaped on purpose: the credential scan in
+    # CI reads test sources too, and a string that looks like a real key is a
+    # finding whatever it is for.
+    record.exc_text = "Traceback: login failed password=hunter2 for x"
+    payload = json.loads(JsonFormatter().format(record))
+    assert payload["exc"] == "Traceback: login failed password=*** for x"

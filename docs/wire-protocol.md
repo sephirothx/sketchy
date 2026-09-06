@@ -399,7 +399,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `select_prompt` | `SelectPromptPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
 | `draw` | binary frame + optional `[generation, sequence]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
-| `request_sync_strokes` | `null`, or `[generation, actionCount, historyHash]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
+| `request_sync_strokes` | `[requestId]`, or `[requestId, generation, actionCount, historyHash]` | `{ok: true}` once the reply is on its way; `not_in_game` with `retryAfterMs` when there is no canvas; `too_fast` from the resync budget | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `guess` | `GuessPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
@@ -573,8 +573,8 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
-| `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash)` | one socket |
-| `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash)` — only the actions after a verified prefix (§7) | one socket |
+| `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash, requestId)` — `requestId` names the request it answers, `0` for a sync the server decided to send | one socket |
+| `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash, requestId)` — only the actions after a verified prefix (§7); always answers a request, never unsolicited | one socket |
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
 | `voted_afk` | `{message}` | the player who was voted AFK |
 | `kicked` | `{reason}` | one socket |
@@ -1022,7 +1022,42 @@ drawer                                     server                       everyone
 | `undo_stroke` whose `revision`/`historyHash` disagree | `sync_strokes` + `{"ok": false, "error": "Canvas history is out of sync"}` |
 
 `sync_strokes` is emitted as a **tuple**:
-`(binaryHistory, revision, generation, sequence, historyHash)`.
+`(binaryHistory, revision, generation, sequence, historyHash, requestId)`.
+
+### The sync transaction
+
+A resync is one transaction at a time on the client
+([`frontend/src/lib/canvasSyncRequests.ts`](../frontend/src/lib/canvasSyncRequests.ts)),
+scoped to what it was asked for (#598). Before it, a reply was applied whatever it
+answered: a tail asked for while nothing was pending could arrive after the drawer had
+drawn again, and replacing history then cleared those strokes as if they had never
+happened; a full reply to a request abandoned by a reset landed on the new turn; and a
+request the server never answered released the latch after ten seconds and retried
+only if something else had asked meanwhile — a lost or refused request on a quiet
+canvas had no next trigger.
+
+- **Identity.** `request_sync_strokes` carries an id, and the reply echoes it last. A
+  reply whose id is not the outstanding request's is **stale** and ignored; a
+  `sync_strokes` with id `0` is a sync the server decided to send (a join, a refused
+  frame) and is always applied. A tail must additionally be cut for the prefix the
+  request *claimed* — the claim is captured when the request goes out, not when the
+  reply arrives — so strokes drawn in between are pending mutations, reconciled like
+  after a full reply, not history to be overwritten.
+- **One reconciliation.** A full reply and a tail go through the same adoption: replace
+  the history, drop pending actions the server has committed and paths still open,
+  replay the rest through the paced sender (above) with a deadline each, or fall back to
+  server truth if they do not fit.
+- **Acknowledged, and retried.** The request is acknowledged: `{ok: true}` when the
+  reply is on its way, `not_in_game` with `retryAfterMs` (2 s) between turns, `too_fast`
+  with the resync budget's window. A refused or lost request (no reply inside 10 s) is
+  retried after max(`retryAfterMs`, 2 s), then 4 s, then 8 s. When those are gone the
+  client does not poll on: it hands the session to the reconnect hook, which restarts
+  the transport — the player sees the existing reconnecting state, the server pushes a
+  fresh snapshot on rejoin, and every counter resets. Unanswered syncs usually mean the
+  seat binding itself is suspect.
+- **Coalesced.** Triggers that arrive while a transaction is outstanding are satisfied by
+  its reply when the reply converges; only a reply that failed to converge issues the
+  follow-up. A burst of duplicate triggers costs one request and one reply.
 
 ### Replaying what the server did not get
 
@@ -1497,7 +1532,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (11) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (12) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

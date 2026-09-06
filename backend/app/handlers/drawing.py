@@ -12,7 +12,7 @@ from app.handlers.payloads import (
     parse_sync_request_payload,
     parse_undo_payload,
 )
-from app.handlers.refusals import ErrorCode
+from app.handlers.refusals import ErrorCode, refuse
 
 async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
@@ -207,15 +207,34 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
 # ------------------------------------------------------------------
 
 
+#: How long a client should wait before asking again when there is no canvas
+#: to send: the seat is between turns or between rooms, and a phase change is
+#: seconds away rather than milliseconds.
+NO_CANVAS_RETRY_MS = 2000
+
+
 async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
+    """Answer with the canvas, or say why not and when to ask again (#598).
+
+    The reply itself travels as `sync_strokes` / `sync_strokes_tail` carrying
+    the request's id; the acknowledgement only says a reply is coming. A
+    request the server cannot answer used to be dropped in silence, which on
+    a quiet canvas left the client with no next trigger.
+    """
     try:
-        holds = parse_sync_request_payload(data)
+        request = parse_sync_request_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
-    if current and current[0].game:
-        room, _ = current
-        await ctx.game_flow._emit_canvas_sync(room, sid, holds)
+    if not current or not current[0].game:
+        return refuse(
+            ErrorCode.NOT_IN_GAME,
+            "There is no canvas to send right now",
+            retry_after_ms=NO_CANVAS_RETRY_MS,
+        )
+    room, _ = current
+    await ctx.game_flow._emit_canvas_sync(room, sid, request.holds, request_id=request.request_id)
+    return {"ok": True}
 
 
 def register(ctx: HandlerContext) -> None:

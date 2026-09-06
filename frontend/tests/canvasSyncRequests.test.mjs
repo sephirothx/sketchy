@@ -1,139 +1,161 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createCanvasSyncRequester } from "../src/lib/canvasSyncRequests.ts";
+import {
+  CANVAS_SYNC_RETRIES_MS,
+  CANVAS_SYNC_TIMEOUT_MS,
+  createCanvasSyncRequester,
+} from "../src/lib/canvasSyncRequests.ts";
 
-function createEnvironment() {
-  const timers = new Map();
-  let nextId = 1;
-  const environment = {
-    requests: 0,
-    requestSync() {
-      environment.requests += 1;
+function harness({ claim = null, answer = () => ({ ok: true }) } = {}) {
+  const state = { now: 0, timers: [], sent: [], exhausted: 0, claim, answer };
+  const env = {
+    send: (requestId, claimed) => {
+      state.sent.push({ requestId, claim: claimed, at: state.now });
+      const reply = state.answer(requestId);
+      return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply);
     },
-    setTimeout(handler, delayMs) {
-      const id = nextId++;
-      timers.set(id, { handler, delayMs });
-      return id;
+    claim: () => state.claim,
+    exhausted: () => { state.exhausted += 1; },
+    setTimeout: (handler, delayMs) => {
+      const handle = { at: state.now + delayMs, handler };
+      state.timers.push(handle);
+      return handle;
     },
-    clearTimeout(timeoutId) {
-      timers.delete(timeoutId);
-    },
-    pending() {
-      return timers.size;
-    },
-    /** Run every armed timer, as the browser would once the delay elapses. */
-    elapse() {
-      const armed = [...timers.entries()];
-      timers.clear();
-      for (const [, timer] of armed) timer.handler();
+    clearTimeout: (handle) => {
+      state.timers = state.timers.filter((timer) => timer !== handle);
     },
   };
-  return environment;
+  const advance = async (ms) => {
+    const until = state.now + ms;
+    for (;;) {
+      await Promise.resolve();
+      const due = state.timers.filter((t) => t.at <= until).sort((a, b) => a.at - b.at)[0];
+      if (!due) break;
+      state.now = due.at;
+      state.timers = state.timers.filter((t) => t !== due);
+      due.handler();
+    }
+    state.now = until;
+    await Promise.resolve();
+  };
+  return { requester: createCanvasSyncRequester(env), state, advance };
 }
 
-test("a second ask while one is outstanding is coalesced into one follow-up", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
+const CLAIM = { generation: 4, actionCount: 3, historyHash: 99 };
 
+test("a request carries an id and the claim captured at that moment", () => {
+  const { requester, state } = harness({ claim: CLAIM });
   requester.request();
-  requester.request();
-  requester.request();
-  assert.equal(environment.requests, 1);
-
-  requester.arrived();
-  requester.drainQueued();
-  assert.equal(environment.requests, 2);
-
-  // Only one follow-up, however many asks were coalesced into it.
-  requester.arrived();
-  requester.drainQueued();
-  assert.equal(environment.requests, 2);
+  assert.deepEqual(state.sent, [{ requestId: 1, claim: CLAIM, at: 0 }]);
+  assert.equal(requester.outstanding, 1);
 });
 
-test("an unanswered request releases the latch instead of jamming it", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
-
+test("request a tail, draw locally, the tail arrives: it is the answer to that request", () => {
+  const { requester } = harness({ claim: CLAIM });
   requester.request();
-  assert.equal(environment.requests, 1);
-
-  // The server answers request_sync_strokes only for a socket that already
-  // resolves to a seat in a live game, and says nothing at all otherwise.
-  environment.elapse();
-
-  requester.request();
-  assert.equal(environment.requests, 2, "the next ask must still get through");
+  // The drawer drew in between; the claim was captured before, so the tail
+  // must be cut for the claimed prefix, whatever the history looks like now.
+  assert.equal(requester.classify({ requestId: 1, generation: 4, baseActionCount: 3 }), "matches");
+  assert.equal(requester.classify({ requestId: 1, generation: 4, baseActionCount: 5 }), "stale", "cut for a prefix that was not claimed");
+  assert.equal(requester.classify({ requestId: 1, generation: 5, baseActionCount: 3 }), "stale", "another generation");
 });
 
-test("an ask made during an unanswered request survives the timeout", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
-
+test("a reply to a request abandoned by a reset is stale; a server-pushed sync never is", () => {
+  const { requester } = harness({ claim: CLAIM });
   requester.request();
+  requester.reset();
+  assert.equal(requester.classify({ requestId: 1, generation: 4 }), "stale");
+  assert.equal(requester.classify({ requestId: 0, generation: 9 }), "unsolicited");
   requester.request();
-  assert.equal(environment.requests, 1);
-
-  environment.elapse();
-  assert.equal(
-    environment.requests,
-    2,
-    "the need for a sync outlived the request that went unanswered",
-  );
+  assert.equal(requester.classify({ requestId: 1, generation: 4 }), "stale", "an old id after a room switch");
+  assert.equal(requester.classify({ requestId: 2, generation: 4 }), "matches");
 });
 
-test("an unanswered request that nobody repeated does not poll", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
-
+test("a dropped request with no later drawing is retried with backoff, then handed over", async () => {
+  const { requester, state, advance } = harness({ answer: () => ({ ok: true }) });
   requester.request();
-  environment.elapse();
-  environment.elapse();
-
-  assert.equal(environment.requests, 1);
-  assert.equal(environment.pending(), 0, "no timer is left armed");
+  assert.equal(state.sent.length, 1);
+  await advance(CANVAS_SYNC_TIMEOUT_MS);
+  await advance(CANVAS_SYNC_RETRIES_MS[1]);
+  assert.equal(state.sent.length, 2, "retried after the timeout and the backoff");
+  await advance(CANVAS_SYNC_TIMEOUT_MS + CANVAS_SYNC_RETRIES_MS[2]);
+  assert.equal(state.sent.length, 3);
+  await advance(CANVAS_SYNC_TIMEOUT_MS);
+  assert.equal(state.exhausted, 1, "the third loss hands the session over");
+  assert.equal(requester.outstanding, null);
+  await advance(60_000);
+  assert.equal(state.sent.length, 3, "nothing more on its own");
 });
 
-test("an arrived sync disarms the timeout", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
-
+test("a throttled request waits the server's retryAfterMs and asks again", async () => {
+  let calls = 0;
+  const { requester, state, advance } = harness({
+    answer: () => (calls++ === 0 ? { ok: false, errorCode: "too_fast", retryAfterMs: 6_000 } : { ok: true }),
+  });
   requester.request();
-  requester.arrived();
-  assert.equal(environment.pending(), 0);
-
-  // Nothing was queued, so the arrival alone must not ask again.
-  requester.drainQueued();
-  assert.equal(environment.requests, 1);
+  await advance(CANVAS_SYNC_RETRIES_MS[1]);
+  assert.equal(state.sent.length, 1, "not before the server said");
+  await advance(6_000 - CANVAS_SYNC_RETRIES_MS[1]);
+  assert.equal(state.sent.length, 2);
+  assert.equal(state.sent[1].requestId, 2, "a retry is a new request");
 });
 
-test("reset drops an outstanding request and anything queued behind it", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
+test("a refusal with no canvas to send is retried after its delay, and a socket that never answers is a loss", async () => {
+  let calls = 0;
+  const { requester, state, advance } = harness({
+    answer: () => (calls++ === 0 ? { ok: false, errorCode: "not_in_game", retryAfterMs: 2_000 } : new Error("disconnected")),
+  });
+  requester.request();
+  await advance(2_000);
+  assert.equal(state.sent.length, 1, "the backoff is a floor under the server's delay");
+  await advance(CANVAS_SYNC_RETRIES_MS[1] - 2_000);
+  assert.equal(state.sent.length, 2);
+  await advance(CANVAS_SYNC_RETRIES_MS[2]);
+  assert.equal(state.sent.length, 3);
+});
 
+test("triggers coalesced during a transaction are discharged by a converged reply and re-issued by one that did not", () => {
+  const { requester, state } = harness();
+  requester.request();
+  requester.request();
+  requester.request();
+  assert.equal(state.sent.length, 1);
+  requester.applied(true);
+  assert.equal(state.sent.length, 1, "one reply satisfied all three");
+  requester.request();
+  requester.request();
+  requester.applied(false);
+  assert.equal(state.sent.length, 3, "a reply that did not converge asks once more");
+});
+
+test("a malformed tail is a non-converged reply: the follow-up is a full request", () => {
+  const claims = [CLAIM, null];
+  const { requester, state } = harness({ claim: claims[0] });
+  requester.request();
+  assert.equal(requester.classify({ requestId: 1, generation: 4, baseActionCount: 3 }), "matches");
+  state.claim = null; // the client now holds pending work and can claim nothing
+  requester.request();
+  requester.applied(false);
+  assert.equal(state.sent.length, 2);
+  assert.equal(state.sent[1].claim, null);
+});
+
+test("an arrived reply disarms the loss timer", async () => {
+  const { requester, state, advance } = harness();
+  requester.request();
+  requester.applied(true);
+  await advance(CANVAS_SYNC_TIMEOUT_MS * 3);
+  assert.equal(state.sent.length, 1);
+  assert.equal(state.exhausted, 0);
+});
+
+test("reset drops an outstanding transaction, its retries and anything queued", async () => {
+  const { requester, state, advance } = harness({ answer: () => ({ ok: false, errorCode: "too_fast", retryAfterMs: 1_000 }) });
   requester.request();
   requester.request();
   requester.reset();
-
-  assert.equal(environment.pending(), 0);
-  requester.drainQueued();
-  assert.equal(environment.requests, 1, "the stale follow-up is dropped");
-
-  // And the latch is open again for the new generation.
-  requester.request();
-  assert.equal(environment.requests, 2);
-});
-
-test("a fresh request after a timeout is itself protected by a timeout", () => {
-  const environment = createEnvironment();
-  const requester = createCanvasSyncRequester(environment);
-
-  requester.request();
-  environment.elapse();
-  requester.request();
-  assert.equal(environment.pending(), 1);
-
-  environment.elapse();
-  requester.request();
-  assert.equal(environment.requests, 3, "the latch cannot re-jam");
+  await advance(60_000);
+  assert.equal(state.sent.length, 1);
+  assert.equal(state.exhausted, 0);
 });

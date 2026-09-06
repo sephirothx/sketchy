@@ -274,3 +274,21 @@ export function onServerCanvasSequence(listener: SequenceListener): () => void {
     sequenceListeners.delete(listener);
   };
 }
+
+/** Recovery gave up: every sync attempt was lost or refused, so the seat
+binding itself is in question. The reconnect hook owns that decision and
+answers with a transport restart, after which the server pushes a fresh
+snapshot and the protocol starts clean. */
+type RebindListener = () => void;
+const rebindListeners = new Set<RebindListener>();
+
+export function requestSessionRebind(): void {
+  rebindListeners.forEach((listener) => listener());
+}
+
+export function onSessionRebindRequested(listener: RebindListener): () => void {
+  rebindListeners.add(listener);
+  return () => {
+    rebindListeners.delete(listener);
+  };
+}
