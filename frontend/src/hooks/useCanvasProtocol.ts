@@ -336,9 +336,13 @@ export function useCanvasProtocol(
     const stopSequenceWatch = onServerCanvasSequence((generation, sequence) => {
       if (generation === historyRef.current.generation) watch.serverCommitted(sequence);
     });
-    // A replaced connection cannot carry on a replay: the rebind's sync
-    // decides what is still pending, and it starts again from there.
-    const onDisconnect = () => sender.cancel();
+    // A replaced connection cannot carry on a replay, and a deadline cannot
+    // be met against a dead socket: the rebind's sync decides what is still
+    // pending and re-arms a deadline for each action it replays.
+    const onDisconnect = () => {
+      sender.cancel();
+      watch.cancelAll();
+    };
 
     const restoreAuthoritative = (
       actions: DecodedCanvasAction[],
@@ -386,9 +390,13 @@ export function useCanvasProtocol(
         );
         return;
       }
-      for (const pendingSequence of pendingMutationsRef.current.keys()) {
+      for (const pendingSequence of [...pendingMutationsRef.current.keys()]) {
         if (pendingSequence <= committedSequence) {
+          // Committed by the server: nothing left to wait for, and a deadline
+          // left armed here would fire into a gone entry and, at its end,
+          // discard strokes that are still in flight.
           pendingMutationsRef.current.delete(pendingSequence);
+          watch.confirm(pendingSequence);
         }
       }
       for (const [pendingSequence, pending] of [...pendingMutationsRef.current.entries()]) {
