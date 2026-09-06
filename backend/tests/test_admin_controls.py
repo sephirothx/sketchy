@@ -67,7 +67,7 @@ async def env(monkeypatch, role_pushes, tmp_path):
         f"sqlite+aiosqlite:///{tmp_path / 'admin-controls.db'}"
     )
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     rooms = RoomManager()

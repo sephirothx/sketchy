@@ -538,7 +538,7 @@ async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
     and a negative received count - all refused by the database itself."""
     engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'reactions.db'}")
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     now = datetime.now(timezone.utc)
 

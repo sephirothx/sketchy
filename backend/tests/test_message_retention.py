@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
@@ -24,6 +24,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
 from app.services.message_retention import (
     MESSAGE_RETENTION,
+    SHUTDOWN_DRAIN_SECONDS,
     MessageRetentionService,
     purge_expired_room_messages,
 )
@@ -271,17 +272,33 @@ async def test_wrong_guess_text_expires_but_per_seat_outcomes_remain():
 class HangingFactory:
     """A database that accepts the connection and then never answers."""
 
+    def __init__(self):
+        self.started = asyncio.Event()
+        self.cancelled = asyncio.Event()
+
     def __call__(self):
         return self
 
     async def __aenter__(self):
-        await asyncio.sleep(3600)
+        self.started.set()
+        try:
+            await asyncio.Future()
+        finally:
+            self.cancelled.set()
 
     async def __aexit__(self, *_exc):
         return False
 
 
-async def test_a_hung_database_does_not_delay_the_message_it_retains():
+async def close_hanging_service(service, monkeypatch):
+    # The availability/queue assertions have finished. Exercise expiration
+    # through the same aclose path, without waiting out its five-second
+    # production budget in every test. Successful draining stays real below.
+    monkeypatch.setattr(service._queue, "join", AsyncMock(side_effect=TimeoutError))
+    await service.aclose()
+
+
+async def test_a_hung_database_does_not_delay_the_message_it_retains(monkeypatch):
     """The boundary this service exists for: live availability does not depend
     on retention. Chat used to wait for the transaction, so a lock or a slow
     disk was chat latency for every room at once."""
@@ -311,10 +328,10 @@ async def test_a_hung_database_does_not_delay_the_message_it_retains():
     # for a message it cannot find.
     assert UUID(emitted.args[1]["retainedMessageId"]).version == 7
     await context.timers.close()
-    await context.message_retention.aclose()
+    await close_hanging_service(context.message_retention, monkeypatch)
 
 
-async def test_a_message_is_not_promised_when_the_queue_is_already_full():
+async def test_a_message_is_not_promised_when_the_queue_is_already_full(monkeypatch):
     """A database that has stopped answering costs bounded memory and nothing
     else. The line still goes out; what it does not get is an identifier
     promising it can be reported."""
@@ -352,7 +369,31 @@ async def test_a_message_is_not_promised_when_the_queue_is_already_full():
 
     assert first is not None and second is not None
     assert third is None
-    await service.aclose()
+    await close_hanging_service(service, monkeypatch)
+
+
+async def test_shutdown_uses_the_production_budget_and_cancels_a_hung_writer(monkeypatch, caplog):
+    factory = HangingFactory()
+    service = MessageRetentionService(factory, queue_depth=1)
+    await service.record_lobby(
+        user_id=str(generate_uuid()), display_name="Ada", name_color=None,
+        is_anonymous=True, text="waiting", sent_at=datetime.now(timezone.utc),
+    )
+    await asyncio.wait_for(factory.started.wait(), timeout=5)
+    worker = service._worker
+    try:
+        assert SHUTDOWN_DRAIN_SECONDS == 5
+        with patch.object(asyncio, "wait_for", wraps=asyncio.wait_for) as wait_for:
+            await close_hanging_service(service, monkeypatch)
+        assert wait_for.call_args.kwargs == {"timeout": SHUTDOWN_DRAIN_SECONDS}
+        assert worker.done() and worker.cancelled()
+        assert factory.cancelled.is_set()
+        assert "Gave up retaining" in caplog.text
+        assert service._worker is None
+        await service.aclose()  # closing again is harmless
+    finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
 
 
 async def test_what_is_still_queued_at_shutdown_is_written():
@@ -434,7 +475,7 @@ async def test_a_lobby_line_is_kept_with_no_room_and_a_public_audience():
         await engine.dispose()
 
 
-async def test_a_lobby_line_is_not_promised_when_the_queue_is_already_full():
+async def test_a_lobby_line_is_not_promised_when_the_queue_is_already_full(monkeypatch):
     """The same bargain as room chat: the line goes out, the identifier does
     not, and nothing waits on the database to find that out."""
     service = MessageRetentionService(HangingFactory(), queue_depth=1)
@@ -456,7 +497,7 @@ async def test_a_lobby_line_is_not_promised_when_the_queue_is_already_full():
     third = await line("three")
     assert first is not None and second is not None
     assert third is None
-    await service.aclose()
+    await close_hanging_service(service, monkeypatch)
 
 
 async def test_a_lobby_line_with_no_account_behind_it_is_not_kept():

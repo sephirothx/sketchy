@@ -47,7 +47,7 @@ async def env(monkeypatch, tmp_path):
     # file tests would never actually contend.
     engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'tunables.db'}")
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     policy = CommandBudgetPolicy()

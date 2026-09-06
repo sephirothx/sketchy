@@ -344,20 +344,28 @@ def is_shallow() -> bool:
     return result.stdout.strip() == "true"
 
 
+@pytest.fixture(scope="module")
+def history_scan():
+    # Both floor tests resolve to this same immutable range. loadgroup keeps
+    # them on one worker so their integration scan is performed only once.
+    baseline = run_checker(REPO_ROOT, "--baseline").stdout.strip()
+    return baseline, run_checker(REPO_ROOT, "--range", f"{baseline}..HEAD")
+
+
 @requires_git
 @pytest.mark.skipif(
     is_shallow(),
     reason="a shallow checkout has no history to resolve the baseline against",
 )
-def test_the_baseline_is_a_commit_in_this_history():
+@pytest.mark.xdist_group("repository_history")
+def test_the_baseline_is_a_commit_in_this_history(history_scan):
     """The hook and CI both take their floor from `--baseline`. A sha that does
     not resolve would send both of them to their weakest fallback without
     saying so.
 
-    Only answerable where the history is actually present. The backend CI job
-    clones one commit deep, so this cannot run there - `.github/workflows/ci.yml`
-    makes the artifact-scan job, which clones in full, fail on a baseline that
-    stops resolving.
+    Only answerable where the history is actually present. Backend CI now
+    clones in full for the wire-contract comparison; PostgreSQL CI still
+    skips these two tests in its shallow checkout.
     """
     baseline = subprocess.run(
         ["bash", str(CHECKER), "--baseline"],
@@ -377,7 +385,8 @@ def test_the_baseline_is_a_commit_in_this_history():
 
     # And the floor has to be usable: scanning from it must not trip over the
     # artifact whose presence in history is the reason it exists.
-    assert run_checker(REPO_ROOT, "--range", f"{baseline}..HEAD").returncode == 0
+    assert history_scan[0] == baseline
+    assert history_scan[1].returncode == 0, history_scan[1].stderr
 
 
 @requires_git
@@ -385,7 +394,8 @@ def test_the_baseline_is_a_commit_in_this_history():
     is_shallow(),
     reason="a shallow checkout has no history to clamp against",
 )
-def test_the_floor_never_moves_earlier_than_the_baseline():
+@pytest.mark.xdist_group("repository_history")
+def test_the_floor_never_moves_earlier_than_the_baseline(history_scan):
     """A pull request whose base branch forked before the baseline has a fork
     point older than it, and an unclamped range from there reaches back over the
     commit that added the database - failing every build from then on. The clamp
@@ -427,10 +437,8 @@ def test_the_floor_never_moves_earlier_than_the_baseline():
     assert floor("deadbeef" * 5) == baseline
 
     # The clamp has to actually make the range usable, which is the whole point.
-    assert (
-        run_checker(REPO_ROOT, "--range", f"{floor(rev(f'{baseline}^'))}..HEAD").returncode
-        == 0
-    )
+    assert floor(rev(f"{baseline}^")) == history_scan[0]
+    assert history_scan[1].returncode == 0, history_scan[1].stderr
 
 
 @requires_git
@@ -501,3 +509,74 @@ def test_an_example_env_file_is_allowed(tmp_path):
     git(repo, "commit", "-qm", "example env")
 
     assert run_checker(repo).returncode == 0
+
+
+@pytest.fixture
+def history_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", ".")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "Test")
+    (repo / "base.txt").write_text("base\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "base")
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    return repo, base
+
+
+@requires_git
+def test_batched_blobs_keep_framing_and_odd_filenames(history_repo):
+    repo, base = history_repo
+    names = ["a-large.txt", "b-tabs\tand\nlines|.txt", "c-small.txt"]
+    contents = [b"harmless" * 300_000, SQLITE_MAGIC + b"\0" * 200_000, b"last"]
+    for name, content in zip(names, contents, strict=True):
+        (repo / name).write_bytes(content)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "three different blobs")
+    for name in names:
+        (repo / name).unlink()
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "clean tip")
+    result = run_checker(repo, "--range", f"{base}..HEAD")
+    assert result.returncode == 1, result.stderr
+    assert names[1] in result.stderr
+    assert "refusing 1 file(s)" in result.stderr
+
+
+@requires_git
+def test_content_caching_never_exempts_another_filename(history_repo):
+    repo, base = history_repo
+    for name in ["a-safe.txt", "b-private.key"]:
+        (repo / name).write_text("identical harmless bytes")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "same blob different names")
+    git(repo, "rm", "a-safe.txt", "b-private.key")
+    git(repo, "commit", "-qm", "clean tip")
+    result = run_checker(repo, "--range", f"{base}..HEAD")
+    assert result.returncode == 1
+    assert "b-private.key" in result.stderr
+
+
+@requires_git
+def test_a_gitlink_is_not_mistaken_for_a_missing_blob(history_repo):
+    repo, base = history_repo
+    git(repo, "update-index", "--add", "--cacheinfo", "160000", "1" * 40, "vendor")
+    git(repo, "commit", "-qm", "submodule pointer")
+    result = run_checker(repo, "--range", f"{base}..HEAD")
+    assert result.returncode == 0, result.stderr
+
+
+@requires_git
+def test_a_missing_historical_blob_fails_closed(history_repo):
+    repo, base = history_repo
+    (repo / "lost.txt").write_bytes(SQLITE_MAGIC + b"\0" * 512)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "artifact")
+    oid = subprocess.check_output(["git", "rev-parse", "HEAD:lost.txt"], cwd=repo, text=True).strip()
+    git(repo, "rm", "lost.txt")
+    git(repo, "commit", "-qm", "clean tip")
+    (repo / ".git" / "objects" / oid[:2] / oid[2:]).unlink()
+    result = run_checker(repo, "--range", f"{base}..HEAD")
+    assert result.returncode == 2
+    assert "scan failed" in result.stderr

@@ -1555,18 +1555,43 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
   .venv/bin/pytest -q tests/test_migrations.py tests/test_repositories.py
 ```
 
-> Every persistence suite builds its database through
+> The shared persistence fixture is
 > [`backend/tests/dbfixtures.py`](../backend/tests/dbfixtures.py), so `TEST_DATABASE_URL`
-> moves all of them onto PostgreSQL. The fixture **deletes application rows** from that
+> moves its callers onto PostgreSQL. Tests specifically proving file-backed SQLite
+> concurrency still use fresh temporary SQLite files. The fixture **deletes application rows** from its
 > database and refuses a name without `test` in it. Never point it at a development or
 > production database.
 
-Without `TEST_DATABASE_URL` the same fixture hands out in-memory SQLite configured the
+Without `TEST_DATABASE_URL` the same fixture hands out fresh in-memory SQLite configured the
 way [`db/__init__.py`](../backend/app/db/__init__.py) configures the application's own
 connections, and checks `PRAGMA foreign_keys` on every connection it opens. A raw
 `create_async_engine` leaves SQLite's enforcement off, and a suite built on one passes
 deletion tests against constraints the database never applied — #612 found two
-deletion paths that only failed once enforcement was real.
+deletion paths that only failed once enforcement was real. Schema creation on a new
+database omits table-existence probes; all tables, indexes and constraints are still
+created, and the engine remains local to the test's event loop.
+
+For the full suite with CI's parallel scheduling, keep migration replay separate:
+
+```bash
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  .venv/bin/pytest -q tests/test_migrations.py
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  .venv/bin/pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50
+```
+
+[`tests/conftest.py`](../backend/tests/conftest.py) provisions an isolated migrated
+database for each worker through
+[`tests/parallel_databases.py`](../backend/tests/parallel_databases.py). The source's owner role needs
+`CREATEDB` and access to the administrative `postgres` database. The migrated source
+must have no other connections while it is cloned. The controller chooses unique
+names, passes each URL before test modules import, and drops only its own clones
+after the workers exit, including connections left by a crashed worker. It never
+drops or resets the source. A killed controller can leave disposable
+`sketchy_test_<uuid>` databases to remove manually; CI's service container is ephemeral.
+Per-worker isolation retains real commits, native types, migration triggers, row
+locks and READ COMMITTED interleavings; sharing an outer rollback transaction would
+change what these tests prove.
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, removes the baseline and
 rebuilds it **down and up** on both PostgreSQL and SQLite, checks schema drift and the

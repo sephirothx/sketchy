@@ -17,6 +17,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from app import wire_contract
 from app.handlers import payloads
 from app.wire_contract import (
@@ -88,31 +90,37 @@ def test_tuple_events_are_events_the_server_emits():
 # --- the four changes a name check accepts -------------------------------------
 
 
-def _mutated(mutate) -> tuple[dict, dict]:
-    base = build_contract()
+@pytest.fixture(scope="module")
+def baseline_contract():
+    # Diff-policy cases change copies of the same input. Extraction and
+    # file-mutation cases below still build fresh contracts explicitly.
+    return build_contract()
+
+
+def _mutated(base, mutate) -> tuple[dict, dict]:
     current = copy.deepcopy(base)
     mutate(current)
     return base, current
 
 
-def test_a_field_type_change_is_a_contract_change():
+def test_a_field_type_change_is_a_contract_change(baseline_contract):
     def mutate(c):
         c["commands"]["join_room"]["payload"]["properties"]["nickname"]["type"] = "integer"
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     assert any("join_room.payload.properties.nickname.type" in line for line in diff_contracts(base, current))
     assert bump_missing(base, current)
 
 
-def test_a_field_losing_a_bound_is_a_contract_change():
+def test_a_field_losing_a_bound_is_a_contract_change(baseline_contract):
     def mutate(c):
         del c["commands"]["join_room"]["payload"]["properties"]["nickname"]["maxLength"]
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     assert diff_contracts(base, current)
 
 
-def test_a_key_moving_between_builders_is_a_contract_change():
+def test_a_key_moving_between_builders_is_a_contract_change(baseline_contract):
     """The union of keys is unchanged; the owner is not."""
 
     def mutate(c):
@@ -122,19 +130,19 @@ def test_a_key_moving_between_builders_is_a_contract_change():
         builders[source] = [k for k in builders[source] if k != "playerId"]
         builders[target] = sorted(builders[target] + ["playerId"])
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     before = {k for keys in base["payloadBuilders"].values() for k in keys}
     after = {k for keys in current["payloadBuilders"].values() for k in keys}
     assert before == after, "the mutation must keep the name union identical"
     assert diff_contracts(base, current)
 
 
-def test_a_tuple_reorder_is_a_contract_change():
+def test_a_tuple_reorder_is_a_contract_change(baseline_contract):
     def mutate(c):
         layout = c["events"]["canvas_commit"]["layout"]
         layout[0], layout[1] = layout[1], layout[0]
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     assert any("events.canvas_commit.layout" in line for line in diff_contracts(base, current))
 
 
@@ -157,43 +165,43 @@ def test_a_binary_layout_change_under_the_same_tag_is_a_contract_change(tmp_path
     ]
 
 
-def test_a_new_refusal_code_and_a_new_event_are_contract_changes():
+def test_a_new_refusal_code_and_a_new_event_are_contract_changes(baseline_contract):
     def mutate(c):
         c["refusal"]["codes"].append("brand_new")
         c["events"]["brand_new_event"] = {"shape": "object"}
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     assert len(diff_contracts(base, current)) == 2
 
 
 # --- the two decisions the CI script makes -----------------------------------
 
 
-def test_a_documented_version_bump_makes_the_change_acceptable():
+def test_a_documented_version_bump_makes_the_change_acceptable(baseline_contract):
     def mutate(c):
         c["commands"]["join_room"]["payload"]["properties"]["nickname"]["type"] = "integer"
         c["protocolVersion"] += 1
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     assert diff_contracts(base, current), "the change is still reported"
     assert not bump_missing(base, current)
 
 
-def test_regenerating_the_fixture_under_the_same_version_is_still_a_change():
+def test_regenerating_the_fixture_under_the_same_version_is_still_a_change(baseline_contract):
     """The check compares against the base revision, not the working tree, so
     rewriting the fixture cannot launder a change."""
 
     def mutate(c):
         c["commands"]["join_room"]["payload"]["properties"]["nickname"]["type"] = "integer"
 
-    base, current = _mutated(mutate)
+    base, current = _mutated(baseline_contract, mutate)
     regenerated = json.loads(dumps(current))  # what --write would commit
     assert bump_missing(base, regenerated)
     assert not diff_contracts(current, regenerated), "against the working tree it looks clean"
 
 
-def test_an_unchanged_contract_needs_no_bump():
-    base = build_contract()
+def test_an_unchanged_contract_needs_no_bump(baseline_contract):
+    base = baseline_contract
     assert diff_contracts(base, copy.deepcopy(base)) == []
     assert not bump_missing(base, copy.deepcopy(base))
 

@@ -1190,6 +1190,7 @@ scripts/
   test-e2e.sh       Frontend build + throwaway-database server + the Playwright suite
   make-admin.sh     Promote a registered account to administrator on this checkout's database
   check-tracked-artifacts.sh  Refuses a tracked database, env file, or private key
+  check_tracked_artifacts.py  Batched Git/blob scanner used by the shell entry point
   check-mockups-regenerated.sh  Refuses a hand-edited mockup artboard
   check-coverage.py   Per-module coverage floors on the risk-critical modules
   check-wire-contract.py  Regenerates fixtures/wire_contract.json and compares it with the base branch
@@ -1242,6 +1243,11 @@ filename shapes someone already anticipated: `*.db` matches neither `sketchy.db-
 file for its *bytes* - a SQLite header is a SQLite header, whatever the file is called -
 and it scans the whole push range, so adding a file and deleting it two commits later
 does not sneak the blob into history.
+
+The shell entry point keeps the history floor in one place. Scanning uses
+[`scripts/check_tracked_artifacts.py`](scripts/check_tracked_artifacts.py), requiring
+only Python 3's standard library. It batches Git reads, checks every merge parent,
+and refuses a scan it cannot complete; it never prints file contents.
 
 CI runs the same script, but a secret pushed to a public remote is already public by the
 time CI has an opinion. The hook is the one that actually protects anything.
@@ -1310,12 +1316,36 @@ multiple players.
 
 ### Running tests
 
+Both backend CI jobs run the full suite with two pytest workers (R-ENG-12).
+`loadgroup` keeps the two history-floor tests together so they share one scan;
+other tests are distributed normally. Backend coverage is combined across workers
+before the unchanged statement and branch floors are checked (R-ENG-15).
+CI prints the slowest 50 test phases and saves JUnit reports for seven days in the
+`backend-test-results` and `postgresql-test-results` artifacts; the former also
+contains `coverage.json`. Local JUnit output belongs in `backend/test-results/`.
+
+With `TEST_DATABASE_URL` set, parallel pytest requires a migrated, disposable
+PostgreSQL database whose name contains `test`, plus its owner role with `CREATEDB` and
+permission to connect to the `postgres` database. Close other connections to the
+template before starting. Pytest creates uniquely named migrated clones before
+test collection, assigns one to each worker, and drops only those clones after the
+workers exit, including failed runs. The template is preserved. Run migration
+replay separately, as CI does; see [PostgreSQL checks](docs/database.md#local-postgresql-checks).
+This isolates test processes; application deployments still use one worker.
+
 ```bash
 # Install test/dev deps once (pytest, Playwright, …)
 cd backend && .venv/bin/pip install -r requirements-dev.txt
 
 # Unit & integration tests
 .venv/bin/pytest
+
+# Same parallel scheduling as CI, with slow-test diagnostics
+.venv/bin/pytest -q -n 2 --dist=loadgroup --durations=50
+
+# Combined statement/branch coverage and the existing module floors
+.venv/bin/pytest -q -n 2 --dist=loadgroup --cov=app --cov-branch --cov-report=json:coverage.json
+.venv/bin/python ../scripts/check-coverage.py coverage.json
 
 # Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
 .venv/bin/ruff check app tests

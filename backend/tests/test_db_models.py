@@ -465,7 +465,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
             foreign_keys = (await conn.execute(text("PRAGMA foreign_keys"))).scalar_one()
             journal_mode = (await conn.execute(text("PRAGMA journal_mode"))).scalar_one()
             busy_timeout = (await conn.execute(text("PRAGMA busy_timeout"))).scalar_one()
-            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(Base.metadata.create_all, checkfirst=False)
 
         assert foreign_keys == 1
         assert journal_mode == "wal"
@@ -1449,14 +1449,14 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
     """The same-game constraints, exercised: a score event, outcome, or guess
     naming a row from a different game is a violation, not a plausible lie.
 
-    Uses the real engine factory so SQLite actually enforces foreign keys -
-    the plain fixture engine leaves them off.
+    Uses a fresh file with the production connection pragmas so raw SQL
+    exercises the same constraints as a deployment.
     """
     from app.db import create_db_engine
 
     engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'coherence.db'}")
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     now = datetime.now(timezone.utc)
 

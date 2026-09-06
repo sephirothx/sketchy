@@ -72,3 +72,4 @@ docs/ui-mockups/sketchy-explorer.html
 .coverage.*
 coverage.json
 htmlcov/
+backend/test-results/

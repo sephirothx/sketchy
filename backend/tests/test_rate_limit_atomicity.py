@@ -41,7 +41,7 @@ async def factory(tmp_path: Path):
             for table in (AuthRateLimitBucket.__table__, AppConfig.__table__):
                 await connection.execute(table.delete())
         else:
-            await connection.run_sync(Base.metadata.create_all)
+            await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     yield async_sessionmaker(engine, expire_on_commit=False)
     await engine.dispose()
 
