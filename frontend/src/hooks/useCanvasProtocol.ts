@@ -7,7 +7,14 @@ import {
   pointsFitWithinBudget,
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
+import {
+  CompletionWatch,
+  RecoverySender,
+  onServerCanvasSequence,
+  repackDrawFrames,
+} from "../lib/canvasRecovery";
 import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
+import { currentClientConfig } from "../lib/clientConfig";
 import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, encodeClear, toWireFrame } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
@@ -38,7 +45,8 @@ function commitsAnAction(packet: LiveDrawingPacket, applied: boolean): boolean {
     || packet.event === "clear_canvas";
 }
 
-export type DrawingFrame = number | Uint8Array;
+export type { DrawingFrame } from "../lib/liveDrawing";
+import type { DrawingFrame } from "../lib/liveDrawing";
 
 type PendingCanvasMutation =
   | {
@@ -79,6 +87,20 @@ export function useCanvasProtocol(
   const pendingMutationsRef = useRef(new Map<number, PendingCanvasMutation>());
   const activeOutgoingSequenceRef = useRef<number | null>(null);
   const syncRequestsRef = useRef<CanvasSyncRequester | null>(null);
+  // Built in the mount effect with the handlers; the callbacks below reach
+  // them through refs, since a stroke may finish before the effect re-runs.
+  const senderRef = useRef<RecoverySender | null>(null);
+  const watchRef = useRef<CompletionWatch | null>(null);
+
+  // Frames leave through one door, and never into a socket that is not
+  // connected: Socket.IO would buffer them and flush that buffer on reconnect,
+  // before the seat is rebound, into whatever the canvas has become (#597).
+  // A frame dropped here is recovered by the sync that follows the rebind.
+  const sendDraw = useCallback((frame: DrawingFrame, identity?: [number, number]): void => {
+    if (!socket.connected) return;
+    if (identity) socket.emit("draw", toWireFrame(frame), identity);
+    else socket.emit("draw", toWireFrame(frame));
+  }, []);
   // What this client can honestly say it already holds, so the server can
   // reply with only the missing tail.
   //
@@ -121,6 +143,8 @@ export function useCanvasProtocol(
     if (discardPending) {
       pendingMutationsRef.current.clear();
       activeOutgoingSequenceRef.current = null;
+      senderRef.current?.cancel();
+      watchRef.current?.cancelAll();
     }
     ensureSyncRequester().request();
   }, [ensureSyncRequester]);
@@ -155,10 +179,12 @@ export function useCanvasProtocol(
       expectedHash: isPath ? null : historyRef.current.historyHash,
     });
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
-    socket.emit("draw", toWireFrame(frame), [generation, sequence]);
+    sendDraw(frame, [generation, sequence]);
+    // A shape, fill or clear commits on this one frame: its clock starts now.
+    if (!isPath) watchRef.current?.arm(sequence);
     publishBudgets();
     return sequence;
-  }, [allocateSequence, publishBudgets, requestAuthoritativeSync]);
+  }, [allocateSequence, publishBudgets, requestAuthoritativeSync, sendDraw]);
 
   const sendPathFrame = useCallback((frame: DrawingFrame): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -183,9 +209,9 @@ export function useCanvasProtocol(
       return;
     }
     pending.frames.push(frame);
-    socket.emit("draw", toWireFrame(frame));
+    sendDraw(frame);
     if (packet.event === "draw_move") publishBudgets();
-  }, [publishBudgets, requestAuthoritativeSync]);
+  }, [publishBudgets, requestAuthoritativeSync, sendDraw]);
 
   const finishPathAction = useCallback((): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -194,6 +220,8 @@ export function useCanvasProtocol(
     if (pending?.kind === "draw") {
       pending.expectedRevision = historyRef.current.revision;
       pending.expectedHash = historyRef.current.historyHash;
+      // Finished here; the server has a deadline to say so (#597).
+      watchRef.current?.arm(sequence);
     }
     activeOutgoingSequenceRef.current = null;
   }, []);
@@ -216,6 +244,7 @@ export function useCanvasProtocol(
     });
     renderer.replay(historyRef.current.actions);
     publishBudgets();
+    watchRef.current?.arm(sequence);
     void emitWithAck<{ ok: boolean; errorCode?: ErrorCode }>("undo_stroke", request)
       .then((response) => {
         if (!response?.ok && response?.errorCode !== "canvas_out_of_sequence") {
@@ -264,6 +293,57 @@ export function useCanvasProtocol(
       ensureSyncRequester().drainQueued();
     };
 
+    const isIncompletePath = (pending: PendingCanvasMutation): boolean =>
+      pending.kind === "draw"
+      && pending.frames.length > 0
+      && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
+      && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end";
+
+    // One paced sender for every replay, and one deadline per finished action.
+    // Both are pure (`lib/canvasRecovery.ts`); this is only the wiring.
+    const sender = new RecoverySender({
+      emit: sendDraw,
+      allowance: () => currentClientConfig(),
+      now: () => performance.now(),
+      schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      cancel: (handle) => window.clearTimeout(handle as number),
+      tooLarge: () => requestAuthoritativeSync(),
+    });
+    // Resend a pending action whole: the server replays the stored commit of
+    // one it already has, and accepts one it never saw. A path still open is
+    // not resent - its end will come, or the next opener will provoke a gap.
+    const replay = (sequence: number): void => {
+      const pending = pendingMutationsRef.current.get(sequence);
+      if (!pending || isIncompletePath(pending)) return;
+      if (pending.kind === "undo") {
+        if (socket.connected) socket.emit("undo_stroke", pending.request);
+        return;
+      }
+      sender.enqueue({
+        sequence,
+        frames: repackDrawFrames(pending.frames),
+        identity: [pending.generation, sequence],
+      });
+    };
+    const watch = new CompletionWatch({
+      schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      cancel: (handle) => window.clearTimeout(handle as number),
+      resend: replay,
+      giveUp: () => requestAuthoritativeSync(),
+    });
+    senderRef.current = sender;
+    watchRef.current = watch;
+    const stopSequenceWatch = onServerCanvasSequence((generation, sequence) => {
+      if (generation === historyRef.current.generation) watch.serverCommitted(sequence);
+    });
+    // A replaced connection cannot carry on a replay, and a deadline cannot
+    // be met against a dead socket: the rebind's sync decides what is still
+    // pending and re-arms a deadline for each action it replays.
+    const onDisconnect = () => {
+      sender.cancel();
+      watch.cancelAll();
+    };
+
     const restoreAuthoritative = (
       actions: DecodedCanvasAction[],
       revision: unknown,
@@ -273,6 +353,8 @@ export function useCanvasProtocol(
       committedSequence: number,
     ) => {
       pendingMutationsRef.current.clear();
+      sender.cancel();
+      watch.cancelAll();
       historyRef.current.replace(actions, revision, generation, sequence, historyHash);
       nextSequenceRef.current = committedSequence + 1;
       renderer.replay(actions);
@@ -296,6 +378,8 @@ export function useCanvasProtocol(
         return;
       }
       activeOutgoingSequenceRef.current = null;
+      // A fresh authority supersedes any replay still queued against the old.
+      sender.cancel();
       const committedGeneration = historyRef.current.generation!;
       const committedSequence = historyRef.current.sequence!;
       if ([...pendingMutationsRef.current.values()].some(
@@ -306,17 +390,20 @@ export function useCanvasProtocol(
         );
         return;
       }
-      for (const pendingSequence of pendingMutationsRef.current.keys()) {
+      for (const pendingSequence of [...pendingMutationsRef.current.keys()]) {
         if (pendingSequence <= committedSequence) {
+          // Committed by the server: nothing left to wait for, and a deadline
+          // left armed here would fire into a gone entry and, at its end,
+          // discard strokes that are still in flight.
           pendingMutationsRef.current.delete(pendingSequence);
+          watch.confirm(pendingSequence);
         }
       }
       for (const [pendingSequence, pending] of [...pendingMutationsRef.current.entries()]) {
-        if (pending.kind !== "draw") continue;
-        const incomplete = pending.frames.length > 0
-          && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
-          && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end";
-        if (incomplete) pendingMutationsRef.current.delete(pendingSequence);
+        if (isIncompletePath(pending)) {
+          pendingMutationsRef.current.delete(pendingSequence);
+          watch.confirm(pendingSequence);
+        }
       }
       const pendingSequences = [...pendingMutationsRef.current.keys()]
         .sort((left, right) => left - right);
@@ -343,13 +430,12 @@ export function useCanvasProtocol(
           if (!recoveryValid) break;
           pending.expectedRevision = historyRef.current.revision;
           pending.expectedHash = historyRef.current.historyHash;
-          pending.frames.forEach((frame, index) => {
-            socket.emit(
-              "draw",
-              toWireFrame(frame),
-              index === 0 ? [pending.generation, pendingSequence] : undefined,
-            );
+          sender.enqueue({
+            sequence: pendingSequence,
+            frames: repackDrawFrames(pending.frames),
+            identity: [pending.generation, pendingSequence],
           });
+          watch.arm(pendingSequence);
         } else {
           const request = historyRef.current.prepareUndo(pendingSequence);
           if (!request) {
@@ -359,7 +445,8 @@ export function useCanvasProtocol(
           pending.request = request;
           pending.expectedRevision = historyRef.current.revision!;
           pending.expectedHash = historyRef.current.historyHash!;
-          socket.emit("undo_stroke", request);
+          if (socket.connected) socket.emit("undo_stroke", request);
+          watch.arm(pendingSequence);
         }
       }
       if (!recoveryValid) {
@@ -404,6 +491,10 @@ export function useCanvasProtocol(
         return;
       }
       pendingMutationsRef.current.clear();
+      // A tail is a new authority as much as a full sync is: a replay still
+      // going out and a deadline still armed belong to the state just dropped.
+      sender.cancel();
+      watch.cancelAll();
       activeOutgoingSequenceRef.current = null;
       nextSequenceRef.current = historyRef.current.sequence! + 1;
       renderer.replay(historyRef.current.actions);
@@ -426,6 +517,7 @@ export function useCanvasProtocol(
         return;
       }
       pendingMutationsRef.current.delete(sequence);
+      watch.confirm(sequence);
     }
 
     const onUndoStroke = (payload: unknown) => {
@@ -443,6 +535,7 @@ export function useCanvasProtocol(
         return;
       }
       pendingMutationsRef.current.delete(sequence);
+      watch.confirm(sequence);
       renderer.replay(historyRef.current.actions);
       publishBudgets();
     };
@@ -465,27 +558,17 @@ export function useCanvasProtocol(
           requestAuthoritativeSync();
           return;
         }
-        if (pending.kind === "undo") {
-          socket.emit("undo_stroke", pending.request);
-          continue;
-        }
-        const incomplete = pending.frames.length > 0
-          && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
-          && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end";
-        if (incomplete) {
+        if (isIncompletePath(pending)) {
           pendingMutationsRef.current.delete(sequence);
+          watch.confirm(sequence);
           if (activeOutgoingSequenceRef.current === sequence) {
             activeOutgoingSequenceRef.current = null;
           }
           continue;
         }
-        pending.frames.forEach((frame, index) => {
-          socket.emit(
-            "draw",
-            toWireFrame(frame),
-            index === 0 ? [pending.generation, sequence] : undefined,
-          );
-        });
+        // Repacked and paced: a second request for the same range while the
+        // first is still going out costs nothing more (#597).
+        replay(sequence);
       }
     };
 
@@ -495,6 +578,8 @@ export function useCanvasProtocol(
         return;
       }
       pendingMutationsRef.current.clear();
+      sender.cancel();
+      watch.cancelAll();
       activeOutgoingSequenceRef.current = null;
       nextSequenceRef.current = 1;
       // A new turn replaces the history wholesale, so a sync still owed
@@ -512,6 +597,7 @@ export function useCanvasProtocol(
     socket.on("canvas_undo", onUndoStroke);
     socket.on("request_canvas_actions", onRequestCanvasActions);
     socket.on("canvas_reset", onCanvasReset);
+    socket.on("disconnect", onDisconnect);
     // Through the requester rather than a bare emit: this one is the most
     // likely of all to go unanswered, since the canvas can mount before the
     // socket has finished binding itself to a seat in the room.
@@ -525,9 +611,15 @@ export function useCanvasProtocol(
       socket.off("canvas_undo", onUndoStroke);
       socket.off("request_canvas_actions", onRequestCanvasActions);
       socket.off("canvas_reset", onCanvasReset);
+      socket.off("disconnect", onDisconnect);
+      stopSequenceWatch();
+      sender.cancel();
+      watch.cancelAll();
+      senderRef.current = null;
+      watchRef.current = null;
       syncRequestsRef.current?.reset();
     };
-  }, [ensureSyncRequester, publishBudgets, renderer, requestAuthoritativeSync]);
+  }, [ensureSyncRequester, publishBudgets, renderer, requestAuthoritativeSync, sendDraw]);
 
   return useMemo(() => ({
     beginDrawAction,

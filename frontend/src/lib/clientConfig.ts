@@ -17,15 +17,23 @@ cannot say is not a reason to stop drawing, and these numbers all have an
 answer that has always worked.
 
 Version 2 dropped `lobbyPollIntervalMs`: the lobby is told about rooms over its
-channel now (#462) and has no cadence of its own to be given. */
+channel now (#462) and has no cadence of its own to be given. Version 3 added
+the drawing allowance (#597). */
 
 export interface ClientConfig {
   flushIntervalMs: number;
+  /** The drawing allowance a `draw` frame spends: this many frames per
+  window. Version 3 (#597) added it so a replay after a stall can pace itself
+  under the allowance instead of bursting into a silent refusal. */
+  drawingFramesPerWindow: number;
+  drawingWindowSeconds: number;
 }
 
 /** What the client uses until a server says otherwise, and if one never does. */
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   flushIntervalMs: 40,
+  drawingFramesPerWindow: 100,
+  drawingWindowSeconds: 2,
 };
 
 /** The bounds the server enforces, mirrored so a bad payload cannot get through.
@@ -35,6 +43,8 @@ refuses a number that would break the client outright: a zero or negative
 interval is a busy loop, and a huge one is a canvas that never updates. */
 const BOUNDS: Record<keyof ClientConfig, { min: number; max: number }> = {
   flushIntervalMs: { min: 10, max: 200 },
+  drawingFramesPerWindow: { min: 50, max: 400 },
+  drawingWindowSeconds: { min: 0.5, max: 10 },
 };
 
 function reading(
@@ -51,7 +61,7 @@ function reading(
 }
 
 /** The notice shape this build understands. */
-export const CLIENT_CONFIG_CONTRACT_VERSION = 2;
+export const CLIENT_CONFIG_CONTRACT_VERSION = 3;
 
 /** Read a `client_config` notice, or `null` if it is not one this build knows.
 
@@ -68,6 +78,8 @@ export function parseClientConfig(payload: unknown): ClientConfig | null {
   if (record.contractVersion !== CLIENT_CONFIG_CONTRACT_VERSION) return null;
   return {
     flushIntervalMs: reading(record, "flushIntervalMs"),
+    drawingFramesPerWindow: reading(record, "drawingFramesPerWindow"),
+    drawingWindowSeconds: reading(record, "drawingWindowSeconds"),
   };
 }
 

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { observeServerCanvasSequence } from "../lib/canvasRecovery";
 import { emitWithAck, socket } from "../lib/socket";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -173,6 +174,9 @@ export function useRoomSessionReconnect() {
         }
 
         consecutiveHeartbeatFailures = 0;
+        // The canvas protocol compares this with what it still holds pending
+        // (#597); the two hooks share nothing else.
+        observeServerCanvasSequence(response[4], response[5]);
         const serverPhase = PHASE_BY_CODE[response[1] ?? 0] ?? "idle";
         const serverRound = response[2] ?? 0;
         const localPhase = ACTIVE_PHASES.has(state.phase) ? state.phase : "idle";

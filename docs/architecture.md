@@ -204,6 +204,7 @@ frontend/src/
 │   ├── gameStore.ts       Live room/game state
 │   ├── authStore.ts       Account identity and role
 │   ├── settingsStore.ts   Player settings (+ settingsMigrations.ts)
+│   ├── canvasRecovery.ts     Repacked, paced replay of unconfirmed actions; completion deadlines
 │   └── canvasBudgetStore.ts  Client-side replay-work budget
 ├── lib/                   Pure helpers, one concern per file; socket.ts is the singleton
 │   ├── crashReport.ts     Pre-fills and redacts the crash page's bug report

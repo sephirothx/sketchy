@@ -195,6 +195,10 @@ wins until the expansion overtakes the envelope it saved: measured at ~85 bytes.
 
 Only the sender consults this. The server accepts either shape and rebroadcasts
 whatever it was handed, so the threshold can move without a protocol change. */
+/** A frame as the client holds it: a bare header byte for the two control
+actions, or the encoded bytes of a data-bearing one. */
+export type DrawingFrame = number | Uint8Array;
+
 export const MAX_BASE64_FRAME_BYTES = 85;
 
 function bytesToBase64(bytes: Uint8Array): string {
