@@ -1060,9 +1060,10 @@ The row's checksum and `byte_size` describe the **stored** bytes, so a read veri
 the database holds before decoding; the drawing route's `ETag` is that checksum, which is
 a valid validator because a stored blob decodes to one frame. The decode-only golden
 blobs live in [`fixtures/stored_drawings_v1.json`](../fixtures/stored_drawings_v1.json):
-entries may be added, never removed or changed. Because a database column has no
-integrity check of its own, an operator command decodes stored drawings in bounded
-batches:
+entries may be added, never removed or changed. On PostgreSQL the payload columns are
+`STORAGE EXTERNAL`, so TOAST never tries to compress what is already deflated. Because a
+database column has no integrity check of its own, an operator command decodes stored
+drawings in bounded batches:
 
 ```bash
 cd backend && .venv/bin/python -m app.services.drawing_storage

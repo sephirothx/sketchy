@@ -955,8 +955,13 @@ and a PNG stays something the browser produces on demand rather than something t
 server keeps. Since #547 the frame is written delta-recoded and deflated (`SKCD` v1,
 about 4.5× smaller on a realistic drawing; a frame too small to earn deflate's overhead
 stays a verbatim `SKCH` v1), and `byte_size` and `checksum_sha256` describe those
-stored bytes. The format rules, the read-side bounds and the frozen golden blobs are in
-[wire-protocol.md](wire-protocol.md) under *Stored format*. A turn whose bytes the recap had to drop for budget is recorded as
+stored bytes. On PostgreSQL the `payload` column (here and on
+`player_report_drawing_evidence`) is `STORAGE EXTERNAL`: out of line past the TOAST
+threshold like any large value, but never handed to TOAST's compressor, which could only
+spend CPU on already-deflated bytes and keep them as they were (measured: same TOAST
+bytes, WAL per game 107 KB → 88 KB). Alembic does not compare storage, so the migration
+round trip pins it. The format rules, the read-side bounds and the frozen golden blobs
+are in [wire-protocol.md](wire-protocol.md) under *Stored format*. A turn whose bytes the recap had to drop for budget is recorded as
 `unavailable` rather than **omitted**. Deleting an account erases the drawings that
 account made while leaving the row saying so.
 

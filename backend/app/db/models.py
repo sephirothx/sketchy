@@ -2268,7 +2268,10 @@ class TurnDrawing(Base):
     verbatim, when it is too small to be worth encoding); the format it
     declares in its own first bytes decides which decoder reads it back.
     ``app/canvas_storage.py`` holds the rules that keep that readable, and
-    ``byte_size`` and ``checksum_sha256`` describe the stored bytes.
+    ``byte_size`` and ``checksum_sha256`` describe the stored bytes. On
+    PostgreSQL the payload column is ``STORAGE EXTERNAL`` (set by migration,
+    since the mapper cannot say it): the bytes are deflated already, so TOAST
+    compressing them again could only cost CPU.
     """
 
     __tablename__ = "turn_drawings"

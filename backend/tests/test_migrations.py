@@ -125,13 +125,39 @@ async def _assert_hand_written_indexes(engine: AsyncEngine) -> None:
         assert "where" in normalized
 
 
+async def _assert_payload_storage(engine: AsyncEngine, expected: str) -> None:
+    """Stored drawings are deflated already, so PostgreSQL keeps them out of
+    line uncompressed: EXTERNAL ('e'), not the EXTENDED ('x') default. Alembic
+    does not compare storage, so the chain test pins it directly."""
+    if engine.dialect.name != "postgresql":
+        return
+    async with engine.connect() as connection:
+        rows = (
+            await connection.execute(
+                text(
+                    "SELECT attrelid::regclass::text, attstorage::text FROM pg_attribute "
+                    "WHERE attname = 'payload' AND attrelid IN "
+                    "('turn_drawings'::regclass, 'player_report_drawing_evidence'::regclass)"
+                )
+            )
+        ).all()
+    assert {(table, storage) for table, storage in rows} == {
+        ("turn_drawings", expected),
+        ("player_report_drawing_evidence", expected),
+    }
+
+
 async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     """The baseline (#557) and what came after it: build to head, prove it
     matches the models, run the newest revision backward and forward, remove
     everything, and build it again from nothing."""
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
-    assert [revision.revision for revision in revisions] == ["a2b3c4d5e6f7", "f0a1b2c3d4e5"]
+    assert [revision.revision for revision in revisions] == [
+        "b3c4d5e6f7a8",
+        "a2b3c4d5e6f7",
+        "f0a1b2c3d4e5",
+    ]
     head = revisions[0].revision
     foundation = revisions[-1].revision
 
@@ -146,13 +172,16 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
             ("user_bans", "source_report_id"): "SET NULL",
         }
     await _assert_hand_written_indexes(engine)
+    await _assert_payload_storage(engine, "e")
 
-    # Run the newest revision backward and replay it.
+    # Run the newest revisions backward and replay them.
     await _migrate(engine, alembic_command.downgrade, foundation)
     assert await _current_revisions(engine) == {foundation}
+    await _assert_payload_storage(engine, "x")
     await _migrate(engine, alembic_command.upgrade, "head")
     assert await _current_revisions(engine) == {head}
     assert await _schema_differences(engine) == []
+    await _assert_payload_storage(engine, "e")
 
     # Prove the whole schema can be removed, then rebuilt from an empty database.
     await _migrate(engine, alembic_command.downgrade, "base")
