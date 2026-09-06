@@ -1355,6 +1355,9 @@ backend/.venv/bin/python benchmarks/drawing_compression.py
 # What it saves in PostgreSQL per game: heap, TOAST, WAL, and one read (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50
+# Which permessage-deflate window and memLevel the server should use (bytes, CPU, memory)
+backend/.venv/bin/python benchmarks/deflate_windows.py
+
 # Live drawing on the wire, measured over a recorded stroke trace
 backend/.venv/bin/python benchmarks/live_drawing.py
 backend/.venv/bin/python benchmarks/live_drawing.py --room-size 8 --window-bits 15 12 --json-output /tmp/wire.json
@@ -1469,10 +1472,19 @@ recording is named for what it is and added beside the others, not swapped in. A
 modelled before, is deflate's best case and understated live drawing by about
 half; the trace is what fixed that.
 
+The deflate-window benchmark decides the WebSocket compressor's two constants in
+`backend/app/ws_transport.py`. It runs one viewer's session — join, late-join
+history sync, two turns of recorded drawing with room churn and chat between
+strokes — through each candidate window and memLevel exactly as wsproto
+compresses, and measures the resident memory of live zlib contexts for a full
+server's worth of connections rather than trusting the formula. The result and
+its reasoning are in `docs/wire-protocol.md` §1.
+
 The browser-driven benchmarks share `benchmarks/with_server.sh`, which builds
-the frontend (skip with `SKIP_BUILD=1`), starts the application on an isolated
-local port (`8765` by default, `PORT=<number>` to move it) against a throwaway
-SQLite database it deletes afterwards, runs one script, and stops the server.
+the frontend (skip with `SKIP_BUILD=1`), starts the application through the production runner (so the benchmark
+measures the transport it names) on an isolated local port (`8765` by default,
+`PORT=<number>` to move it) against a throwaway SQLite database it deletes
+afterwards, runs one script, and stops the server.
 The canvas benchmark creates a real two-player game the way the E2E helpers
 do, and reports
 drawer-to-guesser stroke latency, large-fill latency, Undo/replay latency,

@@ -85,6 +85,7 @@ unit-testable, and the I/O is thin.
 
 ```
 app/server.py         Uvicorn runner with a draining shutdown
+app/ws_transport.py   The WebSocket implementation and deflate window, chosen on purpose
 app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 ├── app/api/          REST routers (profiles, prompt lists, moderation, operations, …)
 ├── app/auth/         Accounts, sessions, email, moderation primitives, CLI commands
@@ -1087,7 +1088,11 @@ Engine.IO packet received and every one sent (per recipient, which is what a fan
 costs) is counted at its wire size, and every command received and every `emit` is sized
 once by event name into a payload-size histogram — all before compression, so the
 numbers overstate what the network carries and answer "which command is the chatty one"
-rather than a bandwidth bill. The outbound hook sits on `eio.send_packet` and nowhere
+rather than a bandwidth bill. What each WebSocket negotiated is counted once at the
+upgrade (`sketchy_socket_transport_total{compression}`,
+[`backend/app/ws_transport.py`](../backend/app/ws_transport.py)), so a deployment whose
+proxy strips permessage-deflate is visible as a label rather than as byte counters that
+quietly stopped meaning what they meant. The outbound hook sits on `eio.send_packet` and nowhere
 higher, because that is the one boundary every path shares: a room broadcast encodes
 its packet once and hands a copy per seat straight to it, while an acknowledgement or a
 direct emit arrives through `eio.send`. The first version hooked `eio.send` and so
@@ -1429,6 +1434,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/timers.py`](../backend/app/services/timers.py) | Own asyncio task lifecycle for game phases, hints, and disconnects. |
 | [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental and full rebuild paths for bounded-cost profile statistics. |
 | [`app/state.py`](../backend/app/state.py) | Process-wide singletons shared between the REST routes and Socket.IO handlers. |
+| [`app/ws_transport.py`](../backend/app/ws_transport.py) | The WebSocket transport, chosen on purpose: wsproto, with a deflate window this module sets rather than one the client happens to ask for. |
 
 ### Frontend
 
