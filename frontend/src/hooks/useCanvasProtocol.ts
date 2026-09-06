@@ -12,10 +12,11 @@ import {
   RecoverySender,
   onServerCanvasSequence,
   repackDrawFrames,
+  requestSessionRebind,
 } from "../lib/canvasRecovery";
-import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
+import { CANVAS_SYNC_TIMEOUT_MS, createCanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { currentClientConfig } from "../lib/clientConfig";
-import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
+import type { CanvasSyncRequester, PrefixClaim } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, encodeClear, toWireFrame } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import type { ErrorCode } from "../types";
@@ -110,21 +111,37 @@ export function useCanvasProtocol(
   // is exactly the moment that guess is being abandoned. Viewers, who never
   // hold pending mutations and are most of a room, always qualify; the drawer
   // qualifies between strokes.
-  const authoritativePrefixClaim = useCallback((): [number, number, number] | null => {
+  const authoritativePrefixClaim = useCallback((): PrefixClaim | null => {
     const history = historyRef.current;
     if (pendingMutationsRef.current.size > 0) return null;
     if (history.generation == null || history.historyHash == null) return null;
     if (history.actions.length === 0) return null;
-    return [history.generation, history.actions.length, history.historyHash];
+    return {
+      generation: history.generation,
+      actionCount: history.actions.length,
+      historyHash: history.historyHash,
+    };
   }, []);
 
   // Built in the mount effect rather than during render: it closes over refs
   // to read the prefix claim at request time, and reading a ref during render
   // is exactly what the hooks rule forbids.
+  // One transaction at a time (#598): the request carries an id the reply
+  // echoes and the prefix claimed at that moment; a refusal says when to ask
+  // again; a lost request is retried with backoff; and when every attempt is
+  // gone the session is handed to the reconnect hook for a transport restart.
   const ensureSyncRequester = useCallback((): CanvasSyncRequester => {
-    syncRequestsRef.current ??= createCanvasSyncRequester(
-      () => socket.emit("request_sync_strokes", authoritativePrefixClaim()),
-    );
+    syncRequestsRef.current ??= createCanvasSyncRequester({
+      send: (requestId, claim) => emitWithAck<{ ok: boolean; errorCode?: ErrorCode; retryAfterMs?: number }>(
+        "request_sync_strokes",
+        claim ? [requestId, claim.generation, claim.actionCount, claim.historyHash] : [requestId],
+        { timeoutMs: CANVAS_SYNC_TIMEOUT_MS },
+      ),
+      claim: authoritativePrefixClaim,
+      exhausted: () => requestSessionRebind(),
+      setTimeout: (handler, delayMs) => window.setTimeout(handler, delayMs),
+      clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
+    });
     return syncRequestsRef.current;
   }, [authoritativePrefixClaim]);
 
@@ -289,8 +306,10 @@ export function useCanvasProtocol(
       if (commit !== undefined) onCanvasCommit(commit);
     };
 
-    const finishQueuedSync = () => {
-      ensureSyncRequester().drainQueued();
+    // The reply was applied. A converged canvas discharges every trigger
+    // coalesced meanwhile; one that fell back asks once more.
+    const finishSync = (converged: boolean) => {
+      ensureSyncRequester().applied(converged);
     };
 
     const isIncompletePath = (pending: PendingCanvasMutation): boolean =>
@@ -359,21 +378,22 @@ export function useCanvasProtocol(
       nextSequenceRef.current = committedSequence + 1;
       renderer.replay(actions);
       publishBudgets();
-      finishQueuedSync();
+      finishSync(true);
     };
 
-    const onSyncStrokes = (
-      payload: unknown,
+    // Adopt `actions` as the authority and reconcile what this client still
+    // holds pending, the same way for a full reply and for a tail (#598): a
+    // tail used to clear every pending mutation, including strokes drawn after
+    // the request went out, as if they had never happened.
+    const adoptAuthority = (
+      actions: DecodedCanvasAction[],
       revision: unknown,
       generation: unknown,
       sequence: unknown,
       historyHash: unknown,
-    ) => {
-      ensureSyncRequester().arrived();
-      const actions = decodeCanvasHistory(payload);
-      if (!actions || !historyRef.current.replace(
-        actions, revision, generation, sequence, historyHash,
-      )) {
+    ): void => {
+      if (!historyRef.current.replace(actions, revision, generation, sequence, historyHash)) {
+        finishSync(false);
         requestAuthoritativeSync();
         return;
       }
@@ -458,7 +478,31 @@ export function useCanvasProtocol(
       nextSequenceRef.current = (pendingSequences.at(-1) ?? committedSequence) + 1;
       renderer.replay(historyRef.current.actions);
       publishBudgets();
-      finishQueuedSync();
+      finishSync(true);
+    };
+
+    const onSyncStrokes = (
+      payload: unknown,
+      revision: unknown,
+      generation: unknown,
+      sequence: unknown,
+      historyHash: unknown,
+      requestId: unknown,
+    ) => {
+      const verdict = ensureSyncRequester().classify({
+        requestId: typeof requestId === "number" ? requestId : 0,
+        generation: typeof generation === "number" ? generation : -1,
+      });
+      // The answer to a request this client has since abandoned - a reset, a
+      // room switch - describes a canvas that is no longer this one.
+      if (verdict === "stale") return;
+      const actions = decodeCanvasHistory(payload);
+      if (!actions) {
+        finishSync(false);
+        requestAuthoritativeSync();
+        return;
+      }
+      adoptAuthority(actions, revision, generation, sequence, historyHash);
     };
 
     // Only the actions this client was missing, spliced onto the prefix it
@@ -472,8 +516,17 @@ export function useCanvasProtocol(
       generation: unknown,
       sequence: unknown,
       historyHash: unknown,
+      requestId: unknown,
     ) => {
-      ensureSyncRequester().arrived();
+      // A tail only ever answers a claim, so it must name the outstanding
+      // request and be cut for the prefix that request claimed: the drawer
+      // may have drawn since, and those strokes are pending, not history.
+      const verdict = ensureSyncRequester().classify({
+        requestId: typeof requestId === "number" ? requestId : 0,
+        generation: typeof generation === "number" ? generation : -1,
+        baseActionCount: typeof baseCount === "number" ? baseCount : -1,
+      });
+      if (verdict !== "matches") return;
       const tail = decodeCanvasHistory(payload);
       if (
         !tail
@@ -482,24 +535,12 @@ export function useCanvasProtocol(
         || baseCount < 0
         || baseCount > historyRef.current.actions.length
       ) {
+        finishSync(false);
         requestAuthoritativeSync();
         return;
       }
       const combined = historyRef.current.actions.slice(0, baseCount).concat(tail);
-      if (!historyRef.current.replace(combined, revision, generation, sequence, historyHash)) {
-        requestAuthoritativeSync();
-        return;
-      }
-      pendingMutationsRef.current.clear();
-      // A tail is a new authority as much as a full sync is: a replay still
-      // going out and a deadline still armed belong to the state just dropped.
-      sender.cancel();
-      watch.cancelAll();
-      activeOutgoingSequenceRef.current = null;
-      nextSequenceRef.current = historyRef.current.sequence! + 1;
-      renderer.replay(historyRef.current.actions);
-      publishBudgets();
-      finishQueuedSync();
+      adoptAuthority(combined, revision, generation, sequence, historyHash);
     };
 
     function onCanvasCommit(payload: unknown) {

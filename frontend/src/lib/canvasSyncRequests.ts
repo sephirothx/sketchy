@@ -1,112 +1,171 @@
-export interface CanvasSyncRequestEnvironment {
-  /** Ask the server for the authoritative canvas history. */
-  requestSync(): void;
+/** One canvas-sync transaction at a time, scoped to what it was asked for (#598).
+
+The old latch tracked "a request is outstanding" and nothing else. Its two gaps:
+
+- A reply was applied whatever it answered. A tail asked for while nothing was
+  pending could arrive after the drawer had drawn again, and replacing history
+  then cleared the new strokes as if they had never happened; a full reply to
+  a request abandoned by a reset landed on the new turn.
+- An unanswered request released the latch after ten seconds and retried only
+  if something else had asked meanwhile. A lost or refused request on a quiet
+  canvas had no next trigger, and the canvas stayed wrong for the turn.
+
+A transaction carries an id the server echoes on its reply, the prefix it
+claimed (so a tail can be checked against what it was cut for), and a retry
+plan: a request the server refuses says when to try again (`retryAfterMs`); one
+it never answers is retried with backoff; and after the attempts run out the
+owner is told to hand the session over to a rebind, which pushes a fresh
+snapshot and resets everything here. Triggers that arrive while a transaction
+is outstanding are satisfied by its reply when the reply converges; only a
+reply that failed to converge issues the follow-up. */
+
+export interface PrefixClaim {
+  generation: number;
+  actionCount: number;
+  historyHash: number;
+}
+
+export type SyncRefusal = { errorCode?: string; retryAfterMs?: number };
+
+export interface CanvasSyncEnvironment {
+  /** Send `request_sync_strokes` for this id; resolves with the server's
+  acknowledgement, or rejects when the socket never answered. */
+  send(requestId: number, claim: PrefixClaim | null): Promise<{ ok: boolean } & SyncRefusal>;
+  /** What this client can honestly claim right now, or null. */
+  claim(): PrefixClaim | null;
+  /** Every attempt failed: the session, not the canvas, is in question. */
+  exhausted(): void;
   setTimeout(handler: () => void, delayMs: number): number;
   clearTimeout(timeoutId: number): void;
 }
 
-/**
- * How long to wait for a sync before assuming the request was dropped.
- *
- * The server answers `request_sync_strokes` only for a socket that currently
- * resolves to a room member with a live game, and says nothing at all
- * otherwise - so a request issued while the session is rebinding (the moment
- * right after a transport drop, which is exactly when a sync is most needed)
- * is silently discarded. Nothing else would ever release the latch.
- *
- * Comfortably longer than a healthy sync so a slow but arriving history is not
- * requested twice, and short enough that a client cannot stay desynchronized
- * for a whole turn. Releasing early only costs a redundant history; releasing
- * late leaves the canvas wrong.
- */
+/** How long a reply may take before the request is presumed lost. */
 export const CANVAS_SYNC_TIMEOUT_MS = 10_000;
+/** Waits before each retry of a lost or refused request, then give up. */
+export const CANVAS_SYNC_RETRIES_MS = [2_000, 4_000, 8_000] as const;
+
+export interface SyncReply {
+  requestId: number;
+  generation: number;
+  /** For a tail: the prefix length it splices onto. */
+  baseActionCount?: number;
+}
+
+export type ReplyVerdict = "matches" | "unsolicited" | "stale";
 
 export interface CanvasSyncRequester {
-  /** Ask for a sync, coalescing while one is already outstanding. */
+  /** Ask for a sync; coalesced while one is outstanding. */
   request(): void;
-  /** A sync arrived: stop waiting on the outstanding request. */
-  arrived(): void;
-  /** Issue the follow-up that was coalesced away, if there was one. */
-  drainQueued(): void;
-  /** Forget any outstanding request (new generation, or teardown). */
+  /** A reply arrived. `matches` names the outstanding transaction (and, for a
+  tail, its claimed prefix); `unsolicited` is a server-pushed sync (id 0);
+  `stale` answers a request this client has abandoned and must be ignored. */
+  classify(reply: SyncReply): ReplyVerdict;
+  /** The matching or unsolicited reply was applied; `converged` says whether
+  it left the canvas right. A trigger coalesced meanwhile is discharged by a
+  converged reply and re-issued by one that did not. */
+  applied(converged: boolean): void;
+  /** Forget everything (new generation, room change, teardown). */
   reset(): void;
+  /** The id awaiting a reply, or null. */
+  readonly outstanding: number | null;
 }
 
-function browserEnvironment(requestSync: () => void): CanvasSyncRequestEnvironment {
-  return {
-    requestSync,
-    setTimeout: (handler, delayMs) => window.setTimeout(handler, delayMs),
-    clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
-  };
-}
-
-/**
- * Track one outstanding canvas-sync request at a time.
- *
- * Two requests in flight would have the server send the whole history twice,
- * so a second ask while one is outstanding is coalesced into a single
- * follow-up. The timeout is what keeps that coalescing from becoming a trap:
- * without it a request the server never answers leaves the latch closed
- * forever, and every later ask - a failed commit hash, an undecodable frame,
- * the pending-mutation ceiling - is silently swallowed with it.
- *
- * `arrived` and `drainQueued` are deliberately separate. The follow-up has to
- * wait until the arriving history has been applied, or it would ask again
- * from the state it is about to replace.
- */
 export function createCanvasSyncRequester(
-  environment: CanvasSyncRequestEnvironment | (() => void),
+  env: CanvasSyncEnvironment,
   timeoutMs: number = CANVAS_SYNC_TIMEOUT_MS,
 ): CanvasSyncRequester {
-  const env = typeof environment === "function"
-    ? browserEnvironment(environment)
-    : environment;
-
-  let inFlight = false;
+  let nextId = 1;
+  let outstanding: { id: number; claim: PrefixClaim | null; attempt: number } | null = null;
   let queued = false;
-  let timeoutId: number | null = null;
+  let timer: number | null = null;
 
-  function stopWaiting(): void {
-    if (timeoutId !== null) {
-      env.clearTimeout(timeoutId);
-      timeoutId = null;
+  function clearTimer(): void {
+    if (timer !== null) {
+      env.clearTimeout(timer);
+      timer = null;
     }
-    inFlight = false;
   }
 
-  function request(): void {
-    if (inFlight) {
-      queued = true;
+  function retryLater(delayMs: number): void {
+    const failed = outstanding!;
+    clearTimer();
+    const attempt = failed.attempt + 1;
+    if (attempt >= CANVAS_SYNC_RETRIES_MS.length) {
+      outstanding = null;
+      queued = false;
+      env.exhausted();
       return;
     }
-    inFlight = true;
-    queued = false;
-    timeoutId = env.setTimeout(() => {
-      timeoutId = null;
-      inFlight = false;
-      // Something asked again while this request was outstanding, so the need
-      // for a sync outlived the request that went unanswered. Anything else
-      // waits for the next genuine trigger rather than polling a server that
-      // may simply have no canvas to send.
-      if (queued) {
-        queued = false;
-        request();
-      }
+    const wait = Math.max(delayMs, CANVAS_SYNC_RETRIES_MS[attempt]);
+    outstanding = { id: 0, claim: null, attempt };
+    timer = env.setTimeout(() => {
+      timer = null;
+      issue(attempt);
+    }, wait);
+  }
+
+  function issue(attempt: number): void {
+    const id = nextId++;
+    const claim = env.claim();
+    outstanding = { id, claim, attempt };
+    clearTimer();
+    timer = env.setTimeout(() => {
+      timer = null;
+      if (outstanding?.id === id) retryLater(0);
     }, timeoutMs);
-    env.requestSync();
+    env.send(id, claim).then(
+      (answer) => {
+        if (outstanding?.id !== id) return;
+        if (answer.ok) return; // the reply is on its way; the timer guards it
+        retryLater(answer.retryAfterMs ?? 0);
+      },
+      () => {
+        if (outstanding?.id === id) retryLater(0);
+      },
+    );
   }
 
   return {
-    request,
-    arrived: stopWaiting,
-    drainQueued(): void {
-      if (!queued) return;
+    request(): void {
+      if (outstanding) {
+        queued = true;
+        return;
+      }
       queued = false;
-      request();
+      issue(0);
+    },
+    classify(reply): ReplyVerdict {
+      if (reply.requestId === 0) return "unsolicited";
+      if (!outstanding || reply.requestId !== outstanding.id) return "stale";
+      if (reply.baseActionCount !== undefined) {
+        const claim = outstanding.claim;
+        if (
+          !claim
+          || reply.generation !== claim.generation
+          || reply.baseActionCount !== claim.actionCount
+        ) return "stale";
+      }
+      return "matches";
+    },
+    applied(converged): void {
+      clearTimer();
+      outstanding = null;
+      if (converged) {
+        queued = false;
+        return;
+      }
+      if (queued) {
+        queued = false;
+        issue(0);
+      }
     },
     reset(): void {
-      stopWaiting();
+      clearTimer();
+      outstanding = null;
       queued = false;
+    },
+    get outstanding(): number | null {
+      return outstanding && outstanding.id !== 0 ? outstanding.id : null;
     },
   };
 }

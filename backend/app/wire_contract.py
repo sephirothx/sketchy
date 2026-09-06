@@ -105,7 +105,8 @@ HAND_PARSED_LAYOUTS: dict[str, Any] = {
         "identityOn": sorted(["draw_start", "draw_shape", "draw_fill", "clear_canvas"]),
     },
     "parse_sync_request_payload": {
-        "argument": "null | [generation, heldActionCount, historyHash]",
+        "argument": "[requestId] | [requestId, generation, heldActionCount, historyHash]",
+        "acknowledgement": "{ok: true} once the reply is on its way; not_in_game with retryAfterMs when there is no canvas",
     },
     "parse_undo_payload": {
         "argument": ["generation", "sequence", "revision", "historyHash"],
@@ -119,8 +120,8 @@ TUPLE_EVENTS: dict[str, list[str]] = {
     "canvas_commit": ["generation", "sequence", "revision", "historyHash"],
     "canvas_reset": ["revision", "generation", "sequence", "historyHash"],
     "canvas_undo": ["generation", "sequence", "revisionBefore", "revisionAfter", "historyHash"],
-    "sync_strokes": ["binaryHistory", "revision", "generation", "sequence", "historyHash"],
-    "sync_strokes_tail": ["binaryTail", "baseActionCount", "revision", "generation", "sequence", "historyHash"],
+    "sync_strokes": ["binaryHistory", "revision", "generation", "sequence", "historyHash", "requestId"],
+    "sync_strokes_tail": ["binaryTail", "baseActionCount", "revision", "generation", "sequence", "historyHash", "requestId"],
     "request_canvas_actions": ["generation", "expectedSequence", "receivedSequence"],
 }
 

@@ -621,7 +621,8 @@
   "request_sync_strokes": {
    "commandClass": "resync",
    "layout": {
-    "argument": "null | [generation, heldActionCount, historyHash]"
+    "acknowledgement": "{ok: true} once the reply is on its way; not_in_game with retryAfterMs when there is no canvas",
+    "argument": "[requestId] | [requestId, generation, heldActionCount, historyHash]"
    },
    "parser": "parse_sync_request_payload",
    "silent": false
@@ -1149,7 +1150,8 @@
     "revision",
     "generation",
     "sequence",
-    "historyHash"
+    "historyHash",
+    "requestId"
    ]
   },
   "sync_strokes_tail": {
@@ -1159,7 +1161,8 @@
     "revision",
     "generation",
     "sequence",
-    "historyHash"
+    "historyHash",
+    "requestId"
    ]
   },
   "turn_ended": {
@@ -2319,7 +2322,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 11,
+ "protocolVersion": 12,
  "refusal": {
   "codes": [
    "invalid_payload",

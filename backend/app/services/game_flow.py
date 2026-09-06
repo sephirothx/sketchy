@@ -623,8 +623,15 @@ class GameFlowService:
         room: Room,
         sid: str,
         holds: tuple[int, int, int] | None = None,
+        request_id: int = 0,
     ) -> None:
         """Send the canvas history, or only the part the client is missing.
+
+        `request_id` is echoed last on the reply: the id the client gave the
+        request it is answering, or 0 for a sync the server decided to send
+        (a join, a refused frame). The client accepts a tail only for the
+        request it has outstanding, and ignores a full reply to a request it
+        has abandoned (#598).
 
         `holds` is the client's claim about the prefix it already has, as
         (generation, actionCount, historyHash). It is verified against the
@@ -653,6 +660,7 @@ class GameFlowService:
                         canvas.generation,
                         canvas.sequence,
                         canvas.hash,
+                        request_id,
                     ),
                     to=sid,
                 )
@@ -665,6 +673,7 @@ class GameFlowService:
                 canvas.generation,
                 canvas.sequence,
                 canvas.hash,
+                request_id,
             ),
             to=sid,
         )
