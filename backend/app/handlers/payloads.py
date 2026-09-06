@@ -490,6 +490,14 @@ class GuessPayload(TextPayload):
     """
 
     id: int | None = Field(default=None, ge=0, le=MAX_GUESS_ID)
+    # The scope the guess was made in (#599): the room and the turn the player
+    # saw when they pressed Enter. A retry that outlives either is answered
+    # and ignored rather than replayed into whatever the seat is doing now.
+    # Optional like `id`, and for the same reason: a client that sends no
+    # scope forgoes the protection, and a retry it never makes cannot be
+    # judged against it.
+    code: str | None = Field(default=None, min_length=1, max_length=16)
+    turn_id: str | None = Field(default=None, alias="turnId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH)
 
 
 class HintPayload(RequestModel):

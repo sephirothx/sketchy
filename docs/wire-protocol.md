@@ -281,6 +281,20 @@ these paths that means a second room, or a game started twice. Instead:
   would be exactly the replay volatile delivery exists to prevent. Two unacknowledged
   attempts are reported to the player instead of vanishing.
 
+  The retry is sent only inside the **scope** the first attempt captured — the same
+  connection (`socket.id`), the same room and the same turn — and abandoned otherwise
+  (#599). `connected` being true at the timeout used to be the whole test, and a
+  connection replaced before the timeout, a room switched on the same socket or a turn
+  that ended all passed it, replaying the guess into whatever the seat was doing by then:
+  the very thing volatile delivery exists to prevent (R-CONN-06). The guess also carries
+  its `code` and `turnId`, and the server ignores — acknowledging, so the client stops —
+  a guess whose room or turn its seat has left, **before** deduplication, the AFK reset,
+  the chat line and the score, so a packet whose scope is gone has no effect at all
+  (`sketchy_guesses_out_of_scope_total{scope}`). Like `id`, the scope is optional on the
+  wire for the same reason: a client that sends none forgoes the protection, and a retry
+  it never makes cannot be judged against it. Each delivery callback settles once,
+  whatever arrives late.
+
   The `id` is what makes the retry safe. It is a per-page-load counter, and the server
   remembers a bounded window of ids **per connection**
   (`Player.accept_guess_id`, [`backend/app/rooms.py`](../backend/app/rooms.py)), so a
@@ -401,7 +415,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `request_sync_strokes` | `[requestId]`, or `[requestId, generation, actionCount, historyHash]` | `{ok: true}` once the reply is on its way; `not_in_game` with `retryAfterMs` when there is no canvas; `too_fast` from the resync budget | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
-| `guess` | `GuessPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
+| `guess` | `GuessPayload` — `{text, id?, code?, turnId?}`: the id for the one retry, the room code and turn id for the scope it was made in (§2) | ✓ (a bare receipt) | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `buy_wheel_letter` | `WheelLetterPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
 | `toggle_afk` | `ToggleAfkPayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
@@ -1550,7 +1564,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (13) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (14) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
