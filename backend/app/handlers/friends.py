@@ -54,7 +54,7 @@ from app.handlers.refusals import ErrorCode
 logger = logging.getLogger("sketchy.handlers.friends")
 
 #: The same wording the REST refusal carries, from the same constant.
-REGISTER_FIRST_ACK = {"ok": False, "errorCode": ErrorCode.FRIEND_NOT_IN_GAME, "error": REGISTER_FIRST}
+REGISTER_FIRST_ACK = {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": REGISTER_FIRST}
 NOT_IN_A_GAME = {"ok": False, "errorCode": ErrorCode.FRIEND_NOT_IN_GAME, "error": "Your friend is not in a game right now."}
 # Deliberately the same answer for "we are not friends" and "there is no such
 # account": neither is a fact this caller is owed, and telling them apart makes
