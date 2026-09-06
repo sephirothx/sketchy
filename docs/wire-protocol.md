@@ -152,7 +152,9 @@ skew into an unusable page.
 
 **Bump `PROTOCOL_VERSION` on both sides whenever any payload on the socket changes shape.**
 It is cheap: both ends deploy together, so the only client that ever sees a mismatch is one
-that was already open across the deploy.
+that was already open across the deploy. What "changes shape" means is not left to memory:
+§11 describes the contract document CI compares against the base branch, and the policy
+on when a difference must carry a bump.
 
 ---
 
@@ -1432,6 +1434,45 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `client_config` (2) | The client-cadence notice | A cadence is added, removed or renamed |
 | Data export `schema_version` (4) | The export document, pinned by [`fixtures/account_data_export_v4_fields.json`](../fixtures/account_data_export_v4_fields.json) | The export's field surface changes |
 
+### The contract as a document
+
+Names are not the contract. `tests/test_wire_contract.py` proves both ends use the same
+event names and payload keys, and that is all it can prove: a key can move from one
+event to another, a field can change type or stop being required, a tuple can swap two
+positions, a binary layout can change under the same tag, and the union of names is
+unchanged. So [`backend/app/wire_contract.py`](../backend/app/wire_contract.py) builds
+the contract as **one document** and
+[`fixtures/wire_contract.json`](../fixtures/wire_contract.json) is that document as last
+committed (#567):
+
+- every client command with the JSON Schema of its payload model — types, bounds,
+  aliases, required fields — or, for the three hand-written parsers (`draw`,
+  `request_sync_strokes`, `undo_stroke`), a declared positional layout; the rate class
+  it spends; whether it answers;
+- every server event, with a declared positional layout for the tuple-shaped ones
+  (`draw`, `canvas_commit`, `canvas_reset`, `canvas_undo`, `sync_strokes`,
+  `sync_strokes_tail`, `request_canvas_actions`) and, for object payloads, the camelCase
+  keys each payload-building function writes — attributed to the function, so a key
+  moving between builders is a difference;
+- the refusal codes (§2), every version constant above that travels on the socket, the
+  live-drawing frame constants, and a SHA-256 of each cross-language fixture, so a
+  byte-level layout example cannot change under the same tag unnoticed.
+
+[`scripts/check-wire-contract.py`](../scripts/check-wire-contract.py) regenerates the
+fixture (`--write`), refuses a stale one, and with `--base <ref>` diffs the tree's contract
+against the fixture **at that revision** — CI passes the pull request's base. Comparing
+against the base rather than the working tree is what makes regenerating the fixture
+under the same number visible: the fixture can be rewritten, the base cannot.
+[`backend/tests/test_wire_contract_baseline.py`](../backend/tests/test_wire_contract_baseline.py)
+pins that a type change, a key relocation, a tuple reorder and a same-tag fixture change
+each move the document, that a bump makes any change acceptable, and that the fixture
+matches the tree and the §5 table lists exactly the events extracted.
+
+**What the document cannot see, and review must:** a change of *meaning* under an
+identical shape (a field that now holds something else), and privacy — a key that is
+still named but now carries what it must not. The document is a floor for review, not a
+proof of compatibility.
+
 ### Before the first deployment
 
 **Nothing is deployed yet, so nothing needs a compatibility story.** Until this
@@ -1442,20 +1483,35 @@ holding rows written by it. A schema may be rewritten rather than migrated; an
 export format may be replaced rather than dual-read; a payload may change shape
 under a version number that stays put.
 
-Bumping is still worth doing where it costs a line, because a stale tab open
-across a rebuild is told to reload rather than left silently broken - but it is
-a development convenience for now, not a contract with anybody.
+For the socket contract this is made explicit rather than left as a contradiction
+with §1's bump rule: **the development policy is regenerate and commit.** Every
+wire change regenerates `fixtures/wire_contract.json` in the same commit, so the
+change is a reviewable diff; CI fails a stale fixture and *warns* on a contract
+that differs from the base branch under the same `PROTOCOL_VERSION`. Bumping is
+still worth doing where it costs a line, because a stale tab open across a
+rebuild is told to reload rather than left silently broken - but it is a
+development convenience for now, not a contract with anybody, and there is no
+N/N−1 support: a mismatch means reload, never a second code path.
 
-What changes at launch: every rule below starts applying, and
-`docs/database.md`'s "Pre-v1 note" stops being an option. Delete this section
-then, rather than leaving it to be read as still true.
+What changes at launch: every rule below starts applying, the CI step gains
+`--enforce` (an unbumped contract change fails), and `docs/database.md`'s
+"Pre-v1 note" stops being an option. **In the same change, reset `PROTOCOL_VERSION`
+to 1 on both sides** (and the other on-wire `contractVersion` constants likewise):
+the numbers accumulated before launch counted development rebuilds, not deployed
+protocols, and nothing in the wild speaks any of them. Regenerate the contract
+fixture with the reset. Delete this section then, rather than leaving it to be read
+as still true.
 
 **Checklist for any wire change:**
 
-1. Change the server (handler, payload model, presenter).
+1. Change the server (handler, payload model, presenter). A new command is added to
+   `COMMAND_PAYLOADS` in `backend/app/wire_contract.py` with the model it parses; a new
+   tuple-shaped event to `TUPLE_EVENTS`.
 2. Change the client (`frontend/src/types.ts`, the listener, the emitter).
 3. Update the fixture if the binary formats moved
    (`fixtures/canvas_protocol_v1.json`).
-4. Run `backend/.venv/bin/pytest tests/test_wire_contract.py`.
-5. Update **this document**, and [`../GLOSSARY.md`](../GLOSSARY.md) if a
-   player-visible name changed.
+4. Regenerate the contract: `backend/.venv/bin/python scripts/check-wire-contract.py --write`,
+   and read the diff of `fixtures/wire_contract.json` as the review of the change.
+5. Run `backend/.venv/bin/pytest tests/test_wire_contract.py tests/test_wire_contract_baseline.py`.
+6. Update **this document** — §5's table must list the event — and
+   [`../GLOSSARY.md`](../GLOSSARY.md) if a player-visible name changed.

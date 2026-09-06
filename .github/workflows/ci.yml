@@ -142,6 +142,9 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The wire-contract check below compares against the base revision.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:
@@ -166,6 +169,12 @@ jobs:
       # lose data.
       - name: Check coverage floors
         run: python3 ../scripts/check-coverage.py coverage.json
+
+      # The socket contract as a document, compared with the base branch's.
+      # A stale fixture fails; a change under the same PROTOCOL_VERSION is a
+      # warning until launch (docs/wire-protocol.md §11) - add --enforce then.
+      - name: Check the wire contract against the base revision
+        run: python ../scripts/check-wire-contract.py --base "origin/${{ github.base_ref || 'main' }}"
 
   postgresql:
     name: PostgreSQL migrations & repositories
