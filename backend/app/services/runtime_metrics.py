@@ -223,6 +223,12 @@ class _CommitOutcomeUnknown(Exception):
     """The COMMIT itself raised: the batch may or may not be on disk."""
 
 
+class _CancelledDuringCommit(BaseException):
+    """A cancel that arrived while COMMIT was in flight: counted as ambiguous
+    inside the transaction block, re-raised as the cancellation outside it."""
+
+
+
 def _daily_insert(session: AsyncSession):
     dialect = session.get_bind().dialect.name
     if dialect == "postgresql":
@@ -304,6 +310,16 @@ async def flush_events(
                 raise
             try:
                 await session.commit()
+            except asyncio.CancelledError:
+                # The server may have committed before the cancel reached
+                # us: the same unknown outcome as a lost connection, and
+                # the same answer - let the batch go rather than insert it
+                # a second time. The cancellation itself still propagates.
+                source.acknowledge(pending)
+                source.ambiguous_batches += 1
+                source.events_lost_to_ambiguity += len(pending)
+                source.interrupted_flushes += 1
+                raise _CancelledDuringCommit() from None
             except Exception as error:
                 raise _CommitOutcomeUnknown() from error
     except _CommitOutcomeUnknown:
@@ -311,6 +327,8 @@ async def flush_events(
         source.ambiguous_batches += 1
         source.events_lost_to_ambiguity += len(pending)
         raise
+    except _CancelledDuringCommit:
+        raise asyncio.CancelledError() from None
     except asyncio.CancelledError:
         source.interrupted_flushes += 1
         raise

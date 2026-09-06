@@ -156,6 +156,35 @@ async def test_a_cancelled_flush_keeps_the_batch_and_says_it_was_interrupted(mon
         await engine.dispose()
 
 
+async def test_a_cancel_during_commit_is_an_unknown_outcome_too(monkeypatch):
+    """The server may have committed before the cancel reached the client;
+    keeping the batch would insert it again. It is let go and counted as
+    ambiguous, and the cancellation still propagates."""
+    factory, engine = await create_test_db()
+    try:
+        recorder = RuntimeMetrics()
+        _record(recorder, 7)
+        real = AsyncSession.commit
+
+        async def cancelled_mid_commit(self):
+            await real(self)
+            raise asyncio.CancelledError
+
+        monkeypatch.setattr(AsyncSession, "commit", cancelled_mid_commit)
+        with pytest.raises(asyncio.CancelledError):
+            await flush_events(factory, recorder=recorder)
+        monkeypatch.setattr(AsyncSession, "commit", real)
+
+        assert recorder.buffered == 0
+        assert recorder.ambiguous_batches == 1 and recorder.events_lost_to_ambiguity == 7
+        assert recorder.interrupted_flushes == 1 and recorder.failed_flushes == 0
+        assert await flush_events(factory, recorder=recorder) == 0
+        async with factory() as session:
+            assert await session.scalar(select(func.count()).select_from(RuntimeEvent)) == 7
+    finally:
+        await engine.dispose()
+
+
 async def test_a_commit_of_unknown_outcome_lets_the_batch_go_and_says_how_many(monkeypatch):
     """Retrying a batch the server may have written would count it twice; a
     batch has no identity of its own, so the honest answer is to count it
