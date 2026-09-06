@@ -108,11 +108,9 @@ test("a refusal with no canvas to send is retried after its delay, and a socket 
   });
   requester.request();
   await advance(2_000);
-  assert.equal(state.sent.length, 1, "the backoff is a floor under the server's delay");
-  await advance(CANVAS_SYNC_RETRIES_MS[1] - 2_000);
-  assert.equal(state.sent.length, 2);
+  assert.equal(state.sent.length, 2, "the server's delay is exact, not floored by the backoff");
   await advance(CANVAS_SYNC_RETRIES_MS[2]);
-  assert.equal(state.sent.length, 3);
+  assert.equal(state.sent.length, 3, "a request that got no answer at all backs off");
 });
 
 test("triggers coalesced during a transaction are discharged by a converged reply and re-issued by one that did not", () => {
