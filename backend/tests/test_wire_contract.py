@@ -99,7 +99,9 @@ def _diagnostic_blob_keys() -> set[str]:
 # The synthetic probe is a *client* of the wire protocol - it emits commands
 # and reads server events - so its literals are the other side of every
 # contract checked here, not the server's.
-CLIENT_SIDE_MODULES = {BACKEND_APP / "probe.py"}
+# `probe.py` speaks to a server; `wire_contract.py` describes one. Neither's
+# dict keys are payloads.
+CLIENT_SIDE_MODULES = {BACKEND_APP / "probe.py", BACKEND_APP / "wire_contract.py"}
 
 
 def _python_sources() -> list[ast.Module]:

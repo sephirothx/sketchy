@@ -1,0 +1,2419 @@
+{
+ "commandClasses": [
+  "action",
+  "conversation",
+  "drawing",
+  "heartbeat",
+  "lobby_chat",
+  "resync"
+ ],
+ "commands": {
+  "accept_colorblind_suggestion": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "add_friend": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "Friend somebody by their *seat*, never by their account.\n\nR-ROOM-07 keeps account ids out of room payloads, so the client names the\nseat it can see and the server resolves who is sitting in it - the same way\nreports and blocks already work from inside a room.",
+    "properties": {
+     "playerId": {
+      "maxLength": 128,
+      "title": "Playerid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "playerId"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "become_player": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "buy_hint": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "slot": {
+      "maximum": 31,
+      "minimum": 0,
+      "title": "Slot",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "slot"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "buy_wheel_letter": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "letter": {
+      "maxLength": 1,
+      "minLength": 1,
+      "pattern": "^[A-Za-z]$",
+      "title": "Letter",
+      "type": "string"
+     }
+    },
+    "required": [
+     "letter"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "cast_restart_vote": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "vote": {
+      "title": "Vote",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "vote"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "create_room": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "allowedTools": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Allowedtools",
+      "type": "array"
+     },
+     "colorMode": {
+      "default": "all",
+      "title": "Colormode",
+      "type": "string"
+     },
+     "colorblindSafeColors": {
+      "default": false,
+      "title": "Colorblindsafecolors",
+      "type": "boolean"
+     },
+     "customPrompts": {
+      "default": "",
+      "maxLength": 80000,
+      "title": "Customprompts",
+      "type": "string"
+     },
+     "customPromptsOnly": {
+      "default": false,
+      "title": "Custompromptsonly",
+      "type": "boolean"
+     },
+     "drawingSeconds": {
+      "default": 90,
+      "title": "Drawingseconds",
+      "type": "integer"
+     },
+     "hideMaskedPrompt": {
+      "default": false,
+      "title": "Hidemaskedprompt",
+      "type": "boolean"
+     },
+     "hintMode": {
+      "default": "checkpoints",
+      "title": "Hintmode",
+      "type": "string"
+     },
+     "isPublic": {
+      "default": true,
+      "title": "Ispublic",
+      "type": "boolean"
+     },
+     "maxPlayers": {
+      "default": 8,
+      "maximum": 16,
+      "minimum": 2,
+      "title": "Maxplayers",
+      "type": "integer"
+     },
+     "name": {
+      "default": "",
+      "maxLength": 40,
+      "title": "Name",
+      "type": "string"
+     },
+     "nameColor": {
+      "anyOf": [
+       {
+        "pattern": "^#[0-9a-fA-F]{6}$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Namecolor"
+     },
+     "nickname": {
+      "default": "Player",
+      "maxLength": 16,
+      "title": "Nickname",
+      "type": "string"
+     },
+     "promptListShareCodes": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Promptlistsharecodes",
+      "type": "array"
+     },
+     "promptListSlugs": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Promptlistslugs",
+      "type": "array"
+     },
+     "rounds": {
+      "default": 3,
+      "maximum": 10,
+      "minimum": 1,
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "scoringMode": {
+      "default": "default",
+      "title": "Scoringmode",
+      "type": "string"
+     },
+     "spectatorsSeePrompt": {
+      "default": false,
+      "title": "Spectatorsseeprompt",
+      "type": "boolean"
+     }
+    },
+    "type": "object"
+   },
+   "silent": false
+  },
+  "dismiss_colorblind_suggestion": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "draw": {
+   "acknowledgement": "no acknowledgement; a throttled frame answers nothing",
+   "commandClass": "drawing",
+   "layout": {
+    "actionIdentity": [
+     "generation",
+     "sequence"
+    ],
+    "arguments": [
+     "frame",
+     "actionIdentity?"
+    ],
+    "frame": "int header (control actions) | base64 text (<= MAX_BASE64_FRAME_BYTES) | binary attachment",
+    "identityOn": [
+     "clear_canvas",
+     "draw_fill",
+     "draw_shape",
+     "draw_start"
+    ]
+   },
+   "parser": "parse_draw_payload",
+   "silent": true
+  },
+  "get_custom_prompts": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "get_recap_drawing": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "index": {
+      "maximum": 2147483647,
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "index"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "get_room_preview": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "maxLength": 16,
+      "minLength": 1,
+      "title": "Code",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "get_room_settings": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "guess": {
+   "acknowledgement": "bare receipt, no body",
+   "commandClass": "conversation",
+   "payload": {
+    "additionalProperties": false,
+    "description": "A guess, optionally carrying the client's own delivery identifier.\n\n`guess` is emitted volatile, so a momentarily unwritable transport drops it\nsilently; the client retries once with the same `id` when the server never\nacknowledges. The id lets the server tell that retry apart from a player\ngenuinely guessing the same word twice. It is per connection and monotonic,\nand omitting it simply forgoes the deduplication.",
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "maximum": 2147483647,
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Id"
+     },
+     "text": {
+      "maxLength": 500,
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "invite_friend": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "Addressed to an account, because the lobby has no seat to resolve.",
+    "properties": {
+     "friendUserId": {
+      "maxLength": 128,
+      "title": "Frienduserid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "friendUserId"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "join_friend_room": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "Ask to be seated wherever a friend is, without naming the room.\n\nCarries the same trailing identity fields `JoinRoomPayload` does, so the\nseat is built by exactly the same `resolve_identity` path. What it does not\ncarry is any way to name a room: no code, no id. The server resolves that\nfrom the friend's live seat, which is what keeps a room code a capability\nsomebody was given rather than one they can ask for.\n\n`inviteToken` is present when this answers an invitation. Without one the\ncaller is pulling themselves in, which is held to a stricter rule - see\n`handlers/friends.py`.",
+    "properties": {
+     "asSpectator": {
+      "default": false,
+      "title": "Asspectator",
+      "type": "boolean"
+     },
+     "colorblindSafeColors": {
+      "default": false,
+      "title": "Colorblindsafecolors",
+      "type": "boolean"
+     },
+     "friendUserId": {
+      "maxLength": 128,
+      "title": "Frienduserid",
+      "type": "string"
+     },
+     "inviteToken": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Invitetoken"
+     },
+     "nameColor": {
+      "anyOf": [
+       {
+        "pattern": "^#[0-9a-fA-F]{6}$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Namecolor"
+     },
+     "nickname": {
+      "default": "Player",
+      "maxLength": 16,
+      "title": "Nickname",
+      "type": "string"
+     }
+    },
+    "required": [
+     "friendUserId"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "join_room": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "asSpectator": {
+      "default": false,
+      "title": "Asspectator",
+      "type": "boolean"
+     },
+     "code": {
+      "anyOf": [
+       {
+        "maxLength": 16,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Code"
+     },
+     "colorblindSafeColors": {
+      "default": false,
+      "title": "Colorblindsafecolors",
+      "type": "boolean"
+     },
+     "nameColor": {
+      "anyOf": [
+       {
+        "pattern": "^#[0-9a-fA-F]{6}$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Namecolor"
+     },
+     "nickname": {
+      "default": "Player",
+      "maxLength": 16,
+      "title": "Nickname",
+      "type": "string"
+     },
+     "reconnectOnly": {
+      "default": false,
+      "title": "Reconnectonly",
+      "type": "boolean"
+     },
+     "roomId": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Roomid"
+     },
+     "soft": {
+      "default": false,
+      "title": "Soft",
+      "type": "boolean"
+     }
+    },
+    "type": "object"
+   },
+   "silent": false
+  },
+  "leave_room": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "propose_restart_vote": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "react_to_drawing": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "One seat's reaction to one drawing; ``emoji: null`` removes it.\n\nThe set is spelled out so the schema is visible here; a test holds it\nagainst ``OFFERED_REACTION_EMOJI_CODES``. A retired code is refused on the\nway in - it still renders from history, it just cannot be chosen again.",
+    "properties": {
+     "emoji": {
+      "anyOf": [
+       {
+        "enum": [
+         "heart",
+         "laugh",
+         "wow",
+         "fire"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Emoji"
+     },
+     "turnId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Turnid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "turnId"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "rename_player": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "nickname": {
+      "maxLength": 16,
+      "title": "Nickname",
+      "type": "string"
+     }
+    },
+    "required": [
+     "nickname"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "report_player": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "A report addressed by room seat, never by account.\n\nThe room's wire payload deliberately carries no account ids, so a client\ncould not name one even if it wanted to - and should not learn one to file\na complaint. The server resolves the seat against the live room.",
+    "properties": {
+     "details": {
+      "default": "",
+      "maxLength": 1000,
+      "title": "Details",
+      "type": "string"
+     },
+     "includeDrawing": {
+      "default": false,
+      "title": "Includedrawing",
+      "type": "boolean"
+     },
+     "reason": {
+      "enum": [
+       "harassment",
+       "offensive_drawing",
+       "inappropriate_name",
+       "cheating",
+       "spam",
+       "inappropriate_avatar"
+      ],
+      "title": "Reason",
+      "type": "string"
+     },
+     "targetPlayerId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Targetplayerid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "targetPlayerId",
+     "reason"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "request_sync_strokes": {
+   "commandClass": "resync",
+   "layout": {
+    "argument": "null | [generation, heldActionCount, historyHash]"
+   },
+   "parser": "parse_sync_request_payload",
+   "silent": false
+  },
+  "select_prompt": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "prompt": {
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Prompt",
+      "type": "string"
+     }
+    },
+    "required": [
+     "prompt"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "send_chat": {
+   "commandClass": "conversation",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "text": {
+      "maxLength": 500,
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "send_lobby_chat": {
+   "commandClass": "lobby_chat",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "text": {
+      "maxLength": 500,
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "session_ping": {
+   "acknowledgement": "[1, phaseCode, round, remaining, generation, sequence] | [0]",
+   "commandClass": "heartbeat",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "start_game": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "toggle_afk": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "afk": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Afk"
+     }
+    },
+    "type": "object"
+   },
+   "silent": false
+  },
+  "undo_stroke": {
+   "commandClass": "drawing",
+   "layout": {
+    "argument": [
+     "generation",
+     "sequence",
+     "revision",
+     "historyHash"
+    ]
+   },
+   "parser": "parse_undo_payload",
+   "silent": false
+  },
+  "unwatch_lobby": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "update_player_settings": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "colorblindSafeColors": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Colorblindsafecolors"
+     },
+     "nameColor": {
+      "anyOf": [
+       {
+        "pattern": "^#[0-9a-fA-F]{6}$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Namecolor"
+     }
+    },
+    "type": "object"
+   },
+   "silent": false
+  },
+  "update_room_settings": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "allowedTools": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Allowedtools"
+     },
+     "colorMode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Colormode"
+     },
+     "customPrompts": {
+      "anyOf": [
+       {
+        "maxLength": 80000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Customprompts"
+     },
+     "customPromptsOnly": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Custompromptsonly"
+     },
+     "drawingSeconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Drawingseconds"
+     },
+     "hideMaskedPrompt": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Hidemaskedprompt"
+     },
+     "hintMode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Hintmode"
+     },
+     "isPublic": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Ispublic"
+     },
+     "maxPlayers": {
+      "anyOf": [
+       {
+        "maximum": 16,
+        "minimum": 2,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Maxplayers"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "maxLength": 40,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Name"
+     },
+     "promptListShareCodes": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 20,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Promptlistsharecodes"
+     },
+     "promptListSlugs": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Promptlistslugs"
+     },
+     "rounds": {
+      "anyOf": [
+       {
+        "maximum": 10,
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Rounds"
+     },
+     "scoringMode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Scoringmode"
+     },
+     "spectatorsSeePrompt": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Spectatorsseeprompt"
+     }
+    },
+    "type": "object"
+   },
+   "silent": false
+  },
+  "vote_player": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {
+     "action": {
+      "enum": [
+       "kick",
+       "afk"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "targetPlayerId": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Targetplayerid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "targetPlayerId",
+     "action"
+    ],
+    "type": "object"
+   },
+   "silent": false
+  },
+  "watch_lobby": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  }
+ },
+ "events": {
+  "account_suspended": {
+   "shape": "object"
+  },
+  "canvas_commit": {
+   "layout": [
+    "generation",
+    "sequence",
+    "revision",
+    "historyHash"
+   ]
+  },
+  "canvas_reset": {
+   "layout": [
+    "revision",
+    "generation",
+    "sequence",
+    "historyHash"
+   ]
+  },
+  "canvas_undo": {
+   "layout": [
+    "generation",
+    "sequence",
+    "revisionBefore",
+    "revisionAfter",
+    "historyHash"
+   ]
+  },
+  "chat_message": {
+   "shape": "object"
+  },
+  "client_config": {
+   "shape": "object"
+  },
+  "colorblind_safe_suggestion": {
+   "shape": "object"
+  },
+  "correct_guess": {
+   "shape": "object"
+  },
+  "draw": {
+   "layout": [
+    "frame",
+    "commit?[generation, sequence, revision, historyHash]"
+   ]
+  },
+  "drawing_reaction": {
+   "shape": "object"
+  },
+  "friend_invite_received": {
+   "shape": "object"
+  },
+  "friends_changed": {
+   "shape": "object"
+  },
+  "game_ended": {
+   "shape": "object"
+  },
+  "game_started": {
+   "shape": "object"
+  },
+  "hint_revealed": {
+   "shape": "object"
+  },
+  "kicked": {
+   "shape": "object"
+  },
+  "lobby_chat_message": {
+   "shape": "object"
+  },
+  "lobby_presence_changed": {
+   "shape": "object"
+  },
+  "lobby_rooms_changed": {
+   "shape": "object"
+  },
+  "moderator_warning": {
+   "shape": "object"
+  },
+  "player_disconnected": {
+   "shape": "object"
+  },
+  "player_joined": {
+   "shape": "object"
+  },
+  "player_left": {
+   "shape": "object"
+  },
+  "player_reconnected": {
+   "shape": "object"
+  },
+  "request_canvas_actions": {
+   "layout": [
+    "generation",
+    "expectedSequence",
+    "receivedSequence"
+   ]
+  },
+  "role_changed": {
+   "shape": "object"
+  },
+  "room_state": {
+   "shape": "object"
+  },
+  "server_full": {
+   "shape": "object"
+  },
+  "server_paused": {
+   "shape": "object"
+  },
+  "server_shutdown": {
+   "shape": "object"
+  },
+  "session_superseded": {
+   "shape": "object"
+  },
+  "sync_game": {
+   "shape": "object"
+  },
+  "sync_strokes": {
+   "layout": [
+    "binaryHistory",
+    "revision",
+    "generation",
+    "sequence",
+    "historyHash"
+   ]
+  },
+  "sync_strokes_tail": {
+   "layout": [
+    "binaryTail",
+    "baseActionCount",
+    "revision",
+    "generation",
+    "sequence",
+    "historyHash"
+   ]
+  },
+  "turn_ended": {
+   "shape": "object"
+  },
+  "turn_started": {
+   "shape": "object"
+  },
+  "turn_starting": {
+   "shape": "object"
+  },
+  "upgrade_required": {
+   "shape": "object"
+  },
+  "voted_afk": {
+   "shape": "object"
+  },
+  "you_are_drawing": {
+   "shape": "object"
+  },
+  "you_guessed_correctly": {
+   "shape": "object"
+  },
+  "your_prompt_choices": {
+   "shape": "object"
+  }
+ },
+ "fixtures": {
+  "fixtures/canvas_protocol_v1.json": "5b5fd3640e72f7fc9e8098bfbebfcaec9a971e762e67c5d9c70a829f42e39f3b",
+  "fixtures/lobby_presence_v1.json": "b1c5e31170b8a7903bb22f0330d44d121f9d9f878e563bfa2ae0ba48684d9fa3",
+  "fixtures/stored_drawings_v1.json": "ca56f37d8705134e3ed3800909cd6578e9628ba61754e4028e0b7e5985e70937"
+ },
+ "liveDrawing": {
+  "magic": "SKCH",
+  "maxBase64FrameBytes": 85,
+  "maxPointsPerFrame": 256,
+  "tags": {
+   "clear": 5,
+   "fill": 4,
+   "path_end": 2,
+   "path_points": 1,
+   "path_points_delta": 6,
+   "path_start": 0,
+   "shape": 3
+  }
+ },
+ "payloadBuilders": {
+  "api.admin_controls:_state": [
+   "drainSeconds"
+  ],
+  "api.admin_controls:create_admin_controls_router": [
+   "displayName",
+   "drainSeconds",
+   "endedTurnIn",
+   "isPublic",
+   "isSpectator",
+   "nameColor",
+   "playerId",
+   "roundNumber"
+  ],
+  "api.admin_controls:end_turn": [
+   "endedTurnIn"
+  ],
+  "api.admin_controls:initiate_shutdown": [
+   "drainSeconds"
+  ],
+  "api.admin_controls:kick_player": [
+   "playerId"
+  ],
+  "api.admin_controls:list_live_rooms": [
+   "isPublic",
+   "isSpectator",
+   "roundNumber"
+  ],
+  "api.admin_controls:search_players": [
+   "displayName",
+   "nameColor"
+  ],
+  "api.admin_settings:_wire": [
+   "bootValue",
+   "envVar",
+   "overrideRejected"
+  ],
+  "api.avatars:create_avatar_router": [
+   "avatarKey",
+   "avatarUrl"
+  ],
+  "api.avatars:upload_avatar": [
+   "avatarKey",
+   "avatarUrl"
+  ],
+  "api.bug_reports:_live_room_context": [
+   "ageSeconds",
+   "allowedTools",
+   "colorMode",
+   "correctGuessers",
+   "customPromptCount",
+   "customPromptsOnly",
+   "drawingSeconds",
+   "hasGuessed",
+   "hideMaskedPrompt",
+   "hintMode",
+   "isAfk",
+   "isDrawer",
+   "isHost",
+   "isPublic",
+   "isSpectator",
+   "maxPlayers",
+   "playerCount",
+   "playersInTurnOrder",
+   "promptLanguage",
+   "roomSettings",
+   "roundNumber",
+   "roundsTotal",
+   "scoringMode",
+   "scoringVersion",
+   "spectatorsSeePrompt",
+   "turnId",
+   "turnIndex"
+  ],
+  "api.bug_reports:_report_payload": [
+   "buildSha",
+   "byteSize",
+   "clientContext",
+   "contentType",
+   "createdAt",
+   "displayName",
+   "gameId",
+   "reporterUserId",
+   "resolutionNote",
+   "reviewedAt",
+   "reviewedByUserId",
+   "roomCode",
+   "serverContext",
+   "turnId",
+   "updatedAt"
+  ],
+  "api.bug_reports:create_bug_report_router": [
+   "createdAt"
+  ],
+  "api.bug_reports:submit_bug_report": [
+   "createdAt"
+  ],
+  "api.friends:_person_payload": [
+   "avatarUrl",
+   "createdAt",
+   "displayName",
+   "isAnonymous",
+   "nameColor",
+   "requestedByMe",
+   "respondedAt",
+   "userId"
+  ],
+  "api.moderation:_ban_payload": [
+   "bannedByUserId",
+   "createdAt",
+   "displayName",
+   "expiresAt",
+   "isActive",
+   "revokeReason",
+   "revokedAt",
+   "revokedByUserId",
+   "userId"
+  ],
+  "api.moderation:_prompt_content_report_payload": [
+   "createdAt",
+   "listName",
+   "moderationState",
+   "promptListId",
+   "promptVersionId",
+   "reportedOwnerUserId",
+   "reporterUserId",
+   "resolutionNote",
+   "reviewedAt",
+   "reviewedBy",
+   "reviewedByUserId",
+   "targetType",
+   "updatedAt"
+  ],
+  "api.moderation:_report_payload": [
+   "contextSnapshot",
+   "copiedAt",
+   "createdAt",
+   "gameId",
+   "messageCreatedAt",
+   "messageEvidence",
+   "messageKind",
+   "nearMissKind",
+   "reportedPlayer",
+   "reportedUserId",
+   "reporterUserId",
+   "resolutionNote",
+   "reviewedAt",
+   "reviewedBy",
+   "reviewedByUserId",
+   "senderDisplayName",
+   "senderNameColor",
+   "senderUserId",
+   "senderWasAnonymous",
+   "sourceAvailable",
+   "sourceMessageId",
+   "turnId",
+   "updatedAt"
+  ],
+  "api.moderation:_reported_player_context": [
+   "activeSuspension",
+   "avatarUrl",
+   "createdAt",
+   "displayName",
+   "priorReports",
+   "priorWarnings"
+  ],
+  "api.moderation:create_ban": [
+   "displayName"
+  ],
+  "api.moderation:create_moderation_router": [
+   "createdAt",
+   "displayName",
+   "hasMore",
+   "userId"
+  ],
+  "api.moderation:create_warning": [
+   "createdAt",
+   "userId"
+  ],
+  "api.moderation:list_closed_cases": [
+   "hasMore"
+  ],
+  "api.moderation:review_prompt_content_report": [
+   "displayName"
+  ],
+  "api.moderation:submit_prompt_content_report": [
+   "createdAt"
+  ],
+  "api.moderation:submit_report": [
+   "createdAt"
+  ],
+  "api.operations:_camel_loops": [
+   "consecutiveFailures",
+   "secondsSinceFailure",
+   "secondsSinceSuccess",
+   "totalFailures"
+  ],
+  "api.operations:audit_ledger": [
+   "actorName",
+   "actorUserId",
+   "createdAt",
+   "eventType",
+   "targetId",
+   "targetName",
+   "targetType",
+   "targetUserId"
+  ],
+  "api.operations:create_operations_router": [
+   "activeGames",
+   "actorName",
+   "actorUserId",
+   "ambiguousBatches",
+   "createdAt",
+   "dataExports",
+   "displayName",
+   "eventType",
+   "failedFlushes",
+   "generatedAt",
+   "interruptedFlushes",
+   "lostToAmbiguity",
+   "mailOutbox",
+   "startedAt",
+   "storedEvents",
+   "sweepSeconds",
+   "targetId",
+   "targetName",
+   "targetType",
+   "targetUserId",
+   "windowMinutes"
+  ],
+  "api.operations:live_metrics": [
+   "activeGames",
+   "ambiguousBatches",
+   "dataExports",
+   "failedFlushes",
+   "generatedAt",
+   "interruptedFlushes",
+   "lostToAmbiguity",
+   "mailOutbox",
+   "startedAt",
+   "storedEvents",
+   "sweepSeconds",
+   "windowMinutes"
+  ],
+  "api.operations:player_activity": [
+   "displayName"
+  ],
+  "api.profiles:create_profile_router": [
+   "hasMore"
+  ],
+  "api.profiles:reaction_payload": [
+   "seatId",
+   "turnId"
+  ],
+  "api.profiles:user_games": [
+   "hasMore"
+  ],
+  "api.prompt_lists:create_prompt_list_router": [
+   "isRated",
+   "minRatedGuessers",
+   "ratedCount",
+   "unratedCount"
+  ],
+  "api.prompt_lists:prompt_stats": [
+   "isRated",
+   "minRatedGuessers",
+   "ratedCount",
+   "unratedCount"
+  ],
+  "api.role_notices:pending_role_notice_payload": [
+   "createdAt"
+  ],
+  "api.room_presets:_config_payload": [
+   "allowedTools",
+   "colorMode",
+   "customPrompts",
+   "customPromptsOnly",
+   "drawingSeconds",
+   "hideMaskedPrompt",
+   "hintMode",
+   "isPublic",
+   "maxPlayers",
+   "promptListShareCodes",
+   "promptListSlugs",
+   "scoringMode",
+   "spectatorsSeePrompt"
+  ],
+  "api.room_presets:_summary_payload": [
+   "createdAt",
+   "updatedAt"
+  ],
+  "api.serializers:game_detail_payload": [
+   "correctGuessTimeSeconds",
+   "correctsEventOrder",
+   "drawerDisplayName",
+   "drawerIsAnonymous",
+   "drawerNameColor",
+   "drawerSeatId",
+   "drawerUserId",
+   "drawingStatus",
+   "durationSeconds",
+   "eligibilityReason",
+   "eventOrder",
+   "eventType",
+   "hintsUsed",
+   "mySeatId",
+   "nearMissCount",
+   "participantOutcomes",
+   "participantSeatId",
+   "participantUserId",
+   "pointsAwarded",
+   "pointsDelta",
+   "pointsSpentOnHints",
+   "promptOffers",
+   "promptSourceKind",
+   "promptVersionId",
+   "roundNumber",
+   "ruleSnapshot",
+   "ruleSnapshotVersion",
+   "scoreEvents",
+   "scoringVersion",
+   "seatId",
+   "sourceKind",
+   "sourceRevisionIds",
+   "strokeCount",
+   "terminalState",
+   "turnId",
+   "turnNumber",
+   "wrongGuessCount"
+  ],
+  "api.serializers:game_summary_payload": [
+   "displayName",
+   "drawingSeconds",
+   "finalRank",
+   "finalScore",
+   "finishedAt",
+   "hintMode",
+   "isAnonymous",
+   "nameColor",
+   "playerCount",
+   "promptSourceMode",
+   "roomName",
+   "ruleSnapshotVersion",
+   "scoreLedgerVersion",
+   "scoringMode",
+   "scoringVersion",
+   "seatId",
+   "startedAt",
+   "totalRounds",
+   "userId"
+  ],
+  "api.serializers:owned_prompt_list_payload": [
+   "conceptId",
+   "createdAt",
+   "isBundled",
+   "moderationState",
+   "promptCount",
+   "promptVersionId",
+   "shareCode",
+   "updatedAt"
+  ],
+  "api.serializers:prompt_list_payload": [
+   "isBundled",
+   "promptCount"
+  ],
+  "api.serializers:prompt_stats_payload": [
+   "correctGuessCount",
+   "correctGuessRatio",
+   "offerCount",
+   "pickCount",
+   "pickRate",
+   "totalGuesserCount"
+  ],
+  "api.serializers:shared_prompt_list_payload": [
+   "promptVersionId"
+  ],
+  "api.serializers:stats_payload": [
+   "averageScore",
+   "drawingsMade",
+   "gamesPlayed",
+   "gamesWon",
+   "promptsGuessed",
+   "reactionsReceived",
+   "totalScore",
+   "turnsPlayed",
+   "winRate"
+  ],
+  "api.serializers:user_payload": [
+   "avatarUrl",
+   "createdAt",
+   "displayName",
+   "isAnonymous",
+   "lastLoginAt",
+   "nameColor"
+  ],
+  "api.user_blocks:_block_payload": [
+   "createdAt",
+   "displayName",
+   "isAnonymous",
+   "userId"
+  ],
+  "api.user_settings:user_settings_payload": [
+   "brushCursor",
+   "colorblindSafeColors",
+   "confettiEffects",
+   "createdAt",
+   "keyBindings",
+   "soundEffects",
+   "timeFormat",
+   "updatedAt"
+  ],
+  "auth.account_data:_bug_report_document": [
+   "buildSha",
+   "clientContext",
+   "createdAt",
+   "reviewedAt",
+   "roomCode",
+   "screenshotByteSize",
+   "screenshotStatus",
+   "updatedAt"
+  ],
+  "auth.account_data:_drawn_turn_document": [
+   "durationSeconds",
+   "endReason",
+   "gameId",
+   "guesserCount",
+   "identityId",
+   "nearMissCount",
+   "participantSeatId",
+   "promptAutoPicked",
+   "promptOffers",
+   "promptSourceKind",
+   "promptVersionId",
+   "roundNumber",
+   "sourceKind",
+   "sourceRevisionIds",
+   "strokeCount",
+   "turnId",
+   "turnNumber",
+   "wrongGuessCount"
+  ],
+  "auth.account_data:_export_request_document": [
+   "completedAt",
+   "createdAt",
+   "expiresAt",
+   "schemaVersion",
+   "startedAt"
+  ],
+  "auth.account_data:_participation_document": [
+   "displayName",
+   "drawingSeconds",
+   "finalRank",
+   "finalScore",
+   "finishedAt",
+   "hintMode",
+   "identityId",
+   "nameColor",
+   "playerCount",
+   "promptSourceMode",
+   "roomName",
+   "ruleSnapshot",
+   "ruleSnapshotVersion",
+   "scoreLedgerVersion",
+   "scoringMode",
+   "scoringVersion",
+   "seatId",
+   "startedAt",
+   "totalRounds",
+   "turnsPlayed",
+   "wasAnonymous"
+  ],
+  "auth.account_data:_player_report_document": [
+   "actionCount",
+   "byteSize",
+   "capturedAt",
+   "contextSnapshot",
+   "createdAt",
+   "gameId",
+   "messageCreatedAt",
+   "messageEvidence",
+   "messageKind",
+   "nearMissKind",
+   "reviewedAt",
+   "roundNumber",
+   "sourceMessageId",
+   "turnId",
+   "updatedAt"
+  ],
+  "auth.account_data:_prompt_content_report_document": [
+   "createdAt",
+   "listName",
+   "moderationState",
+   "promptListId",
+   "promptVersionId",
+   "reviewedAt",
+   "targetType",
+   "updatedAt"
+  ],
+  "auth.account_data:_prompt_list_document": [
+   "conceptId",
+   "contentHash",
+   "createdAt",
+   "moderationState",
+   "promptVersion",
+   "promptVersionId",
+   "shareCode",
+   "updatedAt"
+  ],
+  "auth.account_data:_retained_message_document": [
+   "createdAt",
+   "expiresAt",
+   "gameId",
+   "messageId",
+   "messageKind",
+   "nearMissKind",
+   "participantSeatId",
+   "turnId"
+  ],
+  "auth.account_data:_room_preset_document": [
+   "allowedTools",
+   "colorMode",
+   "createdAt",
+   "drawingSeconds",
+   "hideMaskedPrompt",
+   "hintMode",
+   "isPublic",
+   "maxPlayers",
+   "promptListIds",
+   "roomName",
+   "scoringMode",
+   "spectatorsSeePrompt",
+   "updatedAt"
+  ],
+  "auth.account_data:_score_event_document": [
+   "correctsEventOrder",
+   "createdAt",
+   "eventOrder",
+   "eventType",
+   "gameId",
+   "identityId",
+   "participantSeatId",
+   "pointsDelta",
+   "ruleSnapshotVersion",
+   "scoringVersion",
+   "turnId"
+  ],
+  "auth.account_data:_session_document": [
+   "createdAt",
+   "deviceLabel",
+   "expiresAt",
+   "lastUsedAt",
+   "revokedAt",
+   "rotatedFromId"
+  ],
+  "auth.account_data:_turn_outcome_document": [
+   "correctGuessTimeSeconds",
+   "eligibilityReason",
+   "gameId",
+   "hintsUsed",
+   "nearMissCount",
+   "participantSeatId",
+   "pointsAwarded",
+   "pointsSpentOnHints",
+   "roundNumber",
+   "terminalState",
+   "turnId",
+   "turnNumber",
+   "wrongGuessCount"
+  ],
+  "auth.account_data:_write_export_artifact": [
+   "avatarKey",
+   "blockedUserId",
+   "brushCursor",
+   "byteSize",
+   "colorblindSafeColors",
+   "confettiEffects",
+   "contentType",
+   "createdAt",
+   "displayName",
+   "emailVerifiedAt",
+   "eventType",
+   "expiresAt",
+   "imageBase64",
+   "isActive",
+   "keyBindings",
+   "lastActiveAt",
+   "lastLoginAt",
+   "mergedAt",
+   "nameColor",
+   "requestedByMe",
+   "requesterWasActor",
+   "requesterWasTarget",
+   "respondedAt",
+   "revokedAt",
+   "soundEffects",
+   "timeFormat",
+   "updatedAt",
+   "userId"
+  ],
+  "auth.account_data:export_status_payload": [
+   "completedAt",
+   "createdAt",
+   "downloadUrl",
+   "expiresAt",
+   "failureCode",
+   "schemaVersion",
+   "startedAt"
+  ],
+  "auth.bans:suspension_payload": [
+   "expiresAt"
+  ],
+  "auth.password_reset:reset_password_as_operator": [
+   "displayName"
+  ],
+  "auth.recovery:change_password": [
+   "displayName"
+  ],
+  "auth.recovery:request_email_verification": [
+   "displayName"
+  ],
+  "auth.recovery:request_password_reset": [
+   "displayName"
+  ],
+  "auth.recovery:reset_password": [
+   "displayName"
+  ],
+  "auth.routes:create_auth_router": [
+   "createdAt",
+   "deliveryConfigured",
+   "deviceLabel",
+   "expiresAt",
+   "identitiesAnonymized",
+   "lastUsedAt",
+   "nextRequestAt",
+   "pendingAddress",
+   "reminderDue",
+   "sessionsRevoked"
+  ],
+  "auth.routes:data_exports": [
+   "nextRequestAt"
+  ],
+  "auth.routes:delete_account": [
+   "identitiesAnonymized",
+   "sessionsRevoked"
+  ],
+  "auth.routes:read_email": [
+   "deliveryConfigured",
+   "pendingAddress",
+   "reminderDue"
+  ],
+  "auth.routes:sessions": [
+   "createdAt",
+   "deviceLabel",
+   "expiresAt",
+   "lastUsedAt"
+  ],
+  "auth.routes:set_email": [
+   "pendingAddress"
+  ],
+  "auth.warnings:pending_warning_payload": [
+   "createdAt"
+  ],
+  "client_config:payload": [
+   "contractVersion",
+   "flushIntervalMs"
+  ],
+  "game:rule_snapshot": [
+   "allowedColors",
+   "allowedTools",
+   "colorMode",
+   "consonantBaseCost",
+   "decayPerReferenceSecond",
+   "drawerBonus",
+   "escalatingBaseCost",
+   "hideMaskedPrompt",
+   "maximumFrequencyMultiplier",
+   "maximumGuessPoints",
+   "maximumSpendPerTurn",
+   "minimumFrequencyMultiplier",
+   "minimumGuessPoints",
+   "minimumHiddenLetters",
+   "postGuessMultiplier",
+   "referenceSeconds",
+   "schemaVersion",
+   "sourceRevisionIds",
+   "vowelBaseCost"
+  ],
+  "handlers.chat:_chat_line": [
+   "playerId"
+  ],
+  "handlers.chat:_emit_player_chat": [
+   "retainedMessageId"
+  ],
+  "handlers.chat:buy_hint": [
+   "errorCode",
+   "hintCost",
+   "hintSpend",
+   "maskedPrompt"
+  ],
+  "handlers.chat:buy_wheel_letter": [
+   "errorCode",
+   "hintSpend",
+   "letterPrices",
+   "maskedPrompt"
+  ],
+  "handlers.chat:guess": [
+   "basePoints",
+   "hintSpend",
+   "playerId"
+  ],
+  "handlers.chat:send_chat": [
+   "errorCode"
+  ],
+  "handlers.connection:_begin_reconnect_grace": [
+   "playerId"
+  ],
+  "handlers.connection:_evict_after_grace": [
+   "playerId"
+  ],
+  "handlers.context:guarded": [
+   "errorCode",
+   "retryAfterMs"
+  ],
+  "handlers.context:on": [
+   "errorCode",
+   "retryAfterMs"
+  ],
+  "handlers.drawing:undo_stroke": [
+   "errorCode"
+  ],
+  "handlers.friends:_join_friend_room": [
+   "errorCode"
+  ],
+  "handlers.friends:add_friend": [
+   "errorCode"
+  ],
+  "handlers.friends:invite_friend": [
+   "displayName",
+   "errorCode",
+   "expiresIn",
+   "fromUserId",
+   "inviteToken"
+  ],
+  "handlers.game:select_prompt": [
+   "errorCode"
+  ],
+  "handlers.game:start_game": [
+   "errorCode"
+  ],
+  "handlers.lobby:send_lobby_chat": [
+   "errorCode"
+  ],
+  "handlers.lobby:watch_lobby": [
+   "chatSeq",
+   "roomsRevision"
+  ],
+  "handlers.moderation:report_player": [
+   "drawingAttached",
+   "errorCode",
+   "evidenceCount"
+  ],
+  "handlers.moderation:toggle_afk": [
+   "errorCode",
+   "isAfk"
+  ],
+  "handlers.moderation:vote_player": [
+   "errorCode"
+  ],
+  "handlers.reactions:_accepted": [
+   "turnId"
+  ],
+  "handlers.reactions:react_to_drawing": [
+   "errorCode"
+  ],
+  "handlers.refusals:refuse": [
+   "errorCode"
+  ],
+  "handlers.restart:cast_restart_vote": [
+   "errorCode",
+   "restartVote"
+  ],
+  "handlers.restart:propose_restart_vote": [
+   "errorCode",
+   "restartVote",
+   "retryAfterMs"
+  ],
+  "handlers.rooms:_create_room": [
+   "errorCode"
+  ],
+  "handlers.rooms:_join_room": [
+   "errorCode"
+  ],
+  "handlers.rooms:_seat_in_room": [
+   "errorCode"
+  ],
+  "handlers.rooms:accept_colorblind_suggestion": [
+   "errorCode"
+  ],
+  "handlers.rooms:become_player": [
+   "errorCode"
+  ],
+  "handlers.rooms:dismiss_colorblind_suggestion": [
+   "errorCode"
+  ],
+  "handlers.rooms:get_custom_prompts": [
+   "errorCode"
+  ],
+  "handlers.rooms:get_recap_drawing": [
+   "errorCode"
+  ],
+  "handlers.rooms:get_room_preview": [
+   "errorCode"
+  ],
+  "handlers.rooms:get_room_settings": [
+   "errorCode"
+  ],
+  "handlers.rooms:rename_player": [
+   "errorCode"
+  ],
+  "handlers.rooms:update_player_settings": [
+   "errorCode"
+  ],
+  "handlers.rooms:update_room_settings": [
+   "errorCode"
+  ],
+  "presenters:editable_room_settings_payload": [
+   "allowedTools",
+   "colorMode",
+   "customPrompts",
+   "customPromptsOnly",
+   "drawingSeconds",
+   "hideMaskedPrompt",
+   "hintMode",
+   "isPublic",
+   "maxPlayers",
+   "promptLanguage",
+   "promptListSlugs",
+   "scoringMode",
+   "spectatorsSeePrompt"
+  ],
+  "presenters:session_payload": [
+   "isAnonymous",
+   "playerId",
+   "roomId"
+  ],
+  "presenters:system_chat_message": [
+   "playerId"
+  ],
+  "presenters:turn_ended_payload": [
+   "avatarUrl",
+   "drawerBonus",
+   "drawerId",
+   "isAnonymous",
+   "nameColor",
+   "newRank",
+   "playerId",
+   "previousRank",
+   "turnId"
+  ],
+  "presenters:turn_payload": [
+   "drawerId",
+   "hintCost",
+   "hintSpend",
+   "letterPrices",
+   "maskedPrompt",
+   "maxHintSpend",
+   "remainingSeconds",
+   "roundNumber",
+   "totalRounds",
+   "turnId"
+  ],
+  "rooms:_player_entry": [
+   "avatarUrl",
+   "isAfk",
+   "isAnonymous",
+   "isHost",
+   "isSpectator",
+   "nameColor",
+   "playerId"
+  ],
+  "rooms:drawing_reactions_for": [
+   "playerId"
+  ],
+  "rooms:metadata": [
+   "actionCount",
+   "drawerId",
+   "drawerNameColor",
+   "drawerNickname",
+   "roundNumber",
+   "turnId",
+   "turnNumber"
+  ],
+  "rooms:moderation_state_payload": [
+   "eligibleVoterIds",
+   "requiredVotes"
+  ],
+  "rooms:payload": [
+   "castVotes",
+   "eligibleVoterIds",
+   "expiresAt",
+   "noVoterIds",
+   "playerId",
+   "proposerId",
+   "proposerNickname",
+   "requiredVotes",
+   "restartAt",
+   "yesVoterIds"
+  ],
+  "rooms:to_public_roster": [
+   "avatarUrl",
+   "isAnonymous",
+   "isHost",
+   "nameColor"
+  ],
+  "rooms:to_public_summary": [
+   "allowedTools",
+   "colorMode",
+   "customPromptCount",
+   "customPromptsOnly",
+   "drawingSeconds",
+   "hideMaskedPrompt",
+   "hintMode",
+   "isFull",
+   "isPublic",
+   "maxPlayers",
+   "playerCount",
+   "promptLanguage",
+   "promptListSlugs",
+   "scoringMode",
+   "spectatorCount",
+   "spectatorsSeePrompt"
+  ],
+  "rooms:to_state_payload": [
+   "allowedTools",
+   "colorMode",
+   "customPromptCount",
+   "customPromptsOnly",
+   "drawingSeconds",
+   "hideMaskedPrompt",
+   "hintMode",
+   "isPublic",
+   "lastGameDrawings",
+   "lastGameHighlights",
+   "lastGameScores",
+   "maxPlayers",
+   "promptLanguage",
+   "promptListSlugs",
+   "restartVote",
+   "restartVoteCooldownUntil",
+   "scoringMode",
+   "spectatorsSeePrompt"
+  ],
+  "services.drawing_reactions:reaction_broadcast": [
+   "isAnonymous",
+   "nameColor",
+   "playerId",
+   "turnId"
+  ],
+  "services.game_flow:_begin_drawing": [
+   "drawerId",
+   "hintCost",
+   "hintSpend",
+   "letterPrices",
+   "maskedPrompt",
+   "maxHintSpend",
+   "roundNumber",
+   "totalRounds",
+   "turnId"
+  ],
+  "services.game_flow:_finish_or_next": [
+   "avatarUrl",
+   "isAnonymous",
+   "nameColor",
+   "playerId"
+  ],
+  "services.game_flow:_join_socket_room": [
+   "playerId"
+  ],
+  "services.game_flow:_runner": [
+   "maskedPrompt"
+  ],
+  "services.game_flow:_start_turn": [
+   "drawerId",
+   "drawerNameColor",
+   "drawerNickname",
+   "roundNumber",
+   "totalRounds"
+  ],
+  "services.game_flow:release_seat": [
+   "playerId"
+  ],
+  "services.game_flow:schedule_hint_checkpoints": [
+   "maskedPrompt"
+  ],
+  "services.game_highlights:_best_drawer": [
+   "guessRatio"
+  ],
+  "services.game_highlights:_hardest_prompt": [
+   "correctGuessCount",
+   "totalGuesserCount"
+  ],
+  "services.game_highlights:_most_reacted_drawing": [
+   "drawingIndex",
+   "reactionCount",
+   "turnId"
+  ],
+  "services.game_highlights:_named": [
+   "isAnonymous",
+   "nameColor"
+  ],
+  "services.lobby_chat:payload": [
+   "displayName",
+   "isAnonymous",
+   "nameColor",
+   "sentAt",
+   "userId"
+  ],
+  "services.player_reports:drawing_evidence_payload": [
+   "actionCount",
+   "byteSize",
+   "capturedAt",
+   "roundNumber",
+   "turnId"
+  ],
+  "services.player_reports:record_player_report": [
+   "schemaVersion"
+  ],
+  "services.presence:payload": [
+   "avatarUrl",
+   "displayName",
+   "isAnonymous",
+   "nameColor",
+   "onlineCount",
+   "userId"
+  ],
+  "services.queue_depths:as_json": [
+   "oldestSeconds"
+  ],
+  "services.readiness:last_database_result": [
+   "checkedAgoSeconds"
+  ],
+  "services.runtime_metrics:daily_totals": [
+   "valueMax",
+   "valueSum"
+  ],
+  "services.runtime_metrics:recent_events": [
+   "eventType",
+   "occurredAt",
+   "roomId",
+   "userId"
+  ],
+  "services.shutdown:notice_payload": [
+   "contractVersion",
+   "drainSeconds",
+   "startedAt"
+  ],
+  "services.shutdown:pause_payload": [
+   "contractVersion"
+  ],
+  "services.shutdown:rejection_acknowledgement": [
+   "errorCode"
+  ],
+  "services.telemetry:_size_rows": [
+   "bytesTotal"
+  ],
+  "services.telemetry:as_json": [
+   "checkedIn",
+   "checkedOut"
+  ],
+  "services.telemetry:snapshot": [
+   "byReason",
+   "bytesInPerMinute",
+   "bytesInTotal",
+   "bytesOutPerMinute",
+   "bytesOutTotal",
+   "commandSizes",
+   "cpuPercent",
+   "diskFreeBytes",
+   "diskPath",
+   "diskTotalBytes",
+   "emitSizes",
+   "errorRate",
+   "historyWritesAbandoned",
+   "httpP95Ms",
+   "httpPerMinute",
+   "inFlight",
+   "lastHour",
+   "loopLagMaxMs",
+   "loopLagMs",
+   "loopLagP95Ms",
+   "p50Ms",
+   "p95Ms",
+   "p99Ms",
+   "perMinute",
+   "queriesPerMinute",
+   "queryErrors",
+   "queryP95Ms",
+   "refusedRate",
+   "rssBytes",
+   "rssIsPeak",
+   "socketBytesInPerMinute",
+   "socketBytesOutPerMinute",
+   "socketP95Ms",
+   "socketPerMinute",
+   "startedAt",
+   "throttledPerMinute",
+   "uptimeSeconds",
+   "windowMinutes"
+  ]
+ },
+ "protocolVersion": 10,
+ "refusal": {
+  "codes": [
+   "invalid_payload",
+   "invalid_nickname",
+   "invalid_name_color",
+   "invalid_hint",
+   "invalid_letter",
+   "invalid_prompt_lists",
+   "invalid_custom_prompts",
+   "max_players_below_seated",
+   "empty_message",
+   "too_fast",
+   "seat_changing_too_fast",
+   "joining_too_fast",
+   "room_quota",
+   "room_full",
+   "spectators_full",
+   "player_slots_full",
+   "server_draining",
+   "server_paused",
+   "database_busy",
+   "account_ended",
+   "account_required",
+   "identity_unavailable",
+   "not_in_room",
+   "room_not_found",
+   "room_ended",
+   "could_not_create_room",
+   "no_session_to_resume",
+   "host_only",
+   "players_only",
+   "waiting_room_only",
+   "already_a_player",
+   "registered_name_fixed",
+   "name_taken_by_account",
+   "guests_cannot_choose_color",
+   "suggestion_inactive",
+   "drawing_not_found",
+   "drawing_not_kept",
+   "not_in_game",
+   "game_in_progress",
+   "game_starting",
+   "need_two_players",
+   "room_not_startable",
+   "prompt_not_ready",
+   "prompt_unavailable",
+   "hints_disabled",
+   "hint_spend_limit",
+   "hint_unavailable",
+   "drawer_only",
+   "canvas_stale_generation",
+   "canvas_sequence_committed",
+   "canvas_out_of_sequence",
+   "canvas_out_of_sync",
+   "nothing_to_undo",
+   "spectators_cannot_vote",
+   "spectators_cannot_be_targets",
+   "invalid_vote_target",
+   "not_eligible",
+   "restart_vote_active",
+   "restart_vote_cooldown",
+   "no_restart_vote",
+   "restart_vote_closed",
+   "spectators_cannot_react",
+   "guests_cannot_react",
+   "reaction_not_visible",
+   "own_drawing",
+   "game_still_saving",
+   "game_not_recorded",
+   "reaction_not_accepted",
+   "friends_unavailable",
+   "friend_refused",
+   "friend_not_in_game",
+   "friend_in_several_games",
+   "not_friends",
+   "friends_only_uninvited",
+   "invite_expired",
+   "reporting_unavailable",
+   "no_such_player",
+   "cannot_report",
+   "already_reported",
+   "name_required",
+   "not_watching_lobby"
+  ],
+  "shape": [
+   "ok",
+   "errorCode",
+   "error",
+   "field?",
+   "retryAfterMs?"
+  ]
+ },
+ "versions": {
+  "CANVAS_HISTORY_VERSION": 1,
+  "CLIENT_CONFIG_CONTRACT_VERSION": 2,
+  "LIVE_DRAWING_VERSION": 1,
+  "PAUSE_NOTICE_CONTRACT_VERSION": 1,
+  "SHUTDOWN_NOTICE_CONTRACT_VERSION": 1
+ }
+}
