@@ -506,6 +506,9 @@ async def create_game(
         ),
     )
 
+    # Guest names are capped short; "mobile-throttled-guesser" is over it.
+    seat = profile.name.split("-")[0]
+
     if drawer_sent_frames is not None:
         drawer_cdp = await drawer_context.new_cdp_session(drawer)
         await drawer_cdp.send("Network.enable")
@@ -521,7 +524,7 @@ async def create_game(
         )
 
     await drawer.goto(base_url)
-    await use_guest_name(drawer, f"{profile.name}-drawer")
+    await use_guest_name(drawer, f"{seat}-drawer")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
     await drawer.wait_for_url("**/create")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
@@ -530,11 +533,11 @@ async def create_game(
     code = await room_code(drawer)
 
     await guesser.goto(base_url)
-    await use_guest_name(guesser, f"{profile.name}-guesser")
+    await use_guest_name(guesser, f"{seat}-guesser")
     await join_by_code(guesser, code)
     await guesser.wait_for_selector('[data-testid="waiting-room"]')
     await bystander.goto(base_url)
-    await use_guest_name(bystander, f"{profile.name}-watcher")
+    await use_guest_name(bystander, f"{seat}-watcher")
     await join_by_code(bystander, code)
     await bystander.wait_for_selector('[data-testid="waiting-room"]')
 
