@@ -190,7 +190,7 @@ async def test_a_visitor_without_a_name_may_read_but_not_speak(monkeypatch):
     assert answer["chat"] == []
     sio.emit.reset_mock()
 
-    assert await say(sio, "sid-x", "hello") == {"ok": False, "error": NAME_REQUIRED}
+    assert await say(sio, "sid-x", "hello") == {"ok": False, "errorCode": "name_required", "error": NAME_REQUIRED}
     assert chat_emits(sio) == []
     assert ctx.lobby_chat.last_seq == 0
 
@@ -201,12 +201,12 @@ async def test_a_socket_not_watching_the_lobby_cannot_speak_into_it(monkeypatch)
     await arrive(ctx, sio, "sid-a", "tok-a", watch=False)
     sio.emit.reset_mock()
 
-    assert await say(sio, "sid-a", "hello") == {"ok": False, "error": NOT_WATCHING}
+    assert await say(sio, "sid-a", "hello") == {"ok": False, "errorCode": "not_watching_lobby", "error": NOT_WATCHING}
     assert chat_emits(sio) == []
 
     await sio.handlers["/"]["watch_lobby"]("sid-a", None)
     await sio.handlers["/"]["unwatch_lobby"]("sid-a", None)
-    assert await say(sio, "sid-a", "hello") == {"ok": False, "error": NOT_WATCHING}
+    assert await say(sio, "sid-a", "hello") == {"ok": False, "errorCode": "not_watching_lobby", "error": NOT_WATCHING}
     assert ctx.lobby_chat.last_seq == 0
 
 
@@ -335,6 +335,7 @@ async def test_a_line_with_no_name_to_sign_it_is_refused(monkeypatch):
 
     assert await say(sio, "sid-a", "hello") == {
         "ok": False,
+        "errorCode": "identity_unavailable",
         "error": IDENTITY_UNAVAILABLE,
     }
     assert chat_emits(sio) == []

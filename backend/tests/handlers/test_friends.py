@@ -479,7 +479,7 @@ async def test_a_friend_command_from_outside_a_room_is_refused():
         ("invite_friend", {"friendUserId": BOB}),
     ):
         answer = await sio.handlers["/"][command]("sid-ada", payload)
-        assert answer == {"ok": False, "error": "Not in this room"}
+        assert answer == {"ok": False, "errorCode": "not_in_room", "error": "Not in this room"}
 
 
 async def test_a_guest_cannot_invite_even_a_friend():
@@ -660,7 +660,7 @@ async def test_an_invitation_survives_a_seating_that_was_refused():
         "sid-bob", {"friendUserId": ADA, "inviteToken": token, "nickname": "Bob"}
     )
     assert full["ok"] is False
-    assert full.get("roomFull") is True
+    assert full["errorCode"] == "room_full"
 
     # A seat frees up, and the same invitation still works.
     room_manager.remove_player(room, next(

@@ -174,7 +174,7 @@ async def test_a_broken_cleanup_still_answers_the_refusal(broken):
         sio.handlers["/"]["create_room"]("host-sid", {"nickname": "Host"}), timeout=5
     )
 
-    assert answer == {"ok": False, "error": "You already have too many rooms"}
+    assert answer == {"ok": False, "errorCode": "room_quota", "error": "You already have too many rooms"}
     assert room_manager.rooms == {}
 
 

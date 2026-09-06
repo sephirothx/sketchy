@@ -157,7 +157,7 @@ async def test_only_the_drawing_on_screen_can_be_reacted_to():
     first_turn = game.current_turn_id
 
     stale = await react(reactor.sid, {"turnId": "not-this-turn", "emoji": "heart"})
-    assert stale == {"ok": False, "error": NOT_VISIBLE}
+    assert stale == {"ok": False, "errorCode": "reaction_not_visible", "error": NOT_VISIBLE}
 
     # Turn results still show the drawing.
     await ctx.game_flow._end_turn(room)
@@ -194,7 +194,7 @@ async def test_a_drawer_who_rejoined_still_cannot_react_to_their_own_drawing():
 
     answer = await react("sid-again", {"turnId": game.current_turn_id, "emoji": "wow"})
 
-    assert answer == {"ok": False, "error": OWN_DRAWING}
+    assert answer == {"ok": False, "errorCode": "own_drawing", "error": OWN_DRAWING}
 
 
 async def test_live_reactions_ride_on_the_turn_payloads_and_into_history():
@@ -341,7 +341,7 @@ async def test_a_recap_reaction_the_database_refuses_leaves_no_trace():
 
     answer = await react(reactor.sid, {"turnId": entry.turn_id, "emoji": "wow"})
 
-    assert answer == {"ok": False, "error": NOT_ACCEPTED}
+    assert answer == {"ok": False, "errorCode": "reaction_not_accepted", "error": NOT_ACCEPTED}
     assert room.drawing_reactions == {}
     assert ctx.sio.emit.await_args_list == []
 
@@ -353,7 +353,7 @@ async def test_the_recap_refuses_while_the_game_is_still_being_saved():
 
     answer = await react(reactor.sid, {"turnId": entry.turn_id, "emoji": "wow"})
 
-    assert answer == {"ok": False, "error": STILL_SAVING}
+    assert answer == {"ok": False, "errorCode": "game_still_saving", "error": STILL_SAVING}
     assert history.reaction_writes == []
 
 
@@ -364,7 +364,7 @@ async def test_a_game_that_was_never_recorded_takes_no_recap_reactions():
 
     answer = await react(reactor.sid, {"turnId": entry.turn_id, "emoji": "wow"})
 
-    assert answer == {"ok": False, "error": NOT_RECORDED}
+    assert answer == {"ok": False, "errorCode": "game_not_recorded", "error": NOT_RECORDED}
 
 
 async def test_the_recap_drawer_cannot_react_to_their_own_and_unknown_turns_are_refused():

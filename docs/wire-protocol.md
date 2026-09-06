@@ -165,26 +165,67 @@ Every acknowledgement is a JSON object sharing these fields
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `ok` | `boolean` | Whether the command was accepted |
-| `error` | `string?` | Human-readable refusal |
+| `errorCode` | `ErrorCode?` | **On every refusal.** Why, as one of the enumerated codes below. The only field a program reads |
+| `error` | `string?` | The player's sentence. Shown, never compared: a test fails on any client branch that tests it |
 | `field` | `string?` | The payload field that failed validation, for form binding |
+| `retryAfterMs` | `number?` | When the server knows trying again could work — a command budget's window, a restart-vote cooldown |
 
-Command-specific additions, all optional: `roomId`, `code`, `playerId`,
-`isAnonymous`, `needsRebind`, `roomFull` (player slots are taken but spectating is
-open), `codeRetired` (the code was valid but its ephemeral room has ended),
-`serverDraining` (refused because a bounded deployment drain has begun),
-`serverPaused` (refused because an administrator paused new rooms). The last two
-are told apart on purpose: a drain means this server is going away and a reload
-will find another, while a pause means it is still here and will take the room
-shortly.
+Command-specific **success** additions, all optional: `roomId`, `code` (the invite
+code — which is why the refusal discriminator is `errorCode`, not `code`), `playerId`,
+`isAnonymous`, `needsRebind`.
+
+**Refusals are one shape** (#565): `{"ok": false, "errorCode": …, "error": …}` plus
+`field` or `retryAfterMs` where they apply. Before #565 a refusal carried its reason as
+prose, plus on four paths a boolean nobody else set (`roomFull`, `codeRetired`,
+`serverDraining`, `serverPaused`); `useCanvasProtocol` compared the sentence "Drawing
+actions are out of sequence" to decide whether to resync, so a copy edit could change
+recovery. The codes are declared once, in
+[`backend/app/handlers/refusals.py`](../backend/app/handlers/refusals.py) (`ErrorCode`),
+mirrored member for member by `ErrorCode` in `types.ts`, and both facts are enforced by
+[`backend/tests/test_wire_contract.py`](../backend/tests/test_wire_contract.py): the two
+enums must match, every `"ok": False` literal on the server must carry a code, and no
+client source may compare `.error` to a string. Codes are added, never renamed.
+
+| Family | Codes |
+| --- | --- |
+| Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `max_players_below_seated`, `empty_message` |
+| Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
+| Server and account state | `server_draining`, `server_paused`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
+| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
+| Games and turns | `not_in_game`, `game_in_progress`, `game_starting`, `need_two_players`, `room_not_startable`, `prompt_not_ready`, `prompt_unavailable`, `hints_disabled`, `hint_spend_limit`, `hint_unavailable` |
+| Canvas | `drawer_only`, `canvas_stale_generation`, `canvas_sequence_committed`, `canvas_out_of_sequence`, `canvas_out_of_sync`, `nothing_to_undo` |
+| Votes and restarts | `spectators_cannot_vote`, `spectators_cannot_be_targets`, `invalid_vote_target`, `not_eligible`, `restart_vote_active`, `restart_vote_cooldown`, `no_restart_vote`, `restart_vote_closed` |
+| Reactions | `spectators_cannot_react`, `guests_cannot_react`, `reaction_not_visible`, `own_drawing`, `game_still_saving`, `game_not_recorded`, `reaction_not_accepted` |
+| Friends | `friends_unavailable`, `friend_refused`, `friend_not_in_game`, `friend_in_several_games`, `not_friends`, `friends_only_uninvited`, `invite_expired` |
+| Moderation | `reporting_unavailable`, `no_such_player`, `cannot_report`, `already_reported` |
+| Lobby chat | `name_required`, `not_watching_lobby` |
+
+Three distinctions worth knowing:
+- `room_full` answers only a player-seat request when spectating is still open; a
+  spectator refused for the same room gets `spectators_full`, because offering "you can
+  still spectate" to somebody refused *as* a spectator is a loop.
+- `server_draining` and `server_paused` are told apart on purpose: a drain means this
+  server is going away and a reload will find another, while a pause means it is still
+  here and will take the room shortly.
+- `not_friends` answers both "we are not friends" and "there is no such account", so the
+  command cannot be used to test whether somebody has unfriended you.
 
 A payload that fails validation is refused by
-`PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py:71`](../backend/app/handlers/payloads.py))
-as `{"ok": false, "error": …, "field": …}` — before any authorization or mutation runs.
+`PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py`](../backend/app/handlers/payloads.py))
+as `{"ok": false, "errorCode": "invalid_payload", "error": …, "field": …}` — before any
+authorization or mutation runs. A parser may name a more specific code.
+
+**Deliberate exceptions to the shape**, each for a reason the shape would spoil:
+- `guess` answers with a bare receipt (no body): it is momentary *and* confirmed, and the
+  acknowledgement's only job is "it arrived" (§ Client-side delivery guarantees).
+- `session_ping` answers with a compact tuple `[1, phaseCode, round, remaining, gen, seq]`
+  or `[0]`: it runs on a timer on every seat and its size is the point.
+- a throttled `draw` answers nothing at all (§ Command budgets).
 
 **Earlier still, a command may be refused for its rate.** Every client command answers
 to a per-caller budget ([§ Command budgets](#command-budgets)) checked before the
-payload is even parsed, and answers `{"ok": false, "error": "You are doing that too
-quickly. Slow down a moment."}`. The one exception is `draw`: a frame is fire-and-forget
+payload is even parsed, and answers `{"ok": false, "errorCode": "too_fast", "error": "You are doing that too
+quickly. Slow down a moment.", "retryAfterMs": <the budget's window in ms>}`. The one exception is `draw`: a frame is fire-and-forget
 at twenty-five a second, nobody awaits an answer to one, and an error surfacing
 mid-stroke is worse than the frame it describes — so a refused `draw` answers nothing at
 all. `undo_stroke` shares drawing's budget but **does** answer, because the client sends

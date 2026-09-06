@@ -12,6 +12,7 @@ from app.handlers.payloads import (
     parse_sync_request_payload,
     parse_undo_payload,
 )
+from app.handlers.refusals import ErrorCode
 
 async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
@@ -171,18 +172,18 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
         return
     room, player = current
     if player.id != room.game.current_drawer:
-        return {"ok": False, "error": "Only the drawer can undo"}
+        return {"ok": False, "errorCode": ErrorCode.DRAWER_ONLY, "error": "Only the drawer can undo"}
     generation = payload.generation
     sequence = payload.sequence
     if generation != room.game.canvas.generation:
         await ctx.game_flow._emit_canvas_sync(room, sid)
-        return {"ok": False, "error": "Canvas generation is out of date"}
+        return {"ok": False, "errorCode": ErrorCode.CANVAS_STALE_GENERATION, "error": "Canvas generation is out of date"}
     if sequence <= room.game.canvas.sequence:
         commit = room.game.canvas.get_commit(sequence)
         if commit and commit[2] == "undo":
             await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
             return {"ok": True}
-        return {"ok": False, "error": "Sequence already committed"}
+        return {"ok": False, "errorCode": ErrorCode.CANVAS_SEQUENCE_COMMITTED, "error": "Sequence already committed"}
     expected_sequence = room.game.canvas.sequence + 1
     if sequence != expected_sequence:
         await ctx.game_flow._request_canvas_actions(
@@ -191,15 +192,15 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
             expected_sequence,
             sequence,
         )
-        return {"ok": False, "error": "Drawing actions are out of sequence"}
+        return {"ok": False, "errorCode": ErrorCode.CANVAS_OUT_OF_SEQUENCE, "error": "Drawing actions are out of sequence"}
     if payload.revision != room.game.canvas.revision or payload.history_hash != room.game.canvas.hash:
         await ctx.game_flow._emit_canvas_sync(room, sid)
-        return {"ok": False, "error": "Canvas history is out of sync"}
+        return {"ok": False, "errorCode": ErrorCode.CANVAS_OUT_OF_SYNC, "error": "Canvas history is out of sync"}
     if room.game.canvas.undo_last_stroke():
         room.game.canvas.commit_sequence(sequence, "undo")
         await ctx.game_flow._emit_canvas_commit(room, sequence)
         return {"ok": True}
-    return {"ok": False, "error": "Nothing to undo"}
+    return {"ok": False, "errorCode": ErrorCode.NOTHING_TO_UNDO, "error": "Nothing to undo"}
 
 # ------------------------------------------------------------------
 # Guessing / chat

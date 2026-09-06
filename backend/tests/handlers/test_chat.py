@@ -249,7 +249,7 @@ async def test_buy_hint_purchase_mode():
 
     # Drawer attempting to buy a hint should fail
     drawer_res = await buy_hint("drawer-sid", {"slot": 0})
-    assert drawer_res == {"ok": False, "error": "Hint unavailable"}
+    assert drawer_res == {"ok": False, "errorCode": "hint_unavailable", "error": "Hint unavailable"}
 
     # Guesser buying a valid hint slot. Hints are bought on credit, so the
     # score does not move and the debt shows up in hint_spend instead.
@@ -270,7 +270,7 @@ async def test_buy_hint_purchase_mode():
     # Guesser who has already committed the whole turn budget
     room.game.hint_spend[guesser.id] = MAX_HINT_SPEND
     res_broke = await buy_hint("guesser-sid", {"slot": 1})
-    assert res_broke == {"ok": False, "error": "You've reached this turn's hint spend limit"}
+    assert res_broke == {"ok": False, "errorCode": "hint_spend_limit", "error": "You've reached this turn's hint spend limit"}
     assert 1 not in room.game.purchased_hints[guesser.id]
 
     timer = timers.phase_timers.pop(room.id, None)
@@ -372,7 +372,7 @@ async def test_buy_wheel_letter():
 
     # Invalid letter format
     inv_res = await buy_wheel_letter("guesser-sid", {"letter": "123"})
-    assert inv_res == {"ok": False, "error": "Invalid letter"}
+    assert inv_res == {"ok": False, "errorCode": "invalid_letter", "error": "Invalid letter"}
 
     # Buy letter 'a' (present 3 times in 'banana')
     initial_score = guesser.score
@@ -385,7 +385,7 @@ async def test_buy_wheel_letter():
 
     # Attempting to buy the same letter again should fail
     dup_res = await buy_wheel_letter("guesser-sid", {"letter": "a"})
-    assert dup_res == {"ok": False, "error": "Letter unavailable"}
+    assert dup_res == {"ok": False, "errorCode": "hint_unavailable", "error": "Letter unavailable"}
 
     # Verify system message emission
     emitted = [call.args for call in sio.emit.await_args_list]
@@ -856,7 +856,7 @@ async def test_a_spectator_cannot_buy_a_hint_letter():
     assert (await buy_hint(guesser.sid, {"slot": 0}))["ok"] is True
 
     result = await buy_hint(spectator.sid, {"slot": 1})
-    assert result == {"ok": False, "error": "Hint unavailable"}
+    assert result == {"ok": False, "errorCode": "hint_unavailable", "error": "Hint unavailable"}
     # The refusal has to leave no trace: an unpaid debt would settle against
     # points a spectator never earns, and a revealed slot is the prompt.
     assert spectator.id not in room.game.purchased_hints
@@ -881,7 +881,7 @@ async def test_a_spectator_cannot_buy_a_wheel_letter():
     assert (await buy_wheel_letter(guesser.sid, {"letter": "l"}))["ok"] is True
 
     result = await buy_wheel_letter(spectator.sid, {"letter": "v"})
-    assert result == {"ok": False, "error": "Letter unavailable"}
+    assert result == {"ok": False, "errorCode": "hint_unavailable", "error": "Letter unavailable"}
     assert spectator.id not in room.game.purchased_letters
     assert spectator.id not in room.game.hint_spend
     assert room.game.masked_prompt(spectator.id) == room.game.masked_prompt("nobody")

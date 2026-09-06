@@ -21,6 +21,7 @@ from app.services.game_flow import (
     RoomNoLongerStartableError,
     RoomPromptResolutionError,
 )
+from app.handlers.refusals import ErrorCode
 
 logger = logging.getLogger("sketchy.restart")
 
@@ -143,19 +144,19 @@ async def propose_restart_vote(ctx: HandlerContext, sid, data=None):
         return ctx.shutdown.rejection_acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, proposer = current
     if room.state != "playing" or not room.game:
-        return {"ok": False, "error": "There is no active game to restart"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_GAME, "error": "There is no active game to restart"}
     if room.game.current_drawer is None:
-        return {"ok": False, "error": "The game is still starting"}
+        return {"ok": False, "errorCode": ErrorCode.GAME_STARTING, "error": "The game is still starting"}
     if proposer not in _eligible_players(room):
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.NOT_ELIGIBLE,
             "error": "Only active, non-AFK players can propose a restart",
         }
     if room.restart_vote:
-        return {"ok": False, "error": "A restart vote is already active"}
+        return {"ok": False, "errorCode": ErrorCode.RESTART_VOTE_ACTIVE, "error": "A restart vote is already active"}
 
     now = time.time()
     if room.restart_vote_cooldown_until > now:
@@ -163,13 +164,13 @@ async def propose_restart_vote(ctx: HandlerContext, sid, data=None):
         # The remaining seconds are already in the message; nothing reads a
         # separate timestamp.
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.RESTART_VOTE_COOLDOWN, "retryAfterMs": remaining * 1000,
             "error": f"Another restart vote can be proposed in {remaining}s",
         }
 
     eligible_players = _eligible_players(room)
     if len(eligible_players) < 2:
-        return {"ok": False, "error": "Need at least two active players to vote"}
+        return {"ok": False, "errorCode": ErrorCode.NEED_TWO_PLAYERS, "error": "Need at least two active players to vote"}
     vote = RestartVote(
         proposer_id=proposer.id,
         proposer_nickname=proposer.nickname,
@@ -195,20 +196,20 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
         return ctx.shutdown.rejection_acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
     vote = room.restart_vote
     if room.state != "playing" or not room.game or not vote:
-        return {"ok": False, "error": "There is no active restart vote"}
+        return {"ok": False, "errorCode": ErrorCode.NO_RESTART_VOTE, "error": "There is no active restart vote"}
     if vote.status != "voting":
-        return {"ok": False, "error": "The restart vote is already closed"}
+        return {"ok": False, "errorCode": ErrorCode.RESTART_VOTE_CLOSED, "error": "The restart vote is already closed"}
     if (
         player.id not in vote.eligible_voter_ids
         or not player.connected
         or player.is_afk
         or player.is_spectator
     ):
-        return {"ok": False, "error": "You are not eligible to vote"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_ELIGIBLE, "error": "You are not eligible to vote"}
 
     vote.votes[player.id] = payload.vote
     yes_votes = sum(1 for value in vote.votes.values() if value)

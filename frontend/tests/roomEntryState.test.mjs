@@ -84,8 +84,8 @@ test("a retired room code explains that a new invite is needed", async () => {
   const machine = new RoomEntryMachine("OLD123", "Ada", dependencies({
     preview: async () => ({
       ok: false,
+      errorCode: "room_ended",
       error: "This room has ended",
-      codeRetired: true,
     }),
   }));
 
@@ -195,7 +195,7 @@ test("a superseded load cannot overwrite the newest preview", async () => {
 
 test("a room-full player response returns to preview while keeping spectator join available", async () => {
   const machine = new RoomEntryMachine("ABC123", "Ada", dependencies({
-    join: async () => ({ ok: false, error: "Room is full", roomFull: true }),
+    join: async () => ({ ok: false, errorCode: "room_full", error: "Room is full" }),
   }));
 
   await machine.load();
@@ -207,4 +207,24 @@ test("a room-full player response returns to preview while keeping spectator joi
     machine.getSnapshot().state.error,
     "The player slots just filled up, but you can still spectate.",
   );
+});
+
+test("a refusal is recognised by its code, so a copy edit cannot change what happens", async () => {
+  // The sentences here are deliberately not the server's: only errorCode may
+  // decide the branch (#565). The old client compared prose and broke on edits.
+  const retired = new RoomEntryMachine("OLD123", "Ada", dependencies({
+    preview: async () => ({ ok: false, errorCode: "room_ended", error: "Nope, gone." }),
+  }));
+  await retired.load();
+  assert.equal(retired.getSnapshot().state.status, "error");
+  assert.match(retired.getSnapshot().state.message, /This room has ended/);
+
+  const full = new RoomEntryMachine("ABC123", "Ada", dependencies({
+    join: async () => ({ ok: false, errorCode: "room_full", error: "Full up, sorry!" }),
+  }));
+  await full.load();
+  await full.join("player");
+  assert.equal(full.getSnapshot().state.status, "preview");
+  assert.equal(full.getSnapshot().state.room.isFull, true);
+  assert.match(full.getSnapshot().state.error, /still spectate/);
 });

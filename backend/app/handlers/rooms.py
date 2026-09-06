@@ -37,6 +37,7 @@ from app.rooms import (
     generate_random_name_color,
     normalize_name_color,
 )
+from app.handlers.refusals import ErrorCode
 
 logger = logging.getLogger("sketchy.handlers.rooms")
 
@@ -103,13 +104,13 @@ async def _give_back_allowance(ctx: HandlerContext, user_id) -> None:
 
 
 ENDED_ACCOUNT_ACKNOWLEDGEMENT = {
-    "ok": False,
+    "ok": False, "errorCode": ErrorCode.ACCOUNT_ENDED,
     "error": "This account is no longer active.",
 }
 
 
 BUSY_ACKNOWLEDGEMENT = {
-    "ok": False,
+    "ok": False, "errorCode": ErrorCode.DATABASE_BUSY,
     "error": "Sketchy is having trouble reaching its database. Please try again.",
 }
 
@@ -228,7 +229,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
             "resolving who is entering",
         )
     except IdentityError as error:
-        return {"ok": False, "error": str(error), "field": "nickname"}
+        return {"ok": False, "errorCode": ErrorCode.INVALID_NICKNAME, "error": str(error), "field": "nickname"}
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     if not identity.user_id:
@@ -237,7 +238,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         # a code reservation and a prompt pool, and a ceiling nothing can be
         # keyed on is not a ceiling.
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED,
             "error": (
                 "Sketchy could not start a session for you, so it cannot open "
                 "a room. Allow cookies for this site and reload."
@@ -246,7 +247,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
     try:
         ctx.room_quotas.check_capacity(identity.user_id)
     except RoomQuotaExceeded as error:
-        return {"ok": False, "error": str(error)}
+        return {"ok": False, "errorCode": ErrorCode.ROOM_QUOTA, "error": str(error)}
     try:
         settings = await _bounded(
             ctx.game_flow.room_settings_from_payload(
@@ -255,7 +256,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
             "resolving the room's prompt lists",
         )
     except RoomPromptResolutionError as error:
-        return {"ok": False, "error": str(error), "field": "promptListSlugs"}
+        return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     try:
@@ -267,7 +268,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
             "checking the room-creation allowance",
         )
     except RoomQuotaExceeded as error:
-        return {"ok": False, "error": str(error)}
+        return {"ok": False, "errorCode": ErrorCode.ROOM_QUOTA, "error": str(error)}
     except EntryTimedOut:
         # Deliberately not refunded. The attempt may have been recorded before
         # the wait was cut short, and a refund that guesses wrong hands back
@@ -299,7 +300,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
                 return BUSY_ACKNOWLEDGEMENT
             except Exception:
                 logger.exception("Failed to allocate a room code")
-                return {"ok": False, "error": "Could not create the room"}
+                return {"ok": False, "errorCode": ErrorCode.COULD_NOT_CREATE_ROOM, "error": "Could not create the room"}
             if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
                 await _give_back_code(ctx, code)
                 return ctx.shutdown.rejection_acknowledgement()
@@ -313,7 +314,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
             ctx.room_quotas.check_capacity(identity.user_id)
         except RoomQuotaExceeded as error:
             await _give_back_code(ctx, code)
-            return {"ok": False, "error": str(error)}
+            return {"ok": False, "errorCode": ErrorCode.ROOM_QUOTA, "error": str(error)}
         if ctx.is_ending(sid):
             # A ban or a deletion landed while this entry held the gate. The
             # sweep that closes this socket is waiting at that gate right now,
@@ -359,7 +360,7 @@ async def get_room_settings(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can view room rules"}
+        return {"ok": False, "errorCode": ErrorCode.HOST_ONLY, "error": "Only the host can view room rules"}
     room, _ = current
     return {"ok": True, "settings": editable_room_settings_payload(room)}
 
@@ -371,13 +372,13 @@ async def get_custom_prompts(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
     if player.is_spectator:
-        return {"ok": False, "error": "Only players can view custom prompts"}
+        return {"ok": False, "errorCode": ErrorCode.PLAYERS_ONLY, "error": "Only players can view custom prompts"}
     if room.state != "waiting" or room.game:
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.WAITING_ROOM_ONLY,
             "error": "Custom prompts can only be viewed in the waiting room",
         }
     return {"ok": True, "prompts": list(room.custom_prompts)}
@@ -387,22 +388,21 @@ async def get_recap_drawing(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(RecapDrawingPayload, data)
     except PayloadError:
-        return {"ok": False, "error": "Drawing not found"}
+        return {"ok": False, "errorCode": ErrorCode.DRAWING_NOT_FOUND, "error": "Drawing not found"}
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, _ = current
     if payload.index >= len(room.last_game_drawings):
-        return {"ok": False, "error": "Drawing not found"}
+        return {"ok": False, "errorCode": ErrorCode.DRAWING_NOT_FOUND, "error": "Drawing not found"}
     drawing = room.last_game_drawings[payload.index]
     if not drawing.is_available:
         # Given up to keep the room's recap inside its budget. Distinct from
         # "not found" so the client can say so plainly instead of offering a
         # retry for something that is never coming back.
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.DRAWING_NOT_KEPT,
             "error": "This drawing was not kept",
-            "unavailable": True,
         }
     return {"ok": True, "drawing": drawing.payload(payload.index)}
 
@@ -414,7 +414,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can change room rules"}
+        return {"ok": False, "errorCode": ErrorCode.HOST_ONLY, "error": "Only the host can change room rules"}
     room, player = current
     # Resolving the prompt lists reads the repository, and the host may press
     # Start while that is in the air. Under the lock the game cannot begin
@@ -422,7 +422,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
     # game is played with.
     async with room.lock:
         if room.state != "waiting" or room.game:
-            return {"ok": False, "error": "Settings can only be changed in the waiting room"}
+            return {"ok": False, "errorCode": ErrorCode.WAITING_ROOM_ONLY, "error": "Settings can only be changed in the waiting room"}
         try:
             settings = await ctx.game_flow.room_settings_from_payload(
                 payload,
@@ -430,10 +430,10 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
                 requesting_user_id=player.user_id,
             )
         except RoomPromptResolutionError as error:
-            return {"ok": False, "error": str(error), "field": "promptListSlugs"}
+            return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
         active_count = len(room.seated_players())
         if settings["max_players"] < active_count:
-            return {"ok": False, "error": f"Max players cannot be below the {active_count} players already in the room"}
+            return {"ok": False, "errorCode": ErrorCode.MAX_PLAYERS_BELOW_SEATED, "error": f"Max players cannot be below the {active_count} players already in the room"}
         if not settings["custom_prompts"]:
             settings["custom_prompts_only"] = False
         try:
@@ -441,7 +441,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
                 settings["custom_prompts"], replacing=room
             )
         except RoomQuotaExceeded as error:
-            return {"ok": False, "error": str(error), "field": "customPrompts"}
+            return {"ok": False, "errorCode": ErrorCode.INVALID_CUSTOM_PROMPTS, "error": str(error), "field": "customPrompts"}
         for key, value in settings.items():
             if key == "custom_prompts":
                 ctx.room_manager.set_custom_prompts(room, value)
@@ -474,11 +474,10 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
             return BUSY_ACKNOWLEDGEMENT
         if retired:
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.ROOM_ENDED,
                 "error": "This room has ended",
-                "codeRetired": True,
             }
-        return {"ok": False, "error": "Room not found"}
+        return {"ok": False, "errorCode": ErrorCode.ROOM_NOT_FOUND, "error": "Room not found"}
     return {
         "ok": True,
         "room": room.to_public_summary(),
@@ -517,11 +516,10 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
             return BUSY_ACKNOWLEDGEMENT
         if retired:
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.ROOM_ENDED,
                 "error": "This room has ended",
-                "codeRetired": True,
             }
-        return {"ok": False, "error": "Room not found"}
+        return {"ok": False, "errorCode": ErrorCode.ROOM_NOT_FOUND, "error": "Room not found"}
 
     return await _seat_in_room(
         ctx,
@@ -627,7 +625,7 @@ async def _seat_in_room(
                 player.name_color = stored or name_color
         if not ctx.room_capacity.admits_a_takeover(player.id):
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.SEAT_CHANGING_TOO_FAST,
                 "error": "This seat is changing hands too quickly. Try again in a minute.",
             }
         # _join_socket_room notifies and disconnects any socket that was
@@ -646,7 +644,7 @@ async def _seat_in_room(
         return session_payload(room, player)
 
     if reconnect_only:
-        return {"ok": False, "error": "No existing session in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NO_SESSION_TO_RESUME, "error": "No existing session in this room"}
 
     try:
         identity = await _bounded(
@@ -659,21 +657,21 @@ async def _seat_in_room(
             "resolving who is entering",
         )
     except IdentityError as error:
-        return {"ok": False, "error": str(error), "field": "nickname"}
+        return {"ok": False, "errorCode": ErrorCode.INVALID_NICKNAME, "error": str(error), "field": "nickname"}
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
 
     if payload.as_spectator and not ctx.room_capacity.admits_a_spectator(room):
-        # Deliberately without `roomFull`: that flag is what makes the client
+        # Deliberately not `room_full`: that code is what makes the client
         # offer spectating instead, and offering it to somebody refused *as* a
         # spectator is a loop.
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.SPECTATORS_FULL,
             "error": "This room is not taking any more spectators.",
         }
     if not ctx.room_capacity.admits_a_join(sid):
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.JOINING_TOO_FAST,
             "error": "You are joining rooms too quickly. Try again in a minute.",
         }
 
@@ -694,7 +692,7 @@ async def _seat_in_room(
         # Flagged rather than left for the client to recognise by its prose:
         # the "you can still spectate" offer hangs off this exact case.
         ctx.room_capacity.refund_join(sid)
-        return {"ok": False, "error": "Room is full", "roomFull": True}
+        return {"ok": False, "errorCode": ErrorCode.ROOM_FULL, "error": "Room is full"}
     except Exception:
         # Any other way seating can fail is equally not a join.
         ctx.room_capacity.refund_join(sid)
@@ -791,11 +789,11 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         payload = parse_payload(PlayerSettingsPayload, data)
     except PayloadError as error:
         if error.field == "nameColor":
-            return {"ok": False, "error": "Invalid player name color"}
+            return {"ok": False, "errorCode": ErrorCode.INVALID_NAME_COLOR, "error": "Invalid player name color"}
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
     if payload.colorblind_safe_colors is not None:
         player.colorblind_safe_colors = await resolve_colorblind_safe_preference(
@@ -810,7 +808,7 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         if payload.name_color is not None:
             player.name_color = ANONYMOUS_NAME_COLOR
             await ctx.game_flow._emit_room_state(room)
-            return {"ok": False, "error": "Create an account to choose a name color"}
+            return {"ok": False, "errorCode": ErrorCode.GUESTS_CANNOT_CHOOSE_COLOR, "error": "Create an account to choose a name color"}
         await ctx.game_flow._emit_colorblind_suggestion(room)
         return {"ok": True}
     if payload.name_color is not None:
@@ -819,7 +817,7 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
             # Well-formed but unreadable on one of the panels (#571). Refused
             # rather than quietly kept as the old colour, so a client that sent
             # it is told, and nothing reaches the room or the account.
-            return {"ok": False, "error": "Invalid player name color"}
+            return {"ok": False, "errorCode": ErrorCode.INVALID_NAME_COLOR, "error": "Invalid player name color"}
         player.name_color = chosen
     # Keep the account in step with the seat, so the color this player is
     # using right now is the one their profile shows. A failure here must not
@@ -851,7 +849,7 @@ async def dismiss_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can dismiss this suggestion"}
+        return {"ok": False, "errorCode": ErrorCode.HOST_ONLY, "error": "Only the host can dismiss this suggestion"}
     room, _ = current
     room.colorblind_suggestion_dismissed = True
     await ctx.game_flow._emit_colorblind_suggestion(room)
@@ -865,12 +863,12 @@ async def accept_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can change room colors"}
+        return {"ok": False, "errorCode": ErrorCode.HOST_ONLY, "error": "Only the host can change room colors"}
     room, _ = current
     async with room.lock:
         if room.state != "waiting" or room.game:
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.WAITING_ROOM_ONLY,
                 "error": "Room colors can only be changed in the waiting room",
             }
         if (
@@ -881,7 +879,7 @@ async def accept_colorblind_suggestion(ctx: HandlerContext, sid, data=None):
                 for player in room.players.values()
             )
         ):
-            return {"ok": False, "error": "This suggestion is no longer active"}
+            return {"ok": False, "errorCode": ErrorCode.SUGGESTION_INACTIVE, "error": "This suggestion is no longer active"}
         room.color_mode = "colorblind_safe"
         room.colorblind_suggestion_dismissed = True
         await ctx.game_flow._emit_room_state(room)
@@ -902,12 +900,12 @@ async def rename_player(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
 
     if not player.is_anonymous:
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.REGISTERED_NAME_FIXED,
             "error": "Registered players play as their username",
             "field": "nickname",
         }
@@ -917,7 +915,7 @@ async def rename_player(ctx: HandlerContext, sid, data):
         owner = await ctx.user_repo.get_by_username(nickname)
         if owner is not None and not owner.is_anonymous:
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.NAME_TAKEN_BY_ACCOUNT,
                 "error": "That name belongs to a registered player.",
                 "field": "nickname",
             }
@@ -945,16 +943,16 @@ async def become_player(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
     if room.state != "waiting" or room.game:
-        return {"ok": False, "error": "You can only join as a player from the waiting room"}
+        return {"ok": False, "errorCode": ErrorCode.WAITING_ROOM_ONLY, "error": "You can only join as a player from the waiting room"}
     if not player.is_spectator:
-        return {"ok": False, "error": "You are already a player"}
+        return {"ok": False, "errorCode": ErrorCode.ALREADY_A_PLAYER, "error": "You are already a player"}
 
     active_count = len(room.seated_players())
     if active_count >= room.max_players:
-        return {"ok": False, "error": "Player slots are full"}
+        return {"ok": False, "errorCode": ErrorCode.PLAYER_SLOTS_FULL, "error": "Player slots are full"}
 
     player.is_spectator = False
     player.score = 0

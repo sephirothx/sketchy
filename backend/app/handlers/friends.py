@@ -49,16 +49,17 @@ from app.services.friends import (
     FriendshipOutcome,
     FriendshipRefused,
 )
+from app.handlers.refusals import ErrorCode
 
 logger = logging.getLogger("sketchy.handlers.friends")
 
 #: The same wording the REST refusal carries, from the same constant.
-REGISTER_FIRST_ACK = {"ok": False, "error": REGISTER_FIRST}
-NOT_IN_A_GAME = {"ok": False, "error": "Your friend is not in a game right now."}
+REGISTER_FIRST_ACK = {"ok": False, "errorCode": ErrorCode.FRIEND_NOT_IN_GAME, "error": REGISTER_FIRST}
+NOT_IN_A_GAME = {"ok": False, "errorCode": ErrorCode.FRIEND_NOT_IN_GAME, "error": "Your friend is not in a game right now."}
 # Deliberately the same answer for "we are not friends" and "there is no such
 # account": neither is a fact this caller is owed, and telling them apart makes
 # the command a way to test whether somebody has unfriended you.
-NOT_FRIENDS = {"ok": False, "error": "You can only join a friend's game."}
+NOT_FRIENDS = {"ok": False, "errorCode": ErrorCode.NOT_FRIENDS, "error": "You can only join a friend's game."}
 
 
 def _account_of(session) -> str | None:
@@ -88,10 +89,10 @@ async def add_friend(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, me = current
     if ctx.friend_service is None:
-        return {"ok": False, "error": "Friends are unavailable right now."}
+        return {"ok": False, "errorCode": ErrorCode.FRIENDS_UNAVAILABLE, "error": "Friends are unavailable right now."}
 
     target = room.players.get(payload.player_id)
     if target is None or target.id == me.id:
@@ -115,7 +116,7 @@ async def add_friend(ctx: HandlerContext, sid, data):
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     except FriendshipRefused as refused:
-        return {"ok": False, "error": str(refused)}
+        return {"ok": False, "errorCode": ErrorCode.FRIEND_REFUSED, "error": str(refused)}
     # Only the two outcomes that changed something are named. Everything else -
     # already friends, already asked, or a block - answers the same, so the
     # command cannot be used to tell those apart.
@@ -135,10 +136,10 @@ async def invite_friend(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, me = current
     if ctx.friend_service is None or ctx.friend_invites is None:
-        return {"ok": False, "error": "Friends are unavailable right now."}
+        return {"ok": False, "errorCode": ErrorCode.FRIENDS_UNAVAILABLE, "error": "Friends are unavailable right now."}
     if me.is_anonymous or not me.user_id:
         return REGISTER_FIRST_ACK
 
@@ -191,12 +192,12 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
     except PayloadError as error:
         return error.acknowledgement()
     if ctx.friend_service is None:
-        return {"ok": False, "error": "Friends are unavailable right now."}
+        return {"ok": False, "errorCode": ErrorCode.FRIENDS_UNAVAILABLE, "error": "Friends are unavailable right now."}
 
     session = await ctx.sio.get_session(sid) if sid else None
     account = _account_of(session)
     if not account:
-        return {"ok": False, "error": "Sign in to join a friend's game."}
+        return {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": "Sign in to join a friend's game."}
     mine = await _uuid_or_none(account)
     theirs = await _uuid_or_none(payload.friend_user_id)
     if mine is None or theirs is None or mine == theirs:
@@ -209,7 +210,7 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
     if payload.invite_token and ctx.friend_invites is not None:
         invite = ctx.friend_invites.peek(payload.invite_token, account)
         if invite is None:
-            return {"ok": False, "error": "That invitation has expired."}
+            return {"ok": False, "errorCode": ErrorCode.INVITE_EXPIRED, "error": "That invitation has expired."}
         if invite.from_user_id != payload.friend_user_id:
             return NOT_FRIENDS
 
@@ -255,7 +256,7 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
         if not candidates:
             if _rooms_of(ctx, payload.friend_user_id):
                 return {
-                    "ok": False,
+                    "ok": False, "errorCode": ErrorCode.FRIENDS_ONLY_UNINVITED,
                     "error": "Only the host's friends can join this game "
                     "uninvited. Ask them for an invite.",
                 }
@@ -264,7 +265,7 @@ async def _join_friend_room(ctx: HandlerContext, sid, data, seated: list):
             # Two games, one button, and no way to know which was meant. An
             # invitation names one, which is the way out of this.
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.FRIEND_IN_SEVERAL_GAMES,
                 "error": "That friend is in more than one game. "
                 "Ask them for an invite.",
             }

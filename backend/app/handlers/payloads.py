@@ -44,6 +44,7 @@ from app.domain_values import HINT_MODES, SCORING_MODES
 from app.canvas_history import MAX_CANVAS_ACTIONS
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
+from app.handlers.refusals import ErrorCode, refuse
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import (
     DEFAULT_ROOM_DRAWING_SECONDS,
@@ -67,16 +68,20 @@ MAX_IDENTIFIER_LENGTH = 128
 class PayloadError(ValueError):
     """A safe validation failure suitable for a Socket.IO acknowledgement."""
 
-    def __init__(self, error: str = "Invalid request payload", *, field: str | None = None):
+    def __init__(
+        self,
+        error: str = "Invalid request payload",
+        *,
+        field: str | None = None,
+        code: ErrorCode = ErrorCode.INVALID_PAYLOAD,
+    ):
         super().__init__(error)
         self.error = error
         self.field = field
+        self.code = code
 
     def acknowledgement(self) -> dict[str, object]:
-        response: dict[str, object] = {"ok": False, "error": self.error}
-        if self.field:
-            response["field"] = self.field
-        return response
+        return refuse(self.code, self.error, field=self.field)
 
 
 class RequestModel(BaseModel):

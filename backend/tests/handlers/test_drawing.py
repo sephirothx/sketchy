@@ -456,7 +456,7 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
         ],
     )
 
-    assert response == {"ok": False, "error": "Canvas history is out of sync"}
+    assert response == {"ok": False, "errorCode": "canvas_out_of_sync", "error": "Canvas history is out of sync"}
     assert len(room.game.canvas.history) == 1
     assert any(
         call.args[0] == "sync_strokes" and call.kwargs.get("to") == "drawer-sid"
@@ -567,10 +567,12 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
     assert room.last_game_drawings[0].canvas_history == canvas
     assert await get_drawing("player-sid", {"index": 1}) == {
         "ok": False,
+        "errorCode": "drawing_not_found",
         "error": "Drawing not found",
     }
     assert await get_drawing("player-sid", {"index": True}) == {
         "ok": False,
+        "errorCode": "drawing_not_found",
         "error": "Drawing not found",
     }
 

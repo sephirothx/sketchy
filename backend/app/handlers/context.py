@@ -18,6 +18,7 @@ from app.repositories.interfaces import (
     PromptListRepository,
 )
 from app.domain_values import RuntimeEventType
+from app.handlers.refusals import ErrorCode
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
@@ -172,7 +173,7 @@ class HandlerContext:
                 # never expected a reply to.
                 return None
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.TOO_FAST, "retryAfterMs": int(budget.window_seconds * 1000),
                 "error": "You are doing that too quickly. Slow down a moment.",
             }
 

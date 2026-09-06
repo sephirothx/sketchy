@@ -55,9 +55,9 @@ async def test_a_room_takes_only_so_many_spectators():
 
     assert [join["ok"] for join in joins] == [True, True, False]
     assert "spectators" in joins[2]["error"]
-    # `roomFull` is what makes the client offer spectating; offering it to
+    # `room_full` is what makes the client offer spectating; offering it to
     # somebody refused as a spectator would be a loop.
-    assert "roomFull" not in joins[2]
+    assert joins[2]["errorCode"] == "spectators_full"
     assert len([p for p in room.player_list() if p.is_spectator]) == 2
     # Watching being full must not close the room to players.
     await sessions.save("player-sid", {"user_id": "player-user"})
@@ -294,6 +294,6 @@ async def test_being_turned_away_from_a_full_room_does_not_spend_the_allowance()
     ]
 
     assert all(answer["ok"] is False for answer in answers)
-    assert all(answer.get("roomFull") is True for answer in answers), (
+    assert all(answer["errorCode"] == "room_full" for answer in answers), (
         "a refused seat spent the join budget and changed the reason given"
     )

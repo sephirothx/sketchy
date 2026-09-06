@@ -128,7 +128,7 @@ export class RoomEntryMachine {
           ...this.snapshot,
           state: {
             status: "error",
-            message: response.codeRetired
+            message: response.errorCode === "room_ended"
               ? "This room has ended. Ask the host for a new invite."
               : response.error || "This room is no longer available",
           },
@@ -172,7 +172,7 @@ export class RoomEntryMachine {
         return;
       }
 
-      const justFilled = mode === "player" && response.roomFull === true;
+      const justFilled = mode === "player" && response.errorCode === "room_full";
       const room = justFilled ? { ...current.room, isFull: true } : current.room;
       const error = justFilled
         ? "The player slots just filled up, but you can still spectate."

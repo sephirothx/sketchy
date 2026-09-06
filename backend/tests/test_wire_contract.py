@@ -410,3 +410,80 @@ def test_every_audit_event_about_somebody_names_them_as_its_subject(trees):
         "these audit events name a user in target_user_id but leave the "
         f"ledger's subject empty: {sorted(missing)}"
     )
+
+
+# --- refusals: codes, not prose (#565) ----------------------------------------
+
+
+def _refusal_codes() -> list[str]:
+    from app.handlers.refusals import ErrorCode
+
+    return [member.value for member in ErrorCode]
+
+
+def test_the_client_mirrors_every_error_code_and_nothing_else(frontend):
+    """`ErrorCode` in types.ts is the server enum, member for member, in order.
+
+    A code the server can send that the client does not know is a branch the
+    client cannot take; a code the client knows that the server never sends
+    is dead copy waiting to mislead the next reader.
+    """
+    types = (FRONTEND_SRC / "types.ts").read_text(encoding="utf-8")
+    block = re.search(r"export type ErrorCode =\n((?:  \| \"[a-z_]+\"\n?)+);", types)
+    assert block, "types.ts must declare `export type ErrorCode = | \"…\" | …;`"
+    client = re.findall(r'"([a-z_]+)"', block.group(1))
+    assert client == _refusal_codes()
+
+
+def test_every_refusal_literal_carries_a_code():
+    """No `{"ok": False, …}` on the server without an `errorCode`.
+
+    The helper and `PayloadError.acknowledgement` build the shape; a handler
+    that writes the dict itself must still say why, or the client is back to
+    reading prose.
+    """
+    missing = []
+    for path in sorted(BACKEND_APP.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
+            values = dict(zip(keys, node.values, strict=False))
+            ok = values.get("ok")
+            if isinstance(ok, ast.Constant) and ok.value is False and "errorCode" not in keys:
+                missing.append((str(path.relative_to(BACKEND_APP)), node.lineno))
+    assert missing == [], f"refusals without an errorCode: {missing}"
+
+
+def test_no_client_branch_compares_refusal_prose():
+    """A copy edit must not change control flow: the client may show `error`
+    but never test it. This is the bug #565 found in useCanvasProtocol."""
+    offenders = []
+    for path in sorted(FRONTEND_SRC.rglob("*.ts*")):
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"\.error\s*(?:===|!==|==|!=)\s*[\"'`]|\.error\??\.(?:includes|startsWith|match)\(", text):
+            offenders.append(f"{path.relative_to(FRONTEND_SRC)}:{text[:match.start()].count(chr(10)) + 1}")
+    assert offenders == [], f"client code branching on refusal prose: {offenders}"
+
+
+def test_the_refused_shape_is_the_one_shape():
+    from app.handlers.payloads import PayloadError
+    from app.handlers.refusals import ErrorCode, refuse
+
+    assert refuse(ErrorCode.NOT_IN_ROOM, "Not in this room") == {
+        "ok": False,
+        "errorCode": "not_in_room",
+        "error": "Not in this room",
+    }
+    assert refuse(ErrorCode.TOO_FAST, "Slow down", retry_after_ms=2000)["retryAfterMs"] == 2000
+    assert PayloadError("Bad", field="nickname").acknowledgement() == {
+        "ok": False,
+        "errorCode": "invalid_payload",
+        "error": "Bad",
+        "field": "nickname",
+    }
+    # A code serialises as its string, so an acknowledgement is plain JSON.
+    import json
+
+    assert json.loads(json.dumps(refuse(ErrorCode.ROOM_FULL, "Full")))["errorCode"] == "room_full"

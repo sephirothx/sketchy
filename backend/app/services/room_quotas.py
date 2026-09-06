@@ -293,7 +293,7 @@ class RoomCapacityService:
 
         A full room is the ordinary case: without this, a client retrying one
         is eventually told it is going too quickly, which is untrue and hides
-        the `roomFull` flag the invite screen hangs its offer to spectate on.
+        the `room_full` code the invite screen hangs its offer to spectate on.
         """
         self._joins.refund(sid)
 

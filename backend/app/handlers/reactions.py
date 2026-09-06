@@ -9,7 +9,10 @@ from app.handlers.context import HandlerContext
 from app.handlers.payloads import PayloadError, ReactToDrawingPayload, parse_payload
 from app.services.drawing_reactions import (
     NOT_ACCEPTED,
+    NOT_RECORDED,
     NOT_VISIBLE,
+    OWN_DRAWING,
+    STILL_SAVING,
     live_reaction_refusal,
     reaction_broadcast,
     reaction_tally,
@@ -18,10 +21,20 @@ from app.services.drawing_reactions import (
 )
 from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
 from app.services.game_highlights import refresh_reaction_highlight
+from app.handlers.refusals import ErrorCode
 
 logger = logging.getLogger(__name__)
 
 GUESTS_CANNOT_REACT = "Create an account to react to drawings."
+# The service answers with the sentence it wants the player to read; the code
+# the client keys on is decided here, next to the sentences.
+REACTION_CODES = {
+    NOT_VISIBLE: ErrorCode.REACTION_NOT_VISIBLE,
+    OWN_DRAWING: ErrorCode.OWN_DRAWING,
+    STILL_SAVING: ErrorCode.GAME_STILL_SAVING,
+    NOT_RECORDED: ErrorCode.GAME_NOT_RECORDED,
+    NOT_ACCEPTED: ErrorCode.REACTION_NOT_ACCEPTED,
+}
 SPECTATORS_CANNOT_REACT = "Spectators can't react to drawings."
 
 
@@ -46,20 +59,20 @@ async def react_to_drawing(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
     if player.is_spectator:
-        return {"ok": False, "error": SPECTATORS_CANNOT_REACT}
+        return {"ok": False, "errorCode": ErrorCode.SPECTATORS_CANNOT_REACT, "error": SPECTATORS_CANNOT_REACT}
     # Who they are before what they can do: the advice is the same whatever
     # the drawing turns out to be, and it is advice they can act on.
     if not player.user_id or player.is_anonymous:
-        return {"ok": False, "error": GUESTS_CANNOT_REACT}
+        return {"ok": False, "errorCode": ErrorCode.GUESTS_CANNOT_REACT, "error": GUESTS_CANNOT_REACT}
 
     game = room.game
     if game is not None:
         refusal = live_reaction_refusal(room, game, player, payload.turn_id)
         if refusal:
-            return {"ok": False, "error": refusal}
+            return {"ok": False, "errorCode": REACTION_CODES[refusal], "error": refusal}
         room.set_drawing_reaction(payload.turn_id, player.id, payload.emoji)
         await ctx.sio.emit(
             "drawing_reaction",
@@ -70,10 +83,10 @@ async def react_to_drawing(ctx: HandlerContext, sid, data):
 
     entry = recap_entry_for(room, payload.turn_id)
     if entry is None:
-        return {"ok": False, "error": NOT_VISIBLE}
+        return {"ok": False, "errorCode": ErrorCode.REACTION_NOT_VISIBLE, "error": NOT_VISIBLE}
     refusal = recap_reaction_refusal(room, player, entry)
     if refusal:
-        return {"ok": False, "error": refusal}
+        return {"ok": False, "errorCode": REACTION_CODES[refusal], "error": refusal}
     repo = ctx.game_history_repo
     assert repo is not None and room.last_game_id is not None  # recorded implies both
     try:
@@ -88,12 +101,12 @@ async def react_to_drawing(ctx: HandlerContext, sid, data):
         )
     except asyncio.TimeoutError:
         logger.error("Timed out writing a reaction for room %s", room.id)
-        return {"ok": False, "error": NOT_ACCEPTED}
+        return {"ok": False, "errorCode": ErrorCode.REACTION_NOT_ACCEPTED, "error": NOT_ACCEPTED}
     except Exception:
         logger.exception("Failed to write a reaction for room %s", room.id)
-        return {"ok": False, "error": NOT_ACCEPTED}
+        return {"ok": False, "errorCode": ErrorCode.REACTION_NOT_ACCEPTED, "error": NOT_ACCEPTED}
     if result is None:
-        return {"ok": False, "error": NOT_ACCEPTED}
+        return {"ok": False, "errorCode": ErrorCode.REACTION_NOT_ACCEPTED, "error": NOT_ACCEPTED}
     room.set_drawing_reaction(payload.turn_id, player.id, payload.emoji)
     # The most-reacted highlight is derived from these counts, and the room
     # state is what carries both to the waiting room; broadcast the reaction
