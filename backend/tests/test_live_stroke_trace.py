@@ -22,9 +22,14 @@ def test_every_recorded_frame_decodes_and_strokes_are_well_formed():
     total = 0
     for stroke in trace["strokes"]:
         frames = stroke["frames"]
-        assert frames[0]["event"] == "draw_start" and "identity" in frames[0]
-        assert frames[-1]["event"] == "draw_end"
-        assert all(f["event"] == "draw_move" for f in frames[1:-1])
+        assert "identity" in frames[0], "an action opener carries [generation, sequence]"
+        if stroke["kind"] == "path":
+            assert frames[0]["event"] == "draw_start"
+            assert frames[-1]["event"] == "draw_end"
+            assert all(f["event"] == "draw_move" for f in frames[1:-1])
+        else:
+            assert len(frames) == 1
+            assert frames[0]["event"] == {"fill": "draw_fill", "shape": "draw_shape", "clear": "clear_canvas"}[stroke["kind"]]
         points = 0
         for frame in frames:
             raw = frame["frame"]

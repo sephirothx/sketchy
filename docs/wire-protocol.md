@@ -62,12 +62,12 @@ payload in isolation. Two more rules, each learned from a wrong number (#563):
 - **Measure real, advancing traffic.** A model that repeats the same encoded batch is
   the best case deflate has — every byte already in the window — and it understated
   live drawing by about 3×. [`benchmarks/live_drawing.py`](../benchmarks/live_drawing.py)
-  therefore measures a recording of the production client
+  therefore measures a recording of a hand drawing through the production client
   ([`fixtures/live_stroke_trace_v1.json`](../fixtures/live_stroke_trace_v1.json), made by
-  [`benchmarks/record_stroke.sh`](../benchmarks/record_stroke.sh)): on it, context
-  takeover saves about **35%** of the drawing's packet bytes, not the 70% the repeated
-  batch suggested, and it saves *less* once the same context has also carried a
-  `room_state` and some chat.
+  [`benchmarks/record_stroke.sh --manual`](../benchmarks/record_stroke.sh)): on it, context
+  takeover saves about **half** of the drawing's packet bytes, not the 70% the repeated
+  batch suggested (a scripted 120 Hz pen saved only a third), and it saves *less* once
+  the same context has also carried a `room_state` and some chat.
 - **Strip the flush suffix.** Every message's deflate block ends in `00 00 ff ff` from
   the `Z_SYNC_FLUSH`, and permessage-deflate removes those four bytes before framing
   (RFC 7692 §7.2.1). A model that keeps them overstates every message by 4 B — a

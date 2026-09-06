@@ -1458,12 +1458,13 @@ reports Socket.IO packet bytes — what the server's own byte counters see — a
 the same frames through permessage-deflate four ways (a warm per-connection
 context, that context after the room's other traffic, a cold context per
 message, and none), with WebSocket headers modelled separately, in both
-directions and per viewer. The recording is scripted by default — five strokes
-of different character at a 120 Hz pointer cadence, so its shape is
-deterministic while every encoding and batching decision is the client's — and
-`--manual` records a real hand in a headed browser instead. A repeated
-identical batch, which is what the benchmark modelled before, is deflate's best
-case and understated live drawing about threefold; the trace is what fixed that.
+directions and per viewer. The tracked fixture is a real hand in a headed
+browser (`record_stroke.sh --manual`: draw, then press Enter); without the flag
+the recorder scripts five strokes of different character at a 120 Hz pointer
+cadence, deterministic in shape while every encoding and batching decision is
+still the client's. A repeated identical batch, which is what the benchmark
+modelled before, is deflate's best case and understated live drawing by about
+half; the trace is what fixed that.
 
 The browser-driven benchmarks share `benchmarks/with_server.sh`, which builds
 the frontend (skip with `SKIP_BUILD=1`), starts the application on an isolated

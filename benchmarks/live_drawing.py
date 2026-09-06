@@ -73,6 +73,9 @@ SYNC_FLUSH_SUFFIX = b"\x00\x00\xff\xff"
 IDENTITY_BEARING_EVENTS = frozenset(
     {"draw_start", "draw_shape", "draw_fill", "clear_canvas"}
 )
+# The frame that commits an action carries the commit to viewers (wire §7):
+# a path commits on its end, everything else on its only frame.
+COMMITTING_EVENTS = frozenset({"draw_end", "draw_shape", "draw_fill", "clear_canvas"})
 
 
 def json_bytes(value) -> bytes:
@@ -194,7 +197,7 @@ def rebroadcast_messages(frames: list[dict], rng: random.Random) -> list[bytes]:
     revision = 0
     for frame in frames:
         argument = draw_frame_argument(frame["frame"])
-        if frame["event"] == "draw_end":
+        if frame["event"] in COMMITTING_EVENTS:
             revision += 1
             commit = [1, revision, revision, rng.getrandbits(32)]
             messages.extend(event_messages("draw", argument, commit))
@@ -238,7 +241,7 @@ def mixed_messages(frames: list[dict], traffic: dict[str, list[bytes]], rng: ran
     strokes_closed = 0
     for frame, per_frame in zip(frames, _grouped(rebroadcast_messages(frames, rng), frames)):
         messages.extend(per_frame)
-        if frame["event"] == "draw_end":
+        if frame["event"] in COMMITTING_EVENTS:
             strokes_closed += 1
             if strokes_closed == 2:
                 messages.extend(traffic["chat"])

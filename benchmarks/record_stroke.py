@@ -196,29 +196,36 @@ def parse_draw_frames(frames: list[TimedWebSocketFrame]) -> list[dict]:
     return out
 
 
+SINGLE_FRAME_ACTIONS = {"draw_fill": "fill", "draw_shape": "shape", "clear_canvas": "clear"}
+
+
 def group_strokes(frames: list[dict], labels: list[str]) -> list[dict]:
+    """One entry per action: a path from its start to its end, or a fill,
+    shape or clear, which is one frame that commits on its own."""
     strokes: list[dict] = []
     current: list[dict] | None = None
     for frame in frames:
-        if frame["event"] == "draw_start":
-            current = []
-            strokes.append({"frames": current})
-        if current is None:
-            strokes.append({"frames": [frame]})
+        event = frame["event"]
+        if event in SINGLE_FRAME_ACTIONS:
+            strokes.append({"frames": [frame], "kind": SINGLE_FRAME_ACTIONS[event]})
             current = None
             continue
+        if event == "draw_start" or current is None:
+            current = []
+            strokes.append({"frames": current, "kind": "path"})
         current.append(frame)
-        if frame["event"] == "draw_end":
+        if event == "draw_end":
             current = None
+    paths = 0
     for index, stroke in enumerate(strokes):
-        stroke["label"] = labels[index] if index < len(labels) else f"stroke {index + 1}"
+        if stroke["kind"] == "path":
+            stroke["label"] = labels[paths] if paths < len(labels) else f"stroke {index + 1}"
+            paths += 1
+        else:
+            stroke["label"] = f"{stroke['kind']} {index + 1}"
         stroke["points"] = sum(f.get("points", 0) for f in stroke["frames"])
-        moves = [f for f in stroke["frames"] if f["event"] == "draw_move"]
-        stroke["moveFrames"] = len(moves)
-        if stroke["frames"]:
-            stroke["durationMs"] = round(
-                stroke["frames"][-1]["atMs"] - stroke["frames"][0]["atMs"], 1
-            )
+        stroke["moveFrames"] = sum(1 for f in stroke["frames"] if f["event"] == "draw_move")
+        stroke["durationMs"] = round(stroke["frames"][-1]["atMs"] - stroke["frames"][0]["atMs"], 1)
     return strokes
 
 
