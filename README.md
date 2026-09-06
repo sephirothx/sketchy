@@ -1331,6 +1331,15 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 # EXPLAIN (ANALYZE, BUFFERS) for the admin, moderation and queue reads (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/index_plans.py --scale 1
+
+# Schema-trim measurements behind #545, #548 and #549 (disposable database only; nothing changes)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/recipient_array_sizes.py
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/history_row_footprint.py --games 200
+
+# What a storage-only compressed drawing format would save (#547)
+backend/.venv/bin/python benchmarks/drawing_compression.py
 backend/.venv/bin/python benchmarks/live_drawing.py
 backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 
