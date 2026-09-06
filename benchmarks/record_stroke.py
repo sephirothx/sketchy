@@ -19,7 +19,9 @@ Two ways to drive the pen:
 - `--manual`: a headed browser and a real hand. Draw, then press Enter here.
 
 The fixture is a benchmark input, not a protocol golden: its frames are
-whatever the client sent, decoded only to label them.
+whatever the client sent, decoded only to label them. Every trace under
+`fixtures/live_strokes/` is measured by `live_drawing.py`; name a new one
+for what it is (`hand-long`, `scripted-120hz`) rather than replacing one.
 
 Usage:
   ./benchmarks/record_stroke.sh
@@ -56,7 +58,7 @@ from canvas import (  # noqa: E402
     select_drawing_tool,
 )
 
-DEFAULT_OUTPUT = ROOT_DIR / "fixtures" / "live_stroke_trace_v1.json"
+TRACE_DIR = ROOT_DIR / "fixtures" / "live_strokes"
 SCHEMA_VERSION = 1
 RECORDING_COMMIT: str | None = None
 
@@ -232,18 +234,22 @@ def group_strokes(frames: list[dict], labels: list[str]) -> list[dict]:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:8765")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path,
+                        help="where to write the trace (default: fixtures/live_strokes/hand.json, "
+                             "or scripted-120hz.json for the scripted pen)")
     parser.add_argument("--pointer-hz", type=int, default=120)
     parser.add_argument("--seed", type=int, default=563)
     parser.add_argument("--manual", action="store_true", help="draw by hand in a headed browser")
     args = parser.parse_args()
+    if args.output is None:
+        args.output = TRACE_DIR / ("hand.json" if args.manual else "scripted-120hz.json")
 
     profile = PROFILES["desktop"]
     sent: list[TimedWebSocketFrame] = []
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=not args.manual, args=["--mute-audio"])
         try:
-            drawer_context, guesser_context, drawer, _guesser, _ = await create_game(
+            drawer_context, guesser_context, bystander_context, drawer, _guesser, _ = await create_game(
                 browser, profile, args.base_url, drawer_sent_frames=sent
             )
             await select_drawing_tool(drawer, "Brush")
@@ -256,6 +262,7 @@ async def main() -> None:
             canvas_box = await drawer.locator("canvas.drawing-canvas").bounding_box()
             await drawer_context.close()
             await guesser_context.close()
+            await bystander_context.close()
         finally:
             await browser.close()
 

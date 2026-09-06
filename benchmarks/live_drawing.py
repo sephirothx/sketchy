@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Measure what live drawing actually costs on the wire.
 
-The input is a recording of the production client drawing
-(`fixtures/live_stroke_trace_v1.json`, made by `record_stroke.sh`): every
+The input is a recording of the production client drawing (one of the
+traces under `fixtures/live_strokes/`, made by `record_stroke.sh`): every
 `draw` frame the drawer's browser put on its WebSocket, in order, with its
-timestamp. Before #563 this benchmark modelled a stroke as one five-point
+timestamp. By default every trace in that directory is measured and the
+per-second rates are set side by side, because a hand and a scripted pen
+differ in point rate and in how well they compress. Before #563 this benchmark modelled a stroke as one five-point
 batch repeated twenty-five times a second, which through permessage-deflate
 with context takeover is the best case that exists - the compressor has seen
 every byte before - and it also kept the four-byte `00 00 ff ff` sync-flush
@@ -40,6 +42,7 @@ Usage:
   backend/.venv/bin/python benchmarks/live_drawing.py
   backend/.venv/bin/python benchmarks/live_drawing.py --room-size 8 --window-bits 15 12
   backend/.venv/bin/python benchmarks/live_drawing.py --trace /tmp/trace.json --json-output out.json
+  backend/.venv/bin/python benchmarks/live_drawing.py --trace fixtures/live_strokes/hand-long.json
 """
 from __future__ import annotations
 
@@ -61,7 +64,7 @@ sys.path.insert(0, os.path.join(ROOT_DIR, "benchmarks"))
 from app.live_drawing import MAX_BASE64_FRAME_BYTES, encode_live_drawing  # noqa: E402
 from room_payloads import build_room  # noqa: E402
 
-DEFAULT_TRACE = Path(ROOT_DIR) / "fixtures" / "live_stroke_trace_v1.json"
+DEFAULT_TRACES = Path(ROOT_DIR) / "fixtures" / "live_strokes"
 DEFAULT_ROOM_SIZE = 16
 # zlib level 6 is what wsproto's PerMessageDeflate compresses with; memLevel
 # is left at zlib's default of 8 for the same reason.
@@ -357,7 +360,7 @@ def rate(total: int, seconds: float) -> int:
     return round(total / seconds) if seconds else 0
 
 
-def print_report(rows: list[dict], result: dict) -> None:
+def print_actions(rows: list[dict]) -> None:
     print("Live drawing Socket.IO payload benchmark")
     print("Action           JSON        Current    Reduction")
     print("-" * 52)
@@ -365,12 +368,14 @@ def print_report(rows: list[dict], result: dict) -> None:
         before, after = row["legacy_bytes"], row["current_bytes"]
         print(f"{row['action']:<12} {before:>8,} B {after:>10,} B {(1 - after / before) * 100:>11.1f}%")
 
+
+def print_report(name: str, result: dict) -> None:
     seconds = result["pen_down_seconds"]
     audience = result["audience"]
     recorded = result["trace"]
     print()
     print(
-        f"Recorded session - {recorded['how']}, "
+        f"Trace {name} - {recorded['how']}, "
         f"{recorded.get('pointerHz') or '?'} Hz pointer, {recorded['browser']}"
     )
     print("-" * 76)
@@ -404,9 +409,37 @@ def print_report(rows: list[dict], result: dict) -> None:
     print("  the uncompressed row. Nothing here includes TLS or a proxy.")
 
 
+def print_comparison(results: dict[str, dict]) -> None:
+    """The warm-context rates of every trace side by side."""
+    print()
+    print("Across traces, per second of pen-down drawing, warm deflate (15-bit window)")
+    print(f"{'trace':<16} {'points/s':>8} {'frames/s':>8} {'drawer up':>10} {'per viewer':>11} {'saving':>7} {'room egress':>12}")
+    print("-" * 80)
+    for name, result in results.items():
+        seconds = result["pen_down_seconds"]
+        case = result["cases"]["warm_15"]
+        raw = result["socketio_bytes"]["viewer"]
+        viewer = case["viewer"]["payload"]
+        print(
+            f"{name:<16} {rate(result['points'], seconds):>8} {rate(result['frames'], seconds):>8} "
+            f"{rate(case['uplink']['payload'], seconds):>8,} B {rate(viewer, seconds):>9,} B "
+            f"{(1 - viewer / raw) * 100 if raw else 0:>6.0f}% {rate(case['viewer']['framed'] * result['audience'], seconds):>10,} B"
+        )
+
+
+def trace_files(path: Path) -> list[Path]:
+    if path.is_dir():
+        files = sorted(path.glob("*.json"))
+        if not files:
+            raise SystemExit(f"{path}: no traces to measure")
+        return files
+    return [path]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--trace", type=Path, default=DEFAULT_TRACE)
+    parser.add_argument("--trace", type=Path, default=DEFAULT_TRACES,
+                        help="one trace, or a directory of them (default: every tracked trace)")
     parser.add_argument("--room-size", type=int, default=DEFAULT_ROOM_SIZE)
     parser.add_argument("--window-bits", type=int, nargs="+", default=[15, 12],
                         help="permessage-deflate server window sizes to model (15 = 32 KiB, 12 = 4 KiB)")
@@ -414,12 +447,17 @@ def main() -> None:
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
 
-    trace = load_trace(args.trace)
     rows = per_action_table()
-    result = measure(trace, room_size=args.room_size, window_bits=args.window_bits, seed=args.seed)
-    print_report(rows, result)
+    print_actions(rows)
+    results = {}
+    for path in trace_files(args.trace):
+        result = measure(load_trace(path), room_size=args.room_size, window_bits=args.window_bits, seed=args.seed)
+        results[path.stem] = result
+        print_report(path.stem, result)
+    if len(results) > 1:
+        print_comparison(results)
     if args.json_output:
-        args.json_output.write_text(json.dumps({"per_action": rows, "session": result}, indent=2) + "\n")
+        args.json_output.write_text(json.dumps({"per_action": rows, "traces": results}, indent=2) + "\n")
         print(f"\nWrote {args.json_output}")
 
 

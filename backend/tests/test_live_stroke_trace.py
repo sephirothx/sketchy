@@ -1,4 +1,4 @@
-"""The recorded drawing trace the wire benchmarks measure against.
+"""The recorded drawing traces the wire benchmarks measure against.
 
 It is a benchmark input, not a protocol golden, but the benchmark's numbers
 are only worth reading if every frame in it is a frame the server would
@@ -12,11 +12,19 @@ from pathlib import Path
 
 from app.live_drawing import MAX_BASE64_FRAME_BYTES, decode_live_drawing
 
-TRACE = Path(__file__).parents[2] / "fixtures" / "live_stroke_trace_v1.json"
+import pytest
+
+TRACE_DIR = Path(__file__).parents[2] / "fixtures" / "live_strokes"
+TRACES = sorted(TRACE_DIR.glob("*.json"))
 
 
-def test_every_recorded_frame_decodes_and_strokes_are_well_formed():
-    trace = json.loads(TRACE.read_text())
+def test_there_are_traces_to_measure():
+    assert TRACES, "an empty directory measures nothing"
+
+
+@pytest.mark.parametrize("path", TRACES, ids=[p.stem for p in TRACES])
+def test_every_recorded_frame_decodes_and_strokes_are_well_formed(path):
+    trace = json.loads(path.read_text())
     assert trace["schemaVersion"] == 1
     assert trace["strokes"], "an empty trace measures nothing"
     total = 0

@@ -465,10 +465,11 @@ async def create_game(
     base_url: str,
     *,
     drawer_sent_frames: list[TimedWebSocketFrame] | None = None,
-) -> tuple[BrowserContext, BrowserContext, Page, Page, list[WebSocketFrame]]:
-    """Two players in a running game, the drawer at the canvas.
+) -> tuple[BrowserContext, BrowserContext, BrowserContext, Page, Page, list[WebSocketFrame]]:
+    """Three seats in a running game, the drawer at the canvas.
 
-    Returns the guesser's received WebSocket frames. Pass `drawer_sent_frames`
+    Returns the drawer, guesser and bystander contexts (close all three), the
+    drawer and guesser pages, and the guesser's received WebSocket frames. Pass `drawer_sent_frames`
     to also collect what the drawer's browser put on the wire, with the
     DevTools timestamp of each frame - what `record_stroke.py` turns into a
     fixture.
@@ -480,6 +481,12 @@ async def create_game(
     }
     drawer_context = await browser.new_context(**context_options)
     guesser_context = await browser.new_context(**context_options)
+    # A third seat that only watches. The measured guesser is reloaded later
+    # to exercise the reconnect-time history sync, and a turn whose last
+    # connected guesser leaves ends at once (R-GAME-04 through the disconnect
+    # path); with a second guesser still seated the turn survives the reload.
+    bystander_context = await browser.new_context(**context_options)
+    bystander = await bystander_context.new_page()
     await drawer_context.add_init_script(CANVAS_METRICS_INIT_SCRIPT)
     drawer = await drawer_context.new_page()
     guesser = await guesser_context.new_page()
@@ -526,6 +533,10 @@ async def create_game(
     await use_guest_name(guesser, f"{profile.name}-guesser")
     await join_by_code(guesser, code)
     await guesser.wait_for_selector('[data-testid="waiting-room"]')
+    await bystander.goto(base_url)
+    await use_guest_name(bystander, f"{profile.name}-watcher")
+    await join_by_code(bystander, code)
+    await bystander.wait_for_selector('[data-testid="waiting-room"]')
 
     await drawer.wait_for_selector(".waiting-start-button:not([disabled])")
     await drawer.click(".waiting-start-button")
@@ -535,7 +546,7 @@ async def create_game(
     await drawer.wait_for_selector(".toolbar")
     await guesser.wait_for_selector("canvas.drawing-canvas")
 
-    return drawer_context, guesser_context, drawer, guesser, websocket_frames
+    return drawer_context, guesser_context, bystander_context, drawer, guesser, websocket_frames
 
 
 async def benchmark_profile(
@@ -550,6 +561,7 @@ async def benchmark_profile(
     (
         drawer_context,
         guesser_context,
+        bystander_context,
         drawer,
         guesser,
         websocket_frames,
@@ -849,6 +861,7 @@ async def benchmark_profile(
     finally:
         await drawer_context.close()
         await guesser_context.close()
+        await bystander_context.close()
 
 
 def print_results(results: list[BenchmarkResult]) -> None:
