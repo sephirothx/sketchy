@@ -491,6 +491,10 @@ export function useCanvasProtocol(
         return;
       }
       pendingMutationsRef.current.clear();
+      // A tail is a new authority as much as a full sync is: a replay still
+      // going out and a deadline still armed belong to the state just dropped.
+      sender.cancel();
+      watch.cancelAll();
       activeOutgoingSequenceRef.current = null;
       nextSequenceRef.current = historyRef.current.sequence! + 1;
       renderer.replay(historyRef.current.actions);
