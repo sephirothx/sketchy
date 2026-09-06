@@ -1494,6 +1494,20 @@ order ends erased, and the ascending order is what keeps two writers, or a write
 two deletions, from waiting on each other in a cycle. A merged guest resolves to the
 account it was merged into; a row retention has already purged counts as erased.
 
+**The lock set is the whole identity, resolved before locking.** A seat may still carry
+a guest identity merged into an account mid-game. The finished-game write resolves such
+seats to their accounts first and takes one `FOR UPDATE` over seats and accounts
+together; the deletion reads the guests merged into the account first and takes one
+`FOR UPDATE` over account and guests together, checking under the lock that no guest
+joined in between (a merge needs the account row, so none can join after). Locking the
+account and then reaching for its guests, or the guest and then its account, gave the two
+transactions opposite orders and a cycle PostgreSQL had to break by aborting one.
+
+A write that loses a lock wait to the web role's budget (§1, *Session budgets*), or is
+chosen as a deadlock victim, is transient: the room's persist path tries it again, up to
+three times with a short pause, before recording the game as unrecorded
+([`services/game_flow.py`](../backend/app/services/game_flow.py)).
+
 What each writer then does with an erased identity:
 
 | Writer | With an erased identity |

@@ -1021,6 +1021,21 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 referenced_user_ids.update(
                     _entity_id(reaction.user_id) for reaction in reactions
                 )
+                # A seat may still carry a guest identity that was merged
+                # into an account mid-game; the erasure barrier resolves it
+                # to that account and locks the account too. Resolving first
+                # and locking everything in one ordered statement is what
+                # keeps this write and a deletion of that account from each
+                # holding what the other waits for.
+                merge_targets = set(
+                    (
+                        await session.scalars(
+                            select(IdentityAlias.target_user_id).where(
+                                IdentityAlias.source_user_id.in_(referenced_user_ids)
+                            )
+                        )
+                    ).all()
+                ) if referenced_user_ids else set()
                 # FOR UPDATE, not FOR SHARE: this transaction goes on to
                 # write last_active_at on these rows, and two saves sharing a
                 # player that both held the shared lock would deadlock on the
@@ -1029,7 +1044,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 users = (
                     await session.scalars(
                         select(User)
-                        .where(User.id.in_(referenced_user_ids))
+                        .where(User.id.in_(referenced_user_ids | merge_targets))
                         .order_by(User.id)
                         .with_for_update()
                     )

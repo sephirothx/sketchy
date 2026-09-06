@@ -496,6 +496,101 @@ async def test_a_deletion_waits_for_a_game_write_that_holds_the_seats_then_erase
         await engine.dispose()
 
 
+async def _merged_guest(factory) -> tuple[str, str]:
+    users = SqlAlchemyUserRepository(factory)
+    account = await users.create_anonymous("Account")
+    guest = await users.create_anonymous("Guest identity")
+    async with factory() as session:
+        async with session.begin():
+            guest_row = await session.get(User, UUID(guest.id))
+            guest_row.state = "merged"
+            session.add(
+                IdentityAlias(source_user_id=UUID(guest.id), target_user_id=UUID(account.id))
+            )
+    return account.id, guest.id
+
+
+async def test_both_sides_lock_the_merged_identity_set_in_one_ordered_statement():
+    """A seat may carry a guest merged into an account mid-game. The write
+    resolves the account before locking and the deletion resolves the guests
+    before locking, so each takes one FOR UPDATE over the whole set in
+    ascending id order and neither can hold what the other waits for."""
+    from sqlalchemy import event
+
+    factory, engine = await create_test_db()
+    try:
+        account_id, guest_id = await _merged_guest(factory)
+        _, other_id = await _accounts(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        captured: list[tuple[str, tuple]] = []
+
+        def capture(conn, cursor, statement, parameters, context, executemany):
+            captured.append((statement, parameters))
+
+        event.listen(engine.sync_engine, "before_cursor_execute", capture)
+        try:
+            await record_private_game(history, owner_id=guest_id, other_id=other_id)
+            write_lock = _first_users_lock(captured)
+            captured.clear()
+            await anonymize_account(factory, user_id=account_id)
+            delete_lock = _first_users_lock(captured)
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", capture)
+
+        both = {UUID(account_id), UUID(guest_id)}
+        assert both <= write_lock, "the write locks the seat's account beside the seat"
+        assert both <= delete_lock, "the deletion locks the merged guest beside the account"
+    finally:
+        await engine.dispose()
+
+
+def _first_users_lock(captured) -> set[UUID]:
+    """The ids the first SELECT over `users` in the capture asked for."""
+    for statement, parameters in captured:
+        if statement.startswith("SELECT") and "FROM users" in statement and " IN " in statement:
+            values = parameters if isinstance(parameters, (tuple, list)) else tuple(parameters.values())
+            return {UUID(hex=str(value)) if not isinstance(value, UUID) else value for value in values}
+    raise AssertionError("no locking select over users was captured")
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
+async def test_a_deletion_cannot_deadlock_with_a_write_under_a_merged_seat(monkeypatch):
+    """Writer first, holding the guest seat and its account: the deletion of
+    the account waits on the ordered lock instead of taking the account and
+    then waiting for the guest the writer holds."""
+    import app.repositories.sqlalchemy as repository
+
+    factory, engine = await create_test_db()
+    try:
+        account_id, guest_id = await _merged_guest(factory)
+        _, other_id = await _accounts(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        real = repository.erased_identity_ids
+        writer_holds_the_rows = asyncio.Event()
+        let_the_writer_commit = asyncio.Event()
+
+        async def paused(session, user_ids):
+            result = await real(session, user_ids)
+            writer_holds_the_rows.set()
+            await let_the_writer_commit.wait()
+            return result
+
+        monkeypatch.setattr(repository, "erased_identity_ids", paused)
+        write = asyncio.create_task(
+            record_private_game(history, owner_id=guest_id, other_id=other_id)
+        )
+        await writer_holds_the_rows.wait()
+        erase = asyncio.create_task(anonymize_account(factory, user_id=account_id))
+        await asyncio.sleep(0.3)
+        assert not erase.done(), "the deletion must wait for the writer's locks"
+        let_the_writer_commit.set()
+        game_id, _ = await asyncio.gather(write, erase)
+
+        _assert_erased_only_for(guest_id, *await _seat_rows(factory, game_id))
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
 async def test_a_game_write_waits_for_a_deletion_in_flight_then_writes_tombstones(
     monkeypatch,

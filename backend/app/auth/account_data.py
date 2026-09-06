@@ -1358,6 +1358,18 @@ async def list_data_exports(
         )
 
 
+async def _alias_sources_of(session: AsyncSession, account_id: UUID) -> list[UUID]:
+    return list(
+        (
+            await session.scalars(
+                select(IdentityAlias.source_user_id)
+                .where(IdentityAlias.target_user_id == account_id)
+                .order_by(IdentityAlias.source_user_id)
+            )
+        ).all()
+    )
+
+
 async def anonymize_account(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -1369,23 +1381,43 @@ async def anonymize_account(
     db_user_id = _entity_id(user_id)
     async with session_factory() as session:
         async with session.begin():
-            account = await session.scalar(
-                select(User).where(User.id == db_user_id).with_for_update()
-            )
+            # Every identity this deletion will write - the account and the
+            # guests merged into it - is locked in one ordered statement
+            # before anything else, ascending by id, the erasure barrier's
+            # rule (app.auth.erasure). A finished-game write holding a merged
+            # seat takes its locks the same way, so neither can hold what
+            # the other waits for. The alias set is read before the lock and
+            # checked under it: a merge into this account needs the account
+            # row, so nothing can join the set once it is held.
+            source_ids = await _alias_sources_of(session, db_user_id)
+            identity_ids = sorted({db_user_id, *source_ids})
+            locked = {
+                row.id: row
+                for row in (
+                    await session.scalars(
+                        select(User)
+                        .where(User.id.in_(identity_ids))
+                        .order_by(User.id)
+                        .with_for_update()
+                    )
+                ).all()
+            }
+            account = locked.get(db_user_id)
             if account is None or account.state == AccountState.DELETED.value:
                 raise AccountDataError("account not found")
             if account.state == AccountState.MERGED.value:
                 raise AccountDataError("merged identities must be deleted through their account")
-
-            source_ids = list(
-                (
-                    await session.scalars(
-                        select(IdentityAlias.source_user_id).where(
-                            IdentityAlias.target_user_id == account.id
-                        )
-                    )
-                ).all()
-            )
+            late_sources = set(await _alias_sources_of(session, db_user_id)) - set(source_ids)
+            if late_sources:
+                # Merged in between the read and the lock: rare, and the one
+                # place the ascending order cannot be kept.
+                await session.execute(
+                    select(User.id)
+                    .where(User.id.in_(sorted(late_sources)))
+                    .order_by(User.id)
+                    .with_for_update()
+                )
+                source_ids = [*source_ids, *sorted(late_sources)]
             identity_ids = [account.id, *source_ids]
             friends_of: set[str] = set()
 
