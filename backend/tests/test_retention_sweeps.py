@@ -316,6 +316,36 @@ def test_the_budget_comes_from_the_environment_with_safe_fallbacks():
         SweepBudget(rows=0)
 
 
+async def test_every_scheduled_sweep_runs_to_completion_under_the_budget():
+    """The loop hands every sweep its budget, and a sweep that cannot take
+    one fails every hour behind the fault isolation that keeps the rest
+    running - which is how the retired-list reclaim never ran at all."""
+    factory, engine = await create_test_db()
+    try:
+        health = LoopHealth("retention")
+        reports = await run_retention_sweeps(
+            factory, budget=SweepBudget(rows=50, batch=10), health=health
+        )
+        assert [name for name, report in reports.items() if report.get("failed")] == []
+        assert health.consecutive_failures == 0
+        assert "retired_prompt_lists" in reports
+    finally:
+        await engine.dispose()
+
+
+async def test_the_reclaim_sweep_takes_no_more_lists_than_the_budget_has_rows():
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    factory, engine = await create_test_db()
+    try:
+        result = await reclaim_retired_prompt_lists(
+            factory, limit=25, budget=SweepBudget(rows=1, batch=1)
+        )
+        assert result.lists_examined <= 1
+    finally:
+        await engine.dispose()
+
+
 def test_every_scheduled_sweep_is_registered_once():
     names = [sweep.name for sweep in retention.retention_sweeps()]
     assert len(names) == len(set(names))

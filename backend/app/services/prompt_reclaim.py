@@ -27,6 +27,7 @@ referenced. A day is far longer than a game.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from app.services.sweeps import SweepBudget
 from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
@@ -117,8 +118,12 @@ async def reclaim_retired_prompt_lists(
     now: datetime | None = None,
     grace: timedelta = RETIRED_LIST_GRACE,
     limit: int = RECLAIM_BATCH_LISTS,
+    budget: SweepBudget | None = None,
 ) -> ReclaimResult:
     """Physically remove what retired lists no longer need, a bounded batch at a time.
+
+    Scheduled by the retention loop, which hands every sweep its budget; a
+    run under one takes no more lists than the budget has rows.
 
     One transaction per run, over at most `limit` lists retired before
     `now - grace`, oldest first. Each list's unpinned revisions go, then the
@@ -127,6 +132,8 @@ async def reclaim_retired_prompt_lists(
     as a non-discoverable tombstone and is examined again next run, which
     costs one indexed select.
     """
+    if budget is not None:
+        limit = max(1, min(limit, budget.rows))
     cutoff = (now or datetime.now(timezone.utc)) - grace
     revisions_deleted = lists_deleted = versions_deleted = concepts_deleted = 0
     async with session_factory() as session:
