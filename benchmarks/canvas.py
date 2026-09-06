@@ -18,6 +18,7 @@ import json
 import math
 import re
 import statistics
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -30,6 +31,15 @@ from playwright.async_api import (
     Page,
     async_playwright,
 )
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+BACKEND_DIR = ROOT_DIR / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+# The room is created and joined the way the end-to-end suite does it, so a
+# lobby redesign is fixed in one helper rather than here as well.
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name  # noqa: E402
 
 CANVAS_WIDTH = 800
 CANVAS_HEIGHT = 600
@@ -118,6 +128,7 @@ PROFILES = {
 }
 
 WebSocketFrame = tuple[int, str]
+TimedWebSocketFrame = tuple[float, int, str]
 
 CANVAS_METRICS_INIT_SCRIPT = """
 (() => {
@@ -419,7 +430,7 @@ async def select_drawing_tool(page: Page, name: str) -> None:
         return
 
     await page.get_by_role("button", name=re.compile(r"^Choose tool, current:")).click()
-    await page.get_by_role("dialog", name="Choose tool").get_by_role(
+    await page.get_by_role("group", name="Choose tool").get_by_role(
         "button",
         name=name,
         exact=True,
@@ -452,7 +463,17 @@ async def create_game(
     browser: Browser,
     profile: BrowserProfile,
     base_url: str,
-) -> tuple[BrowserContext, BrowserContext, Page, Page, list[WebSocketFrame]]:
+    *,
+    drawer_sent_frames: list[TimedWebSocketFrame] | None = None,
+) -> tuple[BrowserContext, BrowserContext, BrowserContext, Page, Page, list[WebSocketFrame]]:
+    """Three seats in a running game, the drawer at the canvas.
+
+    Returns the drawer, guesser and bystander contexts (close all three), the
+    drawer and guesser pages, and the guesser's received WebSocket frames. Pass `drawer_sent_frames`
+    to also collect what the drawer's browser put on the wire, with the
+    DevTools timestamp of each frame - what `record_stroke.py` turns into a
+    fixture.
+    """
     context_options: dict[str, Any] = {
         "viewport": profile.viewport,
         "is_mobile": profile.is_mobile,
@@ -460,6 +481,12 @@ async def create_game(
     }
     drawer_context = await browser.new_context(**context_options)
     guesser_context = await browser.new_context(**context_options)
+    # A third seat that only watches. The measured guesser is reloaded later
+    # to exercise the reconnect-time history sync, and a turn whose last
+    # connected guesser leaves ends at once (R-GAME-04 through the disconnect
+    # path); with a second guesser still seated the turn survives the reload.
+    bystander_context = await browser.new_context(**context_options)
+    bystander = await bystander_context.new_page()
     await drawer_context.add_init_script(CANVAS_METRICS_INIT_SCRIPT)
     drawer = await drawer_context.new_page()
     guesser = await guesser_context.new_page()
@@ -479,20 +506,41 @@ async def create_game(
         ),
     )
 
+    # Guest names are capped short; "mobile-throttled-guesser" is over it.
+    seat = profile.name.split("-")[0]
+
+    if drawer_sent_frames is not None:
+        drawer_cdp = await drawer_context.new_cdp_session(drawer)
+        await drawer_cdp.send("Network.enable")
+        drawer_cdp.on(
+            "Network.webSocketFrameSent",
+            lambda event: drawer_sent_frames.append(
+                (
+                    float(event.get("timestamp", 0.0)),
+                    int(event.get("response", {}).get("opcode", 1)),
+                    str(event.get("response", {}).get("payloadData", "")),
+                )
+            ),
+        )
+
     await drawer.goto(base_url)
-    await drawer.fill('input[placeholder="Display name"]', f"{profile.name}-drawer")
-    await drawer.get_by_role("button", name="Create room", exact=True).click()
+    await use_guest_name(drawer, f"{seat}-drawer")
+    # "Create room" in the header, "Create a room" in a phone's thumb dock.
+    await drawer.locator("button:visible", has_text=re.compile(r"^Create (a )?room$")).first.click()
     await drawer.wait_for_url("**/create")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
     await drawer.wait_for_url("**/room/**")
     await drawer.wait_for_selector('[data-testid="waiting-room"]')
-    code = (await drawer.inner_text(".room-copy-button")).split("Code:")[1].strip()
+    code = await room_code(drawer)
 
     await guesser.goto(base_url)
-    await guesser.fill('input[placeholder="Display name"]', f"{profile.name}-guesser")
-    await guesser.fill('input[placeholder="ABC123"]', code)
-    await guesser.click('button:has-text("Join by code")')
+    await use_guest_name(guesser, f"{seat}-guesser")
+    await join_by_code(guesser, code)
     await guesser.wait_for_selector('[data-testid="waiting-room"]')
+    await bystander.goto(base_url)
+    await use_guest_name(bystander, f"{seat}-watcher")
+    await join_by_code(bystander, code)
+    await bystander.wait_for_selector('[data-testid="waiting-room"]')
 
     await drawer.wait_for_selector(".waiting-start-button:not([disabled])")
     await drawer.click(".waiting-start-button")
@@ -502,7 +550,7 @@ async def create_game(
     await drawer.wait_for_selector(".toolbar")
     await guesser.wait_for_selector("canvas.drawing-canvas")
 
-    return drawer_context, guesser_context, drawer, guesser, websocket_frames
+    return drawer_context, guesser_context, bystander_context, drawer, guesser, websocket_frames
 
 
 async def benchmark_profile(
@@ -517,6 +565,7 @@ async def benchmark_profile(
     (
         drawer_context,
         guesser_context,
+        bystander_context,
         drawer,
         guesser,
         websocket_frames,
@@ -816,6 +865,7 @@ async def benchmark_profile(
     finally:
         await drawer_context.close()
         await guesser_context.close()
+        await bystander_context.close()
 
 
 def print_results(results: list[BenchmarkResult]) -> None:
