@@ -609,6 +609,11 @@ class Telemetry:
             "WebSocket connections accepted, by the compression they negotiated.",
             ("compression",),
         )
+        self.canvas_recovery_notices = LabelledCounter(
+            "sketchy_canvas_recovery_notices_total",
+            "Times a socket's canvas needed recovering, by reason (one notice per window is sent; every occurrence counts).",
+            ("reason",),
+        )
         self.socket_packets_rejected = LabelledCounter(
             "sketchy_socket_packets_rejected_total",
             "Inbound packets dropped before dispatch, by reason.",
@@ -695,6 +700,9 @@ class Telemetry:
             self.socket_minutes.bump(now, field=3)
         if seconds is not None:
             self.socket_duration.observe(seconds, (event,), now=now)
+
+    def note_canvas_recovery(self, reason: str) -> None:
+        self.canvas_recovery_notices.inc((reason,))
 
     def note_socket_packet_rejected(self, reason: str) -> None:
         self.socket_packets_rejected.inc((reason,))
@@ -886,6 +894,7 @@ class Telemetry:
         lines += self.socket_connections.lines()
         lines += self.socket_transports.lines()
         lines += self.socket_packets_rejected.lines()
+        lines += self.canvas_recovery_notices.lines()
         lines += self.socket_bytes_in.lines()
         lines += self.socket_bytes_out.lines()
         lines += self.socket_command_bytes.lines()

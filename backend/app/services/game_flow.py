@@ -624,8 +624,16 @@ class GameFlowService:
         sid: str,
         holds: tuple[int, int, int] | None = None,
         request_id: int = 0,
+        *,
+        budgeted: bool = True,
     ) -> None:
         """Send the canvas history, or only the part the client is missing.
+
+        `budgeted` spends the socket's resync window first (#562): a snapshot
+        the server pushes on a join shares the allowance a requested one does,
+        and inside a spent window the socket gets a `canvas_stale` notice
+        saying when to ask instead of a dump. The request path passes
+        `budgeted=False`, since the command guard already spent it.
 
         `request_id` is echoed last on the reply: the id the client gave the
         request it is answering, or 0 for a sync the server decided to send
@@ -644,6 +652,9 @@ class GameFlowService:
         if not room.game:
             return
         canvas = room.game.canvas
+        if budgeted and not self._ctx.spend_canvas_sync(sid):
+            await self._emit_canvas_stale(room, sid, "deferred")
+            return
         if holds is not None:
             generation, count, history_hash = holds
             if (
@@ -675,6 +686,31 @@ class GameFlowService:
                 canvas.hash,
                 request_id,
             ),
+            to=sid,
+        )
+
+    async def _emit_canvas_stale(
+        self, room: Room, sid: str, reason: str, *, sequence: int = 0
+    ) -> None:
+        """Tell one socket its canvas needs recovering, once per window (#562).
+
+        `[generation, sequence, reason, retryAfterMs]`. This replaces the full
+        history the server used to push at every refused opening, undo
+        disagreement and stale generation - up to the drawing budget's worth
+        of 460 KB dumps per window from one socket. The client answers through
+        its sync transaction, which is budgeted, carries a verified prefix when
+        it can, and knows when to ask again. A notice inside the window is not
+        sent again; the refusal it would have described is still counted.
+        """
+        if not room.game:
+            return
+        telemetry.note_canvas_recovery(reason)
+        if not self._ctx.allow_canvas_notice(sid):
+            return
+        budget = self._ctx.command_budgets.for_command("request_sync_strokes")
+        await self._sio.emit(
+            "canvas_stale",
+            [room.game.canvas.generation, sequence, reason, int(budget.window_seconds * 1000)],
             to=sid,
         )
 

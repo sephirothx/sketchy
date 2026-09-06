@@ -576,6 +576,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash, requestId)` — `requestId` names the request it answers, `0` for a sync the server decided to send | one socket |
 | `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash, requestId)` — only the actions after a verified prefix (§7); always answers a request, never unsolicited | one socket |
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
+| `canvas_stale` | `[generation, sequence, reason, retryAfterMs]` — this socket's canvas needs recovering: `stale_generation`, `refused_tool`, `unknown_sequence`, `invalid_frame`, or `deferred` (a snapshot the server would have pushed is held until the resync window opens). At most one per socket per window; the client answers through its sync transaction (§7) | one socket |
 | `voted_afk` | `{message}` | the player who was voted AFK |
 | `kicked` | `{reason}` | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
@@ -1014,12 +1015,29 @@ drawer                                     server                       everyone
 
 | Situation | Server response |
 | --- | --- |
-| `generation` is stale | `sync_strokes` (full authoritative history) |
-| `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `sync_strokes` |
+| `generation` is stale | `canvas_stale … stale_generation` |
+| `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `canvas_stale … unknown_sequence` |
 | `sequence` > expected (a gap) | `request_canvas_actions [generation, expected, received]` |
 | A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
-| A refused tool or color | `sync_strokes` |
-| `undo_stroke` whose `revision`/`historyHash` disagree | `sync_strokes` + `{"ok": false, "error": "Canvas history is out of sync"}` |
+| A refused tool or color | `canvas_stale … refused_tool` |
+| A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
+| `undo_stroke` whose generation, revision or `historyHash` disagree | the acknowledgement alone: `canvas_stale_generation` or `canvas_out_of_sync` — the client resyncs through its transaction |
+| A snapshot the server would push (a join) inside a spent resync window | `canvas_stale … deferred` with `retryAfterMs` |
+
+**Why a notice and not the history (#562).** Every one of these used to push the whole
+canvas to that socket, and nothing but the drawing budget bounded it: a hundred refused
+openings in a window were a hundred full dumps, each up to 460 KB on a full canvas —
+50 per second from one socket, and the client had no say in it. Now the server says
+*that* the canvas needs recovering, once per socket per resync window (further refusals
+inside the window are counted but not repeated), and the client asks through its
+transaction — which is budgeted, carries a verified prefix when it can, and knows when
+to ask again. The floor is one full reply per socket per window across **every** path:
+a snapshot the server pushes on a join spends the same window a requested one does, so a
+rejoin inside it is deferred with a notice rather than answered with a dump. From up to
+100 dumps per window to 1: a 100× bound on the abusive draw path, and no path around it.
+`sketchy_canvas_recovery_notices_total{reason}` (§9) counts every occurrence, not only
+the notices sent.
+
 
 `sync_strokes` is emitted as a **tuple**:
 `(binaryHistory, revision, generation, sequence, historyHash, requestId)`.
@@ -1292,7 +1310,7 @@ replaced, not echoed.
 | `GET` | `/api/health` | Liveness, process-only — never fails on a dependency, because a restart cannot fix an outage the replacement comes back into. `{"status":"ok","readiness":…,"paused":…,"loops":{…}}`, where each supervised background loop reports `running`, `consecutive_failures`, `total_failures`, `seconds_since_success`, `seconds_since_failure` |
 | `GET` | `/api/ready` | 200 only when startup finished, no drain has begun, no supervised loop has stopped, and the database answers `SELECT 1` inside 1 s (result cached ~5 s). 503 otherwise, with `detail.reason` naming which of the three it was. A loop that is merely *erroring* stays ready — see `docs/architecture.md` §Health and readiness |
 | `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`). No longer polled by anything — the lobby is pushed this list on its channel (#462) — but kept as a plain public read for operators and tests. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
-| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_socket_packets_rejected_total{reason}` (inbound packets dropped at the envelope check, §3 — `flood`, `attachment_count`, `attachment_size`, `envelope`, `binary_event`, `binary_ack`, `text_in_assembly`, `stale_assembly`, `unexpected_binary`; anything but zero on a healthy deployment is a client that is not ours), `sketchy_socket_transport_total{compression}` (WebSocket upgrades accepted, by the permessage-deflate window they negotiated — `deflate-15` — or `none`; a proxy stripping the extension shows up here first), `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
+| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_canvas_recovery_notices_total{reason}` (every time a socket's canvas needed recovering, by reason — §7; one notice per window is sent, every occurrence counts), `sketchy_socket_packets_rejected_total{reason}` (inbound packets dropped at the envelope check, §3 — `flood`, `attachment_count`, `attachment_size`, `envelope`, `binary_event`, `binary_ack`, `text_in_assembly`, `stale_assembly`, `unexpected_binary`; anything but zero on a healthy deployment is a client that is not ours), `sketchy_socket_transport_total{compression}` (WebSocket upgrades accepted, by the permessage-deflate window they negotiated — `deflate-15` — or `none`; a proxy stripping the extension shows up here first), `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
 
 ### Accounts and sessions — [`backend/app/auth/routes.py`](../backend/app/auth/routes.py)
 
@@ -1532,7 +1550,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (12) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (13) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

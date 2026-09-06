@@ -13,6 +13,7 @@ import {
   onServerCanvasSequence,
   repackDrawFrames,
   requestSessionRebind,
+  staleNoticeAction,
 } from "../lib/canvasRecovery";
 import { CANVAS_SYNC_TIMEOUT_MS, createCanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { currentClientConfig } from "../lib/clientConfig";
@@ -636,8 +637,25 @@ export function useCanvasProtocol(
     socket.on("sync_strokes_tail", onSyncStrokesTail);
     socket.on("canvas_commit", onCanvasCommit);
     socket.on("canvas_undo", onUndoStroke);
+    // One notice per window instead of a history dump (#562): recover
+    // through the transaction, after the delay the server named if any.
+    let staleTimer: number | null = null;
+    const onCanvasStale = (payload: unknown) => {
+      const action = staleNoticeAction(payload, historyRef.current.generation);
+      if (!action) return;
+      if (staleTimer !== null) window.clearTimeout(staleTimer);
+      if (action.delayMs === 0) {
+        requestAuthoritativeSync(action.discardPending);
+        return;
+      }
+      staleTimer = window.setTimeout(() => {
+        staleTimer = null;
+        requestAuthoritativeSync(action.discardPending);
+      }, action.delayMs);
+    };
     socket.on("request_canvas_actions", onRequestCanvasActions);
     socket.on("canvas_reset", onCanvasReset);
+    socket.on("canvas_stale", onCanvasStale);
     socket.on("disconnect", onDisconnect);
     // Through the requester rather than a bare emit: this one is the most
     // likely of all to go unanswered, since the canvas can mount before the
@@ -652,7 +670,9 @@ export function useCanvasProtocol(
       socket.off("canvas_undo", onUndoStroke);
       socket.off("request_canvas_actions", onRequestCanvasActions);
       socket.off("canvas_reset", onCanvasReset);
+      socket.off("canvas_stale", onCanvasStale);
       socket.off("disconnect", onDisconnect);
+      if (staleTimer !== null) window.clearTimeout(staleTimer);
       stopSequenceWatch();
       sender.cancel();
       watch.cancelAll();

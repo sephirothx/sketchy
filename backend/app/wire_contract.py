@@ -123,6 +123,7 @@ TUPLE_EVENTS: dict[str, list[str]] = {
     "sync_strokes": ["binaryHistory", "revision", "generation", "sequence", "historyHash", "requestId"],
     "sync_strokes_tail": ["binaryTail", "baseActionCount", "revision", "generation", "sequence", "historyHash", "requestId"],
     "request_canvas_actions": ["generation", "expectedSequence", "receivedSequence"],
+    "canvas_stale": ["generation", "sequence", "reason", "retryAfterMs"],
 }
 
 #: Events no scan can see: `main.py` hands `("account_suspended", payload)` to a

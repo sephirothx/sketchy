@@ -190,6 +190,27 @@ class HandlerContext:
 
         self.sio.on(command, handler=guarded)
 
+    def spend_canvas_sync(self, sid: str) -> bool:
+        """Spend one full-history reply from this socket's resync window.
+
+        The same window `request_sync_strokes` spends, keyed the same way, so
+        a snapshot the server decides to push (a join) and one the client asks
+        for draw on one allowance: no path is a way around the floor (#562).
+        """
+        budget = self.command_budgets.for_command("request_sync_strokes")
+        key = f"{sid}:{self.command_budgets.class_of('request_sync_strokes')}"
+        return self._command_windows.check(key, budget)
+
+    def allow_canvas_notice(self, sid: str) -> bool:
+        """At most one recovery notice per socket per resync window.
+
+        A burst of refused frames is one fact - this client needs to resync -
+        and one notice says it; the rest of the burst is dropped in silence
+        and counted (#562).
+        """
+        budget = self.command_budgets.for_command("request_sync_strokes")
+        return self._command_windows.check(f"{sid}:canvas_notice", budget)
+
     def clear_command_budget(self, sid: str) -> None:
         """Forget a socket that has gone, so the windows do not outlive it."""
 

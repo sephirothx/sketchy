@@ -288,9 +288,12 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
         [old_generation, 1],
     )
     assert len(room.game.canvas.history) == 0
+    # A frame from the replaced game's generation earns a recovery notice
+    # (the client's transaction fetches the new canvas), never a dump (#562).
     assert any(
-        call.args[0] == "sync_strokes"
+        call.args[0] == "canvas_stale"
         and call.kwargs.get("to") == proposer.sid
+        and call.args[1][2] == "stale_generation"
         for call in sio.emit.await_args_list
     )
     assert any(
