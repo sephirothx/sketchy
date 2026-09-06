@@ -1495,8 +1495,12 @@ N/N−1 support: a mismatch means reload, never a second code path.
 
 What changes at launch: every rule below starts applying, the CI step gains
 `--enforce` (an unbumped contract change fails), and `docs/database.md`'s
-"Pre-v1 note" stops being an option. Delete this section then, rather than
-leaving it to be read as still true.
+"Pre-v1 note" stops being an option. **In the same change, reset `PROTOCOL_VERSION`
+to 1 on both sides** (and the other on-wire `contractVersion` constants likewise):
+the numbers accumulated before launch counted development rebuilds, not deployed
+protocols, and nothing in the wild speaks any of them. Regenerate the contract
+fixture with the reset. Delete this section then, rather than leaving it to be read
+as still true.
 
 **Checklist for any wire change:**
 
