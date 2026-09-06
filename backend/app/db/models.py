@@ -32,6 +32,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from app.db.types import UTCDateTime
 from app.domain_values import (
     BugReportScreenshotStatus,
+    GAME_OUTCOMES,
     GameOutcome,
     RUNTIME_EVENT_TYPES,
     AUTH_TOKEN_PURPOSES,
@@ -267,8 +268,8 @@ class User(Base):
     # SQLite - the dialect has no way to reflect such an index, and skips it
     # rather than emitting a spurious CREATE on every run. Any change to this
     # index therefore has to be written into a migration by hand: autogenerate
-    # will report nothing and mean nothing by it. Revision 9b6f4e2d1a70 pins it
-    # explicitly and the migration suite checks the database definition.
+    # will report nothing and mean nothing by it. The baseline revision creates
+    # it explicitly and the migration suite checks the database definition.
     __table_args__ = (
         Index(
             "ix_users_username_lower",
@@ -1866,6 +1867,7 @@ class GameRecord(Base):
 
     __tablename__ = "game_records"
     __table_args__ = (
+        _values_check("outcome", GAME_OUTCOMES, "ck_game_records_outcome"),
         _values_check(
             "scoring_mode", SCORING_MODES, "ck_game_records_scoring_mode"
         ),
@@ -1946,17 +1948,10 @@ class GameRecord(Base):
     # How it ended, not whether it did. Deliberately not expressed by making
     # finished_at nullable: every query that orders a player's history by it
     # keeps working, and a game that stopped still stopped at a knowable time.
-    #
-    # The check rides on the column rather than sitting in __table_args__,
-    # matching where SQLite already keeps `prompt_source_mode`'s. A table-level
-    # one could only be added by rebuilding game_records, and rebuilding it
-    # cascades every child row away.
+    # Its CHECK sits in __table_args__ with the others: autogenerate renders
+    # table-level constraints and silently drops column-level ones (#557).
     outcome: Mapped[str] = mapped_column(
         String(16),
-        CheckConstraint(
-            "outcome IN ('finished', 'abandoned', 'shutdown')",
-            name="ck_game_records_outcome",
-        ),
         default=GameOutcome.FINISHED.value,
         server_default=text("'finished'"),
         nullable=False,

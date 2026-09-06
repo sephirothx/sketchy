@@ -1262,6 +1262,25 @@ async def test_init_db_runs_alembic_migrations(tmp_path):
         await engine.dispose()
 
 
+async def test_a_database_built_by_a_retired_revision_is_refused_with_the_rebuild(tmp_path):
+    """The chain that built pre-baseline databases is gone (#557). Alembic
+    would treat the unknown revision as nothing and trip over the first table
+    that already exists; startup says what happened and what to do instead."""
+    from app.db import DatabaseRevisionError, init_db, upgrade_database, verify_database_head
+
+    db_file = tmp_path / "retired-revision.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_file}")
+    try:
+        await upgrade_database(engine)
+        async with engine.begin() as conn:
+            await conn.execute(text("UPDATE alembic_version SET version_num = 'e5f8d2a6b703'"))
+        for entry in (init_db, upgrade_database, verify_database_head):
+            with pytest.raises(DatabaseRevisionError, match="e5f8d2a6b703.*Delete the SQLite file"):
+                await entry(engine)
+    finally:
+        await engine.dispose()
+
+
 async def test_non_sqlite_startup_verifies_without_migrating(monkeypatch):
     from app import db
 
@@ -1298,19 +1317,16 @@ async def test_database_head_verification_reports_stale_schema(tmp_path):
 async def test_migrations_match_the_models(tmp_path):
     """A fresh upgrade must leave nothing for autogenerate to add.
 
-    The historical migrations were squashed into a foundation before data
-    existed. Later revisions now form a replayable chain; this focused check
-    still proves a fresh SQLite upgrade describes the models. Drift here means
-    a model changed without a migration, and the next deployment gets a schema
-    the code does not expect.
+    The schema is one baseline revision (#557); this focused check proves a
+    fresh SQLite upgrade of it describes the models. Drift here means a model
+    changed without a migration, and the next deployment gets a schema the
+    code does not expect.
 
     Note what this cannot see: the username and email expression indexes are
-    invisible to autogenerate on SQLite, so dropping either from a migration
-    would not fail this test. See `User.__table_args__`. SQLite also fails to
-    reflect ON DELETE options for references added inline with ADD COLUMN; the
-    migration replay suite asserts their actual PRAGMA values directly. That
-    suite also exercises the trigger equivalent of the cross-column prompt
-    identity check that SQLite cannot add without rebuilding the parent table.
+    invisible to autogenerate on SQLite, so dropping either from the baseline
+    would not fail this test - the migration suite pins their definition by
+    name instead. It also cannot see a column-level CHECK that the baseline
+    lacks, which is why every check lives in `__table_args__`.
     """
     from alembic import command as alembic_command
     from alembic.autogenerate import compare_metadata
@@ -1362,37 +1378,6 @@ async def test_migrations_match_the_models(tmp_path):
     finally:
         await engine.dispose()
 
-    inline_reference_columns = {
-        # SQLite does not reflect ON DELETE for a reference added inline with
-        # ADD COLUMN. The migration replay suite asserts the PRAGMA directly.
-        ("user_bans", "source_report_id"),
-        ("turn_records", "prompt_version_id"),
-        ("turn_records", "drawer_participant_id"),
-        ("turn_guesses", "participant_id"),
-        ("turn_guesses", "outcome_id"),
-    }
-    differences = [
-        difference
-        for difference in differences
-        if not (
-            (
-                difference[0] in {"add_fk", "remove_fk"}
-                and (
-                    difference[1].table.name,
-                    next(iter(difference[1].column_keys)),
-                )
-                in inline_reference_columns
-            )
-                or (
-                    difference[0] == "add_constraint"
-                    and difference[1].name
-                    in {
-                        "ck_turn_records_prompt_identity",
-                        "ck_game_records_score_ledger_version",
-                    }
-                )
-        )
-    ]
     assert differences == [], f"models and migrations have drifted: {differences}"
 
 

@@ -33,7 +33,7 @@ claim that an arbitrary host will sustain it.
 | # | Requirement |
 | --- | --- |
 | **R-PLAT-01** | The system MUST run with **zero configuration**, defaulting to an embedded SQLite database at `./sketchy.db` — in development and test only; see R-PLAT-11. [`db/__init__.py:23`](../backend/app/db/__init__.py) |
-| **R-PLAT-02** | The system MUST also support PostgreSQL via `DATABASE_URL`, with identical behaviour. Cross-dialect equivalence is proven by replaying the migration chain both directions on both engines. [`tests/test_migrations.py`](../backend/tests/test_migrations.py) |
+| **R-PLAT-02** | The system MUST also support PostgreSQL via `DATABASE_URL`, with identical behaviour. Cross-dialect equivalence is proven by building, removing and rebuilding the baseline revision on both engines. [`tests/test_migrations.py`](../backend/tests/test_migrations.py) |
 | **R-PLAT-03** | The whole game (UI + REST + WebSocket) MUST be servable from **one port** when `frontend/dist` exists. [`main.py:264`](../backend/app/main.py) |
 | **R-PLAT-04** | The backend MUST refuse an interpreter older than Python 3.14, and the frontend requires Node ≥ 22.12. [`deployment.py`](../backend/app/deployment.py), [`frontend/package.json`](../frontend/package.json) |
 | **R-PLAT-05** | Exactly **one application worker** is supported. Startup MUST reject `WEB_CONCURRENCY`/`UVICORN_WORKERS` values other than `1`. Live rooms, games, canvases, timers, Socket.IO sessions, and room-code lookup are process-owned. |

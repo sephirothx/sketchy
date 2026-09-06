@@ -1235,7 +1235,7 @@ older build is still found and still becomes disconnected.
 | Handler integration | `backend/tests/handlers/` | One asyncio suite per Socket.IO domain |
 | Payload/protocol | `test_payloads.py`, `test_canvas_history.py`, `test_live_drawing.py` | The exact wire shapes and their refusals |
 | Wire contract | `test_wire_contract.py` | Both sides still agree on every name |
-| Database | `test_db_models.py`, `test_migrations.py`, `test_repositories.py`, and every suite on `tests/dbfixtures.py` | Schema, the full migration chain both directions, drift, and the repositories and lifecycle suites against PostgreSQL |
+| Database | `test_db_models.py`, `test_migrations.py`, `test_repositories.py`, and every suite on `tests/dbfixtures.py` | Schema, the baseline revision down and up on both engines, drift, and the repositories and lifecycle suites against PostgreSQL |
 | E2E | `backend/tests/e2e/` | Real multi-browser Playwright sessions across Chromium and Firefox |
 | Benchmarks | `benchmarks/`, `frontend/benchmarks/` | Diagnostic baselines, deliberately **not** CI thresholds |
 | Repository hygiene | `backend/tests/test_repo_artifacts.py` | No database, env file, or private key is tracked - by name or by bytes |

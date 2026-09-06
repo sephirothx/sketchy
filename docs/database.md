@@ -7,8 +7,9 @@ Companion documents: [`architecture.md`](architecture.md) ·
 [`../GLOSSARY.md`](../GLOSSARY.md)
 
 Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py).
-Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) (61 revisions,
-starting at `e7c9d4bc813e_initial_schema_…`).
+Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — one baseline
+revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
+into it (#557, §13).
 
 To regenerate an authoritative dump of this schema:
 
@@ -59,8 +60,7 @@ raise on a naive value, and reads are normalized to aware UTC. SQLite and Postgr
 therefore behave identically and application code never infers a local timezone.
 
 Write timestamps are `NOT NULL` everywhere: the schema was tightened before the
-first deployment, so no row predates timestamp coverage (revision
-`p8c3a6d9e147` refuses to upgrade a database that still holds one — see §13).
+first deployment, so no row predates timestamp coverage.
 
 ### Enum discipline
 
@@ -1551,9 +1551,9 @@ connections, and checks `PRAGMA foreign_keys` on every connection it opens. A ra
 deletion tests against constraints the database never applied — #612 found two
 deletion paths that only failed once enforcement was real.
 
-CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete migration
-chain **down and up** on both PostgreSQL and SQLite, checks schema drift and the
-hand-written username index, then runs the whole backend suite against the migrated
+CI upgrades a fresh PostgreSQL 17 database with Alembic, removes the baseline and
+rebuilds it **down and up** on both PostgreSQL and SQLite, checks schema drift and the
+hand-written expression indexes, then runs the whole backend suite against the migrated
 schema. A SQLite pass proves integrity, not concurrency: READ COMMITTED interleavings
 and row locks are only ever exercised on that job.
 
@@ -1606,14 +1606,26 @@ written down for the wire in `docs/wire-protocol.md` §11.
 Delete this paragraph at launch rather than leaving it to be read as still
 true.
 
+### The baseline
 
-The UUID change **rewrote** the pre-v1 initial migration rather than converting old text
-keys. Databases created before that baseline must be rebuilt; preserve no production
-data on a preproduction schema.
+The 70 revisions written before launch were folded into one,
+[`f0a1b2c3d4e5_baseline_schema.py`](../backend/alembic/versions/f0a1b2c3d4e5_baseline_schema.py),
+under exactly that freedom (#557): no deployment held rows written under any of them,
+so their backfills, refusals and legacy accommodations had nothing left to protect, and
+an empty install now runs one revision instead of seventy. The file was generated from
+the models and then finished by hand where autogenerate is blind — the two expression
+indexes on `users` that SQLite cannot reflect, the append-only trigger on
+`score_events`, and dialect-neutral defaults in place of the SQLite-compiled ones — and
+it does not import the models: a historical revision stays what it was when it ran.
 
-Revision `p8c3a6d9e147` applied the same policy to the legacy-accommodation layer:
-nullable-only-for-legacy columns became `NOT NULL`, the `legacy_unknown` enum members
-were removed, and the migration **refuses** to upgrade a database still holding
-pre-feature rows — filling a null write time or renaming a sentinel would fabricate
-exactly the metadata those accommodations existed to avoid fabricating. Rebuild such a
-database instead.
+**A database built by the old chain cannot be upgraded**, and startup says so: a
+revision this checkout does not know is refused with the instruction to rebuild
+(`DatabaseRevisionError`, from both the SQLite auto-migrate and `python -m
+app.db.migrate`) rather than handed to Alembic to trip over the first table that
+already exists. Delete `sketchy.db`, or drop and recreate the PostgreSQL database, and
+start again; it held development data only. What the fold saved on an empty database,
+measured on 2026-09-06 through `python -m app.db.migrate` with interpreter start
+included: SQLite 1.40 s → 0.34 s, PostgreSQL 17 0.64 s → 0.42 s.
+
+Squashing is a pre-launch tool. Once anything is deployed, a revision that a database
+has run is history that stays; the same paragraph above says when that starts.

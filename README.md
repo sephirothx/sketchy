@@ -440,9 +440,11 @@ are string enums backed by portable database `CHECK` constraints. Extending a
 set requires one coordinated code, migration, contract, README, and glossary
 review.
 
-The UUID change rewrites the pre-v1 initial migration rather than converting
-old text keys. Databases created before this baseline must be rebuilt; preserve
-no production data on a preproduction schema.
+The migration chain was folded into one baseline revision before launch. A
+database built by the old chain is refused at startup with the instruction to
+rebuild: delete `sketchy.db`, or drop and recreate the PostgreSQL database. It
+held development data only; preserve no production data on a preproduction
+schema.
 
 Set `SKETCHY_ENV` to say which kind of deployment this is: `development` (the
 default), `test`, or `production`. Anything else fails startup rather than
@@ -569,9 +571,9 @@ process. These deployment settings can be tuned without code changes:
 | `ROOM_JOIN_LIMIT` | `20` | Seating joins per socket per minute; confirmations are free |
 | `ROOM_TAKEOVER_LIMIT` | `20` | Rebinds of one seat to a new socket, per minute |
 
-CI upgrades a fresh PostgreSQL 17 database with Alembic, replays the complete
-migration chain down and up on PostgreSQL and SQLite, checks schema drift and
-the hand-written username index, then runs the whole backend suite against the
+CI upgrades a fresh PostgreSQL 17 database with Alembic, removes the baseline
+revision and rebuilds it on PostgreSQL and SQLite, checks schema drift and the
+hand-written expression indexes, then runs the whole backend suite against the
 migrated schema. To reproduce the PostgreSQL checks locally, point both
 variables at a disposable test database:
 
@@ -1404,8 +1406,8 @@ It is a baseline for any table storage decision, not a threshold.
 
 The foreign-key delete benchmark seeds 20,000 moderated prompt versions and
 20,000 issued warnings, then explains the deletes that make PostgreSQL walk
-those references and prints each trigger's time. Run at the revision before
-`b2c5a9d3e470` and at head on 2026-09-06, deleting 500 guests that referenced
+those references and prints each trigger's time. Run before and after the
+foreign-key indexes landed (#551) on 2026-09-06, deleting 500 guests that referenced
 nothing went from 785 ms to 40 ms: the two `SET NULL` triggers on the actor
 columns fell from 489 ms and 253 ms (a scan of the child table per deleted
 row) to 3.8 ms and 3.2 ms. Deleting the moderator all 40,000 rows point at

@@ -13,6 +13,8 @@ from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
+from alembic.script.revision import ResolutionError
+from alembic.util.exc import CommandError
 from sqlalchemy import event, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SAWarning
@@ -307,9 +309,10 @@ def _run_alembic_upgrade_sync(
     connection: Connection, alembic_cfg: AlembicConfig
 ) -> None:
     alembic_cfg.attributes["connection"] = connection
-    # SQLite cannot reflect the one hand-written expression index. Revision
-    # 9b6f4e2d1a70 and the migration suite pin its exact definition directly,
-    # so suppress only this known warning while batch migrations reflect FKs.
+    # SQLite cannot reflect the two hand-written expression indexes. The
+    # baseline revision and the migration suite pin their exact definition
+    # directly, so suppress only this known warning while batch migrations
+    # reflect FKs.
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
@@ -323,8 +326,22 @@ def _database_revisions_sync(
     connection: Connection, alembic_cfg: AlembicConfig
 ) -> tuple[set[str], set[str]]:
     current = set(MigrationContext.configure(connection).get_current_heads())
-    expected = set(ScriptDirectory.from_config(alembic_cfg).get_heads())
-    return current, expected
+    script = ScriptDirectory.from_config(alembic_cfg)
+    unknown = []
+    for revision in sorted(current):
+        try:
+            script.get_revision(revision)
+        except (ResolutionError, CommandError):
+            unknown.append(revision)
+    if unknown:
+        raise DatabaseRevisionError(
+            f"Database is at revision {unknown}, which this checkout does not know. "
+            "The migration chain that built it was folded into one baseline before "
+            "launch (#557), so it cannot be upgraded: it holds development data only. "
+            "Delete the SQLite file (or drop and recreate the PostgreSQL database) "
+            "and start again."
+        )
+    return current, set(script.get_heads())
 
 
 def assert_references_intact(connection: Any) -> None:
@@ -357,6 +374,10 @@ async def upgrade_database(engine: AsyncEngine | None = None) -> None:
                 text("SELECT pg_advisory_xact_lock(:lock_id)"),
                 {"lock_id": POSTGRES_MIGRATION_LOCK_ID},
             )
+        # A database at a revision this checkout never heard of is refused
+        # with the rebuild instruction, not handed to Alembic to trip over
+        # "table already exists" halfway through the baseline.
+        await conn.run_sync(_database_revisions_sync, alembic_cfg)
         await conn.run_sync(_run_alembic_upgrade_sync, alembic_cfg)
 
 

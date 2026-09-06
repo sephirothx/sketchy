@@ -95,7 +95,11 @@ async def run_async_migrations() -> None:
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
+    # begin(), not connect(): SQLite's DDL is "non-transactional" to Alembic,
+    # so nothing inside commits, and a connection that autobegan would roll
+    # the whole run back on the way out - leaving a file with a handful of
+    # tables and no revision row.
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
