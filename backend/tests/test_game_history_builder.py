@@ -262,11 +262,16 @@ def test_actual_pool_distinguishes_custom_curated_and_fallback_offers():
 
 
 def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
+    # Three guessers, so the count the record carries is a sum of rows, not
+    # a number handed through: the repository refuses a turn whose count and
+    # rows disagree, and the builder counts what it writes.
     _, room, players, game = build(
         ("Ann", "user-ann", 300, False),
         ("Bob", "user-bob", 100, False),
+        ("Cal", "user-cal", 80, False),
+        ("Dee", "user-dee", 60, False),
     )
-    ann, bob = players["Ann"].id, players["Bob"].id
+    ann, bob, cal, dee = (players[name].id for name in ("Ann", "Bob", "Cal", "Dee"))
     game.completed_turns = [
         CompletedTurnStats(
             round_number=1,
@@ -299,13 +304,21 @@ def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():
                     hints_used=2,
                     points_spent_on_hints=36,
                 ),
+                TurnParticipantOutcomeRecord(
+                    token=cal, eligible=True, eligibility_reason="eligible",
+                    outcome="incorrect", terminal_state="active", wrong_guess_count=2, near_miss_count=2,
+                ),
+                TurnParticipantOutcomeRecord(
+                    token=dee, eligible=True, eligibility_reason="eligible",
+                    outcome="no_attempt", terminal_state="disconnected",
+                ),
             ),
             prompt_auto_picked=True,
             stroke_count=17,
             end_reason="timeout",
             wrong_guess_count=6,
             near_miss_count=2,
-            present_tokens=(ann, bob),
+            present_tokens=(ann, bob, cal),
         )
     ]
 
@@ -551,3 +564,43 @@ def test_an_abandoned_game_keeps_its_reactions():
     )
 
     assert [r.emoji for r in history.reactions] == ["laugh"]
+
+
+def test_an_account_that_held_two_eligible_seats_in_one_turn_is_one_guesser():
+    """Leaving and re-entering a room mid-turn gives one account two runtime
+    seats, both eligible. The turn counted both; the outcome rows merge them
+    into one; and the repository refused the write for the disagreement, so
+    the game's history was lost. The stored count must be what the rows say."""
+    room_manager, room, players, game = build(
+        ("Ann", "user-ann", 300, False),
+        ("Bob", "user-bob", 100, False),
+    )
+    ann, old_bob = players["Ann"], players["Bob"]
+    room_manager.remove_player(room, old_bob.id)
+    new_bob = room_manager.add_player(room, "Bob", user_id="user-bob")
+    game.add_player_to_rotation(new_bob.id)
+    completed = turn(ann.id, guesses=((new_bob.id, 120, 9.5),))
+    completed = replace(
+        completed,
+        # What the live game records at turn end: the departed seat was
+        # eligible when the turn started, the new one on arrival.
+        total_guesser_count=2,
+        participant_outcomes=(
+            TurnParticipantOutcomeRecord(
+                token=old_bob.id, eligible=True, eligibility_reason="eligible",
+                outcome="no_attempt", terminal_state="left",
+            ),
+            TurnParticipantOutcomeRecord(
+                token=new_bob.id, eligible=True, eligibility_reason="eligible",
+                outcome="correct", terminal_state="active", correct_guess_time_seconds=9.5,
+            ),
+        ),
+    )
+    game.completed_turns = [completed]
+
+    history = build_game_history(room, game, finished_at=FINISHED_AT)
+
+    recorded = history.turns[0]
+    assert len(recorded.participant_outcomes) == 1, "one account, one row"
+    assert recorded.participant_outcomes[0].eligible is True
+    assert recorded.guesser_count == sum(o.eligible for o in recorded.participant_outcomes) == 1
