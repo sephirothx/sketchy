@@ -1045,10 +1045,14 @@ openings in a window were a hundred full dumps, each up to 460 KB on a full canv
 *that* the canvas needs recovering, once per socket per resync window (further refusals
 inside the window are counted but not repeated), and the client asks through its
 transaction — which is budgeted, carries a verified prefix when it can, and knows when
-to ask again. The floor is one full reply per socket per window across **every** path:
-a snapshot the server pushes on a join spends the same window a requested one does, so a
-rejoin inside it is deferred with a notice rather than answered with a dump. From up to
-100 dumps per window to 1: a 100× bound on the abusive draw path, and no path around it.
+to ask again. The floor is **one pushed and one requested** full reply per socket per
+window, accounted apart: a snapshot the server pushes on a join is one per window, so a
+rejoin inside it is deferred with a notice rather than answered with a dump; a request is
+one per window through its budget. Apart, because on a fresh join the push leaves before
+the join acknowledgement — before the canvas has mounted to receive it — and the mount's
+own request is what actually loads the drawing; charging both to one allowance made every
+entry into a running game wait out the window (4 s measured, #654). From up to 100 dumps
+per window to 2: a 50× bound on the abusive draw path, and no path around it.
 `sketchy_canvas_recovery_notices_total{reason}` (§9) counts every occurrence, not only
 the notices sent.
 
@@ -1081,8 +1085,9 @@ canvas had no next trigger.
   server truth if they do not fit.
 - **Acknowledged, and retried.** The request is acknowledged: `{ok: true}` when the
   reply is on its way, `not_in_game` with `retryAfterMs` (2 s) between turns, `too_fast`
-  with the resync budget's window. A refused or lost request (no reply inside 10 s) is
-  retried after max(`retryAfterMs`, 2 s), then 4 s, then 8 s. When those are gone the
+  with the resync budget's window. A refused request is retried after exactly the
+  `retryAfterMs` it was given — that is how long the server's window has left; a lost
+  one (no reply inside 10 s) after 2 s, then 4 s, then 8 s. When those are gone the
   client does not poll on: it hands the session to the reconnect hook, which restarts
   the transport — the player sees the existing reconnecting state, the server pushes a
   fresh snapshot on rejoin, and every counter resets. Unanswered syncs usually mean the

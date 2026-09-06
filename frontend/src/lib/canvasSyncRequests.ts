@@ -96,7 +96,9 @@ export function createCanvasSyncRequester(
       env.exhausted();
       return;
     }
-    const wait = Math.max(delayMs, CANVAS_SYNC_RETRIES_MS[attempt]);
+    // A delay the server named is exact - it is how long its window has
+    // left; the backoff is only for a request that got no answer at all.
+    const wait = delayMs > 0 ? delayMs : CANVAS_SYNC_RETRIES_MS[attempt];
     outstanding = { id: 0, claim: null, attempt };
     timer = env.setTimeout(() => {
       timer = null;
