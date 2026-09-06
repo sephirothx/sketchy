@@ -154,7 +154,11 @@ Persisting a drawing makes its encoding a stored format, which has to stay
 readable by every future decoder rather than only by the client on the other
 end of an open connection. `app/canvas_storage.py` holds that commitment: a
 registry keyed on the magic and version the blob declares, whose entries are
-never removed and whose decoders answer in the current wire format. Clients
+never removed and whose decoders answer in the current wire format. A finished
+drawing is written delta-recoded and deflated (a stroke is small movements, so
+a realistic drawing stores about 4.5× smaller), read back under bounds taken
+from what the blob claims, and a frame too small to earn that is stored as it
+travels. Clients
 therefore never see a stored format at all, and the wire format stays free to
 change without rewriting a single stored row. Because a database column has no
 integrity check of its own, an operator command walks **every** stored drawing
@@ -1345,8 +1349,12 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
 
-# What a storage-only compressed drawing format would save (#547)
+# The stored drawing format, frame by frame: bytes, ratio, p95 encode/decode (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py
+
+# What it saves in PostgreSQL per game: heap, TOAST, WAL, and one read (disposable database only)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50
 backend/.venv/bin/python benchmarks/live_drawing.py
 backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 

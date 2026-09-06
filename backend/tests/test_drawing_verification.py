@@ -257,3 +257,42 @@ def test_a_cursor_round_trips_through_its_printed_form():
         turn_id=generate_uuid(),
     )
     assert DrawingCursor.parse(str(cursor)) == cursor
+
+
+async def test_a_store_holding_both_formats_verifies_each_with_its_own_decoder():
+    """SKCH v1 rows predate #547 and stay; SKCD v1 is what is written now. A
+    walk over both checks each against its own decoder, and a compressed row
+    whose metadata claims the old format is a mismatch, not a decode."""
+    from app.canvas_storage import (
+        STORED_DELTA_MAGIC,
+        prepare_stored_drawing,
+        stored_drawing_checksum,
+    )
+    from tests.test_canvas_storage import _stroke_history
+
+    factory, engine = await create_test_db()
+    try:
+        old_format, compressed, mislabelled = await _store(factory, 3)
+        stroke_frame = _stroke_history(11).binary_payload()
+        async with factory() as session:
+            async with session.begin():
+                # The writer stores a frame this small as it travels (SKCH).
+                row = await session.get(TurnDrawing, old_format)
+                assert row.format_magic == "SKCH"
+                for turn_id in (compressed, mislabelled):
+                    row = await session.get(TurnDrawing, turn_id)
+                    blob, magic, version, checksum = prepare_stored_drawing(stroke_frame)
+                    assert magic == STORED_DELTA_MAGIC
+                    row.payload, row.byte_size, row.checksum_sha256 = blob, len(blob), checksum
+                    row.format_magic, row.format_version = magic.decode(), version
+                row = await session.get(TurnDrawing, mislabelled)
+                row.format_magic = "SKCH"
+                assert stored_drawing_checksum(row.payload) == row.checksum_sha256
+
+        result = await verify_stored_drawings(factory)
+
+        assert result.complete and result.checked == 3
+        assert result.mismatched == [str(mislabelled)]
+        assert not result.corrupt and not result.malformed and not result.unreadable
+    finally:
+        await engine.dispose()

@@ -1061,7 +1061,7 @@ class PlayerReportDrawingEvidence(Base):
     drawer's account is deleted. What a moderator has to judge is what the
     reporter saw, so that is what is kept, for as long as the report is.
 
-    The bytes are the same SKCH frame ``turn_drawings`` stores, under the same
+    The bytes are stored the way ``turn_drawings`` stores them, under the same
     ``canvas_storage`` rules: the format is named in the row so a decoder can
     be found without parsing, and the checksum is verified on every read.
     """
@@ -2268,9 +2268,11 @@ class TurnRecord(Base):
 class TurnDrawing(Base):
     """The drawing made during one turn, kept for as long as its game.
 
-    The blob is the exact frame the canvas produced, stored verbatim; the format
-    it declares in its own first bytes decides which decoder reads it back.
-    ``app/canvas_storage.py`` holds the rules that keep that readable.
+    The blob is the frame the canvas produced in a storage-only encoding (or
+    verbatim, when it is too small to be worth encoding); the format it
+    declares in its own first bytes decides which decoder reads it back.
+    ``app/canvas_storage.py`` holds the rules that keep that readable, and
+    ``byte_size`` and ``checksum_sha256`` describe the stored bytes.
     """
 
     __tablename__ = "turn_drawings"

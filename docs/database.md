@@ -697,7 +697,7 @@ carries no foreign key for the reason `room_messages.turn_id` does not: the repo
 is filed while the game is still being played, and a game abandoned before it ends
 never writes a `turn_records` row.
 
-The bytes are the same `SKCH` frame `turn_drawings` stores, under the same
+The bytes are stored the way `turn_drawings` stores them, under the same
 [`canvas_storage`](../backend/app/canvas_storage.py) rules: validated on ingest,
 the format named in the row so a decoder can be found without parsing, the checksum
 verified on every read, and `byte_size` under the same 8 MiB structural bound. The
@@ -953,7 +953,11 @@ Every drawing from a completed game is kept **for as long as that game, in the s
 transaction that records it**. The stored bytes are the canvas frame itself — the
 actions, not a picture of them — so a drawing can be replayed and redrawn at any size,
 and a PNG stays something the browser produces on demand rather than something the
-server keeps. A turn whose bytes the recap had to drop for budget is recorded as
+server keeps. Since #547 the frame is written delta-recoded and deflated (`SKCD` v1,
+about 4.5× smaller on a realistic drawing; a frame too small to earn deflate's overhead
+stays a verbatim `SKCH` v1), and `byte_size` and `checksum_sha256` describe those
+stored bytes. The format rules, the read-side bounds and the frozen golden blobs are in
+[wire-protocol.md](wire-protocol.md) under *Stored format*. A turn whose bytes the recap had to drop for budget is recorded as
 `unavailable` rather than **omitted**. Deleting an account erases the drawings that
 account made while leaving the row saying so.
 

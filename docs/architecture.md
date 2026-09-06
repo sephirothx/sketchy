@@ -179,7 +179,7 @@ Three modules with three different commitments, and they must not be conflated:
 | --- | --- |
 | [`live_drawing.py`](../backend/app/live_drawing.py) | The **wire** format for one live action. Both ends deploy together, so a version bump is coordinated by definition. |
 | [`canvas_history.py`](../backend/app/canvas_history.py) | The **in-memory** packed representation plus the versioned replay envelope (`SKCH`). |
-| [`canvas_storage.py`](../backend/app/canvas_storage.py) | The **durable** format policy. Every format ever written keeps its decoder forever; decoders answer in the current wire format. |
+| [`canvas_storage.py`](../backend/app/canvas_storage.py) | The **durable** format policy and the delta-plus-deflate stored encoding (#547). Every format ever written keeps its decoder forever; decoders answer in the current wire format. |
 
 `canvas_session.py` holds the per-turn protocol state: generation, sequence,
 revision, rolling history hash, the acknowledgement window, and the replay-work

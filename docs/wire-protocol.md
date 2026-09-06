@@ -1041,10 +1041,28 @@ Two rules, and only two:
    learn that a stored format exists, and the wire format stays free to change without
    migrating a single row.
 
-Today a stored drawing is a byte-identical `SKCH` frame, so its decoder is the identity
-function. The `(magic, version)` pair at offset 0 is the discriminator, which is why no
-envelope is needed to tell formats apart. Because a database column has no integrity
-check of its own, an operator command decodes stored drawings in bounded batches:
+Two formats exist. `SKCH` v1 is the wire frame stored byte for byte, the only format
+written before #547 and still what a frame too small to be worth encoding is stored as;
+its decoder is the identity function. `SKCD` v1 is what a finished drawing is written as
+now: the same frame with every path's points recoded as deltas from the previous point,
+then deflated, behind a header that declares the frame's inflated length. A stroke is a
+run of small movements, so the deltas are the small repeated numbers deflate is good at;
+the realistic benchmark frame stores 4.5× smaller (34.6 KB → 7.6 KB), where deflate
+over the raw frame reaches 1.4×. The `(magic, version)` pair at offset 0 is the
+discriminator, which is why no envelope is needed to tell formats apart.
+
+Reading a compressed blob is bounded by what it claims, before any of it is trusted: a
+declared length above the largest frame the wire format can express is refused before
+allocation; the stream is inflated to at most that length and must end there exactly, with
+nothing trailing; and the frame is walked under the wire format's own action and point
+caps while the deltas are undone. A blob that lies about any of it is reported corrupt.
+The row's checksum and `byte_size` describe the **stored** bytes, so a read verifies what
+the database holds before decoding; the drawing route's `ETag` is that checksum, which is
+a valid validator because a stored blob decodes to one frame. The decode-only golden
+blobs live in [`fixtures/stored_drawings_v1.json`](../fixtures/stored_drawings_v1.json):
+entries may be added, never removed or changed. Because a database column has no
+integrity check of its own, an operator command decodes stored drawings in bounded
+batches:
 
 ```bash
 cd backend && .venv/bin/python -m app.services.drawing_storage
