@@ -12,6 +12,7 @@ import uvicorn
 from app.deployment import shutdown_drain_seconds
 from app.logging_config import JSON_FORMAT, configure_logging, log_format
 from app.main import shutdown_coordinator, sio
+from app.ws_transport import WS_PROTOCOL
 
 
 # What an operator or a supervisor sends to stop the process. A repeat of any
@@ -89,6 +90,9 @@ def run() -> None:
         access_log=not structured,
         proxy_headers=_boolean_environment("PROXY_HEADERS", True),
         forwarded_allow_ips=os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1"),
+        # Named, not "auto": which library answers a WebSocket decides the
+        # deflate window, and auto decided it by what happened to be installed.
+        ws=WS_PROTOCOL,
         # This bound begins after the application drain. Leave enough time for
         # the ordinary 10-second atomic finished-history write to settle.
         timeout_graceful_shutdown=15,

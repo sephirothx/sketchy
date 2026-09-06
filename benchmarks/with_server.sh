@@ -43,8 +43,9 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 log "Starting benchmark server on $BASE_URL"
-(cd "$BACKEND_DIR" && exec .venv/bin/uvicorn app.main:app \
-  --host 127.0.0.1 --port "$PORT" --log-level warning) &
+# The production runner, so the benchmark measures the transport it names.
+(cd "$BACKEND_DIR" && HOST=127.0.0.1 PORT="$PORT" LOG_LEVEL=warning \
+  exec .venv/bin/python -m app.server) &
 SERVER_PID=$!
 
 cleanup() {

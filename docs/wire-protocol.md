@@ -28,7 +28,8 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Authentication | The HttpOnly `sketchy_session` cookie, read from `HTTP_COOKIE` at handshake |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
-| Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket |
+| WebSocket implementation | **wsproto**, named by [`backend/app/server.py`](../backend/app/server.py) through [`backend/app/ws_transport.py`](../backend/app/ws_transport.py) and pinned in `requirements.txt` — never uvicorn's `auto`, which picked by what happened to be installed (#561) |
+| Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket: zlib level 6, memLevel 8, a **15-bit (32 KB) server window** the server states in its response whether or not the browser asked (`SERVER_MAX_WINDOW_BITS`); each accepted connection is counted under what it actually negotiated (`sketchy_socket_transport_total{compression}`) |
 
 The client does **not** auto-connect. The handshake reads the session cookie exactly
 once, and on a first visit that cookie does not exist until `GET /api/auth/me` has
@@ -36,12 +37,12 @@ provisioned the account, so `App.tsx` connects only after identity has settled.
 
 ### Compression, and what it means for every size in this document
 
-uvicorn's wsproto transport offers `PerMessageDeflate()` and `ws_per_message_deflate`
-defaults to true, so the handshake really does carry
-`Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits=15`. **Every byte
-count anywhere in this document is therefore an input to the wire cost, not the wire
-cost.** Three consequences worth stating, because each one has already reversed a
-plausible-looking optimization:
+The server answers a browser's `permessage-deflate; client_max_window_bits` with
+`permessage-deflate; client_max_window_bits=15; server_max_window_bits=15`
+([`backend/app/ws_transport.py`](../backend/app/ws_transport.py)), and a client that caps
+the server window lower gets the smaller of the two. **Every byte count anywhere in this
+document is therefore an input to the wire cost, not the wire cost.** Three consequences
+worth stating, because each one has already reversed a plausible-looking optimization:
 
 - **Repetition is nearly free.** With context takeover a socket's compressor keeps its
   window across messages, so a payload that resembles the previous one encodes largely
@@ -72,6 +73,31 @@ payload in isolation. Two more rules, each learned from a wrong number (#563):
   the `Z_SYNC_FLUSH`, and permessage-deflate removes those four bytes before framing
   (RFC 7692 §7.2.1). A model that keeps them overstates every message by 4 B — a
   quarter of a compressed point frame.
+
+**Why 15 bits and memLevel 8, and why they are constants.** The window is the
+compressor's memory of what it already sent on that connection; the memLevel sizes the
+hash table it finds matches with. [`benchmarks/deflate_windows.py`](../benchmarks/deflate_windows.py)
+runs one viewer's session — join, late-join sync, two turns of recorded drawing with room
+churn and chat between strokes — through each candidate, and measures the resident memory
+of live zlib contexts rather than trusting a formula:
+
+| window, memLevel | session bytes | of which `room_state` | deflate CPU | per connection | at 400 seats |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 12 bits (4 KB), 8 | 61.2 KB | 12.2 KB | 3.8 ms | 126 KB | 49 MB |
+| 13 bits (8 KB), 8 | 52.2 KB | 4.5 KB | 3.8 ms | 142 KB | 56 MB |
+| **15 bits (32 KB), 8** | **49.8 KB** | **2.7 KB** | **4.0 ms** | **159 KB** | **62 MB** |
+| 15 bits, 5 | 50.2 KB | 2.7 KB | 5.3 ms | 78 KB | 30 MB |
+| 15 bits, no context takeover | 84.1 KB | 14.1 KB | 6.3 ms | — | — |
+| none | 140.6 KB | 60.5 KB | — | — | — |
+
+A 4 KB window is smaller than a 16-seat `room_state` (4.6 KB), so every broadcast is
+cold again and costs 4.5× the 32 KB figure; and the window is not where the memory
+goes — the memLevel-8 hash table is 128 KB of the 159 — so shrinking it buys little. The
+memLevel is the real memory lever, worth half the state for +1% bytes and +30% deflate
+CPU; at 62 MB for a full server against a 1.5 GB resident-memory alert it is not a trade
+worth making yet, and #461's load run is where to revisit it. Both are constants rather
+than settings because a value nobody has measured is not one an operator can choose
+well.
 
 The server's own counters (`sketchy_socket_bytes_{in,out}_total`, §9) sit **before** all
 of this: they count Engine.IO packet bytes as the server handed them to the transport,
@@ -1113,7 +1139,7 @@ replaced, not echoed.
 | `GET` | `/api/health` | Liveness, process-only — never fails on a dependency, because a restart cannot fix an outage the replacement comes back into. `{"status":"ok","readiness":…,"paused":…,"loops":{…}}`, where each supervised background loop reports `running`, `consecutive_failures`, `total_failures`, `seconds_since_success`, `seconds_since_failure` |
 | `GET` | `/api/ready` | 200 only when startup finished, no drain has begun, no supervised loop has stopped, and the database answers `SELECT 1` inside 1 s (result cached ~5 s). 503 otherwise, with `detail.reason` naming which of the three it was. A loop that is merely *erroring* stays ready — see `docs/architecture.md` §Health and readiness |
 | `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`). No longer polled by anything — the lobby is pushed this list on its channel (#462) — but kept as a plain public read for operators and tests. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
-| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
+| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_socket_transport_total{compression}` (WebSocket upgrades accepted, by the permessage-deflate window they negotiated — `deflate-15` — or `none`; a proxy stripping the extension shows up here first), `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
 
 ### Accounts and sessions — [`backend/app/auth/routes.py`](../backend/app/auth/routes.py)
 
