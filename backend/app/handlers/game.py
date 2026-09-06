@@ -14,6 +14,7 @@ from app.services.game_flow import (
     RoomNoLongerStartableError,
     RoomPromptResolutionError,
 )
+from app.handlers.refusals import ErrorCode
 
 async def start_game(ctx: HandlerContext, sid, data=None):
     try:
@@ -22,7 +23,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[1].is_host:
-        return {"ok": False, "error": "Only the host can start the game"}
+        return {"ok": False, "errorCode": ErrorCode.HOST_ONLY, "error": "Only the host can start the game"}
     room, player = current
     if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
         return ctx.shutdown.rejection_acknowledgement()
@@ -34,9 +35,9 @@ async def start_game(ctx: HandlerContext, sid, data=None):
         # that window from one deliberately left out of the roster above.
         seated_before = set(room.players)
         if len(active_players) < 2:
-            return {"ok": False, "error": "Need at least 2 active non-AFK players to start"}
+            return {"ok": False, "errorCode": ErrorCode.NEED_TWO_PLAYERS, "error": "Need at least 2 active non-AFK players to start"}
         if room.state == "playing":
-            return {"ok": False, "error": "Game already in progress"}
+            return {"ok": False, "errorCode": ErrorCode.GAME_IN_PROGRESS, "error": "Game already in progress"}
 
         try:
             await ctx.game_flow.refresh_room_prompt_selection(
@@ -44,7 +45,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
             )
         except RoomPromptResolutionError as error:
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS,
                 "error": str(error),
                 "field": "promptListSlugs",
             }
@@ -58,14 +59,14 @@ async def start_game(ctx: HandlerContext, sid, data=None):
             )
         except RoomNoLongerStartableError as error:
             # The roster emptied out while the prompts were being drawn.
-            return {"ok": False, "error": str(error)}
+            return {"ok": False, "errorCode": ErrorCode.ROOM_NOT_STARTABLE, "error": str(error)}
         except RoomPromptResolutionError as error:
             # Drawing this game's prompts is a second read of the same lists
             # the re-authorization above just made, and fails for the same
             # reasons. It is answered the same way rather than escaping the
             # handler, which would leave the host with no acknowledgement.
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS,
                 "error": str(error),
                 "field": "promptListSlugs",
             }
@@ -79,10 +80,10 @@ async def select_prompt(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
-        return {"ok": False, "error": "Game is not ready for prompt selection"}
+        return {"ok": False, "errorCode": ErrorCode.PROMPT_NOT_READY, "error": "Game is not ready for prompt selection"}
     room, player = current
     if not room.game.choose_prompt(player.id, payload.prompt):
-        return {"ok": False, "error": "That prompt is no longer available"}
+        return {"ok": False, "errorCode": ErrorCode.PROMPT_UNAVAILABLE, "error": "That prompt is no longer available"}
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.game_flow._begin_drawing(room)
     return {"ok": True}

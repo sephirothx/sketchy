@@ -64,8 +64,8 @@ async def test_retired_room_code_has_a_distinct_invite_error():
 
     assert preview == {
         "ok": False,
+        "errorCode": "room_ended",
         "error": "This room has ended",
-        "codeRetired": True,
     }
     assert join == preview
 
@@ -136,6 +136,7 @@ async def test_registered_player_name_color_is_created_and_can_be_updated_live()
 
     assert await update("host-sid", {"nameColor": "red"}) == {
         "ok": False,
+        "errorCode": "invalid_name_color",
         "error": "Invalid player name color",
     }
     assert player.name_color == "#199647"
@@ -392,6 +393,7 @@ async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room
 
     assert result == {
         "ok": False,
+        "errorCode": "invalid_prompt_lists",
         "error": "Selected prompt lists must use the same language",
         "field": "promptListSlugs",
     }
@@ -418,6 +420,7 @@ async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
 
     assert result == {
         "ok": False,
+        "errorCode": "invalid_prompt_lists",
         "error": "A selected prompt list is unavailable",
         "field": "promptListSlugs",
     }
@@ -515,6 +518,7 @@ async def test_room_members_can_inspect_custom_prompts_only_while_waiting():
     spectator_response = await get_custom_prompts("guest-sid", {})
     assert spectator_response == {
         "ok": False,
+        "errorCode": "players_only",
         "error": "Only players can view custom prompts",
     }
 
@@ -566,7 +570,7 @@ async def test_spectator_cannot_become_player_when_room_is_full_or_playing():
     become_player = sio.handlers["/"]["become_player"]
 
     full_response = await become_player("spectator-sid", {})
-    assert full_response == {"ok": False, "error": "Player slots are full"}
+    assert full_response == {"ok": False, "errorCode": "player_slots_full", "error": "Player slots are full"}
     assert spectator.is_spectator is True
 
     room.players[next(

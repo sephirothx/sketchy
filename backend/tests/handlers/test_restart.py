@@ -73,7 +73,7 @@ async def test_restart_vote_cannot_start_before_the_first_turn_is_initialized():
         players[0].sid, {}
     )
 
-    assert response == {"ok": False, "error": "The game is still starting"}
+    assert response == {"ok": False, "errorCode": "game_starting", "error": "The game is still starting"}
     assert room.restart_vote is None
     assert context.timers.restart_timers == {}
 
@@ -96,10 +96,12 @@ async def test_restart_vote_snapshots_eligible_players_and_requires_strict_major
 
     assert await propose("spectator-sid", {}) == {
         "ok": False,
+        "errorCode": "not_eligible",
         "error": "Only active, non-AFK players can propose a restart",
     }
     assert await propose(afk_player.sid, {}) == {
         "ok": False,
+        "errorCode": "not_eligible",
         "error": "Only active, non-AFK players can propose a restart",
     }
 
@@ -120,6 +122,7 @@ async def test_restart_vote_snapshots_eligible_players_and_requires_strict_major
     }
     assert await cast(late_player.sid, {"vote": True}) == {
         "ok": False,
+        "errorCode": "not_eligible",
         "error": "You are not eligible to vote",
     }
 
@@ -313,6 +316,7 @@ async def test_disconnected_snapshot_voter_can_vote_after_reconnect_only():
     reconnecting.sid = None
     assert await cast(old_sid, {"vote": True}) == {
         "ok": False,
+        "errorCode": "not_in_room",
         "error": "Not in this room",
     }
 

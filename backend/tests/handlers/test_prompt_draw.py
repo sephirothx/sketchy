@@ -351,6 +351,7 @@ async def test_start_game_tells_the_host_when_the_draw_fails():
 
     assert result == {
         "ok": False,
+        "errorCode": "invalid_prompt_lists",
         "error": "Prompt lists could not be loaded. Please try again.",
         "field": "promptListSlugs",
     }

@@ -134,7 +134,7 @@ async def test_direct_socket_moderation_rejects_spectator_voters_and_targets():
     spectator_vote = await vote_player(
         "spectator-sid", {"targetPlayerId": target.id, "action": "kick"}
     )
-    assert spectator_vote == {"ok": False, "error": "Spectators cannot vote"}
+    assert spectator_vote == {"ok": False, "errorCode": "spectators_cannot_vote", "error": "Spectators cannot vote"}
     assert target.kick_votes == set()
 
     spectator_target = await vote_player(
@@ -142,6 +142,7 @@ async def test_direct_socket_moderation_rejects_spectator_voters_and_targets():
     )
     assert spectator_target == {
         "ok": False,
+        "errorCode": "spectators_cannot_be_targets",
         "error": "Spectators cannot be moderation targets",
     }
     assert spectator.kick_votes == set()

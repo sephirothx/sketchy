@@ -219,8 +219,7 @@ async def test_pausing_refuses_new_rooms_while_live_games_play_on(env):
     assert coordinator.is_ready
 
     refusal = coordinator.rejection_acknowledgement()
-    assert refusal["serverPaused"] is True
-    assert "serverDraining" not in refusal
+    assert refusal["errorCode"] == "server_paused"
 
 
 async def test_a_pause_does_not_make_the_process_look_unready(env):

@@ -40,6 +40,7 @@ from app.handlers.payloads import (
     parse_payload,
 )
 from app.services.presence import LOBBY_CHANNEL, PresenceIdentity
+from app.handlers.refusals import ErrorCode
 
 NAME_REQUIRED = "Choose a name to chat."
 NOT_WATCHING = "Open the lobby to chat."
@@ -184,15 +185,15 @@ async def send_lobby_chat(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     text = payload.text.strip()
     if not text:
-        return {"ok": False, "error": EMPTY_LINE}
+        return {"ok": False, "errorCode": ErrorCode.EMPTY_MESSAGE, "error": EMPTY_LINE}
     user_id = await _user_of(ctx, sid)
     if not user_id:
-        return {"ok": False, "error": NAME_REQUIRED}
+        return {"ok": False, "errorCode": ErrorCode.NAME_REQUIRED, "error": NAME_REQUIRED}
     if LOBBY_CHANNEL not in ctx.sio.rooms(sid):
-        return {"ok": False, "error": NOT_WATCHING}
+        return {"ok": False, "errorCode": ErrorCode.NOT_WATCHING_LOBBY, "error": NOT_WATCHING}
     identity = await _identity_of(ctx, user_id)
     if identity is None:
-        return {"ok": False, "error": IDENTITY_UNAVAILABLE}
+        return {"ok": False, "errorCode": ErrorCode.IDENTITY_UNAVAILABLE, "error": IDENTITY_UNAVAILABLE}
     # One instant for the wire and for the retained row, so the time a
     # watcher sees beside the line is the time a moderator sees on it.
     sent_at = datetime.now(timezone.utc)

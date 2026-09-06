@@ -13,6 +13,7 @@ from app.handlers.payloads import (
     parse_payload,
 )
 from app.prompts import MAX_PROMPT_LENGTH
+from app.handlers.refusals import ErrorCode
 
 def _chat_line(player, text: str, **extra) -> dict:
     """A chat line attributed to `player`, plus any per-case flags."""
@@ -100,13 +101,13 @@ async def send_chat(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in a room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in a room"}
     room, player = current
     if room.state != "waiting":
-        return {"ok": False, "error": "Waiting-room chat is unavailable during a game"}
+        return {"ok": False, "errorCode": ErrorCode.WAITING_ROOM_ONLY, "error": "Waiting-room chat is unavailable during a game"}
     text = payload.text.strip()
     if not text:
-        return {"ok": False, "error": "Message cannot be empty"}
+        return {"ok": False, "errorCode": ErrorCode.EMPTY_MESSAGE, "error": "Message cannot be empty"}
     if player.is_afk and not player.is_spectator:
         player.is_afk = False
         await ctx.game_flow._emit_room_state(room)
@@ -270,22 +271,22 @@ async def buy_hint(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(HintPayload, data)
     except PayloadError:
-        return {"ok": False, "error": "Invalid hint"}
+        return {"ok": False, "errorCode": ErrorCode.INVALID_HINT, "error": "Invalid hint"}
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
-        return {"ok": False, "error": "Not in an active game"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_GAME, "error": "Not in an active game"}
     room, player = current
     game = room.game
     if game.hint_mode != "purchase":
-        return {"ok": False, "error": "Hint purchasing is disabled in this room"}
+        return {"ok": False, "errorCode": ErrorCode.HINTS_DISABLED, "error": "Hint purchasing is disabled in this room"}
     cost = game.hint_cost(player.id)
     # Hints are bought on credit - nothing is charged here. The game settles
     # the turn's spend against the points a correct guess earns; this check
     # only exists to give the budget case its own message.
     if cost > game.hint_spend_remaining(player.id):
-        return {"ok": False, "error": "You've reached this turn's hint spend limit"}
+        return {"ok": False, "errorCode": ErrorCode.HINT_SPEND_LIMIT, "error": "You've reached this turn's hint spend limit"}
     if not game.buy_hint_letter(player.id, payload.slot):
-        return {"ok": False, "error": "Hint unavailable"}
+        return {"ok": False, "errorCode": ErrorCode.HINT_UNAVAILABLE, "error": "Hint unavailable"}
 
     hint_spend = game.hint_spend.get(player.id, 0)
     await ctx.sio.emit(
@@ -304,20 +305,20 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
     try:
         payload = parse_payload(WheelLetterPayload, data)
     except PayloadError:
-        return {"ok": False, "error": "Invalid letter"}
+        return {"ok": False, "errorCode": ErrorCode.INVALID_LETTER, "error": "Invalid letter"}
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
-        return {"ok": False, "error": "Not in an active game"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_GAME, "error": "Not in an active game"}
     room, player = current
     game = room.game
     if game.hint_mode != "wheel":
-        return {"ok": False, "error": "Letter buying is disabled in this room"}
+        return {"ok": False, "errorCode": ErrorCode.HINTS_DISABLED, "error": "Letter buying is disabled in this room"}
     letter = payload.letter
     cost = game.wheel_hint_cost(player.id, letter)
     if cost > game.hint_spend_remaining(player.id):
-        return {"ok": False, "error": "You've reached this turn's hint spend limit"}
+        return {"ok": False, "errorCode": ErrorCode.HINT_SPEND_LIMIT, "error": "You've reached this turn's hint spend limit"}
     if not game.buy_wheel_letter(player.id, letter):
-        return {"ok": False, "error": "Letter unavailable"}
+        return {"ok": False, "errorCode": ErrorCode.HINT_UNAVAILABLE, "error": "Letter unavailable"}
 
     hint_spend = game.hint_spend.get(player.id, 0)
     found_count = sum(1 for i in game.letter_positions if game.prompt[i].lower() == letter)

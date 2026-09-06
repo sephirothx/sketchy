@@ -22,6 +22,7 @@ from app.services.sweeps import (
 
 from app.db.models import PlannedShutdownAbandonment
 from app.rooms import Room, RoomManager
+from app.handlers.refusals import ErrorCode
 
 
 logger = logging.getLogger("sketchy.shutdown")
@@ -199,14 +200,12 @@ class ShutdownCoordinator:
         """
         if self._state == "draining":
             return {
-                "ok": False,
+                "ok": False, "errorCode": ErrorCode.SERVER_DRAINING,
                 "error": NEW_WORK_REJECTION,
-                "serverDraining": True,
             }
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.SERVER_PAUSED,
             "error": PAUSE_REJECTION,
-            "serverPaused": True,
         }
 
     def notice_payload(self) -> dict:

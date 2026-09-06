@@ -404,27 +404,108 @@ export interface CanvasSyncPayload {
   a: unknown[];
 }
 
+/** Why the server refused a command. Mirrors `ErrorCode` in
+`backend/app/handlers/refusals.py` member for member; a test on the backend
+fails when the two drift. Branch on this, never on `error`, which is prose for
+the player and changes whenever the copy does. */
+export type ErrorCode =
+  | "invalid_payload"
+  | "invalid_nickname"
+  | "invalid_name_color"
+  | "invalid_hint"
+  | "invalid_letter"
+  | "invalid_prompt_lists"
+  | "invalid_custom_prompts"
+  | "max_players_below_seated"
+  | "empty_message"
+  | "too_fast"
+  | "seat_changing_too_fast"
+  | "joining_too_fast"
+  | "room_quota"
+  | "room_full"
+  | "spectators_full"
+  | "player_slots_full"
+  | "server_draining"
+  | "server_paused"
+  | "database_busy"
+  | "account_ended"
+  | "account_required"
+  | "identity_unavailable"
+  | "not_in_room"
+  | "room_not_found"
+  | "room_ended"
+  | "could_not_create_room"
+  | "no_session_to_resume"
+  | "host_only"
+  | "players_only"
+  | "waiting_room_only"
+  | "already_a_player"
+  | "registered_name_fixed"
+  | "name_taken_by_account"
+  | "guests_cannot_choose_color"
+  | "suggestion_inactive"
+  | "drawing_not_found"
+  | "drawing_not_kept"
+  | "not_in_game"
+  | "game_in_progress"
+  | "game_starting"
+  | "need_two_players"
+  | "room_not_startable"
+  | "prompt_not_ready"
+  | "prompt_unavailable"
+  | "hints_disabled"
+  | "hint_spend_limit"
+  | "hint_unavailable"
+  | "drawer_only"
+  | "canvas_stale_generation"
+  | "canvas_sequence_committed"
+  | "canvas_out_of_sequence"
+  | "canvas_out_of_sync"
+  | "nothing_to_undo"
+  | "spectators_cannot_vote"
+  | "spectators_cannot_be_targets"
+  | "invalid_vote_target"
+  | "not_eligible"
+  | "restart_vote_active"
+  | "restart_vote_cooldown"
+  | "no_restart_vote"
+  | "restart_vote_closed"
+  | "spectators_cannot_react"
+  | "guests_cannot_react"
+  | "reaction_not_visible"
+  | "own_drawing"
+  | "game_still_saving"
+  | "game_not_recorded"
+  | "reaction_not_accepted"
+  | "friends_unavailable"
+  | "friend_refused"
+  | "friend_not_in_game"
+  | "friend_in_several_games"
+  | "not_friends"
+  | "friends_only_uninvited"
+  | "invite_expired"
+  | "reporting_unavailable"
+  | "no_such_player"
+  | "cannot_report"
+  | "already_reported"
+  | "name_required"
+  | "not_watching_lobby";
+
 export interface AckResponse {
   ok: boolean;
   roomId?: string;
   code?: string;
   playerId?: string;
+  /** Set on every refusal. The only field a program should read. */
+  errorCode?: ErrorCode;
+  /** The player's sentence; shown, never compared. */
   error?: string;
   field?: string;
+  /** When the server knows trying again could work: a command budget's window,
+  a vote cooldown. Absent when it does not. */
+  retryAfterMs?: number;
   isAnonymous?: boolean;
   needsRebind?: boolean;
-  /** The player slots are taken - spectating is still open. */
-  roomFull?: boolean;
-  /** The code was valid but its ephemeral room has already ended. */
-  codeRetired?: boolean;
-  /** The command was refused because a bounded deployment drain has begun. */
-  serverDraining?: boolean;
-  /** The command was refused because an administrator paused new rooms.
-
-  Told apart from `serverDraining` on purpose: a drain means this server is
-  going away and a reload will find another, while a pause means it is still
-  here and will take the room shortly. */
-  serverPaused?: boolean;
 }
 
 export interface ServerShutdownNotice {

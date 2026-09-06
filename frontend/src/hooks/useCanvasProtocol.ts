@@ -11,6 +11,7 @@ import { createCanvasSyncRequester } from "../lib/canvasSyncRequests";
 import type { CanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, encodeClear, toWireFrame } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
+import type { ErrorCode } from "../types";
 import { recordClientError } from "../lib/clientErrorLog";
 import { emitWithAck, socket } from "../lib/socket";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
@@ -215,9 +216,9 @@ export function useCanvasProtocol(
     });
     renderer.replay(historyRef.current.actions);
     publishBudgets();
-    void emitWithAck<{ ok: boolean; error?: string }>("undo_stroke", request)
+    void emitWithAck<{ ok: boolean; errorCode?: ErrorCode }>("undo_stroke", request)
       .then((response) => {
-        if (!response?.ok && response?.error !== "Drawing actions are out of sequence") {
+        if (!response?.ok && response?.errorCode !== "canvas_out_of_sequence") {
           requestAuthoritativeSync();
         }
       })

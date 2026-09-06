@@ -31,8 +31,8 @@ class DrainingShutdown:
     def rejection_acknowledgement():
         return {
             "ok": False,
+            "errorCode": "server_draining",
             "error": "Server update in progress; try again shortly",
-            "serverDraining": True,
         }
 
     @staticmethod
@@ -64,7 +64,7 @@ async def test_create_room_and_game_start_are_rejected_without_mutation():
     )
     start = await sio.handlers["/"]["start_game"]("host")
 
-    assert create["serverDraining"] is True
+    assert create["errorCode"] == "server_draining"
     assert start == create
     assert list(rooms.rooms) == [room.id]
     assert room.game is None

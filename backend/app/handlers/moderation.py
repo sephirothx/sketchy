@@ -26,6 +26,7 @@ from app.services.player_reports import (
     evidence_from_live_room,
     record_player_report,
 )
+from app.handlers.refusals import ErrorCode
 
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ async def toggle_afk(ctx: HandlerContext, sid, data=None):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
 
     target_afk = not player.is_afk if payload.afk is None else payload.afk
@@ -58,20 +59,20 @@ async def vote_player(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, voter = current
 
     if voter.is_spectator:
-        return {"ok": False, "error": "Spectators cannot vote"}
+        return {"ok": False, "errorCode": ErrorCode.SPECTATORS_CANNOT_VOTE, "error": "Spectators cannot vote"}
 
     target_token = payload.target_player_id
     action = payload.action
 
     target = room.players.get(target_token)
     if not target or target.id == voter.id:
-        return {"ok": False, "error": "Cannot vote on yourself or non-existent player"}
+        return {"ok": False, "errorCode": ErrorCode.INVALID_VOTE_TARGET, "error": "Cannot vote on yourself or non-existent player"}
     if target.is_spectator:
-        return {"ok": False, "error": "Spectators cannot be moderation targets"}
+        return {"ok": False, "errorCode": ErrorCode.SPECTATORS_CANNOT_BE_TARGETS, "error": "Spectators cannot be moderation targets"}
 
     eligible_voter_ids = {player.id for player in room.moderation_voters()}
     target.kick_votes.intersection_update(eligible_voter_ids)
@@ -136,26 +137,26 @@ async def report_player(ctx: HandlerContext, sid, data):
         return error.acknowledgement()
     current = await ctx.game_flow.require_current_player(sid)
     if not current:
-        return {"ok": False, "error": "Not in this room"}
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, reporter = current
 
     # Who they are first, because that is advice they can act on, and it is
     # true whatever the server can do.
     if not reporter.user_id or reporter.is_anonymous:
         return {
-            "ok": False,
+            "ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED,
             "error": "Create an account before reporting, so a moderator can follow up.",
         }
     if ctx.session_factory is None:
-        return {"ok": False, "error": "Reporting is unavailable on this server."}
+        return {"ok": False, "errorCode": ErrorCode.REPORTING_UNAVAILABLE, "error": "Reporting is unavailable on this server."}
 
     target = room.players.get(payload.target_player_id)
     if target is None or target.id == reporter.id:
         # The same answer for "no such seat" and "that is you": a report is not
         # a way to find out who is in a room you cannot see.
-        return {"ok": False, "error": "No such player in this room."}
+        return {"ok": False, "errorCode": ErrorCode.NO_SUCH_PLAYER, "error": "No such player in this room."}
     if not target.user_id:
-        return {"ok": False, "error": "That player cannot be reported."}
+        return {"ok": False, "errorCode": ErrorCode.CANNOT_REPORT, "error": "That player cannot be reported."}
 
     # Taken before the database is touched, so the frame is the one on the
     # canvas at the moment of the report rather than after a round-trip.
@@ -170,7 +171,7 @@ async def report_player(ctx: HandlerContext, sid, data):
             try:
                 await require_live_account(session, reporter.user_id)
             except AccountErasedError:
-                return {"ok": False, "error": "Sign in first."}
+                return {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": "Sign in first."}
             # The same rule the REST path and content reports carry: saying it
             # again while a moderator has yet to look adds no evidence and
             # buries the queue.
@@ -183,7 +184,7 @@ async def report_player(ctx: HandlerContext, sid, data):
             )
             if already_open is not None:
                 return {
-                    "ok": False,
+                    "ok": False, "errorCode": ErrorCode.ALREADY_REPORTED,
                     "error": (
                         "You have already reported this player. A moderator "
                         "has not looked at it yet."
@@ -227,7 +228,7 @@ async def report_player(ctx: HandlerContext, sid, data):
                 # Two clicks in the same instant both passed the check above;
                 # the partial unique index is what really decides.
                 return {
-                    "ok": False,
+                    "ok": False, "errorCode": ErrorCode.ALREADY_REPORTED,
                     "error": (
                         "You have already reported this player. A moderator "
                         "has not looked at it yet."

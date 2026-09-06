@@ -138,7 +138,7 @@ async def test_only_waiting_host_can_accept_and_acceptance_switches_color_mode()
     accept = sio.handlers["/"]["accept_colorblind_suggestion"]
 
     non_host = await accept("player-sid", {})
-    assert non_host == {"ok": False, "error": "Only the host can change room colors"}
+    assert non_host == {"ok": False, "errorCode": "host_only", "error": "Only the host can change room colors"}
 
     accepted = await accept("host-sid", {})
     assert accepted == {"ok": True}
