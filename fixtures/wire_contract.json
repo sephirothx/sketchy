@@ -2299,6 +2299,7 @@
    "p50Ms",
    "p95Ms",
    "p99Ms",
+   "packetsRejected",
    "perMinute",
    "queriesPerMinute",
    "queryErrors",

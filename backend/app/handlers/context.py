@@ -18,7 +18,7 @@ from app.repositories.interfaces import (
     PromptListRepository,
 )
 from app.domain_values import RuntimeEventType
-from app.handlers.refusals import ErrorCode
+from app.handlers.refusals import ErrorCode, refuse
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
@@ -127,6 +127,12 @@ class HandlerContext:
         one. `test_command_budgets.py` checks the two lists against each other.
         """
 
+        # Every command takes one payload; `draw` may add its action identity.
+        # More than that is not a call this handler can make, and it must be
+        # refused here, bounded, rather than surface as a TypeError inside
+        # python-socketio (#596).
+        max_args = 2 if command == "draw" else 1
+
         async def guarded(sid, *args):
             # Every line logged underneath names the socket, the command and
             # a fresh id for this one invocation, the way a request does.
@@ -134,6 +140,11 @@ class HandlerContext:
             correlation.socket_sid.set(sid)
             correlation.socket_event.set(command)
             correlation.request_id.set(correlation.new_request_id())
+            if len(args) > max_args:
+                telemetry.socket_event(command, "refused", None)
+                if command in SILENT_COMMANDS:
+                    return None
+                return refuse(ErrorCode.INVALID_PAYLOAD, "Invalid request payload")
             # Before parsing, before authorization, before any mutation: a
             # refused command must cost nothing but the check itself.
             budget = self.command_budgets.for_command(command)

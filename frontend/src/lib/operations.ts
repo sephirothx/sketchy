@@ -179,6 +179,12 @@ export type ServerSignals = {
     /** Largest total first, since process start; the scrape has the rest. */
     commandSizes: PayloadSizeRow[];
     emitSizes: PayloadSizeRow[];
+    /** WebSocket upgrades since start, by the compression they negotiated
+    (`deflate-15`, `none`). A proxy stripping the extension shows up here. */
+    transports: Record<string, number>;
+    /** Inbound packets dropped before dispatch, by reason. Anything but an
+    empty object on a healthy deployment is a client that is not ours. */
+    packetsRejected: Record<string, number>;
   };
   process: {
     loopLagMs: number | null;

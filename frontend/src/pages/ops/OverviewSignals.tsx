@@ -139,12 +139,37 @@ export function TrafficCard({ live, reasons }: { live: LiveSnapshot; reasons: At
           <Sparkline values={series.socketBytesOutPerMinute} label="Socket bytes sent per minute" format={formatBytes} />
         </Cell>
       </div>
+      <div className="ops-signal-grid ops-signal-row" role="group" aria-label="Socket envelopes">
+        <Cell
+          label="Rejected packets"
+          value={sumCounts(socket.packetsRejected).toLocaleString()}
+          note={byLabel(socket.packetsRejected) || "none since start · dropped before dispatch"}
+          warning={sumCounts(socket.packetsRejected) > 0}
+        />
+        <Cell
+          label="Connections by compression"
+          value={sumCounts(socket.transports).toLocaleString()}
+          note={byLabel(socket.transports) || "no WebSocket upgrades yet"}
+        />
+      </div>
       <div className="ops-sizes-row">
         <PayloadSizes title="Command payloads" rows={socket.commandSizes} />
         <PayloadSizes title="Emitted payloads" rows={socket.emitSizes} />
       </div>
     </SignalCard>
   );
+}
+
+function sumCounts(counts: Record<string, number>): number {
+  return Object.values(counts).reduce((total, count) => total + count, 0);
+}
+
+/** `reason 12 · other 3`, largest first; empty when there is nothing to say. */
+function byLabel(counts: Record<string, number>): string {
+  return Object.entries(counts)
+    .sort(([, a], [, b]) => b - a)
+    .map(([label, count]) => `${label} ${count.toLocaleString()}`)
+    .join(" · ");
 }
 
 /** What each command or event weighs, largest total first, since start.

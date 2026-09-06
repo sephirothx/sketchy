@@ -82,6 +82,12 @@ _ESCAPE_RECORD_SIZE = 1 + _POINT.size
 # untouched and stays binary: histories run to kilobytes, far past the
 # crossover.
 MAX_BASE64_FRAME_BYTES = 85
+#: The largest frame the codec can produce: a full path-points frame with every
+#: point absolute (the delta form is never larger, and an escape record is the
+#: absolute size plus one only where a delta would have been smaller still).
+#: Checked by `tests/test_live_drawing.py`; `socket_server.py` refuses a binary
+#: attachment past it before keeping a byte.
+MAX_FRAME_BYTES = 1 + MAX_POINTS_PER_FRAME * _POINT.size
 
 # The largest frame that can legitimately arrive, base64-expanded: a full
 # 256-point frame with every point escaping.

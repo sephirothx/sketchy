@@ -62,6 +62,7 @@ from app.services.friends import FriendService
 from app.services.lobby_chat import restore_lobby_backlog
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
+from app.socket_server import BoundedSocketServer
 from app.services.telemetry import start_lag_sampler, stop_lag_sampler, telemetry
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
@@ -182,7 +183,7 @@ export_worker = DataExportWorker(async_session_factory)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
 
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+sio = BoundedSocketServer(async_mode="asgi", cors_allowed_origins="*")
 handler_context = register_all_handlers(
     sio,
     room_manager,
