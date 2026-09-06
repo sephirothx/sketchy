@@ -1355,7 +1355,13 @@ backend/.venv/bin/python benchmarks/drawing_compression.py
 # What it saves in PostgreSQL per game: heap, TOAST, WAL, and one read (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50
+# Live drawing on the wire, measured over a recorded stroke trace
 backend/.venv/bin/python benchmarks/live_drawing.py
+backend/.venv/bin/python benchmarks/live_drawing.py --room-size 8 --window-bits 15 12 --json-output /tmp/wire.json
+
+# Re-record that trace through the production client (scripted pen, or --manual to draw by hand)
+./benchmarks/record_stroke.sh
+./benchmarks/record_stroke.sh --manual --output /tmp/my-stroke.json
 backend/.venv/bin/python benchmarks/user_stats.py --games 10000 --reads 100
 
 # Near-limit canvas payload, server-memory, encoding, and decoding measurements
@@ -1445,8 +1451,26 @@ those timings as a reproducible diagnostic, not a CI threshold or a PostgreSQL
 capacity claim. The structural invariant is tested separately: profile reads
 must not query participant, turn, or guess fact tables.
 
-The canvas benchmark starts the built application on an isolated local port
-(`8765` by default), creates a real two-player game, and reports
+The live-drawing benchmark measures what a stroke costs on the wire, over a
+recording of the production client drawing (`fixtures/live_stroke_trace_v1.json`):
+every `draw` frame the drawer's browser sent, in order, with its timestamp. It
+reports Socket.IO packet bytes — what the server's own byte counters see — and
+the same frames through permessage-deflate four ways (a warm per-connection
+context, that context after the room's other traffic, a cold context per
+message, and none), with WebSocket headers modelled separately, in both
+directions and per viewer. The recording is scripted by default — five strokes
+of different character at a 120 Hz pointer cadence, so its shape is
+deterministic while every encoding and batching decision is the client's — and
+`--manual` records a real hand in a headed browser instead. A repeated
+identical batch, which is what the benchmark modelled before, is deflate's best
+case and understated live drawing about threefold; the trace is what fixed that.
+
+The browser-driven benchmarks share `benchmarks/with_server.sh`, which builds
+the frontend (skip with `SKIP_BUILD=1`), starts the application on an isolated
+local port (`8765` by default, `PORT=<number>` to move it) against a throwaway
+SQLite database it deletes afterwards, runs one script, and stops the server.
+The canvas benchmark creates a real two-player game the way the E2E helpers
+do, and reports
 drawer-to-guesser stroke latency, large-fill latency, Undo/replay latency,
 and the `sync_strokes` WebSocket payload size. It also instruments local drawer
 interaction-handler time, canvas readback calls/time/pixels, heap deltas, long
@@ -1454,8 +1478,7 @@ tasks, a nested-boundary fill, and repeated Undo. Optional trace output includes
 raw DevTools timeline JSON and a sampled heap profile per browser profile; the
 timeline can be loaded into Chrome DevTools or Perfetto. Results are diagnostic
 baselines, not CI pass/fail thresholds, because browser timings vary by machine.
-The `mobile` profile uses a 390×844 viewport and 4× CPU throttling. Override
-the port with `PORT=<number>` when needed.
+The `mobile` profile uses a 390×844 viewport and 4× CPU throttling.
 
 The canvas-history benchmarks construct deterministic path-heavy, shape-heavy,
 fill-heavy, fill-bounded, realistic, mixed, and theoretical-maximum histories.

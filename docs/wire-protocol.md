@@ -57,7 +57,28 @@ plausible-looking optimization:
   nothing more.
 
 Measure compressed, through one context, over a plausible sequence — never a single
-payload in isolation.
+payload in isolation. Two more rules, each learned from a wrong number (#563):
+
+- **Measure real, advancing traffic.** A model that repeats the same encoded batch is
+  the best case deflate has — every byte already in the window — and it understated
+  live drawing by about 3×. [`benchmarks/live_drawing.py`](../benchmarks/live_drawing.py)
+  therefore measures a recording of the production client
+  ([`fixtures/live_stroke_trace_v1.json`](../fixtures/live_stroke_trace_v1.json), made by
+  [`benchmarks/record_stroke.sh`](../benchmarks/record_stroke.sh)): on it, context
+  takeover saves about **35%** of the drawing's packet bytes, not the 70% the repeated
+  batch suggested, and it saves *less* once the same context has also carried a
+  `room_state` and some chat.
+- **Strip the flush suffix.** Every message's deflate block ends in `00 00 ff ff` from
+  the `Z_SYNC_FLUSH`, and permessage-deflate removes those four bytes before framing
+  (RFC 7692 §7.2.1). A model that keeps them overstates every message by 4 B — a
+  quarter of a compressed point frame.
+
+The server's own counters (`sketchy_socket_bytes_{in,out}_total`, §9) sit **before** all
+of this: they count Engine.IO packet bytes as the server handed them to the transport,
+once per recipient, at `eio.send_packet` — the one boundary a room broadcast, an
+acknowledgement and a direct emit all pass through. They are the denominator a
+compression ratio needs, never the ratio itself, and nothing measured on the server can
+say what a terminating proxy negotiated with the browser.
 
 ### Handshake
 
@@ -1092,7 +1113,7 @@ replaced, not echoed.
 | `GET` | `/api/health` | Liveness, process-only — never fails on a dependency, because a restart cannot fix an outage the replacement comes back into. `{"status":"ok","readiness":…,"paused":…,"loops":{…}}`, where each supervised background loop reports `running`, `consecutive_failures`, `total_failures`, `seconds_since_success`, `seconds_since_failure` |
 | `GET` | `/api/ready` | 200 only when startup finished, no drain has begun, no supervised loop has stopped, and the database answers `SELECT 1` inside 1 s (result cached ~5 s). 503 otherwise, with `detail.reason` naming which of the three it was. A loop that is merely *erroring* stays ready — see `docs/architecture.md` §Health and readiness |
 | `GET` | `/api/rooms` | Public room summaries (`RoomSummary[]`). No longer polled by anything — the lobby is pushed this list on its channel (#462) — but kept as a plain public read for operators and tests. Sends an `ETag` and answers a matching `If-None-Match` with an empty **304**; `Cache-Control: no-cache` so it is revalidated, never served stale. The validator is a hash of the serialized list, not a change counter — a counter must be bumped at every site touching any of the 22 fields in `to_public_summary()`, and a missed bump is a lobby that stays stale |
-| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (packet bytes before compression, out counted per recipient), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
+| `GET` | `/metrics` | Prometheus text, bearer token. **Disabled entirely until `METRICS_TOKEN` is set.** The nine recorder series (`sketchy_rooms_live` … `sketchy_events_total{event}`) plus the process signals: `sketchy_http_requests_total{method,route,status_class}` and `sketchy_http_request_duration_seconds{route}` (a histogram; probes are not timed), `sketchy_http_requests_in_flight`, `sketchy_socket_events_total{event,outcome}`, `sketchy_socket_event_duration_seconds{event}`, `sketchy_socket_connections_total{outcome}`, `sketchy_sockets_connected`, `sketchy_socket_bytes_in_total` and `sketchy_socket_bytes_out_total` (Engine.IO packet bytes before compression or framing; out counted once per recipient at `eio.send_packet`, which broadcasts, acknowledgements and direct emits all pass through — the earlier `eio.send` hook missed every ordinary broadcast, #563), `sketchy_socket_command_bytes{event}` and `sketchy_socket_emit_bytes{event}` (payload-size histograms, once per command received and once per emit), `sketchy_event_loop_lag_seconds` (+ `_last_seconds`), `sketchy_db_queries_total`, `sketchy_db_query_errors_total`, `sketchy_db_query_duration_seconds`, `sketchy_db_pool_{size,checked_out,checked_in,overflow,capacity}` (absent for a pool that keeps no count), `sketchy_db_ready` (the readiness probe's result, refreshed by the scrape itself - cached a few seconds, bounded to one - so it is present on a worker nothing has asked `/api/ready`), `sketchy_history_writes_abandoned_total{kind,reason}`, `sketchy_mail_outbox_{pending,oldest_seconds}` and `sketchy_data_exports_{pending,oldest_seconds}` (the one family that costs a query; omitted, not failed, when the database does not answer within 2 s, so a scrape survives the outage it is describing), `sketchy_loop_{running,consecutive_failures,failures_total,seconds_since_success}{loop}`, `sketchy_process_{cpu_seconds_total,resident_memory_bytes,start_time_seconds,uptime_seconds}`, `sketchy_data_disk_{free,total}_bytes` |
 
 ### Accounts and sessions — [`backend/app/auth/routes.py`](../backend/app/auth/routes.py)
 

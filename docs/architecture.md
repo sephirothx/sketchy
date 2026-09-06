@@ -1087,7 +1087,13 @@ Engine.IO packet received and every one sent (per recipient, which is what a fan
 costs) is counted at its wire size, and every command received and every `emit` is sized
 once by event name into a payload-size histogram — all before compression, so the
 numbers overstate what the network carries and answer "which command is the chatty one"
-rather than a bandwidth bill. Labels are bounded by construction — route
+rather than a bandwidth bill. The outbound hook sits on `eio.send_packet` and nowhere
+higher, because that is the one boundary every path shares: a room broadcast encodes
+its packet once and hands a copy per seat straight to it, while an acknowledgement or a
+direct emit arrives through `eio.send`. The first version hooked `eio.send` and so
+counted the acknowledgements and none of the broadcasts (#563); the regression test for
+it runs a real manager with seated recipients and mocks only the socket writer, because
+a test that calls the hook directly cannot tell the two paths apart. Labels are bounded by construction — route
 *templates* not paths, status *classes* not codes, command names from the registration
 table, a hard cap per family beyond which values fold into `other` — because a series per
 room id is how an exposition falls over.
