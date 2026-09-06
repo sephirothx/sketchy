@@ -341,7 +341,7 @@ kept:
 | Attachment size | `MAX_FRAME_BYTES` = 1 + 256 × 4 = 1,025 B | The largest frame the codec produces (a full absolute path-points frame) |
 | Assembly age | `ASSEMBLY_DEADLINE_SECONDS` = 5 s | The two messages leave the client back to back; seconds apart means the second is not coming |
 | Text mid-assembly | dropped with the assembly, then judged on its own | A protocol violation, but the text may itself be a well-formed command |
-| Packets per socket | `MAX_PACKETS_PER_WINDOW` = 400 per second, counted before decoding | A drawer sends 25 frames a second and a polling batch delivers several packets at once; this stops a flood, the budgets are the limits |
+| Packets per socket | `MAX_PACKETS_PER_WINDOW` = the drawing budget's tunable maximum + 100 (500 today) per second, counted before decoding; a frame's attachment does not count | An administrator may raise drawing to `DRAWING.maximum` frames per window and a client bunches frames after a stall, so the whole allowance can land in one second; the margin is the seat's other traffic. This stops a flood, the budgets are the limits |
 | Packet size | `MAX_PACKET_BYTES` = 1 MiB (engineio's per-packet ceiling, made explicit) | #566 owns its sizing; a custom-prompts blob is the largest JSON command |
 | Arguments per command | one payload; `draw` may add its action identity | Checked in `HandlerContext.on` before the handler, refused as `invalid_payload` rather than raising `TypeError` inside the library |
 

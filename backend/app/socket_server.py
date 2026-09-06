@@ -29,7 +29,8 @@ it, at `_handle_eio_message`, the one door every inbound packet uses:
   both drop the half-built packet.
 * **Is the socket sending at a rate a client would?** A cheap per-socket
   packet count, checked before decoding, ahead of the per-command budgets
-  that need the decoded event to know which class it is.
+  that need the decoded event to know which class it is. Sized from the
+  drawing budget's tunable maximum, and an attachment does not count.
 
 A refused packet is dropped, not answered: an answer per malformed packet is
 the amplification a flood wants. It is counted once per reason
@@ -55,6 +56,7 @@ from typing import Any
 import socketio
 from socketio import packet
 
+from app.handlers.budgets import DRAWING
 from app.live_drawing import MAX_FRAME_BYTES
 from app.services.telemetry import telemetry
 
@@ -70,12 +72,17 @@ MAX_ATTACHMENT_BYTES = MAX_FRAME_BYTES
 #: How long a declared attachment may take to arrive. A client sends the two
 #: WebSocket messages back to back; seconds apart means it is not coming.
 ASSEMBLY_DEADLINE_SECONDS = 5.0
-#: Inbound packets one socket may send per window, counted before decoding.
-#: A drawer sends 25 frames a second plus a few commands; a polling client's
-#: batch delivers several packets in one POST. Generous by design - this is a
-#: guard against a flood, and the per-command budgets are the real limits.
-MAX_PACKETS_PER_WINDOW = 400
+#: Inbound packets one socket may send per second, counted before decoding.
+#: Derived from the drawing budget's *tunable maximum*, not its default: an
+#: administrator may raise drawing to `DRAWING.maximum` frames per window, and
+#: after a stall a client bunches its frames, so the whole allowance can land
+#: inside one second. A binary frame's attachment is not counted - it can only
+#: arrive inside an assembly this door already admitted, and the assembly bounds
+#: it - so a frame is one count whichever shape it took. The margin is for
+#: everything else a seat sends at once (heartbeat, chat, a sync request).
+#: This is a guard against a flood; the per-command budgets are the limits.
 PACKET_WINDOW_SECONDS = 1.0
+MAX_PACKETS_PER_WINDOW = DRAWING.maximum + 100
 #: Refusals in one window after which the socket is closed.
 MAX_REJECTIONS = 20
 #: The per-packet ceiling engineio enforces; made explicit here rather than
@@ -130,10 +137,11 @@ class BoundedSocketServer(socketio.AsyncServer):
     # --- the door ---------------------------------------------------------
 
     async def _handle_eio_message(self, eio_sid: str, data: Any) -> None:
-        if self._packets.hit(eio_sid) > MAX_PACKETS_PER_WINDOW:
+        assembling = eio_sid in self._binary_packet
+        if not assembling and self._packets.hit(eio_sid) > MAX_PACKETS_PER_WINDOW:
             await self._reject(eio_sid, "flood")
             return
-        if eio_sid in self._binary_packet:
+        if assembling:
             reason = self._attachment_problem(eio_sid, data)
             if reason is not None:
                 self._drop_assembly(eio_sid)

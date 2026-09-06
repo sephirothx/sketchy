@@ -14,6 +14,7 @@ import pytest
 
 from app import socket_server
 from app.handlers.context import HandlerContext
+from app.handlers.budgets import DRAWING
 from app.live_drawing import MAX_FRAME_BYTES, MAX_POINTS_PER_FRAME, encode_live_drawing
 from app.rooms import RoomManager
 from app.services.telemetry import Telemetry
@@ -173,6 +174,21 @@ async def test_a_flood_is_dropped_before_decoding(monkeypatch):
     clock.now += 1.1
     await sio._handle_eio_message("eio0", '2["send_chat",{"text":"later"}]')
     assert received[-1] == ("send_chat", {"text": "later"})
+
+
+async def test_a_burst_at_the_drawing_budget_s_maximum_is_not_a_flood(monkeypatch):
+    """The whole tunable drawing allowance, binary, inside one second, plus a
+    heartbeat and a chat line: what a client bunching frames after a stall
+    sends. The flood guard must sit above it (R-RATE-10)."""
+    sio, store, sockets, received, clock = await server(monkeypatch)
+    for _ in range(DRAWING.maximum):
+        await sio._handle_eio_message("eio0", HEADER)
+        await sio._handle_eio_message("eio0", START_FRAME)
+    await sio._handle_eio_message("eio0", '2["session_ping",null]')
+    await sio._handle_eio_message("eio0", '2["send_chat",{"text":"still here"}]')
+    assert rejected(store) == {}
+    assert len([r for r in received if r[0] == "draw"]) == DRAWING.maximum
+    assert MAX_PACKETS_PER_WINDOW > DRAWING.maximum
 
 
 async def test_a_socket_that_keeps_sending_garbage_is_closed(monkeypatch):
