@@ -430,7 +430,7 @@ async def select_drawing_tool(page: Page, name: str) -> None:
         return
 
     await page.get_by_role("button", name=re.compile(r"^Choose tool, current:")).click()
-    await page.get_by_role("dialog", name="Choose tool").get_by_role(
+    await page.get_by_role("group", name="Choose tool").get_by_role(
         "button",
         name=name,
         exact=True,
@@ -525,7 +525,8 @@ async def create_game(
 
     await drawer.goto(base_url)
     await use_guest_name(drawer, f"{seat}-drawer")
-    await drawer.get_by_role("button", name="Create room", exact=True).click()
+    # "Create room" in the header, "Create a room" in a phone's thumb dock.
+    await drawer.locator("button:visible", has_text=re.compile(r"^Create (a )?room$")).first.click()
     await drawer.wait_for_url("**/create")
     await drawer.get_by_role("button", name="Create room", exact=True).click()
     await drawer.wait_for_url("**/room/**")
