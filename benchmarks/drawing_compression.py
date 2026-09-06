@@ -53,7 +53,7 @@ def _frames() -> dict[str, bytes]:
 def _delta_recode(frame: bytes) -> bytes:
     """Rewrite each path's points as deltas from the previous point, so the
     small numbers a stroke is made of compress; everything else verbatim."""
-    magic, version, action_count = _BINARY_HEADER.unpack_from(frame)
+    _magic, _version, action_count = _BINARY_HEADER.unpack_from(frame)
     offsets = [
         _BINARY_OFFSET.unpack_from(frame, _BINARY_HEADER.size + i * _BINARY_OFFSET.size)[0]
         for i in range(action_count + 1)
