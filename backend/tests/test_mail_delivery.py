@@ -68,7 +68,7 @@ async def outbox(tmp_path, count: int = 1, template=EmailTemplate.VERIFY_EMAIL):
     # contended. `create_db_engine` also applies the deployment's pragmas.
     engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'outbox.db'}")
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         async with session.begin():

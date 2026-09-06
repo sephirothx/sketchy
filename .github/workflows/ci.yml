@@ -156,12 +156,14 @@ jobs:
 
       - run: pip install -r requirements-dev.txt
 
-      - run: ruff check app tests
+      - run: ruff check app tests ../scripts/check_tracked_artifacts.py
 
       # --cov-branch, because "unexecuted branches" is the finding: a statement
       # measure marks an `if` covered the moment it is reached, whatever the
       # condition did.
-      - run: pytest -q --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+      # loadgroup shares the immutable repository-history scan between its
+      # two tests; every other test is distributed normally (R-ENG-12/15).
+      - run: pytest -q -n 2 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
@@ -175,6 +177,16 @@ jobs:
       # warning until launch (docs/wire-protocol.md §11) - add --enforce then.
       - name: Check the wire contract against the base revision
         run: python ../scripts/check-wire-contract.py --base "origin/${{ github.base_ref || 'main' }}"
+
+      - name: Save backend test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-results
+          path: |
+            backend/test-results/
+            backend/coverage.json
+          retention-days: 7
 
   postgresql:
     name: PostgreSQL migrations & repositories
@@ -194,8 +206,10 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # Only the fixtures read this. DATABASE_URL is set on the one step that
-      # migrates: the application's module-level engine would otherwise point
+      # Pytest's controller clones this migrated database per worker before
+      # collection and removes only its own clones when the workers exit.
+      # DATABASE_URL is set only on the migration step: the application's
+      # module-level engine would otherwise point
       # at PostgreSQL for every test, and an asyncpg connection shared across
       # pytest's per-test event loops fails from wherever it is next used.
       TEST_DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
@@ -221,17 +235,25 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
 
       - name: Replay migrations in both directions and check schema drift
-        run: pytest -q tests/test_migrations.py
+        run: pytest -q tests/test_migrations.py --durations=50 --junitxml=test-results/migrations.xml
 
-      # Everything else runs here too. Every persistence fixture comes from
-      # tests/dbfixtures.py and follows TEST_DATABASE_URL, so this is the one
+      # Everything else runs here too. The shared persistence fixture in
+      # tests/dbfixtures.py follows the worker's TEST_DATABASE_URL, so this is the one
       # run in which constraints are proven on PostgreSQL's native types, the
       # export builder's server-side cursors are real, row locks lock, and
       # READ COMMITTED interleavings are the ones production will see. A
       # SQLite pass (the backend job) proves integrity - foreign keys are
       # enforced there too since #612 - but never concurrency.
       - name: Run the backend suite against PostgreSQL
-        run: pytest -q --deselect tests/test_migrations.py
+        run: pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
+
+      - name: Save PostgreSQL test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgresql-test-results
+          path: backend/test-results/
+          retention-days: 7
 
   frontend:
     name: Frontend test, lint & build

@@ -215,7 +215,7 @@ async def test_concurrent_same_day_game_saves_cannot_lose_an_increment(tmp_path)
         f"sqlite+aiosqlite:///{tmp_path / 'concurrent-projection.db'}"
     )
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)

@@ -1260,19 +1260,30 @@ production interval it fast-forwards the page's own clock with Playwright's
 `page.clock` rather than spending the time — which keeps the interval a production
 constant instead of something bent for the tests.
 
-Every suite that persists rows gets its database from one place,
+The shared persistence fixture is
 [`backend/tests/dbfixtures.py`](../backend/tests/dbfixtures.py): PostgreSQL when
 `TEST_DATABASE_URL` is set, otherwise in-memory SQLite configured the way the
 application configures its own connections, with foreign-key enforcement checked on
-every connection. No test module builds its own engine, because one that did ran with
-enforcement off and passed deletion tests against constraints the database never
-applied. A SQLite pass proves integrity; only the PostgreSQL job proves row locks and
+every connection. Tests specifically exercising file-backed SQLite concurrency use
+fresh temporary files with the application's pragmas. Unconfigured engines once
+passed deletion tests against constraints the database never applied. A SQLite pass
+proves integrity; only the PostgreSQL job proves row locks and
 READ COMMITTED interleavings.
 
-CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs five jobs: the
+Both backend suites run on two pytest workers. With `TEST_DATABASE_URL`, the controller
+in [`tests/conftest.py`](../backend/tests/conftest.py) owns the migrated database clones
+managed by [`tests/parallel_databases.py`](../backend/tests/parallel_databases.py),
+assigns URLs before collection, and removes its own clones after worker shutdown.
+This keeps fixtures from clearing another test's rows without substituting shared
+transactions for real commits. Migration replay stays in a separate serial step.
+These are isolated test processes, not a multi-worker application deployment.
+Coverage is combined before applying the existing statement and branch floors;
+JUnit reports and slow-phase timings make future regressions visible (R-ENG-12/15).
+
+CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs six jobs: the
 repository artifact scan, backend lint and tests, PostgreSQL migrations and the whole
 backend suite again on PostgreSQL, frontend test/lint/build, and the multi-browser E2E
-suite.
+suite, plus dependency advisories.
 
 The artifact scan
 ([`scripts/check-tracked-artifacts.sh`](../scripts/check-tracked-artifacts.sh)) is the
@@ -1284,6 +1295,15 @@ its name - a SQLite header or PEM private-key armour, under any filename, and [`
 push range for anyone who opts in with `git config core.hooksPath .githooks`. Catching
 it locally matters more than catching it in CI: by the time CI speaks, a secret is
 already public.
+
+The shell entry point delegates scanning to the standard-library-only
+[`scripts/check_tracked_artifacts.py`](../scripts/check_tracked_artifacts.py).
+One `diff-tree --stdin` processes the selected commits and one `cat-file --batch`
+reads their blobs, rather than starting several programs for each file. The scanner
+keeps pathname checks separate from cached content verdicts, includes every merge
+parent, drains large blobs in bounded chunks, and refuses incomplete Git reads.
+The two real-history floor tests share one scan on the same `loadgroup` worker;
+the synthetic repositories still prove each refusal independently.
 
 ---
 

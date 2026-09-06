@@ -11,8 +11,8 @@ its own (`app.db.configure_sqlite_connection`), and every SQLite connection
 is checked to have foreign keys on. A raw `create_async_engine` does not turn
 them on, so a suite built on one can pass while the database ignores the very
 constraints its deletions rely on - #612 reproduced list and account
-deletions that only failed once enforcement was real. No test module builds
-its own engine any more; that is the point of this file.
+deletions that only failed once enforcement was real. Tests of SQLite's
+file-backed concurrency explicitly use fresh temporary files instead.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import os
 from typing import Any
 
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -59,7 +60,7 @@ def assert_disposable(url: str) -> None:
     pointed at. A name carrying `test` is the convention CI and the README
     use; anything else is presumed to be somebody's data.
     """
-    database_name = url.rsplit("/", 1)[-1].split("?", 1)[0]
+    database_name = make_url(url).database or ""
     if "test" not in database_name.lower():
         raise RuntimeError(
             f"refusing to empty {database_name!r}: TEST_DATABASE_URL must name a "
@@ -98,7 +99,9 @@ async def create_test_db() -> tuple[async_sessionmaker[AsyncSession], AsyncEngin
     else:
         engine = create_test_engine(SQLITE_MEMORY_URL)
         async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            # This connection owns a brand-new in-memory database. Checking
+            # for each table first only adds two round trips per table.
+            await conn.run_sync(Base.metadata.create_all, checkfirst=False)
 
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     return factory, engine
