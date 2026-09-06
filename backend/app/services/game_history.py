@@ -177,6 +177,19 @@ def _participants(
     return participants
 
 
+def _guesser_count(
+    turn: CompletedTurnStats, outcomes: tuple[TurnParticipantOutcomeInput, ...]
+) -> int:
+    """The eligible guessers of a turn as the written rows count them.
+
+    Falls back to the live count only for a turn that recorded no outcomes
+    (a game from before #548), where there is nothing to disagree with.
+    """
+    if not outcomes:
+        return turn.total_guesser_count
+    return sum(1 for outcome in outcomes if outcome.eligible)
+
+
 def _turn_participant_outcomes(
     turn: CompletedTurnStats,
     seats: dict[str, _Seat],
@@ -391,6 +404,7 @@ def build_game_history(
             )
             for position, prompt in enumerate(turn.offered_prompts)
         )
+        participant_outcomes = _turn_participant_outcomes(turn, seats)
         turns.append(
             TurnRecordInput(
                 id=turn_id,
@@ -409,14 +423,19 @@ def build_game_history(
                     if selected_position < len(turn.offered_prompt_source_kinds)
                     else game.prompt_source_kind(turn.chosen_prompt)
                 ),
-                guesser_count=turn.total_guesser_count,
+                # Counted over the rows that are written, not the runtime
+                # seats the turn counted: an account that left and re-entered
+                # mid-turn held two eligible seats and is one participant here,
+                # and the repository refuses a turn whose count disagrees with
+                # its rows - which lost the whole game's history.
+                guesser_count=_guesser_count(turn, participant_outcomes),
                 prompt_auto_picked=turn.prompt_auto_picked,
                 stroke_count=turn.stroke_count,
                 end_reason=turn.end_reason,
                 wrong_guess_count=turn.wrong_guess_count,
                 near_miss_count=turn.near_miss_count,
                 prompt_offers=prompt_offers,
-                participant_outcomes=_turn_participant_outcomes(turn, seats),
+                participant_outcomes=participant_outcomes,
             )
         )
         for guess in turn.guesses:
