@@ -1280,10 +1280,21 @@ These are isolated test processes, not a multi-worker application deployment.
 Coverage is combined before applying the existing statement and branch floors;
 JUnit reports and slow-phase timings make future regressions visible (R-ENG-12/15).
 
-CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs six jobs: the
+CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs six check groups: the
 repository artifact scan, backend lint and tests, PostgreSQL migrations and the whole
 backend suite again on PostgreSQL, frontend test/lint/build, and the multi-browser E2E
 suite, plus dependency advisories.
+
+E2E uses two independent runners, each starting one application worker with a fresh
+database. [`tests/e2e_sharding.py`](../backend/tests/e2e_sharding.py) partitions sorted,
+fully parametrized case IDs before xdist distributes a shard's cases locally. The
+partitions are exhaustive and disjoint without a maintained file list. Browser
+contexts, scenarios, and assertions are unchanged. Probe cases start first within
+each partition so their blocking HTTP long-polls can finish while browsers run;
+the operator command and its production transport remain covered. The existing
+**E2E multi-browser tests** check succeeds only when both shards succeed; a failed,
+cancelled, or skipped shard fails that check (R-ENG-12). Each shard retains its JUnit report for
+seven days, and logs the 30 slowest phases to expose future bottlenecks.
 
 The artifact scan
 ([`scripts/check-tracked-artifacts.sh`](../scripts/check-tracked-artifacts.sh)) is the

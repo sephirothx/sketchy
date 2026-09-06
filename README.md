@@ -1427,6 +1427,19 @@ backend/.venv/bin/python -m playwright install chromium firefox
 database, and runs the Playwright suite across as many xdist workers as the
 machine has cores, capped at eight — past that the browsers contend for CPU and
 timing-sensitive tests start to flake. Override with `E2E_WORKERS=<number>`.
+
+CI runs two independent shards, each with its own server and throwaway database,
+then requires both to pass under the existing **E2E multi-browser tests** check.
+To reproduce one locally, run `./scripts/test-e2e.sh --e2e-shard=1/2` (or `2/2`).
+The default command still runs the entire suite. Shards alternate sorted pytest
+case IDs, including parametrizations, so new tests are included automatically and
+every case runs exactly once across the two runners. Both browser engines and all
+scenario assertions are retained (R-ENG-12). The synthetic-probe cases start first
+on each shard to overlap their long-poll shutdown waits with browser work. The
+runner prints the 30 slowest test phases and writes `backend/test-results/e2e.xml`;
+CI retains each shard's report
+for seven days. Other pytest arguments can also be passed to the script.
+
 Several of the environment variables below now supply a **boot value** rather than
 a fixed one: an administrator can change them at runtime from the operations page,
 and a value changed there survives a restart and takes precedence over the variable
