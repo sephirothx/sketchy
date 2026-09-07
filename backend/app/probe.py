@@ -33,6 +33,7 @@ import base64
 import json
 import struct
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -113,9 +114,38 @@ def urllib_transport(timeout: float = STEP_TIMEOUT_SECONDS) -> Transport:
             raise
 
     async def transport(method, url, body, headers, *, wait_seconds: float | None = None):
-        return await asyncio.to_thread(
-            fetch, method, url, body, headers, wait_seconds or timeout_default
-        )
+        # A thread of our own rather than `asyncio.to_thread`, so that a
+        # cancelled request is abandoned instead of joined. The server holds
+        # a quiet poll until its ping cycle runs out - 45 s by default - and
+        # it keeps holding it after the session is closed: a client-sent close
+        # packet ends the session without answering the poll. Joining that
+        # thread is what made a 100 ms probe take 45 s to exit, and the E2E
+        # suite wait 45 s for the same thread at test teardown. A daemon
+        # thread is not joined by the interpreter or the event loop; it ends
+        # on its own once the poll is answered, and its answer is dropped.
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[HttpResponse] = loop.create_future()
+
+        def settle(result: HttpResponse | None, error: BaseException | None) -> None:
+            if future.done():
+                return  # cancelled: the caller stopped waiting for this one
+            if error is not None:
+                future.set_exception(error)
+            else:
+                future.set_result(result)
+
+        def run() -> None:
+            try:
+                outcome = (fetch(method, url, body, headers, wait_seconds or timeout_default), None)
+            except BaseException as error:  # noqa: BLE001 - every failure belongs to the awaiting caller
+                outcome = (None, error)
+            try:
+                loop.call_soon_threadsafe(settle, *outcome)
+            except RuntimeError:
+                pass  # the loop is closed: nobody is left to tell
+
+        threading.Thread(target=run, name="probe-http", daemon=True).start()
+        return await future
 
     timeout_default = timeout
     return transport

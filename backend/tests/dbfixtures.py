@@ -21,13 +21,16 @@ import os
 from typing import Any
 
 from sqlalchemy import event
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.schema import CreateIndex, CreateTable
 
 from app.db import configure_sqlite_connection, get_engine_connect_args
 from app.db.models import Base
@@ -84,6 +87,64 @@ def create_test_engine(url: str | None = None) -> AsyncEngine:
     return engine
 
 
+# Both schema scripts are compiled once per process. Several hundred tests
+# build a database each, and compiling the same 150-odd statements for every
+# one of them was most of what a fresh database cost (#660).
+_SQLITE_SCHEMA_SCRIPT: str | None = None
+_POSTGRESQL_WIPE_SCRIPT: str | None = None
+
+
+def _sqlite_schema_script() -> str:
+    """Every CREATE the models compile to for SQLite, as one script.
+
+    The statements are the ones `Base.metadata.create_all(checkfirst=False)`
+    would run, in its order, so the schema is identical - a test in
+    `test_db_models.py` still proves the models match the migrations.
+    Running them as one script costs one hop to aiosqlite's thread instead
+    of one per statement.
+    """
+    global _SQLITE_SCHEMA_SCRIPT
+    if _SQLITE_SCHEMA_SCRIPT is None:
+        dialect = sqlite.dialect()
+        statements = []
+        for table in Base.metadata.sorted_tables:
+            statements.append(str(CreateTable(table).compile(dialect=dialect)))
+            statements.extend(
+                str(CreateIndex(index).compile(dialect=dialect)) for index in table.indexes
+            )
+        _SQLITE_SCHEMA_SCRIPT = ";\n".join(s.strip() for s in statements) + ";"
+    return _SQLITE_SCHEMA_SCRIPT
+
+
+def _postgresql_wipe_script() -> str:
+    """One DELETE per application table, children first, as one round trip.
+
+    TRUNCATE was measured slower here - it rewrites every table's file even
+    when empty - and a DELETE per statement is a round trip per table.
+    """
+    global _POSTGRESQL_WIPE_SCRIPT
+    if _POSTGRESQL_WIPE_SCRIPT is None:
+        quote = postgresql.dialect().identifier_preparer.quote
+        _POSTGRESQL_WIPE_SCRIPT = "; ".join(
+            f"DELETE FROM {quote(table.name)}" for table in reversed(Base.metadata.sorted_tables)
+        )
+    return _POSTGRESQL_WIPE_SCRIPT
+
+
+async def _run_driver_script(conn: AsyncConnection, script: str) -> None:
+    """Run a multi-statement script through the driver, in one round trip.
+
+    SQLAlchemy prepares every statement it sends, and a prepared statement
+    holds one statement; the drivers underneath both accept a script.
+    """
+    raw = await conn.get_raw_connection()
+    driver = raw.driver_connection
+    if hasattr(driver, "executescript"):  # aiosqlite
+        await driver.executescript(script)
+    else:  # asyncpg
+        await driver.execute(script)
+
+
 async def create_test_db() -> tuple[async_sessionmaker[AsyncSession], AsyncEngine]:
     """A session factory and its engine over an empty, integrity-enforcing schema."""
     external_url = os.environ.get("TEST_DATABASE_URL")
@@ -94,14 +155,12 @@ async def create_test_db() -> tuple[async_sessionmaker[AsyncSession], AsyncEngin
         # schema intact so tests exercise Alembic's output, while isolating
         # tests by removing application rows in dependency order.
         async with engine.begin() as conn:
-            for table in reversed(Base.metadata.sorted_tables):
-                await conn.execute(table.delete())
+            await _run_driver_script(conn, _postgresql_wipe_script())
     else:
         engine = create_test_engine(SQLITE_MEMORY_URL)
         async with engine.begin() as conn:
-            # This connection owns a brand-new in-memory database. Checking
-            # for each table first only adds two round trips per table.
-            await conn.run_sync(Base.metadata.create_all, checkfirst=False)
+            # This connection owns a brand-new in-memory database.
+            await _run_driver_script(conn, _sqlite_schema_script())
 
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     return factory, engine
