@@ -90,6 +90,17 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         parse_empty_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
+    # Everything that can yield runs *before* the channel is joined and the
+    # baselines are read (#600). The lookups used to sit between the two, and
+    # a room that opened and was flushed during them went out as a delta this
+    # socket discarded for having no baseline yet, followed by the older
+    # baseline; on a quiet server nothing ever repaired the list. From the
+    # join to the answer nothing awaits anything that can yield (`enter_room`
+    # is bookkeeping, and the reply is queued behind it), so the baselines
+    # are at or past every delta this socket can have been sent.
+    hidden = await _hidden_authors_for(
+        ctx, await _user_of(ctx, sid), ctx.lobby_chat.authors()
+    )
     await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
     feed = ctx.presence_broadcaster
     rooms = feed.rooms_for_watcher()
@@ -97,9 +108,6 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     # both the backlog and a delta that beat this answer; the client's
     # sequence numbers make that a duplicate it ignores, not a line it shows
     # twice. Nothing here depends on the order of the two.
-    hidden = await _hidden_authors_for(
-        ctx, await _user_of(ctx, sid), ctx.lobby_chat.authors()
-    )
     return {
         "ok": True,
         **feed.snapshot_for_watcher().payload(),

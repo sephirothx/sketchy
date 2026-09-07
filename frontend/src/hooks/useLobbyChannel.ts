@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { resubscribeDelayMs } from "../lib/lobbyChannel";
+import { createPendingDeltas } from "../lib/lobbyChannel";
 import { emitWithAck, socket } from "../lib/socket";
 import { useLobbyChatStore } from "../store/lobbyChatStore";
 import { usePresenceStore } from "../store/presenceStore";
@@ -38,10 +39,21 @@ export function useLobbyChannel(): void {
     // forgotten.
     let generation = 0;
     let asking = false;
+    // A resync decided while an acknowledgement is in flight - a replayed
+    // delta that did not follow, the pending buffer overflowing - cannot be
+    // issued from inside that attempt; it is remembered and issued the moment
+    // the attempt settles, so it is never lost to the guard below.
+    let wanted = false;
     // Whether an acknowledgement has landed on *this* connection. The server
     // joins the channel before it builds the answer, so a delta can arrive
     // first, and there is nothing sensible to apply it to yet.
     let baseline = false;
+    // Deltas that arrive while the acknowledgement is pending are held, not
+    // dropped, and replayed after the baseline if newer than it (#600). The
+    // server reads its baselines with nothing yielding between the join and
+    // the answer, so on the wire this should never be needed; keeping it
+    // means the lobby does not depend on that ordering to stay right.
+    const pending = createPendingDeltas();
     // Whether the next backlog replaces the chat or merges into it. Replaced
     // on a new socket, whose numbering is new; merged on a resync the other
     // feeds asked for, so a lobby left open all evening keeps what it watched
@@ -61,9 +73,14 @@ export function useLobbyChannel(): void {
       // asks for a resync, and while the answer is on its way each further
       // delta finds it out of step again - so without this a single missed
       // message turns into one subscription per tick.
-      if (cancelled || asking || !socket.connected) return;
+      if (cancelled || !socket.connected) return;
+      if (asking) {
+        wanted = true;
+        return;
+      }
       stopRetrying();
       asking = true;
+      wanted = false;
       const mine = generation;
       try {
         const answer = await emitWithAck<Record<string, unknown>>("watch_lobby", {});
@@ -75,6 +92,22 @@ export function useLobbyChannel(): void {
         replaceChat = false;
         baseline = true;
         attempt = 0;
+        const revisionOf = (value: unknown) => (typeof value === "number" ? value : 0);
+        for (const held of pending.drain({
+          presence: revisionOf(answer.revision),
+          rooms: revisionOf(answer.roomsRevision),
+          chatSeq: revisionOf(answer.chatSeq),
+        })) {
+          if (held.feed === "presence") usePresenceStore.getState().receiveDelta(held.payload);
+          else if (held.feed === "rooms") useRoomsStore.getState().receiveDelta(held.payload);
+          else useLobbyChatStore.getState().receiveLine(held.payload);
+        }
+        if (
+          usePresenceStore.getState().presence.needsResync
+          || useRoomsStore.getState().rooms.needsResync
+        ) {
+          void subscribe();
+        }
       } catch {
         // Nothing else will ask. A disconnect is answered by `onConnect`, but
         // a refusal or a timed-out acknowledgement on a socket that stays up
@@ -88,12 +121,28 @@ export function useLobbyChannel(): void {
           void subscribe();
         }, resubscribeDelayMs(attempt));
       } finally {
-        if (mine === generation) asking = false;
+        if (mine === generation) {
+          asking = false;
+          if (wanted && !cancelled && socket.connected) {
+            wanted = false;
+            void subscribe();
+          }
+        }
       }
     }
 
+    // Held while the baseline is pending; past the buffer's cap a fresh
+    // baseline is asked for, since what was held no longer joins onto anything.
+    const holdOrResubscribe = (feed: "presence" | "rooms" | "chat", payload: unknown) => {
+      if (!pending.hold(feed, payload)) void subscribe();
+    };
+
     const onPresence = (payload: unknown) => {
-      if (cancelled || !baseline) return;
+      if (cancelled) return;
+      if (!baseline) {
+        holdOrResubscribe("presence", payload);
+        return;
+      }
       usePresenceStore.getState().receiveDelta(payload);
       // A delta that did not follow the one we hold means something was
       // missed. The store is not patched around the gap - it is replaced.
@@ -101,15 +150,24 @@ export function useLobbyChannel(): void {
     };
 
     const onRooms = (payload: unknown) => {
-      if (cancelled || !baseline) return;
+      if (cancelled) return;
+      if (!baseline) {
+        holdOrResubscribe("rooms", payload);
+        return;
+      }
       useRoomsStore.getState().receiveDelta(payload);
       if (useRoomsStore.getState().rooms.needsResync) void subscribe();
     };
 
-    // A line before the baseline is also in the backlog the answer carries,
-    // so dropping it here loses nothing.
+    // A line before the baseline is usually in the backlog the answer carries;
+    // one said after the backlog was read is not, so it is held like the rest
+    // and the store's sequence numbers drop the duplicates.
     const onChat = (payload: unknown) => {
-      if (cancelled || !baseline) return;
+      if (cancelled) return;
+      if (!baseline) {
+        holdOrResubscribe("chat", payload);
+        return;
+      }
       useLobbyChatStore.getState().receiveLine(payload);
     };
 
@@ -118,9 +176,11 @@ export function useLobbyChannel(): void {
     const onConnect = () => {
       generation += 1;
       asking = false;
+      wanted = false;
       baseline = false;
       replaceChat = true;
       attempt = 0;
+      pending.clear();
       stopRetrying();
       usePresenceStore.getState().reset();
       useRoomsStore.getState().markStale();
@@ -132,7 +192,9 @@ export function useLobbyChannel(): void {
     const onDisconnect = () => {
       generation += 1;
       asking = false;
+      wanted = false;
       baseline = false;
+      pending.clear();
       stopRetrying();
       usePresenceStore.getState().reset();
       useRoomsStore.getState().markStale();
@@ -148,6 +210,7 @@ export function useLobbyChannel(): void {
     return () => {
       cancelled = true;
       stopRetrying();
+      pending.clear();
       socket.off("lobby_presence_changed", onPresence);
       socket.off("lobby_rooms_changed", onRooms);
       socket.off("lobby_chat_message", onChat);

@@ -537,3 +537,40 @@ async def test_a_handshake_warms_who_has_muted_the_account(monkeypatch):
 
     await connect_as(ctx, sio, "sid-anon", "tok-none")
     ctx.block_service.warm.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_change_during_the_subscription_s_lookups_is_in_the_baseline_not_lost(monkeypatch):
+    """#600: the handler joined the channel and captured the room list, then
+    awaited the block lookup. A room that opened and was flushed during that
+    await went out as a delta the client discards (no baseline yet), and the
+    older baseline followed; on a quiet server nothing ever repaired it. The
+    lookups now run first, and nothing yields between the join and the answer,
+    so the answer is at or past any delta this socket could have received."""
+    from app.handlers import lobby as lobby_module
+
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+
+    opened = {}
+    real_hidden = lobby_module._hidden_authors_for
+
+    async def hidden_with_a_room_opening(ctx_, user_id, authors):
+        # The world moves while the handler is looking something up.
+        opened["room"] = room_manager.create_room(name="Opened meanwhile", is_public=True)
+        await ctx.presence_broadcaster.flush()
+        return await real_hidden(ctx_, user_id, authors)
+
+    monkeypatch.setattr(lobby_module, "_hidden_authors_for", hidden_with_a_room_opening)
+    answer = await sio.handlers["/"]["watch_lobby"]("sid-a", None)
+
+    deltas = [
+        call.args[1] for call in sio.emit.await_args_list
+        if call.args and call.args[0] == "lobby_rooms_changed"
+    ]
+    assert [entry["id"] for entry in answer["rooms"]] == [opened["room"].id], "the baseline has the room"
+    assert all(answer["roomsRevision"] >= delta["revision"] for delta in deltas), (
+        "a delta this socket may have received is not newer than its baseline"
+    )

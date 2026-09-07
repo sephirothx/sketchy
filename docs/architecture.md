@@ -580,6 +580,20 @@ changes to a list it has not been given. The revisions are separate because the
 feeds move independently: a room filling up must not re-send who is online, and
 somebody signing in must not re-send the rooms.
 
+**The subscription cut is the join.** The handler's lookups (the session, the
+blocked authors) run *before* it joins the channel and reads its baselines, and
+from the join to the answer nothing awaits anything that can yield, so the
+baselines are at or past every delta the socket can have been sent (#600). It
+used to be the other way round: the room list was captured, then the lookups
+awaited, and a room that opened and was flushed during that await went out as a
+delta the client discarded for having no baseline yet, followed by the older
+baseline — and on a quiet server no later delta ever repaired the list. The
+client keeps its own half of the guarantee regardless of that ordering
+([`lib/lobbyChannel.ts`](../frontend/src/lib/lobbyChannel.ts)): a delta that
+arrives while the acknowledgement is pending is held, bounded, and replayed
+after the baseline if newer than it; past the cap the buffer is emptied and a
+fresh baseline asked for, since what it held no longer joins onto anything.
+
 The snapshot is built from `Room.to_public_summary()` — the same serializer the
 endpoint uses, so the two surfaces cannot drift into describing rooms
 differently — and it is diffed rather than marked dirty, for the reason
