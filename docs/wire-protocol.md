@@ -423,7 +423,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `report_player` | `ReportPlayerPayload` | ✓ | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
-| `watch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `watch_lobby` | `EmptyPayload` | ✓ — the acknowledgement carries every baseline (presence, rooms, chat) read with nothing yielding between joining the channel and answering, so it is at or past any delta the socket can have been sent (#600) | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
