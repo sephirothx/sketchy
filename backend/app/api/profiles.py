@@ -107,6 +107,13 @@ def create_profile_router(
         because `get_stats` answers with a zeroed record for an id that does not
         exist, so the lookup is also what makes a 404 possible. It is the
         public shape (#469): the caller's own richer account is `/auth/me`.
+
+        The numbers are lifetime, private-room games included, for anyone.
+        That a stranger can subtract the games they are shown from
+        `gamesPlayed` and learn that private games exist is accepted: a
+        count says nothing about who, when or where, and scoping it would
+        put a visibility dimension on the daily projection (R-HIST-20) for
+        a number the owner decided is not sensitive.
         """
         throttle(request)
         user = await user_repo.get_by_id(user_id)
