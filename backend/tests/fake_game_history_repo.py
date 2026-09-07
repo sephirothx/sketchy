@@ -131,6 +131,15 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     ) -> TurnDrawingDetail | None:
         return None
 
+    async def get_turn_drawing_checksum(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+    ) -> str | None:
+        return None
+
     async def get_user_games(
         self, user_id: str, limit: int = 20, offset: int = 0
     ) -> list[GameSummary]:

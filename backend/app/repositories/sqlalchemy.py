@@ -1735,6 +1735,42 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             checksum_sha256=row.checksum_sha256 or "",
         )
 
+    async def get_turn_drawing_checksum(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+    ) -> str | None:
+        db_game_id = _optional_entity_id(game_id)
+        db_turn_id = _optional_entity_id(turn_id)
+        db_requesting_user_id = _optional_entity_id(requesting_user_id)
+        if db_game_id is None or db_turn_id is None or db_requesting_user_id is None:
+            return None
+        async with self._session_factory() as session:
+            identity_ids = await _identity_ids(session, db_requesting_user_id)
+            participated = (
+                select(GameParticipant.id)
+                .where(
+                    GameParticipant.game_id == db_game_id,
+                    GameParticipant.user_id.in_(identity_ids),
+                )
+                .exists()
+            )
+            # The same predicate as the drawing itself - a drawing that is
+            # not there to download has no validator either - selecting the
+            # checksum column alone, never the blob beside it (R-PLAT-14).
+            checksum = await session.scalar(
+                select(TurnDrawing.checksum_sha256).where(
+                    TurnDrawing.turn_id == db_turn_id,
+                    TurnDrawing.game_id == db_game_id,
+                    TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    TurnDrawing.payload.is_not(None),
+                    participated,
+                )
+            )
+        return checksum or None
+
     async def set_drawing_reaction(
         self,
         game_id: str,

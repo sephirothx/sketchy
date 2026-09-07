@@ -13,6 +13,7 @@ from app.api.serializers import (
     user_payload,
 )
 from app.auth.rate_limit import RateLimiter, client_key
+from app.canvas_history import CANVAS_HISTORY_VERSION
 from app.canvas_storage import (
     CorruptStoredDrawingError,
     UnsupportedStoredDrawingError,
@@ -57,6 +58,27 @@ def reaction_payload(result: DrawingReactionResult) -> dict:
             for reaction in result.reactions
         ],
     }
+
+
+def drawing_validator(checksum: str) -> str:
+    """The `ETag` of a served drawing: the stored checksum and the wire
+    version it is decoded into (#604). Weak, since the identical bytes go
+    out with or without a content encoding."""
+    return f'W/"{checksum}-w{CANVAS_HISTORY_VERSION}"'
+
+
+def validator_matches(if_none_match: str, validator: str) -> bool:
+    """Weak comparison of an `If-None-Match` header against one validator:
+    the `W/` prefix is ignored on both sides, a list matches on any member,
+    and `*` matches any current representation."""
+    if if_none_match.strip() == "*":
+        return True
+
+    def bare(tag: str) -> str:
+        tag = tag.strip()
+        return tag[2:] if tag.startswith("W/") else tag
+
+    return any(bare(tag) == bare(validator) for tag in if_none_match.split(",") if tag.strip())
 
 
 def create_profile_router(
@@ -141,11 +163,44 @@ def create_profile_router(
 
         Answered in the current wire format, so a client decodes a stored
         drawing with exactly the code it already uses for a live one.
+
+        Conditional (#604): the browser is told to revalidate on every open
+        (`no-cache`) and is answered `304` without a body while its copy is
+        current, which is nearly always - a drawing never changes, it can
+        only stop being available. The validator names the *served*
+        representation: the stored checksum together with the wire version
+        the decoders answer in, since a new wire version changes the bytes
+        served without touching the bytes stored (R-HIST-18). It is weak,
+        because the same bytes go out gzipped or not, and it is checked only
+        after the same authorization and availability query as the drawing
+        itself, so a tag a browser remembers cannot see past a lost
+        permission or an erased drawing: those are 404 as before.
         """
         throttle(request)
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
             raise HTTPException(status_code=404, detail="No such drawing.")
+        cache_headers = {
+            # Participant-scoped bytes must never reach a shared cache, and a
+            # browser's own copy is revalidated on every open: an erased
+            # drawing stops being shown at once rather than when a lifetime
+            # runs out.
+            "Cache-Control": "private, no-cache",
+        }
+        if_none_match = request.headers.get("if-none-match")
+        if if_none_match is not None:
+            # A validator is answered from the metadata alone: the blob is
+            # neither read nor decoded for a copy that is still current.
+            checksum = await game_history_repo.get_turn_drawing_checksum(
+                game_id, turn_id, requesting_user_id=requesting_user_id
+            )
+            if checksum is None:
+                raise HTTPException(status_code=404, detail="No such drawing.")
+            validator = drawing_validator(checksum)
+            if validator_matches(if_none_match, validator):
+                return Response(
+                    status_code=304, headers={**cache_headers, "ETag": validator}
+                )
         drawing = await game_history_repo.get_turn_drawing(
             game_id, turn_id, requesting_user_id=requesting_user_id
         )
@@ -169,9 +224,8 @@ def create_profile_router(
             content=payload,
             media_type="application/octet-stream",
             headers={
-                # Participant-scoped bytes must never reach a shared cache.
-                "Cache-Control": "private, max-age=3600, immutable",
-                "ETag": f'"{drawing.checksum_sha256}"',
+                **cache_headers,
+                "ETag": drawing_validator(drawing.checksum_sha256),
             },
         )
 

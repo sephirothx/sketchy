@@ -146,7 +146,11 @@ at any size, and a PNG stays something the browser produces on demand rather
 than something the server keeps. `GET
 /api/games/{game_id}/turns/{turn_id}/drawing` returns one, and only to a player
 who was in that game; every refusal is a 404, so the endpoint never reveals
-whether a game exists. A turn whose bytes the recap had to drop for budget is
+whether a game exists. The browser is told to check back on every open and is
+answered with a bodiless 304 while its copy is current, decided from the
+drawing's metadata alone; the validator names the wire version as well as the
+stored bytes, so a newer decoder invalidates old copies, and a tag never gets
+past the participant check or an erasure. A turn whose bytes the recap had to drop for budget is
 recorded as unavailable rather than omitted, and deleting an account erases the
 drawings that account made while leaving the row saying so.
 

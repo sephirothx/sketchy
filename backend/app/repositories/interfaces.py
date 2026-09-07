@@ -744,6 +744,24 @@ class GameHistoryRepository(ABC):
         """
         ...
 
+    @abstractmethod
+    async def get_turn_drawing_checksum(
+        self,
+        game_id: str,
+        turn_id: str,
+        *,
+        requesting_user_id: str,
+    ) -> str | None:
+        """The stored checksum of one drawing, under exactly the rules above.
+
+        What a conditional download (#604) is answered from: the same
+        authorization and availability query as `get_turn_drawing`, without
+        the blob (R-PLAT-14), so a `304` costs no drawing bytes on either
+        side. None for every refusal, so a cached validator can never see
+        past a lost permission or an erased drawing.
+        """
+        ...
+
 
 class PromptListRepository(ABC):
     """Data access boundary for curated prompt lists and prompt usage statistics."""
