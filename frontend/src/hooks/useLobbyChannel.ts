@@ -50,9 +50,9 @@ export function useLobbyChannel(): void {
     let baseline = false;
     // Deltas that arrive while the acknowledgement is pending are held, not
     // dropped, and replayed after the baseline if newer than it (#600). The
-    // server reads its baselines with nothing yielding between the join and
-    // the answer, so on the wire this should never be needed; keeping it
-    // means the lobby does not depend on that ordering to stay right.
+    // server joins the channel before its lookups, so a delta sent during
+    // them does arrive here first; its baselines are read after, so such a
+    // delta is never newer than them.
     const pending = createPendingDeltas();
     // Whether the next backlog replaces the chat or merges into it. Replaced
     // on a new socket, whose numbering is new; merged on a resync the other

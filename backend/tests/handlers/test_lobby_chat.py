@@ -408,3 +408,43 @@ async def test_speaking_answers_to_its_own_budget(monkeypatch):
     refused = await say(sio, "sid-a", "one more")
     assert refused["ok"] is False and "too quickly" in refused["error"]
     assert ctx.lobby_chat.last_seq == budget.limit
+
+
+@pytest.mark.asyncio
+async def test_a_line_said_while_the_subscription_is_looking_things_up_is_heard(monkeypatch):
+    """The client says its first line the moment it is connected, while its
+    `watch_lobby` is still awaiting the block lookup. The join has to come
+    before that await: a socket whose subscription is in flight is watching,
+    and its line goes out to the channel and is in its own backlog, rather
+    than being refused as not watching."""
+    import asyncio
+
+    from app.handlers import lobby as lobby_module
+
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    await arrive(ctx, sio, "sid-b", "tok-b")
+    await connect_as(ctx, sio, "sid-a", "tok-a")
+    sio.emit.reset_mock()
+
+    looking_up = asyncio.Event()
+    release = asyncio.Event()
+    real_hidden = lobby_module._hidden_authors_for
+
+    async def slow_hidden(ctx_, user_id, authors):
+        looking_up.set()
+        await release.wait()
+        return await real_hidden(ctx_, user_id, authors)
+
+    monkeypatch.setattr(lobby_module, "_hidden_authors_for", slow_hidden)
+    watching = asyncio.ensure_future(sio.handlers["/"]["watch_lobby"]("sid-a", None))
+    await looking_up.wait()
+
+    assert await say(sio, "sid-a", "hello") == {"ok": True}
+    [call] = chat_emits(sio)
+    assert call.kwargs == {"room": LOBBY_CHANNEL}
+
+    release.set()
+    answer = await watching
+    assert answer["ok"] is True
+    assert [line["text"] for line in answer["chat"]] == ["hello"]
+    assert answer["chatSeq"] == 1

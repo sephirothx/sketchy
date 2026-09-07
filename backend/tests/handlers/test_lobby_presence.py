@@ -545,8 +545,8 @@ async def test_a_change_during_the_subscription_s_lookups_is_in_the_baseline_not
     awaited the block lookup. A room that opened and was flushed during that
     await went out as a delta the client discards (no baseline yet), and the
     older baseline followed; on a quiet server nothing ever repaired it. The
-    lookups now run first, and nothing yields between the join and the answer,
-    so the answer is at or past any delta this socket could have received."""
+    baselines are now read after the lookups, with nothing yielding before
+    the answer, so it is at or past any delta this socket could have received."""
     from app.handlers import lobby as lobby_module
 
     room_manager = RoomManager()
