@@ -89,7 +89,7 @@ def create_test_engine(url: str | None = None) -> AsyncEngine:
 
 # Both schema scripts are compiled once per process. Several hundred tests
 # build a database each, and compiling the same 150-odd statements for every
-# one of them was most of what a fresh database cost (#659).
+# one of them was most of what a fresh database cost (#660).
 _SQLITE_SCHEMA_SCRIPT: str | None = None
 _POSTGRESQL_WIPE_SCRIPT: str | None = None
 

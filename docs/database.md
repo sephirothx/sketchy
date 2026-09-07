@@ -1573,7 +1573,7 @@ deletion paths that only failed once enforcement was real. The schema is the one
 `test_db_models.py` still proves models and migrations agree - compiled once per
 process and run as one script, because several hundred tests build a database each and
 compiling and sending 150-odd statements one at a time was most of what each cost
-(#659). The engine remains local to the test's event loop.
+(#660). The engine remains local to the test's event loop.
 
 For the full suite with CI's parallel scheduling, keep migration replay separate:
 

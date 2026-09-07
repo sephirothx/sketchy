@@ -269,12 +269,14 @@ jobs:
       # READ COMMITTED interleavings are the ones production will see. A
       # SQLite pass (the backend job) proves integrity - foreign keys are
       # enforced there too since #612 - but never concurrency.
-      # Two workers, not the runner's four: the PostgreSQL container shares
-      # those vCPUs, and with four workers every database-bound test ran two
-      # to four times slower, the step took longer than with two, and the
-      # 33,000-game rebuild test overran its 30 s statement budget (#658).
+      # Four workers on the runner's four vCPUs, shared with the PostgreSQL
+      # container. With commits waiting on the disk (#658) four workers made
+      # every database-bound test two to four times slower than two did and
+      # the 33,000-game rebuild test overran its 30 s statement budget; with
+      # durability off above, the container is CPU-bound like the workers
+      # and four is faster again (#660).
       - name: Run the backend suite against PostgreSQL
-        run: pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
+        run: pytest -q -n 4 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
 
       - name: Save PostgreSQL test results
         if: ${{ !cancelled() }}
@@ -349,13 +351,13 @@ jobs:
         run: npm audit
 
   e2e-tests:
-    name: E2E shard ${{ matrix.shard }}/2
+    name: E2E shard ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     strategy:
-      # Keep both reports even if one shard fails: together they cover the suite.
+      # Keep every report even if one shard fails: together they cover the suite.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
 
@@ -417,7 +419,7 @@ jobs:
         working-directory: frontend
 
       - name: Run E2E tests
-        run: bash scripts/test-e2e.sh --e2e-shard=${{ matrix.shard }}/2
+        run: bash scripts/test-e2e.sh --e2e-shard=${{ matrix.shard }}/3
 
       - name: Save E2E test results
         if: ${{ !cancelled() }}

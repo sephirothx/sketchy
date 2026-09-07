@@ -37,11 +37,5 @@ def pytest_collection_modifyitems(config, items):
     # runner agree without a maintained file list that can omit new tests.
     for position, item in enumerate(sorted(items, key=lambda item: item.nodeid)):
         (selected if position % total == index - 1 else deselected).append(item)
-    # The real operator probe leaves urllib long-polls in executor threads;
-    # process/event-loop shutdown waits roughly 45 seconds for them. Start
-    # these cases early so browser scenarios overlap that wait. Do this after
-    # partitioning: the two adjacent probe IDs land on different CI runners.
-    if total > 1:
-        selected.sort(key=lambda item: not item.nodeid.startswith("tests/e2e/test_probe.py::"))
     items[:] = selected
     config.hook.pytest_deselected(items=deselected)
