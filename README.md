@@ -491,10 +491,12 @@ make multi-worker gameplay correct.
 
 The v1 release-load target for this topology is 50 simultaneous active rooms
 and 400 connected player seats on one worker. This is a validation target, not
-a claim that an arbitrary host will sustain that load: the checked-in #323
-load scenario must measure handler latency, event-loop lag, memory, and drawing
-traffic on the documented reference environment before the production baseline
-is declared complete. Deployments needing multiple workers are outside v1 and
+a claim that an arbitrary host will sustain that load: `benchmarks/run_load.sh`
+(#461) is the checked-in load scenario that measures acknowledgement latency,
+draw fan-out, timer overrun, event-loop lag, memory and drawing traffic at that
+population against thresholds, and its last result on the reference environment
+is recorded beside the target in `docs/requirements.md`; a production host is
+re-measured with the same script before its baseline is declared. Deployments needing multiple workers are outside v1 and
 require shared room/session/timer state plus cross-worker Socket.IO delivery.
 
 Planned deploys use a bounded drain; they do not snapshot or restore live
@@ -1407,6 +1409,11 @@ backend/.venv/bin/python benchmarks/live_drawing.py --room-size 8 --window-bits 
 # What thinning the pointer samples saves and changes, over the same traces (#560)
 backend/.venv/bin/python benchmarks/point_thinning.py
 
+# The release load gate: 50 rooms x 8 seats sustained for 5 minutes against a throwaway server (#461)
+./benchmarks/run_load.sh
+./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
+./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target
+
 # Re-record that trace through the production client (scripted pen, or --manual to draw by hand)
 ./benchmarks/record_stroke.sh
 ./benchmarks/record_stroke.sh --manual --output fixtures/live_strokes/hand-mine.json
@@ -1549,6 +1556,23 @@ relative frames — for the message count and the deflated bytes of each (#559).
 recorded now would already be thinned, and would understate what thinning does. A repeated identical batch, which is what the benchmark
 modelled before, is deflate's best case and understated live drawing by about
 half; the trace is what fixed that.
+
+`run_load.sh` is the **release load gate** (#461): it starts a server with the
+limits a swarm from one address would trip raised, then drives the documented
+scale target - 50 rooms of 8 seats, 400 seats, plus 20 lobby watchers - with real
+Socket.IO clients over WebSocket for five minutes: every room plays games
+continuously (a recorded hand drawing streamed at its own timing by whoever is
+offered prompts, chat and guesses from the rest, a correct guess in half the
+turns), a quarter of the seats drop and reconnect on a schedule, and the lobby
+channel is held open. It reports acknowledgement latency (p50/p95/p99, per
+command), draw fan-out latency from the drawer's send to a viewer's receipt,
+timer overrun on turns that ran their full length, unexpected disconnects and
+failed reconnects, and, scraped from `/metrics`, event-loop lag, resident memory
+and its growth, database query latency, rejected packets and canvas recovery
+notices - each against a threshold, exiting non-zero on a breach. It is run by
+hand on the reference environment before a release (R-ENG-11 keeps it out of
+CI), and the numbers it last produced are recorded with that environment in
+`docs/requirements.md` under the scale target.
 
 The deflate-window benchmark decides the WebSocket compressor's two constants in
 `backend/app/ws_transport.py`. It runs one viewer's session — join, late-join

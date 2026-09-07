@@ -92,5 +92,14 @@ def instrument_socket_server(
         return await emit(event, data, *args, **kwargs)
 
     sio._handle_eio_message = counted_receive
+    # The attribute alone counts nothing on the wire: socketio registered the
+    # *bound* method with engineio at construction, so engineio keeps calling
+    # the original whatever the instance attribute says. The registered
+    # handler is what real packets reach; the attribute is what tests and
+    # the bounded door call. Both are wrapped, and the load gate (#461) is
+    # what noticed that only one had been.
+    handlers = getattr(sio.eio, "handlers", None)
+    if isinstance(handlers, dict) and "message" in handlers:
+        handlers["message"] = counted_receive
     sio.eio.send_packet = counted_send_packet
     sio.manager.emit = counted_emit

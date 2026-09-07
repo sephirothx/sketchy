@@ -24,7 +24,25 @@ for play.
 
 **Scale target (v1):** 50 simultaneous active rooms and 400 connected player seats on
 one worker. This is a *validation target* on a documented reference environment, not a
-claim that an arbitrary host will sustain it.
+claim that an arbitrary host will sustain it. It is validated by the release load gate,
+[`benchmarks/run_load.sh`](../benchmarks/run_load.sh) (#461, R-PLAT-18), whose last
+result is recorded here so the target is a measurement rather than a sentence:
+
+<!-- load-gate-result:begin -->
+**Last result** — PASSED: 50 rooms × 8 seats = 400 seats and 20 lobby watchers for 300 s (50 games, 200 turns), on Darwin 25.5.0 arm64, 12 CPUs, Python 3.14.7 — the reference environment for now; a production host is re-measured with the same script.
+
+| Signal | Measured | Threshold |
+| --- | --- | --- |
+| Acknowledgement latency p50 / p95 / p99 | 2.1 / 7.1 / 22.1 ms | p95 ≤ 100, p99 ≤ 250 ms |
+| Draw fan-out latency p50 / p95 | 1.1 / 3.0 ms | p95 ≤ 150 ms |
+| Timer overrun p95 / max | 21.8 / 26.0 ms | p95 ≤ 250 ms |
+| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 10 / ≤ 25 ms | ≤ 100 / ≤ 250 ms |
+| Resident memory idle → after warm-up → peak | 167 → 211 → 211 MB (103 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 0.0 %) |
+| Database query p99 (bucket bound) | ≤ 50 ms | ≤ 50 ms |
+| Unexpected disconnects / failed reconnects | 0 / 0 (of 504 reconnects) | 0 / 0 |
+| Packets rejected / fault notices (all notices by reason) | 0 / 0 (none) | 0 / 0 |
+| Traffic | 65.5 MB out, 2.0 MB in; 22846 frames sent, 158197 received; 14967 guesses, 866 chats | — |
+<!-- load-gate-result:end -->
 
 ---
 
@@ -44,6 +62,7 @@ claim that an arbitrary host will sustain it.
 | **R-PLAT-16** | The lifecycle invariants listed under *Lifecycle invariants* in [`database.md`](database.md) §1 MUST be held by CHECK and foreign-key constraints, so an alternate writer, a repair or a partial restore cannot store a shape no writer produces; a suspension's activity MUST be one predicate — not revoked and not past expiry — with an expired-but-unrevoked ban kept as history; a drawing MUST belong to a turn of its own game. Constraints complement the transaction ordering of R-PRIV-15 and R-HIST-21; they do not replace it. [`db/models.py`](../backend/app/db/models.py), [`tests/test_lifecycle_constraints.py`](../backend/tests/test_lifecycle_constraints.py) |
 | **R-PLAT-17** | The authenticated request path MUST NOT read what it already holds: `/api/auth/me` is two statements in the steady state and three when the login touch is due, the canonical account resolves in the account read itself, and a writer of `users` returns the row from its own statement's `RETURNING` rather than a refresh. The login touch keeps its throttle and its inactivity-retention meaning (R-PRIV-10 reads `last_active_at`, not this). The counts are pinned by test. [`auth/routes.py`](../backend/app/auth/routes.py), [`repositories/sqlalchemy.py`](../backend/app/repositories/sqlalchemy.py) |
 | **R-PLAT-14** | A read that serves metadata — the bug-report queue, export status and cooldown, the export document's own request and report sections, game history lists — MUST NOT select the blob column beside it (`screenshot_payload`, `artifact`, the list's `rule_snapshot`); those columns are deferred with `raiseload`, so a code path that reaches for one fails loudly instead of fetching megabytes it never serialises. Game history detail MUST test the requester's participation inside the initial query, before any eager load, and MUST NOT load live `users` rows for presentation (R-PRIV-08). [`api/bug_reports.py`](../backend/app/api/bug_reports.py), [`repositories/sqlalchemy.py`](../backend/app/repositories/sqlalchemy.py) |
+| **R-PLAT-18** | The scale target MUST be validated by a checked-in sustained load scenario that drives it with real Socket.IO clients over WebSocket — rooms playing continuously with recorded drawing, chat, guesses, reconnects through the grace, and lobby watchers — and reports acknowledgement latency (p95/p99), draw fan-out latency, timer overrun, event-loop lag, resident memory growth, database query latency, disconnects, rejected packets and recovery notices, **each against a threshold, exiting non-zero on a breach**. It is run by hand on the reference environment before a release rather than in CI (R-ENG-11: CI is not that environment), and its last result is recorded beside the target above with the environment it was measured on; a production host is re-measured with the same script (#461). [`benchmarks/load.py`](../benchmarks/load.py) |
 | **R-PLAT-08** | SQLite MUST migrate itself on startup. PostgreSQL migrations MUST be an explicit deploy step under an advisory lock; startup MUST verify the revision and fail with a direct instruction if the step was missed. [`db/migrate.py`](../backend/app/db/migrate.py) |
 | **R-PLAT-09** | Fingerprinted `/assets/` MUST be served `immutable` with a one-year lifetime, and `index.html` (including client-route fallbacks) `no-cache`, so browsers discover deployments promptly. [`deployment.py`](../backend/app/deployment.py) |
 | **R-PLAT-10** | Behind a proxy, the real client address MUST be recovered only with explicit trusted-proxy configuration (`PROXY_HEADERS=1`, `FORWARDED_ALLOW_IPS`). Without it, `X-Forwarded-For` MUST be ignored — it is attacker-controlled, and trusting it blindly would let a password-guesser sidestep rate limits by varying it per attempt. |
@@ -632,6 +651,7 @@ design, not a bug fix.
 | Bounded canvas recovery notices (R-DRAW-13) | [`handlers/drawing.py`](../backend/app/handlers/drawing.py), [`services/game_flow.py`](../backend/app/services/game_flow.py) | `tests/handlers/test_canvas_recovery_notices.py` |
 | Final batch closing a path (R-DRAW-01, #603) | [`live_drawing.py`](../backend/app/live_drawing.py), [`handlers/drawing.py`](../backend/app/handlers/drawing.py), [`lib/liveDrawing.ts`](../frontend/src/lib/liveDrawing.ts), [`hooks/useCanvasPointerInput.ts`](../frontend/src/hooks/useCanvasPointerInput.ts) | `tests/handlers/test_drawing.py` (atomic commit, refused whole, identical history), `frontend/tests/canvasRecovery.test.mjs` (identical hash, repack), the codec fixture on both sides |
 | Viewer playback (R-DRAW-01) and relative frames (R-DRAW-15) | [`lib/strokePlayback.ts`](../frontend/src/lib/strokePlayback.ts), [`components/Canvas.tsx`](../frontend/src/components/Canvas.tsx), [`live_drawing.py`](../backend/app/live_drawing.py), [`lib/liveDrawing.ts`](../frontend/src/lib/liveDrawing.ts), [`handlers/drawing.py`](../backend/app/handlers/drawing.py) | `frontend/tests/strokePlayback.test.mjs`, `frontend/tests/liveDrawing.test.mjs`, `tests/test_live_drawing.py`, `tests/handlers/test_drawing.py`, `fixtures/canvas_protocol_v1.json` on both sides, `tests/e2e/test_stroke_thinning.py` |
+| Release load gate (R-PLAT-18) | [`benchmarks/load.py`](../benchmarks/load.py), [`benchmarks/run_load.sh`](../benchmarks/run_load.sh) | run by hand before a release; the result recorded under *Scale target* |
 | Conditional drawing downloads (R-HIST-24) | [`api/profiles.py`](../backend/app/api/profiles.py), [`repositories/sqlalchemy.py`](../backend/app/repositories/sqlalchemy.py) | `tests/test_api_profiles.py` (current copy 304, list/strong/wildcard forms, a new wire version, a stranger's and an erased drawing's tag, gzip) |
 | Point thinning (R-DRAW-14) | [`lib/pointThinning.ts`](../frontend/src/lib/pointThinning.ts), [`hooks/useCanvasPointerInput.ts`](../frontend/src/hooks/useCanvasPointerInput.ts), [`benchmarks/point_thinning.py`](../benchmarks/point_thinning.py) | `frontend/tests/pointThinning.test.mjs` (bound and counts over the recorded traces), `frontend/tests/canvasPixels.test.mjs` (segment-by-segment equals polyline) |
 | Canvas sync transaction (R-DRAW-12) | [`lib/canvasSyncRequests.ts`](../frontend/src/lib/canvasSyncRequests.ts), [`handlers/drawing.py`](../backend/app/handlers/drawing.py) | `frontend/tests/canvasSyncRequests.test.mjs`, `tests/handlers/test_drawing.py` |

@@ -231,3 +231,29 @@ async def test_registration_wires_the_counters_and_commands_are_sized(monkeypatc
     rows = {row["event"]: row for row in store.snapshot()["socket"]["commandSizes"]}
     assert rows["create_room"]["count"] == 1
     assert rows["create_room"]["bytesTotal"] == len(b'{"nickname":"Host"}')
+
+
+async def test_packets_arriving_through_engineio_are_counted_not_only_direct_calls():
+    """#461: the load gate reported zero bytes in under 400 seats. socketio
+    hands engineio its *bound* receive method at construction, so wrapping
+    the instance attribute counted only callers that went through the
+    attribute - every test - and none of the packets a socket actually sent.
+    The registered handler is the one real traffic reaches."""
+    import socketio as socketio_module
+
+    from app.handlers.socket_wire import instrument_socket_server
+
+    store = Telemetry()
+    sio = socketio_module.AsyncServer(async_mode="asgi")
+    seen = []
+
+    async def received(eio_sid, data):
+        seen.append((eio_sid, data))
+
+    sio._handle_eio_message = received
+    sio.eio.on("message", received)  # what the constructor did with the original
+    instrument_socket_server(sio, store)
+
+    await sio.eio._trigger_event("message", "eio1", '42["guess",{"text":"cat"}]')
+    assert seen == [("eio1", '42["guess",{"text":"cat"}]')]
+    assert store.socket_bytes_in.total() == len('42["guess",{"text":"cat"}]')
