@@ -163,7 +163,7 @@ jobs:
       # condition did.
       # loadgroup shares the immutable repository-history scan between its
       # two tests; every other test is distributed normally (R-ENG-12/15).
-      - run: pytest -q -n 2 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+      - run: pytest -q -n 4 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
@@ -245,7 +245,7 @@ jobs:
       # SQLite pass (the backend job) proves integrity - foreign keys are
       # enforced there too since #612 - but never concurrency.
       - name: Run the backend suite against PostgreSQL
-        run: pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
+        run: pytest -q -n 4 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
 
       - name: Save PostgreSQL test results
         if: ${{ !cancelled() }}

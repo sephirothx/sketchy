@@ -1577,7 +1577,7 @@ For the full suite with CI's parallel scheduling, keep migration replay separate
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   .venv/bin/pytest -q tests/test_migrations.py
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
-  .venv/bin/pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50
+  .venv/bin/pytest -q -n 4 --dist=loadgroup --deselect tests/test_migrations.py --durations=50
 ```
 
 [`tests/conftest.py`](../backend/tests/conftest.py) provisions an isolated migrated

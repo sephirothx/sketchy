@@ -1341,10 +1341,10 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/pytest
 
 # Same parallel scheduling as CI, with slow-test diagnostics
-.venv/bin/pytest -q -n 2 --dist=loadgroup --durations=50
+.venv/bin/pytest -q -n 4 --dist=loadgroup --durations=50
 
 # Combined statement/branch coverage and the existing module floors
-.venv/bin/pytest -q -n 2 --dist=loadgroup --cov=app --cov-branch --cov-report=json:coverage.json
+.venv/bin/pytest -q -n 4 --dist=loadgroup --cov=app --cov-branch --cov-report=json:coverage.json
 .venv/bin/python ../scripts/check-coverage.py coverage.json
 
 # Lint (undefined/unused names, mutable defaults, truncating zips, async sleeps)
