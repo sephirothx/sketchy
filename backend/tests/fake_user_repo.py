@@ -226,5 +226,9 @@ class FakeUserRepository(UserRepository):
         self.users[user.id] = refreshed
         return refreshed
 
+
+    async def touch_last_seen(self, user_id: str) -> None:
+        self.last_seen: list[str] = getattr(self, "last_seen", [])
+        self.last_seen.append(user_id)
     async def get_stats(self, user_id: str) -> UserStats:
         return UserStats(user_id=user_id)

@@ -71,6 +71,18 @@ def turn(
     )
 
 
+def test_the_rooms_public_flag_is_frozen_onto_the_record():
+    """A private room's game is shown only to the players who were in it, and
+    the room is gone by the time anyone asks (#469)."""
+    _, room, _, game = build(("Ann", "user-ann", 300, False), ("Bob", "user-bob", 100, False))
+
+    assert room.is_public
+    assert build_game_history(room, game, finished_at=FINISHED_AT).record.visibility == "public"
+
+    room.is_public = False
+    assert build_game_history(room, game, finished_at=FINISHED_AT).record.visibility == "private"
+
+
 def test_tied_scores_share_a_rank_so_both_count_as_wins():
     _, room, players, game = build(
         ("Ann", "user-ann", 300, False),

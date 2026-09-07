@@ -141,7 +141,13 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         return None
 
     async def get_user_games(
-        self, user_id: str, limit: int = 20, offset: int = 0
+        self,
+        user_id: str,
+        limit: int = 20,
+        offset: int = 0,
+        *,
+        include_abandoned: bool = False,
+        requesting_user_id: str | None = None,
     ) -> list[GameSummary]:
         return []
 

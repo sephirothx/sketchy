@@ -57,6 +57,7 @@ class UserData:
     last_active_at: datetime | None = None
     state: str = "anonymous"
     role: str = "user"
+    last_seen_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,10 @@ class GameRecordInput:
     # How the game ended. Defaulted so every existing caller keeps meaning what
     # it meant: reaching the writer used to be proof a game had finished.
     outcome: str = "finished"
+    # Who may find the game on a profile: the room's public flag, frozen at
+    # save time (#469). Defaults to private so a writer that forgets to say
+    # discloses nothing.
+    visibility: str = "private"
 
 
 @dataclass(frozen=True)
@@ -267,6 +272,7 @@ class GameSummary:
     rule_snapshot: dict[str, object] = field(default_factory=dict)
     prompt_source_mode: str = "custom"
     outcome: str = "finished"
+    visibility: str = "private"
 
 
 @dataclass(frozen=True)
@@ -655,6 +661,13 @@ class UserRepository(ABC):
         ...
 
     @abstractmethod
+    async def touch_last_seen(self, user_id: str) -> None:
+        """Stamp ``last_seen_at``: the account's last socket closed, or its
+        first one opened (#469). Best-effort and never returns the row - the
+        caller is a connection handler with nothing to do with it."""
+        ...
+
+    @abstractmethod
     async def get_stats(self, user_id: str) -> UserStats:
         """Calculate aggregated lifetime statistics for a user."""
         ...
@@ -704,8 +717,13 @@ class GameHistoryRepository(ABC):
         offset: int = 0,
         *,
         include_abandoned: bool = False,
+        requesting_user_id: str | None = None,
     ) -> list[GameSummary]:
         """Fetch clamped paginated summary of games where a user participated.
+
+        `requesting_user_id` is who is looking (#469): a game from a private
+        room is on the page only when they sat in it too, a game from a
+        public room for anyone. `None` is a visitor with no session.
 
         Games that stopped without ending are excluded by default: a history
         made mostly of collapsed rooms is not the history anyone asked for.

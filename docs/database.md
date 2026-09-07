@@ -239,6 +239,7 @@ One row per player identity, guest or registered.
 | `role` | `user \| moderator \| admin` |
 | `email`, `email_verified_at` | Nullable; normalized by trim + lowercase, enforced by `ck_users_email_normalized`; case-insensitively unique via `ix_users_email_lower` |
 | `created_at`, `updated_at`, `last_login_at`, `last_active_at` | |
+| `last_seen_at` | Nullable. Stamped when the account's last socket closes and when its first one opens (so a process that dies with the player online still leaves a time). What a profile shows as *last seen* (#469). Not `last_login_at` (a page load) and not `last_active_at` (retention); the three mean different things on purpose |
 
 `ck_users_verified_email_present` forbids a verification timestamp with no address.
 
@@ -496,7 +497,7 @@ guesses, prompt-list revision history, unexpired authored retained messages, sub
 evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v4_fields.json`](../fixtures/account_data_export_v4_fields.json).
+pinned by [`fixtures/account_data_export_v5_fields.json`](../fixtures/account_data_export_v5_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -878,6 +879,7 @@ and [`backend/app/repositories/sqlalchemy.py`](../backend/app/repositories/sqlal
 | `prompt_source_mode` | `legacy_unknown \| curated \| custom \| mixed \| builtin_fallback` |
 | `started_at`, `finished_at` | Gameplay times |
 | `outcome` | `finished \| abandoned` (and shutdown-cut) |
+| `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
 
 **The rule snapshot** ([`backend/app/game.py:370`](../backend/app/game.py)) freezes the

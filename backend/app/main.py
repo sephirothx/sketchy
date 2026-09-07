@@ -586,7 +586,11 @@ api.include_router(
 api.include_router(
     create_bug_report_router(async_session_factory, room_manager)
 )
-api.include_router(create_profile_router(user_repo, game_history_repo))
+api.include_router(
+    create_profile_router(
+        user_repo, game_history_repo, is_online=handler_context.presence.is_online
+    )
+)
 api.include_router(create_prompt_list_router(prompt_list_repo, user_repo))
 api.include_router(create_user_settings_router(async_session_factory))
 api.include_router(create_room_preset_router(room_preset_service))

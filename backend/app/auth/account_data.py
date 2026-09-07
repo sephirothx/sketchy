@@ -87,8 +87,9 @@ from app.domain_values import (
 # guess folded into its outcome (#548): `correctGuesses` went, `turnOutcomes`
 # gained `pointsAwarded` and lost `outcomeId`. Additive counts too: the
 # document's field surface changed, and a reader that keys off the version
-# should be able to tell which shape it has.
-EXPORT_SCHEMA_VERSION = 4
+# should be able to tell which shape it has. To 5 when the account gained
+# `lastSeenAt` (#469).
+EXPORT_SCHEMA_VERSION = 5
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -891,6 +892,7 @@ async def _write_export_artifact(
             "updatedAt": _timestamp(account.updated_at),
             "lastLoginAt": _timestamp(account.last_login_at),
             "lastActiveAt": _timestamp(account.last_active_at),
+            "lastSeenAt": _timestamp(account.last_seen_at),
         },
     )
     writer.field(
@@ -1614,6 +1616,7 @@ async def anonymize_account(
                 identity.updated_at = deleted_at
                 identity.last_login_at = deleted_at
                 identity.last_active_at = deleted_at
+                identity.last_seen_at = None
                 if identity.id == account.id:
                     identity.state = AccountState.DELETED.value
 

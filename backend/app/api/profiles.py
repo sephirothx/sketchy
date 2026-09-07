@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.serializers import (
     game_detail_payload,
     game_summary_payload,
+    public_user_payload,
     stats_payload,
-    user_payload,
 )
 from app.auth.rate_limit import RateLimiter, client_key
 from app.canvas_history import CANVAS_HISTORY_VERSION
@@ -84,7 +85,11 @@ def validator_matches(if_none_match: str, validator: str) -> bool:
 def create_profile_router(
     user_repo: UserRepository,
     game_history_repo: GameHistoryRepository,
+    *,
+    is_online: Callable[[str], bool] = lambda user_id: False,
 ) -> APIRouter:
+    """`is_online` is the presence registry's answer for an account id; the
+    default, for a router built without one, says nobody is."""
     router = APIRouter(prefix="/api")
 
     def throttle(request: Request) -> None:
@@ -100,14 +105,27 @@ def create_profile_router(
         The account travels with the numbers because a profile opened by id is
         the one view that has no other way to learn the player's name - and
         because `get_stats` answers with a zeroed record for an id that does not
-        exist, so the lookup is also what makes a 404 possible.
+        exist, so the lookup is also what makes a 404 possible. It is the
+        public shape (#469): the caller's own richer account is `/auth/me`.
+
+        The numbers are lifetime, private-room games included, for anyone.
+        That a stranger can subtract the games they are shown from
+        `gamesPlayed` and learn that private games exist is accepted: a
+        count says nothing about who, when or where, and scoping it would
+        put a visibility dimension on the daily projection (R-HIST-20) for
+        a number the owner decided is not sensitive.
         """
         throttle(request)
         user = await user_repo.get_by_id(user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="No such player.")
         stats = await user_repo.get_stats(user_id)
-        return {"user": user_payload(user), "stats": stats_payload(stats)}
+        return {
+            # Presence is keyed by the canonical account, which is what
+            # `get_by_id` resolved a merged guest's id to.
+            "user": public_user_payload(user, online=is_online(user.id)),
+            "stats": stats_payload(stats),
+        }
 
     @router.get("/users/{user_id}/games")
     async def user_games(
@@ -122,6 +140,11 @@ def create_profile_router(
         Games that stopped without ending are left out unless asked for: a
         history made mostly of rooms that collapsed is not what anyone came
         looking for, but a game somebody remembers should still be findable.
+
+        Which games are on the page depends on who is asking (#469): one from
+        a public room is there for anyone, one from a private room only for
+        the players who were in it. The repository applies the rule; this
+        only says who the caller is, and a visitor with no session is nobody.
         """
         throttle(request)
         # One extra row answers "is there another page?" without a second COUNT
@@ -131,6 +154,7 @@ def create_profile_router(
             limit=limit + 1,
             offset=offset,
             include_abandoned=include_abandoned,
+            requesting_user_id=getattr(request.state, "user_id", None) or None,
         )
         has_more = len(games) > limit
         return {

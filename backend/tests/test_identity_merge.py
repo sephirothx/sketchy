@@ -120,7 +120,7 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
         assert merged.id == account.id
         assert (await users.get_by_id(guest.id)).id == account.id
 
-        games = await history.get_user_games(account.id)
+        games = await history.get_user_games(account.id, requesting_user_id=account.id)
         assert len(games) == 1
         assert {seat.user_id for seat in games[0].participants} == {
             account.id,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -18,6 +18,7 @@
     "account.id",
     "account.lastActiveAt",
     "account.lastLoginAt",
+    "account.lastSeenAt",
     "account.nameColor",
     "account.role",
     "account.state",

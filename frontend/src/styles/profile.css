@@ -414,6 +414,11 @@
 
 /* A game that stopped is labelled rather than hidden once it is shown, so the
    odd scores in it are explained instead of merely odd. */
+.profile-presence.is-online {
+  color: var(--color-success, #2e8b57);
+  font-weight: 600;
+}
+
 .profile-game-outcome {
   border: 1px solid currentColor;
   border-radius: 999px;

@@ -52,7 +52,9 @@ from app.domain_values import (
     FriendshipState,
     GAME_OUTCOMES,
     GAME_PROMPT_SOURCE_MODES,
+    GAME_VISIBILITIES,
     GameOutcome,
+    GameVisibility,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
     PromptContentModerationState,
@@ -240,6 +242,7 @@ def _to_user_data(user: User) -> UserData:
         updated_at=user.updated_at,
         last_login_at=user.last_login_at,
         last_active_at=user.last_active_at,
+        last_seen_at=user.last_seen_at,
     )
 
 
@@ -288,6 +291,7 @@ def _to_game_summary(game: GameRecord, *, with_rule_snapshot: bool = True) -> Ga
         started_at=game.started_at,
         finished_at=game.finished_at,
         outcome=game.outcome,
+        visibility=game.visibility,
         participants=[
             GameParticipantSummary(
                 seat_id=_public_id(p.id),
@@ -794,6 +798,20 @@ class SqlAlchemyUserRepository(UserRepository):
                 user.last_active_at = datetime.now(timezone.utc)
             return _to_user_data(user)
 
+    async def touch_last_seen(self, user_id: str) -> None:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return
+        async with self._session_factory() as session:
+            async with session.begin():
+                # One UPDATE, no read: the handler that asks holds nothing
+                # to refresh, and a row that is gone is simply not stamped.
+                await session.execute(
+                    update(User)
+                    .where(User.id == db_user_id)
+                    .values(last_seen_at=datetime.now(timezone.utc))
+                )
+
     async def get_stats(self, user_id: str) -> UserStats:
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
@@ -867,6 +885,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 "player_count": game_record.player_count,
                 "started_at": game_record.started_at.isoformat(),
                 "finished_at": game_record.finished_at.isoformat(),
+                "visibility": game_record.visibility,
             },
             "participants": sorted(
                 (
@@ -1077,6 +1096,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     raise ValueError(
                         f"Unknown game outcome {game_record.outcome!r}"
                     )
+                if game_record.visibility not in GAME_VISIBILITIES:
+                    raise ValueError(
+                        f"Unknown game visibility {game_record.visibility!r}"
+                    )
                 game_db = GameRecord(
                     id=record_id,
                     payload_hash=payload_hash,
@@ -1094,6 +1117,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     started_at=game_record.started_at,
                     finished_at=game_record.finished_at,
                     outcome=game_record.outcome,
+                    visibility=game_record.visibility,
                 )
                 session.add(game_db)
                 session.add_all(
@@ -1903,7 +1927,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         offset: int = 0,
         *,
         include_abandoned: bool = False,
+        requesting_user_id: str | None = None,
     ) -> list[GameSummary]:
+        """A page of the games `user_id` sat in, as `requesting_user_id` may see them.
+
+        A game from a public room is on the page for anyone; one from a
+        private room only when the requester also sat in it (#469). The
+        subject's own games are all games they sat in, so an owner reading
+        their own profile needs no separate rule - and nor does a merged
+        guest, whose seats are found through the same identity walk.
+        """
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return []
@@ -1918,11 +1951,30 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 .where(GameParticipant.user_id.in_(identity_ids))
                 .scalar_subquery()
             )
+            visible = GameRecord.visibility == GameVisibility.PUBLIC.value
+            db_requesting_user_id = (
+                None
+                if requesting_user_id is None
+                else _optional_entity_id(requesting_user_id)
+            )
+            if db_requesting_user_id is not None:
+                requester_ids = (
+                    identity_ids
+                    if db_requesting_user_id in identity_ids
+                    else await _identity_ids(session, db_requesting_user_id)
+                )
+                requester_games_subq = (
+                    select(GameParticipant.game_id)
+                    .where(GameParticipant.user_id.in_(requester_ids))
+                    .scalar_subquery()
+                )
+                visible = or_(visible, GameRecord.id.in_(requester_games_subq))
 
             stmt = (
                 select(GameRecord)
                 .where(
                     GameRecord.id.in_(user_games_subq),
+                    visible,
                     *(
                         ()
                         if include_abandoned

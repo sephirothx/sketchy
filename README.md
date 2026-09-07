@@ -1863,6 +1863,19 @@ abandoned game contributes those turns but not a game played, a game won, or a
 score - counting it would let a room that keeps emptying inflate everyone's
 totals and drift the average score upward.
 
+**Who may find a game on a profile is frozen with it.** Each `game_records` row
+carries the room's public flag as `visibility`, because the room is gone by the
+time anyone asks. A game from a public room - one the lobby listed with its
+players' names - is on the player's profile for anyone; a game from a private
+room is listed only for the players who sat in it, and is tagged *private room*
+when they see it. A profile opened by id answers with what a seat already shows
+(name, colour, picture, guest state, join date) and whether the player is online
+now or how long ago they last were - never the role or the username, which stay
+on the caller's own `/api/auth/me`. "Last seen" is `users.last_seen_at`, stamped
+when an account's last socket closes (and when its first opens, so a crash with
+the player online still leaves a time); it is neither the login touch nor the
+retention clock.
+
 Operators read this two ways. `GET /metrics` returns Prometheus text behind a
 bearer token and is disabled entirely until `METRICS_TOKEN` is set. The
 in-app page at `/admin/operations` needs the administrator role and carries

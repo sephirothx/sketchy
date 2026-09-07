@@ -59,7 +59,14 @@ async def sign_in_as(http, session_factory, user_id: str) -> None:
 
 
 async def record_game(
-    history, users, *, winner, loser, index: int = 0, drawing: bytes | None = None
+    history,
+    users,
+    *,
+    winner,
+    loser,
+    index: int = 0,
+    drawing: bytes | None = None,
+    visibility: str = "public",
 ) -> str:
     winner_seat = str(generate_uuid())
     loser_seat = str(generate_uuid())
@@ -78,6 +85,7 @@ async def record_game(
             player_count=2,
             started_at=START + timedelta(hours=index),
             finished_at=START + timedelta(hours=index, minutes=10),
+            visibility=visibility,
         ),
         [
             GameParticipantInput(
@@ -168,6 +176,107 @@ async def test_stats_carry_the_account_they_describe(env):
     assert body["stats"]["promptsGuessed"] == 0
 
 
+async def test_the_public_profile_is_the_presentation_a_seat_already_shows(env):
+    """Role, last login and username stay on `/auth/me` (#469): the first
+    names staff to whoever is hunting for them, the second is a schedule,
+    the third is the login identifier the nickname lookup is throttled to
+    protect."""
+    http, users, _, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+
+    body = (await http.get(f"/api/users/{ann.id}/stats")).json()
+
+    assert set(body["user"]) == {
+        "id",
+        "displayName",
+        "nameColor",
+        "avatarUrl",
+        "isAnonymous",
+        "createdAt",
+        "isOnline",
+        "lastSeenAt",
+    }
+
+
+async def test_the_profile_says_whether_the_player_is_here_or_when_they_last_were(env):
+    """Online is the presence registry's answer; otherwise the time the
+    account's last socket closed, null for one that never connected."""
+    http, users, history, session_factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    online = {ann.id}
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
+    app.include_router(
+        create_profile_router(users, history, is_online=lambda user_id: user_id in online)
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get(f"/api/users/{ann.id}/stats")).json()["user"]["isOnline"] is True
+
+        never = (await client.get(f"/api/users/{bob.id}/stats")).json()["user"]
+        assert never["isOnline"] is False
+        assert never["lastSeenAt"] is None
+
+        await users.touch_last_seen(bob.id)
+        gone = (await client.get(f"/api/users/{bob.id}/stats")).json()["user"]
+        assert gone["isOnline"] is False
+        assert datetime.fromisoformat(gone["lastSeenAt"]).tzinfo is not None
+
+
+async def test_a_private_rooms_game_is_shown_only_to_the_players_who_were_in_it(env):
+    """Two games on Ann's profile, one from a public room and one from a
+    private room (#469). Bob, who sat in both, sees both. Cara, who sat in
+    neither, and a visitor with no session see only the public one - the
+    lobby listed that room with its players; nobody listed the other."""
+    http, users, history, session_factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    cara = await users.create_anonymous(display_name="Cara")
+    public_game = await record_game(history, users, winner=ann.id, loser=bob.id, index=0)
+    private_game = await record_game(
+        history, users, winner=ann.id, loser=bob.id, index=1, visibility="private"
+    )
+
+    def ids(body):
+        return {game["id"] for game in body["games"]}
+
+    visitor = (await http.get(f"/api/users/{ann.id}/games")).json()
+    assert ids(visitor) == {public_game}
+    assert visitor["games"][0]["visibility"] == "public"
+
+    await sign_in_as(http, session_factory, cara.id)
+    assert ids((await http.get(f"/api/users/{ann.id}/games")).json()) == {public_game}
+
+    await sign_in_as(http, session_factory, bob.id)
+    as_bob = (await http.get(f"/api/users/{ann.id}/games")).json()
+    assert ids(as_bob) == {public_game, private_game}
+    assert {game["visibility"] for game in as_bob["games"]} == {"public", "private"}
+
+    await sign_in_as(http, session_factory, ann.id)
+    assert ids((await http.get(f"/api/users/{ann.id}/games")).json()) == {
+        public_game,
+        private_game,
+    }
+
+
+async def test_a_private_game_is_not_counted_toward_the_page_a_stranger_gets(env):
+    """`hasMore` is answered from the games the caller may see, so a page of
+    public games is not cut short by private ones it never lists."""
+    http, users, history, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    for index in range(3):
+        await record_game(
+            history, users, winner=ann.id, loser=bob.id, index=index,
+            visibility="private" if index == 1 else "public",
+        )
+
+    page = (await http.get(f"/api/users/{ann.id}/games?limit=2")).json()
+
+    assert [game["roomName"] for game in page["games"]] == ["Studio 2", "Studio 0"]
+    assert page["hasMore"] is False
+
+
 async def test_stats_for_an_unknown_player_are_a_404_not_a_row_of_zeroes(env):
     http, *_ = env
     response = await http.get("/api/users/nobody/stats")
@@ -218,7 +327,6 @@ async def test_timestamps_are_serialized_with_an_offset(env):
 
     for label, value in (
         ("createdAt", profile["user"]["createdAt"]),
-        ("lastLoginAt", profile["user"]["lastLoginAt"]),
         ("startedAt", game["startedAt"]),
         ("finishedAt", game["finishedAt"]),
     ):

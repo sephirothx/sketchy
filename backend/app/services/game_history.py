@@ -12,6 +12,7 @@ from datetime import datetime
 from app.domain_values import (
     DRAWING_UNAVAILABLE_RECAP_BUDGET,
     GameOutcome,
+    GameVisibility,
     RuntimeEventType,
     REACTION_SET_VERSION,
 )
@@ -502,6 +503,11 @@ def build_game_history(
             prompt_source_mode=game.prompt_source_mode(),
             prompt_source_revision_ids=game.prompt_source_revision_ids,
             outcome=outcome,
+            visibility=(
+                GameVisibility.PUBLIC.value
+                if room.is_public
+                else GameVisibility.PRIVATE.value
+            ),
         ),
         participants=participants,
         turns=turns,

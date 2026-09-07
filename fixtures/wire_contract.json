@@ -1620,6 +1620,15 @@
    "pickRate",
    "totalGuesserCount"
   ],
+  "api.serializers:public_user_payload": [
+   "avatarUrl",
+   "createdAt",
+   "displayName",
+   "isAnonymous",
+   "isOnline",
+   "lastSeenAt",
+   "nameColor"
+  ],
   "api.serializers:shared_prompt_list_payload": [
    "promptVersionId"
   ],
@@ -1834,6 +1843,7 @@
    "keyBindings",
    "lastActiveAt",
    "lastLoginAt",
+   "lastSeenAt",
    "mergedAt",
    "nameColor",
    "requestedByMe",

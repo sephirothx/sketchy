@@ -1,5 +1,5 @@
 import { useClock } from "../hooks/useClock";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AuthDialog, type AuthMode } from "../components/AccountMenu";
 import { AppHeader } from "../components/AppHeader";
@@ -24,10 +24,12 @@ import {
   type GameDetail,
   type GameTurn,
   type GameSummary,
+  type PublicProfile,
   type HistoryReaction,
   type ProfileStats,
 } from "../lib/profile";
-import { useAuthStore, type AuthUser } from "../store/authStore";
+import { lastSeenLabel } from "../lib/lastSeen";
+import { useAuthStore } from "../store/authStore";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -182,6 +184,9 @@ function GameRow({
               <span className="profile-game-outcome">
                 {game.outcome === "abandoned" ? "abandoned" : "cut short"}
               </span>
+            )}
+            {game.visibility === "private" && (
+              <span className="profile-game-outcome">private room</span>
             )}
           </span>
         </span>
@@ -385,33 +390,6 @@ function GameRow({
                 ))}
               </tbody>
             </table>
-            {detail.scoreLedgerVersion === 0 ? (
-              <p className="profile-note">Score breakdown unavailable for this legacy game.</p>
-            ) : detail.scoreEvents.length === 0 ? (
-              <p className="profile-note">No score changed in this game.</p>
-            ) : (
-              <table className="profile-score-events">
-                <caption>Score ledger</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Order</th>
-                    <th scope="col">Player</th>
-                    <th scope="col">Reason</th>
-                    <th scope="col">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.scoreEvents.map((event) => (
-                    <tr key={event.eventOrder}>
-                      <td>{event.eventOrder}</td>
-                      <td>{named(event.participantSeatId, "Unknown player")}</td>
-                      <td>{event.eventType.replaceAll("_", " ")}</td>
-                      <td>{event.pointsDelta > 0 ? "+" : ""}{event.pointsDelta}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
             </>
             );
           })()}
@@ -454,7 +432,7 @@ function ProfileView({ userId }: { userId: string }) {
   const currentUser = useAuthStore((s) => s.user);
   const isOwnProfile = userId === currentUser?.id;
 
-  const [subject, setSubject] = useState<AuthUser | null>(null);
+  const [subject, setSubject] = useState<PublicProfile | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -468,8 +446,16 @@ function ProfileView({ userId }: { userId: string }) {
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
 
+  // Which list is current. Bumped when a reload starts and again when it
+  // replaces the list, so a page fetched for the previous one - a "load
+  // more" in flight while the viewer signed in or the abandoned filter
+  // flipped, or one started at the old offset while the reload was still
+  // out - is dropped rather than appended to a list it was never part of.
+  const listGeneration = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
+    listGeneration.current += 1;
     void (async () => {
       try {
         const [profile, page] = await Promise.all([
@@ -477,6 +463,7 @@ function ProfileView({ userId }: { userId: string }) {
           fetchGames(userId, 0, includeAbandoned),
         ]);
         if (cancelled) return;
+        listGeneration.current += 1;
         setSubject(profile.user);
         setStats(profile.stats);
         setGames(page.games);
@@ -493,25 +480,29 @@ function ProfileView({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, includeAbandoned]);
+    // The viewer is a dependency too: which games the server lists depends
+    // on who is asking (#469), so signing in or claiming on this page has
+    // to fetch the list again rather than keep the one a stranger got.
+  }, [userId, includeAbandoned, currentUser?.id]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
+    const generation = listGeneration.current;
     setLoadingMore(true);
     try {
       const page = await fetchGames(userId, games.length, includeAbandoned);
+      if (generation !== listGeneration.current) return;
       setGames((current) => [...current, ...page.games]);
       setHasMore(page.hasMore);
     } catch {
+      if (generation !== listGeneration.current) return;
       setError("Could not load more games.");
     } finally {
       setLoadingMore(false);
     }
   }, [userId, games.length, includeAbandoned, loadingMore]);
 
-  const shownName = subject
-    ? (subject.isAnonymous ? subject.displayName : subject.username ?? subject.displayName)
-    : "";
+  const shownName = subject?.displayName ?? "";
 
   return (
     <div className="profile-page">
@@ -554,6 +545,14 @@ function ProfileView({ userId }: { userId: string }) {
               <p className="profile-subtitle">
                 {subject.isAnonymous ? "Guest — display name not saved" : "Registered player"}
                 {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt, timeFormat)}`}
+                {lastSeenLabel(subject) && (
+                  <>
+                    {" · "}
+                    <span className={subject.isOnline ? "profile-presence is-online" : "profile-presence"}>
+                      {lastSeenLabel(subject)}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           </header>
@@ -607,7 +606,7 @@ function ProfileView({ userId }: { userId: string }) {
               <p className="profile-note">
                 {isOwnProfile
                   ? "No finished games yet. Play one and it will show up here."
-                  : "This player has not finished a game yet."}
+                  : "No games to show. Games from private rooms are listed only for the players who were in them."}
               </p>
             ) : (
               <ul className="profile-games">
@@ -643,7 +642,15 @@ function ProfileView({ userId }: { userId: string }) {
             // Claiming keeps the same user id, so this view never remounts and
             // would otherwise keep showing the guest it loaded - name, badge,
             // and an invitation to claim an account that now exists.
-            if (account.id === userId) setSubject(account);
+            // The claimed account is the one on the page and the tab is its
+            // own socket, so it is online; the last-seen stamp is unchanged.
+            if (account.id === userId) {
+              setSubject((current) => ({
+                ...account,
+                isOnline: true,
+                lastSeenAt: current?.lastSeenAt ?? null,
+              }));
+            }
             return account;
           }}
           onSwitchMode={setAuthMode}

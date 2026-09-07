@@ -1,6 +1,24 @@
 import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
-import type { AuthUser } from "../store/authStore";
+
+/**
+ * A player as anyone may see them: what a seat in a room already shows, and
+ * the day the account was made. The viewer's own richer account (role, last
+ * login, username) is `AuthUser` from `/api/auth/me`, and never comes back
+ * from a profile opened by id (#469).
+ */
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  nameColor: string | null;
+  avatarUrl: string | null;
+  isAnonymous: boolean;
+  createdAt: string | null;
+  /** The presence registry's answer at the time of the request. */
+  isOnline: boolean;
+  /** When the account's last socket closed; null for one that never connected. */
+  lastSeenAt: string | null;
+}
 
 export interface ProfileStats {
   gamesPlayed: number;
@@ -49,6 +67,12 @@ export interface GameSummary {
   /** When the game stopped - not a promise that it reached an end. */
   finishedAt: string | null;
   outcome: "finished" | "abandoned" | "shutdown";
+  /**
+   * The room's public flag, frozen when the game was saved. A private room's
+   * game is listed only for the players who were in it, so a viewer only
+   * ever sees "private" on a game they shared with the subject.
+   */
+  visibility: "public" | "private";
   participants: GameParticipant[];
 }
 
@@ -172,7 +196,7 @@ export interface HistoryReactionResult {
 export const HISTORY_PAGE_SIZE = 10;
 
 export function fetchProfile(userId: string) {
-  return apiRequest<{ user: AuthUser; stats: ProfileStats }>(
+  return apiRequest<{ user: PublicProfile; stats: ProfileStats }>(
     `/api/users/${encodeURIComponent(userId)}/stats`,
   );
 }
