@@ -22,6 +22,7 @@ import {
   encodePathStart,
   encodeShape,
 } from "../lib/liveDrawing";
+import { createPointThinner, type PointThinner } from "../lib/pointThinning";
 import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
 import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
@@ -69,7 +70,12 @@ export function useCanvasPointerInput(
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);
+  // For a brush stroke, the last sample *kept* (#560), which is where the
+  // next kept segment starts on this canvas and on every viewer's; for a
+  // shape, the pointer's last position.
   const lastPointRef = useRef<StrokePoint | null>(null);
+  // Thins the stroke under the pen; null between strokes.
+  const thinnerRef = useRef<PointThinner | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
   const pointerPosRef = useRef<StrokePoint | null>(null);
   const inputActiveRef = useRef(false);
@@ -134,13 +140,57 @@ export function useCanvasPointerInput(
     );
   }
 
+  // The preview layer, repainted as one picture: the circle cursor if there
+  // is one, and the segment from the last kept sample to the one still
+  // pending in the thinner, so the ink under the pen never lags a sample
+  // behind what the drawer's hand did. Both go when the stroke ends.
+  function repaintPreview(pointer: StrokePoint | null) {
+    clearPreview();
+    if (showCircleCursor && pointer) drawCircleCursorPreview(pointer, brushWidth);
+    const thinner = thinnerRef.current;
+    const pending = thinner?.pending();
+    const previewContext = previewContextRef.current;
+    if (!thinner || !pending || !previewContext) return;
+    const activeColor = tool === "eraser" ? "#ffffff" : color;
+    rasterizePath(
+      previewContext,
+      [toPixels(thinner.anchor()), toPixels(pending)],
+      brushWidth / 2,
+      hexToRgba(activeColor),
+      false,
+    );
+  }
+
+  // Samples the thinner kept: painted here from the last kept sample, and
+  // queued for the frame, so the drawer's canvas and every viewer's are
+  // rasterized from the same polyline (#560).
+  function acceptPoints(points: StrokePoint[]) {
+    for (const point of points) {
+      if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
+      lastPointRef.current = point;
+      pendingPointsRef.current.push(point);
+    }
+  }
+  // The flush timer below is armed once and must paint with the colour and
+  // width the stroke has *now*, not the ones it closed over when armed.
+  const acceptRef = useRef(acceptPoints);
+  const repaintPreviewRef = useRef(repaintPreview);
+  useEffect(() => {
+    acceptRef.current = acceptPoints;
+    repaintPreviewRef.current = repaintPreview;
+  });
+
   function finishPath() {
+    const thinner = thinnerRef.current;
+    if (thinner) acceptPoints(thinner.end());
+    thinnerRef.current = null;
     if (pendingPointsRef.current.length > 0) {
       protocol.sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
       pendingPointsRef.current = [];
     }
     protocol.sendPathFrame(encodePathEnd());
     protocol.finishPathAction();
+    repaintPreview(pointerPosRef.current);
   }
 
   function handlePointerUp(event?: ReactPointerEvent<HTMLCanvasElement>) {
@@ -157,8 +207,10 @@ export function useCanvasPointerInput(
       return;
     }
     if (tool === "brush" || tool === "eraser") {
-      lastPointRef.current = null;
+      // The stroke's last sample is kept here, and painted from the last
+      // kept one - so that one is still needed.
       finishPath();
+      lastPointRef.current = null;
       return;
     }
     const start = shapeStartRef.current;
@@ -199,10 +251,7 @@ export function useCanvasPointerInput(
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = normalizedPoint(event);
     pointerPosRef.current = point;
-    if (showCircleCursor) {
-      clearPreview();
-      drawCircleCursorPreview(point, brushWidth);
-    }
+    repaintPreview(point);
     if ((tool === "brush" || tool === "eraser") && !strokeAvailable) {
       activePointerIdRef.current = null;
       return;
@@ -211,6 +260,7 @@ export function useCanvasPointerInput(
     lastPointRef.current = point;
     if (tool === "brush" || tool === "eraser") {
       const activeColor = tool === "eraser" ? "#ffffff" : color;
+      thinnerRef.current = createPointThinner(point);
       drawLocalSegment(point, point);
       protocol.beginDrawAction(encodePathStart({
         x: point.x,
@@ -238,11 +288,10 @@ export function useCanvasPointerInput(
     ) return;
     const point = normalizedPoint(event);
     pointerPosRef.current = point;
-    if (showCircleCursor) {
-      clearPreview();
-      drawCircleCursorPreview(point, brushWidth);
+    if (!inputActiveRef.current || tool === "fill") {
+      repaintPreview(point);
+      return;
     }
-    if (!inputActiveRef.current || tool === "fill") return;
     if (tool === "brush" || tool === "eraser") {
       if (!strokeAvailable) {
         // The budget ran out under the brush. Close the stroke here so the
@@ -250,10 +299,11 @@ export function useCanvasPointerInput(
         handlePointerUp(event);
         return;
       }
-      if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
-      lastPointRef.current = point;
-      pendingPointsRef.current.push(point);
+      const thinner = thinnerRef.current;
+      if (thinner) acceptPoints(thinner.push(point));
+      repaintPreview(point);
     } else {
+      repaintPreview(point);
       lastPointRef.current = point;
       const previewContext = previewContextRef.current;
       const start = shapeStartRef.current;
@@ -290,6 +340,17 @@ export function useCanvasPointerInput(
   useEffect(() => {
     if (!isDrawer) return;
     const flushTimer = setInterval(() => {
+      // The sample still pending in the thinner goes with this flush, so a
+      // viewer watches a long straight stroke advance every flush rather
+      // than only when it bends or ends (#560).
+      const thinner = thinnerRef.current;
+      if (thinner) {
+        const forced = thinner.flush();
+        if (forced.length > 0) {
+          acceptRef.current(forced);
+          repaintPreviewRef.current(pointerPosRef.current);
+        }
+      }
       if (pendingPointsRef.current.length === 0) return;
       const points = pendingPointsRef.current;
       pendingPointsRef.current = [];
@@ -300,6 +361,9 @@ export function useCanvasPointerInput(
 
   useEffect(() => () => {
     if (!inputActiveRef.current) return;
+    const thinner = thinnerRef.current;
+    if (thinner) acceptRef.current(thinner.end());
+    thinnerRef.current = null;
     if (pendingPointsRef.current.length > 0) {
       protocol.sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
       pendingPointsRef.current = [];
@@ -328,6 +392,7 @@ export function useCanvasPointerInput(
     inputActiveRef.current = false;
     pendingPointsRef.current = [];
     lastPointRef.current = null;
+    thinnerRef.current = null;
     shapeStartRef.current = null;
     pointerPosRef.current = null;
     clearPreview();

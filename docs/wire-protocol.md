@@ -962,6 +962,35 @@ Colors are `#rrggbb` strings on the payload side and three raw bytes on the wire
 | `draw_fill` | `{x: 0.25, y: 0.75, color: "#fedcba"}` | `14 fedcba c800 c201` |
 | `clear_canvas` | — | `15` |
 
+### Thinning at the source
+
+The client does not send every pointer sample (#560). A pointer reports up to 120 a
+second, and at a quarter-pixel quantization most of a hand stroke is exact duplicates
+and runs along one straight segment. [`frontend/src/lib/pointThinning.ts`](../frontend/src/lib/pointThinning.ts)
+keeps only the samples that move the drawn line by more than **0.25 canvas pixels**
+(`THINNING_TOLERANCE_PX`, one quantization step), with a bound that holds for the whole
+stroke: a sample is dropped only if it — and every sample dropped before it since the
+last kept one — lies within the tolerance of the segment that will replace them, so
+dropping cannot accumulate error. The first and last sample, corners, reversals and dots
+are kept because they fail that test. The sample still pending when the flush timer fires
+is sent with that flush, so a viewer watches a straight stroke advance every 40 ms rather
+than only when it bends or ends.
+
+The kept samples are the stroke, on both sides: the drawer's own canvas is painted from
+them, not from the raw pointer (the raw segment under the pen is shown on the preview
+layer until it is kept or dropped), so the drawer, every viewer and every replay
+rasterize the same polyline. Nothing on the wire changes — the frames carry fewer
+points — and no stored format moves.
+
+Measured on the recorded traces (`benchmarks/point_thinning.py`; the traces were
+recorded before thinning, so they are the raw input): on a long hand drawing 57% of the
+points and 75% of the deflated bytes remain, on a slow short one 33% and 65%, on a
+scripted 120 Hz pen 82% and 89%; the maximum error measured equals the tolerance, no
+pixel of a stroke edge moves by more than it, and the number of blank regions a fill
+could be aimed at was unchanged on every trace. Holding the pending sample past the
+flush would save about ten points in a hundred more; it was not taken, because a
+ruler-straight line would then appear on viewers' screens all at once.
+
 ### Server-side refusals
 
 `decode_live_drawing` ([`backend/app/live_drawing.py:150`](../backend/app/live_drawing.py))
