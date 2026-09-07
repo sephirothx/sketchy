@@ -446,3 +446,86 @@ async def test_a_client_that_names_no_protocol_at_all_is_told_to_upgrade():
             call for call in sio.emit.await_args_list
             if call.args and call.args[0] == "upgrade_required"
         ], f"no upgrade notice for auth={auth!r}"
+
+
+def _stack():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.save_session = AsyncMock()
+    sio.get_session = AsyncMock(return_value={"user_id": "user-1"})
+    sio.enter_room = AsyncMock()
+    sio.disconnect = AsyncMock()
+    return ctx, sio, room_manager
+
+
+@pytest.mark.asyncio
+async def test_a_stale_socket_is_refused_every_command_and_mutates_nothing(monkeypatch):
+    """#476: told to upgrade, then held to it. A stale build that ignores the
+    notice cannot create or join a room, draw, or watch the lobby: its
+    payloads are of a contract this server does not speak, and they are
+    refused at the dispatch door before parsing."""
+    from app import protocol as protocol_module
+
+    monkeypatch.setattr(protocol_module, "STALE_SOCKET_CLOSE_SECONDS", 60.0)
+    ctx, sio, room_manager = _stack()
+    await sio.handlers["/"]["connect"]("sid-stale", {}, {"protocol": PROTOCOL_VERSION - 1})
+    assert ctx.is_stale("sid-stale")
+
+    refused = await sio.handlers["/"]["create_room"](
+        "sid-stale", {"nickname": "Old", "name": "Room"}
+    )
+    assert refused["ok"] is False
+    assert refused["errorCode"] == "protocol_mismatch"
+    assert refused["expected"] == PROTOCOL_VERSION
+    assert refused["received"] == PROTOCOL_VERSION - 1
+    assert room_manager.rooms == {}
+
+    watched = await sio.handlers["/"]["watch_lobby"]("sid-stale", None)
+    assert watched["errorCode"] == "protocol_mismatch"
+    sio.enter_room.assert_not_awaited()
+    # A frame nobody waits on is dropped in silence, not answered.
+    assert await sio.handlers["/"]["draw"]("sid-stale", b"\x00" * 8) is None
+
+    # A matching socket beside it is untouched.
+    await sio.handlers["/"]["connect"]("sid-current", {}, {"protocol": PROTOCOL_VERSION})
+    assert not ctx.is_stale("sid-current")
+    created = await sio.handlers["/"]["create_room"](
+        "sid-current", {"nickname": "New", "name": "Room"}
+    )
+    assert created["ok"] is True, created
+    ctx.release_stale("sid-stale")
+
+
+@pytest.mark.asyncio
+async def test_a_stale_socket_that_does_not_reload_is_closed_and_one_that_goes_is_forgotten(monkeypatch):
+    import asyncio
+
+    from app import protocol as protocol_module
+
+    monkeypatch.setattr(protocol_module, "STALE_SOCKET_CLOSE_SECONDS", 0.02)
+    ctx, sio, _ = _stack()
+    await sio.handlers["/"]["connect"]("sid-slow", {}, {"protocol": 3})
+    await sio.handlers["/"]["connect"]("sid-quick", {}, {"protocol": 3})
+    # The quick one reloads: its disconnect arrives before the deadline and
+    # cancels the close, so the server never closes a socket that is gone.
+    await sio.handlers["/"]["disconnect"]("sid-quick")
+    assert not ctx.is_stale("sid-quick")
+
+    await asyncio.sleep(0.1)
+    closed = [call.args[0] for call in sio.disconnect.await_args_list]
+    assert closed == ["sid-slow"]
+
+
+@pytest.mark.asyncio
+async def test_capacity_and_suspension_outcomes_stay_their_own_for_a_stale_client(monkeypatch):
+    """The version is checked after admission: a stale build turned away for
+    capacity hears `server_full`, and a suspended account is refused, with no
+    upgrade notice and no quarantine in either case."""
+    ctx, sio, _ = _stack()
+    monkeypatch.setattr(ctx.room_capacity, "has_socket_capacity", lambda: False)
+    await sio.handlers["/"]["connect"]("sid-full", {}, {"protocol": 1})
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "server_full" in events and "upgrade_required" not in events
+    assert not ctx.is_stale("sid-full")

@@ -19,6 +19,7 @@ from app.repositories.interfaces import (
 )
 from app.domain_values import RuntimeEventType
 from app.handlers.refusals import ErrorCode, refuse
+from app.protocol import PROTOCOL_VERSION
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.runtime_metrics import metrics
@@ -118,6 +119,11 @@ class HandlerContext:
     _ending_sockets: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
     )
+    # Sockets told to upgrade and not yet gone (#476): the version each one
+    # claimed, and the task that closes it if it does not reload in time.
+    _stale_sockets: dict[str, tuple[int, asyncio.Task | None]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def on(self, command: str, handler) -> None:
         """Register a client command, with the budget it answers to.
@@ -145,6 +151,22 @@ class HandlerContext:
                 if command in SILENT_COMMANDS:
                     return None
                 return refuse(ErrorCode.INVALID_PAYLOAD, "Invalid request payload")
+            # A socket told to upgrade is held to it here, at the one door
+            # every command uses (#476): nothing it says is parsed, let alone
+            # acted on, because its payloads are of a contract this server
+            # does not speak. The notice already carried the way out.
+            stale = self._stale_sockets.get(sid)
+            if stale is not None:
+                telemetry.socket_event(command, "refused", None)
+                if command in SILENT_COMMANDS:
+                    return None
+                return refuse(
+                    ErrorCode.PROTOCOL_MISMATCH,
+                    "This tab is running an older version of Sketchy. "
+                    "Reload the page to continue.",
+                    expected=PROTOCOL_VERSION,
+                    received=stale[0],
+                )
             # Before parsing, before authorization, before any mutation: a
             # refused command must cost nothing but the check itself.
             budget = self.command_budgets.for_command(command)
@@ -189,6 +211,44 @@ class HandlerContext:
             }
 
         self.sio.on(command, handler=guarded)
+
+    def quarantine(
+        self, sid: str, received: int, *, close_after: float
+    ) -> None:
+        """Hold a socket that was told to upgrade to it (#476).
+
+        Every command from it is refused until it goes, and it is closed
+        after `close_after` seconds if it has not gone by itself. The close
+        is a task rather than a sleep in the handshake so the handshake
+        answers at once and the reload the notice asked for is not waiting
+        on it.
+        """
+        self.release_stale(sid)
+
+        async def close_later() -> None:
+            try:
+                await asyncio.sleep(close_after)
+            except asyncio.CancelledError:
+                return
+            if sid not in self._stale_sockets:
+                return
+            logger.warning(
+                "closing stale socket %s: told to upgrade %.0fs ago and still here",
+                sid, close_after,
+            )
+            await self.sio.disconnect(sid)
+
+        self._stale_sockets[sid] = (received, asyncio.create_task(close_later()))
+
+    def is_stale(self, sid: str) -> bool:
+        """Whether this socket was told to upgrade and has not gone yet."""
+        return sid in self._stale_sockets
+
+    def release_stale(self, sid: str) -> None:
+        """Forget a stale socket, cancelling its close: it has gone."""
+        stale = self._stale_sockets.pop(sid, None)
+        if stale is not None and stale[1] is not None:
+            stale[1].cancel()
 
     def spend_canvas_push(self, sid: str) -> bool:
         """Spend one *pushed* full-history reply from this socket's window.

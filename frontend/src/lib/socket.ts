@@ -2,6 +2,7 @@ import { io, Socket } from "socket.io-client";
 import { applyClientConfig } from "./clientConfig.ts";
 import { recordClientError } from "./clientErrorLog.ts";
 import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
+import { markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
 
@@ -24,6 +25,32 @@ handshake takes well under a second; a slow network that trips this merely
 starts on polling and is upgraded from there. */
 export const CONNECT_TIMEOUT_MS = 6_000;
 
+/** The version this socket claims, which is the bundle's - except under test.
+
+A stale client cannot be built from the current tree, so the E2E suite's
+diagnostics build (the same flag that arms the crash probe) lets a page claim
+an older version from `sessionStorage`: the server then treats the tab as a
+build from before the last deploy, and everything downstream of that - the
+notice, the refusals, the close, the reload-once rule - is the real thing. A
+production build never reads the key. */
+export const PROTOCOL_OVERRIDE_KEY = "sketchy:protocol-override";
+
+// Read through an optional chain: the unit tests import this module under
+// Node, where `import.meta.env` does not exist; Vite still inlines it.
+const diagnosticsBuild =
+  (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_RENDER_DIAGNOSTICS === "true";
+
+function claimedProtocolVersion(): number {
+  if (!diagnosticsBuild) return PROTOCOL_VERSION;
+  try {
+    const raw = sessionStorage.getItem(PROTOCOL_OVERRIDE_KEY);
+    if (raw !== null && /^\d+$/.test(raw)) return Number(raw);
+  } catch {
+    // No storage, no override.
+  }
+  return PROTOCOL_VERSION;
+}
+
 export const socket: Socket = io({
   autoConnect: false,
   // WebSocket first, and polling *actually* tried when it fails (#601).
@@ -41,8 +68,15 @@ export const socket: Socket = io({
   // Settled at the handshake, where there is somewhere to put the answer. A
   // frame refused by the codec is refused inside a handler with no
   // acknowledgement, so a stale build is never told and diverges in silence.
-  auth: { protocol: PROTOCOL_VERSION },
+  auth: { protocol: claimedProtocolVersion() },
 });
+
+// The E2E suite reads the socket's own state through this in a diagnostics
+// build (whether it is connected, whether it will reconnect) rather than
+// inferring it from network activity. Never installed in a production build.
+if (diagnosticsBuild) {
+  (window as Window & { __SKETCHY_SOCKET__?: Socket }).__SKETCHY_SOCKET__ = socket;
+}
 
 // Registered here rather than in a component so the flag is set by the very
 // first `connect`, whatever mounts when: it tells "still opening the first
@@ -178,9 +212,28 @@ socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
         "socket",
         "upgrade_required repeated after a reload; the bundle is not updating",
       );
+      noteUpdateStuck();
     },
   });
 });
+
+/** The reload did not fetch a compatible bundle: stop and say so (#476).
+
+The server refuses everything this socket says and closes it in a few
+seconds; reconnecting would only be told the same thing and closed again,
+a loop that costs a handshake every few seconds for nothing. So the socket is
+put down for good - `disconnect()` on a manager with reconnection off stays
+down - and the page shows the way out, which is a reload the player chooses. */
+function noteUpdateStuck(): void {
+  socket.io.reconnection(false);
+  socket.disconnect();
+  markUpdateRequired();
+}
+
+/** Where the REST layer reports the same stuck state. */
+export function noteUpdateStuckFromRest(): void {
+  noteUpdateStuck();
+}
 
 // Same reasoning as the two notices above: the cadences arrive at the
 // handshake, which is usually before anything that depends on them has

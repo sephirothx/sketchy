@@ -35,6 +35,8 @@ import {
   shutdownSecondsRemaining,
 } from "./lib/shutdownNotice";
 import { onServerFull } from "./lib/socket";
+import { reloadForUpdate } from "./lib/protocol";
+import { onUpdateRequired } from "./lib/updateRequired";
 import type { ServerShutdownNotice } from "./types";
 
 /* The router keeps the window scroll across navigations, so submitting a form
@@ -120,6 +122,7 @@ function App() {
   const [paused, setPaused] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [restarted, setRestarted] = useState(false);
+  const [updateRequired, setUpdateRequired] = useState(false);
   // Whether a drain was on screen when the connection dropped, so the "we are
   // back" line can be shown once - after the notice itself has been cleared.
   const sawShutdownRef = useRef(false);
@@ -180,6 +183,10 @@ function App() {
   // chance to say why: without it the player sees a silent, permanent
   // disconnection and no reason for it.
   useEffect(() => onServerFull(setServerFull), []);
+  // The tab is out of date and the one automatic reload did not fix it; the
+  // socket is down for good and every command would be refused, so the only
+  // thing left to offer is a reload the player chooses (#476).
+  useEffect(() => onUpdateRequired(() => setUpdateRequired(true)), []);
 
   useEffect(() => {
     if (!shutdownNotice) return;
@@ -205,7 +212,23 @@ function App() {
 
   return (
     <ToastProvider>
-      {serverFull && (
+      {updateRequired && (
+        <div className="server-shutdown-banner is-update-required" role="alert">
+          <span>This tab is out of date and cannot play until it is reloaded.</span>
+          <button
+            type="button"
+            onClick={() =>
+              reloadForUpdate({
+                storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
+                reload: () => window.location.reload(),
+              })
+            }
+          >
+            Reload
+          </button>
+        </div>
+      )}
+      {serverFull && !updateRequired && (
         <div className="server-shutdown-banner" role="status" aria-live="polite">
           {serverFull}
         </div>

@@ -1,3 +1,5 @@
+import { PROTOCOL_HEADER, handleProtocolHeader } from "./protocol.ts";
+import { noteUpdateStuckFromRest } from "./socket.ts";
 import { reportSuspended, suspensionFromPayload } from "./suspension.ts";
 const DEFAULT_TIMEOUT_MS = 8000;
 const BINARY_TIMEOUT_MS = 20000;
@@ -19,6 +21,20 @@ export class ApiError extends Error {
  * and is stated here only to make the dependency on the session cookie obvious
  * at the call site. The token itself is HttpOnly and never visible here.
  */
+/** Compare the server's version stamp on a response with this bundle (#476).
+
+Read on every response, success or not, because the stale tab's next request
+is whichever one it makes. A skew takes the same reload-once path as the
+socket's notice; a second one after that reload means the bundle is not
+updating, and the page says so rather than reloading again. */
+function checkProtocol(response: Response): void {
+  handleProtocolHeader(response.headers.get(PROTOCOL_HEADER), {
+    storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
+    reload: () => window.location.reload(),
+    onStuck: noteUpdateStuckFromRest,
+  });
+}
+
 export async function apiBinaryRequest(
   path: string,
   options: { timeoutMs?: number } = {},
@@ -34,6 +50,7 @@ export async function apiBinaryRequest(
       credentials: "same-origin",
       signal: controller.signal,
     });
+    checkProtocol(response);
     if (!response.ok) {
       throw new ApiError(response.status, `Request failed with ${response.status}`);
     }
@@ -60,6 +77,7 @@ export async function apiRequest<T>(
       signal: controller.signal,
     });
 
+    checkProtocol(response);
     const text = await response.text();
     const payload = text ? JSON.parse(text) : null;
 

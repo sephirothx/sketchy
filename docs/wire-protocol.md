@@ -137,6 +137,17 @@ A mismatch is **not** refused. The socket connects normally and is sent
 Refusing instead would hand a stale build nothing it could act on, and
 `ConnectionRefusedError` is reserved for suspensions.
 
+Told, then held to it (#476). Until the socket goes it is **quarantined**: every
+command it sends is answered `protocol_mismatch {expected, received}` at the dispatch
+door — before parsing, so nothing of a contract this server does not speak is acted on:
+no room is created or joined, no frame recorded, no lobby watched — and `draw`, which has
+no acknowledgement, is dropped in silence. After `STALE_SOCKET_CLOSE_SECONDS` (5) the
+server closes it, so a tab that ignores the notice does not hold a socket and a presence
+slot for the rest of its life. A reload takes a fraction of a second, so a client that
+does act never notices either. The version is checked *after* admission: a stale build
+turned away for capacity hears `server_full` (R-CONN-08) and a suspended one is refused,
+with no notice and no quarantine — those outcomes stay their own.
+
 > **Why this exists at all.** Frame layouts carry their own version bytes, but they are
 > checked far too late to help. A `draw` frame refused by the codec is refused inside a
 > handler that has **no acknowledgement** (§4), so the sender is never told: it keeps
@@ -148,7 +159,25 @@ Refusing instead would hand a stale build nothing it could act on, and
 The client reloads **at most once per server version**, recording the version it reloaded
 for in `sessionStorage`. A bundle that somehow does not update — a proxy ignoring
 `no-cache`, a stale service worker — would otherwise reload forever, turning a recoverable
-skew into an unusable page.
+skew into an unusable page. When the same server version is seen again after that reload
+the tab is **stuck**: the client turns reconnection off and puts the socket down (the
+server was about to close it, and reconnecting would only be told the same thing again),
+and shows a banner saying the tab is out of date, with a Reload the player chooses. That
+reload forgets the automatic one already spent, so a bundle that has been fixed since is
+picked up the ordinary way. Nothing is invisible: a stale tab is either reloading, or
+saying so.
+
+**REST is held to the same number.** Every HTTP response carries
+`X-Sketchy-Protocol: <PROTOCOL_VERSION>`, stamped in the one wrapper every response passes
+through, and the client compares it against its own constant on every response it reads
+— success or not — taking the same reload-once path, with the same marker, so the two
+checks cannot between them reload twice for one server version. This is what catches a
+tab that is not on a socket: offline and back, or one that has stopped reconnecting. A
+header that is absent or not an integer is ignored rather than read as a skew — a proxy
+stripping unknown headers, or a captive portal answering in the server's place, must not
+reload the page. There is no `/api/v1`, no N/N−1 support and no per-route version: the
+client and the server are one same-origin deployment and change together, and a mismatch
+means reload, never a second code path (§11).
 
 **Bump `PROTOCOL_VERSION` on both sides whenever any payload on the socket changes shape.**
 It is cheap: both ends deploy together, so the only client that ever sees a mismatch is one
@@ -201,6 +230,7 @@ client source may compare `.error` to a string. Codes are added, never renamed.
 | Friends | `friends_unavailable`, `friend_refused`, `friend_not_in_game`, `friend_in_several_games`, `not_friends`, `friends_only_uninvited`, `invite_expired` |
 | Moderation | `reporting_unavailable`, `no_such_player`, `cannot_report`, `already_reported` |
 | Lobby chat | `name_required`, `not_watching_lobby` |
+| Versioning | `protocol_mismatch` — the socket was told to upgrade and has not reloaded yet (§1); carries `expected` and `received` |
 
 Three distinctions worth knowing:
 - `room_full` answers only a player-seat request when spectating is still open; a
@@ -1322,6 +1352,13 @@ server's own log lines for that request are stamped with, and the one written in
 proxy and the operator can quote the same id. A supplied value that is not a UUID is
 replaced, not echoed.
 
+Every response also carries `X-Sketchy-Protocol`, the `PROTOCOL_VERSION` this build
+speaks, which the client compares against its own on every response it reads (§1, *REST
+is held to the same number*). The REST surface has no version of its own: it is served
+by the same deployment as the bundle that calls it, evolves additively where that is
+free and otherwise changes shape under a `PROTOCOL_VERSION` bump, and a stale tab is
+reloaded rather than served an older contract.
+
 ### Health, discovery, metrics
 
 | Method | Path | Notes |
@@ -1636,9 +1673,13 @@ wire change regenerates `fixtures/wire_contract.json` in the same commit, so the
 change is a reviewable diff; CI fails a stale fixture and *warns* on a contract
 that differs from the base branch under the same `PROTOCOL_VERSION`. Bumping is
 still worth doing where it costs a line, because a stale tab open across a
-rebuild is told to reload rather than left silently broken - but it is a
-development convenience for now, not a contract with anybody, and there is no
-N/N−1 support: a mismatch means reload, never a second code path.
+rebuild is told to reload rather than left silently broken - and, since #476,
+refused everything and closed if it does not - but it is a development
+convenience for now, not a contract with anybody, and there is no N/N−1
+support: a mismatch means reload, never a second code path. That last rule is
+not a pre-launch exception; it is the deployment model (§1, §9): one
+same-origin deployment, both ends change together, and a rollback is just a
+deploy whose number is lower - the tab reloads onto it the same way.
 
 What changes at launch: every rule below starts applying, the CI step gains
 `--enforce` (an unbumped contract change fails), and `docs/database.md`'s
