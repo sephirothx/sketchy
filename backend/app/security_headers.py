@@ -37,6 +37,7 @@ import base64
 import hashlib
 import re
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
@@ -49,8 +50,6 @@ HTTPS_EXEMPT_PATHS = frozenset({"/api/health", "/api/ready", "/metrics"})
 # which saw one production response keeps the rule across a deploy gap.
 HSTS_MAX_AGE_SECONDS = 31536000
 
-_INLINE_SCRIPT = re.compile(r"<script(?P<attrs>[^>]*)>(?P<body>.*?)</script>", re.DOTALL | re.IGNORECASE)
-_SRC_ATTRIBUTE = re.compile(r"\bsrc\s*=", re.IGNORECASE)
 # What may be reflected into a CSP source from a Host header: a name, an
 # address (bracketed for IPv6), a port. Anything else is left out rather
 # than written into a header.
@@ -69,13 +68,43 @@ def inline_script_hashes(index_html: Path) -> tuple[str, ...]:
         text = index_html.read_text(encoding="utf-8")
     except OSError:
         return ()
+    scripts = _InlineScripts()
+    scripts.feed(text)
+    scripts.close()
     hashes = []
-    for match in _INLINE_SCRIPT.finditer(text):
-        if _SRC_ATTRIBUTE.search(match.group("attrs")):
-            continue
-        digest = hashlib.sha256(match.group("body").encode("utf-8")).digest()
+    for body in scripts.bodies:
+        digest = hashlib.sha256(body.encode("utf-8")).digest()
         hashes.append(f"'sha256-{base64.b64encode(digest).decode('ascii')}'")
     return tuple(hashes)
+
+
+class _InlineScripts(HTMLParser):
+    """Collect the text of every `<script>` element without a `src`.
+
+    A real parser rather than a regular expression, so the end tag is found
+    however it is spelled (`</script >`, mixed case) and a `src` attribute is
+    read as an attribute rather than as a substring of one. The parser hands
+    a script's content over as one raw run, exactly as written, which is what
+    the browser hashes.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.bodies: list[str] = []
+        self._collecting: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script" and not any(name == "src" for name, _ in attrs):
+            self._collecting = []
+
+    def handle_data(self, data: str) -> None:
+        if self._collecting is not None:
+            self._collecting.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._collecting is not None:
+            self.bodies.append("".join(self._collecting))
+            self._collecting = None
 
 
 @dataclass(frozen=True)

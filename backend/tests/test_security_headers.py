@@ -40,6 +40,13 @@ def test_the_inline_scripts_of_the_built_shell_are_admitted_by_hash(tmp_path: Pa
     expected = base64.b64encode(hashlib.sha256(body.encode()).digest()).decode()
     assert inline_script_hashes(shell) == (f"'sha256-{expected}'",)
     assert inline_script_hashes(tmp_path / "missing.html") == (), "no build, no inline script"
+    # However the end tag is spelled, and whatever the content looks like: a
+    # parser finds the element, and hashes exactly what is between the tags.
+    odd = 'if (a < b && "</scr" + "ipt>") {}'
+    shell.write_text(f'<SCRIPT TYPE="text/javascript">{odd}</script >', encoding="utf-8")
+    assert inline_script_hashes(shell) == (
+        f"'sha256-{base64.b64encode(hashlib.sha256(odd.encode()).digest()).decode()}'",
+    )
 
 
 def test_the_policy_is_one_same_origin_bundle_with_the_socket_named():
