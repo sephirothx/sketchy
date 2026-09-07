@@ -1620,6 +1620,13 @@
    "pickRate",
    "totalGuesserCount"
   ],
+  "api.serializers:public_user_payload": [
+   "avatarUrl",
+   "createdAt",
+   "displayName",
+   "isAnonymous",
+   "nameColor"
+  ],
   "api.serializers:shared_prompt_list_payload": [
    "promptVersionId"
   ],

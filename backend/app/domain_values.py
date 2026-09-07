@@ -348,6 +348,21 @@ class GameOutcome(StrEnum):
     SHUTDOWN = "shutdown"
 
 
+class GameVisibility(StrEnum):
+    """Who may find a recorded game on a player's profile (#469).
+
+    Frozen from the room's public flag when the game is saved, because the
+    room is gone by the time anyone asks and a flag re-derived later would
+    change what the players agreed to when they sat down. A game played in a
+    public room was listed in the lobby with its players' names, so its
+    summary is open to anyone; one played in a private room is shown only to
+    the people who were in it. A missing value reads as private.
+    """
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+
 class AuthTokenPurpose(StrEnum):
     """Why a one-shot token exists.
 
@@ -448,6 +463,7 @@ BUG_REPORT_SCREENSHOT_STATUSES = tuple(
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
+GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)
 RUNTIME_EVENT_TYPES = tuple(event.value for event in RuntimeEventType)
 AUTH_TOKEN_PURPOSES = tuple(purpose.value for purpose in AuthTokenPurpose)
 EMAIL_OUTBOX_STATES = tuple(state.value for state in EmailOutboxState)

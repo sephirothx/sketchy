@@ -183,7 +183,7 @@ async def test_a_stranger_asking_for_a_game_is_refused_after_one_statement():
         )
 
         statements.clear()
-        summaries = await history.get_user_games(player.id)
+        summaries = await history.get_user_games(player.id, requesting_user_id=player.id)
         assert [s.id for s in summaries] == [game_id]
         assert summaries[0].rule_snapshot == {}
         list_selects = [s for s in _selects(statements) if "game_records" in s]

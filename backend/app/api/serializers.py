@@ -45,6 +45,26 @@ def user_payload(user: UserData) -> dict:
     }
 
 
+def public_user_payload(user: UserData) -> dict:
+    """The account as anyone may see it: what a seat in a room already shows.
+
+    Deliberately not `user_payload` (#469). That one is the caller's own
+    account and carries the role, the last login and the username - the
+    first names staff to whoever is looking for them, the second is a
+    schedule, and the third is the login identifier the nickname lookup is
+    throttled to protect. A profile opened by id gets the presentation the
+    player list shows and the day the account was made, nothing else.
+    """
+    return {
+        "id": user.id,
+        "displayName": user.display_name,
+        "nameColor": user.name_color,
+        "avatarUrl": avatar_url(None if user.is_anonymous else user.avatar_key),
+        "isAnonymous": user.is_anonymous,
+        "createdAt": _timestamp(user.created_at),
+    }
+
+
 def stats_payload(stats: UserStats) -> dict:
     return {
         "gamesPlayed": stats.games_played,
@@ -75,6 +95,7 @@ def game_summary_payload(summary: GameSummary) -> dict:
         "startedAt": _timestamp(summary.started_at),
         "finishedAt": _timestamp(summary.finished_at),
         "outcome": summary.outcome,
+        "visibility": summary.visibility,
         "participants": [
             {
                 "seatId": p.seat_id,

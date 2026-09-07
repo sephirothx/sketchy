@@ -878,6 +878,7 @@ and [`backend/app/repositories/sqlalchemy.py`](../backend/app/repositories/sqlal
 | `prompt_source_mode` | `legacy_unknown \| curated \| custom \| mixed \| builtin_fallback` |
 | `started_at`, `finished_at` | Gameplay times |
 | `outcome` | `finished \| abandoned` (and shutdown-cut) |
+| `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
 
 **The rule snapshot** ([`backend/app/game.py:370`](../backend/app/game.py)) freezes the

@@ -24,10 +24,11 @@ import {
   type GameDetail,
   type GameTurn,
   type GameSummary,
+  type PublicProfile,
   type HistoryReaction,
   type ProfileStats,
 } from "../lib/profile";
-import { useAuthStore, type AuthUser } from "../store/authStore";
+import { useAuthStore } from "../store/authStore";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -182,6 +183,9 @@ function GameRow({
               <span className="profile-game-outcome">
                 {game.outcome === "abandoned" ? "abandoned" : "cut short"}
               </span>
+            )}
+            {game.visibility === "private" && (
+              <span className="profile-game-outcome">private room</span>
             )}
           </span>
         </span>
@@ -454,7 +458,7 @@ function ProfileView({ userId }: { userId: string }) {
   const currentUser = useAuthStore((s) => s.user);
   const isOwnProfile = userId === currentUser?.id;
 
-  const [subject, setSubject] = useState<AuthUser | null>(null);
+  const [subject, setSubject] = useState<PublicProfile | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -509,9 +513,7 @@ function ProfileView({ userId }: { userId: string }) {
     }
   }, [userId, games.length, includeAbandoned, loadingMore]);
 
-  const shownName = subject
-    ? (subject.isAnonymous ? subject.displayName : subject.username ?? subject.displayName)
-    : "";
+  const shownName = subject?.displayName ?? "";
 
   return (
     <div className="profile-page">
@@ -607,7 +609,7 @@ function ProfileView({ userId }: { userId: string }) {
               <p className="profile-note">
                 {isOwnProfile
                   ? "No finished games yet. Play one and it will show up here."
-                  : "This player has not finished a game yet."}
+                  : "No games to show. Games from private rooms are listed only for the players who were in them."}
               </p>
             ) : (
               <ul className="profile-games">

@@ -33,7 +33,9 @@ from app.db.types import UTCDateTime
 from app.domain_values import (
     BugReportScreenshotStatus,
     GAME_OUTCOMES,
+    GAME_VISIBILITIES,
     GameOutcome,
+    GameVisibility,
     RUNTIME_EVENT_TYPES,
     AUTH_TOKEN_PURPOSES,
     EMAIL_OUTBOX_STATES,
@@ -1869,6 +1871,9 @@ class GameRecord(Base):
     __table_args__ = (
         _values_check("outcome", GAME_OUTCOMES, "ck_game_records_outcome"),
         _values_check(
+            "visibility", GAME_VISIBILITIES, "ck_game_records_visibility"
+        ),
+        _values_check(
             "scoring_mode", SCORING_MODES, "ck_game_records_scoring_mode"
         ),
         _values_check("hint_mode", HINT_MODES, "ck_game_records_hint_mode"),
@@ -1954,6 +1959,16 @@ class GameRecord(Base):
         String(16),
         default=GameOutcome.FINISHED.value,
         server_default=text("'finished'"),
+        nullable=False,
+    )
+    # The room's public flag, frozen when the game is saved (#469): a public
+    # room's game is open to anyone, a private room's only to the players
+    # who were there. The default is the safe reading for a row written by
+    # something that did not say.
+    visibility: Mapped[str] = mapped_column(
+        String(16),
+        default=GameVisibility.PRIVATE.value,
+        server_default=text("'private'"),
         nullable=False,
     )
     # Deliberately distinct from game event time; supports save-lag and
