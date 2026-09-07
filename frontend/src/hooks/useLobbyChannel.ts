@@ -39,6 +39,11 @@ export function useLobbyChannel(): void {
     // forgotten.
     let generation = 0;
     let asking = false;
+    // A resync decided while an acknowledgement is in flight - a replayed
+    // delta that did not follow, the pending buffer overflowing - cannot be
+    // issued from inside that attempt; it is remembered and issued the moment
+    // the attempt settles, so it is never lost to the guard below.
+    let wanted = false;
     // Whether an acknowledgement has landed on *this* connection. The server
     // joins the channel before it builds the answer, so a delta can arrive
     // first, and there is nothing sensible to apply it to yet.
@@ -68,9 +73,14 @@ export function useLobbyChannel(): void {
       // asks for a resync, and while the answer is on its way each further
       // delta finds it out of step again - so without this a single missed
       // message turns into one subscription per tick.
-      if (cancelled || asking || !socket.connected) return;
+      if (cancelled || !socket.connected) return;
+      if (asking) {
+        wanted = true;
+        return;
+      }
       stopRetrying();
       asking = true;
+      wanted = false;
       const mine = generation;
       try {
         const answer = await emitWithAck<Record<string, unknown>>("watch_lobby", {});
@@ -111,7 +121,13 @@ export function useLobbyChannel(): void {
           void subscribe();
         }, resubscribeDelayMs(attempt));
       } finally {
-        if (mine === generation) asking = false;
+        if (mine === generation) {
+          asking = false;
+          if (wanted && !cancelled && socket.connected) {
+            wanted = false;
+            void subscribe();
+          }
+        }
       }
     }
 
@@ -160,6 +176,7 @@ export function useLobbyChannel(): void {
     const onConnect = () => {
       generation += 1;
       asking = false;
+      wanted = false;
       baseline = false;
       replaceChat = true;
       attempt = 0;
@@ -175,6 +192,7 @@ export function useLobbyChannel(): void {
     const onDisconnect = () => {
       generation += 1;
       asking = false;
+      wanted = false;
       baseline = false;
       pending.clear();
       stopRetrying();
