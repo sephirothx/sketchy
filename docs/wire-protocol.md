@@ -156,6 +156,20 @@ the cookie to a session record and stores `{"user_id": …}` on the Socket.IO se
   need it for. There is no acknowledgement on a handshake to put these in, and
   `room_state` is per-room so it never reaches a client sitting in the lobby.
 
+### Origin
+
+A browser sends `Origin` on every WebSocket handshake, and a WebSocket is not subject to
+CORS: without a check, a page on any other site could connect here carrying the
+visitor's session cookie and play as them (#465). Engine.IO therefore consults
+[`backend/app/origin_policy.py`](../backend/app/origin_policy.py) for every handshake
+that carries an `Origin` and refuses with **400** (`… is not an accepted origin`) unless
+it is the origin this server serves the page at — the request's scheme and `Host`,
+where the scheme is what uvicorn established (rewritten from `X-Forwarded-Proto` only
+for a proxy in `FORWARDED_ALLOW_IPS`) — or one named in `ALLOWED_ORIGINS`. A handshake
+with no `Origin` is a non-browser client (the probe, the load harness, a script) and is
+not judged: it cannot carry a victim's cookie without the victim. The same rule guards
+unsafe REST requests (§9).
+
 ### Protocol version
 
 The client sends `auth: {protocol: PROTOCOL_VERSION}`
@@ -1497,6 +1511,14 @@ server's own log lines for that request are stamped with, and the one written in
 `audit_events.request_id` when the request produced a ledger entry - so a client, a
 proxy and the operator can quote the same id. A supplied value that is not a UUID is
 replaced, not echoed.
+
+**Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
+a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
+that — is not this server's own origin or one in `ALLOWED_ORIGINS` is answered **403**
+`{"detail": "This request did not come from Sketchy."}` before its cookie is resolved.
+A request with neither header is a non-browser client and passes. CORS is granted only to
+`ALLOWED_ORIGINS`, never to a wildcard and never with credentials. With the session cookie
+`SameSite=Strict`, that is the whole CSRF policy: there is no token.
 
 Every response also carries `X-Sketchy-Protocol`, the `PROTOCOL_VERSION` this build
 speaks, which the client compares against its own on every response it reads (§1, *REST

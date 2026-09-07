@@ -16,28 +16,32 @@ def is_secure_request(request: Request) -> bool:
     """Whether the browser reached us over HTTPS.
 
     A tunnel or reverse proxy terminates TLS and forwards plain HTTP, so the
-    request scheme alone would under-report and the forwarded header is the
-    only signal that the user's connection was encrypted.
+    request's own scheme would under-report - but the forwarded header is
+    read only for a proxy the deployment trusts: uvicorn rewrites the scope's
+    scheme from `X-Forwarded-Proto` when the peer is in `FORWARDED_ALLOW_IPS`
+    (R-PLAT-10), and anyone else's header is ignored. Reading the raw header
+    here used to let any client claim HTTPS and steer the cookie's `Secure`
+    flag (#465).
     """
-    forwarded_proto = request.headers.get("x-forwarded-proto", "")
-    if forwarded_proto:
-        return forwarded_proto.split(",")[0].strip().lower() == "https"
-    return request.url.scheme == "https"
+    return request.scope.get("scheme") in ("https", "wss")
 
 
 def set_session_cookie(response: Response, token: str, *, secure: bool) -> None:
     """Attach the session token as an HttpOnly cookie.
 
-    HttpOnly keeps the token out of JavaScript entirely. SameSite=Lax is
-    sufficient against cross-site POSTs because the frontend is served from the
-    same origin as the API, which also means no CSRF token is required.
+    HttpOnly keeps the token out of JavaScript entirely. SameSite=Strict keeps
+    it off every cross-site request, navigations included; together with the
+    origin check on unsafe requests and socket handshakes (#465,
+    `app/origin_policy.py`) that is the CSRF policy, and no token is needed.
+    A link into Sketchy from elsewhere loads the page without the cookie, and
+    the page's own same-origin fetches carry it from then on.
     """
     response.set_cookie(
         COOKIE_NAME,
         token,
         max_age=COOKIE_MAX_AGE,
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=secure,
         path="/",
     )
@@ -47,7 +51,7 @@ def clear_session_cookie(response: Response, *, secure: bool) -> None:
     response.delete_cookie(
         COOKIE_NAME,
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=secure,
         path="/",
     )

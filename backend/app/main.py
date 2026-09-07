@@ -37,6 +37,7 @@ from app.auth.bans import suspension_payload
 from app.auth.warnings import pending_warning_payload
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
+from app.origin_policy import OriginPolicyMiddleware, configured_origins, socket_origins
 from app.request_limits import RequestSizeLimitMiddleware
 from app.request_timing import RequestTimingMiddleware
 from app.auth.routes import create_auth_router
@@ -184,7 +185,11 @@ export_worker = DataExportWorker(async_session_factory)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
 
-sio = BoundedSocketServer(async_mode="asgi", cors_allowed_origins="*")
+# Only this server's own origin, and any named in ALLOWED_ORIGINS, may open a
+# socket from a browser (#465): a WebSocket is not subject to CORS, so a page
+# on any other origin could otherwise connect with the visitor's cookie and
+# play as them. Engine.IO refuses the handshake when `Origin` names another.
+sio = BoundedSocketServer(async_mode="asgi", cors_allowed_origins=socket_origins())
 handler_context = register_all_handlers(
     sio,
     room_manager,
@@ -515,17 +520,22 @@ async def lifespan(_app: FastAPI):
 
 
 api = FastAPI(title="Sketchy", lifespan=lifespan)
-# No allow_credentials: the frontend is served from this same origin, so the
-# session cookie rides along without CORS involvement. Turning credentials on
-# alongside a wildcard origin is invalid anyway, and would be the only reason
-# to need CSRF tokens on top of SameSite=Lax.
+# The frontend is served from this same origin, so the session cookie rides
+# along without CORS involvement, and no other origin is read by a browser:
+# CORS is granted only to the origins named in ALLOWED_ORIGINS (a frontend
+# hosted elsewhere), never to a wildcard, and never with credentials (#465).
 api.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=sorted(configured_origins()),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 api.add_middleware(SessionAuthMiddleware, session_factory=async_session_factory)
+# Ahead of the session lookup (added after it, so it runs before): an unsafe
+# request from an origin that is not this server's is refused before its
+# cookie is resolved. The Origin check plus the cookie's SameSite=Strict is
+# the CSRF policy; there is no token to forget on a route.
+api.add_middleware(OriginPolicyMiddleware)
 # Added last so it runs first: an oversized body is refused before any routing
 # or session lookup, rather than after the server has already held it.
 api.add_middleware(RequestSizeLimitMiddleware)

@@ -578,6 +578,7 @@ process. These deployment settings can be tuned without code changes:
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
 | `ROOM_SPECTATOR_LIMIT` | `8` | Spectators one room will hold, independently of `maxPlayers` |
 | `SOCKET_LIMIT` | `600` | Sockets this process will hold at once |
+| `ALLOWED_ORIGINS` | unset | Comma-separated origins, besides this server's own, from which a browser may open a socket or make a state-changing request (#465): only for a frontend hosted on another origin. Everything else is refused at the handshake and on POST/PUT/PATCH/DELETE |
 | `ROOM_JOIN_LIMIT` | `20` | Seating joins per socket per minute; confirmations are free |
 | `ROOM_TAKEOVER_LIMIT` | `20` | Rebinds of one seat to a new socket, per minute |
 
@@ -1018,6 +1019,21 @@ are held where an admin panel could change them without a deploy
 Set the same high-entropy `IP_HASH_SECRET` on every deployment that shares the
 database if you manage secrets externally. Rotating it starts fresh buckets
 without exposing or re-identifying old keys.
+
+**Origins.** A browser may act as a signed-in player only from the origin this
+server serves the page at, or one named in `ALLOWED_ORIGINS`. A socket handshake
+whose `Origin` names another site is refused with 400 before a session exists, and an
+unsafe request (POST, PUT, PATCH, DELETE) from another origin - by `Origin`, or
+`Referer` when a browser sent only that - is refused with 403 before its cookie is
+resolved; a request with neither header is a non-browser client, which cannot carry
+somebody else's cookie. The session cookie is `SameSite=Strict`, so it never rides a
+cross-site request or navigation either; a link into Sketchy from elsewhere loads the
+page without it and the page's own fetches carry it from then on. Together that is
+the CSRF policy: no token to plumb through the client. Whether the cookie is marked
+`Secure` follows the request's scheme as uvicorn established it, which honours
+`X-Forwarded-Proto` only from a proxy in `FORWARDED_ALLOW_IPS`; the raw header is
+never read. In development the Vite proxy presents the backend's own origin, so the
+dev server's pages are the served page as far as the backend can tell.
 
 Limits are keyed on the connecting address. Behind a reverse proxy or tunnel
 every request arrives from the proxy, so run the production server with
