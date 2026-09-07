@@ -14,9 +14,30 @@ import type { AckResponse } from "../types";
 // has provisioned the account. Connecting eagerly would bind the socket to no
 // account at all, so the seat it takes could never be reclaimed after signing
 // up. App.tsx connects as soon as identity has settled.
+/** How long one connection attempt may stall before polling is put first.
+Engine.IO's default connect timeout is 20 s, which on a network that silently
+drops WebSocket upgrades is 20 s of nothing before polling is even
+considered. Under the 8 s an acknowledged command waits for the connection
+(`DEFAULT_ACK_TIMEOUT_MS`), so a join pressed during the stall still lands on
+the polling session instead of timing out first. A healthy WebSocket
+handshake takes well under a second; a slow network that trips this merely
+starts on polling and is upgraded from there. */
+export const CONNECT_TIMEOUT_MS = 6_000;
+
 export const socket: Socket = io({
   autoConnect: false,
+  // WebSocket first, and polling *actually* tried when it fails (#601).
+  // Listing both is not enough: without `tryAllTransports` the client only
+  // moves to the next transport when the first fails while opening, and
+  // an environment that blocks WebSocket upgrades kept retrying WebSocket
+  // for ever against a polling fallback it had been told about. A
+  // successful WebSocket costs nothing more; polling costs more bytes and is
+  // a working session instead of none. An application refusal at the
+  // handshake (a suspension, a version skew) is not a transport error and
+  // never causes a transport switch.
   transports: ["websocket", "polling"],
+  tryAllTransports: true,
+  timeout: CONNECT_TIMEOUT_MS,
   // Settled at the handshake, where there is somewhere to put the answer. A
   // frame refused by the codec is refused inside a handler with no
   // acknowledgement, so a stale build is never told and diverges in silence.
@@ -47,13 +68,95 @@ const telemetry = {
   reconnects: 0,
   lastDisconnectAt: null as string | null,
   lastDisconnectReason: null as string | null,
+  /** The transport each handshake opened on, newest last, bounded. A page
+  that reads "polling, websocket, polling" fell back and recovered. */
+  transports: [] as string[],
+  /** Times a polling session was upgraded to WebSocket afterwards. */
+  upgrades: 0,
+  /** Times a stalled WebSocket attempt made the client put polling first. */
+  fallbacks: 0,
 };
+
+socket.io.on("open", () => {
+  const name = socket.io.engine?.transport?.name ?? "unknown";
+  telemetry.transports.push(name);
+  if (telemetry.transports.length > 8) telemetry.transports.shift();
+  if (name !== "websocket") recordClientError("socket", `connected over ${name}`);
+  socket.io.engine?.once("upgrade", () => {
+    telemetry.upgrades += 1;
+  });
+});
 
 socket.on("disconnect", (reason) => {
   telemetry.lastDisconnectAt = new Date().toISOString();
   telemetry.lastDisconnectReason = String(reason);
   recordClientError("socket", `disconnect: ${reason}`);
 });
+
+/** Which transports to try next after a failed connection attempt (#601).
+
+`tryAllTransports` moves on when the WebSocket *errors* while opening, which is
+what a proxy answering the upgrade with an HTTP status produces. A network that
+silently drops upgrades produces nothing at all: the socket hangs, the attempt
+times out, and Engine.IO retries WebSocket for ever, because a timeout is not a
+transport error. So a timeout on an attempt whose engine never opened puts
+polling first for the next attempt; Engine.IO still probes for a WebSocket
+upgrade from there, and keeps polling if that probe hangs too. An application
+refusal - a suspension, a version skew - arrives over a transport that did
+open, and changes nothing here: another transport would be refused the same. */
+export function transportsAfterStall(
+  current: readonly string[],
+  engineOpened: boolean,
+): string[] {
+  if (engineOpened) return [...current];
+  if (current[0] !== "websocket" || !current.includes("polling")) return [...current];
+  return ["polling", "websocket"];
+}
+
+// The watchdog. Armed on every attempt by wrapping the manager's `open`,
+// which the first connect and each reconnect go through; disarmed by the
+// engine handshake completing, or the attempt ending in an error or a close
+// on its own. When it fires, the attempt stalled: nothing arrived in
+// CONNECT_TIMEOUT_MS on a transport the browser reported open.
+let stallTimer: number | null = null;
+
+function disarmStallWatchdog(): void {
+  if (stallTimer !== null) {
+    window.clearTimeout(stallTimer);
+    stallTimer = null;
+  }
+}
+
+function armStallWatchdog(): void {
+  disarmStallWatchdog();
+  stallTimer = window.setTimeout(() => {
+    stallTimer = null;
+    if (socket.connected) return;
+    const opts = socket.io.opts as { transports?: string[] };
+    const next = transportsAfterStall(opts.transports ?? [], socket.io.engine?.readyState === "open");
+    if (!opts.transports || next[0] === opts.transports[0]) return;
+    opts.transports = next;
+    recordClientError("socket", `transport fallback: the ${opts.transports[1]} attempt stalled, trying polling first`);
+    telemetry.fallbacks += 1;
+    // A fresh engine reads the new order; nothing was connected, so nobody
+    // sees a disconnect.
+    socket.disconnect();
+    socket.connect();
+  }, CONNECT_TIMEOUT_MS);
+}
+
+const managerOpen = socket.io.open.bind(socket.io);
+socket.io.open = ((callback?: (err?: Error) => void) => {
+  // Only an attempt that actually starts is watched: `connect()` on a socket
+  // already open or opening is a no-op in the manager and must not arm a
+  // timer against a connection that is fine.
+  const state = (socket.io as unknown as { _readyState?: string })._readyState;
+  if (state !== "open" && state !== "opening") armStallWatchdog();
+  return managerOpen(callback);
+}) as typeof socket.io.open;
+socket.io.on("open", disarmStallWatchdog);
+socket.io.on("error", disarmStallWatchdog);
+socket.io.on("close", disarmStallWatchdog);
 
 socket.on("connect_error", (error) => {
   recordClientError("socket", `connect_error: ${error?.message ?? error}`);
@@ -141,6 +244,12 @@ export interface ConnectionTelemetry {
   /** "websocket" or "polling" - a game that fell back to polling behaves
       differently enough to be worth knowing before reproducing anything. */
   transport: string | null;
+  /** The transport each handshake of this page load opened on, newest last. */
+  transports: string[];
+  /** Polling sessions later upgraded to WebSocket. */
+  upgrades: number;
+  /** Stalled WebSocket attempts that made the client put polling first. */
+  fallbacks: number;
 }
 
 export function connectionTelemetry(): ConnectionTelemetry {
@@ -151,6 +260,9 @@ export function connectionTelemetry(): ConnectionTelemetry {
     lastDisconnectAt: telemetry.lastDisconnectAt,
     lastDisconnectReason: telemetry.lastDisconnectReason,
     transport: socket.io?.engine?.transport?.name ?? null,
+    transports: [...telemetry.transports],
+    upgrades: telemetry.upgrades,
+    fallbacks: telemetry.fallbacks,
   };
 }
 
