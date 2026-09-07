@@ -24,7 +24,7 @@ resets every in-memory series; Prometheus keeps the history.
 | **SLO-6** | API requests are fast | `sketchy:http_p95_seconds:5m` | p95 < 300 ms | `SketchySlowRequests` (warn, 10 m) |
 | **SLO-7** | Command handlers are fast | `sketchy:socket_p95_seconds:5m` | p95 < 100 ms | `SketchySlowCommands` (warn, 10 m) |
 | **SLO-8** | Nothing a player did is lost | `sketchy_history_writes_abandoned_total`, `sketchy_events_dropped_total` | zero | `SketchyHistoryWritesLost` (page), `SketchyRecorderDropping` (warn) |
-| **SLO-9** | Deferred work is carried out | `sketchy_mail_outbox_oldest_seconds`, `sketchy_data_exports_oldest_seconds`, `sketchy_loop_*` | oldest < 10 min; every loop running and not failing | `SketchyMailBacklog`, `SketchyExportStuck`, `SketchyLoopFailing` (warn), `SketchyLoopStopped` (page) |
+| **SLO-9** | Deferred work is carried out | `sketchy_mail_outbox_oldest_seconds`, `sketchy_data_exports_oldest_seconds`, `sketchy_finished_games_oldest_seconds`, `sketchy_loop_*` | oldest < 10 min (a staged finished game < 1 h, its retry schedule); every loop running and not failing | `SketchyMailBacklog`, `SketchyExportStuck`, `SketchyFinishedGamesStuck`, `SketchyLoopFailing` (warn), `SketchyLoopStopped` (page) |
 
 Saturation signals - pool fill, statement p95, disk, memory - are not objectives but
 warnings, because each one is a cause the objectives above would show the effect of:

@@ -35,6 +35,7 @@ from app.db.models import (
 )
 from app.domain_values import AuditTargetType, GameOutcome
 from app.services.mail_delivery import sweep_interval_seconds
+from app.services.game_handoff import sweep_interval_seconds as handoff_sweep_interval_seconds
 from app.services.queue_depths import QueueDepths, QueueSnapshot
 from app.services.readiness import ReadinessProbe
 from app.services.runtime_metrics import (
@@ -143,6 +144,21 @@ def _queue_lines(queues: QueueSnapshot | None) -> list[str]:
             "sketchy_data_exports_oldest_seconds",
             "Age of the oldest unfinished export.",
             queues.data_exports.oldest_seconds,
+        ),
+        *gauge_lines(
+            "sketchy_finished_games_pending",
+            "Finished games staged and not yet written into history.",
+            queues.finished_games.pending,
+        ),
+        *gauge_lines(
+            "sketchy_finished_games_oldest_seconds",
+            "Age of the oldest staged finished game.",
+            queues.finished_games.oldest_seconds,
+        ),
+        *gauge_lines(
+            "sketchy_finished_games_failed",
+            "Staged finished games given up on and kept as a record.",
+            queues.finished_games.failed,
         ),
     ]
 
@@ -276,6 +292,7 @@ def create_operations_router(
     telemetry: Telemetry | None = None,
     queue_depths: QueueDepths | None = None,
     mail_sweep_seconds: float | None = None,
+    handoff_sweep_seconds: float | None = None,
 ) -> APIRouter:
     """The two operator surfaces over one set of numbers.
 
@@ -289,6 +306,11 @@ def create_operations_router(
     queues = queue_depths if queue_depths is not None else QueueDepths(session_factory)
     sweep_seconds = (
         mail_sweep_seconds if mail_sweep_seconds is not None else sweep_interval_seconds()
+    )
+    handoff_sweep_seconds = (
+        handoff_sweep_seconds
+        if handoff_sweep_seconds is not None
+        else handoff_sweep_interval_seconds()
     )
 
     def loop_snapshot() -> dict[str, dict[str, object]]:
@@ -410,6 +432,10 @@ def create_operations_router(
                     "sweepSeconds": sweep_seconds,
                 },
                 "dataExports": queue_snapshot.data_exports.as_json(),
+                "finishedGames": {
+                    **queue_snapshot.finished_games.as_json(),
+                    "sweepSeconds": handoff_sweep_seconds,
+                },
             },
             "loops": _camel_loops(loop_snapshot()),
             "series": signals["series"],

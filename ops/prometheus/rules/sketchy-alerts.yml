@@ -57,6 +57,15 @@ groups:
           summary: "A finished game's history was not saved (kind={{ $labels.kind }}, reason={{ $labels.reason }})"
           runbook: "README.md#on-call"
 
+      - alert: SketchyFinishedGamesStuck
+        expr: sketchy_finished_games_oldest_seconds > 3600
+        for: 5m
+        labels: {severity: warn}
+        annotations:
+          summary: "A finished game has been staged for over an hour without reaching history"
+          description: "The handoff loop retries for about two hours before giving up; check the database and the history_handoff loop on the operations page."
+          runbook: "README.md#on-call"
+
       - alert: SketchyRecorderDropping
         expr: increase(sketchy_events_dropped_total[10m]) > 0
         labels: {severity: warn}

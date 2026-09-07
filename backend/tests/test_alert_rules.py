@@ -17,7 +17,7 @@ import yaml
 
 from app.api.operations import _loop_lines, _prometheus_lines, _queue_lines
 from app.probe import PROBE_METRIC_NAMES
-from app.services.queue_depths import QueueDepth, QueueSnapshot
+from app.services.queue_depths import HandoffDepth, QueueDepth, QueueSnapshot
 from app.services.telemetry import PoolGauges, Telemetry, gauge_lines
 
 
@@ -51,7 +51,7 @@ def exposed_names() -> set[str]:
             {"mail_delivery": {"running": True, "consecutive_failures": 0, "total_failures": 0, "seconds_since_success": 1.0}}
         ),
         # Non-empty queues, so the oldest-age gauges - omitted when empty - appear.
-        *_queue_lines(QueueSnapshot(QueueDepth(1, 5.0), QueueDepth(1, 5.0))),
+        *_queue_lines(QueueSnapshot(QueueDepth(1, 5.0), QueueDepth(1, 5.0), HandoffDepth(1, 5.0, 0))),
         *gauge_lines("sketchy_db_ready", "x", 1),
     ]
     names: set[str] = set()

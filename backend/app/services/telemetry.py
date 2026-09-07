@@ -688,6 +688,20 @@ class Telemetry:
             ("kind", "reason"),
         )
         self.history_minutes = CountRing(1)
+        # The durable handoff (#541): how staging went, and how each replay
+        # attempt ended. A lost game is counted above as well, under kind
+        # `handoff` (could not be staged) or `replay` (staged, then failed
+        # for good), so SLO-8 keeps one counter to page on.
+        self.history_handoffs = LabelledCounter(
+            "sketchy_history_handoffs_total",
+            "Finished games staged for replay, by outcome.",
+            ("outcome",),
+        )
+        self.history_replays = LabelledCounter(
+            "sketchy_history_replays_total",
+            "Replay attempts of staged finished games, by outcome.",
+            ("outcome",),
+        )
 
     # --- recording ---------------------------------------------------------
 
@@ -782,6 +796,12 @@ class Telemetry:
     def history_write_abandoned(self, kind: str, reason: str) -> None:
         self.history_writes_abandoned.inc((kind, reason))
         self.history_minutes.bump(self._clock())
+
+    def history_handoff(self, outcome: str) -> None:
+        self.history_handoffs.inc((outcome,))
+
+    def history_replay(self, outcome: str) -> None:
+        self.history_replays.inc((outcome,))
 
     def sample_process(self) -> None:
         self.process.sample(self, now=self._clock(), mono=self._monotonic())
@@ -893,7 +913,15 @@ class Telemetry:
                             for (_, why), count in self.history_writes_abandoned.items()
                             if why == reason
                         )
-                        for reason in ("timeout", "error")
+                        for reason in ("timeout", "error", "conflict", "exhausted", "unreadable")
+                    },
+                },
+                "historyHandoff": {
+                    "staged": self.history_handoffs.get(("staged",)),
+                    "duplicate": self.history_handoffs.get(("duplicate",)),
+                    "replays": {
+                        outcome: count
+                        for (outcome,), count in sorted(self.history_replays.items())
                     },
                 },
             },
@@ -973,6 +1001,8 @@ class Telemetry:
                 "sketchy_db_pool_capacity", "Most connections the pool will ever open.", pool.capacity
             )
         lines += self.history_writes_abandoned.lines()
+        lines += self.history_handoffs.lines()
+        lines += self.history_replays.lines()
         cpu = _cpu_seconds()
         if cpu is not None:
             lines += [

@@ -189,8 +189,25 @@ writer reuses that ID for the history row and prompt-usage batch, and stores a
 canonical SHA-256 payload digest with the history row. Retrying the same ID and
 content is idempotent—even if collection order changes—while reusing an ID for
 different content raises an operator-visible conflict instead of duplicating or
-silently replacing history. The digest is an integrity/idempotency aid, not a
-credential or an event timestamp.
+silently replacing history. The digest covers the drawings too, and the usage
+batch keeps a digest of its own, so a retry carrying different bytes or different
+facts is a conflict rather than a silent accept. The digest is an
+integrity/idempotency aid, not a credential or an event timestamp.
+
+**A finished game is written down whole before it is unpacked.** The room stages
+the game - history, drawings and prompt usage together - as one bounded,
+versioned envelope row (`finished_game_envelopes`) in a single insert, and a
+supervised loop replays it into the history tables: one row at a time, under a
+lease and a fencing token, with each of the two parts recorded under the row so
+a crash between them resumes only the missing one, and the row deleted once the
+game is in history. Transient failures are retried with backoff for about two
+hours, a conflict fails at once, and a terminal failure keeps the row without its
+payload as a record for 30 days. What this does not do is survive a database that
+is down at the moment a game ends: that game is lost and counted, exactly as a
+lost write always was (`sketchy_history_writes_abandoned_total`, kind `handoff`).
+The loop's own sweep interval is `HISTORY_HANDOFF_SWEEP_SECONDS`, the envelope
+ceiling `HISTORY_HANDOFF_MAX_BYTES`, and `python -m app.services.game_handoff`
+replays staged games by hand.
 Finished games also store a scoring-rules version and a versioned exact rule
 snapshot. The snapshot freezes the numeric default/pressure/hint parameters,
 drawer-bonus algorithm, drawing time, permitted tools and colors, prompt
@@ -573,6 +590,8 @@ process. These deployment settings can be tuned without code changes:
 | `RETENTION_SWEEP_SECONDS_BUDGET` | `30` | Seconds one sweep may spend per run |
 | `EXPORT_SWEEP_SECONDS` | `60` | How often the export worker looks for jobs nobody woke it for, and reclaims ones a crash left behind |
 | `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
+| `HISTORY_HANDOFF_SWEEP_SECONDS` | `60` | How often the finished-game handoff loop looks for staged games nobody woke it for, retries the ones that are due, and reclaims a claim a crash left behind |
+| `HISTORY_HANDOFF_MAX_BYTES` | `16777216` | Ceiling on one staged finished game (deflated); past it the game is lost and counted as `too_large` |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
@@ -1207,6 +1226,7 @@ backend/
       payloads.py    Typed boundary models and parsers for every client command
     services/
       game_flow.py Shared turn, round, timer, and player-removal workflows
+      game_handoff.py Durable handoff of a finished game into history: staged whole, replayed by a loop
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
       timers.py    Application-owned asynchronous timer lifecycle

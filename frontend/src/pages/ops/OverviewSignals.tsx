@@ -271,8 +271,17 @@ export function DatabaseCard({ live, reasons }: { live: LiveSnapshot; reasons: A
         <Cell
           label="History writes lost"
           value={String(lost.lastHour)}
-          note={`last hour · ${lost.total} since start (${lost.byReason.timeout} timed out, ${lost.byReason.error} failed)`}
+          note={`last hour · ${lost.total} since start (${lost.byReason.timeout} timed out, ${lost.byReason.error} failed, ${lost.byReason.conflict + lost.byReason.exhausted + lost.byReason.unreadable} given up in replay)`}
           warning={flagged(reasons, "history-lost")}
+        />
+        <Cell
+          label="Games staged"
+          value={String(database.historyHandoff.staged)}
+          note={`since start · replays: ${
+            Object.entries(database.historyHandoff.replays)
+              .map(([outcome, count]) => `${count} ${outcome.replaceAll("_", " ")}`)
+              .join(", ") || "none yet"
+          }`}
         />
       </div>
       <div className={`ops-health-row${readiness && !readiness.ok ? " is-warning" : ""}`}>
@@ -310,6 +319,16 @@ export function QueuesCard({ live, reasons }: { live: LiveSnapshot; reasons: Att
         <span>
           {queues.dataExports.pending} pending
           {queues.dataExports.oldestSeconds !== null && ` · oldest ${formatDuration(queues.dataExports.oldestSeconds)}`}
+        </span>
+      </div>
+      <div className={`ops-health-row${flagged(reasons, "history-backlog") || flagged(reasons, "history-failed") ? " is-warning" : ""}`}>
+        <span className="ops-health-dot" aria-hidden="true" />
+        <strong>Finished games</strong>
+        <span>
+          {queues.finishedGames.pending} staged
+          {queues.finishedGames.oldestSeconds !== null && ` · oldest ${formatDuration(queues.finishedGames.oldestSeconds)}`}
+          {queues.finishedGames.failed > 0 && ` · ${queues.finishedGames.failed} failed`}
+          {` · swept every ${formatDuration(queues.finishedGames.sweepSeconds)}`}
         </span>
       </div>
       {loops.map(([name, loop]) => {

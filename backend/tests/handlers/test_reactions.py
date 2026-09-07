@@ -1,7 +1,6 @@
 """The `react_to_drawing` command: who may react, to what, and what the room hears."""
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,6 +20,7 @@ from tests.handlers.helpers import (
     build_room,
     contains_secret,
     play_to_completion,
+    replay_staged,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -176,6 +176,7 @@ async def test_only_the_drawing_on_screen_can_be_reacted_to():
         "error"
     ] == NOT_VISIBLE
     await ctx.timers.close()
+    await replay_staged(ctx)
 
 
 async def test_a_drawer_who_rejoined_still_cannot_react_to_their_own_drawing():
@@ -227,6 +228,7 @@ async def test_live_reactions_ride_on_the_turn_payloads_and_into_history():
         ctx.timers.cancel_phase_timer(room.id)
         await ctx.game_flow._finish_or_next(room)
     await ctx.timers.close()
+    await replay_staged(ctx)
     [saved] = history.saved
     seat = next(p for p in saved.participants if p.user_id == reactor.user_id)
     assert [(r.turn_id, r.seat_id, r.user_id, r.emoji) for r in saved.reactions] == [
@@ -253,17 +255,13 @@ async def test_a_late_write_from_an_earlier_game_does_not_speak_for_the_newer_on
     assert room.last_game_history == "recorded"
     newer = room.last_game_id
 
-    stale = SimpleNamespace(
-        record=SimpleNamespace(id="an-earlier-game"),
-        participants=[], turns=[], score_events=[], drawings=[], reactions=[],
-    )
-    history.fail = True
-    await ctx.game_flow._persist_game_history(room, stale)
+    # The loop reports on the earlier game after the room has moved on: it
+    # must not speak for the newer one, whichever way it went.
+    ctx.game_flow.note_history_outcome("an-earlier-game", "failed")
     assert (room.last_game_id, room.last_game_history) == (newer, "recorded")
 
-    history.fail = False
     room.last_game_history = "pending"
-    await ctx.game_flow._persist_game_history(room, stale)
+    ctx.game_flow.note_history_outcome("an-earlier-game", "recorded")
     assert room.last_game_history == "pending", "a stale success must not open the recap"
 
 
@@ -280,6 +278,7 @@ async def test_an_abandoned_game_carries_its_reactions_too():
 
     assert await ctx.game_flow.record_abandoned_game(room) is True
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     [saved] = history.saved
     assert saved.record.outcome == "abandoned"
@@ -290,10 +289,12 @@ async def test_an_abandoned_game_carries_its_reactions_too():
 # ------------------------------------------------------------------ recap
 
 
-async def finished(history=None, *, guests: bool = False):
+async def finished(history=None, *, guests: bool = False, staging_fails: bool = False):
     room_manager, room, players = build_room(rounds=1)
     history = history or FakeGameHistoryRepository()
     ctx = build_context(room_manager, history)
+    if staging_fails:
+        ctx.finished_games.store.fail_stage = RuntimeError("database unavailable")
     react = wire(ctx, room, players)
     await play_to_completion(ctx, room, players)
     assert room.game is None and room.last_game_drawings
@@ -358,7 +359,7 @@ async def test_the_recap_refuses_while_the_game_is_still_being_saved():
 
 
 async def test_a_game_that_was_never_recorded_takes_no_recap_reactions():
-    ctx, room, players, history, react = await finished(FakeGameHistoryRepository(fail=True))
+    ctx, room, players, history, react = await finished(staging_fails=True)
     assert room.last_game_history == "failed"
     entry, reactor = recap_target(room, players)
 

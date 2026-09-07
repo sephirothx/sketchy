@@ -111,7 +111,7 @@ async def test_concurrent_queue_reads_share_one_query():
     try:
         results = await asyncio.gather(*(depths.read() for _ in range(5)))
         assert all(result is results[0] for result in results)
-        assert store.db_queries.total() == 2
+        assert store.db_queries.total() == 3  # one statement per durable queue
     finally:
         await engine.dispose()
 

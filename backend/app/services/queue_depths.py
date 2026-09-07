@@ -23,8 +23,8 @@ import time
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import DataExport, EmailOutboxEntry
-from app.domain_values import DataExportStatus, EmailOutboxState
+from app.db.models import DataExport, EmailOutboxEntry, FinishedGameEnvelope
+from app.domain_values import DataExportStatus, EmailOutboxState, FinishedGameHandoffState
 
 
 DEFAULT_CACHE_SECONDS = 10.0
@@ -45,9 +45,20 @@ class QueueDepth:
 
 
 @dataclass(frozen=True)
+class HandoffDepth(QueueDepth):
+    """The finished-game queue also counts what it gave up on (#541)."""
+
+    failed: int = 0
+
+    def as_json(self) -> dict[str, object]:
+        return {**super().as_json(), "failed": self.failed}
+
+
+@dataclass(frozen=True)
 class QueueSnapshot:
     mail_outbox: QueueDepth
     data_exports: QueueDepth
+    finished_games: HandoffDepth
 
 
 def _age(oldest: datetime | None, now: datetime) -> float | None:
@@ -112,7 +123,30 @@ class QueueDepths:
                     )
                 )
             ).one()
+            # One statement for the third queue too: live rows and failed
+            # rows are the two groups, and the oldest matters only for live.
+            handoff_count = 0
+            handoff_failed = 0
+            handoff_oldest = None
+            for state, count, oldest in (
+                await session.execute(
+                    select(
+                        FinishedGameEnvelope.state,
+                        func.count(),
+                        func.min(FinishedGameEnvelope.created_at),
+                    ).group_by(FinishedGameEnvelope.state)
+                )
+            ).all():
+                if state == FinishedGameHandoffState.FAILED.value:
+                    handoff_failed += int(count or 0)
+                else:
+                    handoff_count += int(count or 0)
+                    if oldest is not None and (handoff_oldest is None or oldest < handoff_oldest):
+                        handoff_oldest = oldest
         return QueueSnapshot(
             mail_outbox=QueueDepth(int(mail_count or 0), _age(mail_oldest, now)),
             data_exports=QueueDepth(int(export_count or 0), _age(export_oldest, now)),
+            finished_games=HandoffDepth(
+                int(handoff_count or 0), _age(handoff_oldest, now), int(handoff_failed or 0)
+            ),
         )

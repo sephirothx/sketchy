@@ -29,6 +29,7 @@ from app.services.timers import TimerManager
 if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.game_flow import GameFlowService
+    from app.services.game_handoff import FinishedGameHandoffWorker
     from app.services.friend_invites import FriendInviteBook
     from app.services.friends import FriendService
     from app.services.lobby_chat import LobbyChatLog
@@ -77,6 +78,9 @@ class HandlerContext:
     user_repo: UserRepository | None = None
     game_history_repo: GameHistoryRepository | None = None
     prompt_list_repo: PromptListRepository | None = None
+    # Where a finished game goes (#541): staged whole, replayed into the two
+    # repositories above by the worker's loop. None means no history at all.
+    finished_games: FinishedGameHandoffWorker | None = None
     # Needed to resolve a hashed opaque session when a socket presents a cookie.
     session_factory: async_sessionmaker[AsyncSession] | None = None
     block_service: BlockService | None = None

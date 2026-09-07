@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import asyncio
+import logging
 import hashlib
 import json
 import os
@@ -68,6 +69,12 @@ from app.auth.retention import (
 )
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.data_export_worker import DataExportWorker, stop_export_worker
+from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
+from app.services.game_handoff import (
+    FinishedGameHandoffWorker,
+    SqlEnvelopeStore,
+    stop_handoff_worker,
+)
 from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
 from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
@@ -193,6 +200,13 @@ room_preset_service = RoomPresetService(async_session_factory, prompt_list_repo)
 # Built at import so the auth router can hold its wake handle; started in
 # the lifespan alongside the other supervised loops.
 export_worker = DataExportWorker(async_session_factory)
+# The durable handoff of finished games (#541): the room stages, this replays.
+# The outcome callback is bound once the handler context exists, below.
+finished_game_worker = FinishedGameHandoffWorker(
+    SqlEnvelopeStore(async_session_factory),
+    game_history_repo=game_history_repo,
+    prompt_list_repo=prompt_list_repo,
+)
 shutdown_coordinator = ShutdownCoordinator(async_session_factory, room_manager)
 readiness_probe = ReadinessProbe(async_session_factory)
 
@@ -207,11 +221,13 @@ handler_context = register_all_handlers(
     user_repo=user_repo,
     game_history_repo=game_history_repo,
     prompt_list_repo=prompt_list_repo,
+    finished_games=finished_game_worker,
     session_factory=async_session_factory,
     block_service=block_service,
     friend_service=friend_service,
     shutdown=shutdown_coordinator,
 )
+finished_game_worker.bind_outcome(handler_context.game_flow.note_history_outcome)
 # The socket ledger already knows exactly how many are open; the gauge reads
 # it rather than keeping a second count that could drift from it.
 telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open_sockets
@@ -448,6 +464,7 @@ async def lifespan(_app: FastAPI):
     lag_sampler = None
     mail_health = LoopHealth("mail_delivery")
     exports_health = LoopHealth("data_exports")
+    handoff_health = LoopHealth("history_handoff")
     metrics_health = LoopHealth("runtime_metrics")
     retention_health = LoopHealth("retention_sweep")
     presence_health = LoopHealth("presence_broadcast")
@@ -486,6 +503,9 @@ async def lifespan(_app: FastAPI):
         # Same shape as the outbox: the table is the queue, this is the one
         # place a document is built, and the request only wakes it.
         export_build = export_worker.start(health=exports_health)
+        # The same shape again: the room stages, this unpacks (#541). Rows a
+        # previous process left behind are replayed by the first sweep.
+        history_replay = finished_game_worker.start(health=handoff_health)
         # No database of its own: it rebuilds from the presence registry and
         # the live rooms every tick, and broadcasts only when the two say
         # something different from the last time it looked.
@@ -500,6 +520,7 @@ async def lifespan(_app: FastAPI):
         readiness_probe.supervise("runtime_metrics", metrics_flush, metrics_health)
         readiness_probe.supervise("retention_sweep", retention_sweep, retention_health)
         readiness_probe.supervise("data_exports", export_build, exports_health)
+        readiness_probe.supervise("history_handoff", history_replay, handoff_health)
         readiness_probe.supervise(
             "presence_broadcast", presence_broadcast, presence_health
         )
@@ -525,6 +546,18 @@ async def lifespan(_app: FastAPI):
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
+        # After the drain, which ends games and stages them: one bounded
+        # pass replays what it can, and whatever is left is a row the next
+        # process picks up on its first sweep - that is the point of #541.
+        await stop_handoff_worker(history_replay)
+        try:
+            await asyncio.wait_for(
+                finished_game_worker.drain(), timeout=HISTORY_WRITE_TIMEOUT_SECONDS
+            )
+        except (asyncio.TimeoutError, Exception):
+            logging.getLogger("sketchy.main").warning(
+                "finished games left staged for the next process", exc_info=True
+            )
         # After the sockets are drained, so the last thing anybody said is
         # written rather than left in the queue.
         if handler_context.message_retention is not None:

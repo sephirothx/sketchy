@@ -15,6 +15,10 @@ class RepositoryError(Exception):
     pass
 
 
+class PromptUsageConflictError(RepositoryError):
+    """A prompt-usage batch id was reused for different facts (#541)."""
+
+
 class GameHistoryConflictError(RepositoryError):
     """A stable game ID was reused with a different persistence payload."""
 

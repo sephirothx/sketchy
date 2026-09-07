@@ -5,9 +5,12 @@ import random
 from unittest.mock import AsyncMock
 
 import socketio
+from datetime import datetime, timedelta, timezone
 
 from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
+from app.services.game_handoff import FinishedGameHandoffWorker
+from tests.fake_envelope_store import MemoryEnvelopeStore
 from app.prompt_content import prompt_match_key
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
@@ -66,14 +69,47 @@ def build_room(*, rounds: int = 1, accounts: dict[str, str | None] | None = None
     return room_manager, room, players
 
 
+class ManualClock:
+    """The handoff worker's idea of now, moved by hand through the backoff."""
+
+    def __init__(self) -> None:
+        self.now = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+
+    def advance(self, seconds: float) -> None:
+        self.now = self.now + timedelta(seconds=seconds)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
 def build_context(room_manager, history_repo, prompt_list_repo=None, timeline=None):
     sio = socketio.AsyncServer(async_mode="asgi")
+    # The handoff runs against an in-memory queue here (#541): a game is
+    # staged by the flow and replayed into the fake repositories by
+    # `replay_staged`, which `play_to_completion` calls on its way out. The
+    # worker's clock is the test's to move, so a backoff is a call rather
+    # than a wait.
+    clock = ManualClock()
+    finished_games = (
+        FinishedGameHandoffWorker(
+            MemoryEnvelopeStore(),
+            game_history_repo=history_repo,
+            prompt_list_repo=prompt_list_repo,
+            clock=clock,
+        )
+        if history_repo is not None
+        else None
+    )
     ctx = register_handlers(
         sio,
         room_manager,
         game_history_repo=history_repo,
         prompt_list_repo=prompt_list_repo,
+        finished_games=finished_games,
     )
+    if finished_games is not None:
+        finished_games.bind_outcome(ctx.game_flow.note_history_outcome)
+    ctx.handoff_clock = clock
     if timeline is None:
         sio.emit = AsyncMock()
     else:
@@ -117,6 +153,32 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
+    await replay_staged(ctx)
+
+
+async def replay_staged(ctx):
+    """Run the handoff loop's work once: every staged game, replayed now.
+
+    What the supervised loop does in the process the moment it is woken;
+    here it is a call, so a test sees the write land - or fail - before it
+    looks. A test that wants to look between staging and replay simply does
+    not call this.
+    """
+    worker = ctx.finished_games
+    if worker is None:
+        return None
+    return await worker.drain()
+
+
+async def replay_through_backoff(ctx, rounds: int):
+    """Move the worker's clock past every backoff step and replay each time."""
+    for _ in range(rounds):
+        ctx.handoff_clock.advance(3600)
+        await replay_staged(ctx)
+
+
+def staged_rows(ctx) -> dict:
+    return ctx.finished_games.store.rows
 
 
 class SessionStore:

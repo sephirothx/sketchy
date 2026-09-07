@@ -349,7 +349,7 @@ revocation applies uniformly without a shared signing secret.
 7. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
 8. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
 9. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
-10. Start the mail-delivery, runtime-metrics, retention, and export-worker loops, and hand each one to `readiness_probe.supervise()`
+10. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 11. `mark_ready()` — `GET /api/ready` starts answering 200
 
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
@@ -1289,12 +1289,22 @@ turn ends (all eligible guessed, or the timer fires)
 
 ### A finished game becoming history
 
-`GameFlowService._persist_game_history` runs **after** every client-visible emit, so
-nothing a player is waiting to see sits behind a database round trip. The write is
+`GameFlowService._hand_off_finished_game` runs **after** every client-visible emit, so
+nothing a player is waiting to see sits behind a database round trip. Since #541 what
+the room waits on is one small insert: the whole game — history, drawings, prompt usage
+— staged as a versioned, bounded envelope row (`finished_game_envelopes`). The
+supervised handoff loop ([`app/services/game_handoff.py`](../backend/app/services/game_handoff.py))
+claims that row with a lease and a fencing token, performs the history write below,
+records each of its two parts under the one row, and deletes it; a transient failure
+is retried with backoff for about two hours, a conflict fails at once, and a terminal
+failure keeps the row without its payload as a record. A database that is down at the
+moment a game ends still loses the game, counted as before (kind `handoff`); everything
+after the insert survives crashes, restarts and lock waits. The history write itself is
 all-or-nothing and keyed on the game's stable UUIDv7:
 
 - Retrying the same ID with the same content is idempotent, even if collection order
-  changed (a canonical SHA-256 payload digest proves it).
+  changed (a canonical SHA-256 payload digest proves it — the drawings included, and
+  the prompt-usage batch keeps a digest of its own in `prompt_usage_batches`).
 - Reusing an ID for *different* content raises an operator-visible conflict instead
   of duplicating or silently replacing history.
 - In the same transaction: the game record, participants, turns, per-seat outcomes,
@@ -1304,7 +1314,9 @@ all-or-nothing and keyed on the game's stable UUIDv7:
 - The room is told which game it just held and whether a row is coming
   (`Room.last_game_id`, `Room.last_game_history`), because a reaction given from the
   recap afterwards is a write to that row (`handlers/reactions.py`): it is refused while
-  the write is pending, and when there was never going to be one.
+  the write is pending, and when there was never going to be one. The loop reports
+  back through `GameFlowService.note_history_outcome`, which finds the room by the
+  game it last held and ignores an outcome for a game the room has moved on from.
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
 
@@ -1533,6 +1545,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py) | Build account data exports one at a time from the durable job table. |
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | Operator check that every stored drawing is still readable. |
 | [`app/services/game_flow.py`](../backend/app/services/game_flow.py) | Shared workflows used by the domain-specific Socket.IO handlers. |
+| [`app/services/game_handoff.py`](../backend/app/services/game_handoff.py) | Durable handoff of a finished game into history (#541). |
 | [`app/services/game_highlights.py`](../backend/app/services/game_highlights.py) | Pick the few moments from a finished game worth putting on the final screen. |
 | [`app/services/game_history.py`](../backend/app/services/game_history.py) | Turn a finished in-memory game into the rows that record it. |
 | [`app/services/drawing_reactions.py`](../backend/app/services/drawing_reactions.py) | Decide whether, and to which drawing, a room seat may react (#520). |
