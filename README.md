@@ -1194,6 +1194,7 @@ scripts/
   check-mockups-regenerated.sh  Refuses a hand-edited mockup artboard
   check-coverage.py   Per-module coverage floors on the risk-critical modules
   check-wire-contract.py  Regenerates fixtures/wire_contract.json and compares it with the base branch
+  update-e2e-durations.py  Rebuilds the E2E shard weights from a run's JUnit reports
   brand/            Logo and icon sources, and the scripts that raster them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
@@ -1316,7 +1317,8 @@ multiple players.
 
 ### Running tests
 
-Both backend CI jobs run the full suite with two pytest workers (R-ENG-12).
+Both backend CI jobs run the full suite under pytest-xdist (R-ENG-12): four workers on
+SQLite, two on PostgreSQL, whose container shares the runner's four cores.
 `loadgroup` keeps the two history-floor tests together so they share one scan;
 other tests are distributed normally. Backend coverage is combined across workers
 before the unchanged statement and branch floors are checked (R-ENG-15).
@@ -1428,14 +1430,27 @@ database, and runs the Playwright suite across as many xdist workers as the
 machine has cores, capped at eight — past that the browsers contend for CPU and
 timing-sensitive tests start to flake. Override with `E2E_WORKERS=<number>`.
 
-CI runs two independent shards, each with its own server and throwaway database,
-then requires both to pass under the existing **E2E multi-browser tests** check.
-To reproduce one locally, run `./scripts/test-e2e.sh --e2e-shard=1/2` (or `2/2`).
-The default command still runs the entire suite. Shards alternate sorted pytest
-case IDs, including parametrizations, so new tests are included automatically and
-every case runs exactly once across the two runners. Both browser engines and all
-scenario assertions are retained (R-ENG-12). The synthetic-probe cases start first
-on each shard to overlap their long-poll shutdown waits with browser work. The
+CI runs three independent shards, each with its own server and throwaway database,
+then requires all of them to pass under the existing **E2E multi-browser tests** check.
+To reproduce one locally, run `./scripts/test-e2e.sh --e2e-shard=1/3` (or `2/3`, `3/3`).
+The default command still runs the entire suite. Every runner collects the same
+sorted pytest case IDs, including parametrizations, and deals them out longest-first
+onto the lightest shard, weighing each case by the seconds it took on a recent CI run
+(`backend/tests/e2e_durations.json`). A case the file does not know weighs the median,
+so a new test is never left out and a stale file only costs balance; every case runs
+exactly once across the three runners. Both browser engines and all scenario
+assertions are retained (R-ENG-12). Three shards, because a shard's tests are browser
+work that saturates the runner's four cores: two shards spent about a minute each in
+tests on top of half a minute of setup, three balanced ones spend about forty seconds
+(#660). When one shard keeps finishing well after the others, refresh the weights from
+the reports a run uploaded:
+
+```bash
+gh run download <run-id> -p 'e2e-test-results-*' -D /tmp/e2e-junit
+python3 scripts/update-e2e-durations.py /tmp/e2e-junit/*/e2e.xml
+```
+
+The
 runner prints the 30 slowest test phases and writes `backend/test-results/e2e.xml`;
 CI retains each shard's report
 for seven days. Other pytest arguments can also be passed to the script.
