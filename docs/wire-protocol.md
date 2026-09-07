@@ -288,7 +288,17 @@ authorization or mutation runs. A parser may name a more specific code.
 - `guess` answers with a bare receipt (no body): it is momentary *and* confirmed, and the
   acknowledgement's only job is "it arrived" (§ Client-side delivery guarantees).
 - `session_ping` answers with a compact tuple `[1, phaseCode, round, remaining, gen, seq]`
-  or `[0]`: it runs on a timer on every seat and its size is the point.
+  or `[0]`: it runs on a timer on every seat and its size is the point. The timer is
+  5 s, and a tick is **skipped** when an authoritative event — `turn_starting`,
+  `turn_started`, `turn_ended`, `sync_game` or `room_state` — reached the seat inside
+  the last interval and agrees with the phase and round it holds; nothing else counts
+  (a draw frame, a chat line, a config notice or an Engine.IO pong proves the transport,
+  not the seat), and a probe is forced at least every 15 s so a silent one-way failure
+  is noticed before the transport's 20 s ping timeout (#564,
+  [`frontend/src/lib/heartbeatSchedule.ts`](../frontend/src/lib/heartbeatSchedule.ts)).
+  A reply is judged against the seat as it is when the reply lands, and only from the
+  socket, room and seat the probe was sent on: an answer older than a turn change that
+  landed meanwhile says nothing about the state it lands on.
 - a throttled `draw` answers nothing at all (§ Command budgets).
 
 **Earlier still, a command may be refused for its rate.** Every client command answers
