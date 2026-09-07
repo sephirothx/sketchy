@@ -243,3 +243,22 @@ test("scanline fill is pixel-equivalent to the previous eight-neighbour fill", (
     assert.deepEqual(actual, expected, `fixture ${fixture}`);
   }
 });
+
+test("a stroke painted segment by segment is the stroke painted as one polyline (#560)", () => {
+  // The drawer's canvas paints each kept segment as it is kept; a viewer
+  // paints the flushed batch as one polyline. The rasterizer is a union of
+  // per-segment capsules, so the two are one raster, pixel for pixel -
+  // which is what lets a flood fill see the same edges on every screen.
+  const points = [
+    { x: 4.25, y: 5 }, { x: 12, y: 5.5 }, { x: 12.75, y: 14 }, { x: 20, y: 20.25 }, { x: 20, y: 6 },
+  ];
+  const width = 32;
+  const height = 32;
+  const bySegment = solidPixels(width, height);
+  for (let i = 0; i + 1 < points.length; i++) {
+    rasterizePath(bySegment, width, height, [points[i], points[i + 1]], 2.5, BLACK, false);
+  }
+  const asPolyline = solidPixels(width, height);
+  rasterizePath(asPolyline, width, height, points, 2.5, BLACK, false);
+  assert.deepEqual(Array.from(bySegment), Array.from(asPolyline));
+});
