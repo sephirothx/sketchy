@@ -57,3 +57,20 @@ def test_shards_work_with_xdist_and_propagate_failures(pytester):
     second = pytester.runpytest_subprocess("-n", "2", "--e2e-shard=2/2")
     second.assert_outcomes(passed=2, failed=1)
     assert second.ret == 1
+
+
+def test_weights_balance_the_shards_and_unknown_cases_still_run():
+    from tests.e2e_sharding import partition
+
+    cases = [f"tests/e2e/test_{n}.py::test_it" for n in "abcdefgh"]
+    durations = {cases[0]: 20.0, cases[1]: 20.0, cases[2]: 20.0, cases[3]: 1.0, cases[4]: 1.0}
+    assignment = partition(cases, 3, durations)
+    assert set(assignment) == set(cases)
+    # The three heavy cases land on three different shards, not as modulo would have it.
+    assert len({assignment[c] for c in cases[:3]}) == 3
+    # Nothing in the file about the rest - they weigh the median and are still placed.
+    assert all(assignment[c] in range(3) for c in cases[5:])
+    # Every runner computes the same split.
+    assert partition(list(reversed(cases)), 3, durations) == assignment
+    # Without weights the split is round-robin over sorted IDs, as before.
+    assert partition(cases, 3, {}) == {c: i % 3 for i, c in enumerate(cases)}

@@ -1289,7 +1289,8 @@ passed deletion tests against constraints the database never applied. A SQLite p
 proves integrity; only the PostgreSQL job proves row locks and
 READ COMMITTED interleavings.
 
-Both backend suites run on two pytest workers. With `TEST_DATABASE_URL`, the controller
+Both backend suites run under pytest-xdist - four workers on SQLite, two on PostgreSQL,
+whose container shares the runner's cores. With `TEST_DATABASE_URL`, the controller
 in [`tests/conftest.py`](../backend/tests/conftest.py) owns the migrated database clones
 managed by [`tests/parallel_databases.py`](../backend/tests/parallel_databases.py),
 assigns URLs before collection, and removes its own clones after worker shutdown.
@@ -1304,14 +1305,19 @@ repository artifact scan, backend lint and tests, PostgreSQL migrations and the 
 backend suite again on PostgreSQL, frontend test/lint/build, and the multi-browser E2E
 suite, plus dependency advisories.
 
-E2E uses two independent runners, each starting one application worker with a fresh
+E2E uses three independent runners, each starting one application worker with a fresh
 database. [`tests/e2e_sharding.py`](../backend/tests/e2e_sharding.py) partitions sorted,
-fully parametrized case IDs before xdist distributes a shard's cases locally. The
-partitions are exhaustive and disjoint without a maintained file list. Browser
-contexts, scenarios, and assertions are unchanged. Probe cases start first within
-each partition so their blocking HTTP long-polls can finish while browsers run;
-the operator command and its production transport remain covered. The existing
-**E2E multi-browser tests** check succeeds only when both shards succeed; a failed,
+fully parametrized case IDs before xdist distributes a shard's cases locally: longest
+case first onto the lightest shard, weighed by
+[`tests/e2e_durations.json`](../backend/tests/e2e_durations.json), which
+[`scripts/update-e2e-durations.py`](../scripts/update-e2e-durations.py) rebuilds from
+the JUnit reports CI uploads. The partitions are exhaustive and disjoint without a
+maintained file list: a case the weights do not know gets the median weight and is
+placed all the same. Browser contexts, scenarios, and assertions are unchanged; the
+operator probe and its production transport run there too. Three runners because a
+shard's tests are browser work that saturates the runner's cores, so the test step
+shrinks with the shard while the setup around it does not. The existing
+**E2E multi-browser tests** check succeeds only when every shard succeeds; a failed,
 cancelled, or skipped shard fails that check (R-ENG-12). Each shard retains its JUnit report for
 seven days, and logs the 30 slowest phases to expose future bottlenecks.
 
