@@ -48,10 +48,9 @@ test("versioned canvas protocol goldens match frontend frames, histories, and ha
   }
 
   for (const fixture of fixtures.histories) {
-    const jsonActions = decodeCanvasHistory(fixture.payload);
     const binaryActions = decodeCanvasHistory(bytesFromHex(fixture.binary));
-    assert.deepEqual(binaryActions, jsonActions);
-    assert.equal(calculateCanvasHistoryHash(jsonActions), fixture.hash);
+    assert.notEqual(binaryActions, null);
+    assert.equal(calculateCanvasHistoryHash(binaryActions), fixture.hash);
   }
 });
 
@@ -60,7 +59,8 @@ test("versioned canvas protocol goldens reject malformed versions", () => {
     assert.equal(decodeLiveDrawing(bytesFromHex(wire)), null);
   }
   for (const fixture of fixtures.malformedVersions.histories) {
-    const payload = fixture.payload ?? bytesFromHex(fixture.binary);
-    assert.equal(decodeCanvasHistory(payload), null);
+    assert.equal(decodeCanvasHistory(bytesFromHex(fixture.binary)), null);
   }
+  // Nothing sends the retired JSON form; it is not decoded either.
+  assert.equal(decodeCanvasHistory({ v: 1, a: [] }), null);
 });

@@ -304,3 +304,76 @@ def test_the_metrics_carry_the_rejection_rows():
     store.note_socket_packet_rejected("attachment_count")
     assert store.snapshot()["socket"]["packetsRejected"] == {"attachment_count": 1}
     assert 'sketchy_socket_packets_rejected_total{reason="attachment_count"} 1' in "\n".join(store.prometheus_lines())
+
+
+# --- the packet ceiling against the largest legitimate command (#566) ---------
+
+
+def _largest_create_room(text: str) -> str:
+    """A `create_room` with every field at its bound, as a Socket.IO event."""
+    import json as json_module
+
+    from app.handlers.payloads import MAX_ROOM_NAME_LENGTH
+    from app.prompts import MAX_RAW_INPUT_LENGTH
+
+    prompts = (text * (MAX_RAW_INPUT_LENGTH // len(text) + 1))[:MAX_RAW_INPUT_LENGTH]
+    payload = {
+        "nickname": "N" * 20,
+        "name": "R" * MAX_ROOM_NAME_LENGTH,
+        "isPublic": True,
+        "maxPlayers": 8,
+        "rounds": 10,
+        "drawingSeconds": 180,
+        "customPrompts": prompts,
+        "customPromptsOnly": True,
+        "hintMode": "wheel",
+        "scoringMode": "default",
+        "spectatorsSeePrompt": True,
+        "hideMaskedPrompt": True,
+        "allowedTools": ["brush", "fill", "shapes"],
+        "colorMode": "all",
+        "promptListSlugs": ["english_standard", "english_extended"],
+        "promptListShareCodes": [],
+    }
+    return payload, json_module
+
+
+@pytest.mark.parametrize("text", ["a", "é", "日", "😀"])
+def test_the_largest_command_fits_the_ceiling_however_it_is_serialised(text):
+    """The custom-prompts blob is the largest JSON command. A browser sends
+    astral characters as raw UTF-8 (4 bytes each), a stricter serialiser
+    escapes each as a `\\uXXXX` pair (12 bytes); both must fit `MAX_PACKET_BYTES`
+    with the rest of the command at its bounds, which is what keeps 1 MiB
+    the ceiling rather than a tighter one."""
+    payload, json_module = _largest_create_room(text)
+    as_browser = '42["create_room",' + json_module.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "]"
+    escaped = '42["create_room",' + json_module.dumps(payload, ensure_ascii=True, separators=(",", ":")) + "]"
+    assert len(as_browser.encode("utf-8")) < socket_server.MAX_PACKET_BYTES
+    assert len(escaped.encode("utf-8")) < socket_server.MAX_PACKET_BYTES
+    if text == "😀":
+        # The two sizes the document quotes: ~330 KB raw, ~960 KB escaped.
+        assert 300_000 < len(as_browser.encode("utf-8")) < 340_000
+        assert 950_000 < len(escaped.encode("utf-8")) < 1_000_000
+
+
+async def test_the_largest_command_passes_the_door_on_both_transports(monkeypatch):
+    """Over a WebSocket the text arrives as one message; over polling engineio
+    hands the door the same decoded text. Both are judged by the same code,
+    and neither rejects the largest legitimate command."""
+    from engineio import packet as eio_packet
+
+    payload, json_module = _largest_create_room("😀")
+    sio, store, sockets, received, clock = await server(monkeypatch)
+
+    @sio.on("create_room")
+    async def create_room(sid, data):
+        received.append(("create_room", len(data["customPrompts"])))
+        return {"ok": True}
+
+    message = '2["create_room",' + json_module.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "]"
+    await sio._handle_eio_message("eio0", message)
+    polled = eio_packet.Packet(encoded_packet="4" + message)
+    assert not polled.binary
+    await sio._handle_eio_message("eio0", polled.data)
+    assert received == [("create_room", 80_000), ("create_room", 80_000)]
+    assert rejected(store) == {}

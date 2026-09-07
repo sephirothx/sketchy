@@ -1227,7 +1227,7 @@
   }
  },
  "fixtures": {
-  "fixtures/canvas_protocol_v1.json": "8eaebf2e4d5e04e5acfe15d1ea51ddd19828da345af924149ed70b24be5d05fe",
+  "fixtures/canvas_protocol_v1.json": "025e2c0e4dc21e709cc4559c0cd86a410b0bec601b5fb63ea36f2c15f358c108",
   "fixtures/lobby_presence_v1.json": "b1c5e31170b8a7903bb22f0330d44d121f9d9f878e563bfa2ae0ba48684d9fa3",
   "fixtures/stored_drawings_v1.json": "ca56f37d8705134e3ed3800909cd6578e9628ba61754e4028e0b7e5985e70937"
  },

@@ -5,7 +5,7 @@ import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
-from app.canvas_history import encode_canvas_history
+from app.canvas_history import PackedCanvasHistory
 from app.flow_timing import timing
 from app.game import Game, Phase
 from app.handlers import register_all_handlers as register_handlers
@@ -231,7 +231,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
             drawer_name_color=proposer.name_color,
             prompt="old",
             action_count=0,
-            canvas_history=encode_canvas_history([]),
+            canvas_history=PackedCanvasHistory().binary_payload(),
         )
     )
 

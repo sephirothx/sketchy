@@ -11,8 +11,8 @@ from app.canvas_history import (
     FillAction,
     PathAction,
     ShapeAction,
+    PackedCanvasHistory,
     decode_binary_canvas_history,
-    encode_canvas_history,
 )
 from app.handlers import register_all_handlers as register_handlers
 from tests.handlers.helpers import canvas_action
@@ -524,7 +524,9 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
     room = room_manager.create_room(name="Room", is_public=True)
     player = room_manager.add_player(room, "Player")
     player.sid = "player-sid"
-    canvas = encode_canvas_history([ClearAction()])
+    cleared = PackedCanvasHistory()
+    cleared.append_clear()
+    canvas = cleared.binary_payload()
     room.last_game_drawings.append(
         DrawingRecapEntry(
             turn_id=str(generate_uuid7()),
@@ -772,10 +774,9 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     assert generation == room.game.canvas.generation
     assert sequence == room.game.canvas.sequence
     assert history_hash == room.game.canvas.hash
-    assert encode_canvas_history(decoded) == {
-        "v": 1,
-        "a": [[0, 0, 4, 0.1, 0.2, 0.3, 0.4]],
-    }
+    [path] = list(decoded)
+    assert (path.color, path.width) == (0, 4)
+    assert [(round(x, 3), round(y, 3)) for x, y in path.points] == [(0.1, 0.2), (0.3, 0.4)]
 
 @pytest.mark.asyncio
 async def test_request_sync_strokes_seeds_empty_history_revision():

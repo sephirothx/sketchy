@@ -9,8 +9,6 @@ from app.canvas_history import (
     PathAction,
     canvas_history_hash,
     decode_binary_canvas_history,
-    decode_canvas_history,
-    encode_canvas_history,
 )
 from app.canvas_history import (
     CLEAR_TAG,
@@ -107,7 +105,6 @@ def test_versioned_cross_language_canvas_protocol_fixtures():
 
     for fixture in FIXTURES["histories"]:
         history = decode_binary_canvas_history(bytes.fromhex(fixture["binary"]))
-        assert encode_canvas_history(history) == fixture["payload"]
         assert history.binary_payload().hex() == fixture["binary"]
         assert canvas_history_hash(history) == fixture["hash"]
 
@@ -118,10 +115,7 @@ def test_versioned_cross_language_fixtures_reject_malformed_versions():
             decode_live_drawing(bytes.fromhex(wire))
     for fixture in FIXTURES["malformedVersions"]["histories"]:
         with pytest.raises(ValueError):
-            if "payload" in fixture:
-                decode_canvas_history(fixture["payload"])
-            else:
-                decode_binary_canvas_history(bytes.fromhex(fixture["binary"]))
+            decode_binary_canvas_history(bytes.fromhex(fixture["binary"]))
 
 
 def test_hash_during_active_path_matches_a_full_rescan():

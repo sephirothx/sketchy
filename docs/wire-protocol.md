@@ -32,8 +32,11 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket: zlib level 6, memLevel 8, a **15-bit (32 KB) server window** the server states in its response whether or not the browser asked (`SERVER_MAX_WINDOW_BITS`); each accepted connection is counted under what it actually negotiated (`sketchy_socket_transport_total{compression}`) |
 
 The client does **not** auto-connect. The handshake reads the session cookie exactly
-once, and on a first visit that cookie does not exist until `GET /api/auth/me` has
-provisioned the account, so `App.tsx` connects only after identity has settled.
+once, so `App.tsx` connects only after `GET /api/auth/me` has answered — which on a
+first visit is *nothing*: that route creates no account (a crawler or a link preview
+must not cost a row), and the visitor becomes a guest when they choose a name
+(`POST /api/auth/display-name`, R-ACCT-00). The socket then re-handshakes to pick the
+new account up (`reconnectWithCurrentIdentity`).
 
 ### Compression, and what it means for every size in this document
 
@@ -192,7 +195,9 @@ on when a difference must carry a bump.
 
 Commands the client needs an answer to are emitted with an acknowledgement callback.
 Every acknowledgement is a JSON object sharing these fields
-([`frontend/src/types.ts` `AckResponse`](../frontend/src/types.ts)):
+([`frontend/src/types.ts` `AckResponse`](../frontend/src/types.ts)) — with one
+exception, `session_ping`, whose answer is a compact positional tuple (below), because
+it is sent every few seconds by every seat and carries no refusal a player could act on:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -268,7 +273,10 @@ it with an acknowledgement waiting on it.
 
 These are the **defaults**. Every limit is an administrator-settable runtime value
 (§9 Operations, R-RATE-09 and R-CONF-01), bounded server-side and applied to the
-next command; the windows are fixed. The drawing budget is additionally bound to
+next command. The windows are **sliding**: each hit is timestamped and a command is
+refused when the window ending now already holds the budget's worth, so an allowance
+never resets at a boundary a burst could straddle
+([`handlers/budgets.py`](../backend/app/handlers/budgets.py)). The drawing budget is additionally bound to
 `client.flush_interval_ms` below, since the interval decides how many frames a
 legitimate drawer produces and the budget decides how many are accepted.
 
@@ -389,7 +397,7 @@ kept:
 | Assembly age | `ASSEMBLY_DEADLINE_SECONDS` = 5 s | The two messages leave the client back to back; seconds apart means the second is not coming |
 | Text mid-assembly | dropped with the assembly, then judged on its own | A protocol violation, but the text may itself be a well-formed command |
 | Packets per socket | `MAX_PACKETS_PER_WINDOW` = the drawing budget's tunable maximum + 100 (500 today) per second, counted before decoding; a frame's attachment does not count | An administrator may raise drawing to `DRAWING.maximum` frames per window and a client bunches frames after a stall, so the whole allowance can land in one second; the margin is the seat's other traffic. This stops a flood, the budgets are the limits |
-| Packet size | `MAX_PACKET_BYTES` = 1 MiB (engineio's per-packet ceiling, made explicit) | #566 owns its sizing; a custom-prompts blob is the largest JSON command |
+| Packet size | `MAX_PACKET_BYTES` = 1 MiB, on both transports (engineio's per-packet ceiling, made explicit) | A **byte** ceiling on the encoded packet, not a character count. The largest legitimate command is `create_room` with every field at its bound and the 80 000-character custom-prompts blob (`MAX_RAW_INPUT_LENGTH`): a browser serialises astral characters as raw UTF-8, ~330 KB in all; a serialiser that escapes each as a `\uXXXX` pair produces ~960 KB. Both fit, which is why the ceiling stays at 1 MiB rather than the 512 KiB the REST body limit uses (#566); `test_socket_server.py` pins both sizes and pushes the command through the door on each transport |
 | Arguments per command | one payload; `draw` may add its action identity | Checked in `HandlerContext.on` before the handler, refused as `invalid_payload` rather than raising `TypeError` inside the library |
 
 A refused packet is **dropped, never answered** — an answer per malformed packet is the
@@ -499,7 +507,7 @@ mirrors it with every field optional (absent means *unchanged*).
 | `maxPlayers` | integer | `8` | 2 – 16 |
 | `rounds` | integer | `3` | 1 – 10 |
 | `drawingSeconds` | integer | `90` | one of 15, 30, 60, 90, 120, 180, 240, 300 |
-| `customPrompts` | string | `""` | ≤ 400 000 chars, trimmed; newline/comma separated |
+| `customPrompts` | string | `""` | ≤ 80 000 chars (`MAX_RAW_INPUT_LENGTH`), trimmed; newline/comma separated. Characters, not bytes: the byte ceiling is the packet's (§3) |
 | `customPromptsOnly` | boolean | `false` | — |
 | `hintMode` | string | `"checkpoints"` | `none \| checkpoints \| purchase \| wheel` |
 | `scoringMode` | string | `"default"` | `none \| default \| pressure` |
@@ -1340,21 +1348,15 @@ Packed record layouts (tags are **history** tags, distinct from the live-drawing
 target: all 20 000 action slots, all 25 000 points in one path, and the remaining slots
 filled with the larger fixed-size shape record.
 
-### Compact JSON fallback (`{v, a}`)
+### The retired JSON form
 
-`wire_payload()` produces `{"v": 1, "a": [...]}`, each action a positional array:
-
-```jsonc
-[0, colorInt, width, x0, y0, x1, y1, …]   // path
-[1, shapeId, colorInt, width, x0, y0, x1, y1]  // shape
-[2, colorInt, x, y]                        // fill
-[3]                                        // clear
-```
-
-Colors are integers here, and coordinates are the unpacked normalized floats. The
-frontend retains this decoder as a **compatibility fallback**
-([`frontend/src/lib/canvasHistory.ts`](../frontend/src/lib/canvasHistory.ts)); the binary
-envelope is what `sync_strokes` actually carries.
+Until #566 the server could also describe a history as `{"v": 1, "a": [...]}`, each
+action a positional array, and the client decoded either. Nothing had sent the JSON
+form since the binary envelope shipped — `sync_strokes`, `sync_strokes_tail` and every
+drawing download carry `SKCH` — so the server encoder, the client decoder and the JSON
+half of the cross-language fixture were removed rather than kept as a fallback nobody
+could reach. This is the *wire* form only: every **stored** format keeps its decoder
+(R-HIST-18), and those answer in `SKCH`.
 
 ### History hash
 
@@ -1446,12 +1448,12 @@ reloaded rather than served an older contract.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/auth/me` | Provisions a guest account on first call. **The only path that creates a user row for a visitor.** |
+| `GET` | `/api/auth/me` | The caller's account, or `null` — it creates nothing, so a crawler or a link preview costs no row. `POST /api/auth/display-name` is the one path that provisions a guest (R-ACCT-00) |
 | `GET` | `/api/auth/nickname-available` | Rate limited (`AUTH_LOOKUP_LIMIT`) |
 | `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 WebP or PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour. Answers `{ avatarKey, avatarUrl }` |
 | `GET` | `/api/avatars/{key}` | The picture behind a content address, for anybody: `image/webp` or `image/png` as the key's extension says, `nosniff`, `Cache-Control: public, max-age=31536000, immutable`. `404` for a key that is not a content address or not stored |
 | `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator. Takes down the reported account's picture, audits it, blocks re-upload for 7 days; `{ ok, removed }` (R-AVA-04) |
-| `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies |
+| `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits — and `display-name` is what **provisions a guest** on a first visit (R-ACCT-00): choosing a name is the first act only a person about to play performs. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies |
 | `POST` | `/api/auth/register` | Claims the current account (`AUTH_REGISTER_LIMIT`) |
 | `POST` | `/api/auth/login` | Argon2id; rehashes stale-cost hashes on success (`AUTH_LOGIN_LIMIT`) |
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
@@ -1682,7 +1684,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | --- | --- | --- |
 | `PROTOCOL_VERSION` (17) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
-| `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
+| `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
 | `SCORING_RULES_VERSION` (1) | Any constant or algorithm that can change a score | Any such change; every completed game freezes its rule snapshot |
 | `GAME_RULE_SNAPSHOT_VERSION` (1) | The stored rule-snapshot JSON contract | The snapshot's *shape* changes |

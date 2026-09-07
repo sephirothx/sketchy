@@ -6,7 +6,7 @@ import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
-from app.canvas_history import encode_canvas_history
+from app.canvas_history import PackedCanvasHistory
 from app.handlers import register_all_handlers as register_handlers
 from app.game import Game
 from app.rooms import DrawingRecapEntry, RoomManager
@@ -62,7 +62,7 @@ async def test_starting_new_game_clears_previous_drawing_recap():
             drawer_name_color=host.name_color,
             prompt="old",
             action_count=0,
-            canvas_history=encode_canvas_history([]),
+            canvas_history=PackedCanvasHistory().binary_payload(),
         )
     )
 

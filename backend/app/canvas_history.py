@@ -1,7 +1,6 @@
 """Compact, versioned drawing-history models and wire encoding."""
 from __future__ import annotations
 
-import math
 import struct
 import sys
 import zlib
@@ -17,7 +16,6 @@ BINARY_HISTORY_MAGIC = b"SKCH"
 CANVAS_WIDTH = 800
 CANVAS_HEIGHT = 600
 MAX_BRUSH_WIDTH = 64
-MAX_NORMALIZED_COORDINATE_MAGNITUDE = 8
 MAX_CANVAS_ACTIONS = 20_000
 MAX_CANVAS_POINTS = 25_000
 COORDINATE_SCALE = 4
@@ -298,61 +296,6 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
     def last_is_clear(self) -> bool:
         return bool(self) and self.data[self.offsets[-1]] == CLEAR_TAG
 
-    def wire_actions(self) -> list[list]:
-        """Decode packed records directly into the compact JSON wire schema."""
-        actions = []
-        for index, start in enumerate(self.offsets):
-            end = (
-                self.offsets[index + 1]
-                if index + 1 < len(self)
-                else len(self.data)
-            )
-            tag = self.data[start]
-            if tag == PATH_TAG:
-                _, color, width = _PATH_HEADER.unpack_from(self.data, start)
-                encoded = [PATH_TAG, _unpacked_color(color), width]
-                for offset in range(
-                    start + _PATH_HEADER.size,
-                    end,
-                    _PATH_POINT.size,
-                ):
-                    x, y = _PATH_POINT.unpack_from(self.data, offset)
-                    encoded.extend(
-                        (
-                            _unpack_coordinate(x, CANVAS_WIDTH),
-                            _unpack_coordinate(y, CANVAS_HEIGHT),
-                        )
-                    )
-                actions.append(encoded)
-            elif tag == SHAPE_TAG:
-                _, shape_id, color, width, start_x, start_y, end_x, end_y = (
-                    _SHAPE_ACTION.unpack_from(self.data, start)
-                )
-                actions.append(
-                    [
-                        SHAPE_TAG,
-                        shape_id,
-                        _unpacked_color(color),
-                        width,
-                        _unpack_coordinate(start_x, CANVAS_WIDTH),
-                        _unpack_coordinate(start_y, CANVAS_HEIGHT),
-                        _unpack_coordinate(end_x, CANVAS_WIDTH),
-                        _unpack_coordinate(end_y, CANVAS_HEIGHT),
-                    ]
-                )
-            elif tag == FILL_TAG:
-                _, color, x, y = _FILL_ACTION.unpack_from(self.data, start)
-                actions.append([FILL_TAG, _unpacked_color(color), x, y])
-            else:
-                actions.append([CLEAR_TAG])
-        return actions
-
-    def wire_payload(self) -> dict:
-        return {
-            "v": CANVAS_HISTORY_VERSION,
-            "a": self.wire_actions(),
-        }
-
     def binary_payload(self, start: int = 0) -> bytes:
         """Return one versioned, self-delimiting binary synchronization frame.
 
@@ -414,37 +357,6 @@ def color_to_int(color: str) -> int:
 
 def color_to_hex(color: int) -> str:
     return f"#{color:06x}"
-
-def encode_canvas_action(action: CanvasAction) -> list:
-    if isinstance(action, PathAction):
-        encoded = [PATH_TAG, action.color, action.width]
-        for x, y in action.points:
-            encoded.extend((x, y))
-        return encoded
-    if isinstance(action, ShapeAction):
-        return [
-            SHAPE_TAG,
-            SHAPE_IDS[action.shape],
-            action.color,
-            action.width,
-            action.start[0],
-            action.start[1],
-            action.end[0],
-            action.end[1],
-        ]
-    if isinstance(action, FillAction):
-        return [FILL_TAG, action.color, action.x, action.y]
-    return [CLEAR_TAG]
-
-
-def encode_canvas_history(actions: Sequence[CanvasAction]) -> dict:
-    if isinstance(actions, PackedCanvasHistory):
-        return actions.wire_payload()
-    return {
-        "v": CANVAS_HISTORY_VERSION,
-        "a": [encode_canvas_action(action) for action in actions],
-    }
-
 
 def decode_binary_canvas_history(payload) -> PackedCanvasHistory:
     """Validate and decode a packed synchronization frame."""
@@ -538,89 +450,3 @@ def decode_binary_canvas_history(payload) -> PackedCanvasHistory:
     )
 
 
-def _number(value, *, low: float, high: float) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError("canvas action contains a non-number")
-    number = float(value)
-    if not math.isfinite(number) or not low <= number <= high:
-        raise ValueError("canvas action number is out of bounds")
-    return number
-
-
-def _integer(value, *, low: int, high: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
-        raise ValueError("canvas action contains an invalid integer")
-    return value
-
-
-def _color(value) -> int:
-    return _integer(value, low=0, high=0xFFFFFF)
-
-
-def _coordinate(value) -> float:
-    return _number(
-        value,
-        low=-MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-        high=MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-    )
-
-
-def _width(value) -> int:
-    return _integer(value, low=1, high=MAX_BRUSH_WIDTH)
-
-
-def decode_canvas_action(encoded) -> CanvasAction:
-    if not isinstance(encoded, list) or not encoded:
-        raise ValueError("canvas action must be a non-empty list")
-    tag = _integer(encoded[0], low=PATH_TAG, high=CLEAR_TAG)
-    if tag == PATH_TAG:
-        if len(encoded) < 5 or (len(encoded) - 3) % 2:
-            raise ValueError("path action has invalid length")
-        if (len(encoded) - 3) // 2 > MAX_CANVAS_POINTS:
-            raise ValueError("path action contains too many points")
-        points = [
-            (_coordinate(encoded[index]), _coordinate(encoded[index + 1]))
-            for index in range(3, len(encoded), 2)
-        ]
-        return PathAction(points=points, color=_color(encoded[1]), width=_width(encoded[2]))
-    if tag == SHAPE_TAG:
-        if len(encoded) != 8:
-            raise ValueError("shape action has invalid length")
-        shape_id = _integer(encoded[1], low=0, high=len(SHAPE_NAMES) - 1)
-        return ShapeAction(
-            shape=SHAPE_NAMES[shape_id],
-            color=_color(encoded[2]),
-            width=_width(encoded[3]),
-            start=(_coordinate(encoded[4]), _coordinate(encoded[5])),
-            end=(_coordinate(encoded[6]), _coordinate(encoded[7])),
-        )
-    if tag == FILL_TAG:
-        if len(encoded) != 4:
-            raise ValueError("fill action has invalid length")
-        return FillAction(
-            color=_color(encoded[1]),
-            x=_integer(encoded[2], low=0, high=CANVAS_WIDTH - 1),
-            y=_integer(encoded[3], low=0, high=CANVAS_HEIGHT - 1),
-        )
-    if len(encoded) != 1:
-        raise ValueError("clear action has invalid length")
-    return ClearAction()
-
-
-def decode_canvas_history(payload) -> list[CanvasAction]:
-    if (
-        not isinstance(payload, dict)
-        or set(payload) != {"v", "a"}
-        or payload["v"] != CANVAS_HISTORY_VERSION
-        or not isinstance(payload["a"], list)
-    ):
-        raise ValueError("invalid canvas history envelope")
-    if len(payload["a"]) > MAX_CANVAS_ACTIONS:
-        raise ValueError("canvas history contains too many actions")
-    actions = [decode_canvas_action(action) for action in payload["a"]]
-    if (
-        sum(len(action.points) for action in actions if isinstance(action, PathAction))
-        > MAX_CANVAS_POINTS
-    ):
-        raise ValueError("canvas history contains too many path points")
-    return actions

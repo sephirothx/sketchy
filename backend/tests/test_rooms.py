@@ -1,7 +1,7 @@
 import pytest
 
 from app.identifiers import generate_uuid7
-from app.canvas_history import encode_canvas_history
+from app.canvas_history import PackedCanvasHistory
 from app.game import Game
 from app.domain_values import HINT_MODES, SCORING_MODES
 from app.rooms import (
@@ -256,7 +256,7 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
             drawer_name_color=drawer.name_color,
             prompt="apple",
             action_count=0,
-            canvas_history=encode_canvas_history([]),
+            canvas_history=PackedCanvasHistory().binary_payload(),
         )
     )
 
