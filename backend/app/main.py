@@ -44,10 +44,21 @@ from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
+    is_production,
+    public_base_url,
     shutdown_drain_seconds,
     validate_database_configuration,
+    validate_public_base_url,
     validate_python_runtime,
     validate_worker_topology,
+)
+from app.security_headers import (
+    HeaderPolicy,
+    HttpsOnly,
+    HttpsOnlyMiddleware,
+    SecurityHeadersMiddleware,
+    inline_script_hashes,
+    public_origin,
 )
 from app.handlers import register_all_handlers
 from app.logging_config import configure_logging
@@ -449,6 +460,9 @@ async def lifespan(_app: FastAPI):
         # Before init_db, so a production process pointed at a local file
         # refuses to start rather than migrating one and serving from it.
         validate_database_configuration()
+        # And before serving: in production every plain request is sent to
+        # this origin and every mailed link is built on it (#467).
+        validate_public_base_url()
         await init_db()
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
@@ -718,4 +732,19 @@ configure_frontend(api, _frontend_dist)
 # the REST numbers.
 api.add_middleware(RequestTimingMiddleware)
 
-app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")
+# Outside the Socket.IO mount, so a polling response and a static file carry
+# the browser headers a REST response does (#467). The HTTPS rule sits inside
+# the headers so that its redirect is a hardened response too; both are pure
+# ASGI and cost a header scan. The inline-script hash is read off the built
+# shell once, here, so a rebuilt page is admitted by the next start.
+app = SecurityHeadersMiddleware(
+    HttpsOnlyMiddleware(
+        socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io"),
+        rule=HttpsOnly(enabled=is_production(), public_origin=public_origin(public_base_url())),
+    ),
+    policy=HeaderPolicy(
+        script_hashes=inline_script_hashes(_frontend_dist / "index.html"),
+        strict_transport_security=is_production(),
+        cross_origin_resources=bool(configured_origins()),
+    ),
+)

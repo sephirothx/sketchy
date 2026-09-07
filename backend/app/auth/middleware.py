@@ -7,7 +7,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.auth.bans import suspension_payload
-from app.auth.sessions import COOKIE_NAME, SESSION_TTL, resolve_session_status
+from app.auth.sessions import SESSION_TTL, cookie_name, resolve_session_status
+from app.deployment import is_production
 
 COOKIE_MAX_AGE = int(SESSION_TTL.total_seconds())
 
@@ -26,6 +27,22 @@ def is_secure_request(request: Request) -> bool:
     return request.scope.get("scheme") in ("https", "wss")
 
 
+def cookie_is_secure(secure: bool) -> bool:
+    """`Secure` as the cookie will carry it: what the request established,
+    or unconditionally in production (#467).
+
+    Production is HTTPS by construction - startup refuses any other
+    `PUBLIC_BASE_URL`, and a plain request is redirected before it reaches
+    a route - so a production request that still looks plain is one behind
+    a proxy the deployment did not name in `FORWARDED_ALLOW_IPS`. Issuing a
+    year-long cookie without `Secure` there would be the one outcome worse
+    than the redirect loop that misconfiguration otherwise produces: a
+    cookie the browser would send over plain HTTP if it were ever asked to.
+    The `__Host-` name makes the same demand from the other side.
+    """
+    return secure or is_production()
+
+
 def set_session_cookie(response: Response, token: str, *, secure: bool) -> None:
     """Attach the session token as an HttpOnly cookie.
 
@@ -34,25 +51,26 @@ def set_session_cookie(response: Response, token: str, *, secure: bool) -> None:
     origin check on unsafe requests and socket handshakes (#465,
     `app/origin_policy.py`) that is the CSRF policy, and no token is needed.
     A link into Sketchy from elsewhere loads the page without the cookie, and
-    the page's own same-origin fetches carry it from then on.
+    the page's own same-origin fetches carry it from then on. `Path=/` and no
+    `Domain` are what the production `__Host-` name requires.
     """
     response.set_cookie(
-        COOKIE_NAME,
+        cookie_name(),
         token,
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         samesite="strict",
-        secure=secure,
+        secure=cookie_is_secure(secure),
         path="/",
     )
 
 
 def clear_session_cookie(response: Response, *, secure: bool) -> None:
     response.delete_cookie(
-        COOKIE_NAME,
+        cookie_name(),
         httponly=True,
         samesite="strict",
-        secure=secure,
+        secure=cookie_is_secure(secure),
         path="/",
     )
 
@@ -70,7 +88,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         self._session_factory = session_factory
 
     async def dispatch(self, request: Request, call_next):
-        raw_token = request.cookies.get(COOKIE_NAME, "")
+        raw_token = request.cookies.get(cookie_name(), "")
         request.state.session_token = raw_token
         resolution = await resolve_session_status(self._session_factory, raw_token)
         privacy_escape_hatch = (

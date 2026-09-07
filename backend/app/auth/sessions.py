@@ -12,9 +12,17 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import AuthSession, UserBan, generate_uuid
+from app.deployment import is_production
 
 
 COOKIE_NAME = "sketchy_session"
+# In production the cookie is `__Host-sketchy_session` (#467). A browser
+# accepts a `__Host-` cookie only when it was set over HTTPS with `Secure`,
+# `Path=/` and no `Domain`, and it can then be set by nobody else: not by a
+# subdomain, not by a plain-HTTP hop somebody has managed to put in front of
+# the server. The plain name stays in development because a browser refuses
+# the prefixed one over http://localhost.
+HOST_COOKIE_PREFIX = "__Host-"
 SESSION_TTL = timedelta(days=365)
 ROTATE_AFTER = SESSION_TTL / 2
 LAST_USED_WRITE_INTERVAL = timedelta(minutes=5)
@@ -48,6 +56,11 @@ def hash_session_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def cookie_name() -> str:
+    """The session cookie's name for this deployment: prefixed in production."""
+    return HOST_COOKIE_PREFIX + COOKIE_NAME if is_production() else COOKIE_NAME
+
+
 def session_token_from_cookie_header(cookie_header: str | None) -> str | None:
     """Extract the opaque token from an HTTP or Socket.IO cookie header."""
     if not cookie_header:
@@ -57,7 +70,7 @@ def session_token_from_cookie_header(cookie_header: str | None) -> str | None:
         jar.load(cookie_header)
     except Exception:
         return None
-    morsel = jar.get(COOKIE_NAME)
+    morsel = jar.get(cookie_name())
     return morsel.value if morsel and morsel.value else None
 
 

@@ -55,11 +55,20 @@ from app.protocol import PROTOCOL_VERSION
 COOKIE = "sketchy_session"
 
 
+def session_cookie(cookies) -> str:
+    """`name=value` of the session cookie, under whichever name the server
+    gave it: `__Host-`-prefixed in production (#467), plain elsewhere."""
+    for name, morsel in cookies.items():
+        if name.endswith(COOKIE):
+            return f"{name}={morsel.value}"
+    raise AssertionError("no session cookie was set")
+
+
 async def provision(base: str, name: str) -> str:
     async with aiohttp.ClientSession() as http:
         async with http.post(f"{base}/api/auth/display-name", json={"displayName": name}) as response:
             assert response.status == 200, response.status
-            return response.cookies[COOKIE].value
+            return session_cookie(response.cookies)
 
 
 async def metrics(base: str, token: str) -> dict[str, float]:
@@ -75,17 +84,17 @@ async def metrics(base: str, token: str) -> dict[str, float]:
 
 
 async def client(base: str, name: str) -> socketio.AsyncClient:
-    token = await provision(base, name)
+    cookie = await provision(base, name)
     sio = socketio.AsyncClient(reconnection=False)
-    await sio.connect(base, headers={"Cookie": f"{COOKIE}={token}"}, auth={"protocol": PROTOCOL_VERSION}, transports=["websocket"])
+    await sio.connect(base, headers={"Cookie": cookie}, auth={"protocol": PROTOCOL_VERSION}, transports=["websocket"])
     return sio
 
 
 async def raw_spectator(base: str, name: str, code: str):
     """A raw WebSocket spectator: session, socket, and the join sent."""
-    token = await provision(base, name)
+    cookie = await provision(base, name)
     session = aiohttp.ClientSession()
-    ws = await session.ws_connect(base.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket", headers={"Cookie": f"{COOKIE}={token}"})
+    ws = await session.ws_connect(base.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket", headers={"Cookie": cookie})
     assert (await ws.receive_str()).startswith("0")
     await ws.send_str("40" + json.dumps({"protocol": PROTOCOL_VERSION}))
     while not (await ws.receive_str()).startswith("40"):

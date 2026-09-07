@@ -12,6 +12,9 @@ from playwright.async_api import Page
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AXE_SOURCE = REPO_ROOT / "frontend" / "node_modules" / "axe-core" / "axe.min.js"
 
+# A path the server has no file at, answered by a route the check installs
+# for exactly as long as the script tag takes to load.
+AXE_ROUTE = "__e2e__/axe.min.js"
 FAILING_IMPACTS = {"critical", "serious"}
 # User-chosen name colors can fail contrast; the rest of the UI is in scope.
 DEFAULT_DISABLED_RULES = ("color-contrast",)
@@ -27,7 +30,19 @@ async def assert_no_axe_violations(
         raise FileNotFoundError(
             f"axe-core not found at {AXE_SOURCE}. Run npm ci in frontend/."
         )
-    await page.add_script_tag(path=str(AXE_SOURCE))
+    # Served from the page's own origin rather than injected inline: the page
+    # is under the Content-Security-Policy production sends (#467), which
+    # admits scripts from 'self' and refuses an inline one, and the check is
+    # worth more run under that policy than around it.
+    axe_url = f"{page.url.split('/', 3)[0]}//{page.url.split('/', 3)[2]}/{AXE_ROUTE}"
+    await page.route(
+        f"**/{AXE_ROUTE}",
+        lambda route: route.fulfill(path=str(AXE_SOURCE), content_type="application/javascript"),
+    )
+    try:
+        await page.add_script_tag(url=axe_url)
+    finally:
+        await page.unroute(f"**/{AXE_ROUTE}")
     results = await page.evaluate(
         """async (disabledRules) => {
             return await axe.run({
