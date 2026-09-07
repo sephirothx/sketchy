@@ -800,23 +800,32 @@ def test_bounded_edit_distance_returns_sentinel_outside_useful_band():
 
 
 def test_largest_guess_uses_bounded_edit_distance_memory():
-    import tracemalloc
+    import json
+    import subprocess
+    import sys
 
-    guess = "x" * MAX_PROMPT_LENGTH
-    target = "y" * MAX_PROMPT_LENGTH
-    tracemalloc.start()
-    try:
-        _bounded_damerau_levenshtein(
-            guess,
-            target,
-            CLOSE_GUESS_MAX_DISTANCE,
-        )
-        _, peak_bytes = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
+    # Measured in a child interpreter with nothing else tracing: under
+    # `--cov` the coverage tracer allocates inside the very frames being
+    # measured, and on a busy CI runner that alone read 34 KB against a
+    # 16 KB bound. The number this test is about is the function's own.
+    program = f"""
+import json, tracemalloc
+from app.game import _bounded_damerau_levenshtein
+guess = "x" * {MAX_PROMPT_LENGTH}
+target = "y" * {MAX_PROMPT_LENGTH}
+tracemalloc.start()
+_bounded_damerau_levenshtein(guess, target, {CLOSE_GUESS_MAX_DISTANCE})
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+print(json.dumps(peak))
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True, check=True, timeout=60
+    )
+    peak_bytes = json.loads(completed.stdout)
 
     # Three distance-2 sparse rows should stay far below a full 61x61 matrix.
-    assert peak_bytes < 16 * 1024
+    assert 0 < peak_bytes < 16 * 1024
 
 
 def test_guess_hint_distance_between_2_and_5_uses_similarity_ratio():
