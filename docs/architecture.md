@@ -1303,12 +1303,16 @@ suite, plus dependency advisories.
 
 E2E uses three independent runners, each starting one application worker with a fresh
 database. [`tests/e2e_sharding.py`](../backend/tests/e2e_sharding.py) partitions sorted,
-fully parametrized case IDs before xdist distributes a shard's cases locally. The
-partitions are exhaustive and disjoint without a maintained file list. Browser
-contexts, scenarios, and assertions are unchanged; the operator probe and its
-production transport run there too. Three runners because a shard's tests are
-browser work that saturates the runner's cores, so the test step shrinks with the
-shard while the setup around it does not. The existing
+fully parametrized case IDs before xdist distributes a shard's cases locally: longest
+case first onto the lightest shard, weighed by
+[`tests/e2e_durations.json`](../backend/tests/e2e_durations.json), which
+[`scripts/update-e2e-durations.py`](../scripts/update-e2e-durations.py) rebuilds from
+the JUnit reports CI uploads. The partitions are exhaustive and disjoint without a
+maintained file list: a case the weights do not know gets the median weight and is
+placed all the same. Browser contexts, scenarios, and assertions are unchanged; the
+operator probe and its production transport run there too. Three runners because a
+shard's tests are browser work that saturates the runner's cores, so the test step
+shrinks with the shard while the setup around it does not. The existing
 **E2E multi-browser tests** check succeeds only when every shard succeeds; a failed,
 cancelled, or skipped shard fails that check (R-ENG-12). Each shard retains its JUnit report for
 seven days, and logs the 30 slowest phases to expose future bottlenecks.
