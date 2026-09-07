@@ -25,7 +25,8 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Socket.IO path | `/socket.io` (mounted by `socketio.ASGIApp`, [`backend/app/main.py:266`](../backend/app/main.py)) |
 | Client transports | `["websocket", "polling"]`, and polling **actually reached** ([`frontend/src/lib/socket.ts`](../frontend/src/lib/socket.ts), #601): `tryAllTransports` moves on when the WebSocket errors while opening, and a stall watchdog puts polling first when an attempt has produced no handshake after 6 s — a dropped upgrade neither errors nor closes, it hangs, and Engine.IO alone would retry WebSocket for ever. 6 s is under the 8 s an acknowledged command waits for the connection, so a join pressed during the stall still lands on the polling session. An application refusal at the handshake (a suspension, a version skew) opened a transport and changes nothing. A polling session is still probed for a WebSocket upgrade from there. The transport each handshake opened on, upgrades and fallbacks ride the bug report's connection telemetry; the server counts handshakes by transport (`sketchy_socket_backlog_closures_total{reason}` (sockets closed for an outbound backlog past the budget, §3 — `age` or `bytes`; anything but zero is a peer that could not keep up), `sketchy_socket_backlog_bytes_max` and `sketchy_socket_backlog_age_seconds_max` (the most any one socket has had queued, and the oldest a queued packet has been, since start), `sketchy_socket_handshake_transport_total{transport}`, §9) |
 | Origin | Always same-origin: the backend serves the built SPA in production and E2E, and Vite proxies `/api` and `/socket.io` in dev |
-| Authentication | The HttpOnly `sketchy_session` cookie, read from `HTTP_COOKIE` at handshake |
+| Authentication | The HttpOnly `sketchy_session` cookie, read from `HTTP_COOKIE` at handshake — named `__Host-sketchy_session` in production (#467), where it is `Secure` unconditionally and a browser will neither accept it over plain HTTP nor let another host set it |
+| Scheme | Production is HTTPS only (#467): a handshake over plain `ws:` is closed before it is accepted (uvicorn answers 403), and a plain HTTP request is redirected with 308 to `PUBLIC_BASE_URL`; only `/api/health`, `/api/ready` and `/metrics` answer plain. A `Content-Security-Policy` on every response names `wss://` and `ws://` of the serving host beside `'self'` in `connect-src`, for browsers predating CSP 3 |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
 | WebSocket implementation | **wsproto**, named by [`backend/app/server.py`](../backend/app/server.py) through [`backend/app/ws_transport.py`](../backend/app/ws_transport.py) and pinned in `requirements.txt` — never uvicorn's `auto`, which picked by what happened to be installed (#561) |
@@ -1519,6 +1520,19 @@ that — is not this server's own origin or one in `ALLOWED_ORIGINS` is answered
 A request with neither header is a non-browser client and passes. CORS is granted only to
 `ALLOWED_ORIGINS`, never to a wildcard and never with credentials. With the session cookie
 `SameSite=Strict`, that is the whole CSRF policy: there is no token.
+
+**Every response carries the browser hardening headers** (#467,
+[`backend/app/security_headers.py`](../backend/app/security_headers.py)), the Socket.IO
+mount's and static files' included: `Content-Security-Policy` (same-origin, the built
+shell's inline script by hash, `data:`/`blob:` images and `data:` fonts, no frames or
+objects), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
+same-origin`, a `Permissions-Policy` declining device APIs, `Cross-Origin-Opener-Policy:
+same-origin` and `Cross-Origin-Resource-Policy: same-origin` (`cross-origin` when
+`ALLOWED_ORIGINS` is set). In production `Strict-Transport-Security: max-age=31536000;
+includeSubDomains` joins them, the session cookie is `__Host-sketchy_session`, and a
+request over plain HTTP is answered **308** to the same path on `PUBLIC_BASE_URL` — its
+method kept — unless it is one of the three probe paths. A response the application gave
+its own value for one of these headers keeps it.
 
 Every response also carries `X-Sketchy-Protocol`, the `PROTOCOL_VERSION` this build
 speaks, which the client compares against its own on every response it reads (§1, *REST

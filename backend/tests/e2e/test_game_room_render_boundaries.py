@@ -84,8 +84,10 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             await sender.fill(".chat-input input", "ordinary boundary message")
             await drawer.evaluate(RESET_COUNTS)
             await sender.keyboard.press("Enter")
+            # A function, not a bare expression: Playwright evaluates the
+            # latter as a string, which the page's CSP refuses (#467).
             await drawer.wait_for_function(
-                "window.__SKETCHY_RENDER_DIAGNOSTICS__?.counts.chat > 0"
+                "() => window.__SKETCHY_RENDER_DIAGNOSTICS__?.counts.chat > 0"
             )
             chat_counts = await assert_regions_unchanged(drawer)
             assert chat_counts.get("chat", 0) > 0

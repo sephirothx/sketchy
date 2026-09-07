@@ -560,7 +560,7 @@ process. These deployment settings can be tuned without code changes:
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
 | `SMTP_STARTTLS` | `1` | Upgrade the connection before sending |
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
-| `PUBLIC_BASE_URL` | `http://localhost:8000` | Where confirmation and reset links point |
+| `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
 | `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable |
@@ -1034,6 +1034,36 @@ the CSRF policy: no token to plumb through the client. Whether the cookie is mar
 `X-Forwarded-Proto` only from a proxy in `FORWARDED_ALLOW_IPS`; the raw header is
 never read. In development the Vite proxy presents the backend's own origin, so the
 dev server's pages are the served page as far as the backend can tell.
+
+**HTTPS and the browser's own defences** (#467,
+[`backend/app/security_headers.py`](backend/app/security_headers.py)). Production
+speaks HTTPS only. Startup refuses a `PUBLIC_BASE_URL` that is not an `https` origin,
+the session cookie is named `__Host-sketchy_session` and marked `Secure` whatever the
+request said — a browser accepts a `__Host-` cookie only over HTTPS, with `Path=/` and
+no `Domain`, and then from nobody but this host — and every response carries
+`Strict-Transport-Security` for a year. A request that still arrives over plain HTTP
+is sent to `PUBLIC_BASE_URL` with a **308** (its method kept) and a plain WebSocket
+handshake is closed, except for `/api/health`, `/api/ready` and `/metrics`, which an
+orchestrator reaches directly on the process's port. The scheme judged is the one
+uvicorn established, so a TLS-terminating proxy **must** be named in
+`FORWARDED_ALLOW_IPS`: behind one that is not, every request looks plain and the
+redirect loops on the first page load — loudly, rather than serving a year-long
+cookie over a hop somebody could read. In development the cookie keeps its plain name,
+since a browser refuses the prefixed one over `http://localhost`.
+
+Every response, in every environment, carries the browser headers: a
+`Content-Security-Policy` that admits only this origin (the one inline script in the
+built shell — the pre-paint theme read — by a hash computed from `frontend/dist` at
+startup; images and fonts also as `data:` and `blob:`, which Vite's inlining and the
+picture and screenshot previews need; the WebSocket named beside `'self'` for browsers
+predating CSP 3; no frames, objects or foreign form targets), `X-Content-Type-Options:
+nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, a `Permissions-Policy`
+that declines the sensors and payment APIs the game has no use for,
+`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Resource-Policy:
+same-origin` (`cross-origin` when `ALLOWED_ORIGINS` names a frontend that has to load
+this server's images). The policy is the same everywhere on purpose: one that only
+production sent would be one the E2E suite never ran the page under. The Vite dev
+server does not send it; only the built page is held to it.
 
 Limits are keyed on the connecting address. Behind a reverse proxy or tunnel
 every request arrives from the proxy, so run the production server with
@@ -1665,13 +1695,18 @@ cd frontend && npm run build   # outputs frontend/dist
 cd ../backend
 export SKETCHY_ENV=production
 export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
+export PUBLIC_BASE_URL=https://sketchy.example
+export FORWARDED_ALLOW_IPS=<the TLS-terminating proxy's address>
 HOST=0.0.0.0 .venv/bin/python -m app.server
 ```
 
-Both variables are required together: `SKETCHY_ENV=production` refuses a missing
-or SQLite `DATABASE_URL` (see [Database & Configuration](#database--configuration) for the full
-sequence, including the migration step that must run first). To check the built bundle
-locally without a PostgreSQL server, omit them both — the same `frontend/dist`
+The variables go together: `SKETCHY_ENV=production` refuses a missing or SQLite
+`DATABASE_URL` (see [Database & Configuration](#database--configuration) for the full
+sequence, including the migration step that must run first) and a `PUBLIC_BASE_URL`
+that is not an `https` origin, and it answers plain HTTP with a redirect there (see
+*HTTPS and the browser's own defences* under [Accounts](#accounts)), so the proxy that
+terminates TLS has to be one uvicorn trusts to say so. To check the built bundle
+locally without a PostgreSQL server, omit them all — the same `frontend/dist`
 is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,

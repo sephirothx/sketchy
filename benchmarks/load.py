@@ -149,7 +149,7 @@ class Seat:
         self.harness = harness
         self.room = room
         self.name = name
-        self.token: str | None = None
+        self.cookie: str | None = None
         self.sio: socketio.AsyncClient | None = None
         self.player_id: str | None = None
         self.canvas: list | None = None
@@ -169,11 +169,15 @@ class Seat:
             if response.status != 200:
                 raise RuntimeError(f"provisioning {self.name}: HTTP {response.status}")
             # Read off the response: aiohttp's jar ignores cookies an IP host
-            # sets, and the server here is one.
-            cookie = response.cookies.get(COOKIE)
+            # sets, and the server here is one. Under whichever name the
+            # server gave it: `__Host-`-prefixed in production (#467).
+            cookie = next(
+                (f"{name}={morsel.value}" for name, morsel in response.cookies.items() if name.endswith(COOKIE)),
+                None,
+            )
         if cookie is None:
             raise RuntimeError(f"provisioning {self.name}: no session cookie")
-        self.token = cookie.value
+        self.cookie = cookie
 
     async def connect(self) -> None:
         sio = socketio.AsyncClient(reconnection=False)
@@ -270,7 +274,7 @@ class Seat:
 
         await sio.connect(
             self.harness.base_url,
-            headers={"Cookie": f"{COOKIE}={self.token}"},
+            headers={"Cookie": self.cookie},
             auth={"protocol": PROTOCOL_VERSION},
             transports=["websocket"],
             wait_timeout=30,
@@ -433,7 +437,7 @@ class SlowViewer:
         self.harness = harness
         self.room = room
         self.name = name
-        self.token: str | None = None
+        self.cookie: str | None = None
         self.ws = None
         self.session: aiohttp.ClientSession | None = None
         self.joined = False
@@ -444,7 +448,7 @@ class SlowViewer:
     async def connect(self) -> None:
         self.session = aiohttp.ClientSession()
         url = self.harness.base_url.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket"
-        self.ws = await self.session.ws_connect(url, headers={"Cookie": f"{COOKIE}={self.token}"})
+        self.ws = await self.session.ws_connect(url, headers={"Cookie": self.cookie})
         opened = await self.ws.receive_str()
         assert opened.startswith("0"), opened
         await self.ws.send_str("40" + json.dumps({"protocol": PROTOCOL_VERSION}))

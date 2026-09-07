@@ -1,8 +1,10 @@
 """Deployment invariants that must fail before application startup mutates state."""
 
 from collections.abc import Mapping
+import ipaddress
 import os
 import sys
+from urllib.parse import urlsplit
 
 
 MINIMUM_PYTHON_VERSION = (3, 14)
@@ -19,6 +21,7 @@ PRODUCTION = "production"
 # which is the only reading under which refusing to start is fair.
 SUPPORTED_ENVIRONMENTS = (DEVELOPMENT, TEST, PRODUCTION)
 DEFAULT_ENVIRONMENT = DEVELOPMENT
+DEFAULT_PUBLIC_BASE_URL = "http://localhost:8000"
 
 
 def current_environment(environ: Mapping[str, str] | None = None) -> str:
@@ -93,6 +96,69 @@ def validate_database_configuration(environ: Mapping[str, str] | None = None) ->
             f"when {ENVIRONMENT_VARIABLE}={PRODUCTION}. Set it to a "
             "PostgreSQL URL, for example "
             "postgresql+asyncpg://user:password@host:5432/sketchy."
+        )
+
+
+def public_base_url(environ: Mapping[str, str] | None = None) -> str:
+    """Where this deployment is reached from outside: the base of every link
+    in a mail message, and the origin a plain-HTTP request is sent to in
+    production. The default is the development server."""
+
+    values = os.environ if environ is None else environ
+    return values.get("PUBLIC_BASE_URL", DEFAULT_PUBLIC_BASE_URL).rstrip("/")
+
+
+def _is_loopback(hostname: str) -> bool:
+    if hostname in ("localhost",) or hostname.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def validate_public_base_url(environ: Mapping[str, str] | None = None) -> None:
+    """Refuse a production deployment whose public address is not HTTPS.
+
+    Every reset and confirmation link is built on it, the session cookie is
+    `__Host-` prefixed and therefore only ever sent over TLS, and a plain
+    request is redirected to it (#467): a production `PUBLIC_BASE_URL` that
+    is still the development default would mail links nobody can use and
+    redirect every visitor to a server that is not there. Only the origin is
+    accepted - Sketchy is served at the root of its host, so a path here
+    would be a base no route is under.
+    """
+
+    values = os.environ if environ is None else environ
+    if not is_production(values):
+        return
+    raw_value = values.get("PUBLIC_BASE_URL", "")
+    if not raw_value.strip():
+        raise RuntimeError(
+            f"PUBLIC_BASE_URL is required when {ENVIRONMENT_VARIABLE}={PRODUCTION}: "
+            "the https origin players reach this deployment at, for example "
+            "https://sketchy.example."
+        )
+    parts = urlsplit(raw_value.strip())
+    hostname = parts.hostname or ""
+    if parts.scheme != "https" or not hostname:
+        raise RuntimeError(
+            f"PUBLIC_BASE_URL must be an https origin when {ENVIRONMENT_VARIABLE}="
+            f"{PRODUCTION}; got {raw_value.strip()!r}. Production speaks HTTPS only: "
+            "the session cookie is never sent over plain HTTP and a plain request "
+            "is redirected here."
+        )
+    if _is_loopback(hostname):
+        raise RuntimeError(
+            f"PUBLIC_BASE_URL names a loopback address ({hostname}), which no "
+            f"player can reach; set it to the public https origin when "
+            f"{ENVIRONMENT_VARIABLE}={PRODUCTION}."
+        )
+    if parts.path not in ("", "/") or parts.query or parts.fragment:
+        raise RuntimeError(
+            "PUBLIC_BASE_URL must be an origin only (scheme, host and port): "
+            "Sketchy is served at the root of its host, so a path, query or "
+            "fragment here would be a base no route is under."
         )
 
 

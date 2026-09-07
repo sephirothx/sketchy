@@ -32,6 +32,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.deployment import public_base_url
 from app.services.sweeps import (
     SweepBudget,
     SweepReport,
@@ -80,11 +81,6 @@ class OutgoingMessage:
     # second send a duplicate a mail client can collapse rather than a second
     # message.
     message_id: str | None = None
-
-
-def public_base_url(environ: Mapping[str, str] | None = None) -> str:
-    values = os.environ if environ is None else environ
-    return values.get("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
 def sender_address(environ: Mapping[str, str] | None = None) -> str:

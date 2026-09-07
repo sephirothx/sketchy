@@ -6,8 +6,10 @@ from app.deployment import (
     MINIMUM_PYTHON_VERSION,
     current_environment,
     is_production,
+    public_base_url,
     shutdown_drain_seconds,
     validate_database_configuration,
+    validate_public_base_url,
     validate_python_runtime,
     validate_worker_topology,
 )
@@ -168,3 +170,52 @@ def test_the_rejected_url_is_named_but_never_reproduced():
     assert "DATABASE_URL" in message
     assert "hunter2" not in message
     assert secret not in message
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {},
+        {"PUBLIC_BASE_URL": "http://localhost:8000"},
+        {"SKETCHY_ENV": "development", "PUBLIC_BASE_URL": "http://localhost:8000"},
+        {"SKETCHY_ENV": "test", "PUBLIC_BASE_URL": "http://127.0.0.1:8000"},
+    ],
+)
+def test_a_plain_or_local_public_url_is_fine_outside_production(environ):
+    validate_public_base_url(environ)
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://sketchy.example", "https://sketchy.example/", "https://play.sketchy.example:8443"],
+)
+def test_production_accepts_an_https_origin(url):
+    validate_public_base_url({"SKETCHY_ENV": "production", "PUBLIC_BASE_URL": url})
+
+
+@pytest.mark.parametrize(
+    "url,reason",
+    [
+        ("", "is required"),
+        ("   ", "is required"),
+        ("http://sketchy.example", "must be an https origin"),
+        ("sketchy.example", "must be an https origin"),
+        ("https://localhost", "loopback"),
+        ("https://127.0.0.1:8000", "loopback"),
+        ("https://[::1]", "loopback"),
+        ("https://sketchy.localhost", "loopback"),
+        ("https://sketchy.example/play", "origin only"),
+        ("https://sketchy.example/?x=1", "origin only"),
+    ],
+)
+def test_production_refuses_a_public_url_that_is_not_its_https_origin(url, reason):
+    """#467: links are built on it, the `__Host-` cookie is only ever sent
+    over TLS, and a plain request is redirected to it - so the development
+    default, a plain scheme, or a loopback name would each strand players."""
+    with pytest.raises(RuntimeError, match=reason):
+        validate_public_base_url({"SKETCHY_ENV": "production", "PUBLIC_BASE_URL": url})
+
+
+def test_the_public_url_default_is_the_development_server():
+    assert public_base_url({}) == "http://localhost:8000"
+    assert public_base_url({"PUBLIC_BASE_URL": "https://sketchy.example/"}) == "https://sketchy.example"

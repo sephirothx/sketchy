@@ -344,12 +344,13 @@ revocation applies uniformly without a shared signing secret.
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
 3. `validate_worker_topology()` — refuses a multi-worker configuration
 4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
-5. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
-6. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-7. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
-8. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
-9. Start the mail-delivery, runtime-metrics, retention, and export-worker loops, and hand each one to `readiness_probe.supervise()`
-10. `mark_ready()` — `GET /api/ready` starts answering 200
+5. `validate_public_base_url()` — with `SKETCHY_ENV=production`, refuses a `PUBLIC_BASE_URL` that is not an `https` origin, or names a loopback address, or carries a path: every mailed link is built on it and every plain-HTTP request is redirected to it (#467)
+6. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
+7. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
+8. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
+9. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
+10. Start the mail-delivery, runtime-metrics, retention, and export-worker loops, and hand each one to `readiness_probe.supervise()`
+11. `mark_ready()` — `GET /api/ready` starts answering 200
 
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
 
@@ -431,6 +432,23 @@ served at, plus `ALLOWED_ORIGINS`. Engine.IO consults it for every handshake car
 unsafe REST requests from anywhere else. A request that names no origin is a non-browser
 client and is not judged. The cookie is `SameSite=Strict`, its `Secure` flag follows the
 scheme uvicorn established from a trusted proxy, and there is no CSRF token to plumb.
+
+**Production is HTTPS only, and every response carries the browser's own defences**
+([`security_headers.py`](../backend/app/security_headers.py), #467). Two pure ASGI
+middlewares wrap the outermost application — outside the Socket.IO mount, so a polling
+response and a static file are held to the same rules as a REST one. The headers
+(a same-origin Content-Security-Policy with the built shell's one inline script admitted
+by a hash read off `frontend/dist/index.html` at startup, `nosniff`, no framing, a
+same-origin referrer policy, declined device permissions, cross-origin isolation
+policies) go out in every environment, so the E2E suite runs the built page under the
+same policy production sends. What depends on TLS is production-only: the cookie is
+named `__Host-sketchy_session` and `Secure` unconditionally, `Strict-Transport-Security`
+rides every response, and a plain-HTTP request is redirected with 308 to
+`PUBLIC_BASE_URL` (a plain WebSocket handshake is closed) — except the process-local
+probes, `/api/health`, `/api/ready` and `/metrics`. Startup refuses a production
+`PUBLIC_BASE_URL` that is not an `https` origin. The scheme judged is uvicorn's, so a
+TLS-terminating proxy not named in `FORWARDED_ALLOW_IPS` produces a redirect loop
+rather than a cookie a plain hop could read.
 
 ### Seats and sockets
 
@@ -1532,6 +1550,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/request_timing.py`](../backend/app/request_timing.py) | Count and time every HTTP request by the route template it matched. |
+| [`app/security_headers.py`](../backend/app/security_headers.py) | Browser hardening headers, and the rule that production is HTTPS only (#467). |
 | [`app/handlers/socket_wire.py`](../backend/app/handlers/socket_wire.py) | Bytes in and out of the socket, and payload sizes per command and per emitted event. |
 | [`app/services/room_codes.py`](../backend/app/services/room_codes.py) | Database-backed room-code allocation and retirement. |
 | [`app/services/room_quotas.py`](../backend/app/services/room_quotas.py) | Ceilings on room creation, so one client cannot spend the whole server. |

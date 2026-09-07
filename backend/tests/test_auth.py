@@ -644,3 +644,35 @@ def test_the_session_cookie_is_strict_about_its_site():
     set_session_cookie(response, "token", secure=True)
     header = response.headers["set-cookie"].lower()
     assert "samesite=strict" in header and "httponly" in header and "secure" in header
+
+
+def test_in_production_the_cookie_is_host_prefixed_and_secure_whatever_the_request_said(monkeypatch):
+    """#467: a `__Host-` cookie can be set only over HTTPS with Secure, Path=/
+    and no Domain, and then by nobody but this host. Production is HTTPS by
+    construction, so Secure does not wait for the request to prove it."""
+    from fastapi import Response
+
+    from app.auth.middleware import clear_session_cookie, set_session_cookie
+    from app.auth.sessions import cookie_name, session_token_from_cookie_header
+
+    assert cookie_name() == "sketchy_session"
+    monkeypatch.setenv("SKETCHY_ENV", "production")
+    assert cookie_name() == "__Host-sketchy_session"
+
+    response = Response()
+    set_session_cookie(response, "token", secure=False)
+    header = response.headers["set-cookie"]
+    assert header.startswith("__Host-sketchy_session=token;")
+    lowered = header.lower()
+    assert "secure" in lowered and "path=/" in lowered and "domain=" not in lowered
+    assert "samesite=strict" in lowered and "httponly" in lowered
+
+    cleared = Response()
+    clear_session_cookie(cleared, secure=False)
+    assert cleared.headers["set-cookie"].startswith("__Host-sketchy_session=") and "secure" in cleared.headers["set-cookie"].lower()
+
+    # And it is read back under that name, on REST and at the socket handshake.
+    assert session_token_from_cookie_header("__Host-sketchy_session=abc; other=1") == "abc"
+    assert session_token_from_cookie_header("sketchy_session=abc") is None, "the plain name is not production's"
+    monkeypatch.delenv("SKETCHY_ENV")
+    assert session_token_from_cookie_header("sketchy_session=abc") == "abc"
