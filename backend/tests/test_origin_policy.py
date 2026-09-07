@@ -33,6 +33,12 @@ def test_the_serving_origin_is_always_allowed_and_a_stranger_never():
     assert not origin_allowed("https://evil.example", scheme="https", host="play.example.com", extra=frozenset())
     assert not origin_allowed("https://play.example.com.evil.example", scheme="https", host="play.example.com", extra=frozenset())
     assert origin_allowed("https://app.example", scheme="https", host="api.example", extra=frozenset({"https://app.example"}))
+    # Behind a TLS-terminating proxy not named in FORWARDED_ALLOW_IPS the
+    # scope stays plain while the browser says https: the same host is ours,
+    # for a REST request exactly as for a handshake.
+    assert origin_allowed("https://play.example.com", scheme="http", host="play.example.com", extra=frozenset())
+    assert not origin_allowed("http://play.example.com", scheme="https", host="play.example.com", extra=frozenset()), "the other way round is a downgrade, not ours"
+    assert request_origin_allowed(method="POST", origin="https://play.example.com", referer=None, scheme="http", host="play.example.com", extra=frozenset())
 
 
 @pytest.mark.parametrize(

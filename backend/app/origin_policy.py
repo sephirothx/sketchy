@@ -66,12 +66,20 @@ def serving_origin(scheme: str, host: str | None) -> str | None:
 
 def origin_allowed(origin: str | None, *, scheme: str, host: str | None, extra: frozenset[str]) -> bool:
     """Whether a browser at `origin` may act here: the serving origin, or a
-    configured one. A malformed origin is nobody's."""
+    configured one. A malformed origin is nobody's.
+
+    Behind a TLS-terminating proxy the deployment did not name in
+    `FORWARDED_ALLOW_IPS`, the request's scheme stays plain while the
+    browser's `Origin` says https of the same host; the host is what decides,
+    so the https spelling of a plain serving origin is this server's too.
+    One rule for sockets and REST, so the two never disagree about a proxy."""
     candidate = normalize_origin(origin)
     if candidate is None:
         return False
     own = serving_origin(scheme, host)
-    return candidate == own or candidate in extra
+    if candidate == own or candidate in extra:
+        return True
+    return own is not None and own.startswith("http://") and candidate == "https://" + own[len("http://"):]
 
 
 def request_origin_allowed(
@@ -136,13 +144,11 @@ def socket_origins(extra: frozenset[str] | None = None):
 
     def allowed(origin, environ=None) -> bool:
         environ = environ or {}
-        scheme = environ.get("wsgi.url_scheme", "http")
-        host = environ.get("HTTP_HOST")
-        if origin_allowed(origin, scheme=scheme, host=host, extra=allowed_extra):
-            return True
-        # Behind a proxy the deployment did not name in FORWARDED_ALLOW_IPS
-        # the scope's scheme stays plain while the browser's Origin says
-        # https; the host is still this server's, and that is what decides.
-        return scheme == "http" and origin_allowed(origin, scheme="https", host=host, extra=allowed_extra)
+        return origin_allowed(
+            origin,
+            scheme=environ.get("wsgi.url_scheme", "http"),
+            host=environ.get("HTTP_HOST"),
+            extra=allowed_extra,
+        )
 
     return allowed
