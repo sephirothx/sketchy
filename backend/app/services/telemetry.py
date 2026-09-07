@@ -609,6 +609,11 @@ class Telemetry:
             "WebSocket connections accepted, by the compression they negotiated.",
             ("compression",),
         )
+        self.socket_handshake_transports = LabelledCounter(
+            "sketchy_socket_handshake_transport_total",
+            "Socket.IO handshakes accepted, by the transport they opened on (polling or websocket).",
+            ("transport",),
+        )
         self.guesses_out_of_scope = LabelledCounter(
             "sketchy_guesses_out_of_scope_total",
             "Guesses that named a room or turn the seat had already left, ignored.",
@@ -705,6 +710,9 @@ class Telemetry:
             self.socket_minutes.bump(now, field=3)
         if seconds is not None:
             self.socket_duration.observe(seconds, (event,), now=now)
+
+    def note_handshake_transport(self, transport: str) -> None:
+        self.socket_handshake_transports.inc((transport,))
 
     def note_guess_out_of_scope(self, scope: str) -> None:
         self.guesses_out_of_scope.inc((scope,))
@@ -904,6 +912,7 @@ class Telemetry:
         lines += self.socket_packets_rejected.lines()
         lines += self.canvas_recovery_notices.lines()
         lines += self.guesses_out_of_scope.lines()
+        lines += self.socket_handshake_transports.lines()
         lines += self.socket_bytes_in.lines()
         lines += self.socket_bytes_out.lines()
         lines += self.socket_command_bytes.lines()
