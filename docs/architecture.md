@@ -424,6 +424,14 @@ The socket resolves its account once, at the handshake, so a visitor who names
 themselves after connecting re-handshakes rather than spending that connection
 anonymous ([`frontend/src/lib/socket.ts`](../frontend/src/lib/socket.ts)).
 
+**Who may act as a browser here is decided once**
+([`origin_policy.py`](../backend/app/origin_policy.py), #465): the origin the page is
+served at, plus `ALLOWED_ORIGINS`. Engine.IO consults it for every handshake carrying an
+`Origin` and refuses the rest; a pure ASGI middleware ahead of the session lookup refuses
+unsafe REST requests from anywhere else. A request that names no origin is a non-browser
+client and is not judged. The cookie is `SameSite=Strict`, its `Secure` flag follows the
+scheme uvicorn established from a trusted proxy, and there is no CSRF token to plumb.
+
 ### Seats and sockets
 
 **One socket holds at most one seat.** Creating or joining a room first releases

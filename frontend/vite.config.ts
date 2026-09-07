@@ -51,8 +51,20 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': { target: DEV_BACKEND, changeOrigin: true },
-      '/socket.io': { target: DEV_BACKEND, changeOrigin: true, ws: true },
+      // The backend admits a browser only from its own origin (#465). Through
+      // this proxy the browser's Origin is the dev server's, so the proxy
+      // presents the backend's own instead - which is the truth: the request
+      // is from the page the backend serves, reached through here.
+      '/api': { target: DEV_BACKEND, changeOrigin: true, headers: { origin: DEV_BACKEND } },
+      '/socket.io': {
+        target: DEV_BACKEND,
+        changeOrigin: true,
+        ws: true,
+        headers: { origin: DEV_BACKEND },
+        configure: (proxy) => {
+          proxy.on('proxyReqWs', (proxyReq) => proxyReq.setHeader('origin', DEV_BACKEND))
+        },
+      },
     },
   },
   define: {

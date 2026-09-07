@@ -271,7 +271,7 @@ async def test_naming_yourself_provisions_a_guest_and_sets_an_httponly_cookie(cl
     assert COOKIE_NAME in cookie
     # HttpOnly keeps the token out of JavaScript; Lax blunts cross-site POSTs.
     assert "httponly" in cookie
-    assert "samesite=lax" in cookie
+    assert "samesite=strict" in cookie
     # Long-lived on purpose: expiry would orphan a guest's accumulated stats.
     assert "max-age=31536000" in cookie
 
@@ -612,3 +612,35 @@ async def test_a_colour_that_is_not_a_colour_is_rejected(client):
     assert (
         await client.post("/api/auth/name-color", json={"nameColor": "red"})
     ).status_code == 400
+
+
+def test_the_secure_flag_follows_the_request_scheme_never_a_raw_forwarded_header():
+    """#465: `X-Forwarded-Proto` is rewritten into the request's scheme by
+    uvicorn only for a proxy in FORWARDED_ALLOW_IPS; read raw, any client
+    could claim HTTPS and steer the cookie's Secure flag."""
+    from starlette.requests import Request
+
+    from app.auth.middleware import is_secure_request
+
+    def request(scheme: str, headers: dict[str, str]) -> Request:
+        raw = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
+        return Request({
+            "type": "http", "scheme": scheme, "method": "GET", "path": "/", "headers": raw,
+            "query_string": b"", "server": ("play.example.com", 443 if scheme == "https" else 80),
+        })
+
+    assert is_secure_request(request("https", {})) is True
+    assert is_secure_request(request("http", {})) is False
+    assert is_secure_request(request("http", {"X-Forwarded-Proto": "https"})) is False, "an untrusted claim"
+    assert is_secure_request(request("https", {"X-Forwarded-Proto": "http"})) is True
+
+
+def test_the_session_cookie_is_strict_about_its_site():
+    from fastapi import Response
+
+    from app.auth.middleware import set_session_cookie
+
+    response = Response()
+    set_session_cookie(response, "token", secure=True)
+    header = response.headers["set-cookie"].lower()
+    assert "samesite=strict" in header and "httponly" in header and "secure" in header
