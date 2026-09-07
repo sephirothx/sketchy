@@ -141,12 +141,14 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out the full history
+        uses: actions/checkout@v7
         with:
           # The wire-contract check below compares against the base revision.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
@@ -154,16 +156,19 @@ jobs:
             backend/requirements.txt
             backend/requirements-dev.txt
 
-      - run: pip install -r requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
 
-      - run: ruff check app tests ../scripts/check_tracked_artifacts.py
+      - name: Lint
+        run: ruff check app tests ../scripts/check_tracked_artifacts.py
 
       # --cov-branch, because "unexecuted branches" is the finding: a statement
       # measure marks an `if` covered the moment it is reached, whatever the
       # condition did.
       # loadgroup shares the immutable repository-history scan between its
       # two tests; every other test is distributed normally (R-ENG-12/15).
-      - run: pytest -q -n 2 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+      - name: Run the backend suite with coverage
+        run: pytest -q -n 4 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
@@ -244,6 +249,10 @@ jobs:
       # READ COMMITTED interleavings are the ones production will see. A
       # SQLite pass (the backend job) proves integrity - foreign keys are
       # enforced there too since #612 - but never concurrency.
+      # Two workers, not the runner's four: the PostgreSQL container shares
+      # those vCPUs, and with four workers every database-bound test ran two
+      # to four times slower, the step took longer than with two, and the
+      # 33,000-game rebuild test overran its 30 s statement budget (#658).
       - name: Run the backend suite against PostgreSQL
         run: pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
 
