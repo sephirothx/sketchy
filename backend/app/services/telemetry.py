@@ -609,6 +609,11 @@ class Telemetry:
             "WebSocket connections accepted, by the compression they negotiated.",
             ("compression",),
         )
+        self.guesses_out_of_scope = LabelledCounter(
+            "sketchy_guesses_out_of_scope_total",
+            "Guesses that named a room or turn the seat had already left, ignored.",
+            ("scope",),
+        )
         self.canvas_recovery_notices = LabelledCounter(
             "sketchy_canvas_recovery_notices_total",
             "Times a socket's canvas needed recovering, by reason (one notice per window is sent; every occurrence counts).",
@@ -700,6 +705,9 @@ class Telemetry:
             self.socket_minutes.bump(now, field=3)
         if seconds is not None:
             self.socket_duration.observe(seconds, (event,), now=now)
+
+    def note_guess_out_of_scope(self, scope: str) -> None:
+        self.guesses_out_of_scope.inc((scope,))
 
     def note_canvas_recovery(self, reason: str) -> None:
         self.canvas_recovery_notices.inc((reason,))
@@ -895,6 +903,7 @@ class Telemetry:
         lines += self.socket_transports.lines()
         lines += self.socket_packets_rejected.lines()
         lines += self.canvas_recovery_notices.lines()
+        lines += self.guesses_out_of_scope.lines()
         lines += self.socket_bytes_in.lines()
         lines += self.socket_bytes_out.lines()
         lines += self.socket_command_bytes.lines()

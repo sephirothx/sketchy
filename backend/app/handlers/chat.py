@@ -14,6 +14,7 @@ from app.handlers.payloads import (
 )
 from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
+from app.services.telemetry import telemetry
 
 def _chat_line(player, text: str, **extra) -> dict:
     """A chat line attributed to `player`, plus any per-case flags."""
@@ -141,6 +142,17 @@ async def guess(ctx: HandlerContext, sid, data):
     room, player = current
     text = payload.text.strip()
     if not text:
+        return
+    # Scope before anything else (#599): a guess that names another room or
+    # another turn is a retry that outlived the moment it was made in - the
+    # seat moved on while the packet was in flight. Acknowledged so the client
+    # stops, and otherwise as if it never arrived: no dedup entry, no AFK
+    # change, no chat line, no score.
+    if payload.code is not None and payload.code != room.code:
+        telemetry.note_guess_out_of_scope("room")
+        return
+    if payload.turn_id is not None and payload.turn_id != room.game.current_turn_id:
+        telemetry.note_guess_out_of_scope("turn")
         return
     if not player.accept_guess_id(sid, payload.id):
         # The client's one retry of a guess that did arrive. Acknowledged like

@@ -1002,3 +1002,77 @@ async def test_a_turn_waits_for_the_player_who_joined_mid_turn():
 
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.timers.close()
+
+
+# --- #599: a guess is scoped to the room and turn it was made in ---------------
+
+
+@pytest.mark.asyncio
+async def test_a_guess_naming_another_room_or_turn_is_acknowledged_and_ignored(monkeypatch):
+    from app.handlers import chat as chat_module
+    from app.services.telemetry import Telemetry
+
+    store = Telemetry()
+    monkeypatch.setattr(chat_module, "telemetry", store)
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
+    guesser.is_afk = True
+    room.game = Game(turn_order=[drawer.id, guesser.id])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    room.game.prompt = "stone"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+    guess = sio.handlers["/"]["guess"]
+    turn = room.game.current_turn_id
+
+    # Wrong room, then a turn that has ended: no chat, no score, no AFK change,
+    # and the id is not remembered - a same-id guess for the right scope is new.
+    for stale in ({"code": "ZZZZZZ", "turnId": turn}, {"code": room.code, "turnId": "01a0-gone"}):
+        ctx.clear_command_budget("guesser-sid")
+        assert await guess("guesser-sid", {"text": "stone", "id": 4, **stale}) is None
+    assert sio.emit.await_count == 0
+    assert guesser.is_afk is True
+    assert guesser.id not in room.game.correct_guessers
+    assert store.guesses_out_of_scope.get(("room",)) == 1
+    assert store.guesses_out_of_scope.get(("turn",)) == 1
+
+    ctx.clear_command_budget("guesser-sid")
+    assert await guess("guesser-sid", {"text": "stone", "id": 4, "code": room.code, "turnId": turn}) is None
+    assert guesser.id in room.game.correct_guessers
+    assert guesser.is_afk is False
+    assert any(call.args[0] == "correct_guess" for call in sio.emit.await_args_list)
+
+    # The same id inside the same scope is the client's one retry: deduplicated.
+    ctx.clear_command_budget("guesser-sid")
+    before = sio.emit.await_count
+    assert await guess("guesser-sid", {"text": "stone", "id": 4, "code": room.code, "turnId": turn}) is None
+    assert sio.emit.await_count == before
+
+
+@pytest.mark.asyncio
+async def test_a_guess_with_no_scope_is_accepted_as_before():
+    """A client that sends no scope forgoes the protection, like one that
+    sends no id; the fields are optional for the same reason."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
+    room.game = Game(turn_order=[drawer.id, guesser.id])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    room.game.prompt = "stone"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+    await sio.handlers["/"]["guess"]("guesser-sid", {"text": "stone"})
+    assert guesser.id in room.game.correct_guessers
+    refused = await sio.handlers["/"]["guess"]("guesser-sid", {"text": "x", "code": ""})
+    assert refused["errorCode"] == "invalid_payload"

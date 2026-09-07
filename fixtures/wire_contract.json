@@ -318,6 +318,20 @@
     "additionalProperties": false,
     "description": "A guess, optionally carrying the client's own delivery identifier.\n\n`guess` is emitted volatile, so a momentarily unwritable transport drops it\nsilently; the client retries once with the same `id` when the server never\nacknowledges. The id lets the server tell that retry apart from a player\ngenuinely guessing the same word twice. It is per connection and monotonic,\nand omitting it simply forgoes the deduplication.",
     "properties": {
+     "code": {
+      "anyOf": [
+       {
+        "maxLength": 16,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Code"
+     },
      "id": {
       "anyOf": [
        {
@@ -336,6 +350,20 @@
       "maxLength": 500,
       "title": "Text",
       "type": "string"
+     },
+     "turnId": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Turnid"
      }
     },
     "required": [
@@ -2330,7 +2358,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 13,
+ "protocolVersion": 14,
  "refusal": {
   "codes": [
    "invalid_payload",

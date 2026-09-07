@@ -287,6 +287,25 @@ export interface TransientAckTarget {
   readonly connected: boolean;
   /** Emit volatile, calling back with an error if no ack arrives in `timeoutMs`. */
   emitTransient(event: string, data: unknown, timeoutMs: number, ack: (error: unknown) => void): void;
+  /** Where a guess made right now belongs, or null when there is no such
+  place (not connected, no room, no turn). Read at the first attempt and
+  again before a retry (#599). */
+  scope(): GuessScope | null;
+}
+
+/** The moment a guess was made in: this connection, this room, this turn.
+A retry that outlives any of the three is not sent, and the server ignores a
+guess that names a room or turn its seat has left. `connected` on its own
+says nothing about gameplay: a socket can be replaced, rebind to another
+room, or watch the turn end while staying "connected" throughout. */
+export interface GuessScope {
+  connection: string;
+  code: string;
+  turnId: string;
+}
+
+function sameScope(a: GuessScope, b: GuessScope | null): boolean {
+  return b !== null && a.connection === b.connection && a.code === b.code && a.turnId === b.turnId;
 }
 
 export interface GuessDeliveryResult {
@@ -305,10 +324,15 @@ hits mid-round and which nothing currently reports. The acknowledgement turns
 that silence into a signal, and one retry covers the blip.
 
 The retry carries the same `id`, which the server remembers per connection, so
-a guess that did arrive is never processed twice. That is also why a retry is
-abandoned rather than sent while disconnected: after a reconnect the ids start
-over, and the packet would be replayed into a turn that has moved on - the very
-thing volatile delivery exists to prevent. */
+a guess that did arrive is never processed twice. It is sent only inside the
+scope the first attempt captured - the same connection, room and turn - and is
+abandoned otherwise (#599): `connected` being true at the timeout used to be
+the whole test, and a connection replaced before the timeout, a room switched
+on the same socket or a turn that ended all passed it, replaying the guess into
+whatever the seat was doing by then - the very thing volatile delivery exists
+to prevent. The guess also carries its room code and turn id, so the server
+ignores a packet whose scope is gone even when the client's check was not
+enough. Each result callback settles exactly once. */
 export function createGuessSender(
   target: TransientAckTarget,
   options: { timeoutMs?: number } = {},
@@ -322,32 +346,67 @@ export function createGuessSender(
   return function sendGuess(text: string, result: GuessDeliveryResult = {}): void {
     const id = nextGuessId++;
     let retriesLeft = 1;
+    let settled = false;
+    const settle = (delivered: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (delivered) result.onDelivered?.();
+      else result.onUndelivered?.();
+    };
+
+    const scope = target.scope();
+    if (scope === null) {
+      settle(false);
+      return;
+    }
 
     function attempt() {
-      target.emitTransient("guess", { text, id }, timeoutMs, (error) => {
-        if (!error) {
-          result.onDelivered?.();
-          return;
-        }
-        if (retriesLeft > 0 && target.connected) {
-          retriesLeft -= 1;
-          attempt();
-          return;
-        }
-        result.onUndelivered?.();
-      });
+      target.emitTransient(
+        "guess",
+        { text, id, code: scope!.code, turnId: scope!.turnId },
+        timeoutMs,
+        (error) => {
+          if (settled) return; // a late callback from an attempt already judged
+          if (!error) {
+            settle(true);
+            return;
+          }
+          if (retriesLeft > 0 && target.connected && sameScope(scope!, target.scope())) {
+            retriesLeft -= 1;
+            attempt();
+            return;
+          }
+          settle(false);
+        },
+      );
     }
 
     attempt();
   };
 }
 
-/** Send a guess on the shared socket, retrying once if it goes unacknowledged. */
-export const sendGuess = createGuessSender({
+/** The shared socket as a guess target. The scope's room and turn come from
+whoever knows them - the game store - through `guessScope`, registered by
+`lib/guessSender.ts`, so this module does not import the store. */
+let guessScope: () => Omit<GuessScope, "connection"> | null = () => null;
+
+export function provideGuessScope(read: () => Omit<GuessScope, "connection"> | null): void {
+  guessScope = read;
+}
+
+export const sharedGuessTarget: TransientAckTarget = {
   get connected() {
     return socket.connected;
   },
   emitTransient(event, data, timeoutMs, ack) {
     socket.volatile.timeout(timeoutMs).emit(event, data, ack);
   },
-});
+  scope() {
+    const place = guessScope();
+    if (!socket.connected || !socket.id || place === null) return null;
+    return { connection: socket.id, ...place };
+  },
+};
+
+/** Send a guess on the shared socket, retrying once inside the scope it was made in. */
+export const sendGuess = createGuessSender(sharedGuessTarget);
