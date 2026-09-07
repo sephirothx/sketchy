@@ -1159,8 +1159,7 @@ async def test_a_dropped_frame_closes_the_path_for_everyone_and_tells_the_drawer
 
 @pytest.mark.asyncio
 async def test_a_throttled_draw_frame_is_remembered_at_the_door():
-    ctx, sio, room = _relative_room()
-    room.game.canvas  # the room exists; the door is what is under test
+    ctx, sio, _room = _relative_room()
     draw = sio.handlers["/"]["draw"]
     budget = ctx.command_budgets.for_command("draw")
     for _ in range(budget.limit + 1):

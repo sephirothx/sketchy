@@ -18,6 +18,7 @@ import {
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { toPixels } from "../lib/canvasGeometry";
+import type { Point } from "../lib/canvasGeometry";
 import { hexToRgba } from "../lib/canvasPixels";
 import {
   applyFillAction,
@@ -30,7 +31,7 @@ import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { currentClientConfig } from "../lib/clientConfig";
 import { createStrokePlayback } from "../lib/strokePlayback";
 import { useSettingsStore } from "../store/settingsStore";
-import type { DrawTool, StrokePoint } from "../types";
+import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { recordRender } from "../lib/renderDiagnostics";
 
@@ -58,11 +59,16 @@ function createProtocolRenderer(
   // renderCanvasActions overwrites every pixel, so nothing stale carries over.
   let scratch: HTMLCanvasElement | null = null;
   let scratchContext: CanvasRenderingContext2D | null = null;
-  const remoteState: {
-    last: StrokePoint | null;
-    color: string;
-    width: number;
-  } = { last: null, color: "#000000", width: 4 };
+  // Where the open path ends *as queued*, in canvas pixels, and the style
+  // it is drawn in. Updated the moment a frame is queued, never inside a
+  // deferred barrier: a batch joins the point queued before it, and reading
+  // the state a barrier will set later would anchor a new stroke's first
+  // batch to the previous stroke's end while that end is still playing.
+  const queued: { last: Point | null; color: string; width: number } = {
+    last: null,
+    color: "#000000",
+    width: 4,
+  };
 
   // Received points are played out over the flush interval that follows
   // them rather than painted the moment they land (#559): what is on screen
@@ -104,7 +110,7 @@ function createProtocolRenderer(
     const canvas = canvasRef.current;
     const context = contextRef.current;
     if (canvas && context) fillWhite(context, canvas.width, canvas.height);
-    remoteState.last = null;
+    queued.last = null;
   };
 
   const apply = (packet: LiveDrawingPacket) => {
@@ -113,32 +119,24 @@ function createProtocolRenderer(
     const now = performance.now();
     if (packet.event === "draw_start") {
       const { x, y, color, width } = packet.payload;
+      const point = toPixels({ x, y });
+      queued.last = point;
+      queued.color = color;
+      queued.width = width;
       playback.enqueueBarrier(() => {
-        remoteState.last = { x, y };
-        remoteState.color = color;
-        remoteState.width = width;
-        const point = toPixels(remoteState.last);
         rasterizePolyline(context, [point, point], width / 2, hexToRgba(color));
       }, now);
     } else if (packet.event === "draw_move") {
-      // `remoteState.last` is read when the batch is *queued*, not when it
-      // is painted: the start barrier before it in the queue is what set it
-      // - unless it ran already, in which case it is set already. Either
-      // way the polyline joins the previous batch, so it is tracked here.
-      if (packet.payload.points.length === 0) return;
-      const from = remoteState.last ?? packet.payload.points[0];
-      const style = { radius: remoteState.width / 2, color: hexToRgba(remoteState.color) };
-      playback.enqueueSegments(
-        toPixels(from),
-        packet.payload.points.map(toPixels),
-        style,
-        now,
-      );
-      remoteState.last = packet.payload.points.at(-1)!;
+      // No open path to join - the start never arrived on this connection
+      // and the replay did not leave one open - is nothing to paint from;
+      // the history has the points, and the next resync will show them.
+      if (packet.payload.points.length === 0 || !queued.last) return;
+      const style = { radius: queued.width / 2, color: hexToRgba(queued.color) };
+      const points = packet.payload.points.map(toPixels);
+      playback.enqueueSegments(queued.last, points, style, now);
+      queued.last = points[points.length - 1];
     } else if (packet.event === "draw_end") {
-      playback.enqueueBarrier(() => {
-        remoteState.last = null;
-      }, now);
+      queued.last = null;
     } else if (packet.event === "draw_shape") {
       const payload = packet.payload;
       playback.enqueueBarrier(() => {
@@ -186,7 +184,18 @@ function createProtocolRenderer(
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(scratch, 0, 0);
     }
-    remoteState.last = null;
+    // A replay that ends on a path may have landed mid-stroke: the live
+    // batches that follow join that path's last point. If the path was in
+    // fact closed, the next frame is a start and resets this anyway.
+    const last = actions.at(-1);
+    const end = last?.kind === "path" ? last.points.at(-1) : undefined;
+    if (last?.kind === "path" && end) {
+      queued.last = { x: end.x, y: end.y };
+      queued.color = last.color;
+      queued.width = last.width;
+    } else {
+      queued.last = null;
+    }
   };
 
   return { apply, clear, replay };
