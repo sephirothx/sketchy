@@ -23,6 +23,14 @@ from app.services.telemetry import telemetry
 logger = logging.getLogger("sketchy.handlers.connection")
 
 
+def _transport_of(ctx: HandlerContext, sid) -> str:
+    """`polling` or `websocket`, or `unknown` for a socket that is already gone."""
+    try:
+        return str(ctx.sio.transport(sid))
+    except Exception:
+        return "unknown"
+
+
 async def connect(ctx: HandlerContext, sid, environ, auth):
     """Bind the socket to whatever account the session cookie names.
 
@@ -120,11 +128,22 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             # paused is the more urgent of the two, and saying both would put
             # two banners on one screen.
             await ctx.sio.emit("server_paused", shutdown.pause_payload(), to=sid)
-        logger.info("socket connected: %s (user=%s)", sid, user_id or "anonymous")
+        logger.info(
+            "socket connected: %s (user=%s) over %s",
+            sid,
+            user_id or "anonymous",
+            _transport_of(ctx, sid),
+        )
         accepted = True
         outcome = "accepted"
     finally:
         telemetry.socket_connection(outcome)
+        # Which transport the handshake opened on (#601): a WebSocket that the
+        # network blocks now falls back to polling instead of never
+        # connecting, and that fallback should be visible here rather than
+        # inferred from a byte counter that looks oddly uncompressed.
+        if outcome == "accepted":
+            telemetry.note_handshake_transport(_transport_of(ctx, sid))
         if not accepted:
             ctx.room_capacity.note_socket_closed(sid)
             ctx.presence.note_socket_closed(sid)
