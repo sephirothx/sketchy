@@ -192,6 +192,7 @@ class Seat:
             if self.room.seats[0] is self:
                 samples.turns_started += 1
                 self.room.prompt = None
+                self.room.correct_guesser = None
                 self.room.turn_index += 1
                 self.room.guess_correctly = self.room.turn_index % 2 == 0
 
@@ -212,11 +213,12 @@ class Seat:
             if self.room.seats[0] is self:
                 self.harness.spawn(self.room.start_game(delay=2.0))
 
-        @sio.on("chat_message")
-        async def on_chat(payload):
-            # A correct guess ends the turn early: not a full-length turn.
-            if isinstance(payload, dict) and payload.get("kind") in {"correct", "guess_correct"}:
-                self.turn_full_length = False
+        @sio.on("correct_guess")
+        async def on_correct_guess(payload):
+            # A correct guess ends the turn early once everyone has guessed
+            # (or here, where one guesser is enough to change the timing):
+            # the turn is no longer a full-length one for the overrun sample.
+            self.turn_full_length = False
 
         @sio.on("draw")
         async def on_draw(frame, commit=None):
@@ -415,13 +417,22 @@ class Harness:
         task.add_done_callback(self.tasks.discard)
 
     async def metrics(self, http: aiohttp.ClientSession) -> dict[str, float]:
+        """One scrape of `/metrics`. The server-side half of the gate is read
+        from here, so a scrape that is not one - no token, a refusal, a
+        page that is not Prometheus text - is a failed run, never a row of
+        zeros that happens to pass every threshold."""
         if not self.args.metrics_token:
-            return {}
+            raise RuntimeError("METRICS_TOKEN is not set; the gate cannot read the server's side")
         async with http.get(
             f"{self.base_url}/metrics", headers={"Authorization": f"Bearer {self.args.metrics_token}"}
         ) as response:
             text = await response.text()
-        return parse_metrics(text)
+            if response.status != 200:
+                raise RuntimeError(f"/metrics answered HTTP {response.status}; is METRICS_TOKEN the server's?")
+        values = parse_metrics(text)
+        if "rss_bytes" not in values or "sockets" not in values:
+            raise RuntimeError("/metrics did not carry the series the gate reads")
+        return values
 
     async def run(self) -> dict:
         args = self.args
@@ -551,7 +562,7 @@ class Harness:
                 "rooms": self.args.rooms, "seatsPerRoom": self.args.seats,
                 "seats": self.args.rooms * self.args.seats, "lobbyWatchers": self.args.lobby_watchers,
                 "durationSeconds": self.args.duration, "reconnectShare": self.args.reconnect_share,
-                "metricsScraped": bool(before),
+                "metricsScrapes": 2 + len(during),
             },
             "measured": measured,
             "thresholds": thresholds,

@@ -33,15 +33,15 @@ result is recorded here so the target is a measurement rather than a sentence:
 
 | Signal | Measured | Threshold |
 | --- | --- | --- |
-| Acknowledgement latency p50 / p95 / p99 | 2.1 / 7.1 / 22.1 ms | p95 ≤ 100, p99 ≤ 250 ms |
-| Draw fan-out latency p50 / p95 | 1.1 / 3.0 ms | p95 ≤ 150 ms |
-| Timer overrun p95 / max | 21.8 / 26.0 ms | p95 ≤ 250 ms |
-| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 10 / ≤ 25 ms | ≤ 100 / ≤ 250 ms |
-| Resident memory idle → after warm-up → peak | 167 → 211 → 211 MB (103 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 0.0 %) |
+| Acknowledgement latency p50 / p95 / p99 | 1.8 / 10.6 / 26.0 ms | p95 ≤ 100, p99 ≤ 250 ms |
+| Draw fan-out latency p50 / p95 | 0.8 / 2.6 ms | p95 ≤ 150 ms |
+| Timer overrun p95 / max | 16.2 / 21.5 ms | p95 ≤ 250 ms |
+| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 50 / ≤ 50 ms | ≤ 100 / ≤ 250 ms |
+| Resident memory idle → after warm-up → peak | 168 → 212 → 212 MB (105 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 0.0 %) |
 | Database query p99 (bucket bound) | ≤ 50 ms | ≤ 50 ms |
-| Unexpected disconnects / failed reconnects | 0 / 0 (of 504 reconnects) | 0 / 0 |
+| Unexpected disconnects / failed reconnects | 0 / 0 (of 495 reconnects) | 0 / 0 |
 | Packets rejected / fault notices (all notices by reason) | 0 / 0 (none) | 0 / 0 |
-| Traffic | 65.5 MB out, 2.0 MB in; 22846 frames sent, 158197 received; 14967 guesses, 866 chats | — |
+| Traffic | 64.6 MB out, 2.0 MB in; 22719 frames sent, 157395 received; 14861 guesses, 1000 chats | — |
 <!-- load-gate-result:end -->
 
 ---
