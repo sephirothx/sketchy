@@ -1412,6 +1412,10 @@ backend/.venv/bin/python benchmarks/point_thinning.py
 # The release load gate: 50 rooms x 8 seats sustained for 5 minutes against a throwaway server (#461)
 ./benchmarks/run_load.sh
 
+# Would room-state deltas pay? Replayed on a real viewer's stream captured under the gate (#493)
+backend/.venv/bin/python benchmarks/room_state_deltas.py
+./benchmarks/run_load.sh --duration 180 --slow-viewers 0 --capture-seat fixtures/viewer_streams/gate-viewer-180s.jsonl   # re-capture
+
 # A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
@@ -1559,6 +1563,16 @@ relative frames — for the message count and the deflated bytes of each (#559).
 recorded now would already be thinned, and would understate what thinning does. A repeated identical batch, which is what the benchmark
 modelled before, is deflate's best case and understated live drawing by about
 half; the trace is what fixed that.
+
+`room_state_deltas.py` answers whether a room-state delta protocol would pay
+(#493), on the one input that can: a guest's whole inbound stream captured raw and
+in order under the gate's full population (`fixtures/viewer_streams/`), replayed
+through one deflate context at the server's settings as captured and with every
+`room_state` after the first replaced by the patch the issue describes. It saves
+1.5% on the wire, so `room_state` stays whole (N-14); the same replay gives the
+per-event wire shares wire-protocol.md §1 records. A capture is raw input like a
+stroke trace: re-capture with the command above, name it for what it is, and keep
+the old one.
 
 `slow_viewer.py` stages the case the outbound budget exists for (#602): a room near the
 canvas ceiling, a spectator that stops reading at the transport while pulling a full
