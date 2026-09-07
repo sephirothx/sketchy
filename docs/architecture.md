@@ -1094,6 +1094,14 @@ letting a running game finish first.
 
 ### Observability
 
+**Capacity is measured, not assumed.** The scale target (50 rooms, 400 seats on one
+worker) is validated by [`benchmarks/run_load.sh`](../benchmarks/run_load.sh) (#461): a
+population of real Socket.IO clients playing continuously against a throwaway server,
+reporting acknowledgement and draw fan-out latency, timer overrun, event-loop lag,
+memory growth, database latency, disconnects and door rejections against thresholds. It
+is the release gate on the reference environment, run by hand; its last result lives
+beside the target in `requirements.md`. The signals it reads are the ones below.
+
 Two things are recorded, answering two different questions
 ([`backend/app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py)):
 
