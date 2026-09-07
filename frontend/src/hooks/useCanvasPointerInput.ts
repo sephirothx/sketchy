@@ -186,13 +186,17 @@ export function useCanvasPointerInput(
   });
 
   // The queued points as one frame, relative to the last point sent, which
-  // they then become the last of.
+  // they then become the last of - only if the frame went. A frame the
+  // protocol dropped (over the point budget, no path open) left the server's
+  // path where it was, and the next frame must be relative to that.
   function sendPendingPoints() {
     const points = pendingPointsRef.current;
     if (points.length === 0) return;
     pendingPointsRef.current = [];
-    protocol.sendPathFrame(encodePathPoints({ points, previous: lastSentRef.current ?? undefined }));
-    lastSentRef.current = points[points.length - 1];
+    const sent = protocol.sendPathFrame(
+      encodePathPoints({ points, previous: lastSentRef.current ?? undefined }),
+    );
+    if (sent) lastSentRef.current = points[points.length - 1];
   }
   const sendPendingPointsRef = useRef(sendPendingPoints);
 
