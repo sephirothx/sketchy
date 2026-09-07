@@ -32,6 +32,7 @@ FILL_TAG = 4
 CLEAR_TAG = 5
 PATH_POINTS_DELTA_TAG = 6
 PATH_POINTS_RELATIVE_TAG = 7
+PATH_POINTS_END_TAG = 8
 
 _HEADER_VERSION_SHIFT = 4
 _HEADER_TAG_MASK = 0x0F
@@ -75,6 +76,15 @@ _DELTA = struct.Struct("<bb")
 # a frame the server *dropped* (throttled) closes the path for everyone and
 # tells the drawer, so a later relative frame can never be resolved against a
 # predecessor the server never recorded (`handlers/drawing.py`).
+#
+# PATH_POINTS_END_TAG (#603) is the relative layout again, and the frame
+# also closes the path: the points the drawer had buffered when the pen
+# lifted and the `draw_end` used to travel as two events, sent in the same
+# call, with only the second carrying the commit. One frame extends the path
+# and ends it atomically - refused whole if the points do not fit, so a
+# refused ending never leaves a committed prefix - and carries the commit
+# the way `draw_end` did. The one-byte `draw_end` stays for a path with
+# nothing buffered. Both produce the same history and hash.
 #
 # -128 is not a delta but the escape marker, followed by an absolute pair. It
 # is what keeps an arbitrarily fast stroke representable rather than refused.
@@ -246,6 +256,13 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
                 _pack_coordinate(previous.get("x"), CANVAS_WIDTH),
                 _pack_coordinate(previous.get("y"), CANVAS_HEIGHT),
             )
+        if payload.get("ends"):
+            # The final batch closes the path (#603): always relative, since
+            # an ending has an open path to be relative to, escaping where a
+            # step is too far rather than falling back.
+            if packed_previous is None:
+                raise ValueError("an ending batch needs the open path's last point")
+            return _encode_records(PATH_POINTS_END_TAG, packed, packed_previous)
         return _encode_points(packed, packed_previous)
     if event == "draw_end":
         return _header(PATH_END_TAG)
@@ -411,11 +428,12 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
             for point_x, point_y in packed
         ]
         return LiveDrawingPacket("draw_move", {"points": points})
-    if tag == PATH_POINTS_RELATIVE_TAG:
+    if tag in {PATH_POINTS_RELATIVE_TAG, PATH_POINTS_END_TAG}:
         # Walked like the delta frame, but nothing here is a point yet: the
         # records are offsets from a predecessor this frame does not carry.
         # `resolve_relative_points` turns them into points once the caller
-        # has looked the predecessor up.
+        # has looked the predecessor up. The end tag is the same records,
+        # and the path is closed once they are recorded (#603).
         if len(frame) < 1 + _DELTA.size:
             raise ValueError("invalid path-points frame size")
         offset = 1
@@ -435,7 +453,10 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
                 offset += _DELTA.size
             if len(records) > MAX_POINTS_PER_FRAME:
                 raise ValueError("invalid path point count")
-        return LiveDrawingPacket("draw_move", {"relative": records})
+        payload: dict = {"relative": records}
+        if tag == PATH_POINTS_END_TAG:
+            payload["ends"] = True
+        return LiveDrawingPacket("draw_move", payload)
     if tag == PATH_END_TAG:
         if len(frame) != 1:
             raise ValueError("invalid path-end frame size")
@@ -525,15 +546,22 @@ def resolve_relative_points(
             ):
                 raise ValueError("path point is outside packed range")
         packed.append((x, y))
-    return LiveDrawingPacket(
-        "draw_move",
-        {
-            "points": [
-                {
-                    "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
-                    "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
-                }
-                for point_x, point_y in packed
-            ]
-        },
+    resolved: dict = {
+        "points": [
+            {
+                "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
+                "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
+            }
+            for point_x, point_y in packed
+        ]
+    }
+    if packet.payload.get("ends"):
+        resolved["ends"] = True
+    return LiveDrawingPacket("draw_move", resolved)
+
+
+def ends_path(packet: LiveDrawingPacket) -> bool:
+    """Whether this frame closes the open path: `draw_end`, or a final batch."""
+    return packet.event == "draw_end" or (
+        packet.event == "draw_move" and bool(packet.payload.get("ends"))
     )

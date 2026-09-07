@@ -1227,7 +1227,7 @@
   }
  },
  "fixtures": {
-  "fixtures/canvas_protocol_v1.json": "90cc7759d121c4b67d4edcde191333e64c56d23fcb5e8301e1b3450ef75421d5",
+  "fixtures/canvas_protocol_v1.json": "8eaebf2e4d5e04e5acfe15d1ea51ddd19828da345af924149ed70b24be5d05fe",
   "fixtures/lobby_presence_v1.json": "b1c5e31170b8a7903bb22f0330d44d121f9d9f878e563bfa2ae0ba48684d9fa3",
   "fixtures/stored_drawings_v1.json": "ca56f37d8705134e3ed3800909cd6578e9628ba61754e4028e0b7e5985e70937"
  },
@@ -1241,6 +1241,7 @@
    "path_end": 2,
    "path_points": 1,
    "path_points_delta": 6,
+   "path_points_end": 8,
    "path_points_relative": 7,
    "path_start": 0,
    "shape": 3
@@ -2359,7 +2360,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 16,
+ "protocolVersion": 17,
  "refusal": {
   "codes": [
    "invalid_payload",

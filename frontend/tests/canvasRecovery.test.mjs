@@ -33,7 +33,8 @@ function stroke(points, batch = 1) {
 function replayInto(frames) {
   const history = new ClientCanvasHistory();
   history.replace([], 0, 1, 0, 0);
-  for (const frame of frames) assert.ok(history.apply(decodeLiveDrawing(frame)));
+  // Decoded against the open path, as the protocol hook does (#559).
+  for (const frame of frames) assert.ok(history.apply(decodeLiveDrawing(frame, history.openPathLastPoint())));
   return history;
 }
 
@@ -246,4 +247,21 @@ test("saved relative frames repack to self-contained ones with the same points (
     decodeLiveDrawing(repacked[1]).payload.points,
     [{ x: 0.5, y: 0.51 }, { x: 0.51, y: 0.52 }, { x: 0.52, y: 0.52 }],
   );
+});
+
+test("a path that ended on a final batch repacks to the same points and a plain end (#603)", () => {
+  const start = encodePathStart({ x: 0.5, y: 0.5, color: "#000000", width: 4 });
+  const middle = encodePathPoints({ points: [{ x: 0.5, y: 0.51 }], previous: { x: 0.5, y: 0.5 } });
+  const final = encodePathPoints({ points: [{ x: 0.51, y: 0.52 }], previous: { x: 0.5, y: 0.51 }, ends: true });
+  const frames = [start, middle, final];
+  assert.equal(pointCount(frames), 2);
+  const repacked = repackDrawFrames(frames);
+  assert.equal(repacked.length, 3);
+  assert.deepEqual(decodeLiveDrawing(repacked[1]).payload.points, [{ x: 0.5, y: 0.51 }, { x: 0.51, y: 0.52 }]);
+  assert.equal(decodeLiveDrawing(repacked[2]).event, "draw_end");
+  // Both forms are one history.
+  const viaEnd = replayInto([start, middle, encodePathPoints({ points: [{ x: 0.51, y: 0.52 }], previous: { x: 0.5, y: 0.51 } }), encodePathEnd()]);
+  const viaFinal = replayInto(frames);
+  assert.equal(viaFinal.historyHash, viaEnd.historyHash);
+  assert.deepEqual(viaFinal.actions, viaEnd.actions);
 });

@@ -171,3 +171,27 @@ def test_a_relative_frame_cannot_walk_a_coordinate_out_of_range():
         # Starting near the right edge of the packed range, 256 steps of 127
         # leave it.
         resolve_relative_points(packet, (1.0, 0.5))
+
+
+def test_an_ending_batch_is_the_relative_layout_under_its_own_tag():
+    """#603: the final points and the end as one frame. Always relative - an
+    ending has an open path to be relative to - escaping where a step is too
+    far rather than falling back to a self-contained form."""
+    from app.live_drawing import ends_path, resolve_relative_points
+
+    previous = {"x": 0.5, "y": 0.5}
+    one = encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": previous, "ends": True})
+    assert len(one) == 3 and one[0] & 0x0F == 8
+    packet = decode_live_drawing(one)
+    assert ends_path(packet) and packet.payload["ends"] is True
+    resolved = resolve_relative_points(packet, (0.5, 0.5))
+    assert resolved.payload == {"points": [{"x": 0.5, "y": 0.51}], "ends": True}
+    assert ends_path(resolved)
+    far = encode_live_drawing("draw_move", {"points": [{"x": 0.9, "y": 0.9}], "previous": previous, "ends": True})
+    assert far[0] & 0x0F == 8 and len(far) == 1 + 5
+    assert not ends_path(decode_live_drawing(encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": previous})))
+    assert ends_path(decode_live_drawing(encode_live_drawing("draw_end")))
+    with pytest.raises(ValueError):
+        encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "ends": True})
+    with pytest.raises(ValueError):
+        decode_live_drawing(bytes((0x18,)))

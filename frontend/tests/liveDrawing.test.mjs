@@ -9,6 +9,7 @@ import {
   encodePathPoints,
   encodePathStart,
   encodeShape,
+  endsPath,
   resolveRelativePoints,
 } from "../src/lib/liveDrawing.ts";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../src/lib/canvasHistory.ts";
@@ -119,4 +120,27 @@ test("a relative frame is offsets from the open path and three bytes a point (#5
   walk[0] = 0x17;
   for (let i = 1; i < walk.length; i += 2) walk[i] = 127;
   assert.equal(decodeLiveDrawing(walk, { x: 1, y: 0.5 }), null);
+});
+
+test("a final batch is the relative layout under its own tag and closes the path (#603)", () => {
+  const previous = { x: 0.5, y: 0.5 };
+  const final = encodePathPoints({ points: [{ x: 0.5, y: 0.51 }], previous, ends: true });
+  assert.equal(final.byteLength, 3);
+  assert.equal(final[0] & 0x0f, 8);
+  const unresolved = decodeLiveDrawing(final);
+  assert.equal(unresolved.event, "draw_move_relative");
+  assert.equal(unresolved.payload.ends, true);
+  assert.equal(endsPath(unresolved), true);
+  const resolved = decodeLiveDrawing(final, previous);
+  assert.deepEqual(resolved, { event: "draw_move", payload: { points: [{ x: 0.5, y: 0.51 }], ends: true } });
+  assert.equal(endsPath(resolved), true);
+  assert.equal(endsPath(decodeLiveDrawing(encodePathPoints({ points: [{ x: 0.5, y: 0.51 }], previous }), previous)), false);
+  assert.equal(endsPath(decodeLiveDrawing(encodePathEnd())), true);
+  // Too far for a byte: escapes rather than falling back to a form that
+  // could not carry the end.
+  const far = encodePathPoints({ points: [{ x: 0.9, y: 0.9 }], previous, ends: true });
+  assert.equal(far[0] & 0x0f, 8);
+  assert.equal(far.byteLength, 6);
+  assert.throws(() => encodePathPoints({ points: [{ x: 0.5, y: 0.51 }], ends: true }));
+  assert.equal(decodeLiveDrawing(new Uint8Array([0x18])), null);
 });

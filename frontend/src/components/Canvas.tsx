@@ -134,7 +134,7 @@ function createProtocolRenderer(
       const style = { radius: queued.width / 2, color: hexToRgba(queued.color) };
       const points = packet.payload.points.map(toPixels);
       playback.enqueueSegments(queued.last, points, style, now);
-      queued.last = points[points.length - 1];
+      queued.last = packet.payload.ends ? null : points[points.length - 1];
     } else if (packet.event === "draw_end") {
       queued.last = null;
     } else if (packet.event === "draw_shape") {

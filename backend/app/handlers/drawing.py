@@ -13,7 +13,7 @@ from app.handlers.payloads import (
     parse_undo_payload,
 )
 from app.handlers.refusals import ErrorCode, refuse
-from app.live_drawing import encode_live_drawing, is_relative, resolve_relative_points
+from app.live_drawing import encode_live_drawing, ends_path, is_relative, resolve_relative_points
 
 async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
@@ -114,7 +114,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             )
             return
     elif room.game.canvas.discarding_draw_sequence:
-        if packet.event == "draw_end":
+        if ends_path(packet):
             room.game.canvas.discarding_draw_sequence = False
         return
     if packet.event == "clear_canvas":
@@ -137,6 +137,11 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
             return
     if not room.game.canvas.record_stroke(packet.event, packet.payload):
         return
+    if packet.event == "draw_move" and packet.payload.get("ends"):
+        # The final batch closes the path it just extended (#603). Nothing
+        # between the two can fail: the path is open, since the points were
+        # just recorded on it.
+        room.game.canvas.record_stroke("draw_end", {})
     if packet.event == "draw_start":
         room.game.canvas.discarding_draw_sequence = False
         room.game.canvas.active_draw_sequence = sequence
@@ -145,7 +150,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     # be decided inside this call, and the state a rebroadcast describes is now
     # settled before anyone is told about it.
     committed = None
-    if packet.event == "draw_end":
+    if ends_path(packet):
         active_sequence = room.game.canvas.active_draw_sequence
         if active_sequence is not None:
             room.game.canvas.active_draw_sequence = None

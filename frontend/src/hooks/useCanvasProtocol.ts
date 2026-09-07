@@ -18,7 +18,7 @@ import {
 import { CANVAS_SYNC_TIMEOUT_MS, createCanvasSyncRequester } from "../lib/canvasSyncRequests";
 import { currentClientConfig } from "../lib/clientConfig";
 import type { CanvasSyncRequester, PrefixClaim } from "../lib/canvasSyncRequests";
-import { decodeLiveDrawing, encodeClear, toWireFrame } from "../lib/liveDrawing";
+import { decodeLiveDrawing, endsPath, encodeClear, toWireFrame  } from "../lib/liveDrawing";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import type { ErrorCode } from "../types";
 import { recordClientError } from "../lib/clientErrorLog";
@@ -41,7 +41,7 @@ finally arrived. Cheap to recover from and almost impossible to notice, which
 is the wrong way round. */
 function commitsAnAction(packet: LiveDrawingPacket, applied: boolean): boolean {
   if (!applied) return false;
-  return packet.event === "draw_end"
+  return endsPath(packet)
     || packet.event === "draw_shape"
     || packet.event === "draw_fill"
     || packet.event === "clear_canvas";
@@ -331,7 +331,11 @@ export function useCanvasProtocol(
       pending.kind === "draw"
       && pending.frames.length > 0
       && decodeLiveDrawing(pending.frames[0])?.event === "draw_start"
-      && decodeLiveDrawing(pending.frames.at(-1)!)?.event !== "draw_end";
+      && !closesPath(pending.frames.at(-1)!);
+    const closesPath = (frame: DrawingFrame): boolean => {
+      const packet = decodeLiveDrawing(frame);
+      return packet !== null && endsPath(packet);
+    };
 
     // One paced sender for every replay, and one deadline per finished action.
     // Both are pure (`lib/canvasRecovery.ts`); this is only the wiring.

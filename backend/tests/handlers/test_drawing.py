@@ -1165,3 +1165,73 @@ async def test_a_throttled_draw_frame_is_remembered_at_the_door():
     for _ in range(budget.limit + 1):
         await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.6, "y": 0.6}]}))
     assert "drawer-sid" in ctx.dropped_draw_frames
+
+
+def _start(room, sio, sequence, x=0.5, y=0.5):
+    return sio.handlers["/"]["draw"](
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": x, "y": y, "color": "#112233", "width": 5}),
+        canvas_action(room.game, sequence),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_final_batch_extends_and_closes_the_path_in_one_committed_frame():
+    """#603: the points buffered when the pen lifted and the end travel as
+    one frame, which carries the commit the way `draw_end` did; the history
+    and its hash are what the two-frame form produces."""
+    from app.canvas_history import canvas_history_hash
+
+    ctx, sio, room = _relative_room()
+    draw = sio.handlers["/"]["draw"]
+    await _start(room, sio, 1)
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}}))
+    sio.emit.reset_mock()
+    final = encode_live_drawing("draw_move", {"points": [{"x": 0.51, "y": 0.52}, {"x": 0.52, "y": 0.52}], "previous": {"x": 0.5, "y": 0.51}, "ends": True})
+    assert final[0] & 0x0F == 8
+    await draw("drawer-sid", final)
+
+    assert room.game.canvas.active_draw_sequence is None
+    assert room.game.canvas.sequence == 1
+    [(frame, commit)] = [call.args[1] for call in _emitted(sio, "draw")]
+    assert frame == final and commit is not None, "one event, carrying the commit"
+    assert _emitted(sio, "canvas_commit"), "and the drawer's own commit"
+    one_frame = canvas_history_hash(room.game.canvas.history)
+
+    ctx2, sio2, room2 = _relative_room()
+    draw2 = sio2.handlers["/"]["draw"]
+    await _start(room2, sio2, 1)
+    await draw2("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}}))
+    await draw2("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.51, "y": 0.52}, {"x": 0.52, "y": 0.52}], "previous": {"x": 0.5, "y": 0.51}}))
+    await draw2("drawer-sid", encode_live_drawing("draw_end"))
+    assert canvas_history_hash(room2.game.canvas.history) == one_frame
+    assert room2.game.canvas.history.binary_payload() == room.game.canvas.history.binary_payload()
+
+
+@pytest.mark.asyncio
+async def test_a_refused_final_batch_commits_nothing_and_leaves_the_path_open(monkeypatch):
+    """A final batch past the point budget is refused whole: no points, no
+    end, no commit - never a committed prefix the drawer did not draw."""
+    from app import canvas_session
+
+    ctx, sio, room = _relative_room()
+    draw = sio.handlers["/"]["draw"]
+    monkeypatch.setattr(canvas_session, "MAX_CANVAS_POINTS", 2)
+    await _start(room, sio, 1)
+    sio.emit.reset_mock()
+    final = encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}, {"x": 0.51, "y": 0.52}], "previous": {"x": 0.5, "y": 0.5}, "ends": True})
+    await draw("drawer-sid", final)
+    assert room.game.canvas.active_draw_sequence == 1, "still open"
+    assert room.game.canvas.sequence == 0, "nothing committed"
+    assert _emitted(sio, "draw") == [] and _emitted(sio, "canvas_commit") == []
+    # The plain end still closes it, and commits.
+    await draw("drawer-sid", encode_live_drawing("draw_end"))
+    assert room.game.canvas.sequence == 1
+
+
+@pytest.mark.asyncio
+async def test_a_final_batch_with_no_open_path_is_dropped():
+    ctx, sio, room = _relative_room()
+    draw = sio.handlers["/"]["draw"]
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}, "ends": True}))
+    assert len(room.game.canvas.history) == 0 and _emitted(sio, "draw") == []

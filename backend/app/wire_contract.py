@@ -262,6 +262,7 @@ def build_contract() -> dict[str, Any]:
                 "clear": live_drawing.CLEAR_TAG,
                 "path_points_delta": live_drawing.PATH_POINTS_DELTA_TAG,
                 "path_points_relative": live_drawing.PATH_POINTS_RELATIVE_TAG,
+                "path_points_end": live_drawing.PATH_POINTS_END_TAG,
             },
         },
         "refusal": {"shape": ["ok", "errorCode", "error", "field?", "retryAfterMs?"], "codes": [c.value for c in ErrorCode]},
