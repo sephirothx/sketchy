@@ -1285,7 +1285,8 @@ passed deletion tests against constraints the database never applied. A SQLite p
 proves integrity; only the PostgreSQL job proves row locks and
 READ COMMITTED interleavings.
 
-Both backend suites run on two pytest workers. With `TEST_DATABASE_URL`, the controller
+Both backend suites run under pytest-xdist - four workers on SQLite, two on PostgreSQL,
+whose container shares the runner's cores. With `TEST_DATABASE_URL`, the controller
 in [`tests/conftest.py`](../backend/tests/conftest.py) owns the migrated database clones
 managed by [`tests/parallel_databases.py`](../backend/tests/parallel_databases.py),
 assigns URLs before collection, and removes its own clones after worker shutdown.

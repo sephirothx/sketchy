@@ -1559,17 +1559,21 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 > [`backend/tests/dbfixtures.py`](../backend/tests/dbfixtures.py), so `TEST_DATABASE_URL`
 > moves its callers onto PostgreSQL. Tests specifically proving file-backed SQLite
 > concurrency still use fresh temporary SQLite files. The fixture **deletes application rows** from its
-> database and refuses a name without `test` in it. Never point it at a development or
-> production database.
+> database - one `DELETE` per table, children first, sent as a single round trip - and
+> refuses a name without `test` in it. Never point it at a development or production
+> database.
 
 Without `TEST_DATABASE_URL` the same fixture hands out fresh in-memory SQLite configured the
 way [`db/__init__.py`](../backend/app/db/__init__.py) configures the application's own
 connections, and checks `PRAGMA foreign_keys` on every connection it opens. A raw
 `create_async_engine` leaves SQLite's enforcement off, and a suite built on one passes
 deletion tests against constraints the database never applied — #612 found two
-deletion paths that only failed once enforcement was real. Schema creation on a new
-database omits table-existence probes; all tables, indexes and constraints are still
-created, and the engine remains local to the test's event loop.
+deletion paths that only failed once enforcement was real. The schema is the one
+`create_all` would build - the same `CREATE` statements in the same order, so
+`test_db_models.py` still proves models and migrations agree - compiled once per
+process and run as one script, because several hundred tests build a database each and
+compiling and sending 150-odd statements one at a time was most of what each cost
+(#659). The engine remains local to the test's event loop.
 
 For the full suite with CI's parallel scheduling, keep migration replay separate:
 

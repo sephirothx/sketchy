@@ -1316,7 +1316,8 @@ multiple players.
 
 ### Running tests
 
-Both backend CI jobs run the full suite with two pytest workers (R-ENG-12).
+Both backend CI jobs run the full suite under pytest-xdist (R-ENG-12): four workers on
+SQLite, two on PostgreSQL, whose container shares the runner's four cores.
 `loadgroup` keeps the two history-floor tests together so they share one scan;
 other tests are distributed normally. Backend coverage is combined across workers
 before the unchanged statement and branch floors are checked (R-ENG-15).
