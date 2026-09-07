@@ -484,3 +484,116 @@ async def test_every_reaction_refusal_is_a_404(env):
         )
     ).status_code == 404
     assert (await http.get(f"/api/games/{game_id}")).json()["turns"][0]["reactions"] == []
+
+
+# ---- conditional downloads (#604)
+
+
+async def _drawing_url(users, history) -> tuple[str, object, object]:
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    return f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing", ann, bob
+
+
+async def test_a_current_copy_is_answered_304_with_no_body(env):
+    """#604: the browser revalidates on every open and is answered from the
+    metadata alone while its copy is current; the validator names the wire
+    version as well as the stored bytes, and is weak, since the same bytes
+    go out with or without a content encoding."""
+    from app.canvas_history import CANVAS_HISTORY_VERSION
+
+    http, users, history, factory = env
+    url, ann, _ = await _drawing_url(users, history)
+    await sign_in_as(http, factory, ann.id)
+
+    first = await http.get(url)
+    assert first.status_code == 200
+    assert first.headers["cache-control"] == "private, no-cache"
+    tag = first.headers["etag"]
+    assert tag.startswith('W/"') and tag.endswith(f'-w{CANVAS_HISTORY_VERSION}"')
+
+    again = await http.get(url, headers={"If-None-Match": tag})
+    assert again.status_code == 304
+    assert again.content == b""
+    assert again.headers["etag"] == tag
+    assert again.headers["cache-control"] == "private, no-cache"
+
+    # A list, the strong form of the same tag, and a wildcard all match;
+    # another tag does not, and the drawing is sent again.
+    assert (await http.get(url, headers={"If-None-Match": f'"other", {tag}'})).status_code == 304
+    assert (await http.get(url, headers={"If-None-Match": tag[2:]})).status_code == 304
+    assert (await http.get(url, headers={"If-None-Match": "*"})).status_code == 304
+    stale = await http.get(url, headers={"If-None-Match": 'W/"deadbeef-w1"'})
+    assert stale.status_code == 200 and stale.content == _skch()
+
+
+async def test_a_new_wire_version_changes_the_validator_over_unchanged_stored_bytes(env, monkeypatch):
+    """The stored checksum alone is not a validator for what is served: a
+    decoder that answers in a newer wire format changes the bytes sent
+    without touching the bytes stored."""
+    from app.api import profiles as profiles_module
+
+    http, users, history, factory = env
+    url, ann, _ = await _drawing_url(users, history)
+    await sign_in_as(http, factory, ann.id)
+    tag = (await http.get(url)).headers["etag"]
+
+    monkeypatch.setattr(profiles_module, "CANVAS_HISTORY_VERSION", 99)
+    bumped = await http.get(url, headers={"If-None-Match": tag})
+    assert bumped.status_code == 200, "the remembered tag no longer matches"
+    assert bumped.headers["etag"] != tag and bumped.headers["etag"].endswith('-w99"')
+
+
+async def test_a_remembered_validator_cannot_see_past_permission_or_erasure(env):
+    """A 304 is a statement that the caller may still have the drawing. A
+    stranger with a known tag, and a participant whose drawing was erased,
+    are told it does not exist - the same 404 as without the tag."""
+    from sqlalchemy import update
+
+    from app.db.models import TurnDrawing
+
+    http, users, history, factory = env
+    url, ann, _ = await _drawing_url(users, history)
+    outsider = await users.create_anonymous(display_name="Cid")
+    await sign_in_as(http, factory, ann.id)
+    tag = (await http.get(url)).headers["etag"]
+
+    await sign_in_as(http, factory, outsider.id)
+    assert (await http.get(url, headers={"If-None-Match": tag})).status_code == 404
+
+    async with factory() as session:
+        await session.execute(
+            update(TurnDrawing).values(
+                status="unavailable", unavailable_reason="erased",
+                payload=None, byte_size=None, checksum_sha256=None,
+            )
+        )
+        await session.commit()
+    await sign_in_as(http, factory, ann.id)
+    assert (await http.get(url, headers={"If-None-Match": tag})).status_code == 404
+    assert (await http.get(url)).status_code == 404
+
+
+async def test_the_validator_is_the_same_gzipped_and_a_gzipped_copy_revalidates(env):
+    """Behind the compression middleware the drawing goes out gzipped to a
+    client that accepts it; the weak validator is the same either way, and a
+    conditional request from such a client is answered 304 all the same."""
+    from starlette.middleware.gzip import GZipMiddleware
+
+    http, users, history, factory = env
+    url, ann, _ = await _drawing_url(users, history)
+    app = FastAPI()
+    app.add_middleware(GZipMiddleware, minimum_size=1)
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_profile_router(users, history))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as gz:
+        await sign_in_as(gz, factory, ann.id)
+        plain = await gz.get(url, headers={"Accept-Encoding": "identity"})
+        gzipped = await gz.get(url, headers={"Accept-Encoding": "gzip"})
+        assert plain.headers.get("content-encoding") is None
+        assert gzipped.headers.get("content-encoding") == "gzip"
+        assert gzipped.content == plain.content == _skch(), "httpx inflates it; the bytes are the drawing"
+        assert plain.headers["etag"] == gzipped.headers["etag"]
+        revalidated = await gz.get(url, headers={"Accept-Encoding": "gzip", "If-None-Match": gzipped.headers["etag"]})
+        assert revalidated.status_code == 304 and revalidated.content == b""
