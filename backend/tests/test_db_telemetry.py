@@ -134,3 +134,57 @@ def test_listeners_ignore_a_context_that_was_never_timed():
     listeners.after(None, None, "SELECT 1", None, context, False)
     assert store.db_queries.total() == 1
     assert store.db_query_errors.total() == 1
+
+
+async def test_the_finished_game_queue_counts_live_rows_and_failed_ones_apart():
+    """Pending and processing rows are the backlog and set its age; a failed
+    row is counted on its own and never makes the backlog look old (#541)."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import FinishedGameEnvelope, generate_uuid
+    from app.services.queue_depths import QueueDepths
+
+    factory, engine = await create_test_db()
+    now = datetime.now(timezone.utc)
+
+    def row(*, state: str, age_seconds: float, **extra) -> FinishedGameEnvelope:
+        return FinishedGameEnvelope(
+            game_id=generate_uuid(),
+            envelope_version=1,
+            payload=None if state == "failed" else b"x",
+            byte_size=1,
+            checksum_sha256="0" * 64,
+            state=state,
+            next_attempt_at=now,
+            created_at=now - timedelta(seconds=age_seconds),
+            **extra,
+        )
+
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        row(state="pending", age_seconds=20),
+                        row(
+                            state="processing",
+                            age_seconds=90,
+                            claimed_at=now,
+                            claim_token=generate_uuid(),
+                        ),
+                        row(
+                            state="failed",
+                            age_seconds=7 * 86400,
+                            failure_code="conflict",
+                            failed_at=now,
+                        ),
+                    ]
+                )
+        snapshot = await QueueDepths(factory, cache_seconds=0.0).read()
+    finally:
+        await engine.dispose()
+
+    assert snapshot.finished_games.pending == 2
+    assert snapshot.finished_games.failed == 1
+    assert 89 <= snapshot.finished_games.oldest_seconds <= 120
+    assert snapshot.finished_games.as_json()["failed"] == 1

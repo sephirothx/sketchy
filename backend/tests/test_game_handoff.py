@@ -281,7 +281,7 @@ async def test_a_crash_between_the_two_parts_resumes_only_what_is_missing(env):
     worker = worker_for(store, history, dying_prompts, clock=clock)
     await worker.stage(FinishedGameEnvelope(history_for(game_id, ann, bob), usage_for(game_id), ("rev-1",)))
 
-    assert (await worker.replay_one())[0] is ReplayOutcome.RETRIED
+    assert (await worker.replay_one()).outcome is ReplayOutcome.RETRIED
     [row] = await rows(session_factory)
     assert (row.state, row.history_state, row.usage_state) == ("pending", "done", "pending")
 
@@ -296,7 +296,7 @@ async def test_a_crash_between_the_two_parts_resumes_only_what_is_missing(env):
     history.save_game = counting_save  # type: ignore[method-assign]
     dying_prompts.raise_with = None
     clock.advance(RETRY_BACKOFF_SECONDS[0])
-    assert (await worker.replay_one())[0] is ReplayOutcome.RECORDED
+    assert (await worker.replay_one()).outcome is ReplayOutcome.RECORDED
     assert saves == 0, "the history half is not written twice"
     assert len(dying_prompts.batches) == 1
     assert await rows(session_factory) == []
@@ -324,9 +324,9 @@ async def test_a_commit_whose_outcome_was_never_learned_is_simply_tried_again(en
         return result
 
     history.save_game = committed_but_unacknowledged  # type: ignore[method-assign]
-    assert (await worker.replay_one())[0] is ReplayOutcome.RETRIED
+    assert (await worker.replay_one()).outcome is ReplayOutcome.RETRIED
     clock.advance(RETRY_BACKOFF_SECONDS[0])
-    assert (await worker.replay_one())[0] is ReplayOutcome.RECORDED
+    assert (await worker.replay_one()).outcome is ReplayOutcome.RECORDED
     async with session_factory() as session:
         assert len((await session.scalars(select(GameRecord))).all()) == 1
     assert await rows(session_factory) == []
@@ -346,15 +346,15 @@ async def test_transient_failures_back_off_on_the_schedule_and_then_give_up(env)
 
     history.save_game = refusing  # type: ignore[method-assign]
     for attempt, wait in enumerate(RETRY_BACKOFF_SECONDS, start=1):
-        assert (await worker.replay_one())[0] is ReplayOutcome.RETRIED
+        assert (await worker.replay_one()).outcome is ReplayOutcome.RETRIED
         [row] = await rows(session_factory)
         assert (row.state, row.attempts) == ("pending", attempt)
         assert row.next_attempt_at == clock.now + timedelta(seconds=wait)
         assert await worker.replay_one() is None, "not due before its wait"
         clock.advance(wait)
 
-    outcome, code = await worker.replay_one()
-    assert (outcome, code) == (ReplayOutcome.FAILED, "exhausted")
+    outcome, code, history_recorded = await worker.replay_one()
+    assert (outcome, code, history_recorded) == (ReplayOutcome.FAILED, "exhausted", False)
     [row] = await rows(session_factory)
     assert (row.state, row.attempts, row.failure_code) == ("failed", MAX_ATTEMPTS, "exhausted")
     assert row.payload is None and row.failed_at == clock.now
@@ -373,9 +373,9 @@ async def test_a_conflict_with_what_history_already_holds_fails_on_first_sight(e
     other = history_for(game_id, ann, bob, drawing=_frame(1))
     await history.save_game(other.record, other.participants, other.turns, other.score_events, other.drawings, other.reactions)
 
-    outcome, code = await worker.replay_one()
+    outcome, code, history_recorded = await worker.replay_one()
 
-    assert (outcome, code) == (ReplayOutcome.FAILED, "conflict")
+    assert (outcome, code, history_recorded) == (ReplayOutcome.FAILED, "conflict", False)
     [row] = await rows(session_factory)
     assert (row.state, row.attempts, row.payload) == ("failed", 1, None)
 
@@ -385,12 +385,15 @@ async def test_a_usage_conflict_fails_the_envelope_but_leaves_the_history_writte
     ann, bob = await two_players(users)
     game_id = str(generate_uuid())
     prompts = RecordingPrompts(raise_with=PromptUsageConflictError("different facts"))
-    worker = worker_for(store, history, prompts)
+    outcomes: list[tuple[str, str]] = []
+    worker = worker_for(store, history, prompts, on_outcome=lambda g, s: outcomes.append((g, s)))
     await worker.stage(FinishedGameEnvelope(history_for(game_id, ann, bob), usage_for(game_id), ("rev-1",)))
 
-    outcome, code = await worker.replay_one()
+    outcome, code, history_recorded = await worker.replay_one()
 
-    assert (outcome, code) == (ReplayOutcome.FAILED, "conflict")
+    assert (outcome, code, history_recorded) == (ReplayOutcome.FAILED, "conflict", True)
+    # The room is told the game is recorded - it is - not that it failed.
+    assert outcomes == [(game_id, "recorded")]
     [row] = await rows(session_factory)
     assert (row.history_state, row.usage_state) == ("done", "pending")
     assert [g.id for g in await history.get_user_games(ann, requesting_user_id=ann)] == [game_id]
@@ -477,7 +480,7 @@ async def test_a_replay_that_hangs_is_bounded_and_retried(env, monkeypatch):
 
     history.save_game = hanging  # type: ignore[method-assign]
     monkeypatch.setattr(handoff_module, "REPLAY_TIMEOUT_SECONDS", 0.05)
-    assert (await worker.replay_one())[0] is ReplayOutcome.RETRIED
+    assert (await worker.replay_one()).outcome is ReplayOutcome.RETRIED
 
 
 # --- housekeeping ----------------------------------------------------------------

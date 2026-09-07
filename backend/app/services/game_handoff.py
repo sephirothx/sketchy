@@ -55,6 +55,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
+from typing import NamedTuple
 from uuid import UUID
 
 from sqlalchemy import delete, or_, select, update
@@ -745,6 +746,16 @@ class _Transient(Exception):
     """A failure the next attempt may not see."""
 
 
+class ReplayResult(NamedTuple):
+    outcome: ReplayOutcome
+    # The failure code, for a FAILED outcome.
+    code: str | None
+    # Whether the history half is in the database - written now or by an
+    # earlier attempt. A room's recap opens on this, not on the envelope:
+    # a usage batch that fails afterwards loses the counters, not the game.
+    history_recorded: bool
+
+
 async def replay_claim(
     store: EnvelopeStore,
     claim: ClaimedEnvelope,
@@ -753,28 +764,44 @@ async def replay_claim(
     prompt_list_repo: PromptListRepository | None,
     now: datetime,
     write_timeout: float | None = None,
-) -> tuple[ReplayOutcome, str | None]:
+) -> ReplayResult:
     """Write one claimed envelope's parts into history. Never raises on the
-    row's account: every failure ends in a released, failed or lost claim.
-    Returns the outcome and, for a failure, its code."""
+    row's account: every failure ends in a released, failed or lost claim."""
 
     # Read at call time, so a test can shorten it.
     if write_timeout is None:
         write_timeout = REPLAY_TIMEOUT_SECONDS
 
-    async def _fail(code: HandoffFailureCode, error: str) -> tuple[ReplayOutcome, str]:
-        logger.error("finished game %s will not be recorded (%s): %s", claim.game_id, code, error)
+    history_state = claim.history_state
+    usage_state = claim.usage_state
+
+    def history_recorded() -> bool:
+        return history_state == HandoffPartState.DONE.value
+
+    async def _fail(code: HandoffFailureCode, error: str) -> ReplayResult:
+        # What was lost: the game, or only its prompt-usage counters. The
+        # kinds are the ones #482 introduced for the two writes, so the
+        # page that alerts on a lost *game* is not paged for lost counters.
+        kind = "prompt_usage" if history_recorded() else "replay"
+        logger.error(
+            "finished game %s: %s will not be recorded (%s): %s",
+            claim.game_id,
+            "prompt usage" if history_recorded() else "history",
+            code,
+            error,
+        )
         if not await store.fail(claim, code=code.value, error=error, now=now):
-            return ReplayOutcome.LOST_CLAIM, None
-        # One lost game is one observation, whichever stage lost it (#482):
-        # the same event the staging path records, under kind `replay`.
+            return ReplayResult(ReplayOutcome.LOST_CLAIM, None, history_recorded())
         metrics.record(
             RuntimeEventType.HISTORY_WRITE_ABANDONED,
             value=claim.attempts,
-            details={"kind": "replay", "reason": code.value, "game_id": claim.game_id},
+            details={"kind": kind, "reason": code.value, "game_id": claim.game_id},
         )
-        telemetry.history_write_abandoned("replay", code.value)
-        return ReplayOutcome.FAILED, code.value
+        telemetry.history_write_abandoned(kind, code.value)
+        return ReplayResult(ReplayOutcome.FAILED, code.value, history_recorded())
+
+    def _lost() -> ReplayResult:
+        return ReplayResult(ReplayOutcome.LOST_CLAIM, None, history_recorded())
 
     if envelope_checksum(claim.payload) != claim.checksum:
         return await _fail(HandoffFailureCode.UNREADABLE, "stored bytes fail their checksum")
@@ -783,8 +810,6 @@ async def replay_claim(
     except EnvelopeUnreadable as error:
         return await _fail(HandoffFailureCode.UNREADABLE, str(error))
 
-    history_state = claim.history_state
-    usage_state = claim.usage_state
     try:
         if history_state == HandoffPartState.PENDING.value:
             history = envelope.history
@@ -805,7 +830,7 @@ async def replay_claim(
             except (asyncio.TimeoutError, Exception) as error:
                 raise _Transient(f"history: {error!r}") from error
             if not await store.mark_part(claim, "history", HandoffPartState.DONE.value):
-                return ReplayOutcome.LOST_CLAIM, None
+                return _lost()
             history_state = HandoffPartState.DONE.value
 
         if usage_state == HandoffPartState.PENDING.value:
@@ -828,7 +853,7 @@ async def replay_claim(
                     raise _Transient(f"usage: {error!r}") from error
                 state = HandoffPartState.DONE.value
             if not await store.mark_part(claim, "usage", state):
-                return ReplayOutcome.LOST_CLAIM, None
+                return _lost()
     except _Transient as error:
         if claim.attempts >= MAX_ATTEMPTS:
             return await _fail(HandoffFailureCode.EXHAUSTED, str(error))
@@ -842,12 +867,12 @@ async def replay_claim(
             wait,
         )
         if not await store.release(claim, next_attempt_at=now + timedelta(seconds=wait)):
-            return ReplayOutcome.LOST_CLAIM, None
-        return ReplayOutcome.RETRIED, None
+            return _lost()
+        return ReplayResult(ReplayOutcome.RETRIED, None, history_recorded())
 
     if not await store.complete(claim):
-        return ReplayOutcome.LOST_CLAIM, None
-    return ReplayOutcome.RECORDED, None
+        return _lost()
+    return ReplayResult(ReplayOutcome.RECORDED, None, True)
 
 
 @dataclass
@@ -927,14 +952,14 @@ class FinishedGameHandoffWorker:
         self.wake()
         return outcome
 
-    async def replay_one(self) -> tuple[ReplayOutcome, str | None] | None:
+    async def replay_one(self) -> ReplayResult | None:
         """Claim and replay the next due envelope; None when nothing is due."""
         now = self._clock()
         claim = await self._store.claim_next(now=now, stale_after=STALE_CLAIM_AFTER)
         if claim is None:
             return None
         try:
-            outcome, code = await replay_claim(
+            result = await replay_claim(
                 self._store,
                 claim,
                 game_history_repo=self._game_history_repo,
@@ -949,13 +974,18 @@ class FinishedGameHandoffWorker:
             with contextlib.suppress(Exception):
                 await self._store.release(claim, next_attempt_at=now)
             raise
+        outcome, code, history_recorded = result
         telemetry.history_replay(outcome.value if code is None else code)
-        if self._on_outcome is not None and outcome in (
-            ReplayOutcome.RECORDED,
-            ReplayOutcome.FAILED,
-        ):
-            self._on_outcome(claim.game_id, outcome.value)
-        return outcome, code
+        if self._on_outcome is not None:
+            # The room's recap opens on the history, not on the envelope: a
+            # game whose history is in and whose usage is still owed, or was
+            # given up on, is a recorded game. Only a game whose history
+            # never landed is told "failed".
+            if history_recorded:
+                self._on_outcome(claim.game_id, "recorded")
+            elif outcome is ReplayOutcome.FAILED:
+                self._on_outcome(claim.game_id, "failed")
+        return result
 
     async def drain(self, *, limit: int | None = None) -> ReplayReport:
         """Replay every due envelope, one at a time, until a claim finds nothing."""
@@ -964,7 +994,7 @@ class FinishedGameHandoffWorker:
             result = await self.replay_one()
             if result is None:
                 break
-            outcome, _ = result
+            outcome = result.outcome
             if outcome is ReplayOutcome.RECORDED:
                 report.recorded += 1
             elif outcome is ReplayOutcome.RETRIED:

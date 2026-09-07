@@ -904,7 +904,9 @@ idempotent by content (R-HIST-02), so a commit whose acknowledgement was lost is
 tried again. A transient failure hands the row back with backoff — 1 s, 5 s, 30 s,
 2 min, 10 min, 30 min, 60 min, eight attempts in all — and then fails it as `exhausted`;
 a conflict (the database already holds this game or this batch with different content)
-fails on first sight; an envelope this build cannot read fails as `unreadable`. A claim
+fails on first sight; an envelope this build cannot read fails as `unreadable`. A failure
+after the history half is written loses only the usage counters and is counted under
+kind `prompt_usage`; the room's recap opens the moment the history is in. A claim
 older than 15 minutes belongs to a process that died and is taken over with a new
 token; a planned shutdown hands a claim back at once. Failed rows keep their metadata
 **30 days** for the operations page (`sketchy_finished_games_failed`) and are purged by

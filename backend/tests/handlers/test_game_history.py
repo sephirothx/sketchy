@@ -630,8 +630,10 @@ async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
         await play_to_completion(ctx, room, players)
 
     assert words.calls == [], "the hung writes never landed"
-    # The history half of the envelope is done; only the usage is owed.
+    # The history half of the envelope is done; only the usage is owed - and
+    # the recap is already open, because the game is in history.
     assert len(history.saved) == 1
+    assert room.last_game_history == "recorded"
     [row] = staged_rows(ctx).values()
     assert (row.history_state, row.usage_state, row.state) == ("done", "pending", "pending")
     # The room was still told the game ended, with the real standings rather
@@ -876,10 +878,13 @@ async def test_a_usage_write_that_conflicts_is_given_up_without_touching_the_his
     assert len(history.saved) == 1
     [row] = staged_rows(ctx).values()
     assert (row.state, row.failure_code, row.history_state) == ("failed", "conflict", "done")
+    # The counters were lost, not the game: counted under their own kind,
+    # and the room's recap is open because the history is there.
     assert [lost_write(event) for event in abandoned_writes()] == [
-        {"kind": "replay", "reason": "conflict"}
+        {"kind": "prompt_usage", "reason": "conflict"}
     ]
-    assert signals.history_writes_abandoned.get(("replay", "conflict")) == 1
+    assert signals.history_writes_abandoned.get(("prompt_usage", "conflict")) == 1
+    assert room.last_game_history == "recorded"
 
 
 async def test_a_write_that_lands_is_not_counted_as_lost(signals):
