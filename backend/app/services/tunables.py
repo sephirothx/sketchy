@@ -326,13 +326,14 @@ def client_tunables(config: ClientConfig) -> list[Tunable]:
     return [
         _number(
             config, "flush_interval_ms",
-            name="client.flush_interval_ms", default=40,
+            name="client.flush_interval_ms", default=80,
             minimum=10, maximum=200, unit="ms", audience_=CLIENT,
             description=(
                 "How long the drawer's queued points wait before going out as "
-                "one frame. Bandwidth against stroke smoothness: the drawer "
-                "never feels it, but a viewer draws each batch as one "
-                "polyline, so a fast curve arrives faceted."
+                "one frame. Bandwidth against viewer lag: the drawer never "
+                "feels it, and a viewer plays each batch out smoothly over "
+                "the interval that follows, so it sees ink this far behind "
+                "the drawer's hand."
             ),
         ),
     ]

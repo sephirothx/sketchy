@@ -31,6 +31,7 @@ SHAPE_TAG = 3
 FILL_TAG = 4
 CLEAR_TAG = 5
 PATH_POINTS_DELTA_TAG = 6
+PATH_POINTS_RELATIVE_TAG = 7
 
 _HEADER_VERSION_SHIFT = 4
 _HEADER_TAG_MASK = 0x0F
@@ -59,6 +60,21 @@ _DELTA = struct.Struct("<bb")
 # The first point of a delta frame stays absolute so each frame decodes
 # independently: a frame arriving late, out of order, or not at all cannot
 # corrupt the points in any other.
+#
+# PATH_POINTS_RELATIVE_TAG (#559) goes one step further: *every* point is a
+# signed-byte offset, the first from the last point of the open path - the
+# `draw_start` point, or the last point of the previous frame. That drops the
+# absolute pair the delta frame spends on its first point, which is most of
+# a one-point frame: with the client sending one thinned sample per flush on
+# a straight stroke (#560), a frame is 3 bytes instead of 5. The price is
+# that the frame does not decode on its own: `decode_live_drawing` returns
+# the offsets, and `resolve_relative_points` needs the predecessor, which
+# both the server (the open path in `canvas_session`) and a viewer (its own
+# history) already hold. A relative frame that arrives with no open path is
+# dropped, the way an absolute `draw_move` with no open path already is; and
+# a frame the server *dropped* (throttled) closes the path for everyone and
+# tells the drawer, so a later relative frame can never be resolved against a
+# predecessor the server never recorded (`handlers/drawing.py`).
 #
 # -128 is not a delta but the escape marker, followed by an absolute pair. It
 # is what keeps an arbitrarily fast stroke representable rather than refused.
@@ -144,8 +160,35 @@ def _is_delta(delta_x: int, delta_y: int) -> bool:
     )
 
 
-def _encode_points(packed: list[tuple[int, int]]) -> bytes:
-    """Pack path points whichever way is smaller for this particular frame."""
+def _encode_records(tag: int, packed: list[tuple[int, int]], previous: tuple[int, int]) -> bytes:
+    """Offset records from `previous`, escaping to absolute where one is too far."""
+    frame = bytearray((_header(tag),))
+    previous_x, previous_y = previous
+    for x, y in packed:
+        delta_x = x - previous_x
+        delta_y = y - previous_y
+        if _is_delta(delta_x, delta_y):
+            frame.extend(_DELTA.pack(delta_x, delta_y))
+        else:
+            frame.append(_DELTA_ESCAPE & 0xFF)
+            frame.extend(_POINT.pack(x, y))
+        previous_x, previous_y = x, y
+    return bytes(frame)
+
+
+def _encode_points(
+    packed: list[tuple[int, int]], previous: tuple[int, int] | None = None
+) -> bytes:
+    """Pack path points whichever way is smaller for this particular frame.
+
+    With the open path's last point in hand, the relative form is taken
+    whenever its first record fits a byte: it is then the smallest of the
+    three by construction (no absolute first point). A first point too far
+    from the predecessor makes it the largest, so the frame falls back to
+    the self-contained forms.
+    """
+    if previous is not None and _is_delta(packed[0][0] - previous[0], packed[0][1] - previous[1]):
+        return _encode_records(PATH_POINTS_RELATIVE_TAG, packed, previous)
     absolute_size = 1 + len(packed) * _POINT.size
     delta_size = 1 + _POINT.size + sum(
         _DELTA.size
@@ -159,16 +202,8 @@ def _encode_points(packed: list[tuple[int, int]]) -> bytes:
             frame.extend(_POINT.pack(x, y))
         return bytes(frame)
 
-    frame = bytearray((_header(PATH_POINTS_DELTA_TAG),))
-    frame.extend(_POINT.pack(*packed[0]))
-    for (previous_x, previous_y), (x, y) in pairwise(packed):
-        delta_x = x - previous_x
-        delta_y = y - previous_y
-        if _is_delta(delta_x, delta_y):
-            frame.extend(_DELTA.pack(delta_x, delta_y))
-        else:
-            frame.append(_DELTA_ESCAPE & 0xFF)
-            frame.extend(_POINT.pack(x, y))
+    frame = bytearray(_encode_records(PATH_POINTS_DELTA_TAG, packed[1:], packed[0]))
+    frame[1:1] = _POINT.pack(*packed[0])
     return bytes(frame)
 
 
@@ -200,7 +235,18 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
                     _pack_coordinate(point.get("y"), CANVAS_HEIGHT),
                 )
             )
-        return _encode_points(packed)
+        # The open path's last point, when the caller has it: unlocks the
+        # relative form. Optional, so a frame can always be built alone.
+        previous = payload.get("previous")
+        packed_previous = None
+        if previous is not None:
+            if not isinstance(previous, dict):
+                raise ValueError("invalid path point")
+            packed_previous = (
+                _pack_coordinate(previous.get("x"), CANVAS_WIDTH),
+                _pack_coordinate(previous.get("y"), CANVAS_HEIGHT),
+            )
+        return _encode_points(packed, packed_previous)
     if event == "draw_end":
         return _header(PATH_END_TAG)
     if event == "draw_shape":
@@ -365,6 +411,31 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
             for point_x, point_y in packed
         ]
         return LiveDrawingPacket("draw_move", {"points": points})
+    if tag == PATH_POINTS_RELATIVE_TAG:
+        # Walked like the delta frame, but nothing here is a point yet: the
+        # records are offsets from a predecessor this frame does not carry.
+        # `resolve_relative_points` turns them into points once the caller
+        # has looked the predecessor up.
+        if len(frame) < 1 + _DELTA.size:
+            raise ValueError("invalid path-points frame size")
+        offset = 1
+        records: list[tuple[int, int] | tuple[None, int, int]] = []
+        while offset < len(frame):
+            if frame[offset] == (_DELTA_ESCAPE & 0xFF):
+                offset += 1
+                if offset + _POINT.size > len(frame):
+                    raise ValueError("invalid path-points frame size")
+                x, y = _POINT.unpack_from(frame, offset)
+                offset += _POINT.size
+                records.append((None, x, y))
+            else:
+                if offset + _DELTA.size > len(frame):
+                    raise ValueError("invalid path-points frame size")
+                records.append(_DELTA.unpack_from(frame, offset))
+                offset += _DELTA.size
+            if len(records) > MAX_POINTS_PER_FRAME:
+                raise ValueError("invalid path point count")
+        return LiveDrawingPacket("draw_move", {"relative": records})
     if tag == PATH_END_TAG:
         if len(frame) != 1:
             raise ValueError("invalid path-end frame size")
@@ -423,3 +494,46 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
             raise ValueError("invalid clear frame size")
         return LiveDrawingPacket("clear_canvas", {})
     raise ValueError("unknown live drawing tag")
+
+
+def is_relative(packet: LiveDrawingPacket) -> bool:
+    """Whether this `draw_move` still needs its predecessor to become points."""
+    return packet.event == "draw_move" and "relative" in packet.payload
+
+
+def resolve_relative_points(
+    packet: LiveDrawingPacket, previous: tuple[float, float]
+) -> LiveDrawingPacket:
+    """The points a relative frame stands for, given the open path's last point.
+
+    `previous` is in normalized coordinates, as the history keeps it. Every
+    resolved point is range-checked the way the delta decoder checks its
+    running point, so a frame cannot walk a path off the packed range.
+    """
+    x = _pack_coordinate(previous[0], CANVAS_WIDTH)
+    y = _pack_coordinate(previous[1], CANVAS_HEIGHT)
+    packed = []
+    for record in packet.payload["relative"]:
+        if record[0] is None:
+            x, y = record[1], record[2]
+        else:
+            x += record[0]
+            y += record[1]
+            if not (
+                MIN_PACKED_COORDINATE <= x <= MAX_PACKED_COORDINATE
+                and MIN_PACKED_COORDINATE <= y <= MAX_PACKED_COORDINATE
+            ):
+                raise ValueError("path point is outside packed range")
+        packed.append((x, y))
+    return LiveDrawingPacket(
+        "draw_move",
+        {
+            "points": [
+                {
+                    "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
+                    "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
+                }
+                for point_x, point_y in packed
+            ]
+        },
+    )

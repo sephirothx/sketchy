@@ -105,3 +105,69 @@ def test_encoder_rejects_invalid_values():
             "draw_fill",
             {"x": 1, "y": 0.5, "color": "#000000"},
         )
+
+
+def test_a_relative_frame_is_offsets_from_the_open_path_and_three_bytes_a_point():
+    """#559: with the predecessor in hand the frame carries no absolute point at
+    all, so the one-point frame a thinned straight stroke sends every flush
+    is 3 bytes rather than 5. It does not decode on its own; the resolver
+    turns it into points once the caller has looked the predecessor up."""
+    from app.live_drawing import is_relative, resolve_relative_points
+
+    previous = {"x": 0.5, "y": 0.5}
+    one = encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": previous})
+    assert len(one) == 3
+    assert one[0] & 0x0F == 7
+    packet = decode_live_drawing(one)
+    assert is_relative(packet) and "points" not in packet.payload
+    resolved = resolve_relative_points(packet, (0.5, 0.5))
+    assert resolved.payload == {"points": [{"x": 0.5, "y": 0.51}]}
+
+    # Several points: still two bytes each, chained from one another.
+    many = encode_live_drawing(
+        "draw_move",
+        {"points": [{"x": 0.5, "y": 0.51}, {"x": 0.51, "y": 0.52}, {"x": 0.52, "y": 0.52}], "previous": previous},
+    )
+    assert len(many) == 1 + 3 * 2
+    assert resolve_relative_points(decode_live_drawing(many), (0.5, 0.5)).payload["points"] == [
+        {"x": 0.5, "y": 0.51}, {"x": 0.51, "y": 0.52}, {"x": 0.52, "y": 0.52},
+    ]
+
+    # A first point too far from the predecessor would need an escape and
+    # make the relative frame the largest form, so it is not taken.
+    far = encode_live_drawing("draw_move", {"points": [{"x": 0.9, "y": 0.9}], "previous": previous})
+    assert far[0] & 0x0F != 7 and len(far) == 5
+    # A later jump inside a relative frame escapes to an absolute pair.
+    jump = encode_live_drawing(
+        "draw_move", {"points": [{"x": 0.5, "y": 0.51}, {"x": 0.9, "y": 0.9}], "previous": previous},
+    )
+    assert jump[0] & 0x0F == 7 and len(jump) == 1 + 2 + 5
+    assert resolve_relative_points(decode_live_drawing(jump), (0.5, 0.5)).payload["points"][1] == {"x": 0.9, "y": 0.9}
+
+    # Without the predecessor there are no points; the same frame is the
+    # same offsets whatever the predecessor turns out to be.
+    assert resolve_relative_points(packet, (0.25, 0.25)).payload["points"] == [{"x": 0.25, "y": 0.26}]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        bytes((0x17,)),  # no records
+        bytes((0x17, 1)),  # half a record
+        bytes((0x17, 0x80, 0, 0)),  # an escape with half a pair
+        bytes((0x17,)) + bytes((1, 1)) * 257,  # too many points
+    ],
+)
+def test_malformed_relative_frames_are_refused(payload):
+    with pytest.raises(ValueError):
+        decode_live_drawing(payload)
+
+
+def test_a_relative_frame_cannot_walk_a_coordinate_out_of_range():
+    from app.live_drawing import resolve_relative_points
+
+    packet = decode_live_drawing(bytes((0x17,)) + bytes((127, 0)) * 256)
+    with pytest.raises(ValueError):
+        # Starting near the right edge of the packed range, 256 steps of 127
+        # leave it.
+        resolve_relative_points(packet, (1.0, 0.5))

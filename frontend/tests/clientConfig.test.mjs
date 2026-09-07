@@ -38,8 +38,8 @@ test("a subscriber is told what is already known", () => {
 test("a subscriber hears about a change", () => {
   const seen = [];
   onClientConfig((config) => seen.push(config.flushIntervalMs));
-  applyClientConfig({ contractVersion: 3, flushIntervalMs: 80 });
-  assert.deepEqual(seen, [40, 80]);
+  applyClientConfig({ contractVersion: 3, flushIntervalMs: 72 });
+  assert.deepEqual(seen, [80, 72]);
 });
 
 test("re-sending the same values tells nobody", () => {
@@ -49,15 +49,15 @@ test("re-sending the same values tells nobody", () => {
   onClientConfig((config) => seen.push(config.flushIntervalMs));
   applyClientConfig({ contractVersion: 3, flushIntervalMs: 40 });
   applyClientConfig({ contractVersion: 3, flushIntervalMs: 40 });
-  assert.deepEqual(seen, [40]);
+  assert.deepEqual(seen, [80, 40]);
 });
 
 test("unsubscribing stops the notices", () => {
   const seen = [];
   const stop = onClientConfig((config) => seen.push(config.flushIntervalMs));
   stop();
-  applyClientConfig({ contractVersion: 3, flushIntervalMs: 80 });
-  assert.deepEqual(seen, [40]);
+  applyClientConfig({ contractVersion: 3, flushIntervalMs: 56 });
+  assert.deepEqual(seen, [80]);
 });
 
 test("a missing field keeps the default rather than becoming undefined", () => {
@@ -119,7 +119,7 @@ test("an unknown contract leaves subscribers undisturbed", () => {
   const seen = [];
   onClientConfig((config) => seen.push(config.flushIntervalMs));
   applyClientConfig({ contractVersion: 99, flushIntervalMs: 20 });
-  assert.deepEqual(seen, [40]);
+  assert.deepEqual(seen, [80]);
 });
 
 test("parsing reports an unknown contract rather than guessing", () => {

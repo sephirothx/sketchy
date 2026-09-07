@@ -820,8 +820,8 @@ Every client command answers to a **per-caller budget** before it is parsed
 through `HandlerContext.on` so that adding a command cannot quietly add an unbounded
 one — `test_command_budgets.py` checks the two lists against each other. The numbers
 follow the client's own cadence rather than the size of the host: the drawer's flush
-timer fires every 40 ms, so drawing is allowed double the 25 frames a second that
-produces, while `request_sync_strokes` — a cheap request with a full canvas re-encode
+timer fires every 80 ms, so drawing is allowed four times the 12.5 frames a second that
+produces (room for the interval being moved back to 40, and for bunching after a stall), while `request_sync_strokes` — a cheap request with a full canvas re-encode
 for an answer — gets one per window, which is a minimum spacing rather than an
 allowance a burst can spend at once. Windows live in memory and are dropped when the
 socket goes.
@@ -1036,10 +1036,14 @@ transaction as the row.
 
 Client-side cadences are shipped rather than compiled, over `client_config` at the
 handshake and again to everyone on a change. That is the half of #446 the issue was
-actually about: the flush interval is the largest lever on drawing bandwidth, the
-number the byte curve points at is not the one that looks right, and the only way to
-judge it is to watch somebody draw while it moves — so the change re-arms the
-drawer's timer mid-stroke rather than waiting for their next turn.
+actually about: the flush interval is the largest lever on drawing bandwidth, and the
+only way to judge it is to watch somebody draw while it moves — so the change re-arms
+the drawer's timer mid-stroke rather than waiting for their next turn. The number the
+byte curve pointed at used to be the wrong one because a viewer painted each batch
+at once; since #559 a viewer plays a batch out over the interval that follows it
+([`lib/strokePlayback.ts`](../frontend/src/lib/strokePlayback.ts)), presentation
+decoupled from the wire while the history and commits stay synchronous, and the
+default is 80 ms.
 
 Deliberately **not** tunable: abuse backstops (the authentication and submission
 limits, the canvas and replay ceilings), anything that can change a score, and any
@@ -1527,7 +1531,7 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomsStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useSettingsRoute.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `suspension.ts`, `toast.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts` |
 | `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomSetupControls.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and

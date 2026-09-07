@@ -1065,3 +1065,104 @@ async def test_a_sync_request_is_acknowledged_and_refused_with_a_retry_when_ther
     assert await sync("player-sid", [4]) == {"ok": True}
     assert sio.emit.await_args.args[0] == "sync_strokes"
     assert sio.emit.await_args.args[1][-1] == 4
+
+
+def _relative_room():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    drawer.sid = "drawer-sid"
+    room_manager.add_player(room, "Guesser")
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
+    sio.emit = AsyncMock()
+    return ctx, sio, room
+
+
+def _emitted(sio, event):
+    return [call for call in sio.emit.await_args_list if call.args and call.args[0] == event]
+
+
+@pytest.mark.asyncio
+async def test_relative_frames_extend_the_open_path_and_are_rebroadcast_verbatim():
+    """#559: the server resolves the offsets against the path it holds, and
+    the room is sent the drawer's bytes, not the server's idea of them."""
+    ctx, sio, room = _relative_room()
+    draw = sio.handlers["/"]["draw"]
+    await draw("drawer-sid", encode_live_drawing("draw_start", {"x": 0.5, "y": 0.5, "color": "#112233", "width": 5}), canvas_action(room.game, 1))
+    first = encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}})
+    second = encode_live_drawing("draw_move", {"points": [{"x": 0.51, "y": 0.52}, {"x": 0.52, "y": 0.52}], "previous": {"x": 0.5, "y": 0.51}})
+    assert first[0] & 0x0F == 7 and second[0] & 0x0F == 7
+    await draw("drawer-sid", first)
+    await draw("drawer-sid", second)
+    assert room.game.canvas.active_path_last_point() == (0.52, 0.52)
+    await draw("drawer-sid", encode_live_drawing("draw_end"))
+
+    [path] = list(room.game.canvas.history)
+    assert [(round(x, 3), round(y, 3)) for x, y in path.points] == [(0.5, 0.5), (0.5, 0.51), (0.51, 0.52), (0.52, 0.52)]
+    rebroadcast = [call.args[1] for call in _emitted(sio, "draw")]
+    assert rebroadcast[1] == first and rebroadcast[2] == second
+    assert _emitted(sio, "canvas_stale") == []
+
+
+@pytest.mark.asyncio
+async def test_a_relative_frame_with_no_open_path_is_dropped_like_an_absolute_one():
+    ctx, sio, room = _relative_room()
+    draw = sio.handlers["/"]["draw"]
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}}))
+    assert len(room.game.canvas.history) == 0
+    assert _emitted(sio, "draw") == []
+
+
+@pytest.mark.asyncio
+async def test_a_dropped_frame_closes_the_path_for_everyone_and_tells_the_drawer():
+    """#559: a `draw` frame throttled at the door is dropped in silence, and a
+    later relative frame would otherwise be resolved against a point the
+    server never recorded. So the next frame closes the torn path where the
+    server's copy ends: the room gets a `draw_end` with the commit, the
+    drawer a recovery notice, and the rest of that path is discarded."""
+    ctx, sio, room = _relative_room()
+    draw = sio.handlers["/"]["draw"]
+    await draw("drawer-sid", encode_live_drawing("draw_start", {"x": 0.5, "y": 0.5, "color": "#112233", "width": 5}), canvas_action(room.game, 1))
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}}))
+    # The door dropped the next frame (the one reaching 0.52); nobody saw it.
+    ctx.dropped_draw_frames.add("drawer-sid")
+    sio.emit.reset_mock()
+
+    late = encode_live_drawing("draw_move", {"points": [{"x": 0.52, "y": 0.53}], "previous": {"x": 0.5, "y": 0.52}})
+    await draw("drawer-sid", late)
+    [path] = list(room.game.canvas.history)
+    assert [(round(x, 3), round(y, 3)) for x, y in path.points] == [(0.5, 0.5), (0.5, 0.51)]
+    assert room.game.canvas.active_draw_sequence is None
+    assert room.game.canvas.sequence == 1
+    [(end_call,)] = [call.args[1:] for call in _emitted(sio, "draw")]
+    assert end_call[0] == encode_live_drawing("draw_end") and end_call[1] is not None, "the room got the end and its commit"
+    assert _emitted(sio, "canvas_commit"), "the drawer got its commit"
+    [(notice,)] = [call.args[1:] for call in _emitted(sio, "canvas_stale")]
+    assert notice[2] == "dropped_frame"
+    assert "drawer-sid" not in ctx.dropped_draw_frames
+
+    # The rest of the torn path trickles in and changes nothing; the next
+    # action opens as usual.
+    sio.emit.reset_mock()
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.6, "y": 0.6}]}))
+    await draw("drawer-sid", encode_live_drawing("draw_end"))
+    assert len(room.game.canvas.history) == 1 and _emitted(sio, "draw") == []
+    await draw("drawer-sid", encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#112233", "width": 5}), canvas_action(room.game, 2))
+    assert len(room.game.canvas.history) == 2
+    assert room.game.canvas.active_draw_sequence == 2
+
+
+@pytest.mark.asyncio
+async def test_a_throttled_draw_frame_is_remembered_at_the_door():
+    ctx, sio, room = _relative_room()
+    room.game.canvas  # the room exists; the door is what is under test
+    draw = sio.handlers["/"]["draw"]
+    budget = ctx.command_budgets.for_command("draw")
+    for _ in range(budget.limit + 1):
+        await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.6, "y": 0.6}]}))
+    assert "drawer-sid" in ctx.dropped_draw_frames

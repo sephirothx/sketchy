@@ -13,6 +13,7 @@ from app.handlers.payloads import (
     parse_undo_payload,
 )
 from app.handlers.refusals import ErrorCode, refuse
+from app.live_drawing import encode_live_drawing, is_relative, resolve_relative_points
 
 async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
@@ -32,6 +33,17 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     room, player = current
     if player.id != room.game.current_drawer or room.game.phase != Phase.DRAWING:
         return
+    if sid in ctx.dropped_draw_frames:
+        # A frame of this socket's was dropped at the door, and nobody was
+        # told: the drawer painted it, the server never recorded it. Whatever
+        # path was open is closed here for everyone, at the last point the
+        # server has, and the drawer is told to resync onto that (#559). The
+        # rest of the torn path is discarded as it trickles in; a frame that
+        # opens a new action is taken as usual.
+        ctx.dropped_draw_frames.discard(sid)
+        await _close_torn_path(ctx, room, sid)
+        if packet.event in {"draw_move", "draw_end"}:
+            return
     if not packet_allowed(
         packet.event, packet.payload, room.allowed_tools, room.color_mode
     ):
@@ -111,6 +123,18 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         room.game.canvas.commit_sequence(sequence)
         await _rebroadcast(ctx, room, sid, payload.wire_data, committed=sequence)
         return
+    if is_relative(packet):
+        # Offsets from the open path's last point (#559). No open path means
+        # nothing to be relative to, which is the silent drop an absolute
+        # `draw_move` with no open path gets from `record_stroke` below.
+        previous = room.game.canvas.active_path_last_point()
+        if previous is None:
+            return
+        try:
+            packet = resolve_relative_points(packet, previous)
+        except ValueError:
+            await ctx.game_flow._emit_canvas_stale(room, sid, "invalid_frame")
+            return
     if not room.game.canvas.record_stroke(packet.event, packet.payload):
         return
     if packet.event == "draw_start":
@@ -131,6 +155,28 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         room.game.canvas.commit_sequence(sequence)
         committed = sequence
     await _rebroadcast(ctx, room, sid, payload.wire_data, committed=committed)
+
+
+async def _close_torn_path(ctx: HandlerContext, room, sid: str) -> None:
+    """End the open path where the server's copy of it ends, and say so.
+
+    The room is sent a `draw_end` carrying the commit, exactly as if the
+    drawer had lifted the pen there; the drawer is sent the commit and a
+    recovery notice, and its own remaining frames of the path are discarded
+    until its `draw_end` arrives. With no path open there is nothing to
+    close, but the drawer is still told: the dropped frame may have been the
+    one that opened a path the drawer went on painting.
+    """
+    canvas = room.game.canvas
+    active_sequence = canvas.active_draw_sequence
+    if active_sequence is not None and canvas.record_stroke("draw_end", {}):
+        canvas.active_draw_sequence = None
+        canvas.commit_sequence(active_sequence)
+        await _rebroadcast(
+            ctx, room, sid, encode_live_drawing("draw_end"), committed=active_sequence
+        )
+    canvas.discarding_draw_sequence = True
+    await ctx.game_flow._emit_canvas_stale(room, sid, "dropped_frame")
 
 
 async def _rebroadcast(

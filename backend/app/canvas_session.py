@@ -71,6 +71,12 @@ class CanvasSession:
     point_count: int = field(default=0, repr=False, compare=False)
     replay_work: int = field(default=0, repr=False, compare=False)
 
+    def active_path_last_point(self) -> tuple[float, float] | None:
+        """Where the open path currently ends, or None when no path is open."""
+        if self.active_path_index is None or self.history.last_is_clear():
+            return None
+        return self.history.last_path_point(self.active_path_index)
+
     def record_stroke(self, event: str, payload: dict) -> bool:
         if self.history.last_is_clear():
             if event == "clear_canvas":

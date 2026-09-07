@@ -26,8 +26,9 @@ import {
   rasterizePolyline,
   renderCanvasActions,
 } from "../lib/canvasRenderer";
-import type { Point } from "../lib/canvasGeometry";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
+import { currentClientConfig } from "../lib/clientConfig";
+import { createStrokePlayback } from "../lib/strokePlayback";
 import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool, StrokePoint } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
@@ -63,8 +64,43 @@ function createProtocolRenderer(
     width: number;
   } = { last: null, color: "#000000", width: 4 };
 
+  // Received points are played out over the flush interval that follows
+  // them rather than painted the moment they land (#559): what is on screen
+  // advances at the animation rate, while the history and the commits behind
+  // it were applied synchronously by the protocol hook before `apply` was
+  // called. Everything that is not a run of points is a barrier in the same
+  // queue, so nothing is painted out of order.
+  const playback = createStrokePlayback({
+    intervalMs: () => currentClientConfig().flushIntervalMs,
+    paint: (points, style) => {
+      const context = contextRef.current;
+      if (context) rasterizePolyline(context, points, style.radius, style.color);
+    },
+  });
+  let frame: number | null = null;
+  const tick = () => {
+    frame = null;
+    if (playback.advance(performance.now())) frame = window.requestAnimationFrame(tick);
+  };
+  const schedule = () => {
+    if (frame === null && playback.pending()) frame = window.requestAnimationFrame(tick);
+  };
+  const stopTicking = () => {
+    if (frame !== null) window.cancelAnimationFrame(frame);
+    frame = null;
+  };
+  // A hidden tab gets no animation frames; drain rather than hold ink
+  // for as long as it is away, so what it shows on return is current.
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") playback.drain();
+    });
+  }
+
   const clear = () => {
     replayGeneration += 1;
+    playback.cancel();
+    stopTicking();
     const canvas = canvasRef.current;
     const context = contextRef.current;
     if (canvas && context) fillWhite(context, canvas.width, canvas.height);
@@ -74,49 +110,68 @@ function createProtocolRenderer(
   const apply = (packet: LiveDrawingPacket) => {
     const context = contextRef.current;
     if (!context) return;
+    const now = performance.now();
     if (packet.event === "draw_start") {
-      remoteState.last = { x: packet.payload.x, y: packet.payload.y };
-      remoteState.color = packet.payload.color;
-      remoteState.width = packet.payload.width;
-      const point = toPixels(remoteState.last);
-      rasterizePolyline(
-        context,
-        [point, point],
-        remoteState.width / 2,
-        hexToRgba(remoteState.color),
-      );
+      const { x, y, color, width } = packet.payload;
+      playback.enqueueBarrier(() => {
+        remoteState.last = { x, y };
+        remoteState.color = color;
+        remoteState.width = width;
+        const point = toPixels(remoteState.last);
+        rasterizePolyline(context, [point, point], width / 2, hexToRgba(color));
+      }, now);
     } else if (packet.event === "draw_move") {
-      if (!remoteState.last || packet.payload.points.length === 0) return;
-      const polyline: Point[] = [toPixels(remoteState.last)];
-      packet.payload.points.forEach((point) => polyline.push(toPixels(point)));
-      rasterizePolyline(
-        context,
-        polyline,
-        remoteState.width / 2,
-        hexToRgba(remoteState.color),
+      // `remoteState.last` is read when the batch is *queued*, not when it
+      // is painted: the start barrier before it in the queue is what set it
+      // - unless it ran already, in which case it is set already. Either
+      // way the polyline joins the previous batch, so it is tracked here.
+      if (packet.payload.points.length === 0) return;
+      const from = remoteState.last ?? packet.payload.points[0];
+      const style = { radius: remoteState.width / 2, color: hexToRgba(remoteState.color) };
+      playback.enqueueSegments(
+        toPixels(from),
+        packet.payload.points.map(toPixels),
+        style,
+        now,
       );
       remoteState.last = packet.payload.points.at(-1)!;
     } else if (packet.event === "draw_end") {
-      remoteState.last = null;
+      playback.enqueueBarrier(() => {
+        remoteState.last = null;
+      }, now);
     } else if (packet.event === "draw_shape") {
       const payload = packet.payload;
-      drawShapeOutlinePixels(
-        context,
-        payload.from,
-        payload.to,
-        payload.shape,
-        payload.color,
-        payload.width,
-      );
+      playback.enqueueBarrier(() => {
+        drawShapeOutlinePixels(
+          context,
+          payload.from,
+          payload.to,
+          payload.shape,
+          payload.color,
+          payload.width,
+        );
+      }, now);
     } else if (packet.event === "draw_fill") {
-      applyFillAction(context, packet.payload);
-    } else {
+      // A fill must see the complete raster before it: a barrier, so every
+      // queued point is painted first.
+      const payload = packet.payload;
+      playback.enqueueBarrier(() => {
+        applyFillAction(context, payload);
+      }, now);
+    } else if (packet.event === "clear_canvas") {
       clear();
     }
+    // `draw_move_relative` never reaches here: the protocol hook resolves it
+    // against the history before it is painted (#559).
+    schedule();
   };
 
   const replay = (actions: DecodedCanvasAction[]) => {
     const currentReplay = ++replayGeneration;
+    // What was queued is inside the history being repainted, or superseded
+    // by it; either way it must not land on top afterwards.
+    playback.cancel();
+    stopTicking();
     if (!scratch) {
       scratch = document.createElement("canvas");
       scratch.width = CANVAS_WIDTH;

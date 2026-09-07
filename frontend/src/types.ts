@@ -376,6 +376,19 @@ export interface StrokeStartPayload {
 
 export interface StrokeMovePayload {
   points: StrokePoint[];
+  /** The open path's last point, when the encoder is given it: unlocks the
+  relative frame (#559). Never on the wire itself. */
+  previous?: StrokePoint;
+}
+
+/** A `draw_move` frame's offsets before its predecessor is known (#559):
+a delta pair, or an absolute pair where the step escaped. */
+export type RelativePointRecord =
+  | { dx: number; dy: number }
+  | { x: number; y: number };
+
+export interface RelativeMovePayload {
+  records: RelativePointRecord[];
 }
 
 /** The chips a host toggles. The eraser rides with the brush - see `drawingRules.ts`. */
