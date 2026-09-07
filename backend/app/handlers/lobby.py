@@ -90,18 +90,24 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         parse_empty_payload(data)
     except PayloadError as error:
         return error.acknowledgement()
-    # Everything that can yield runs *before* the channel is joined and the
-    # baselines are read (#600). The lookups used to sit between the two, and
-    # a room that opened and was flushed during them went out as a delta this
-    # socket discarded for having no baseline yet, followed by the older
-    # baseline; on a quiet server nothing ever repaired the list. From the
-    # join to the answer nothing awaits anything that can yield (`enter_room`
-    # is bookkeeping, and the reply is queued behind it), so the baselines
-    # are at or past every delta this socket can have been sent.
+    # The join comes first, the lookups next, and the baselines are read last,
+    # with nothing that can yield between them and the answer. Each order
+    # has been wrong once. The baselines used to be read before the lookups
+    # (#600): a room that opened and was flushed during that await went out
+    # as a delta the socket discarded for having no baseline yet, followed by
+    # the older baseline, and on a quiet server nothing ever repaired the
+    # list. Then the join came after the lookups, and a line said the moment
+    # the client connected - its first `send_lobby_chat` queued right behind
+    # this `watch_lobby` - found the socket not yet in the channel and was
+    # refused as not watching. Joining first makes a subscription in flight
+    # count as watching; reading the baselines last keeps them at or past
+    # every delta this socket can have been sent. A delta that goes out
+    # during the lookups reaches the socket before its answer, which the
+    # client holds and then drops as older than the baseline.
+    await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
     hidden = await _hidden_authors_for(
         ctx, await _user_of(ctx, sid), ctx.lobby_chat.authors()
     )
-    await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
     feed = ctx.presence_broadcaster
     rooms = feed.rooms_for_watcher()
     # A line said between joining the channel and reading the backlog is in

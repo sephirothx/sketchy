@@ -580,15 +580,19 @@ changes to a list it has not been given. The revisions are separate because the
 feeds move independently: a room filling up must not re-send who is online, and
 somebody signing in must not re-send the rooms.
 
-**The subscription cut is the join.** The handler's lookups (the session, the
-blocked authors) run *before* it joins the channel and reads its baselines, and
-from the join to the answer nothing awaits anything that can yield, so the
-baselines are at or past every delta the socket can have been sent (#600). It
-used to be the other way round: the room list was captured, then the lookups
-awaited, and a room that opened and was flushed during that await went out as a
-delta the client discarded for having no baseline yet, followed by the older
-baseline — and on a quiet server no later delta ever repaired the list. The
-client keeps its own half of the guarantee regardless of that ordering
+**Join first, look up next, read the baselines last.** The handler joins the
+channel, then awaits its lookups (the session, the blocked authors), then reads
+its baselines with nothing that can yield between them and the answer, so the
+baselines are at or past every delta the socket can have been sent (#600). Each
+other order has been wrong once. Reading the room list before the lookups let a
+room that opened during the await go out as a delta the client discarded for
+having no baseline yet, followed by the older baseline, and on a quiet server
+no later delta ever repaired the list. Joining after the lookups made a line
+said the moment the client connected — its first `send_lobby_chat` queued right
+behind `watch_lobby` — find a socket not yet in the channel and be refused as
+not watching. A delta sent during the lookups now precedes the answer, and the
+client holds it and drops it as older than the baseline: it keeps its own half
+of the guarantee regardless of the server's ordering
 ([`lib/lobbyChannel.ts`](../frontend/src/lib/lobbyChannel.ts)): a delta that
 arrives while the acknowledgement is pending is held, bounded, and replayed
 after the baseline if newer than it; past the cap the buffer is emptied and a

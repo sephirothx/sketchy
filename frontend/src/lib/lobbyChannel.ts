@@ -25,10 +25,9 @@ export function resubscribeDelayMs(attempt: number): number {
 
 /** Deltas that arrive before the baseline they apply to (#600).
 
-The server now reads its baselines with nothing yielding between the join and
-the answer, so on the wire a delta cannot precede the baseline it postdates.
-This is the client's half of the same guarantee, kept because it costs a few
-kilobytes and removes the last dependency on the server's ordering: a delta
+The server joins the channel first and reads its baselines last, so a delta
+sent during its lookups arrives before the acknowledgement, and is never newer
+than the baselines in it. This is the client's half of that guarantee: a delta
 that arrives while the acknowledgement is pending is held, and once the
 baseline lands every held delta newer than it is applied, in order. A delta
 at or below the baseline's revision is already inside it and is dropped.
