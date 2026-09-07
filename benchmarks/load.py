@@ -230,6 +230,34 @@ class Seat:
             if sent_at is not None:
                 samples.fanout_ms.append((time.monotonic() - sent_at) * 1000)
 
+        if (
+            self.harness.capture is not None
+            and self.harness.captured_seat is None
+            and self.room.seats
+            and self.room.seats[0] is not self
+        ):
+            # A guest, not the host: a host draws the first turn and would
+            # record its own commits rather than a viewer's stream.
+            # One seat's inbound stream, raw, in order, with a time: what a
+            # viewer's compressor actually sees (#493). Hooked on the handler
+            # the client registered with Engine.IO, which is what real
+            # packets reach (the instance attribute is not, see #669).
+            self.harness.captured_seat = self
+            capture = self.harness.capture
+            started = self.harness.capture_started
+            handler = sio.eio.handlers["message"]
+
+            async def recording(data):
+                capture.write(json.dumps({
+                    "atMs": round((time.monotonic() - started) * 1000, 1),
+                    "seat": self.name,
+                    "text": data if isinstance(data, str) else None,
+                    "binaryBytes": None if isinstance(data, str) else len(data),
+                }) + "\n")
+                await handler(data)
+
+            sio.eio.handlers["message"] = recording
+
         await sio.connect(
             self.harness.base_url,
             headers={"Cookie": f"{COOKIE}={self.token}"},
@@ -495,6 +523,9 @@ class Harness:
         self.rooms: list[RoomRun] = []
         self.watchers: list[Seat] = []
         self.slow_viewers: list[SlowViewer] = []
+        self.capture = args.capture_seat.open("w") if args.capture_seat else None
+        self.capture_started = time.monotonic()
+        self.captured_seat: Seat | None = None
 
     def spawn(self, coroutine) -> None:
         task = asyncio.create_task(coroutine)
@@ -568,6 +599,8 @@ class Harness:
                 await viewer.close()
             await asyncio.sleep(1.0)
             after = await self.metrics(http)
+        if self.capture is not None:
+            self.capture.close()
         return self.report(before, during, after, connect_seconds, open_seconds)
 
     def report(self, before, during, after, connect_seconds, open_seconds) -> dict:
@@ -628,6 +661,16 @@ class Harness:
                 for key in sorted(after) if key.startswith("backlog_closure:")
             } if after else {},
             "slowViewers": len(self.slow_viewers),
+            # What each event costs before compression, summed over every
+            # recipient (#493): the room_state share is what a delta
+            # protocol could at most touch.
+            "emitBytesByEvent": {
+                key[len("emit:"):-len(":sum")]: {
+                    "bytes": after.get(key, 0.0) - before.get(key, 0.0),
+                    "count": after.get(key[:-len(":sum")] + ":count", 0.0) - before.get(key[:-len(":sum")] + ":count", 0.0),
+                }
+                for key in sorted(after) if key.startswith("emit:") and key.endswith(":sum")
+            } if after else {},
             "unexpectedBacklogClosures": max(0.0, sum(
                 after.get(key, 0.0) - before.get(key, 0.0)
                 for key in after if key.startswith("backlog_closure:")
@@ -727,6 +770,10 @@ def parse_metrics(text: str) -> dict[str, float]:
             values["bytes_in"] = number
         elif name.startswith("sketchy_socket_packets_rejected_total"):
             values["rejected"] = values.get("rejected", 0.0) + number
+        elif name.startswith("sketchy_socket_emit_bytes_sum{") or name.startswith("sketchy_socket_emit_bytes_count{"):
+            event = name.split('event="')[1].split('"')[0]
+            kind = "sum" if "_sum{" in name else "count"
+            values[f"emit:{event}:{kind}"] = number
         elif name == "sketchy_socket_backlog_bytes_max":
             values["backlog_bytes_max"] = number
         elif name == "sketchy_socket_backlog_age_seconds_max":
@@ -792,6 +839,11 @@ def print_report(report: dict) -> None:
     print(f"  outbound backlog high-water: {m['backlogBytesMax']:.0f} B, oldest {m['backlogAgeMaxMs']:.0f} ms; "
           f"closures {m['backlogClosures'] or 'none'} with {m['slowViewers']} slow viewers")
     print(f"  RSS every 15 s: {m['rssSeriesMB']}")
+    by_event = sorted(m["emitBytesByEvent"].items(), key=lambda item: -item[1]["bytes"])
+    total_emit = sum(item["bytes"] for _, item in by_event) or 1.0
+    print("  emitted bytes by event (before compression, per recipient):")
+    for event, item in by_event[:8]:
+        print(f"    {event:<24}{item['count']:>8.0f} emits{item['bytes'] / 1e6:>9.2f} MB{100 * item['bytes'] / total_emit:>6.1f}%")
     print(f"  ack p50 {m['ackP50Ms']:.1f} ms; draw fan-out p50 {m['drawFanoutP50Ms']:.1f} ms; "
           f"timer overrun max {m['timerOverrunMaxMs']:.1f} ms; RSS idle {m['rssIdleMB']:.0f} MB, after warm-up {m['rssLoadedMB']:.0f} MB, "
           f"peak {m['rssPeakMB']:.0f} MB ({m['rssPerSeatKB']:.0f} KB per seat above idle); "
@@ -852,6 +904,7 @@ def main() -> int:
     parser.add_argument("--slow-viewers", type=int, default=4, help="spectators that join a room and stop reading, for the outbound budget (#602); each is expected to be closed by the server")
     parser.add_argument("--metrics-token", default=os.environ.get("METRICS_TOKEN"))
     parser.add_argument("--json-output", type=Path)
+    parser.add_argument("--capture-seat", type=Path, help="write one seat's raw inbound stream, in order with times, as JSON lines (#493)")
     parser.add_argument("--record", type=Path, help="write the result into this document's load-gate slot (docs/requirements.md)")
     args = parser.parse_args()
 

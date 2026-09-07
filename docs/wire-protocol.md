@@ -102,6 +102,37 @@ worth making yet, and #461's load run is where to revisit it. Both are constants
 than settings because a value nobody has measured is not one an operator can choose
 well.
 
+**Measured, combined (#568).** With every change of the wire-protocol epic in, one guest's
+whole inbound stream was captured under the release load gate's full population (50
+rooms, 400 seats, `benchmarks/run_load.sh --capture-seat`, kept as
+[`fixtures/viewer_streams/gate-viewer-180s.jsonl`](../fixtures/viewer_streams/gate-viewer-180s.jsonl))
+and replayed through one context at the server's settings
+([`benchmarks/room_state_deltas.py`](../benchmarks/room_state_deltas.py)):
+
+| A guest's stream, 184 s | uncompressed | on the wire |
+| --- | ---: | ---: |
+| whole stream (431 messages) | 108.0 KB | 11.7 KB — **64 B/s per seat** |
+| `chat_message` (171) | 31.3 KB | 5.8 KB (50%) |
+| `draw` (127) | 3.7 KB | 2.2 KB (19%) |
+| `room_state` (28) | 66.3 KB | 1.8 KB (15%) |
+| everything else | 6.7 KB | 1.9 KB |
+
+The gate itself measured 64.6 MB of packet bytes out before compression over five
+minutes for 420 sockets (~0.5 KB/s per seat), 43% fewer draw messages and about half the
+draw bytes against the state before the epic (#560, #559, #603), and ack p95 under
+15 ms throughout. Two things the table says that the estimates did not: chat, not
+drawing, is the largest share of a viewer's wire bytes once drawing is thinned and folded,
+because every line is its own message with its own boundary; and a **room-state delta
+protocol is not worth building (#493)** — replacing every `room_state` after the first
+with the patch the issue describes (changed top-level keys and a version) saves 1.5% of
+the stream on the wire, 1.0 B/s per seat, 0.4 KB/s at 400 seats, against 15% of the
+uncompressed stream (the long-polling bound), while building a snapshot costs 4 µs for a
+16-seat room, 0.01% of a core at the gate's rate. The compressor already does the
+delta: through this real mixed stream a `room_state` costs 64 B on the wire, the same as
+through a context that saw nothing else (63 B). A smaller window changes that (4 KB:
+15.7 KB → 13.8 KB with deltas), which is one more reason the window is 32 KB (§above).
+Requirements N-14 records the decision.
+
 The server's own counters (`sketchy_socket_bytes_{in,out}_total`, §9) sit **before** all
 of this: they count Engine.IO packet bytes as the server handed them to the transport,
 once per recipient, at `eio.send_packet` — the one boundary a room broadcast, an
@@ -635,7 +666,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 
 | Event | Payload | Scope |
 | --- | --- | --- |
-| `room_state` | `RoomStatePayload` | room |
+| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5% on the wire (§1, *Measured, combined*; N-14) | room |
 | `player_joined` / `player_reconnected` | `{playerId, nickname}` | room |
 | `player_left` | `{playerId}` | room |
 | `player_disconnected` | `{playerId, nickname}` | room |
