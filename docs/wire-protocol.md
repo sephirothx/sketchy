@@ -23,7 +23,7 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Concern | Value |
 | --- | --- |
 | Socket.IO path | `/socket.io` (mounted by `socketio.ASGIApp`, [`backend/app/main.py:266`](../backend/app/main.py)) |
-| Client transports | `["websocket", "polling"]`, and polling **actually reached** ([`frontend/src/lib/socket.ts`](../frontend/src/lib/socket.ts), #601): `tryAllTransports` moves on when the WebSocket errors while opening, and a stall watchdog puts polling first when an attempt has produced no handshake after 6 s — a dropped upgrade neither errors nor closes, it hangs, and Engine.IO alone would retry WebSocket for ever. 6 s is under the 8 s an acknowledged command waits for the connection, so a join pressed during the stall still lands on the polling session. An application refusal at the handshake (a suspension, a version skew) opened a transport and changes nothing. A polling session is still probed for a WebSocket upgrade from there. The transport each handshake opened on, upgrades and fallbacks ride the bug report's connection telemetry; the server counts handshakes by transport (`sketchy_socket_handshake_transport_total{transport}`, §9) |
+| Client transports | `["websocket", "polling"]`, and polling **actually reached** ([`frontend/src/lib/socket.ts`](../frontend/src/lib/socket.ts), #601): `tryAllTransports` moves on when the WebSocket errors while opening, and a stall watchdog puts polling first when an attempt has produced no handshake after 6 s — a dropped upgrade neither errors nor closes, it hangs, and Engine.IO alone would retry WebSocket for ever. 6 s is under the 8 s an acknowledged command waits for the connection, so a join pressed during the stall still lands on the polling session. An application refusal at the handshake (a suspension, a version skew) opened a transport and changes nothing. A polling session is still probed for a WebSocket upgrade from there. The transport each handshake opened on, upgrades and fallbacks ride the bug report's connection telemetry; the server counts handshakes by transport (`sketchy_socket_backlog_closures_total{reason}` (sockets closed for an outbound backlog past the budget, §3 — `age` or `bytes`; anything but zero is a peer that could not keep up), `sketchy_socket_backlog_bytes_max` and `sketchy_socket_backlog_age_seconds_max` (the most any one socket has had queued, and the oldest a queued packet has been, since start), `sketchy_socket_handshake_transport_total{transport}`, §9) |
 | Origin | Always same-origin: the backend serves the built SPA in production and E2E, and Vite proxies `/api` and `/socket.io` in dev |
 | Authentication | The HttpOnly `sketchy_session` cookie, read from `HTTP_COOKIE` at handshake |
 | REST base | `/api`, relative to whatever origin served the page |
@@ -426,6 +426,34 @@ Shared bounds:
 | `MAX_GUESS_ID` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 
 ---
+
+### After dispatch: the outbound budget
+
+The other direction has a door too (#602). Engine.IO queues every packet for a socket
+without a bound and drains the queue as fast as the peer reads; a peer that cannot keep
+up holds the writer on the transport's slack and everything after that piles up — a
+full canvas sync at a time — for as long as it takes the ping timeout (~45 s) to notice.
+[`backend/app/socket_server.py`](../backend/app/socket_server.py) accounts for every
+packet at `send_packet`, trimmed to what the socket's queue still holds, and closes the
+socket past either bound:
+
+| Bound | Value | Why this value |
+| --- | --- | --- |
+| Oldest queued packet | `BACKLOG_MAX_AGE_SECONDS` = 10 s | A healthy socket keeps this at milliseconds; a stalled one grows it at the rate of the stall. Re-read every second (`BACKLOG_SWEEP_SECONDS`), because age is time, not traffic: measured, a peer with nothing new sent to it sat at nine seconds until the ping timeout got there first |
+| Queued bytes | `BACKLOG_MAX_BYTES` = 4 MiB | The hard cap a burst of syncs cannot pass inside the age window; ten seconds of anything a room sends is far below it |
+
+The close **aborts**: no CLOSE packet, no waiting for the queue to drain (which a stalled
+writer never does), the disconnect handlers run so the seat starts its grace, and the
+socket leaves the server's table so the room's next fan-out finds nobody there. Nothing
+partial is ever delivered and no draw packet is dropped mid-stream: the client
+reconnects, rebinds its seat and takes a fresh sync (§7). What the budget cannot reach is
+the slack *below* it — the peer's TCP window, the server's send buffer and the
+transport's own 64 KiB — which on a loopback absorbed about 1.2 MB before the queue grew
+at all (`benchmarks/slow_viewer.py`), and a stalled writer coroutine holding that slack
+lives until TCP gives up on the peer. The gate reports the high-water of healthy play
+(one packet, the largest being a sync) so the budget is known to sit far above it;
+`sketchy_socket_backlog_closures_total{reason}` counts the closures and
+`sketchy_socket_backlog_{bytes,age_seconds}_max` the high-water since start (§9).
 
 ## 4. Client → server events
 
@@ -1143,6 +1171,7 @@ drawer                                     server                       everyone
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
 | A final batch (tag 8) past the point budget | dropped whole, nothing committed, the path stays open; the drawer's one-byte `draw_end` that follows closes it, and its completion watch covers the case where nothing does |
+| The socket's outbound backlog passed the budget (§3) | the socket is closed, its queue discarded whole; the client reconnects, rebinds its seat inside the grace and takes a full sync, so recovery is a verified canvas rather than a partial stream |
 | A frame throttled at the door (§2), noticed at the next frame | the open path is closed for the room with a `draw_end` carrying its commit; `canvas_stale … dropped_frame` to the drawer; the rest of that path discarded (§6) |
 | `undo_stroke` whose generation, revision or `historyHash` disagree | the acknowledgement alone: `canvas_stale_generation` or `canvas_out_of_sync` — the client resyncs through its transaction |
 | A snapshot the server would push (a join) inside a spent resync window | `canvas_stale … deferred` with `retryAfterMs` |

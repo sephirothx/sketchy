@@ -1102,6 +1102,15 @@ memory growth, database latency, disconnects and door rejections against thresho
 is the release gate on the reference environment, run by hand; its last result lives
 beside the target in `requirements.md`. The signals it reads are the ones below.
 
+**The outbound side is bounded too.** A socket that cannot keep up is closed once its
+queue's oldest packet is ten seconds old or the queue holds 4 MiB
+([`socket_server.py`](../backend/app/socket_server.py), #602): accounted at the one
+place every packet is queued, re-read every second by a sweeper task the server starts on
+the first packet it queues, and closed with an abort so a stalled writer is never waited
+on. The client's recovery path — reconnect, rebind inside the grace, full sync — is what
+makes closing safe: nothing partial is ever delivered. Wire §3 has the bounds and what
+lies below them.
+
 Two things are recorded, answering two different questions
 ([`backend/app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py)):
 

@@ -1411,6 +1411,9 @@ backend/.venv/bin/python benchmarks/point_thinning.py
 
 # The release load gate: 50 rooms x 8 seats sustained for 5 minutes against a throwaway server (#461)
 ./benchmarks/run_load.sh
+
+# A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
+METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
 ./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target
 
@@ -1556,6 +1559,13 @@ relative frames — for the message count and the deflated bytes of each (#559).
 recorded now would already be thinned, and would understate what thinning does. A repeated identical batch, which is what the benchmark
 modelled before, is deflate's best case and understated live drawing by about
 half; the trace is what fixed that.
+
+`slow_viewer.py` stages the case the outbound budget exists for (#602): a room near the
+canvas ceiling, a spectator that stops reading at the transport while pulling a full
+sync every window, the server's backlog high-water and age read every two seconds until
+the socket is closed for its age, then the viewer's return and a check that the sync it
+takes back hashes to what the server said. It also measures the slack *under* the
+budget - about 1.2 MB on a loopback before the server's queue grows at all.
 
 `run_load.sh` is the **release load gate** (#461): it starts a server with the
 limits a swarm from one address would trip raised, then drives the documented
@@ -1876,7 +1886,7 @@ cd backend
 ### Reconnection & disconnection
 
 A drawer who reconnects, or whose frames the server asked for again, replays what the server has not confirmed at a pace under the drawing allowance the server advertises, with each saved stroke repacked into the fewest frames its points fit in, so a long stroke converges instead of being cut off by the very budget that protects live drawing. A finished stroke the server never confirms is resent a few times with backoff and then replaced by the server's canvas.
-A tab left open across a deploy is told to reload and, until it does, has every command refused and its socket closed after five seconds; every REST response carries the server's version too, so a tab that is not on a socket is caught by its next request. The client reloads at most once per server version, and if the reload did not fetch a newer bundle it stops reconnecting and shows an "out of date" banner with a Reload button rather than looping. A browser whose WebSocket upgrades are blocked or silently dropped plays over long-polling instead of never connecting: the client moves on when the upgrade errors, and puts polling first when an attempt has produced nothing after six seconds, then keeps probing for an upgrade from there. A guess that goes unacknowledged is resent once, but only on the same connection, in the same room and turn it was typed in; otherwise it is reported as lost rather than replayed into a turn that has moved on, and the server ignores a guess that names a room or turn its seat has left. The server never pushes a whole canvas at a refused frame any more: it sends one small notice per socket per window and the client fetches through that transaction, and a rejoin inside a spent window waits for it too, so no path can make the server re-encode a full canvas more than twice every two seconds per socket (one pushed, one requested). A request for the server's canvas is a transaction: its reply names it, a reply to a request the client has since abandoned is ignored, a request the server cannot answer says when to ask again, and one that goes unanswered is retried a few times before the client restarts its connection rather than staying quietly wrong.
+A viewer that cannot keep up with what the room sends it is closed once the oldest packet queued for it is ten seconds old or the queue holds 4 MiB, and comes back through the ordinary reconnect: its seat is kept for the grace and it takes a fresh, verified canvas rather than a partial stream. A tab left open across a deploy is told to reload and, until it does, has every command refused and its socket closed after five seconds; every REST response carries the server's version too, so a tab that is not on a socket is caught by its next request. The client reloads at most once per server version, and if the reload did not fetch a newer bundle it stops reconnecting and shows an "out of date" banner with a Reload button rather than looping. A browser whose WebSocket upgrades are blocked or silently dropped plays over long-polling instead of never connecting: the client moves on when the upgrade errors, and puts polling first when an attempt has produced nothing after six seconds, then keeps probing for an upgrade from there. A guess that goes unacknowledged is resent once, but only on the same connection, in the same room and turn it was typed in; otherwise it is reported as lost rather than replayed into a turn that has moved on, and the server ignores a guess that names a room or turn its seat has left. The server never pushes a whole canvas at a refused frame any more: it sends one small notice per socket per window and the client fetches through that transaction, and a rejoin inside a spent window waits for it too, so no path can make the server re-encode a full canvas more than twice every two seconds per socket (one pushed, one requested). A request for the server's canvas is a transaction: its reply names it, a reply to a request the client has since abandoned is ignored, a request the server cannot answer says when to ask again, and one that goes unanswered is retried a few times before the client restarts its connection rather than staying quietly wrong.
 
 - On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
   their score and place in the turn order. A successful reconnect replaces the player's active

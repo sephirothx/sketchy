@@ -629,6 +629,15 @@ class Telemetry:
             "Inbound packets dropped before dispatch, by reason.",
             ("reason",),
         )
+        self.socket_backlog_closures = LabelledCounter(
+            "sketchy_socket_backlog_closures_total",
+            "Sockets closed for an outbound backlog past the budget, by which bound (age or bytes).",
+            ("reason",),
+        )
+        # High-water marks since start (#602): the most any one socket has had
+        # queued, in bytes, and the oldest a queued packet has been.
+        self.socket_backlog_bytes_max = 0
+        self.socket_backlog_age_max = 0.0
         self.socket_bytes_in = LabelledCounter(
             "sketchy_socket_bytes_in_total",
             "Socket.IO packet bytes received, before compression.",
@@ -719,6 +728,15 @@ class Telemetry:
 
     def note_canvas_recovery(self, reason: str) -> None:
         self.canvas_recovery_notices.inc((reason,))
+
+    def note_socket_backlog(self, queued_bytes: int, oldest_age: float) -> None:
+        if queued_bytes > self.socket_backlog_bytes_max:
+            self.socket_backlog_bytes_max = queued_bytes
+        if oldest_age > self.socket_backlog_age_max:
+            self.socket_backlog_age_max = oldest_age
+
+    def note_socket_backlog_closed(self, reason: str) -> None:
+        self.socket_backlog_closures.inc((reason,))
 
     def note_socket_packet_rejected(self, reason: str) -> None:
         self.socket_packets_rejected.inc((reason,))
@@ -910,6 +928,17 @@ class Telemetry:
         lines += self.socket_connections.lines()
         lines += self.socket_transports.lines()
         lines += self.socket_packets_rejected.lines()
+        lines += self.socket_backlog_closures.lines()
+        lines += gauge_lines(
+            "sketchy_socket_backlog_bytes_max",
+            "The most bytes any one socket has had queued for it since start (#602).",
+            self.socket_backlog_bytes_max,
+        )
+        lines += gauge_lines(
+            "sketchy_socket_backlog_age_seconds_max",
+            "The oldest a queued outbound packet has been on any socket since start (#602).",
+            self.socket_backlog_age_max,
+        )
         lines += self.canvas_recovery_notices.lines()
         lines += self.guesses_out_of_scope.lines()
         lines += self.socket_handshake_transports.lines()
