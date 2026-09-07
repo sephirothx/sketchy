@@ -113,6 +113,7 @@ class Samples:
     turns_started: int = 0
     turns_ended: int = 0
     turns_skipped: int = 0
+    heartbeats_skipped: int = 0
     games_started: int = 0
     guesses: int = 0
     chats: int = 0
@@ -154,6 +155,10 @@ class Seat:
         self.canvas: list | None = None
         self.turn_deadline: float | None = None
         self.turn_full_length: bool = True
+        # When a turn_starting/turn_started/turn_ended/sync_game/room_state
+        # last reached this seat; the harness applies them all, so each one
+        # agrees with the seat by construction (#564).
+        self.last_authoritative_at: float | None = None
         self.closing = False
 
     async def provision(self, http: aiohttp.ClientSession) -> None:
@@ -187,6 +192,9 @@ class Seat:
         @sio.on("canvas_reset")
         async def on_reset(payload):
             self.canvas = list(payload)
+
+        for authoritative in ("turn_starting", "turn_started", "turn_ended", "sync_game", "room_state"):
+            sio.on(authoritative, self._note_authoritative)
 
         @sio.on("turn_started")
         async def on_turn(payload):
@@ -268,6 +276,9 @@ class Seat:
             wait_timeout=30,
         )
 
+    async def _note_authoritative(self, _payload=None) -> None:
+        self.last_authoritative_at = time.monotonic()
+
     async def call(self, command: str, payload: dict) -> dict | None:
         if self.sio is None or not self.sio.connected:
             return None
@@ -346,8 +357,22 @@ class Seat:
             self.harness.samples.guesses += 1
 
     async def heartbeat(self) -> None:
+        """The browser's rule (#564, `lib/heartbeatSchedule.ts`): a probe every
+        5 s, skipped when an authoritative phase event that agrees with the
+        seat landed inside the last interval, forced at least every 15 s."""
+        last_probe = time.monotonic()
         while not self.harness.stopping:
             await asyncio.sleep(5.0)
+            now = time.monotonic()
+            covered = (
+                self.last_authoritative_at is not None
+                and now - self.last_authoritative_at < 5.0
+                and now - last_probe < 15.0
+            )
+            if covered:
+                self.harness.samples.heartbeats_skipped += 1
+                continue
+            last_probe = now
             await self.call("session_ping", {})
 
     async def reconnect_cycle(self) -> None:
@@ -687,6 +712,7 @@ class Harness:
             "turnsStarted": s.turns_started,
             "turnsEnded": s.turns_ended,
             "turnsSkipped": s.turns_skipped,
+            "heartbeatsSkipped": s.heartbeats_skipped,
             "gamesStarted": s.games_started,
             "guesses": s.guesses,
             "chats": s.chats,
@@ -850,6 +876,9 @@ def print_report(report: dict) -> None:
           f"timer overrun max {m['timerOverrunMaxMs']:.1f} ms; RSS idle {m['rssIdleMB']:.0f} MB, after warm-up {m['rssLoadedMB']:.0f} MB, "
           f"peak {m['rssPeakMB']:.0f} MB ({m['rssPerSeatKB']:.0f} KB per seat above idle); "
           f"sockets peak {m['socketsConnectedPeak']:.0f}")
+    pings = m["ackByCommand"].get("session_ping", {"n": 0})["n"]
+    print(f"  heartbeats: {pings} sent, {m['heartbeatsSkipped']} skipped for an authoritative event inside the interval "
+          f"({100 * m['heartbeatsSkipped'] / max(1, pings + m['heartbeatsSkipped']):.0f}% of ticks)")
     for command, stats in m["ackByCommand"].items():
         print(f"    {command:<18} n={stats['n']:<6} p95 {stats['p95Ms']:.1f} ms")
     if m["errorCount"]:

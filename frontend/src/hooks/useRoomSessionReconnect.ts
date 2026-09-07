@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { observeServerCanvasSequence, onSessionRebindRequested } from "../lib/canvasRecovery";
+import { createHeartbeatSchedule, HEARTBEAT_MS, replyIsCurrent } from "../lib/heartbeatSchedule";
 import { emitWithAck, socket } from "../lib/socket";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -10,8 +11,10 @@ import type { AckResponse } from "../types";
 
 const STALL_GRACE_MS = 2500;
 const STALL_CHECK_MS = 1000;
-const HEARTBEAT_MS = 5000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
+// The events that carry what a heartbeat would confirm (#564): each moves
+// the local phase or round through the game store's own listeners.
+const AUTHORITATIVE_EVENTS = ["turn_starting", "turn_started", "turn_ended", "sync_game", "room_state"] as const;
 const ACTIVE_PHASES = new Set(["choosing_prompt", "drawing", "turn_results"]);
 const PHASE_BY_CODE = ["idle", "choosing_prompt", "drawing", "turn_results", "game_end"] as const;
 
@@ -43,6 +46,21 @@ export function useRoomSessionReconnect() {
     let lastStallRecoveryAt = 0;
     let heartbeatInFlight = false;
     let consecutiveHeartbeatFailures = 0;
+    // Skips a probe when an authoritative event inside the last interval
+    // already said what the probe would, forces one at the cap (#564).
+    const schedule = createHeartbeatSchedule();
+    let lastAuthoritativeAt: number | null = null;
+    const onAuthoritative = () => {
+      // After the store's listeners have applied the event: socket.io calls
+      // listeners in order and the store's were registered first, but a
+      // microtask makes the reading independent of that order.
+      queueMicrotask(() => {
+        const state = useGameStore.getState();
+        const at = Date.now();
+        lastAuthoritativeAt = at;
+        schedule.noteAuthoritative({ phase: state.phase, round: state.roundNumber }, at);
+      });
+    };
 
     async function joinWithSession(soft = false) {
       const { roomId, code } = useGameStore.getState();
@@ -155,6 +173,12 @@ export function useRoomSessionReconnect() {
         queueRebind({ forceTransportRestart: true });
         return;
       }
+      const sentAt = Date.now();
+      if (!schedule.shouldProbe(sentAt, { phase: state.phase, round: state.roundNumber })) return;
+      schedule.noteProbe(sentAt);
+      // The probe's scope: a reply from another socket, room or seat, or one
+      // older than a phase change that landed meanwhile, is not judged.
+      const scope = { socketId: socket.id, code: state.code, playerId: state.playerId, sentAt };
 
       heartbeatInFlight = true;
       try {
@@ -177,17 +201,28 @@ export function useRoomSessionReconnect() {
         // The canvas protocol compares this with what it still holds pending
         // (#597); the two hooks share nothing else.
         observeServerCanvasSequence(response[4], response[5]);
+        // Judged against the seat as it is *now*, not the snapshot the probe
+        // left with: a turn can change while the answer is in flight, and an
+        // old answer against an old snapshot would rebind a correct seat.
+        const current = useGameStore.getState();
+        const stillCurrent = replyIsCurrent(scope, {
+          socketId: socket.id,
+          code: current.code,
+          playerId: current.playerId,
+          lastAuthoritativeAt,
+        });
+        if (!stillCurrent) return;
         const serverPhase = PHASE_BY_CODE[response[1] ?? 0] ?? "idle";
         const serverRound = response[2] ?? 0;
-        const localPhase = ACTIVE_PHASES.has(state.phase) ? state.phase : "idle";
+        const localPhase = ACTIVE_PHASES.has(current.phase) ? current.phase : "idle";
         const phaseMismatch =
           ACTIVE_PHASES.has(localPhase)
           && ACTIVE_PHASES.has(serverPhase)
           && localPhase !== serverPhase;
         const roundMismatch =
           serverRound > 0
-          && state.roundNumber > 0
-          && serverRound !== state.roundNumber
+          && current.roundNumber > 0
+          && serverRound !== current.roundNumber
           && ACTIVE_PHASES.has(localPhase);
 
         if (phaseMismatch || roundMismatch) {
@@ -209,6 +244,7 @@ export function useRoomSessionReconnect() {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    for (const event of AUTHORITATIVE_EVENTS) socket.on(event, onAuthoritative);
     document.addEventListener("visibilitychange", onVisibility);
     // The canvas protocol exhausted its sync retries (#598): the seat binding
     // is suspect, and a transport restart is the one recovery that resets it.
@@ -225,6 +261,7 @@ export function useRoomSessionReconnect() {
       cancelled = true;
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      for (const event of AUTHORITATIVE_EVENTS) socket.off(event, onAuthoritative);
       document.removeEventListener("visibilitychange", onVisibility);
       stopRebindRequests();
       window.clearInterval(stallTimer);
