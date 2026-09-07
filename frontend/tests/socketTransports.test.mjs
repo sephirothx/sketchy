@@ -32,3 +32,19 @@ test("a stalled WebSocket attempt (no handshake) puts polling first; a refusal c
   assert.deepEqual(transportsAfterStall(["polling", "websocket"], false), ["polling", "websocket"]);
   assert.deepEqual(transportsAfterStall(["websocket"], false), ["websocket"]);
 });
+
+test("a tab stuck on an update it could not fetch does not open another socket", async () => {
+  // #476: the page opens the socket by hand in several places (after the
+  // first account read, after a sign-in); once the tab is out of date every
+  // one of them must be a no-op, not one more handshake to refuse and close.
+  const { markUpdateRequired, resetUpdateRequiredForTests } = await import("../src/lib/updateRequired.ts");
+  resetUpdateRequiredForTests();
+  markUpdateRequired();
+  try {
+    socket.connect();
+    assert.equal(socket.active, false);
+    assert.notEqual(socket.io._readyState, "opening");
+  } finally {
+    resetUpdateRequiredForTests();
+  }
+});

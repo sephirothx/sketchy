@@ -161,7 +161,8 @@ for in `sessionStorage`. A bundle that somehow does not update — a proxy ignor
 `no-cache`, a stale service worker — would otherwise reload forever, turning a recoverable
 skew into an unusable page. When the same server version is seen again after that reload
 the tab is **stuck**: the client turns reconnection off and puts the socket down (the
-server was about to close it, and reconnecting would only be told the same thing again),
+server was about to close it, and reconnecting would only be told the same thing again;
+`socket.connect()` itself is a no-op from then on, whoever calls it),
 and shows a banner saying the tab is out of date, with a Reload the player chooses. That
 reload forgets the automatic one already spent, so a bundle that has been fixed since is
 picked up the ordinary way. Nothing is invisible: a stale tab is either reloading, or

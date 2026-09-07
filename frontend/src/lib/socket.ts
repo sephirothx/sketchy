@@ -2,7 +2,7 @@ import { io, Socket } from "socket.io-client";
 import { applyClientConfig } from "./clientConfig.ts";
 import { recordClientError } from "./clientErrorLog.ts";
 import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
-import { markUpdateRequired } from "./updateRequired.ts";
+import { isUpdateRequired, markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
 
@@ -229,6 +229,14 @@ function noteUpdateStuck(): void {
   socket.disconnect();
   markUpdateRequired();
 }
+
+// Down for good means down against every caller, not only the manager's
+// own reconnection: the page opens the socket by hand after its first
+// account read, after a sign-in, and when the stall watchdog fires, and
+// each of those would otherwise open one more handshake for the server to
+// refuse and close. So the method itself refuses once the tab is stuck.
+const rawConnect = socket.connect.bind(socket);
+socket.connect = (() => (isUpdateRequired() ? socket : rawConnect())) as typeof socket.connect;
 
 /** Where the REST layer reports the same stuck state. */
 export function noteUpdateStuckFromRest(): void {
