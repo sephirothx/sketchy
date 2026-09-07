@@ -196,6 +196,7 @@ Three different things, never used for one another:
 | **Waiting room** | A room's state before a game starts or between games, where players gather and the host starts the game. | lobby, pre-game, staging |
 | **Public room** | A room listed in the lobby, joinable by anyone. | open room |
 | **Private room** | A room reachable only by its code or invite link. | closed room, locked room |
+| **Last seen** | What a profile shows instead of *online* for a player who is not connected: how long ago their last socket closed. Says nothing for an account that never connected. | last login, last active, offline since |
 | **Game visibility** | Whether a recorded game may be found on a player's profile by anyone (it was played in a **Public room**) or only by the players who sat in it (a **Private room**). Frozen from the room when the game is saved, and shown as a *private room* tag on the game. | hidden game, privacy setting, secret game |
 | **Room-setting preset** | A private, named, versioned configuration template owned by one registered account and applied while creating a new room. It has no room identity or code, members, scores, game, timer, canvas, chat, or other live state, and is never a built-in or shared catalogue item in v1. | persistent room, room template, saved room, tool preset |
 | **Live room instance** | The process-owned, temporary realization of a room in which players join and games run. Nothing outlives it: when the last player leaves, the room and everything in it are gone. | persistent room, saved game, replica |

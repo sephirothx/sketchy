@@ -363,6 +363,14 @@ class User(Base):
     last_active_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
+    # When the account's last socket closed - or its first one opened, so a
+    # process that dies with the player online still leaves a time. What a
+    # profile shows as "last seen" (#469). Null until the account has ever
+    # connected. Not `last_login_at` (a page load) and not `last_active_at`
+    # (retention), which both mean something else on purpose.
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
     @property
     def is_anonymous(self) -> bool:

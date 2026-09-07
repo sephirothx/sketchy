@@ -14,6 +14,10 @@ export interface PublicProfile {
   avatarUrl: string | null;
   isAnonymous: boolean;
   createdAt: string | null;
+  /** The presence registry's answer at the time of the request. */
+  isOnline: boolean;
+  /** When the account's last socket closed; null for one that never connected. */
+  lastSeenAt: string | null;
 }
 
 export interface ProfileStats {

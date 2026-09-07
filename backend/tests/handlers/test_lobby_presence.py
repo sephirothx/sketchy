@@ -94,6 +94,40 @@ async def test_a_handshake_registers_the_account_and_a_disconnect_releases_it(
     assert ctx.presence.tracked_sockets() == 0
 
 
+class _SeenRecorder:
+    def __init__(self):
+        self.stamped: list[str] = []
+
+    async def touch_last_seen(self, user_id: str) -> None:
+        self.stamped.append(user_id)
+
+
+@pytest.mark.asyncio
+async def test_coming_online_and_going_offline_are_stamped_on_the_account(monkeypatch):
+    """`last_seen_at` is what a profile shows when the player is not here
+    (#469): written when the first socket opens and when the last one closes,
+    and not for the tabs in between."""
+    import asyncio
+
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    ctx.user_repo = _SeenRecorder()
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    await connect_as(ctx, sio, "sid-b", "tok-ada")
+    await asyncio.sleep(0)
+    assert ctx.user_repo.stamped == ["user-ada"]
+
+    await sio.handlers["/"]["disconnect"]("sid-a")
+    await asyncio.sleep(0)
+    assert ctx.user_repo.stamped == ["user-ada"], "one tab of two closing is not going offline"
+
+    await sio.handlers["/"]["disconnect"]("sid-b")
+    await asyncio.sleep(0)
+    assert ctx.user_repo.stamped == ["user-ada", "user-ada"]
+
+
 @pytest.mark.asyncio
 async def test_a_visitor_who_has_not_chosen_a_name_is_not_in_the_list(monkeypatch):
     """R-ACCT-02: a socket alone never makes an account, so this is ordinary."""

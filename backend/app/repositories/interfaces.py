@@ -57,6 +57,7 @@ class UserData:
     last_active_at: datetime | None = None
     state: str = "anonymous"
     role: str = "user"
+    last_seen_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -657,6 +658,13 @@ class UserRepository(ABC):
     @abstractmethod
     async def touch_last_active(self, user_id: str) -> UserData | None:
         """Record meaningful gameplay activity for retention decisions."""
+        ...
+
+    @abstractmethod
+    async def touch_last_seen(self, user_id: str) -> None:
+        """Stamp ``last_seen_at``: the account's last socket closed, or its
+        first one opened (#469). Best-effort and never returns the row - the
+        caller is a connection handler with nothing to do with it."""
         ...
 
     @abstractmethod

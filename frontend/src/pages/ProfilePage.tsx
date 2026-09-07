@@ -28,6 +28,7 @@ import {
   type HistoryReaction,
   type ProfileStats,
 } from "../lib/profile";
+import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
@@ -389,33 +390,6 @@ function GameRow({
                 ))}
               </tbody>
             </table>
-            {detail.scoreLedgerVersion === 0 ? (
-              <p className="profile-note">Score breakdown unavailable for this legacy game.</p>
-            ) : detail.scoreEvents.length === 0 ? (
-              <p className="profile-note">No score changed in this game.</p>
-            ) : (
-              <table className="profile-score-events">
-                <caption>Score ledger</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Order</th>
-                    <th scope="col">Player</th>
-                    <th scope="col">Reason</th>
-                    <th scope="col">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.scoreEvents.map((event) => (
-                    <tr key={event.eventOrder}>
-                      <td>{event.eventOrder}</td>
-                      <td>{named(event.participantSeatId, "Unknown player")}</td>
-                      <td>{event.eventType.replaceAll("_", " ")}</td>
-                      <td>{event.pointsDelta > 0 ? "+" : ""}{event.pointsDelta}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
             </>
             );
           })()}
@@ -556,6 +530,14 @@ function ProfileView({ userId }: { userId: string }) {
               <p className="profile-subtitle">
                 {subject.isAnonymous ? "Guest — display name not saved" : "Registered player"}
                 {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt, timeFormat)}`}
+                {lastSeenLabel(subject) && (
+                  <>
+                    {" · "}
+                    <span className={subject.isOnline ? "profile-presence is-online" : "profile-presence"}>
+                      {lastSeenLabel(subject)}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
           </header>
@@ -645,7 +627,15 @@ function ProfileView({ userId }: { userId: string }) {
             // Claiming keeps the same user id, so this view never remounts and
             // would otherwise keep showing the guest it loaded - name, badge,
             // and an invitation to claim an account that now exists.
-            if (account.id === userId) setSubject(account);
+            // The claimed account is the one on the page and the tab is its
+            // own socket, so it is online; the last-seen stamp is unchanged.
+            if (account.id === userId) {
+              setSubject((current) => ({
+                ...account,
+                isOnline: true,
+                lastSeenAt: current?.lastSeenAt ?? null,
+              }));
+            }
             return account;
           }}
           onSwitchMode={setAuthMode}

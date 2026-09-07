@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -84,7 +85,11 @@ def validator_matches(if_none_match: str, validator: str) -> bool:
 def create_profile_router(
     user_repo: UserRepository,
     game_history_repo: GameHistoryRepository,
+    *,
+    is_online: Callable[[str], bool] = lambda user_id: False,
 ) -> APIRouter:
+    """`is_online` is the presence registry's answer for an account id; the
+    default, for a router built without one, says nobody is."""
     router = APIRouter(prefix="/api")
 
     def throttle(request: Request) -> None:
@@ -108,7 +113,12 @@ def create_profile_router(
         if user is None:
             raise HTTPException(status_code=404, detail="No such player.")
         stats = await user_repo.get_stats(user_id)
-        return {"user": public_user_payload(user), "stats": stats_payload(stats)}
+        return {
+            # Presence is keyed by the canonical account, which is what
+            # `get_by_id` resolved a merged guest's id to.
+            "user": public_user_payload(user, online=is_online(user.id)),
+            "stats": stats_payload(stats),
+        }
 
     @router.get("/users/{user_id}/games")
     async def user_games(

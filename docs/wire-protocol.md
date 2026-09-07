@@ -1580,7 +1580,7 @@ reloaded rather than served an older contract.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/users/{user_id}/stats` | Served from the daily projection, never four history scans. The `user` beside the numbers is the **public profile** (#469): `id`, `displayName`, `nameColor`, `avatarUrl`, `isAnonymous`, `createdAt` — what a seat in a room already shows. Never `role`, `lastLoginAt` or `username`; those are the caller's own account on `/api/auth/me` |
+| `GET` | `/api/users/{user_id}/stats` | Served from the daily projection, never four history scans. The `user` beside the numbers is the **public profile** (#469): `id`, `displayName`, `nameColor`, `avatarUrl`, `isAnonymous`, `createdAt`, plus `isOnline` (the presence registry's answer now) and `lastSeenAt` (when the account's last socket closed; `null` for one that never connected). Never `role`, `lastLoginAt` or `username`; those are the caller's own account on `/api/auth/me` |
 | `GET` | `/api/users/{user_id}/games` | `?includeAbandoned=true` to include games that stopped. Which games are on the page depends on who asks (R-HIST-25): a game from a public room is listed for anyone, a game from a private room only for a caller who sat in it. Each summary carries `visibility` (`public \| private`), frozen from the room when the game was saved; `hasMore` is answered from the games the caller may see |
 | `GET` | `/api/games/{game_id}` | Participant-only detail: exact rule snapshot, offers, outcomes, ledger |
 | `GET` | `/api/games/{game_id}/turns/{turn_id}/drawing` | Participants only. **Every refusal is a 404**, so it never reveals whether a game exists. The bytes in the current wire format (`application/octet-stream`), `Cache-Control: private, no-cache` and a weak `ETag` of the form `W/"<stored sha256>-w<CANVAS_HISTORY_VERSION>"` — the stored checksum *and* the wire version the decoders answer in, because a new wire version changes the bytes served without changing the bytes stored (R-HIST-18), and weak because the same bytes go out gzipped or not. A matching `If-None-Match` (weak comparison; a list, the strong form, or `*`) is answered **304** with no body, from the metadata alone — the blob is neither read nor decoded — and only after the same participant and availability query as the drawing itself: a remembered tag from a stranger, or for an erased drawing, is a 404 like any other refusal (#604). `no-cache` rather than a lifetime so an erased drawing stops being shown at the next open, not when an hour runs out |
@@ -1597,7 +1597,7 @@ Its `scoreEvents` are identified by `eventOrder` within the game (#552): there i
 per-event id on the wire, and a `correction` names its target as `correctsEventOrder`.
 Each turn's `participantOutcomes[]` carries the seat's `pointsAwarded` (null unless the
 outcome is `correct`); there is no separate `guesses[]` list (#548).
-The private export's `scoreEvents` (schema version 4) use the same identity.
+The private export's `scoreEvents` (schema version 5) use the same identity.
 
 ### Prompt lists — [`backend/app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py)
 
@@ -1798,7 +1798,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (3) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (4) | The export document, pinned by [`fixtures/account_data_export_v4_fields.json`](../fixtures/account_data_export_v4_fields.json) | The export's field surface changes |
+| Data export `schema_version` (5) | The export document, pinned by [`fixtures/account_data_export_v5_fields.json`](../fixtures/account_data_export_v5_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 

@@ -1625,6 +1625,8 @@
    "createdAt",
    "displayName",
    "isAnonymous",
+   "isOnline",
+   "lastSeenAt",
    "nameColor"
   ],
   "api.serializers:shared_prompt_list_payload": [
@@ -1841,6 +1843,7 @@
    "keyBindings",
    "lastActiveAt",
    "lastLoginAt",
+   "lastSeenAt",
    "mergedAt",
    "nameColor",
    "requestedByMe",

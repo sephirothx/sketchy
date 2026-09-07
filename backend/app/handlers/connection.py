@@ -81,7 +81,8 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         await ctx.sio.save_session(sid, {"user_id": user_id})
         # Balanced by the same `finally` the socket ledger uses, and for the
         # same reason: a handshake refused below never reaches `disconnect`.
-        ctx.presence.note_socket_opened(sid, user_id)
+        if ctx.presence.note_socket_opened(sid, user_id):
+            _record_last_seen(ctx, user_id)
         client_protocol = client_protocol_version(auth)
         if client_protocol != PROTOCOL_VERSION:
             # Accepted, then told. Refusing would leave a stale build with nothing
@@ -169,7 +170,9 @@ async def disconnect(ctx: HandlerContext, sid):
     # moment the socket goes and is deliberately not held for the R-CONN-01
     # reconnect grace: that grace protects a *seat*, and a socket that cannot
     # receive is not online.
-    ctx.presence.note_socket_closed(sid)
+    went_offline_user_id = ctx.presence.user_for_sid(sid)
+    if ctx.presence.note_socket_closed(sid):
+        _record_last_seen(ctx, went_offline_user_id)
     ctx.clear_command_budget(sid)
     ctx.release_stale(sid)
     if ctx.is_closing(sid):
@@ -186,6 +189,32 @@ async def disconnect(ctx: HandlerContext, sid):
     # rather than a moment before it does.
     async with ctx.seating(sid):
         await reconcile_socket_seats(ctx, sid)
+
+
+_last_seen_writes: set[asyncio.Task] = set()
+
+
+def _record_last_seen(ctx: HandlerContext, user_id: str | None) -> None:
+    """Stamp `users.last_seen_at` when an account comes online or goes offline.
+
+    Off the handler's path: a disconnect must not wait on the database, and
+    a stamp that is lost costs a profile a few minutes of "last seen", not a
+    seat or a socket. Written at both edges so a process that dies with the
+    player online still leaves the time they arrived (#469).
+    """
+    user_repo = getattr(ctx, "user_repo", None)
+    if not user_id or user_repo is None:
+        return
+
+    async def write() -> None:
+        try:
+            await user_repo.touch_last_seen(user_id)
+        except Exception:
+            logger.warning("could not record last seen for %s", user_id, exc_info=True)
+
+    task = asyncio.create_task(write())
+    _last_seen_writes.add(task)
+    task.add_done_callback(_last_seen_writes.discard)
 
 
 async def reconcile_socket_seats(ctx: HandlerContext, sid: str) -> None:

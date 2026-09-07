@@ -45,15 +45,16 @@ def user_payload(user: UserData) -> dict:
     }
 
 
-def public_user_payload(user: UserData) -> dict:
+def public_user_payload(user: UserData, *, online: bool) -> dict:
     """The account as anyone may see it: what a seat in a room already shows.
 
     Deliberately not `user_payload` (#469). That one is the caller's own
-    account and carries the role, the last login and the username - the
-    first names staff to whoever is looking for them, the second is a
-    schedule, and the third is the login identifier the nickname lookup is
-    throttled to protect. A profile opened by id gets the presentation the
-    player list shows and the day the account was made, nothing else.
+    account and carries the role and the username - the first names staff to
+    whoever is looking for them, the second is the login identifier the
+    nickname lookup is throttled to protect. A profile opened by id gets the
+    presentation the player list shows, the day the account was made, and
+    whether the player is here: online now, or when they were last - the
+    lobby already shows who is online, so a profile saying so is nothing new.
     """
     return {
         "id": user.id,
@@ -62,6 +63,8 @@ def public_user_payload(user: UserData) -> dict:
         "avatarUrl": avatar_url(None if user.is_anonymous else user.avatar_key),
         "isAnonymous": user.is_anonymous,
         "createdAt": _timestamp(user.created_at),
+        "isOnline": online,
+        "lastSeenAt": _timestamp(user.last_seen_at),
     }
 
 

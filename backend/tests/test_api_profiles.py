@@ -193,7 +193,34 @@ async def test_the_public_profile_is_the_presentation_a_seat_already_shows(env):
         "avatarUrl",
         "isAnonymous",
         "createdAt",
+        "isOnline",
+        "lastSeenAt",
     }
+
+
+async def test_the_profile_says_whether_the_player_is_here_or_when_they_last_were(env):
+    """Online is the presence registry's answer; otherwise the time the
+    account's last socket closed, null for one that never connected."""
+    http, users, history, session_factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    online = {ann.id}
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
+    app.include_router(
+        create_profile_router(users, history, is_online=lambda user_id: user_id in online)
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get(f"/api/users/{ann.id}/stats")).json()["user"]["isOnline"] is True
+
+        never = (await client.get(f"/api/users/{bob.id}/stats")).json()["user"]
+        assert never["isOnline"] is False
+        assert never["lastSeenAt"] is None
+
+        await users.touch_last_seen(bob.id)
+        gone = (await client.get(f"/api/users/{bob.id}/stats")).json()["user"]
+        assert gone["isOnline"] is False
+        assert datetime.fromisoformat(gone["lastSeenAt"]).tzinfo is not None
 
 
 async def test_a_private_rooms_game_is_shown_only_to_the_players_who_were_in_it(env):
