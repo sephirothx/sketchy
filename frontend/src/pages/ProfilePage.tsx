@@ -446,10 +446,11 @@ function ProfileView({ userId }: { userId: string }) {
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
 
-  // Which list is current. Bumped whenever the list is replaced, so a page
-  // fetched for the previous one - a "load more" in flight while the viewer
-  // signed in, or while the abandoned filter flipped - is dropped rather
-  // than appended to a list it was never part of.
+  // Which list is current. Bumped when a reload starts and again when it
+  // replaces the list, so a page fetched for the previous one - a "load
+  // more" in flight while the viewer signed in or the abandoned filter
+  // flipped, or one started at the old offset while the reload was still
+  // out - is dropped rather than appended to a list it was never part of.
   const listGeneration = useRef(0);
 
   useEffect(() => {
@@ -462,6 +463,7 @@ function ProfileView({ userId }: { userId: string }) {
           fetchGames(userId, 0, includeAbandoned),
         ]);
         if (cancelled) return;
+        listGeneration.current += 1;
         setSubject(profile.user);
         setStats(profile.stats);
         setGames(page.games);
