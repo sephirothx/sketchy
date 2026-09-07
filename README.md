@@ -1891,5 +1891,5 @@ A tab left open across a deploy is told to reload and, until it does, has every 
   with compact action offsets, and send replay history in a versioned binary envelope
   containing its action-offset table and packed records. Packed paths use quarter-pixel
   signed 16-bit coordinates and one-byte widths; packed shapes additionally use a one-byte
-  shape enum. The frontend retains the versioned `{v, a}` JSON history decoder as a
-  compatibility fallback.
+  shape enum. The `{v, a}` JSON history form, which nothing had sent since the binary
+  envelope shipped, was retired with #566; stored formats keep their decoders regardless.

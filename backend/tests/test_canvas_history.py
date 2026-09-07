@@ -14,8 +14,6 @@ from app.canvas_history import (
     color_to_hex,
     color_to_int,
     decode_binary_canvas_history,
-    decode_canvas_history,
-    encode_canvas_history,
 )
 
 
@@ -38,25 +36,7 @@ def representative_actions():
     ]
 
 
-def test_canvas_history_encoding_is_compact_and_versioned():
-    assert encode_canvas_history(representative_actions()) == {
-        "v": 1,
-        "a": [
-            [0, 0xAABBCC, 4, 0.1, 0.2, 0.3, 0.4],
-            [1, 1, 0x102030, 8, 0.2, 0.3, 0.8, 0.9],
-            [2, 0xFFFFFF, 799, 599],
-            [3],
-        ],
-    }
-
-
-def test_canvas_history_round_trip_preserves_every_action():
-    actions = representative_actions()
-
-    assert decode_canvas_history(encode_canvas_history(actions)) == actions
-
-
-def test_packed_canvas_history_uses_fixed_width_binary_records(monkeypatch):
+def test_packed_canvas_history_uses_fixed_width_binary_records():
     history = PackedCanvasHistory()
     history.append_path(
         [(0.1, 0.2), (0.3, 0.4)],
@@ -78,13 +58,6 @@ def test_packed_canvas_history_uses_fixed_width_binary_records(monkeypatch):
     assert history.offsets.itemsize == 4
     assert list(history) == representative_actions()
 
-    def fail_if_actions_are_materialized(_history):
-        raise AssertionError("packed wire encoding materialized action objects")
-
-    monkeypatch.setattr(PackedCanvasHistory, "__iter__", fail_if_actions_are_materialized)
-    assert encode_canvas_history(history) == encode_canvas_history(
-        representative_actions()
-    )
 
 
 def test_binary_canvas_history_round_trip_preserves_packed_actions():
@@ -180,39 +153,19 @@ def test_canvas_history_crc32_matches_frontend_canonical_encoding():
     assert canvas_history_hash(history) == 0x0C816F97
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
-        None,
-        {},
-        {"v": 2, "a": []},
-        {"v": 1, "a": [], "extra": True},
-        {"v": 1, "a": "not-a-list"},
-        {"v": 1, "a": [[]]},
-        {"v": 1, "a": [[True]]},
-        {"v": 1, "a": [[4]]},
-        {"v": 1, "a": [[0, 0, 4, 0.1]]},
-        {"v": 1, "a": [[0, 0, 4, 0.1, float("nan")]]},
-        {"v": 1, "a": [[0, 0, 4.5, 0.1, 0.2]]},
-        {"v": 1, "a": [[0, 0x1000000, 4, 0.1, 0.2]]},
-        {"v": 1, "a": [[1, 3, 0, 4, 0.1, 0.2, 0.3, 0.4]]},
-        {"v": 1, "a": [[2, 0, 800, 0]]},
-        {"v": 1, "a": [[2, 0, 0, 600]]},
-        {"v": 1, "a": [[3, 0]]},
-    ],
-)
-def test_canvas_history_decoder_rejects_malformed_payloads(payload):
-    with pytest.raises(ValueError):
-        decode_canvas_history(payload)
-
-
-def test_canvas_history_decoder_enforces_complexity_limits():
+def test_the_binary_history_decoder_enforces_the_turn_limits():
+    """R-DRAW-07 on the wire decoder itself, not only on storage: a frame
+    claiming more actions or points than a turn may hold is refused."""
+    too_many_actions = PackedCanvasHistory()
+    for _ in range(MAX_CANVAS_ACTIONS + 1):
+        too_many_actions.append_clear()
     with pytest.raises(ValueError, match="too many actions"):
-        decode_canvas_history({"v": 1, "a": [[3]] * 20_001})
+        decode_binary_canvas_history(too_many_actions.binary_payload())
 
-    oversized_path = [0, 0, 4] + [0, 0] * 25_001
+    too_many_points = PackedCanvasHistory()
+    too_many_points.append_path([(0.0, 0.0)] * (MAX_CANVAS_POINTS + 1), color=0, width=4)
     with pytest.raises(ValueError, match="too many points"):
-        decode_canvas_history({"v": 1, "a": [oversized_path]})
+        decode_binary_canvas_history(too_many_points.binary_payload())
 
 
 def test_color_encoding_round_trip_preserves_leading_zeroes():

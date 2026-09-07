@@ -4,7 +4,7 @@ import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
-from app.canvas_history import encode_canvas_history
+from app.canvas_history import PackedCanvasHistory
 from app.handlers import register_all_handlers as register_handlers
 from tests.handlers.helpers import contains_secret
 from app.game import DRAWING_SECONDS, MAX_HINT_SPEND, Game
@@ -52,7 +52,7 @@ async def test_public_player_ids_are_broadcast_but_account_identity_is_private()
             drawer_name_color=host.name_color,
             prompt="apple",
             action_count=0,
-            canvas_history=encode_canvas_history([]),
+            canvas_history=PackedCanvasHistory().binary_payload(),
         )
     )
     host.kick_votes.add(host.id)

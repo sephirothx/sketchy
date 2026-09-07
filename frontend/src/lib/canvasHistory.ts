@@ -1,4 +1,4 @@
-import type { CanvasSyncPayload, ShapeType, StrokePoint, StrokeShapePayload } from "../types";
+import type { ShapeType, StrokePoint, StrokeShapePayload } from "../types";
 import type { LiveDrawingPacket } from "./liveDrawing";
 
 export const CANVAS_WIDTH = 800;
@@ -7,7 +7,6 @@ export const CANVAS_COORDINATE_SCALE = 4;
 
 const CANVAS_HISTORY_VERSION = 1;
 const MAX_BRUSH_WIDTH = 64;
-const MAX_NORMALIZED_COORDINATE_MAGNITUDE = 1_000_000;
 const MAX_CANVAS_ACTIONS = 20_000;
 /**
  * What each action costs a joining client to replay, relative to a stroke.
@@ -489,113 +488,6 @@ function isIntegerBetween(value: unknown, low: number, high: number): value is n
   return Number.isInteger(value) && isNumberBetween(value, low, high);
 }
 
-function historyColor(value: unknown): string | null {
-  if (!isIntegerBetween(value, 0, 0xffffff)) return null;
-  return `#${value.toString(16).padStart(6, "0")}`;
-}
-
-function decodeJsonCanvasHistory(payload: unknown): DecodedCanvasAction[] | null {
-  if (
-    typeof payload !== "object"
-    || payload === null
-    || Array.isArray(payload)
-    || Object.keys(payload).length !== 2
-    || !Object.hasOwn(payload, "v")
-    || !Object.hasOwn(payload, "a")
-    || (payload as CanvasSyncPayload).v !== CANVAS_HISTORY_VERSION
-    || !Array.isArray((payload as CanvasSyncPayload).a)
-    || (payload as CanvasSyncPayload).a.length > MAX_CANVAS_ACTIONS
-  ) {
-    return null;
-  }
-
-  const decoded: DecodedCanvasAction[] = [];
-  let totalPoints = 0;
-  for (const rawAction of (payload as CanvasSyncPayload).a) {
-    if (!Array.isArray(rawAction) || !isIntegerBetween(rawAction[0], 0, 3)) return null;
-    const tag = rawAction[0];
-    if (tag === 0) {
-      const color = historyColor(rawAction[1]);
-      if (
-        rawAction.length < 5
-        || (rawAction.length - 3) % 2 !== 0
-        || (rawAction.length - 3) / 2 > MAX_CANVAS_POINTS
-        || color === null
-        || !isIntegerBetween(rawAction[2], 1, MAX_BRUSH_WIDTH)
-      ) {
-        return null;
-      }
-      const points: CanvasPoint[] = [];
-      for (let index = 3; index < rawAction.length; index += 2) {
-        if (
-          !isNumberBetween(
-            rawAction[index],
-            -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-            MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-          )
-          || !isNumberBetween(
-            rawAction[index + 1],
-            -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-            MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-          )
-        ) {
-          return null;
-        }
-        points.push({
-          x: rawAction[index] * CANVAS_WIDTH,
-          y: rawAction[index + 1] * CANVAS_HEIGHT,
-        });
-      }
-      totalPoints += points.length;
-      if (totalPoints > MAX_CANVAS_POINTS) return null;
-      decoded.push({ kind: "path", color, width: rawAction[2], points });
-    } else if (tag === 1) {
-      const shapeId = rawAction[1];
-      const color = historyColor(rawAction[2]);
-      if (
-        rawAction.length !== 8
-        || !isIntegerBetween(shapeId, 0, HISTORY_SHAPES.length - 1)
-        || color === null
-        || !isIntegerBetween(rawAction[3], 1, MAX_BRUSH_WIDTH)
-        || rawAction.slice(4).some(
-          (value) => !isNumberBetween(
-            value,
-            -MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-            MAX_NORMALIZED_COORDINATE_MAGNITUDE,
-          ),
-        )
-      ) {
-        return null;
-      }
-      decoded.push({
-        kind: "shape",
-        payload: {
-          shape: HISTORY_SHAPES[shapeId],
-          color,
-          width: rawAction[3],
-          from: { x: rawAction[4], y: rawAction[5] },
-          to: { x: rawAction[6], y: rawAction[7] },
-        },
-      });
-    } else if (tag === 2) {
-      const color = historyColor(rawAction[1]);
-      if (
-        rawAction.length !== 4
-        || color === null
-        || !isIntegerBetween(rawAction[2], 0, CANVAS_WIDTH - 1)
-        || !isIntegerBetween(rawAction[3], 0, CANVAS_HEIGHT - 1)
-      ) {
-        return null;
-      }
-      decoded.push({ kind: "fill", color, x: rawAction[2], y: rawAction[3] });
-    } else {
-      if (rawAction.length !== 1) return null;
-      decoded.push({ kind: "clear" });
-    }
-  }
-  return decoded;
-}
-
 export function binaryDataView(payload: unknown): DataView | null {
   if (payload instanceof ArrayBuffer) return new DataView(payload);
   if (ArrayBuffer.isView(payload)) {
@@ -733,9 +625,10 @@ function decodeBinaryCanvasHistory(view: DataView): DecodedCanvasAction[] | null
   return decoded;
 }
 
+/** Decode a history frame: the `SKCH` binary envelope, the one form the
+server sends. The `{v, a}` JSON form it once fell back to was removed with
+#566: nothing had sent it since the binary envelope shipped. */
 export function decodeCanvasHistory(payload: unknown): DecodedCanvasAction[] | null {
   const binary = binaryDataView(payload);
-  return binary
-    ? decodeBinaryCanvasHistory(binary)
-    : decodeJsonCanvasHistory(payload);
+  return binary ? decodeBinaryCanvasHistory(binary) : null;
 }

@@ -9,35 +9,39 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, fields, is_dataclass
 import json
 import os
-from pathlib import Path
 import statistics
 import sys
 import time
+from dataclasses import asdict, dataclass, fields, is_dataclass
+from pathlib import Path
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.canvas_history import (  # noqa: E402
+from app.canvas_history import (
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
-    ClearAction,
-    FillAction,
+    CLEAR_TAG,
+    FILL_TAG,
     MAX_BINARY_CANVAS_HISTORY_BYTES,
     MAX_CANVAS_ACTIONS,
     MAX_CANVAS_POINTS,
+    PATH_TAG,
+    SHAPE_IDS,
+    SHAPE_TAG,
+    ClearAction,
+    FillAction,
     PackedCanvasHistory,
     PathAction,
     ShapeAction,
-    decode_binary_canvas_history,
     color_to_hex,
-    encode_canvas_history,
+    decode_binary_canvas_history,
 )
-from app.canvas_session import CanvasSession, MAX_CANVAS_COMMITS  # noqa: E402
+from app.canvas_session import MAX_CANVAS_COMMITS, CanvasSession
 
 
 @dataclass(frozen=True)
@@ -476,9 +480,31 @@ def report_near_limits() -> list[NearLimitResult]:
     return results
 
 
+def compact_history(actions: list) -> dict:
+    """The compact `{v, a}` JSON form, kept here as a yardstick only: it was
+    retired from the wire with #566 (nothing had sent it since the binary
+    envelope shipped), and this benchmark's story is what the binary envelope
+    saved against it."""
+    encoded = []
+    for action in actions:
+        if isinstance(action, PathAction):
+            record = [PATH_TAG, action.color, action.width]
+            for x, y in action.points:
+                record.extend((x, y))
+        elif isinstance(action, ShapeAction):
+            record = [SHAPE_TAG, SHAPE_IDS[action.shape], action.color, action.width,
+                      action.start[0], action.start[1], action.end[0], action.end[1]]
+        elif isinstance(action, FillAction):
+            record = [FILL_TAG, action.color, action.x, action.y]
+        else:
+            record = [CLEAR_TAG]
+        encoded.append(record)
+    return {"v": 1, "a": encoded}
+
+
 def report(name: str, actions: list) -> None:
     legacy = legacy_history(actions)
-    compact = encode_canvas_history(actions)
+    compact = compact_history(actions)
     legacy_bytes = len(encoded_bytes(legacy))
     compact_bytes = len(encoded_bytes(compact))
     binary_bytes = len(packed_history(actions).binary_payload())
