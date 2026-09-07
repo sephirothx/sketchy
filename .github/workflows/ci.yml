@@ -249,8 +249,12 @@ jobs:
       # READ COMMITTED interleavings are the ones production will see. A
       # SQLite pass (the backend job) proves integrity - foreign keys are
       # enforced there too since #612 - but never concurrency.
+      # Two workers, not the runner's four: the PostgreSQL container shares
+      # those vCPUs, and with four workers every database-bound test ran two
+      # to four times slower, the step took longer than with two, and the
+      # 33,000-game rebuild test overran its 30 s statement budget (#658).
       - name: Run the backend suite against PostgreSQL
-        run: pytest -q -n 4 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
+        run: pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
 
       - name: Save PostgreSQL test results
         if: ${{ !cancelled() }}
