@@ -28,6 +28,7 @@ import logging
 from time import perf_counter
 
 from app import correlation
+from app.protocol import PROTOCOL_HEADER, PROTOCOL_VERSION
 from app.services.telemetry import (
     HTTP_OUTCOME_ABORTED,
     PROBE_ROUTES,
@@ -40,6 +41,12 @@ from app.services.telemetry import (
 
 STATIC_PREFIX = "/assets/"
 RESPONSE_HEADER = b"x-request-id"
+# Every answer names the contract this build speaks (#476), so a tab that is
+# not on a socket learns it is stale from its next request rather than from a
+# handshake it may never make. Stamped here because this is the one wrapper
+# every response passes through, static files and errors included.
+PROTOCOL_RESPONSE_HEADER = PROTOCOL_HEADER.encode("ascii")
+PROTOCOL_RESPONSE_VALUE = str(PROTOCOL_VERSION).encode("ascii")
 
 access_log = logging.getLogger("sketchy.http")
 
@@ -86,9 +93,10 @@ class RequestTimingMiddleware:
                 headers = [
                     (name, value)
                     for name, value in message.get("headers", [])
-                    if name.lower() != RESPONSE_HEADER
+                    if name.lower() not in (RESPONSE_HEADER, PROTOCOL_RESPONSE_HEADER)
                 ]
                 headers.append((RESPONSE_HEADER, request_id.encode("ascii")))
+                headers.append((PROTOCOL_RESPONSE_HEADER, PROTOCOL_RESPONSE_VALUE))
                 message = {**message, "headers": headers}
             await send(message)
 

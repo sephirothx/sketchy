@@ -166,3 +166,17 @@ async def test_a_handler_sees_the_request_id_it_will_be_logged_under(tmp_path):
     async with client(app) as http:
         response = await http.get("/api/whoami")
     assert seen["id"] == response.headers["x-request-id"]
+
+
+async def test_every_response_names_the_protocol_this_build_speaks(env):
+    """#476: a tab that is not on a socket learns it is stale from its next
+    request. Routed, unrouted and error responses all carry it, because the
+    stale tab's next request is whichever one it makes."""
+    from app.protocol import PROTOCOL_HEADER, PROTOCOL_VERSION
+
+    app, _ = env
+    async with client(app) as http:
+        routed = await http.get("/api/things/1")
+        missing = await http.get("/api/nothing-here")
+    assert routed.headers[PROTOCOL_HEADER] == str(PROTOCOL_VERSION)
+    assert missing.headers[PROTOCOL_HEADER] == str(PROTOCOL_VERSION)

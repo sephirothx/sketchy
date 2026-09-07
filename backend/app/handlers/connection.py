@@ -15,6 +15,7 @@ from app.domain_values import RuntimeEventType
 from app.client_config import client_config
 from app.flow_timing import timing
 from app.handlers.context import HandlerContext
+from app import protocol
 from app.protocol import PROTOCOL_VERSION, client_protocol_version
 from app.rooms import Player, Room, _metrics_user_id as metrics_user_id
 from app.services.runtime_metrics import metrics
@@ -84,8 +85,10 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         client_protocol = client_protocol_version(auth)
         if client_protocol != PROTOCOL_VERSION:
             # Accepted, then told. Refusing would leave a stale build with nothing
-            # to act on; this way it can reload onto the one being served. The
-            # socket is otherwise ordinary until it does.
+            # to act on; this way it can reload onto the one being served. Then
+            # held to it (#476): every command is refused until it does, and
+            # the socket is closed if it has not gone in time. Checked after
+            # capacity and suspension so those outcomes stay their own.
             await ctx.sio.emit(
                 "upgrade_required",
                 {
@@ -94,6 +97,14 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
                     "received": client_protocol,
                 },
                 to=sid,
+            )
+            logger.info(
+                "socket %s speaks protocol %d, server speaks %d: told to upgrade",
+                sid, client_protocol, PROTOCOL_VERSION,
+            )
+            ctx.quarantine(
+                sid, client_protocol,
+                close_after=protocol.STALE_SOCKET_CLOSE_SECONDS,
             )
         if user_id is not None:
             # Every socket of an account shares one broadcast room, so account-
@@ -160,6 +171,7 @@ async def disconnect(ctx: HandlerContext, sid):
     # receive is not online.
     ctx.presence.note_socket_closed(sid)
     ctx.clear_command_budget(sid)
+    ctx.release_stale(sid)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition
         # that has already moved its seat on - the tab a reconnect superseded.

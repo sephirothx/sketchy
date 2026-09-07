@@ -2358,7 +2358,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 14,
+ "protocolVersion": 15,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2441,7 +2441,8 @@
    "cannot_report",
    "already_reported",
    "name_required",
-   "not_watching_lobby"
+   "not_watching_lobby",
+   "protocol_mismatch"
   ],
   "shape": [
    "ok",

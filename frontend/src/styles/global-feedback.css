@@ -45,6 +45,16 @@
   color: var(--primary-ink);
 }
 
+.server-shutdown-banner.is-update-required button {
+  background: var(--warm-ink);
+  border: 0;
+  border-radius: 6px;
+  color: var(--warm-soft);
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 12px;
+}
+
 .server-shutdown-banner.is-restarted button {
   background: none;
   border: 0;

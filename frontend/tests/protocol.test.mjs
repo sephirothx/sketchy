@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   PROTOCOL_VERSION,
+  handleProtocolHeader,
   handleUpgradeRequired,
+  reloadForUpdate,
 } from "../src/lib/protocol.ts";
 
 function fakeStorage(initial = {}) {
@@ -82,4 +84,55 @@ test("storage that throws still lets the reload happen", () => {
   );
 
   assert.equal(reloads, 1);
+});
+
+test("a REST response stamped with another version reloads once, with the same marker", () => {
+  // #476: the socket notice and the header share the marker, so between them
+  // they cannot reload the page twice for one server version.
+  const storage = fakeStorage();
+  let reloads = 0;
+  let stuck = 0;
+  const environment = {
+    storage,
+    reload: () => { reloads += 1; },
+    onStuck: () => { stuck += 1; },
+  };
+
+  assert.equal(handleProtocolHeader(String(PROTOCOL_VERSION), environment), false);
+  assert.equal(handleProtocolHeader(String(PROTOCOL_VERSION + 1), environment), true);
+  assert.equal(reloads, 1);
+  handleUpgradeRequired({ expected: PROTOCOL_VERSION + 1, received: PROTOCOL_VERSION }, environment);
+  assert.equal(reloads, 1);
+  assert.equal(stuck, 1);
+});
+
+test("a rollback to an older server version reloads onto it the same way", () => {
+  const storage = fakeStorage();
+  let reloads = 0;
+  handleProtocolHeader(String(PROTOCOL_VERSION - 1), { storage, reload: () => { reloads += 1; } });
+  assert.equal(reloads, 1);
+});
+
+test("a header that is missing or not a version is not a skew", () => {
+  // A proxy stripping unknown headers, or a captive portal answering in the
+  // server's place, must not reload the page.
+  let reloads = 0;
+  const environment = { storage: fakeStorage(), reload: () => { reloads += 1; } };
+  for (const value of [null, undefined, "", "abc", "1.5", "-1", "15x"]) {
+    assert.equal(handleProtocolHeader(value, environment), false, String(value));
+  }
+  assert.equal(reloads, 0);
+});
+
+test("reloading on request forgets the automatic reload already spent", () => {
+  const storage = fakeStorage({ "sketchy:upgrade-reload": "2" });
+  let reloads = 0;
+  reloadForUpdate({ storage: { removeItem: (key) => { delete storage.values[key]; } }, reload: () => { reloads += 1; } });
+  assert.equal(reloads, 1);
+  assert.equal(storage.getItem("sketchy:upgrade-reload"), null);
+  // So the next notice for that version is acted on again, not reported stuck.
+  let stuck = 0;
+  handleUpgradeRequired({ expected: 2, received: 1 }, { storage, reload: () => { reloads += 1; }, onStuck: () => { stuck += 1; } });
+  assert.equal(reloads, 2);
+  assert.equal(stuck, 0);
 });

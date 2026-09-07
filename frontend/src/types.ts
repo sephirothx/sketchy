@@ -489,7 +489,8 @@ export type ErrorCode =
   | "cannot_report"
   | "already_reported"
   | "name_required"
-  | "not_watching_lobby";
+  | "not_watching_lobby"
+  | "protocol_mismatch";
 
 export interface AckResponse {
   ok: boolean;

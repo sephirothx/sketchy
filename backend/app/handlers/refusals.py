@@ -133,6 +133,9 @@ class ErrorCode(StrEnum):
     NAME_REQUIRED = "name_required"
     NOT_WATCHING_LOBBY = "not_watching_lobby"
 
+    # Versioning: the socket was told to upgrade and has not reloaded yet.
+    PROTOCOL_MISMATCH = "protocol_mismatch"
+
 
 def refuse(
     code: ErrorCode,

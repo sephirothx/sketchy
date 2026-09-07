@@ -38,6 +38,8 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Awaitable, Callable
+
+from app.protocol import PROTOCOL_VERSION
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -270,7 +272,10 @@ class PollingSocket:
         if not opened or not isinstance(opened[0], str) or not opened[0].startswith("0"):
             raise ProbeError(self.label, "no Engine.IO open packet")
         self.sid = json.loads(opened[0][1:])["sid"]
-        await self._post(["40"])
+        # The socket handshake names the contract this probe speaks (wire
+        # §1); a client that names none is treated as older than version 1,
+        # told to upgrade, and refused everything it asks (#476).
+        await self._post(["40" + json.dumps({"protocol": PROTOCOL_VERSION})])
         self._poller = asyncio.create_task(self._poll_forever(), name=f"probe-poll-{self.label}")
         while self.socket_sid is None:
             event = await asyncio.wait_for(self._events.get(), STEP_TIMEOUT_SECONDS)
