@@ -124,6 +124,12 @@ class HandlerContext:
     _stale_sockets: dict[str, tuple[int, asyncio.Task | None]] = field(
         default_factory=dict, init=False, repr=False
     )
+    # Sockets whose last `draw` frame was dropped at the door (throttled).
+    # Nobody awaits a frame, so the drop is silent here; the drawing handler
+    # reads this on the next frame and closes the path the drop tore a hole
+    # in (#559), so that nothing is ever resolved against a point the server
+    # never recorded.
+    dropped_draw_frames: set[str] = field(default_factory=set, init=False, repr=False)
 
     def on(self, command: str, handler) -> None:
         """Register a client command, with the budget it answers to.
@@ -203,7 +209,9 @@ class HandlerContext:
             if command in SILENT_COMMANDS:
                 # A frame nobody is waiting on. Answering would put an error on
                 # screen in the middle of a stroke, about a frame the client
-                # never expected a reply to.
+                # never expected a reply to. Remembered instead, for the
+                # handler to act on at the next frame.
+                self.dropped_draw_frames.add(sid)
                 return None
             return {
                 "ok": False, "errorCode": ErrorCode.TOO_FAST, "retryAfterMs": int(budget.window_seconds * 1000),
@@ -279,6 +287,7 @@ class HandlerContext:
         """Forget a socket that has gone, so the windows do not outlive it."""
 
         self._command_windows.forget(sid)
+        self.dropped_draw_frames.discard(sid)
 
     @asynccontextmanager
     async def seating(self, sid: str) -> AsyncIterator[SeatingGate]:

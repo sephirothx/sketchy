@@ -7,8 +7,11 @@ import {
   colorBytes,
 } from "./canvasHistory.ts";
 import type {
+  RelativeMovePayload,
+  RelativePointRecord,
   StrokeFillPayload,
   StrokeMovePayload,
+  StrokePoint,
   StrokeShapePayload,
   StrokeStartPayload,
 } from "../types.ts";
@@ -41,10 +44,14 @@ const SHAPE_TAG = 3;
 const FILL_TAG = 4;
 const CLEAR_TAG = 5;
 const PATH_POINTS_DELTA_TAG = 6;
+const PATH_POINTS_RELATIVE_TAG = 7;
 
 export type LiveDrawingPacket =
   | { event: "draw_start"; payload: StrokeStartPayload }
   | { event: "draw_move"; payload: StrokeMovePayload }
+  // A relative frame decoded without its predecessor: offsets, not points
+  // yet. `resolveRelativePoints` turns it into a `draw_move` (#559).
+  | { event: "draw_move_relative"; payload: RelativeMovePayload }
   | { event: "draw_end"; payload: Record<string, never> }
   | { event: "draw_shape"; payload: StrokeShapePayload }
   | { event: "draw_fill"; payload: StrokeFillPayload }
@@ -87,6 +94,51 @@ export function encodePathStart(payload: StrokeStartPayload): Uint8Array {
   return frame;
 }
 
+function stepFits(deltaX: number, deltaY: number): boolean {
+  return deltaX >= MIN_DELTA && deltaX <= MAX_DELTA
+    && deltaY >= MIN_DELTA && deltaY <= MAX_DELTA;
+}
+
+/** Offset records from `previous`, escaping to an absolute pair where a
+step is too far for a byte. Shared by the delta frame (after its absolute
+first point) and the relative frame (#559, from the open path's last point). */
+function writeRecords(
+  view: DataView,
+  offset: number,
+  packed: number[][],
+  previous: number[],
+): number {
+  let [previousX, previousY] = previous;
+  for (const [x, y] of packed) {
+    const deltaX = x - previousX;
+    const deltaY = y - previousY;
+    if (stepFits(deltaX, deltaY)) {
+      view.setInt8(offset, deltaX);
+      view.setInt8(offset + 1, deltaY);
+      offset += 2;
+    } else {
+      view.setInt8(offset, DELTA_ESCAPE);
+      view.setInt16(offset + 1, x, true);
+      view.setInt16(offset + 3, y, true);
+      offset += ESCAPE_RECORD_SIZE;
+    }
+    previousX = x;
+    previousY = y;
+  }
+  return offset;
+}
+
+function recordsSize(packed: number[][], previous: number[]): number {
+  let size = 0;
+  let [previousX, previousY] = previous;
+  for (const [x, y] of packed) {
+    size += stepFits(x - previousX, y - previousY) ? 2 : ESCAPE_RECORD_SIZE;
+    previousX = x;
+    previousY = y;
+  }
+  return size;
+}
+
 export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
   if (payload.points.length < 1 || payload.points.length > MAX_POINTS_PER_FRAME) {
     throw new Error("Invalid path point count");
@@ -96,12 +148,27 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
     packedCoordinate(point.y, CANVAS_HEIGHT),
   ]);
 
-  const fits = (index: number): boolean => {
-    const deltaX = packed[index][0] - packed[index - 1][0];
-    const deltaY = packed[index][1] - packed[index - 1][1];
-    return deltaX >= MIN_DELTA && deltaX <= MAX_DELTA
-      && deltaY >= MIN_DELTA && deltaY <= MAX_DELTA;
-  };
+  // With the open path's last point in hand, the relative form is the
+  // smallest of the three whenever its first step fits a byte: every point
+  // is two bytes and there is no absolute first point (#559). A first step
+  // too far would make it the largest, so the frame falls back to the
+  // self-contained forms.
+  if (payload.previous) {
+    const previous = [
+      packedCoordinate(payload.previous.x, CANVAS_WIDTH),
+      packedCoordinate(payload.previous.y, CANVAS_HEIGHT),
+    ];
+    if (stepFits(packed[0][0] - previous[0], packed[0][1] - previous[1])) {
+      const frame = new Uint8Array(1 + recordsSize(packed, previous));
+      const view = new DataView(frame.buffer);
+      view.setUint8(0, header(PATH_POINTS_RELATIVE_TAG));
+      writeRecords(view, 1, packed, previous);
+      return frame;
+    }
+  }
+
+  const fits = (index: number): boolean =>
+    stepFits(packed[index][0] - packed[index - 1][0], packed[index][1] - packed[index - 1][1]);
 
   const absoluteSize = 1 + packed.length * 4;
   let deltaSize = 1 + 4;
@@ -125,20 +192,34 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
   view.setUint8(0, header(PATH_POINTS_DELTA_TAG));
   view.setInt16(1, packed[0][0], true);
   view.setInt16(3, packed[0][1], true);
-  let offset = 5;
-  for (let index = 1; index < packed.length; index += 1) {
-    if (fits(index)) {
-      view.setInt8(offset, packed[index][0] - packed[index - 1][0]);
-      view.setInt8(offset + 1, packed[index][1] - packed[index - 1][1]);
-      offset += 2;
-    } else {
-      view.setInt8(offset, DELTA_ESCAPE);
-      view.setInt16(offset + 1, packed[index][0], true);
-      view.setInt16(offset + 3, packed[index][1], true);
-      offset += ESCAPE_RECORD_SIZE;
-    }
-  }
+  writeRecords(view, 5, packed.slice(1), packed[0]);
   return frame;
+}
+
+/** The points a relative frame stands for, given the open path's last point.
+Null when a step walks a coordinate out of the packed range. */
+export function resolveRelativePoints(
+  packet: Extract<LiveDrawingPacket, { event: "draw_move_relative" }>,
+  previous: StrokePoint,
+): Extract<LiveDrawingPacket, { event: "draw_move" }> | null {
+  let x = packedCoordinate(previous.x, CANVAS_WIDTH);
+  let y = packedCoordinate(previous.y, CANVAS_HEIGHT);
+  const points: StrokePoint[] = [];
+  for (const record of packet.payload.records) {
+    if ("dx" in record) {
+      x += record.dx;
+      y += record.dy;
+      if (x < -0x8000 || x > 0x7fff || y < -0x8000 || y > 0x7fff) return null;
+    } else {
+      x = record.x;
+      y = record.y;
+    }
+    points.push({
+      x: unpackedCoordinate(x, CANVAS_WIDTH),
+      y: unpackedCoordinate(y, CANVAS_HEIGHT),
+    });
+  }
+  return { event: "draw_move", payload: { points } };
 }
 
 export function encodePathEnd(): number {
@@ -227,11 +308,17 @@ export function toWireFrame(frame: number | Uint8Array): number | string | Uint8
   return bytesToBase64(frame);
 }
 
-export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
+/** Decode a frame. A relative `draw_move` (#559) needs the open path's last
+point to become points; given `previous` it comes back as an ordinary
+`draw_move`, without it as `draw_move_relative` for the caller to resolve. */
+export function decodeLiveDrawing(
+  payload: unknown,
+  previous?: StrokePoint | null,
+): LiveDrawingPacket | null {
   if (typeof payload === "string") {
     const bytes = base64ToBytes(payload);
     if (!bytes) return null;
-    return decodeLiveDrawing(bytes);
+    return decodeLiveDrawing(bytes, previous);
   }
   if (typeof payload === "number") {
     if (
@@ -313,6 +400,25 @@ export function decodeLiveDrawing(payload: unknown): LiveDrawingPacket | null {
       if (points.length > MAX_POINTS_PER_FRAME) return null;
     }
     return { event: "draw_move", payload: { points } };
+  }
+  if (tag === PATH_POINTS_RELATIVE_TAG) {
+    if (view.byteLength < 3) return null;
+    const records: RelativePointRecord[] = [];
+    let offset = 1;
+    while (offset < view.byteLength) {
+      if (view.getInt8(offset) === DELTA_ESCAPE) {
+        if (offset + 5 > view.byteLength) return null;
+        records.push({ x: view.getInt16(offset + 1, true), y: view.getInt16(offset + 3, true) });
+        offset += 5;
+      } else {
+        if (offset + 2 > view.byteLength) return null;
+        records.push({ dx: view.getInt8(offset), dy: view.getInt8(offset + 1) });
+        offset += 2;
+      }
+      if (records.length > MAX_POINTS_PER_FRAME) return null;
+    }
+    const relative = { event: "draw_move_relative" as const, payload: { records } };
+    return previous ? resolveRelativePoints(relative, previous) : relative;
   }
   if (tag === PATH_END_TAG) {
     return view.byteLength === 1 ? { event: "draw_end", payload: {} } : null;

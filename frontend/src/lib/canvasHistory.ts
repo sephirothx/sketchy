@@ -1,8 +1,4 @@
-import type {
-  CanvasSyncPayload,
-  ShapeType,
-  StrokeShapePayload,
-} from "../types";
+import type { CanvasSyncPayload, ShapeType, StrokePoint, StrokeShapePayload } from "../types";
 import type { LiveDrawingPacket } from "./liveDrawing";
 
 export const CANVAS_WIDTH = 800;
@@ -266,7 +262,20 @@ export class ClientCanvasHistory {
     return true;
   }
 
+  /** Where the open path ends, in normalized coordinates, or null when no
+  path is open: what a relative `draw_move` frame is resolved against (#559). */
+  openPathLastPoint(): StrokePoint | null {
+    const path = this.activePath
+      ?? (this.actions.at(-1)?.kind === "path" ? this.actions.at(-1) : null);
+    if (!path || path.kind !== "path") return null;
+    const last = path.points.at(-1);
+    if (!last) return null;
+    return { x: last.x / CANVAS_WIDTH, y: last.y / CANVAS_HEIGHT };
+  }
+
   apply(packet: LiveDrawingPacket): boolean {
+    // Offsets are not points: the caller resolves them first (#559).
+    if (packet.event === "draw_move_relative") return false;
     if (packet.event === "draw_move") {
       if (!this.activePath && this.actions.at(-1)?.kind === "path") {
         this.activePath = this.actions.at(-1) as Extract<

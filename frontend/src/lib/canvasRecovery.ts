@@ -26,7 +26,8 @@ Three parts, all pure so they can be tested without a socket:
   end frame or a lost commit. Three tries with backoff, then authoritative
   state: the drawing that exists is the one the room has. */
 
-import { decodeLiveDrawing, encodePathPoints } from "./liveDrawing.ts";
+import { decodeLiveDrawing, encodePathPoints, type LiveDrawingPacket } from "./liveDrawing.ts";
+import type { StrokePoint } from "../types.ts";
 import type { DrawingFrame } from "./liveDrawing.ts";
 
 const MAX_POINTS_PER_FRAME = 256;
@@ -49,9 +50,23 @@ export interface DrawingAllowance {
 
 Anything that is not `start, move*, end` - a shape, a fill, a clear, or a path
 still open - comes back as it was. Order and points are untouched. */
+/** Decode a path's saved frames in order, each relative frame against the
+point the one before it ended on (#559). A frame that cannot be decoded is
+null in place. */
+export function decodeSavedFrames(frames: DrawingFrame[]): (LiveDrawingPacket | null)[] {
+  let previous: StrokePoint | null = null;
+  return frames.map((frame) => {
+    const packet = decodeLiveDrawing(frame, previous);
+    if (packet?.event === "draw_start") previous = { x: packet.payload.x, y: packet.payload.y };
+    else if (packet?.event === "draw_move") previous = packet.payload.points.at(-1) ?? previous;
+    else if (packet?.event === "draw_move_relative") return null;
+    return packet;
+  });
+}
+
 export function repackDrawFrames(frames: DrawingFrame[]): DrawingFrame[] {
   if (frames.length < 2) return frames;
-  const packets = frames.map((frame) => decodeLiveDrawing(frame));
+  const packets = decodeSavedFrames(frames);
   const first = packets[0];
   const last = packets.at(-1);
   if (!first || first.event !== "draw_start" || !last || last.event !== "draw_end") return frames;
@@ -70,8 +85,7 @@ export function repackDrawFrames(frames: DrawingFrame[]): DrawingFrame[] {
 
 export function pointCount(frames: DrawingFrame[]): number {
   let total = 0;
-  for (const frame of frames) {
-    const packet = decodeLiveDrawing(frame);
+  for (const packet of decodeSavedFrames(frames)) {
     if (packet?.event === "draw_move") total += packet.payload.points.length;
   }
   return total;

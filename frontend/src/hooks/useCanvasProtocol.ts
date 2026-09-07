@@ -74,7 +74,11 @@ export interface CanvasProtocolRenderer {
 
 export interface CanvasProtocol {
   beginDrawAction(frame: DrawingFrame, isPath?: boolean): number | null;
-  sendPathFrame(frame: DrawingFrame): void;
+  /** Whether the frame was applied and sent. A frame that was not - no path
+  open, undecodable, over the point budget, refused by the history - leaves
+  the open path where it was, and the caller's idea of its last point must
+  stay there too, since the next relative frame is resolved against it (#559). */
+  sendPathFrame(frame: DrawingFrame): boolean;
   finishPathAction(): void;
   requestUndo(): void;
   requestClear(): void;
@@ -177,11 +181,20 @@ export function useCanvasProtocol(
     return sequence;
   }, [requestAuthoritativeSync]);
 
+  // A relative `draw_move` (#559) carries offsets from the open path's last
+  // point, which the history holds; decoded against it here so that every
+  // consumer below sees points. One that arrives with no open path decodes
+  // to nothing, like a frame that does not decode at all.
+  const decodeAgainstHistory = useCallback((frame: unknown): LiveDrawingPacket | null => {
+    const packet = decodeLiveDrawing(frame, historyRef.current.openPathLastPoint());
+    return packet?.event === "draw_move_relative" ? null : packet;
+  }, []);
+
   const beginDrawAction = useCallback((
     frame: DrawingFrame,
     isPath = false,
   ): number | null => {
-    const packet = decodeLiveDrawing(frame);
+    const packet = decodeAgainstHistory(frame);
     if (!packet || !historyRef.current.apply(packet)) return null;
     const sequence = allocateSequence();
     const generation = historyRef.current.generation;
@@ -202,14 +215,14 @@ export function useCanvasProtocol(
     if (!isPath) watchRef.current?.arm(sequence);
     publishBudgets();
     return sequence;
-  }, [allocateSequence, publishBudgets, requestAuthoritativeSync, sendDraw]);
+  }, [allocateSequence, decodeAgainstHistory, publishBudgets, requestAuthoritativeSync, sendDraw]);
 
-  const sendPathFrame = useCallback((frame: DrawingFrame): void => {
+  const sendPathFrame = useCallback((frame: DrawingFrame): boolean => {
     const sequence = activeOutgoingSequenceRef.current;
-    if (sequence === null) return;
+    if (sequence === null) return false;
     const pending = pendingMutationsRef.current.get(sequence);
-    const packet = decodeLiveDrawing(frame);
-    if (!pending || pending.kind !== "draw" || !packet) return;
+    const packet = decodeAgainstHistory(frame);
+    if (!pending || pending.kind !== "draw" || !packet) return false;
     if (
       packet.event === "draw_move"
       && !pointsFitWithinBudget(
@@ -220,16 +233,17 @@ export function useCanvasProtocol(
       // The server refuses a batch whole, so taking part of it here would put
       // the two histories out of step. Drop it and let the stroke end where
       // the budget ran out.
-      return;
+      return false;
     }
     if (!historyRef.current.apply(packet)) {
       requestAuthoritativeSync();
-      return;
+      return false;
     }
     pending.frames.push(frame);
     sendDraw(frame);
     if (packet.event === "draw_move") publishBudgets();
-  }, [publishBudgets, requestAuthoritativeSync, sendDraw]);
+    return true;
+  }, [decodeAgainstHistory, publishBudgets, requestAuthoritativeSync, sendDraw]);
 
   const finishPathAction = useCallback((): void => {
     const sequence = activeOutgoingSequenceRef.current;
@@ -284,7 +298,7 @@ export function useCanvasProtocol(
     // is spared a second event per action. The drawer is skipped by the
     // rebroadcast and still receives `canvas_commit` on its own.
     const onDraw = (payload: unknown, commit?: unknown) => {
-      const packet = decodeLiveDrawing(payload);
+      const packet = decodeAgainstHistory(payload);
       if (!packet) {
         requestAuthoritativeSync();
         return;
@@ -442,7 +456,7 @@ export function useCanvasProtocol(
         const pending = pendingMutationsRef.current.get(pendingSequence)!;
         if (pending.kind === "draw") {
           for (const frame of pending.frames) {
-            const packet = decodeLiveDrawing(frame);
+            const packet = decodeAgainstHistory(frame);
             if (!packet || !historyRef.current.apply(packet)) {
               recoveryValid = false;
               break;
@@ -680,7 +694,7 @@ export function useCanvasProtocol(
       watchRef.current = null;
       syncRequestsRef.current?.reset();
     };
-  }, [ensureSyncRequester, publishBudgets, renderer, requestAuthoritativeSync, sendDraw]);
+  }, [decodeAgainstHistory, ensureSyncRequester, publishBudgets, renderer, requestAuthoritativeSync, sendDraw]);
 
   return useMemo(() => ({
     beginDrawAction,

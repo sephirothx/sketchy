@@ -227,3 +227,23 @@ test("a stale notice discards pending work, except a deferral which only waits",
   assert.equal(staleNoticeAction("nope", 3), null);
   assert.equal(staleNoticeAction([3, 0, 5, 2000], 3), null);
 });
+
+test("saved relative frames repack to self-contained ones with the same points (#559)", () => {
+  // A replayed path must decode on its own on the server: the repack
+  // resolves each saved frame against the one before it and re-encodes
+  // without a predecessor.
+  const start = encodePathStart({ x: 0.5, y: 0.5, color: "#000000", width: 4 });
+  const first = encodePathPoints({ points: [{ x: 0.5, y: 0.51 }], previous: { x: 0.5, y: 0.5 } });
+  const second = encodePathPoints({ points: [{ x: 0.51, y: 0.52 }, { x: 0.52, y: 0.52 }], previous: { x: 0.5, y: 0.51 } });
+  assert.equal(first[0] & 0x0f, 7);
+  assert.equal(second[0] & 0x0f, 7);
+  const frames = [start, first, second, encodePathEnd()];
+  assert.equal(pointCount(frames), 3);
+  const repacked = repackDrawFrames(frames);
+  assert.equal(repacked.length, 3);
+  assert.notEqual(repacked[1][0] & 0x0f, 7);
+  assert.deepEqual(
+    decodeLiveDrawing(repacked[1]).payload.points,
+    [{ x: 0.5, y: 0.51 }, { x: 0.51, y: 0.52 }, { x: 0.52, y: 0.52 }],
+  );
+});

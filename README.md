@@ -25,7 +25,7 @@ keyboard that takes half the screen, and one thumb.
 - Lobby with a live, polled list of public rooms, or join a private room by code.
 - Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
-- Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line.
+- Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line. Points go out every 80 ms, each frame relative to the last point sent, and a viewer plays each batch out over the next 80 ms at the screen's own rate rather than painting it in one step, so it sees ink smoothly, up to 80 ms behind the drawer's hand.
 - Drawing rules — two **Room rules** the host sets at creation and edits while waiting.
   **Allowed tools** turns the brush, fill, and shapes on and off independently (at least one
   of brush and shapes stays on, since fill alone can only flood a blank canvas), and
@@ -1539,8 +1539,10 @@ recording is named for what it is and added beside the others, not swapped in. T
 three traces there were recorded before the client thinned its samples (#560), so
 they are the raw pointer input; `point_thinning.py` replays them through the thinner
 at several tolerances and reports points, bytes, the measured error bound, the
-pixels that change and the blank regions a fill could be aimed at. A trace recorded
-now would already be thinned, and would understate what thinning does. A repeated identical batch, which is what the benchmark
+pixels that change and the blank regions a fill could be aimed at, then puts the same
+kept points on the wire three ways — 40 ms frames, 40 ms relative frames, and 80 ms
+relative frames — for the message count and the deflated bytes of each (#559). A trace
+recorded now would already be thinned, and would understate what thinning does. A repeated identical batch, which is what the benchmark
 modelled before, is deflate's best case and understated live drawing by about
 half; the trace is what fixed that.
 

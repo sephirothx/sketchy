@@ -41,11 +41,15 @@ class ClientConfig:
 
     # How long queued path points wait before going out as one frame. The
     # drawer never feels it - their own canvas is rasterized on every
-    # pointermove - but a viewer receives a whole batch at once and draws it as
-    # one polyline, so a fast curve arrives as visible facets. The byte curve
-    # says to raise this; measured against a viewer's screen, 56ms and 80ms
-    # both read as steppy and 40ms did not.
-    flush_interval_ms: int = 40
+    # pointermove. A viewer used to paint each batch the moment it landed,
+    # which made 56 ms and 80 ms read as steppy on a viewer's screen and kept
+    # this at 40; since #559 a viewer plays each batch out over the interval
+    # that follows it, at the screen's own rate, so the interval no longer
+    # shows as steps and the byte curve gets its way: 80 ms halves the
+    # point messages a drawer sends, at the cost of a viewer seeing ink up
+    # to 80 ms behind the drawer's hand instead of 40. Still shipped, so it
+    # can be moved back from the admin panel while somebody watches.
+    flush_interval_ms: int = 80
 
     # Where the drawing budget in force is read from. Version 3 (#597) tells
     # the client the allowance its `draw` frames spend, so a client replaying

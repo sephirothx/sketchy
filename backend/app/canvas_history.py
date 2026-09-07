@@ -231,6 +231,21 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
         self.data.extend(record)
         return len(self) - 1
 
+    def last_path_point(self, index: int) -> tuple[float, float]:
+        """The last point of the path at `index`, in normalized coordinates.
+
+        What a relative `draw_move` frame (#559) is resolved against: the
+        record's final four bytes, read in place rather than by decoding
+        the path.
+        """
+        if index != len(self) - 1 or self.data[self.offsets[index]] != PATH_TAG:
+            raise ValueError("only the active final path has a last point")
+        x, y = _PATH_POINT.unpack_from(self.data, len(self.data) - _PATH_POINT.size)
+        return (
+            _unpack_coordinate(x, CANVAS_WIDTH),
+            _unpack_coordinate(y, CANVAS_HEIGHT),
+        )
+
     def extend_path(
         self,
         index: int,

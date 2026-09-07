@@ -36,7 +36,7 @@ was already open across the deploy.
 """
 from __future__ import annotations
 
-PROTOCOL_VERSION = 15
+PROTOCOL_VERSION = 16
 
 # How long a socket that was told to upgrade is kept before it is closed.
 # Long enough for the reload the notice asks for (a fraction of a second on

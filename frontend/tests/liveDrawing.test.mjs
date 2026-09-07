@@ -9,6 +9,7 @@ import {
   encodePathPoints,
   encodePathStart,
   encodeShape,
+  resolveRelativePoints,
 } from "../src/lib/liveDrawing.ts";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../src/lib/canvasHistory.ts";
 
@@ -78,4 +79,44 @@ test("fill coordinates preserve the addressed canvas pixel", () => {
   const edge = decodeLiveDrawing(encodeFill({ x: 0.9999, y: 0.9999, color: "#abcdef" }));
   assert.equal(Math.floor(edge.payload.x * CANVAS_WIDTH), CANVAS_WIDTH - 1);
   assert.equal(Math.floor(edge.payload.y * CANVAS_HEIGHT), CANVAS_HEIGHT - 1);
+});
+
+test("a relative frame is offsets from the open path and three bytes a point (#559)", () => {
+  const previous = { x: 0.5, y: 0.5 };
+  const one = encodePathPoints({ points: [{ x: 0.5, y: 0.51 }], previous });
+  assert.equal(one.byteLength, 3);
+  assert.equal(one[0] & 0x0f, 7);
+  // Without the predecessor: offsets, for the caller to resolve.
+  const unresolved = decodeLiveDrawing(one);
+  assert.equal(unresolved.event, "draw_move_relative");
+  assert.deepEqual(unresolved.payload.records, [{ dx: 0, dy: 24 }]);
+  // With it: points.
+  const resolved = decodeLiveDrawing(one, previous);
+  assert.equal(resolved.event, "draw_move");
+  assert.deepEqual(resolved.payload.points, [{ x: 0.5, y: 0.51 }]);
+  assert.deepEqual(resolveRelativePoints(unresolved, { x: 0.25, y: 0.25 }).payload.points, [{ x: 0.25, y: 0.26 }]);
+
+  const many = encodePathPoints({ points: [{ x: 0.5, y: 0.51 }, { x: 0.51, y: 0.52 }, { x: 0.52, y: 0.52 }], previous });
+  assert.equal(many.byteLength, 1 + 3 * 2);
+  assert.deepEqual(decodeLiveDrawing(many, previous).payload.points, [{ x: 0.5, y: 0.51 }, { x: 0.51, y: 0.52 }, { x: 0.52, y: 0.52 }]);
+
+  // A first step too far falls back to a self-contained frame; a later jump
+  // escapes to an absolute pair inside the relative frame.
+  const far = encodePathPoints({ points: [{ x: 0.9, y: 0.9 }], previous });
+  assert.notEqual(far[0] & 0x0f, 7);
+  assert.equal(far.byteLength, 5);
+  const jump = encodePathPoints({ points: [{ x: 0.5, y: 0.51 }, { x: 0.9, y: 0.9 }], previous });
+  assert.equal(jump[0] & 0x0f, 7);
+  assert.equal(jump.byteLength, 1 + 2 + 5);
+  assert.deepEqual(decodeLiveDrawing(jump, previous).payload.points[1], { x: 0.9, y: 0.9 });
+
+  // Malformed: no records, half a record, an escape with half a pair.
+  for (const bytes of [[0x17], [0x17, 1], [0x17, 0x80, 0, 0]]) {
+    assert.equal(decodeLiveDrawing(new Uint8Array(bytes), previous), null);
+  }
+  // A walk off the packed range resolves to nothing.
+  const walk = new Uint8Array(1 + 256 * 2);
+  walk[0] = 0x17;
+  for (let i = 1; i < walk.length; i += 2) walk[i] = 127;
+  assert.equal(decodeLiveDrawing(walk, { x: 1, y: 0.5 }), null);
 });

@@ -44,7 +44,7 @@ test("versioned canvas protocol goldens match frontend frames, histories, and ha
   for (const fixture of fixtures.frames) {
     const encoded = encoders[fixture.event](fixture.payload);
     assert.equal(wireHex(encoded), fixture.wire);
-    assert.equal(decodeLiveDrawing(encoded)?.event, fixture.event);
+    assert.equal(decodeLiveDrawing(encoded, fixture.payload.previous)?.event, fixture.event);
   }
 
   for (const fixture of fixtures.histories) {

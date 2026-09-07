@@ -76,6 +76,10 @@ export function useCanvasPointerInput(
   const lastPointRef = useRef<StrokePoint | null>(null);
   // Thins the stroke under the pen; null between strokes.
   const thinnerRef = useRef<PointThinner | null>(null);
+  // The last point the server has been sent for the open path - the start
+  // point, then the last point of each frame - which the next frame's points
+  // are encoded relative to (#559).
+  const lastSentRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
   const pointerPosRef = useRef<StrokePoint | null>(null);
   const inputActiveRef = useRef(false);
@@ -178,16 +182,30 @@ export function useCanvasPointerInput(
   useEffect(() => {
     acceptRef.current = acceptPoints;
     repaintPreviewRef.current = repaintPreview;
+    sendPendingPointsRef.current = sendPendingPoints;
   });
+
+  // The queued points as one frame, relative to the last point sent, which
+  // they then become the last of - only if the frame went. A frame the
+  // protocol dropped (over the point budget, no path open) left the server's
+  // path where it was, and the next frame must be relative to that.
+  function sendPendingPoints() {
+    const points = pendingPointsRef.current;
+    if (points.length === 0) return;
+    pendingPointsRef.current = [];
+    const sent = protocol.sendPathFrame(
+      encodePathPoints({ points, previous: lastSentRef.current ?? undefined }),
+    );
+    if (sent) lastSentRef.current = points[points.length - 1];
+  }
+  const sendPendingPointsRef = useRef(sendPendingPoints);
 
   function finishPath() {
     const thinner = thinnerRef.current;
     if (thinner) acceptPoints(thinner.end());
     thinnerRef.current = null;
-    if (pendingPointsRef.current.length > 0) {
-      protocol.sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
-      pendingPointsRef.current = [];
-    }
+    sendPendingPoints();
+    lastSentRef.current = null;
     protocol.sendPathFrame(encodePathEnd());
     protocol.finishPathAction();
     repaintPreview(pointerPosRef.current);
@@ -261,6 +279,7 @@ export function useCanvasPointerInput(
     if (tool === "brush" || tool === "eraser") {
       const activeColor = tool === "eraser" ? "#ffffff" : color;
       thinnerRef.current = createPointThinner(point);
+      lastSentRef.current = point;
       drawLocalSegment(point, point);
       protocol.beginDrawAction(encodePathStart({
         x: point.x,
@@ -351,10 +370,7 @@ export function useCanvasPointerInput(
           repaintPreviewRef.current(pointerPosRef.current);
         }
       }
-      if (pendingPointsRef.current.length === 0) return;
-      const points = pendingPointsRef.current;
-      pendingPointsRef.current = [];
-      protocol.sendPathFrame(encodePathPoints({ points }));
+      sendPendingPointsRef.current();
     }, flushIntervalMs);
     return () => clearInterval(flushTimer);
   }, [isDrawer, protocol, flushIntervalMs]);
@@ -364,10 +380,8 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     if (thinner) acceptRef.current(thinner.end());
     thinnerRef.current = null;
-    if (pendingPointsRef.current.length > 0) {
-      protocol.sendPathFrame(encodePathPoints({ points: pendingPointsRef.current }));
-      pendingPointsRef.current = [];
-    }
+    sendPendingPointsRef.current();
+    lastSentRef.current = null;
     protocol.sendPathFrame(encodePathEnd());
     protocol.finishPathAction();
     inputActiveRef.current = false;
@@ -393,6 +407,7 @@ export function useCanvasPointerInput(
     pendingPointsRef.current = [];
     lastPointRef.current = null;
     thinnerRef.current = null;
+    lastSentRef.current = null;
     shapeStartRef.current = null;
     pointerPosRef.current = null;
     clearPreview();

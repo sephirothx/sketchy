@@ -283,8 +283,10 @@ legitimate drawer produces and the budget decides how many are accepted.
 
 Windows are per socket and per **kind**, not per command, so two commands of one kind
 share the allowance that kind was given. The numbers follow the client's own cadence:
-the drawer's flush timer fires every 40 ms, so drawing is allowed double the 25 frames a
-second that produces, while a full canvas replay is spaced rather than stockpiled.
+the drawer's flush timer fires every 80 ms (#559), so drawing is allowed four times the
+12.5 frames a second that produces — room for an administrator moving the interval back
+to 40 ms, and for the bunching a stall leaves behind — while a full canvas replay is
+spaced rather than stockpiled.
 
 ### Client-side delivery guarantees
 
@@ -621,7 +623,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash, requestId)` — `requestId` names the request it answers, `0` for a sync the server decided to send | one socket |
 | `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash, requestId)` — only the actions after a verified prefix (§7); always answers a request, never unsolicited | one socket |
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
-| `canvas_stale` | `[generation, sequence, reason, retryAfterMs]` — this socket's canvas needs recovering: `stale_generation`, `refused_tool`, `unknown_sequence`, `invalid_frame`, or `deferred` (a snapshot the server would have pushed is held until the resync window opens). At most one per socket per window; the client answers through its sync transaction (§7) | one socket |
+| `canvas_stale` | `[generation, sequence, reason, retryAfterMs]` — this socket's canvas needs recovering: `stale_generation`, `refused_tool`, `unknown_sequence`, `invalid_frame`, `dropped_frame` (a frame of this socket's was throttled at the door and the open path was closed where the server's copy ends, §6), or `deferred` (a snapshot the server would have pushed is held until the resync window opens). At most one per socket per window; the client answers through its sync transaction (§7) | one socket |
 | `voted_afk` | `{message}` | the player who was voted AFK |
 | `kicked` | `{reason}` | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
@@ -838,10 +840,14 @@ fixed when the drain starts, so a change to the configured default cannot move i
 
 Cadences the *client* runs at, decided by the server so a deployment can tune them
 without shipping a bundle (R-CONF-01). `flushIntervalMs` is the motivating case:
-it is the largest single lever on drawing bandwidth, the drawer never feels it —
-their own canvas is rasterized on every `pointermove` — and a viewer draws each
-batch as one polyline, so a value the byte curve likes can arrive visibly faceted.
-It can only be settled by looking at a running game, which is why it ships.
+it is the largest single lever on drawing bandwidth, and the drawer never feels it —
+their own canvas is rasterized on every `pointermove`. A viewer used to draw each batch
+as one polyline the moment it landed, so a value the byte curve liked arrived visibly
+faceted and the default stayed at 40 ms; since #559 a viewer plays each batch out over
+the interval that follows it (§6, *Playback on the viewer*), and the default is
+**80 ms**: half the point messages, a viewer up to 80 ms behind the drawer's hand
+instead of 40. It still ships rather than compiles, so it can be moved while somebody
+watches.
 
 Version 2 dropped `lobbyPollIntervalMs`. The lobby is told about rooms over its
 channel now (#462) and has no cadence of its own to be given.
@@ -904,6 +910,8 @@ bit  7 6 5 4 | 3 2 1 0
 | `SHAPE` | 3 | `draw_shape` | binary, 14 bytes |
 | `FILL` | 4 | `draw_fill` | binary, 8 bytes |
 | `CLEAR` | 5 | `clear_canvas` | integer `0x15` |
+| `PATH_POINTS_DELTA` | 6 | `draw_move` | binary, 5 + 2·(n−1) bytes without escapes |
+| `PATH_POINTS_RELATIVE` | 7 | `draw_move` | binary, 1 + 2·n bytes without escapes (#559) |
 
 ### Frame layouts
 
@@ -913,6 +921,8 @@ All multi-byte integers are **little-endian** except colors, which are big-endia
 | --- | --- | --- |
 | `draw_start` | `<B3sBhh` | header, color (3 B, RGB), width (1 B), x, y (int16) |
 | `draw_move` | `B` + `<hh` × n | header, then n points; 1 ≤ n ≤ 256 (`MAX_POINTS_PER_FRAME`) |
+| `draw_move` (delta, tag 6) | `B` + `<hh` + records | header, the first point absolute, then one record per further point: `<bb` (a signed-byte offset from the previous point) or the escape byte `0x80` followed by `<hh` absolute |
+| `draw_move` (relative, tag 7) | `B` + records | header, then one record per point in the same two shapes — the first relative to the **open path's last point**, which the frame does not carry (#559). Decodes to offsets; the receiver resolves them against the path it holds: the server against `canvas_session`, a viewer against its own history. A relative frame with no open path is dropped, as an absolute `draw_move` with no open path is. The encoder takes it whenever the first step fits a byte, since it is then the smallest of the three: a one-point frame is 3 bytes instead of 5 |
 | `draw_end` | `B` | header only |
 | `draw_shape` | `<BB3sBhhhh` | header, shape id (1 B), color, width, x₀, y₀, x₁, y₁ |
 | `draw_fill` | `<B3sHH` | header, color, x, y as **absolute uint16 pixels** |
@@ -973,14 +983,41 @@ stroke: a sample is dropped only if it — and every sample dropped before it si
 last kept one — lies within the tolerance of the segment that will replace them, so
 dropping cannot accumulate error. The first and last sample, corners, reversals and dots
 are kept because they fail that test. The sample still pending when the flush timer fires
-is sent with that flush, so a viewer watches a straight stroke advance every 40 ms rather
+is sent with that flush, so a viewer watches a straight stroke advance every flush rather
 than only when it bends or ends.
 
 The kept samples are the stroke, on both sides: the drawer's own canvas is painted from
 them, not from the raw pointer (the raw segment under the pen is shown on the preview
 layer until it is kept or dropped), so the drawer, every viewer and every replay
-rasterize the same polyline. Nothing on the wire changes — the frames carry fewer
-points — and no stored format moves.
+rasterize the same polyline. The frames carry fewer points; no stored format moves.
+
+### Playback on the viewer, and what a dropped frame does
+
+A viewer does not paint a batch the moment it lands (#559). Each `draw_move` is
+scheduled to be painted over the flush interval that follows its arrival — the time
+the next batch takes to come — and every animation frame paints the part that has come
+due, down to a fraction of a segment ([`frontend/src/lib/strokePlayback.ts`](../frontend/src/lib/strokePlayback.ts)).
+Painting a segment in parts is exact: the rasterizer paints a capsule around each
+segment, and a capsule split at a point on its own segment is the union of the halves.
+The history and the commit on the frame are still applied synchronously, before
+anything is queued; only presentation is delayed. Everything that is not a run of points
+— a path start or end, a shape, a fill, a clear — is a barrier in the same queue, so a
+fill always sees the complete raster before it. Past `MAX_LAG_MS` (250) of unplayed
+ink the schedule is compressed so the viewer catches up; a hidden tab drains at once;
+a replay or a clear discards the queue, since what follows repaints from history.
+
+This is what let the default flush interval move from 40 ms to **80 ms**
+(`client_config`, §5): a batch every 80 ms painted all at once read as steps, painted
+over the next 80 ms it reads as a line. A viewer sees ink up to one interval behind
+the drawer's hand, and the drawer sends half the point messages.
+
+A `draw` frame the door drops (throttled, §2) is dropped in silence — nobody awaits a
+`draw` — and the drawer painted it. Since a later relative frame would be resolved
+against a point the server never recorded, the handler acts on the *next* frame from
+that socket: the open path is closed where the server's copy ends (the room is sent a
+`draw_end` carrying the commit), the drawer is sent `canvas_stale … dropped_frame`, and
+the rest of that path is discarded as it trickles in; a frame that opens a new action
+is taken as usual.
 
 Measured on the recorded traces (`benchmarks/point_thinning.py`; the traces were
 recorded before thinning, so they are the raw input): on a long hand drawing 57% of the
@@ -1095,6 +1132,7 @@ drawer                                     server                       everyone
 | A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
+| A frame throttled at the door (§2), noticed at the next frame | the open path is closed for the room with a `draw_end` carrying its commit; `canvas_stale … dropped_frame` to the drawer; the rest of that path discarded (§6) |
 | `undo_stroke` whose generation, revision or `historyHash` disagree | the acknowledgement alone: `canvas_stale_generation` or `canvas_out_of_sync` — the client resyncs through its transaction |
 | A snapshot the server would push (a join) inside a spent resync window | `canvas_stale … deferred` with `retryAfterMs` |
 
@@ -1170,8 +1208,10 @@ A larger allowance is not a fix, since a longer stroke exceeds any live allowanc
 Recovery now lives in [`frontend/src/lib/canvasRecovery.ts`](../frontend/src/lib/canvasRecovery.ts),
 pure and tested, wired by `useCanvasProtocol`:
 
-- **Repacked.** Both histories store a path as one point list, so the 40 ms batch
-  boundaries were never part of the record. A saved path is resent as its opener, one
+- **Repacked.** Both histories store a path as one point list, so the flush batch
+  boundaries were never part of the record. A saved relative frame (§6) is resolved
+  against the one before it and re-encoded self-contained, so a replayed path decodes
+  on the server without an open path to be relative to. A saved path is resent as its opener, one
   frame per 256 points, and its end — the same points in the same order, so the
   canonical action and the history hash are identical. The reproduced stroke becomes 3
   frames; 750 points become 5.
@@ -1636,8 +1676,8 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (14) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
-| `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | The frame layout changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (16) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6 and 7 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
 | `SCORING_RULES_VERSION` (1) | Any constant or algorithm that can change a score | Any such change; every completed game freezes its rule snapshot |

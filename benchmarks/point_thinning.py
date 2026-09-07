@@ -160,22 +160,30 @@ def max_error(points, kept) -> float:
 
 # ---------------------------------------------------------------- bytes
 
-def frames_for(stroke, points, frames) -> list[bytes]:
-    """Re-encode the kept points into the flush frames they would ride."""
+def frames_for(stroke, points, frames, *, relative: bool = False, flush_every: int = 1) -> list[bytes]:
+    """Re-encode the kept points into the flush frames they would ride.
+
+    `flush_every` merges that many of the recording's flushes into one, which
+    is what a longer flush interval does to the same stroke (#559): the
+    traces were recorded at 40 ms, so 2 is 80 ms. `relative` encodes each
+    frame against the point the previous one ended on (#559).
+    """
+    normalized = lambda point: {"x": point[0] / CANVAS_WIDTH, "y": point[1] / CANVAS_HEIGHT}
     out = [encode_live_drawing("draw_start", {
-        "x": points[0][0] / CANVAS_WIDTH, "y": points[0][1] / CANVAS_HEIGHT,
-        "color": stroke["color"], "width": stroke["width"],
+        **normalized(points[0]), "color": stroke["color"], "width": stroke["width"],
     })]
+    previous = normalized(points[0])
     batch: list[dict] = []
-    current = frames[1] if len(frames) > 1 else None
+    current = frames[1] // flush_every if len(frames) > 1 else None
     for point, frame in zip(points[1:], frames[1:]):
-        if frame != current and batch:
-            out.append(encode_live_drawing("draw_move", {"points": batch}))
+        if frame // flush_every != current and batch:
+            out.append(encode_live_drawing("draw_move", {"points": batch, **({"previous": previous} if relative else {})}))
+            previous = batch[-1]
             batch = []
-        current = frame
-        batch.append({"x": point[0] / CANVAS_WIDTH, "y": point[1] / CANVAS_HEIGHT})
+        current = frame // flush_every
+        batch.append(normalized(point))
     if batch:
-        out.append(encode_live_drawing("draw_move", {"points": batch}))
+        out.append(encode_live_drawing("draw_move", {"points": batch, **({"previous": previous} if relative else {})}))
     return out
 
 
@@ -275,9 +283,11 @@ def measure(path: Path, tolerances: list[float], with_raster: bool) -> dict:
             kept_all = []
             frames_all = []
             worst = 0.0
+            thinned = []
             for stroke in strokes:
                 kept, kept_frames = thin(stroke["points"], stroke["frame_of"], tolerance, forced)
                 kept_all.append((kept, stroke["width"]))
+                thinned.append((stroke, kept, kept_frames))
                 frames_all.extend(frames_for(stroke, kept, kept_frames))
                 worst = max(worst, max_error(stroke["points"], kept))
             points = sum(len(k) for k, _ in kept_all)
@@ -290,7 +300,20 @@ def measure(path: Path, tolerances: list[float], with_raster: bool) -> dict:
                 "frameBytes": sum(len(f) for f in frames_all),
                 "deflatedBytes": deflated_bytes(frames_all),
                 "maxErrorPx": round(worst, 4),
+                # The same kept points on the wire two more ways (#559): in
+                # relative frames, and in relative frames at twice the flush
+                # interval. Fewer, smaller messages; the points are the same.
+                "wire": [],
             }
+            for label, relative, flush_every in (("40ms", False, 1), ("40ms relative", True, 1), ("80ms relative", True, 2)):
+                frames = [f for stroke, kept, kept_frames in thinned
+                          for f in frames_for(stroke, kept, kept_frames, relative=relative, flush_every=flush_every)]
+                entry["wire"].append({
+                    "label": label,
+                    "frames": len(frames),
+                    "frameBytes": sum(len(f) for f in frames),
+                    "deflatedBytes": deflated_bytes(frames),
+                })
             if with_raster:
                 ink = rasterize(kept_all)
                 entry["pixelsDiffering"] = sum(a != b for a, b in zip(ink, baseline_ink))
@@ -312,6 +335,10 @@ def print_report(results: list[dict]) -> None:
             print(f"  {'forced' if s['forced'] else 'unforced':<9}{s['tolerance']:>7.2f}{s['points']:>8}{kept:>7}"
                   f"{s['frames']:>8}{s['frameBytes']:>8}{s['deflatedBytes']:>8}{s['maxErrorPx']:>9.3f}"
                   f"{s.get('pixelsDiffering', '-'):>9}{s.get('blankRegions', '-'):>9}")
+        print("  on the wire (#559), same kept points, tolerance 0.25 forced:")
+        chosen = next(s for s in result["settings"] if s["forced"] and s["tolerance"] == 0.25)
+        for w in chosen["wire"]:
+            print(f"    {w['label']:<16}{w['frames']:>7} frames{w['frameBytes']:>8} B raw{w['deflatedBytes']:>8} B deflated")
 
 
 def main() -> None:

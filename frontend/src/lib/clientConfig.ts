@@ -31,7 +31,7 @@ export interface ClientConfig {
 
 /** What the client uses until a server says otherwise, and if one never does. */
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
-  flushIntervalMs: 40,
+  flushIntervalMs: 80,
   drawingFramesPerWindow: 100,
   drawingWindowSeconds: 2,
 };

@@ -149,7 +149,7 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
                 while not notices:
                     arrived.clear()
                     await arrived.wait()
-            assert '"flushIntervalMs":40' in notices[-1].replace(" ", ""), notices[-1]
+            assert '"flushIntervalMs":80' in notices[-1].replace(" ", ""), notices[-1]
             already_seen = len(notices)
 
             await admin_page.goto(f"{BASE_URL}/admin/operations?tab=tuning")
@@ -159,7 +159,7 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             )
             # Every control is drawn from what the server said about the
             # setting, so the page knows nothing about any particular one.
-            await admin_page.wait_for_selector("text=Bandwidth against stroke smoothness")
+            await admin_page.wait_for_selector("text=Bandwidth against viewer lag")
 
             await admin_page.fill(field_for("client.flush_interval_ms"), "56")
             await admin_page.click('button:has-text("Apply changes")')
@@ -172,7 +172,7 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             # half of the record a reset later takes back.
             assert (
                 "client.flush_interval_ms",
-                {"from": 40, "to": 56, "override": "stored"},
+                {"from": 80, "to": 56, "override": "stored"},
             ) in await config_changes()
 
             # The point of the test: a notice the running socket had not
