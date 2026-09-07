@@ -90,6 +90,9 @@ DEFAULT_THRESHOLDS = {
     "unexpectedDisconnects": 0,
     "failedReconnects": 0,
     "packetsRejected": 0,
+    # Sockets closed for their backlog: none without slow viewers in the run
+    # (the harness adds the slow viewers' own closures back as expected).
+    "unexpectedBacklogClosures": 0,
     # Notices that mean a canvas went wrong. `deferred` is excluded: a seat
     # that reconnects mid-turn inside a spent resync window is told to wait,
     # which is the bound working as designed (R-DRAW-13), not a fault.
@@ -353,6 +356,87 @@ class Seat:
 WRONG = ["cat", "house", "tree", "boat", "sun", "car", "fish", "hat"]
 
 
+class SlowViewer:
+    """A seat that joins a room and then stops reading (#602).
+
+    A raw WebSocket rather than a Socket.IO client, because a client library
+    reads for you. It performs the Engine.IO and Socket.IO handshakes, joins
+    the room as a spectator, then reads **one message a second**, answering
+    pings, while asking for a full canvas sync every resync window. A reader
+    that stops altogether is not the case: the ping timeout closes it in
+    ~45 s, and at a seat's ordinary traffic the kernel's and transport's
+    buffers would take an hour to fill before anything queued on the server
+    anyway (measured while building this). The socket the budget exists for
+    is one that keeps answering but cannot keep up - a slow device, a
+    throttled link - and syncs are the bursts that put it behind: once its
+    buffers are full the server's queue for it grows, the oldest packet ages,
+    and the budget closes it. Expected to be closed by the server, and
+    counted as such rather than as an unexpected disconnect.
+    """
+
+    def __init__(self, harness: Harness, room: RoomRun, name: str) -> None:
+        self.harness = harness
+        self.room = room
+        self.name = name
+        self.token: str | None = None
+        self.ws = None
+        self.session: aiohttp.ClientSession | None = None
+        self.joined = False
+
+    async def provision(self, http: aiohttp.ClientSession) -> None:
+        await Seat.provision(self, http)  # type: ignore[arg-type]
+
+    async def connect(self) -> None:
+        self.session = aiohttp.ClientSession()
+        url = self.harness.base_url.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket"
+        self.ws = await self.session.ws_connect(url, headers={"Cookie": f"{COOKIE}={self.token}"})
+        opened = await self.ws.receive_str()
+        assert opened.startswith("0"), opened
+        await self.ws.send_str("40" + json.dumps({"protocol": PROTOCOL_VERSION}))
+        # Read until the Socket.IO CONNECT answer, then join and stop reading.
+        for _ in range(20):
+            message = await self.ws.receive_str()
+            if message.startswith("40"):
+                break
+        await self.ws.send_str('421["join_room",' + json.dumps({"code": self.room.code, "nickname": self.name, "asSpectator": True}) + "]")
+        self.joined = True
+        self.harness.spawn(self.pull_syncs())
+        self.harness.spawn(self.read_slowly())
+
+    async def pull_syncs(self) -> None:
+        """Ask for the whole canvas once per resync window."""
+        request_id = 1
+        while not self.harness.stopping and self.ws is not None and not self.ws.closed:
+            await asyncio.sleep(2.2)
+            request_id += 1
+            try:
+                await self.ws.send_str(f'42{request_id}["request_sync_strokes",[{request_id}]]')
+            except (ConnectionResetError, aiohttp.ClientError, RuntimeError):
+                return
+
+    async def read_slowly(self) -> None:
+        """One message a second, pings answered, everything else unread."""
+        while not self.harness.stopping and self.ws is not None and not self.ws.closed:
+            await asyncio.sleep(1.0)
+            try:
+                message = await asyncio.wait_for(self.ws.receive(), 5.0)
+            except (asyncio.TimeoutError, ConnectionResetError, aiohttp.ClientError, RuntimeError):
+                continue
+            if message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                return
+            if message.type == aiohttp.WSMsgType.TEXT and message.data == "2":
+                try:
+                    await self.ws.send_str("3")
+                except (ConnectionResetError, aiohttp.ClientError, RuntimeError):
+                    return
+
+    async def close(self) -> None:
+        if self.ws is not None and not self.ws.closed:
+            await self.ws.close()
+        if self.session is not None and not self.session.closed:
+            await self.session.close()
+
+
 # ---------------------------------------------------------------- one room
 
 
@@ -410,6 +494,7 @@ class Harness:
         self.strokes = load_strokes()
         self.rooms: list[RoomRun] = []
         self.watchers: list[Seat] = []
+        self.slow_viewers: list[SlowViewer] = []
 
     def spawn(self, coroutine) -> None:
         task = asyncio.create_task(coroutine)
@@ -452,6 +537,10 @@ class Harness:
                 await room.open()
             for watcher in self.watchers:
                 await watcher.call("watch_lobby", {})
+            for viewer in self.slow_viewers:
+                async with aiohttp.ClientSession() as own:
+                    await viewer.provision(own)
+                await viewer.connect()
             open_seconds = time.monotonic() - started
             for room in self.rooms:
                 self.spawn(room.start_game())
@@ -475,6 +564,8 @@ class Harness:
             await asyncio.gather(*self.tasks, return_exceptions=True)
             for seat in seats:
                 await seat.close()
+            for viewer in self.slow_viewers:
+                await viewer.close()
             await asyncio.sleep(1.0)
             after = await self.metrics(http)
         return self.report(before, during, after, connect_seconds, open_seconds)
@@ -525,6 +616,22 @@ class Harness:
                 after.get(f"notice:{reason}", 0.0) - before.get(f"notice:{reason}", 0.0)
                 for reason in FAULT_NOTICE_REASONS
             ) if after else 0.0,
+            # The outbound budget (#602): how much any one socket ever had
+            # queued, and how many sockets were closed for passing it. With
+            # slow viewers in the run the closures are the point; without
+            # them they must be zero, and the high-water is what healthy
+            # play reaches, which is what the budget is sized against.
+            "backlogBytesMax": after.get("backlog_bytes_max", 0.0) if after else 0.0,
+            "backlogAgeMaxMs": after.get("backlog_age_max_ms", 0.0) if after else 0.0,
+            "backlogClosures": {
+                key[len("backlog_closure:"):]: after.get(key, 0.0) - before.get(key, 0.0)
+                for key in sorted(after) if key.startswith("backlog_closure:")
+            } if after else {},
+            "slowViewers": len(self.slow_viewers),
+            "unexpectedBacklogClosures": max(0.0, sum(
+                after.get(key, 0.0) - before.get(key, 0.0)
+                for key in after if key.startswith("backlog_closure:")
+            ) - len(self.slow_viewers)) if after else 0.0,
             "rssSeriesMB": [round(m.get("rss_bytes", 0.0) / 1e6, 1) for m in during if m],
             "lagP99SeriesMs": [round(m.get("lag_p99_ms", 0.0), 1) for m in during if m],
             "bytesOutMB": ((after.get("bytes_out", 0.0) - before.get("bytes_out", 0.0)) / 1e6) if after else 0.0,
@@ -562,6 +669,7 @@ class Harness:
                 "rooms": self.args.rooms, "seatsPerRoom": self.args.seats,
                 "seats": self.args.rooms * self.args.seats, "lobbyWatchers": self.args.lobby_watchers,
                 "durationSeconds": self.args.duration, "reconnectShare": self.args.reconnect_share,
+                "slowViewers": len(self.slow_viewers),
                 "metricsScrapes": 2 + len(during),
             },
             "measured": measured,
@@ -619,6 +727,13 @@ def parse_metrics(text: str) -> dict[str, float]:
             values["bytes_in"] = number
         elif name.startswith("sketchy_socket_packets_rejected_total"):
             values["rejected"] = values.get("rejected", 0.0) + number
+        elif name == "sketchy_socket_backlog_bytes_max":
+            values["backlog_bytes_max"] = number
+        elif name == "sketchy_socket_backlog_age_seconds_max":
+            values["backlog_age_max_ms"] = number * 1000
+        elif name.startswith("sketchy_socket_backlog_closures_total{"):
+            reason = name.split('reason="')[1].split('"')[0]
+            values[f"backlog_closure:{reason}"] = number
         elif name.startswith("sketchy_canvas_recovery_notices_total{"):
             reason = name.split('reason="')[1].split('"')[0]
             values[f"notice:{reason}"] = number
@@ -674,6 +789,8 @@ def print_report(report: dict) -> None:
         print(f"  {key:<24}{value:>12.1f}{t[key]:>10.1f}{flag}")
     if m["recoveryNotices"]:
         print(f"  recovery notices by reason: {m['recoveryNotices']}")
+    print(f"  outbound backlog high-water: {m['backlogBytesMax']:.0f} B, oldest {m['backlogAgeMaxMs']:.0f} ms; "
+          f"closures {m['backlogClosures'] or 'none'} with {m['slowViewers']} slow viewers")
     print(f"  RSS every 15 s: {m['rssSeriesMB']}")
     print(f"  ack p50 {m['ackP50Ms']:.1f} ms; draw fan-out p50 {m['drawFanoutP50Ms']:.1f} ms; "
           f"timer overrun max {m['timerOverrunMaxMs']:.1f} ms; RSS idle {m['rssIdleMB']:.0f} MB, after warm-up {m['rssLoadedMB']:.0f} MB, "
@@ -704,6 +821,7 @@ def record_result(report: dict, path: Path) -> None:
         ("Resident memory idle → after warm-up → peak", f"{m['rssIdleMB']:.0f} → {m['rssLoadedMB']:.0f} → {m['rssPeakMB']:.0f} MB ({m['rssPerSeatKB']:.0f} KB per seat above idle)", f"growth after warm-up ≤ {report['thresholds']['rssGrowthPercent']:.0f} % (measured {m['rssGrowthPercent']:.1f} %)"),
         ("Database query p99 (bucket bound)", f"≤ {m['dbQueryP99Ms']:.0f} ms", f"≤ {report['thresholds']['dbQueryP99Ms']:.0f} ms"),
         ("Unexpected disconnects / failed reconnects", f"{m['unexpectedDisconnects']:.0f} / {m['failedReconnects']:.0f} (of {m['reconnects']:.0f} reconnects)", "0 / 0"),
+        ("Outbound backlog high-water (bytes / oldest) and closures", f"{m['backlogBytesMax']:.0f} B / {m['backlogAgeMaxMs']:.0f} ms; closures {', '.join(f'{k} {v:.0f}' for k, v in m['backlogClosures'].items()) or 'none'} with {m['slowViewers']} slow viewers", "closures = slow viewers; budget 10 s / 4 MiB"),
         ("Packets rejected / fault notices (all notices by reason)", f"{m['packetsRejected']:.0f} / {m['faultNotices']:.0f} ({', '.join(f'{k} {v:.0f}' for k, v in m['recoveryNotices'].items()) or 'none'})", "0 / 0"),
         ("Traffic", f"{m['bytesOutMB']:.1f} MB out, {m['bytesInMB']:.1f} MB in; {m['framesSent']} frames sent, {m['framesReceived']} received; {m['guesses']} guesses, {m['chats']} chats", "—"),
     ]
@@ -731,6 +849,7 @@ def main() -> int:
     parser.add_argument("--lobby-watchers", type=int, default=20)
     parser.add_argument("--duration", type=float, default=300.0, help="seconds of sustained play")
     parser.add_argument("--reconnect-share", type=float, default=0.25, help="share of non-host seats that drop and reconnect on a schedule")
+    parser.add_argument("--slow-viewers", type=int, default=4, help="spectators that join a room and stop reading, for the outbound budget (#602); each is expected to be closed by the server")
     parser.add_argument("--metrics-token", default=os.environ.get("METRICS_TOKEN"))
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--record", type=Path, help="write the result into this document's load-gate slot (docs/requirements.md)")
@@ -739,6 +858,10 @@ def main() -> int:
     harness = Harness(args)
     harness.rooms = [RoomRun(harness, index, args.seats) for index in range(args.rooms)]
     harness.watchers = [Seat(harness, RoomRun(harness, -1, 0), f"Lw{index}") for index in range(args.lobby_watchers)]
+    harness.slow_viewers = [
+        SlowViewer(harness, harness.rooms[index % max(1, len(harness.rooms))], f"Lslow{index}")
+        for index in range(args.slow_viewers)
+    ] if harness.rooms else []
     report = asyncio.run(harness.run())
     print_report(report)
     if args.json_output:

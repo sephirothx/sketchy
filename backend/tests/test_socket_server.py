@@ -8,6 +8,7 @@ server a counter and nothing else - no reply, no handler, no memory.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 
 import pytest
@@ -377,3 +378,128 @@ async def test_the_largest_command_passes_the_door_on_both_transports(monkeypatc
     await sio._handle_eio_message("eio0", polled.data)
     assert received == [("create_room", 80_000), ("create_room", 80_000)]
     assert rejected(store) == {}
+
+
+# --- the outbound budget (#602) ------------------------------------------------
+
+
+class StalledEngineSocket:
+    """An engineio socket whose writer never drains: every packet queued stays."""
+
+    closed = False
+
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue = asyncio.Queue()
+        self.closes: list[dict] = []
+
+    async def send(self, pkt) -> None:
+        await self.queue.put(pkt)
+
+    async def close(self, wait=True, abort=False, reason=None) -> None:
+        self.closes.append({"wait": wait, "abort": abort})
+        self.closed = True
+
+
+class DrainingEngineSocket(StalledEngineSocket):
+    """A healthy one: the queue is emptied as soon as anything lands in it."""
+
+    async def send(self, pkt) -> None:
+        pass  # taken by the writer at once; the queue stays empty
+
+
+async def _seat(sio, eio_sid, socket):
+    sio.eio.sockets[eio_sid] = socket
+    await sio.manager.connect(eio_sid, "/")
+    return sio.manager.sid_from_eio_sid(eio_sid, "/")
+
+
+async def test_a_socket_that_stops_reading_is_closed_by_age_and_dropped_from_fan_out(monkeypatch):
+    """#602: a viewer that stops reading holds its writer on the transport;
+    everything after that queues. Once the oldest queued packet is older
+    than the budget the socket is closed - aborted, never joined - and taken
+    out of the server's table, so the room's next fan-out finds nobody there
+    and no other viewer waits on it."""
+    sio, store, sockets, received, clock = await server(monkeypatch, seats=1)
+    stalled = StalledEngineSocket()
+    stalled_sid = await _seat(sio, "eio-stalled", stalled)
+    healthy_sid = sio.manager.sid_from_eio_sid("eio0", "/")
+    await sio.enter_room(stalled_sid, "room")
+    await sio.enter_room(healthy_sid, "room")
+
+    await sio.emit("chat_message", {"text": "one"}, room="room")
+    assert stalled.queue.qsize() == 1 and not stalled.closed
+    clock.now += socket_server.BACKLOG_MAX_AGE_SECONDS + 1
+    await sio.emit("chat_message", {"text": "two"}, room="room")
+    await asyncio.sleep(0)  # the close is a task of its own
+    assert stalled.closes == [{"wait": False, "abort": True}], "aborted, never joined"
+    assert "eio-stalled" not in sio.eio.sockets
+    assert store.socket_backlog_closures.total() == 1
+    assert dict(store.socket_backlog_closures.items())[("age",)] == 1
+    assert store.socket_backlog_age_max > socket_server.BACKLOG_MAX_AGE_SECONDS
+
+    # Life goes on for the room: the healthy seat still receives.
+    before = len(sockets["eio0"].packets)
+    await sio.emit("chat_message", {"text": "three"}, room="room")
+    assert len(sockets["eio0"].packets) == before + 1
+
+
+async def test_a_socket_that_stops_reading_is_closed_by_bytes_before_age(monkeypatch):
+    sio, store, sockets, received, clock = await server(monkeypatch, seats=0)
+    stalled = StalledEngineSocket()
+    sid = await _seat(sio, "eio-stalled", stalled)
+    blob = "x" * (256 * 1024)
+    for _ in range(socket_server.BACKLOG_MAX_BYTES // len(blob) + 2):
+        await sio.emit("sync_strokes", blob, to=sid)
+        await asyncio.sleep(0)
+        if stalled.closed:
+            break
+    assert stalled.closed
+    assert dict(store.socket_backlog_closures.items()) == {("bytes",): 1}
+    assert store.socket_backlog_bytes_max > socket_server.BACKLOG_MAX_BYTES
+
+
+async def test_a_socket_that_keeps_up_is_never_closed_and_its_backlog_reads_as_empty(monkeypatch):
+    sio, store, sockets, received, clock = await server(monkeypatch, seats=0)
+    healthy = DrainingEngineSocket()
+    sid = await _seat(sio, "eio-healthy", healthy)
+    for _ in range(50):
+        await sio.emit("chat_message", {"text": "steady"}, to=sid)
+        clock.now += socket_server.BACKLOG_MAX_AGE_SECONDS  # long gaps change nothing when the queue is empty
+    await asyncio.sleep(0)
+    assert not healthy.closed
+    assert store.socket_backlog_closures.total() == 0
+    assert store.socket_backlog_bytes_max < 200, "one packet at most, measured before the writer took it"
+    assert store.socket_backlog_age_max == 0.0
+
+
+async def test_the_budget_is_stated_and_reported(monkeypatch):
+    assert socket_server.BACKLOG_MAX_AGE_SECONDS == 10.0
+    assert socket_server.BACKLOG_MAX_BYTES == 4 * 1024 * 1024
+    store = Telemetry()
+    store.note_socket_backlog(1234, 0.5)
+    store.note_socket_backlog(12, 0.1)
+    store.note_socket_backlog_closed("age")
+    text = "\n".join(store.prometheus_lines())
+    assert "sketchy_socket_backlog_bytes_max 1234" in text
+    assert "sketchy_socket_backlog_age_seconds_max 0.5" in text
+    assert 'sketchy_socket_backlog_closures_total{reason="age"} 1' in text
+
+
+async def test_an_aged_backlog_is_closed_by_the_sweep_without_a_new_packet(monkeypatch):
+    """#602: age is time, not traffic. A stalled peer on a quiet room holds
+    its queue with nothing new arriving to re-check it; measured, the ping
+    timeout got there first. The sweep re-reads every backlog on the clock."""
+    sio, store, sockets, received, clock = await server(monkeypatch, seats=0)
+    stalled = StalledEngineSocket()
+    sid = await _seat(sio, "eio-stalled", stalled)
+    await sio.emit("chat_message", {"text": "one"}, to=sid)
+    assert not stalled.closed
+    clock.now += socket_server.BACKLOG_MAX_AGE_SECONDS + 0.5
+    sio.sweep_backlogs_once()
+    await asyncio.sleep(0)
+    assert stalled.closed
+    assert dict(store.socket_backlog_closures.items()) == {("age",): 1}
+    # Swept records of sockets that have gone are dropped, and a closing one
+    # is not judged twice.
+    sio.sweep_backlogs_once()
+    assert store.socket_backlog_closures.total() == 1
