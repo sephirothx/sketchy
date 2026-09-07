@@ -471,7 +471,10 @@ function ProfileView({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, includeAbandoned]);
+    // The viewer is a dependency too: which games the server lists depends
+    // on who is asking (#469), so signing in or claiming on this page has
+    // to fetch the list again rather than keep the one a stranger got.
+  }, [userId, includeAbandoned, currentUser?.id]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
