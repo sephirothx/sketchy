@@ -188,25 +188,32 @@ export function useCanvasPointerInput(
   // The queued points as one frame, relative to the last point sent, which
   // they then become the last of - only if the frame went. A frame the
   // protocol dropped (over the point budget, no path open) left the server's
-  // path where it was, and the next frame must be relative to that.
-  function sendPendingPoints() {
+  // path where it was, and the next frame must be relative to that. With
+  // `ends`, the frame also closes the path (#603). Returns whether it went.
+  function sendPendingPoints(ends = false): boolean {
     const points = pendingPointsRef.current;
-    if (points.length === 0) return;
+    if (points.length === 0) return false;
     pendingPointsRef.current = [];
+    const previous = lastSentRef.current;
+    if (ends && !previous) return false;
     const sent = protocol.sendPathFrame(
-      encodePathPoints({ points, previous: lastSentRef.current ?? undefined }),
+      encodePathPoints({ points, previous: previous ?? undefined, ...(ends ? { ends: true } : {}) }),
     );
     if (sent) lastSentRef.current = points[points.length - 1];
+    return sent;
   }
   const sendPendingPointsRef = useRef(sendPendingPoints);
 
+  // The points buffered when the pen lifted and the end go as one frame
+  // (#603); the one-byte end alone when nothing is buffered, or when the
+  // final batch did not go - a batch past the budget is refused whole, and
+  // the stroke then ends where the budget ran out.
   function finishPath() {
     const thinner = thinnerRef.current;
     if (thinner) acceptPoints(thinner.end());
     thinnerRef.current = null;
-    sendPendingPoints();
+    if (!sendPendingPoints(true)) protocol.sendPathFrame(encodePathEnd());
     lastSentRef.current = null;
-    protocol.sendPathFrame(encodePathEnd());
     protocol.finishPathAction();
     repaintPreview(pointerPosRef.current);
   }
@@ -380,9 +387,8 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     if (thinner) acceptRef.current(thinner.end());
     thinnerRef.current = null;
-    sendPendingPointsRef.current();
+    if (!sendPendingPointsRef.current(true)) protocol.sendPathFrame(encodePathEnd());
     lastSentRef.current = null;
-    protocol.sendPathFrame(encodePathEnd());
     protocol.finishPathAction();
     inputActiveRef.current = false;
   }, [protocol]);

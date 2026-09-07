@@ -45,6 +45,7 @@ const FILL_TAG = 4;
 const CLEAR_TAG = 5;
 const PATH_POINTS_DELTA_TAG = 6;
 const PATH_POINTS_RELATIVE_TAG = 7;
+const PATH_POINTS_END_TAG = 8;
 
 export type LiveDrawingPacket =
   | { event: "draw_start"; payload: StrokeStartPayload }
@@ -158,14 +159,17 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
       packedCoordinate(payload.previous.x, CANVAS_WIDTH),
       packedCoordinate(payload.previous.y, CANVAS_HEIGHT),
     ];
-    if (stepFits(packed[0][0] - previous[0], packed[0][1] - previous[1])) {
+    // An ending batch (#603) is always relative - it has an open path to
+    // be relative to - escaping where a step is too far.
+    if (payload.ends || stepFits(packed[0][0] - previous[0], packed[0][1] - previous[1])) {
       const frame = new Uint8Array(1 + recordsSize(packed, previous));
       const view = new DataView(frame.buffer);
-      view.setUint8(0, header(PATH_POINTS_RELATIVE_TAG));
+      view.setUint8(0, header(payload.ends ? PATH_POINTS_END_TAG : PATH_POINTS_RELATIVE_TAG));
       writeRecords(view, 1, packed, previous);
       return frame;
     }
   }
+  if (payload.ends) throw new Error("An ending batch needs the open path's last point");
 
   const fits = (index: number): boolean =>
     stepFits(packed[index][0] - packed[index - 1][0], packed[index][1] - packed[index - 1][1]);
@@ -219,7 +223,13 @@ export function resolveRelativePoints(
       y: unpackedCoordinate(y, CANVAS_HEIGHT),
     });
   }
-  return { event: "draw_move", payload: { points } };
+  return { event: "draw_move", payload: packet.payload.ends ? { points, ends: true } : { points } };
+}
+
+/** Whether this frame closes the open path: `draw_end`, or a final batch (#603). */
+export function endsPath(packet: LiveDrawingPacket): boolean {
+  return packet.event === "draw_end"
+    || ((packet.event === "draw_move" || packet.event === "draw_move_relative") && packet.payload.ends === true);
 }
 
 export function encodePathEnd(): number {
@@ -401,7 +411,7 @@ export function decodeLiveDrawing(
     }
     return { event: "draw_move", payload: { points } };
   }
-  if (tag === PATH_POINTS_RELATIVE_TAG) {
+  if (tag === PATH_POINTS_RELATIVE_TAG || tag === PATH_POINTS_END_TAG) {
     if (view.byteLength < 3) return null;
     const records: RelativePointRecord[] = [];
     let offset = 1;
@@ -417,7 +427,10 @@ export function decodeLiveDrawing(
       }
       if (records.length > MAX_POINTS_PER_FRAME) return null;
     }
-    const relative = { event: "draw_move_relative" as const, payload: { records } };
+    const relative = {
+      event: "draw_move_relative" as const,
+      payload: tag === PATH_POINTS_END_TAG ? { records, ends: true } : { records },
+    };
     return previous ? resolveRelativePoints(relative, previous) : relative;
   }
   if (tag === PATH_END_TAG) {

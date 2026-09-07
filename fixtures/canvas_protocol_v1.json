@@ -121,6 +121,46 @@
       "note": "relative, with a jump escaping to an absolute pair"
     },
     {
+      "event": "draw_move",
+      "payload": {
+        "points": [
+          {
+            "x": 0.5,
+            "y": 0.51
+          },
+          {
+            "x": 0.51,
+            "y": 0.52
+          }
+        ],
+        "previous": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "ends": true
+      },
+      "note": "final batch: the last points and the end as one frame (#603), relative to the open path's last point",
+      "wire": "1800182018"
+    },
+    {
+      "event": "draw_move",
+      "payload": {
+        "points": [
+          {
+            "x": 0.9,
+            "y": 0.9
+          }
+        ],
+        "previous": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "ends": true
+      },
+      "note": "final batch whose first step is too far: escapes, never falls back",
+      "wire": "1880400b7008"
+    },
+    {
       "event": "draw_end",
       "payload": {},
       "wire": "12"

@@ -379,6 +379,9 @@ export interface StrokeMovePayload {
   /** The open path's last point, when the encoder is given it: unlocks the
   relative frame (#559). Never on the wire itself. */
   previous?: StrokePoint;
+  /** This batch also closes the path (#603): the final points and the end
+  as one frame, carrying the commit the way `draw_end` does. */
+  ends?: boolean;
 }
 
 /** A `draw_move` frame's offsets before its predecessor is known (#559):
@@ -389,6 +392,7 @@ export type RelativePointRecord =
 
 export interface RelativeMovePayload {
   records: RelativePointRecord[];
+  ends?: boolean;
 }
 
 /** The chips a host toggles. The eraser rides with the brush - see `drawingRules.ts`. */

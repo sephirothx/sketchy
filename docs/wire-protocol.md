@@ -912,6 +912,7 @@ bit  7 6 5 4 | 3 2 1 0
 | `CLEAR` | 5 | `clear_canvas` | integer `0x15` |
 | `PATH_POINTS_DELTA` | 6 | `draw_move` | binary, 5 + 2·(n−1) bytes without escapes |
 | `PATH_POINTS_RELATIVE` | 7 | `draw_move` | binary, 1 + 2·n bytes without escapes (#559) |
+| `PATH_POINTS_END` | 8 | `draw_move` that also ends the path | binary, the relative layout; carries the commit (#603) |
 
 ### Frame layouts
 
@@ -923,6 +924,7 @@ All multi-byte integers are **little-endian** except colors, which are big-endia
 | `draw_move` | `B` + `<hh` × n | header, then n points; 1 ≤ n ≤ 256 (`MAX_POINTS_PER_FRAME`) |
 | `draw_move` (delta, tag 6) | `B` + `<hh` + records | header, the first point absolute, then one record per further point: `<bb` (a signed-byte offset from the previous point) or the escape byte `0x80` followed by `<hh` absolute |
 | `draw_move` (relative, tag 7) | `B` + records | header, then one record per point in the same two shapes — the first relative to the **open path's last point**, which the frame does not carry (#559). Decodes to offsets; the receiver resolves them against the path it holds: the server against `canvas_session`, a viewer against its own history. A relative frame with no open path is dropped, as an absolute `draw_move` with no open path is. The encoder takes it whenever the first step fits a byte, since it is then the smallest of the three: a one-point frame is 3 bytes instead of 5 |
+| `draw_move` (final batch, tag 8) | `B` + records | The relative layout, and the frame **also closes the path** (#603): the points the drawer had buffered when the pen lifted and its `draw_end` used to be two events sent in the same call, only the second carrying the commit. One frame extends the path and ends it atomically — refused whole if the points do not fit the budget, so a refused ending never leaves a committed prefix — and carries the commit the way `draw_end` does. Always relative (an ending has an open path), escaping where a step is too far. The one-byte `draw_end` stays for a path with nothing buffered, and for a final batch that was refused: the stroke then ends where the budget ran out. Both forms produce byte-identical history and hash |
 | `draw_end` | `B` | header only |
 | `draw_shape` | `<BB3sBhhhh` | header, shape id (1 B), color, width, x₀, y₀, x₁, y₁ |
 | `draw_fill` | `<B3sHH` | header, color, x, y as **absolute uint16 pixels** |
@@ -1132,6 +1134,7 @@ drawer                                     server                       everyone
 | A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
+| A final batch (tag 8) past the point budget | dropped whole, nothing committed, the path stays open; the drawer's one-byte `draw_end` that follows closes it, and its completion watch covers the case where nothing does |
 | A frame throttled at the door (§2), noticed at the next frame | the open path is closed for the room with a `draw_end` carrying its commit; `canvas_stale … dropped_frame` to the drawer; the rest of that path discarded (§6) |
 | `undo_stroke` whose generation, revision or `historyHash` disagree | the acknowledgement alone: `canvas_stale_generation` or `canvas_out_of_sync` — the client resyncs through its transaction |
 | A snapshot the server would push (a join) inside a spent resync window | `canvas_stale … deferred` with `retryAfterMs` |
@@ -1210,8 +1213,9 @@ pure and tested, wired by `useCanvasProtocol`:
 
 - **Repacked.** Both histories store a path as one point list, so the flush batch
   boundaries were never part of the record. A saved relative frame (§6) is resolved
-  against the one before it and re-encoded self-contained, so a replayed path decodes
-  on the server without an open path to be relative to. A saved path is resent as its opener, one
+  against the one before it and re-encoded self-contained, and a path that ended on a
+  final batch is resent with that batch's points and a plain end, so a replayed path
+  decodes on the server without an open path to be relative to. A saved path is resent as its opener, one
   frame per 256 points, and its end — the same points in the same order, so the
   canonical action and the history hash are identical. The reproduced stroke becomes 3
   frames; 750 points become 5.
@@ -1676,8 +1680,8 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (16) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
-| `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6 and 7 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
+| `PROTOCOL_VERSION` (17) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` and the `{v,a}` JSON | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
 | `SCORING_RULES_VERSION` (1) | Any constant or algorithm that can change a score | Any such change; every completed game freezes its rule snapshot |

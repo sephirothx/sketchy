@@ -290,6 +290,12 @@ export class ClientCanvasHistory {
           y: point.y * CANVAS_HEIGHT,
         })),
       );
+      if (packet.payload.ends) {
+        // The final batch closes the path it just extended (#603): the same
+        // history as the batch followed by `draw_end`.
+        this.activePath = null;
+        this.finalizeLastAction();
+      }
       return true;
     }
     if (packet.event === "draw_end") {

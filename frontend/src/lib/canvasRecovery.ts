@@ -26,7 +26,7 @@ Three parts, all pure so they can be tested without a socket:
   end frame or a lost commit. Three tries with backoff, then authoritative
   state: the drawing that exists is the one the room has. */
 
-import { decodeLiveDrawing, encodePathPoints, type LiveDrawingPacket } from "./liveDrawing.ts";
+import { decodeLiveDrawing, encodePathEnd, encodePathPoints, endsPath, type LiveDrawingPacket } from "./liveDrawing.ts";
 import type { StrokePoint } from "../types.ts";
 import type { DrawingFrame } from "./liveDrawing.ts";
 
@@ -69,9 +69,11 @@ export function repackDrawFrames(frames: DrawingFrame[]): DrawingFrame[] {
   const packets = decodeSavedFrames(frames);
   const first = packets[0];
   const last = packets.at(-1);
-  if (!first || first.event !== "draw_start" || !last || last.event !== "draw_end") return frames;
+  if (!first || first.event !== "draw_start" || !last || !endsPath(last)) return frames;
   const points: { x: number; y: number }[] = [];
-  for (const packet of packets.slice(1, -1)) {
+  // A path that ended on a final batch (#603) has that batch's points too;
+  // the repack ends on the one-byte end either way.
+  for (const packet of packets.slice(1, last.event === "draw_end" ? -1 : undefined)) {
     if (!packet || packet.event !== "draw_move") return frames;
     points.push(...packet.payload.points);
   }
@@ -79,7 +81,7 @@ export function repackDrawFrames(frames: DrawingFrame[]): DrawingFrame[] {
   for (let index = 0; index < points.length; index += MAX_POINTS_PER_FRAME) {
     repacked.push(encodePathPoints({ points: points.slice(index, index + MAX_POINTS_PER_FRAME) }));
   }
-  repacked.push(frames.at(-1)!);
+  repacked.push(encodePathEnd());
   return repacked;
 }
 

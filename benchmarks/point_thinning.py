@@ -160,7 +160,7 @@ def max_error(points, kept) -> float:
 
 # ---------------------------------------------------------------- bytes
 
-def frames_for(stroke, points, frames, *, relative: bool = False, flush_every: int = 1) -> list[bytes]:
+def frames_for(stroke, points, frames, *, relative: bool = False, flush_every: int = 1, fold_end: bool = False) -> list[bytes | int]:
     """Re-encode the kept points into the flush frames they would ride.
 
     `flush_every` merges that many of the recording's flushes into one, which
@@ -182,17 +182,27 @@ def frames_for(stroke, points, frames, *, relative: bool = False, flush_every: i
             batch = []
         current = frame // flush_every
         batch.append(normalized(point))
+    if batch and fold_end:
+        # The final batch closes the path (#603): one frame, no end event.
+        out.append(encode_live_drawing("draw_move", {"points": batch, "previous": previous, "ends": True}))
+        return out
     if batch:
         out.append(encode_live_drawing("draw_move", {"points": batch, **({"previous": previous} if relative else {})}))
+    out.append(encode_live_drawing("draw_end"))
     return out
 
 
-def deflated_bytes(frames: list[bytes]) -> int:
+def deflated_bytes(frames: list[bytes | int]) -> int:
     compressor = zlib.compressobj(DEFLATE_LEVEL, zlib.DEFLATED, -WINDOW_BITS)
     total = 0
     for frame in frames:
-        total += len(compressor.compress(frame)) + len(compressor.flush(zlib.Z_SYNC_FLUSH)) - 4
+        raw = bytes((frame,)) if isinstance(frame, int) else frame
+        total += len(compressor.compress(raw)) + len(compressor.flush(zlib.Z_SYNC_FLUSH)) - 4
     return total
+
+
+def raw_bytes(frames: list[bytes | int]) -> int:
+    return sum(1 if isinstance(frame, int) else len(frame) for frame in frames)
 
 
 # ---------------------------------------------------------------- raster
@@ -273,7 +283,7 @@ def measure(path: Path, tolerances: list[float], with_raster: bool) -> dict:
         "points": raw_points,
         "pointBytes": raw_points * 4,
         "frames": len(raw_frames),
-        "frameBytes": sum(len(f) for f in raw_frames),
+        "frameBytes": raw_bytes(raw_frames),
         "deflatedBytes": deflated_bytes(raw_frames),
         "blankRegions": blank_regions(baseline_ink) if with_raster else None,
         "settings": [],
@@ -297,7 +307,7 @@ def measure(path: Path, tolerances: list[float], with_raster: bool) -> dict:
                 "points": points,
                 "pointBytes": points * 4,
                 "frames": len(frames_all),
-                "frameBytes": sum(len(f) for f in frames_all),
+                "frameBytes": raw_bytes(frames_all),
                 "deflatedBytes": deflated_bytes(frames_all),
                 "maxErrorPx": round(worst, 4),
                 # The same kept points on the wire two more ways (#559): in
@@ -305,13 +315,16 @@ def measure(path: Path, tolerances: list[float], with_raster: bool) -> dict:
                 # interval. Fewer, smaller messages; the points are the same.
                 "wire": [],
             }
-            for label, relative, flush_every in (("40ms", False, 1), ("40ms relative", True, 1), ("80ms relative", True, 2)):
+            for label, relative, flush_every, fold_end in (
+                ("40ms", False, 1, False), ("40ms relative", True, 1, False),
+                ("80ms relative", True, 2, False), ("80ms relative, folded end", True, 2, True),
+            ):
                 frames = [f for stroke, kept, kept_frames in thinned
-                          for f in frames_for(stroke, kept, kept_frames, relative=relative, flush_every=flush_every)]
+                          for f in frames_for(stroke, kept, kept_frames, relative=relative, flush_every=flush_every, fold_end=fold_end)]
                 entry["wire"].append({
                     "label": label,
                     "frames": len(frames),
-                    "frameBytes": sum(len(f) for f in frames),
+                    "frameBytes": raw_bytes(frames),
                     "deflatedBytes": deflated_bytes(frames),
                 })
             if with_raster:
@@ -338,7 +351,7 @@ def print_report(results: list[dict]) -> None:
         print("  on the wire (#559), same kept points, tolerance 0.25 forced:")
         chosen = next(s for s in result["settings"] if s["forced"] and s["tolerance"] == 0.25)
         for w in chosen["wire"]:
-            print(f"    {w['label']:<16}{w['frames']:>7} frames{w['frameBytes']:>8} B raw{w['deflatedBytes']:>8} B deflated")
+            print(f"    {w['label']:<28}{w['frames']:>6} events{w['frameBytes']:>8} B raw{w['deflatedBytes']:>8} B deflated")
 
 
 def main() -> None:
