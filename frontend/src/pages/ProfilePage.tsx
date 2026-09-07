@@ -1,5 +1,5 @@
 import { useClock } from "../hooks/useClock";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AuthDialog, type AuthMode } from "../components/AccountMenu";
 import { AppHeader } from "../components/AppHeader";
@@ -446,8 +446,15 @@ function ProfileView({ userId }: { userId: string }) {
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
 
+  // Which list is current. Bumped whenever the list is replaced, so a page
+  // fetched for the previous one - a "load more" in flight while the viewer
+  // signed in, or while the abandoned filter flipped - is dropped rather
+  // than appended to a list it was never part of.
+  const listGeneration = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
+    listGeneration.current += 1;
     void (async () => {
       try {
         const [profile, page] = await Promise.all([
@@ -478,12 +485,15 @@ function ProfileView({ userId }: { userId: string }) {
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
+    const generation = listGeneration.current;
     setLoadingMore(true);
     try {
       const page = await fetchGames(userId, games.length, includeAbandoned);
+      if (generation !== listGeneration.current) return;
       setGames((current) => [...current, ...page.games]);
       setHasMore(page.hasMore);
     } catch {
+      if (generation !== listGeneration.current) return;
       setError("Could not load more games.");
     } finally {
       setLoadingMore(false);
