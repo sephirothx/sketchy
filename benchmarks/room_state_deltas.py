@@ -32,7 +32,7 @@ done to the same stream.
 
 Usage:
   backend/.venv/bin/python benchmarks/room_state_deltas.py
-  backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewer_streams/gate-seat-90s.jsonl
+  backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewer_streams/gate-viewer-180s.jsonl
 """
 from __future__ import annotations
 
@@ -154,8 +154,8 @@ def build_room(players: int):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--stream", type=Path, default=STREAM_DIR / "gate-seat-90s.jsonl")
-    parser.add_argument("--emits-per-second", type=float, default=1124 / 90, help="room_state emits the gate saw server-wide, per second (default: the 90 s capture run)")
+    parser.add_argument("--stream", type=Path, default=STREAM_DIR / "gate-viewer-180s.jsonl")
+    parser.add_argument("--emits-per-second", type=float, default=1446 / 180, help="room_state emits the gate saw server-wide, per second (default: the 180 s capture run, 1446 in 180 s)")
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
 

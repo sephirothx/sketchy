@@ -232,12 +232,14 @@ class Seat:
 
         if (
             self.harness.capture is not None
-            and self.harness.captured_seat is None
+            and self.harness.captured_seat in (None, self)
             and self.room.seats
             and self.room.seats[0] is not self
         ):
             # A guest, not the host: a host draws the first turn and would
-            # record its own commits rather than a viewer's stream.
+            # record its own commits rather than a viewer's stream. Bound to
+            # the seat, not to its first socket, so the stream carries on
+            # across the seat's scheduled reconnects on the new client.
             # One seat's inbound stream, raw, in order, with a time: what a
             # viewer's compressor actually sees (#493). Hooked on the handler
             # the client registered with Engine.IO, which is what real
