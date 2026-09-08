@@ -14,7 +14,7 @@ import { useAuthStore } from "../store/authStore";
 import { authSubmitter, type AuthCredentials, type AuthMode } from "../lib/authSubmit";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError, SecondFactorRequiredError } from "../lib/api";
-import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
+import { passkeysAvailable } from "../lib/passkeys";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
 import { operatorEntries } from "../lib/operatorAccess";
@@ -438,10 +438,11 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      await assertPasskey();
-      // The session is set by the response; the store has to be told who it
-      // belongs to now, which is what every other sign-in path does.
-      await useAuthStore.getState().fetchMe();
+      // Through the store, which does what a password sign-in does after its
+      // own proof: gives up the guest's seat, adopts the account and bounces
+      // the socket onto it. Setting the user alone left the socket playing as
+      // somebody this browser had stopped being.
+      await useAuthStore.getState().signInWithPasskey();
       onClose();
     } catch (passkeyError) {
       setError(

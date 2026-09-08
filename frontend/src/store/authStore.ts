@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiRequest, ApiError } from "../lib/api";
+import { assertPasskey } from "../lib/passkeys";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
 import { isPaletteColor, useSettingsStore } from "./settingsStore";
@@ -81,6 +82,12 @@ interface AuthStore {
    * is wanted, and the form retries with it.
    */
   login: (username: string, password: string, code?: string) => Promise<AuthUser>;
+  /**
+   * Sign in with a passkey: one assertion, no username and no password
+   * (R-AUTH-23). Everything after it is what a password sign-in does, because
+   * it is the same transition.
+   */
+  signInWithPasskey: () => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -205,7 +212,27 @@ function installIdentity(
   set({ user, hasResolved: true });
 }
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
+export const useAuthStore = create<AuthStore>((set, get) => {
+  /**
+   * Become this account, whatever proved it.
+   *
+   * A password and a passkey answer different questions and land in the same
+   * place, and what follows is the same either way — which is why it is one
+   * function. A second sign-in path that only set the user looked right and
+   * left the socket bound to the guest it replaced: the old seat stayed
+   * occupied on the server, and everything live carried on under an identity
+   * this browser no longer had.
+   */
+  const adopt = async (user: AuthUser): Promise<AuthUser> => {
+    installIdentity(set, user);
+    reconcileNameColor(user);
+    await loadRegisteredSettings(user);
+    releaseSeatBeforeIdentityChange();
+    reconnectSocketAsNewIdentity();
+    return user;
+  };
+
+  return {
   user: null,
   isLoading: false,
   hasResolved: false,
@@ -325,12 +352,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       method: "POST",
       body: code ? { username, password, code } : { username, password },
     });
-    installIdentity(set, user);
-    reconcileNameColor(user);
-    await loadRegisteredSettings(user);
-    releaseSeatBeforeIdentityChange();
-    reconnectSocketAsNewIdentity();
-    return user;
+    return adopt(user);
+  },
+
+  signInWithPasskey: async () => {
+    // The server's response carries the account, so there is nothing to read
+    // back: the assertion identified it, which is the point of a
+    // discoverable credential.
+    const { user } = await assertPasskey();
+    return adopt(user);
   },
 
   logout: async () => {
@@ -347,4 +377,5 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     await useAuthStore.getState().fetchMe();
     reconnectSocketAsNewIdentity();
   },
-}));
+  };
+});

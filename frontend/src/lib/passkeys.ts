@@ -1,4 +1,5 @@
 import { apiRequest } from "./api";
+import type { AuthUser } from "../store/authStore";
 
 /**
  * Passkeys, as the staff surfaces use them (R-AUTH-23).
@@ -156,7 +157,9 @@ export async function registerPasskey(
 export async function assertPasskey(): Promise<{
   ok: boolean;
   steppedUp: boolean;
-  user: { id: string; role: string };
+  /** The whole account, as `/api/auth/me` returns it: the assertion is what
+      identified it, so there is nothing to read back afterwards. */
+  user: AuthUser;
 }> {
   const { options } = await apiRequest<{ options: string }>(
     "/api/auth/passkeys/challenge",

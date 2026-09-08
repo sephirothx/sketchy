@@ -1567,7 +1567,16 @@ def create_auth_router(
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
         already = await second_factor_state(session_factory, user_id=user.id)
-        if already.enrolled:
+        # Anything already in place makes this a *change* rather than a first
+        # setup, and a change asks for the password. A passkey counts: a staff
+        # account whose only credential is one used to fall through the branch
+        # below, so a stolen cookie could add an authenticator app of its own
+        # choosing without proving anything - and then step up with its codes,
+        # which is the whole of what R-AUTH-21 keeps a stolen cookie away from.
+        holds_something = already.enrolled or bool(
+            await list_passkeys(session_factory, user_id=user.id)
+        )
+        if holds_something:
             await _prove_password(user, body.password)
         elif body.password:
             # Offered rather than demanded: somebody who gives it here is
@@ -1714,6 +1723,24 @@ def create_auth_router(
         session_id = getattr(request.state, "session_id", None)
         if not session_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
+        # An authenticator app nobody has vouched for is not a way to unlock a
+        # destructive action, even though it is a way to sign in beside a
+        # password. The difference is what each one costs an attacker: a
+        # sign-in needs the password they do not have, and a step-up needs only
+        # the session they already stole. A factor planted on an ordinary
+        # player who was later promoted on the strength of a *passkey* would
+        # otherwise be a step-up credential the account's owner never saw
+        # (R-AUTH-20, R-AUTH-23). Its recovery codes go with it: they were
+        # issued to the same factor.
+        enrolled = await second_factor_state(session_factory, user_id=user.id)
+        if enrolled.enrolled and not enrolled.password_proved:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "This authenticator has not been confirmed as yours. Use a "
+                    "passkey, or confirm it with your password in Settings."
+                ),
+            )
         outcome = await verify_second_factor(
             session_factory, user_id=user.id, code=body.code
         )

@@ -449,6 +449,88 @@ async def test_signing_in_with_a_passkey_carries_the_guest_along(env):
     assert await list_active_sessions(factory, user_id=guest_id) == []
 
 
+async def test_a_stolen_session_cannot_give_itself_an_authenticator(env):
+    """The hole a passkey-only staff account opened, and what closes it.
+
+    Enrolling asks for no password on purpose - it is optional for a player
+    and gates nothing of theirs. But an account that already holds a
+    credential is *changing* one, and until passkeys existed that was always
+    true of a staff account, so the branch was never reached with anything at
+    stake. A stolen cookie could otherwise bind an authenticator app nobody
+    vouched for and step up with its codes, which is exactly what R-AUTH-21
+    keeps a stolen cookie away from.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Cookiedagain")
+    await offer_a_role(factory, account["id"])
+    await add_passkey(client, SoftAuthenticator())
+
+    offer = (await client.post("/api/auth/second-factor/enrol")).json()
+    planted = await client.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )
+    assert planted.status_code == 401
+    assert not (await second_factor_state(factory, user_id=account["id"])).enrolled
+
+
+async def test_an_authenticator_nobody_vouched_for_cannot_step_up(env):
+    """The other half, for a factor planted before the role existed.
+
+    A player's own account is worth nothing to plant on, so the app is bound
+    while they are still a player - and then a role is granted on the strength
+    of a passkey, and the planted factor comes along. Signing in still needs
+    the password an attacker has not got; stepping up would need only the
+    session they already stole.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Vouchless")
+
+    # Planted while they are an ordinary player, which asks for nothing.
+    offer = (await client.post("/api/auth/second-factor/enrol")).json()
+    confirmed = await client.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    recovery = confirmed.json()["recoveryCodes"][0]
+
+    # Promoted later on the strength of a passkey.
+    await offer_a_role(factory, account["id"])
+    await add_passkey(client, SoftAuthenticator())
+    assert not (await second_factor_state(factory, user_id=account["id"])).password_proved
+
+    refused = await client.post(
+        "/api/auth/step-up",
+        json={"code": code_at(offer["secret"], current_step(time.time()) + 1)},
+    )
+    assert refused.status_code == 403, (refused.status_code, refused.text)
+    assert "not been confirmed as yours" in refused.json()["detail"]
+
+    # And the way out is the one the dialog already offers. Proved with a
+    # recovery code rather than a TOTP one, which spends no step and leaves
+    # the next one for the step-up below: inside a single thirty-second
+    # interval there is exactly one unspent step to go round.
+    proved = await client.post(
+        "/api/auth/second-factor/confirm-owner",
+        json={"password": PASSWORD, "code": recovery},
+    )
+    assert proved.status_code == 200, proved.text
+    stepped = await client.post(
+        "/api/auth/step-up",
+        json={"code": code_at(offer["secret"], current_step(time.time()) + 1)},
+    )
+    assert stepped.status_code == 200, stepped.text
+
+
 async def test_a_response_that_is_not_one_is_refused_rather_than_parsed(env):
     """Everything about the credential arrives from the browser.
 
