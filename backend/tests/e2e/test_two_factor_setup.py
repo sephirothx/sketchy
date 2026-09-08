@@ -17,7 +17,7 @@ import pytest
 from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
 from tests.e2e.staff_helpers import set_role
 
 BASE_URL = "http://localhost:8000"
@@ -89,20 +89,23 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             # of the blast radius.
             await page.goto(BASE_URL)
             await page.click('button:has-text("Create room")')
-            # Named, because the operator's table lists every room on the
-            # server and the other workers' rooms are in it too.
-            await page.fill(
-                'input[placeholder="Leave blank for a random name!"]',
-                "TwoFactorRoom",
-            )
+            # Waited for by name: both the lobby and the setup page carry a
+            # "Create room" button, so clicking twice without this is a race
+            # against the navigation between them - one CI shard lost it.
+            await page.wait_for_selector(".create-room-page h1")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
+            # Found by its code rather than by a name typed into the setup
+            # form: the operator's table lists every room on the server, so
+            # the row has to be identified, and the code is issued rather than
+            # entered - one less field on the way there to wait for.
+            code = await room_code(page)
 
             await page.goto(f"{BASE_URL}/admin/operations?tab=controls")
             await page.wait_for_selector(
                 '[role="tab"][aria-selected="true"]:has-text("Controls")'
             )
-            room_row = page.locator(".ops-table tbody tr", has_text="TwoFactorRoom")
+            room_row = page.locator(".ops-table tbody tr", has_text=code)
             await expect(room_row).to_be_visible()
             await room_row.get_by_role("button", name="Close room").click()
             await room_row.get_by_role("button", name="Confirm close").click()
