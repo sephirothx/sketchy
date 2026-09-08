@@ -806,7 +806,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               onClick={() => setTwoFactorOpen(true)}
             >
               <ShieldIcon size={15} />
-              {twoFactorState?.enrolled ? "Manage" : "Set up"}
+              {twoFactorState && (twoFactorState.enrolled || twoFactorState.passkeys > 0)
+                ? "Manage"
+                : "Set up"}
             </button>
           </Row>
         )}

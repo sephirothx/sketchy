@@ -382,6 +382,16 @@ export function AuthDialog({
   const [passkeyOnly, setPasskeyOnly] = useState(false);
   const canUsePasskeys = passkeysAvailable();
 
+  // Both of these are answers about one account and one attempt. Switching
+  // between signing in and creating an account starts a different one, and
+  // `passkeyOnly` left standing hides the form on a screen that offers no
+  // passkey button either - a dialog with nothing in it at all.
+  useEffect(() => {
+    setPasskeyOnly(false);
+    setCodeWanted(false);
+    setError(null);
+  }, [mode]);
+
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
   const isClaim = mode === "claim";
 
@@ -505,7 +515,14 @@ export function AuthDialog({
             )}
           </>
         )}
-        <form onSubmit={submit} className="auth-form" hidden={passkeyOnly}>
+        {/* Not `hidden`: that attribute is a user-agent default, and
+            `.auth-form { display: flex }` beats it - the form stayed on
+            screen inviting a second attempt at a password route the server
+            has just said cannot finish. Rendering the decision leaves no
+            room for a stylesheet to disagree with it. The two links below
+            sit outside the form, so the way on is still there. */}
+        {!(passkeyOnly && !isClaim) && (
+        <form onSubmit={submit} className="auth-form">
           <label htmlFor={`${titleId}-username`}>Username</label>
           {/* Pre-filled from the guest name but editable: this is where a typo
               gets fixed, and where you pick another if yours is taken. */}
@@ -598,6 +615,7 @@ export function AuthDialog({
             {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
           </button>
         </form>
+        )}
 
         {!isClaim && (
           <p className="auth-switch">

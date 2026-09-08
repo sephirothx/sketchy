@@ -426,6 +426,9 @@ and authenticators that keep no counter report zero throughout. `backed_up` says
 the platform syncs a copy, which is what lets the page tell somebody their only passkey
 lives on one device.
 
+Deleted with the account rather than by cascade: erasure anonymises the `users` row instead of removing it,
+so `ON DELETE CASCADE` never fires and `account_data.py` clears these tables by hand (R-AUTH-23).
+
 There is no `password_proved_at` here, unlike `user_second_factors`: registering a passkey demands
 the account's password, so every row is one somebody proved was theirs. A promotion reads it that
 way (R-AUTH-20).

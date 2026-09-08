@@ -22,7 +22,7 @@ from app.auth.account_data import (
     next_export_allowed_at,
     open_export_artifact,
 )
-from app.domain_values import DataExportStatus
+from app.domain_values import AccountState, DataExportStatus
 from app.auth.middleware import (
     clear_session_cookie,
     is_secure_request,
@@ -77,6 +77,7 @@ from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
 from app.auth.passkeys import (
+    LastFactorError,
     PasskeyError,
     authentication_options as passkey_authentication_options_json,
     list_passkeys,
@@ -1320,6 +1321,11 @@ def create_auth_router(
             # Whether a staff role could be granted on this factor as it
             # stands, or whether the password still has to be proved for it.
             "passwordProved": state.password_proved,
+            # How many passkeys stand beside it. The row that opens this
+            # dialog asks one question - "is there anything set up?" - and
+            # answering it from the authenticator app alone told an account
+            # holding only a passkey to set one up (R-AUTH-23).
+            "passkeys": len(await list_passkeys(session_factory, user_id=user.id)),
             "required": user.role in STAFF_ROLES and staff_second_factor_required(),
             "stepUpWindowSeconds": int(STEP_UP_WINDOW.total_seconds()),
         }
@@ -1453,20 +1459,20 @@ def create_auth_router(
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
         await _prove_password(user, body.password)
-        held = await list_passkeys(session_factory, user_id=user.id)
-        factor = await second_factor_state(session_factory, user_id=user.id)
-        last_one = len(held) <= 1 and not factor.enrolled
-        if user.role in STAFF_ROLES and staff_second_factor_required() and last_one:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "This is the only thing this account can sign in with. Add "
-                    "another passkey or an authenticator app first."
-                ),
+        # Whether the rule applies is this route's question - it is about the
+        # role - and whether it is broken is decided inside the write, where
+        # the count cannot go stale between reading it and acting on it.
+        keep_one = user.role in STAFF_ROLES and staff_second_factor_required()
+        try:
+            removed = await remove_passkey(
+                session_factory,
+                user_id=user.id,
+                passkey_id=passkey_id,
+                keep_one=keep_one,
             )
-        if not await remove_passkey(
-            session_factory, user_id=user.id, passkey_id=passkey_id
-        ):
+        except LastFactorError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        if not removed:
             raise HTTPException(status_code=404, detail="No such passkey.")
         return {"ok": True}
 
@@ -1501,7 +1507,11 @@ def create_auth_router(
             raise HTTPException(status_code=401, detail=str(error)) from error
 
         account = await user_repo.get_by_id(assertion.user_id)
-        if account is None:
+        # Registered, not merely present. An account that was deleted keeps its
+        # row - erasure anonymises rather than removes it, so history stays
+        # readable - and a credential is refused against one on its own
+        # account, whatever else may have been left behind.
+        if account is None or account.state != AccountState.REGISTERED.value:
             raise HTTPException(status_code=401, detail="That passkey is not registered here.")
         if await is_user_banned(session_factory, account.id):
             raise HTTPException(status_code=403, detail="This account is suspended.")

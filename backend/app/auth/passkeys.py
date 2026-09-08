@@ -40,7 +40,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from webauthn import (
     base64url_to_bytes,
@@ -63,7 +63,13 @@ from webauthn.helpers.structs import (
 )
 
 from app.deployment import public_base_url
-from app.db.models import UserPasskey, WebauthnChallenge, generate_uuid
+from app.db.models import (
+    User,
+    UserPasskey,
+    UserSecondFactor,
+    WebauthnChallenge,
+    generate_uuid,
+)
 
 # How long a handed-out challenge is worth anything. Long enough to find a
 # fingerprint reader, short enough that a collected one is useless by the time
@@ -112,22 +118,46 @@ def expected_origin(environ=None) -> str:
     return public_base_url(environ)
 
 
-async def _spend_challenge(
-    session: AsyncSession, *, challenge: str, purpose: str, user_id: str | None
+async def _claim_challenge(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    challenge: str,
+    purpose: str,
+    user_id: str | None,
 ) -> bytes:
-    """Take the challenge back out of the store, or refuse the ceremony.
+    """Take the challenge out of the store, or refuse the ceremony.
 
-    Deleted as it is read and inside the caller's transaction, so two requests
-    carrying the same one cannot both be told yes - the same rule a recovery
-    code is claimed under, for the same reason.
+    One DELETE decides it, and it is committed before anything is verified.
+    Both halves of that matter. The condition travels *with* the statement, so
+    two requests carrying the same challenge cannot both be told yes - the
+    rule a recovery code is claimed under, for the same reason. And the
+    commit is separate from the verification that follows, because a deletion
+    made inside that transaction is undone when the verification raises: a
+    signature that failed would hand the challenge back, and a challenge is
+    worth one attempt whether or not the attempt was any good.
     """
     now = datetime.now(timezone.utc)
-    row = await session.get(WebauthnChallenge, challenge)
-    if row is None or row.purpose != purpose or row.expires_at <= now:
+    conditions = [
+        WebauthnChallenge.challenge == challenge,
+        WebauthnChallenge.purpose == purpose,
+        WebauthnChallenge.expires_at > now,
+    ]
+    # A registration's challenge belongs to the account that asked for it; a
+    # sign-in's belongs to nobody, because nobody has said who they are yet.
+    if user_id is None:
+        conditions.append(WebauthnChallenge.user_id.is_(None))
+    else:
+        conditions.append(
+            or_(
+                WebauthnChallenge.user_id.is_(None),
+                WebauthnChallenge.user_id == UUID(user_id),
+            )
+        )
+    async with session_factory() as session:
+        async with session.begin():
+            claimed = await session.execute(delete(WebauthnChallenge).where(*conditions))
+    if not claimed.rowcount:
         raise PasskeyError("That request has expired. Please try again.")
-    if user_id is not None and row.user_id is not None and str(row.user_id) != user_id:
-        raise PasskeyError("That request belongs to a different account.")
-    await session.delete(row)
     return base64url_to_bytes(challenge)
 
 
@@ -215,11 +245,11 @@ async def register_passkey(
     leaves no credential to be confused by later.
     """
     challenge = _client_challenge(credential)
+    expected = await _claim_challenge(
+        session_factory, challenge=challenge, purpose=REGISTER, user_id=user_id
+    )
     async with session_factory() as session:
         async with session.begin():
-            expected = await _spend_challenge(
-                session, challenge=challenge, purpose=REGISTER, user_id=user_id
-            )
             try:
                 verified = verify_registration_response(
                     credential=credential,
@@ -309,14 +339,14 @@ async def verify_assertion(
     if not isinstance(raw_id, str):
         raise PasskeyError("That sign-in could not be read.")
 
+    expected = await _claim_challenge(
+        session_factory,
+        challenge=challenge,
+        purpose=AUTHENTICATE,
+        user_id=expected_user_id,
+    )
     async with session_factory() as session:
         async with session.begin():
-            expected = await _spend_challenge(
-                session,
-                challenge=challenge,
-                purpose=AUTHENTICATE,
-                user_id=expected_user_id,
-            )
             row = await session.get(UserPasskey, raw_id)
             if row is None:
                 raise PasskeyError("That passkey is not registered here.")
@@ -356,12 +386,32 @@ async def list_passkeys(
         return [_as_registered(row) for row in rows]
 
 
+class LastFactorError(PasskeyError):
+    """Removing this one would leave the account with no way in."""
+
+
 async def remove_passkey(
-    session_factory: async_sessionmaker[AsyncSession], *, user_id: str, passkey_id: str
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    user_id: str,
+    passkey_id: str,
+    keep_one: bool,
 ) -> bool:
-    """Forget one credential. The caller decides whether it may go."""
+    """Forget one credential, unless it is the last thing standing.
+
+    The rule and the deletion are one transaction on purpose. Counting in one
+    and deleting in another is a race an account can lose against itself: two
+    requests removing the last two passkeys each see two, each decide the
+    other one is still there, and a staff account is left with nothing to
+    sign in with. The account row is taken for update first, so the two
+    requests queue rather than interleave - on SQLite the write lock does the
+    same job.
+    """
     async with session_factory() as session:
         async with session.begin():
+            await session.execute(
+                select(User.id).where(User.id == UUID(user_id)).with_for_update()
+            )
             row = await session.scalar(
                 select(UserPasskey).where(
                     UserPasskey.id == UUID(passkey_id),
@@ -370,6 +420,22 @@ async def remove_passkey(
             )
             if row is None:
                 return False
+            if keep_one:
+                held = len(
+                    (
+                        await session.scalars(
+                            select(UserPasskey.credential_id).where(
+                                UserPasskey.user_id == UUID(user_id)
+                            )
+                        )
+                    ).all()
+                )
+                factor = await session.get(UserSecondFactor, UUID(user_id))
+                if held <= 1 and factor is None:
+                    raise LastFactorError(
+                        "This is the only thing this account can sign in with. "
+                        "Add another passkey or an authenticator app first."
+                    )
             await session.delete(row)
             return True
 

@@ -562,27 +562,45 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                     Add a passkey
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-compact"
-                  onClick={() => void newCodes()}
-                  disabled={busy || !password}
-                >
-                  New recovery codes
-                </button>
-                {/*
-                  Offered even when the role requires it: the server refuses,
-                  and being told why by the thing you asked is clearer than an
-                  option that silently is not there.
-                */}
-                <button
-                  type="button"
-                  className="btn btn-danger-ghost btn-compact"
-                  onClick={() => void turnOff()}
-                  disabled={busy || !password}
-                >
-                  Turn off
-                </button>
+                {/* Both of these are about the authenticator app, and an
+                    account whose only credential is a passkey has none: the
+                    endpoints answer 409, so offering them is offering a
+                    refusal. What that account wants instead is the app it
+                    does not have yet. */}
+                {state?.enrolled ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-compact"
+                      onClick={() => void newCodes()}
+                      disabled={busy || !password}
+                    >
+                      New recovery codes
+                    </button>
+                    {/*
+                      Offered even when the role requires it: the server
+                      refuses, and being told why by the thing you asked is
+                      clearer than an option that silently is not there.
+                    */}
+                    <button
+                      type="button"
+                      className="btn btn-danger-ghost btn-compact"
+                      onClick={() => void turnOff()}
+                      disabled={busy || !password}
+                    >
+                      Turn off
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => void start()}
+                    disabled={busy}
+                  >
+                    Add an authenticator app
+                  </button>
+                )}
               </div>
             </div>
           </>

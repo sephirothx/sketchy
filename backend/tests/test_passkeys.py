@@ -9,6 +9,7 @@ and that a counter going backwards is caught.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -529,6 +530,109 @@ async def test_an_authenticator_nobody_vouched_for_cannot_step_up(env):
         json={"code": code_at(offer["secret"], current_step(time.time()) + 1)},
     )
     assert stepped.status_code == 200, stepped.text
+
+
+async def test_a_deleted_account_cannot_be_signed_back_into(env):
+    """Erasure anonymises the row rather than removing it (R-PRIV-04).
+
+    Which means `ON DELETE CASCADE` never fires, and a credential left behind
+    outlives the account. It does not matter much for an authenticator app -
+    the username and password go, so a code alone opens nothing - but a
+    passkey needs neither, and one left behind is the front door to an account
+    somebody deleted. Two answers, because either alone is a single point of
+    failure: the credentials go with the account, and a credential is refused
+    against anything that is not a registered account.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Departing")
+    await offer_a_role(factory, account["id"])
+    authenticator = SoftAuthenticator()
+    await add_passkey(client, authenticator)
+
+    deleted = await client.request(
+        "DELETE", "/api/auth/account", json={"password": PASSWORD}
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert await _passkey_count(factory, account["id"]) == 0
+
+    stranger = new_client()
+    options = await assertion_options(stranger)
+    refused = await stranger.post(
+        "/api/auth/passkeys/verify",
+        json={"credential": authenticator.sign(options, origin=ORIGIN)},
+    )
+    assert refused.status_code == 401
+    assert (await stranger.get("/api/auth/me")).json() is None
+
+
+async def test_a_challenge_is_spent_by_an_attempt_that_failed(env):
+    """One attempt, good or bad. Anything else is a retry budget.
+
+    The deletion used to sit inside the transaction that verified the
+    signature, so a verification that raised took the deletion with it: a
+    signature for the wrong origin handed the challenge back, and the next
+    attempt could use it again.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Retried")
+    await offer_a_role(factory, account["id"])
+    authenticator = SoftAuthenticator()
+
+    options = await registration_options(client)
+    wrong = await client.post(
+        "/api/auth/passkeys",
+        json={
+            "credential": authenticator.register(
+                options, origin="https://not-this-server.example"
+            ),
+            "password": PASSWORD,
+        },
+    )
+    assert wrong.status_code == 400
+
+    # The same challenge, signed properly this time: it is gone.
+    again = await client.post(
+        "/api/auth/passkeys",
+        json={
+            "credential": authenticator.register(options, origin=ORIGIN),
+            "password": PASSWORD,
+        },
+    )
+    assert again.status_code == 400
+    assert "expired" in again.json()["detail"].lower()
+    assert await _passkey_count(factory, account["id"]) == 0
+
+
+async def test_two_removals_at_once_cannot_empty_a_staff_account(env):
+    """An account racing itself, which is the only way this is reachable.
+
+    Counting in one transaction and deleting in another lets both requests see
+    two credentials, each conclude the other will remain, and leave a
+    moderator with nothing to sign in with.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Racing")
+    await offer_a_role(factory, account["id"])
+    first = await add_passkey(client, SoftAuthenticator())
+    second = await add_passkey(client, SoftAuthenticator())
+
+    both = await asyncio.gather(
+        client.request(
+            "DELETE",
+            f"/api/auth/passkeys/{first['passkey']['id']}",
+            json={"password": PASSWORD},
+        ),
+        client.request(
+            "DELETE",
+            f"/api/auth/passkeys/{second['passkey']['id']}",
+            json={"password": PASSWORD},
+        ),
+    )
+    assert sorted(response.status_code for response in both) == [200, 400]
+    assert await _passkey_count(factory, account["id"]) == 1
 
 
 async def test_a_response_that_is_not_one_is_refused_rather_than_parsed(env):

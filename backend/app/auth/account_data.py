@@ -65,7 +65,11 @@ from app.db.models import (
     User,
     UserBan,
     UserBlock,
+    UserPasskey,
+    UserRecoveryCode,
+    UserSecondFactor,
     UserSettings,
+    WebauthnChallenge,
     generate_uuid,
 )
 from app.services.avatars import delete_avatars_for
@@ -1600,6 +1604,32 @@ async def anonymize_account(
             )
             # The picture is the account's, not the game's: it goes now.
             await delete_avatars_for(session, identity_ids)
+
+            # And so does everything the account signed in with. These have
+            # `ON DELETE CASCADE`, which never fires: the row is anonymised
+            # rather than deleted, so a credential left here outlives the
+            # account it belonged to. A password is nulled just below and a
+            # username with it, so an authenticator app could not be used on
+            # its own - but a **passkey** needs neither, and one left behind is
+            # a way back into an account that was deleted (R-AUTH-23).
+            await session.execute(
+                delete(UserPasskey).where(UserPasskey.user_id.in_(identity_ids))
+            )
+            await session.execute(
+                delete(WebauthnChallenge).where(
+                    WebauthnChallenge.user_id.in_(identity_ids)
+                )
+            )
+            await session.execute(
+                delete(UserRecoveryCode).where(
+                    UserRecoveryCode.user_id.in_(identity_ids)
+                )
+            )
+            await session.execute(
+                delete(UserSecondFactor).where(
+                    UserSecondFactor.user_id.in_(identity_ids)
+                )
+            )
 
             for identity in (
                 await session.scalars(select(User).where(User.id.in_(identity_ids)))
