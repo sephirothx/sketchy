@@ -1,7 +1,8 @@
 import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AuthDialog, authSubmitter, type AuthMode } from "../components/AccountMenu";
+import { AuthDialog } from "../components/AccountMenu";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AppHeader } from "../components/AppHeader";
 import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { avatarInitial, identityColor } from "../lib/avatar";

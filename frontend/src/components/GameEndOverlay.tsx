@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../store/authStore";
-import { AuthDialog, authSubmitter, type AuthMode} from "./AccountMenu";
+import { AuthDialog } from "./AccountMenu";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import type { ScoreEntry, ScoringMode } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { competitionRanks, crownOutcome } from "../lib/standings";

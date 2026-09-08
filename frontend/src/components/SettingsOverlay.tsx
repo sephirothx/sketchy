@@ -28,7 +28,8 @@ import {
   type SettingsLocationState,
   type SettingsSection,
 } from "../hooks/useSettingsRoute";
-import { AuthDialog, authSubmitter, type AuthMode} from "./AccountMenu";
+import { AuthDialog } from "./AccountMenu";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";

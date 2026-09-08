@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
-import { AuthDialog, authSubmitter, type AuthMode} from "./AccountMenu";
+import { AuthDialog } from "./AccountMenu";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { Canvas, type CanvasRef } from "./Canvas";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { GuessPips } from "./GuessPips";

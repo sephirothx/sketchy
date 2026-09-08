@@ -38,9 +38,6 @@ import {
   ZapIcon,
 } from "./icons";
 
-export type { AuthMode, AuthCredentials } from "../lib/authSubmit";
-export { authSubmitter } from "../lib/authSubmit";
-
 function MenuItem({
   icon,
   className,
