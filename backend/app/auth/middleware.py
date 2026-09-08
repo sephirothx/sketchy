@@ -1,6 +1,7 @@
 """Session cookie plumbing for HTTP requests and Socket.IO handshakes."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 
@@ -108,19 +109,35 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         # cache this would be a database round trip per request purely to
         # hash an address that is only ever compared with another hash.
         self._ip_secret: str | None = None
+        # And read once *in total*, not once per request in flight. A cold
+        # server has no key row yet, and this now runs on every request: the
+        # first page load is a dozen of them at once, each finding nothing
+        # cached, each trying to insert the same row, each losing on the
+        # unique key and retrying. That pile-up lands precisely when the first
+        # page is loading, which is where it was seen (#468). One caller
+        # establishes it; the rest wait on the lock and find it done.
+        self._ip_secret_lock = asyncio.Lock()
 
     async def _caller_ip_hash(self, request: Request) -> str | None:
         """Who is calling, as a digest. Never the address itself (R-PRIV-09)."""
-        try:
-            self._ip_secret = await get_ip_hash_secret(
-                self._session_factory, cached=self._ip_secret
-            )
-        except Exception:
-            # A signal, not a gate. If the key cannot be established the
-            # request still proceeds; the anomaly is simply not recorded.
-            return None
+        secret = self._ip_secret
+        if secret is None:
+            async with self._ip_secret_lock:
+                # Checked again inside the lock: whoever held it before this
+                # caller has almost certainly just established it.
+                if self._ip_secret is None:
+                    try:
+                        self._ip_secret = await get_ip_hash_secret(
+                            self._session_factory
+                        )
+                    except Exception:
+                        # A signal, not a gate. If the key cannot be
+                        # established the request still proceeds; the anomaly
+                        # is simply not recorded.
+                        return None
+                secret = self._ip_secret
         return hmac.new(
-            self._ip_secret.encode("utf-8"),
+            secret.encode("utf-8"),
             client_key(request).encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()

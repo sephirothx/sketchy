@@ -9,15 +9,17 @@ to suspend somebody.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import time
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from app.auth.breached_passwords import screening_failure
 from app.auth.login_guard import (
@@ -857,3 +859,39 @@ async def test_finished_lockouts_are_forgotten(env):
     )
     assert forgotten == 1
     assert (await guard.check(username="Ancient", address="10.0.0.1")).allowed
+
+
+@pytest.mark.asyncio
+async def test_a_cold_server_establishes_its_hashing_key_once(env, monkeypatch):
+    """The first page load is a dozen requests at once, not one.
+
+    Hashing the caller's address runs on every request now, and a server that
+    has never run has no key row yet. Without single-flight each of those
+    concurrent requests reads nothing, tries to insert the same row, loses on
+    the unique key and retries - a pile-up landing exactly when the first page
+    is loading. One caller establishes it; the rest wait and find it done.
+    """
+    from app.auth.middleware import SessionAuthMiddleware
+    from app.db.models import AppConfig
+
+    new_client, factory, _ = env
+    # No environment key, so it has to be minted into `app_config` - the
+    # deployment shape this actually bites on.
+    monkeypatch.delenv("IP_HASH_SECRET", raising=False)
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(delete(AppConfig))
+
+    middleware = SessionAuthMiddleware(lambda scope, receive, send: None, factory)
+    request = SimpleNamespace(client=SimpleNamespace(host="203.0.113.7"))
+
+    digests = await asyncio.gather(
+        *(middleware._caller_ip_hash(request) for _ in range(16))
+    )
+    assert len(set(digests)) == 1
+    assert digests[0] is not None
+
+    async with factory() as session:
+        rows = (await session.scalars(select(AppConfig.key))).all()
+    # Exactly one key row, whoever won the race.
+    assert list(rows) == ["ip_hash_secret"]
