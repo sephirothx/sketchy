@@ -1756,6 +1756,14 @@ class AuthSession(Base):
         CheckConstraint(
             "expires_at > created_at", name="ck_auth_sessions_expiry_after_creation"
         ),
+        CheckConstraint(
+            "anomaly_count >= 0", name="ck_auth_sessions_anomaly_count"
+        ),
+        # A session that has never looked wrong has no time at which it did.
+        CheckConstraint(
+            "(anomaly_at IS NULL) = (anomaly_count = 0)",
+            name="ck_auth_sessions_anomaly_pair",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1789,6 +1797,135 @@ class AuthSession(Base):
         UTCDateTime(), nullable=False, index=True
     )
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # The address this session was issued to and the one it was last used
+    # from, both keyed HMACs rather than addresses: R-PRIV-09 forbids storing
+    # a raw address, and comparing two digests answers "is this the same
+    # network" without ever knowing which network it is (#468).
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # When this session was last used from a browser or - for staff - a
+    # network that does not match how it was issued, and how often that has
+    # happened. Shown in the device list so somebody can recognize a session
+    # that is not theirs (R-AUTH-22).
+    anomaly_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    anomaly_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    # The last time this device proved a second factor. Destructive staff
+    # actions require one inside a short window (R-AUTH-21). Held here rather
+    # than in memory so revoking the device revokes its step-up with it.
+    stepped_up_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+
+
+class UserSecondFactor(Base):
+    """The TOTP secret guarding one staff account (R-AUTH-20).
+
+    One row per account, present only once enrolment has been confirmed by a
+    code the account actually produced - an unconfirmed secret is held in the
+    enrolment response and nowhere else, so a secret that was generated and
+    then abandoned never becomes a credential.
+
+    The secret is stored as it must be. TOTP is symmetric: the server has to
+    hold what the authenticator holds in order to check a code at all, and
+    there is no hashing scheme that changes that. This is the honest cost of
+    choosing TOTP over WebAuthn, and it is why a database read is not the only
+    thing standing between a leak and a staff account - the password is still
+    required first, and R-AUTH-21's step-up is required again per action.
+    """
+
+    __tablename__ = "user_second_factors"
+    __table_args__ = (
+        CheckConstraint(
+            "failed_attempts >= 0", name="ck_user_second_factors_failed_attempts"
+        ),
+        # A code is accepted once. `last_step` is the counter of the interval
+        # that was spent, so a replay inside the same thirty seconds - which
+        # is exactly what a relayed code is - finds it already used.
+        CheckConstraint("last_step >= 0", name="ck_user_second_factors_last_step"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    secret: Mapped[str] = mapped_column(String(64), nullable=False)
+    confirmed_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    last_step: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    failed_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
+
+
+class UserRecoveryCode(Base):
+    """One single-use way back in when the authenticator is gone.
+
+    Hashed with SHA-256 for the same reason session tokens are (R-AUTH-02):
+    these are high-entropy values this server generated, so a slow hash buys
+    nothing a guesser could not already not do, and the database must not
+    contain a replayable credential. Spent rather than deleted, so somebody
+    can be told how many they have left without the count being a guess.
+    """
+
+    __tablename__ = "user_recovery_codes"
+    __table_args__ = (
+        UniqueConstraint("user_id", "code_hash", name="uq_user_recovery_codes_code"),
+        Index("ix_user_recovery_codes_user", "user_id", "used_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class AuthLoginLockout(Base):
+    """Consecutive failures against one login key, and the backoff they bought.
+
+    Separate from `auth_rate_limit_buckets` because it is a different shape:
+    a bucket is a count inside a fixed window that forgets everything when the
+    window rolls, which is what a rate limit should do. A lockout has to
+    remember across windows - the point of backing off is that the tenth
+    failure costs more than the second - and it is cleared by a success rather
+    than by time (#468).
+
+    The key is a keyed hash of the username, never the username: this table
+    would otherwise be a list of which accounts exist and which are under
+    attack, readable by anything that can read the database.
+    """
+
+    __tablename__ = "auth_login_lockouts"
+    __table_args__ = (
+        CheckConstraint(
+            "consecutive_failures >= 0",
+            name="ck_auth_login_lockouts_failures",
+        ),
+        Index("ix_auth_login_lockouts_locked_until", "locked_until"),
+    )
+
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
 
 
 class DataExport(Base):

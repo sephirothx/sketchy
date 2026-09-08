@@ -38,6 +38,8 @@ from app.services.message_retention import purge_expired_room_messages
 from tests.dbfixtures import create_test_db
 
 
+from tests.staffauth import mark_staff_ready
+
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
@@ -99,6 +101,11 @@ async def set_role(factory, user_id: str, role: UserRole) -> None:
             user = await session.get(User, UUID(user_id))
             assert user is not None
             user.role = role.value
+    # A staff role now comes with a second factor and a live step-up
+    # (R-AUTH-20, R-AUTH-21). Granted here so the tests below stay about
+    # moderation; the ceremony itself is covered in `test_auth_hardening.py`.
+    if role in (UserRole.MODERATOR, UserRole.ADMIN):
+        await mark_staff_ready(factory, user_id)
 
 
 async def test_report_submission_is_bounded_private_and_audited(env):

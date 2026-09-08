@@ -13,12 +13,12 @@ import os
 
 import pytest
 from playwright.async_api import async_playwright, expect
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import User
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import register_account, use_guest_name
+
+# Grants the role *and* the second factor R-AUTH-20 now requires of one.
+from tests.e2e.staff_helpers import set_role
 
 
 BASE_URL = "http://localhost:8000"
@@ -31,19 +31,6 @@ def _database_url() -> str:
     return url
 
 
-async def set_role(username: str, role: str) -> None:
-    """Move one account's role through the same throwaway database the server
-    uses - the way every other end-to-end test makes an account staff."""
-    engine = create_async_engine(_database_url())
-    try:
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with factory() as session:
-            async with session.begin():
-                await session.execute(
-                    update(User).where(User.username == username).values(role=role)
-                )
-    finally:
-        await engine.dispose()
 
 
 async def a_registered_page(browser, username: str):

@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
+from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.erasure import AccountErasedError, require_live_account
@@ -306,6 +307,7 @@ def create_bug_report_router(
     )
 
     require_admin = admin_gate(session_factory)
+    require_admin_action = stepped_up(require_admin)
 
     def _decode_screenshot(encoded: str | None) -> tuple[bytes, str, str] | None:
         """Validated bytes, content type and digest for an attached screenshot.
@@ -521,7 +523,7 @@ def create_bug_report_router(
     async def review_bug_report(
         report_id: UUID, body: BugReviewBody, request: Request
     ):
-        reviewer = await require_admin(request)
+        reviewer = await require_admin_action(request)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         async with session_factory() as session:
             async with session.begin():

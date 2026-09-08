@@ -20,6 +20,7 @@ import {
 import { canAdminister } from "../lib/operatorAccess";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
+import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 
 function formatWhen(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
@@ -70,6 +71,7 @@ export function BugReportsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const { guard, dialog: stepUpDialog } = useStepUp();
   const [error, setError] = useState<string | null>(null);
 
   const allowed = hasResolved && canAdminister(user?.role);
@@ -121,7 +123,11 @@ export function BugReportsPage() {
     setBusy(report.id);
     setError(null);
     try {
-      await reviewBugReport(report.id, decision, note[report.id].trim());
+      const outcome = await guard(() =>
+        reviewBugReport(report.id, decision, note[report.id].trim()),
+      );
+      // The step-up prompt was dismissed: the report is still open.
+      if (outcome === STEP_UP_ABANDONED) return;
       // Only claim the erasure when there was something to erase.
       notify(
         report.screenshot.status === "ready"
@@ -153,6 +159,7 @@ export function BugReportsPage() {
   return (
     <main className="ops-page">
       <AppHeader backLabel="Back to lobby" />
+      {stepUpDialog}
 
       {error && <p className="auth-error" role="alert">{error}</p>}
 

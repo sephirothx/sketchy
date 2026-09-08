@@ -24,6 +24,8 @@ from app.rooms import RoomManager
 from tests.dbfixtures import create_test_db
 
 
+from tests.staffauth import mark_staff_ready
+
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
@@ -95,6 +97,10 @@ async def set_role(factory, user_id: str, role: UserRole) -> None:
             user = await session.get(User, UUID(user_id))
             assert user is not None
             user.role = role.value
+    # Reviewing a report is a staff action, and now asks for the second
+    # factor R-AUTH-21 requires of one.
+    if role in (UserRole.MODERATOR, UserRole.ADMIN):
+        await mark_staff_ready(factory, user_id)
 
 
 def a_report(**overrides) -> dict:

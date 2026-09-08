@@ -29,6 +29,7 @@ import {
 } from "../lib/moderation";
 import { canModerate } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
+import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 
 type Filter = "open" | "players" | "content" | "bans" | "closed";
 type CaseKind = "player" | "content" | "ban";
@@ -180,6 +181,7 @@ export function ModerationPage() {
   const [note, setNote] = useState<Record<string, string>>({});
   const [duration, setDuration] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const { guard, dialog: stepUpDialog } = useStepUp();
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -316,7 +318,12 @@ export function ModerationPage() {
     setBusy(id);
     setError(null);
     try {
-      await run();
+      // Every decision here is destructive, so each one may be met with
+      // R-AUTH-21's "prove it again" - which `guard` turns into a prompt and
+      // then this same call, re-sent. `undefined` means the prompt was
+      // dismissed: nothing happened, so nothing is announced or cleared.
+      const outcome = await guard(run);
+      if (outcome === STEP_UP_ABANDONED) return;
       setMessage(done);
       setNote((current) => ({ ...current, [id]: "" }));
       load();
@@ -360,6 +367,7 @@ export function ModerationPage() {
   return (
     <main className="ops-page">
       <AppHeader backLabel="Back to lobby" />
+      {stepUpDialog}
 
       {error && (
         <p className="auth-error" role="alert">

@@ -22,6 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
+from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
 from app.db.models import AuditEvent, RoleChangeNotice, generate_uuid
 from app.domain_values import AuditTargetType
@@ -132,6 +133,10 @@ def create_admin_controls_router(
     # single thing the 404 in `admin_auth` is there to avoid. A dependency is
     # resolved first, so they get the same 404 either way.
     require_admin = admin_gate(session_factory)
+    # The same gate, plus a live step-up. Every route that changes a running
+    # server uses this one; the ones that only read use `require_admin`
+    # (R-AUTH-21).
+    require_admin_action = stepped_up(require_admin)
 
     async def _audit(request, admin, *, event, target_type, target_id, details):
         request_id, ip_hash = await audit_coordinates(request, session_factory)
@@ -166,7 +171,7 @@ def create_admin_controls_router(
     async def set_maintenance(
         request: Request,
         body: MaintenanceRequest,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Stop or resume admitting new rooms, games and restart votes.
 
@@ -274,7 +279,7 @@ def create_admin_controls_router(
     @router.delete("/api/admin/rooms/{room_id}")
     async def close_room(room_id: str, request: Request):
         """End a room now, telling everyone in it before their sockets close."""
-        admin = await require_admin(request)
+        admin = await require_admin_action(request)
         room = _room_or_404(room_id)
         await _audit(
             request, admin,
@@ -300,7 +305,7 @@ def create_admin_controls_router(
     @router.delete("/api/admin/rooms/{room_id}/players/{player_id}")
     async def kick_player(room_id: str, player_id: str, request: Request):
         """Remove one seat, by the same sequence a room's own vote uses."""
-        admin = await require_admin(request)
+        admin = await require_admin_action(request)
         room = _room_or_404(room_id)
         if player_id not in room.players:
             raise HTTPException(status_code=404, detail="No such player.")
@@ -327,7 +332,7 @@ def create_admin_controls_router(
         stuck behind a drawer who has stopped drawing wants the turn over, not
         the game.
         """
-        admin = await require_admin(request)
+        admin = await require_admin_action(request)
         room = _room_or_404(room_id)
         if room.game is None or room.game.phase != Phase.DRAWING:
             raise HTTPException(
@@ -361,7 +366,7 @@ def create_admin_controls_router(
     async def initiate_shutdown(
         request: Request,
         body: ShutdownRequest,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Stop this process, draining live games first.
 
@@ -508,7 +513,7 @@ def create_admin_controls_router(
         user_id: str,
         request: Request,
         body: RoleRequest,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Grant or revoke the moderator role, with a reason on the record."""
         if body.role not in GRANTABLE_ROLES:

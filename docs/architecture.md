@@ -405,8 +405,18 @@ skips even that diagnostic. A hard crash cannot run this hook at all.
 
 Every visitor is provisioned an anonymous account on first page load and remembered
 by an HttpOnly `sketchy_session` cookie. Session cookies carry opaque 256-bit random
-tokens; only SHA-256 hashes are stored. Tokens rotate halfway through a one-year
-maximum lifetime. Registered players can inspect and revoke individual devices.
+tokens; only SHA-256 hashes are stored. A session is bounded twice (R-AUTH-03): by an
+absolute life — 365 days for a player, 7 for a moderator or administrator — and by an
+idle window of 90 days (24 hours for staff) measured from its last use. Neither is
+frozen at issue: the absolute bound is re-derived from the account's *current* role at
+every resolution, so a promotion shortens the sessions somebody already holds. Tokens
+rotate weekly (daily for staff), which is per-device — the cookie is swapped on the
+browser making the request, and every other device stays signed in — and each rotation
+links its successor to its predecessor, so a predecessor presented afterwards is a
+second copy and takes the whole chain down with it (R-AUTH-22). Registered players can
+inspect and revoke individual devices, and see when each one lapses on its own.
+Staff carry a TOTP second factor and re-prove it for each destructive action
+(R-AUTH-20, R-AUTH-21).
 Logging in while carrying a guest identity creates an **immutable alias**
 (`identity_aliases`) rather than rewriting the guest's historical seats.
 
@@ -1485,10 +1495,12 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/auth/admin.py`](../backend/app/auth/admin.py) | Audited command for bootstrapping the first service administrator. |
 | [`app/auth/audit.py`](../backend/app/auth/audit.py) | Privacy-safe request correlation for append-only audit events. |
 | [`app/auth/avatars.py`](../backend/app/auth/avatars.py) | Canonical keys for avatar visuals hosted by the Sketchy deployment. |
+| [`app/auth/breached_passwords.py`](../backend/app/auth/breached_passwords.py) | Offline screening for passwords a guesser would reach before a brute force. |
 | [`app/auth/bans.py`](../backend/app/auth/bans.py) | Shared active-ban queries for HTTP, Socket.IO, login, and moderation. |
 | [`app/auth/blocks.py`](../backend/app/auth/blocks.py) | Low-latency lookup cache for directional player blocks. |
 | [`app/auth/erasure.py`](../backend/app/auth/erasure.py) | The erasure barrier: what a writer of account-owned content checks first. |
 | [`app/auth/email.py`](../backend/app/auth/email.py) | Provider-agnostic normalization for account email identities. |
+| [`app/auth/login_guard.py`](../backend/app/auth/login_guard.py) | What a password guess meets before the password is ever checked. |
 | [`app/auth/mail.py`](../backend/app/auth/mail.py) | Queueing and delivery for the few messages this game ever sends. |
 | [`app/auth/middleware.py`](../backend/app/auth/middleware.py) | Session cookie plumbing for HTTP requests and Socket.IO handshakes. |
 | [`app/auth/names.py`](../backend/app/auth/names.py) | The single naming rule shared by guest nicknames and account usernames. |
@@ -1498,7 +1510,10 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/auth/recovery.py`](../backend/app/auth/recovery.py) | Getting back into an account whose password is gone. |
 | [`app/auth/retention.py`](../backend/app/auth/retention.py) | Bounded cleanup policy for stale anonymous account rows. |
 | [`app/auth/routes.py`](../backend/app/auth/routes.py) | REST endpoints for anonymous provisioning, registration, and sign-in. |
+| [`app/auth/second_factor.py`](../backend/app/auth/second_factor.py) | Enrolling, proving and revoking the second factor a staff account needs. |
 | [`app/auth/sessions.py`](../backend/app/auth/sessions.py) | Opaque, hashed, server-side account session lifecycle. |
+| [`app/auth/step_up.py`](../backend/app/auth/step_up.py) | The gate a destructive staff action passes, having already passed a role. |
+| [`app/auth/totp.py`](../backend/app/auth/totp.py) | RFC 6238 time-based one-time passwords, and the codes that replace them. |
 | [`app/auth/tokens.py`](../backend/app/auth/tokens.py) | One-shot tokens for flows that leave the app and come back. |
 | [`app/canvas_history.py`](../backend/app/canvas_history.py) | Compact, versioned drawing-history models and wire encoding. |
 | [`app/canvas_session.py`](../backend/app/canvas_session.py) | Per-turn canvas protocol state and drawing-history operations. |

@@ -96,6 +96,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
         <h3 id={titleId} className="modal-title">Signed-in devices</h3>
         <p className="modal-body">
           Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.
+          A device you stop using signs itself out after ninety days.
         </p>
         {loading && <p role="status">Loading devices…</p>}
         {error && <p className="auth-error" role="alert">{error}</p>}
@@ -107,6 +108,24 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
                   <strong>{session.deviceLabel}</strong>
                   {session.current && <span className="session-current">Current device</span>}
                   <small>Last used {usedLabel(session.lastUsedAt, dateTime)}</small>
+                  {session.idleExpiresAt && (
+                    <small>
+                      Signs out on its own {usedLabel(session.idleExpiresAt, dateTime)}
+                    </small>
+                  )}
+                  {/*
+                    Worth interrupting for: a session used from a browser it
+                    was not issued to is the shape a stolen cookie has. Says
+                    only that it happened and when - the server keeps a hash
+                    of the address, not the address.
+                  */}
+                  {session.anomalyAt && (
+                    <small className="session-anomaly" role="note">
+                      Used from a different browser on{" "}
+                      {usedLabel(session.anomalyAt, dateTime)}. Revoke this
+                      device if that was not you.
+                    </small>
+                  )}
                 </span>
                 <button
                   type="button"

@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
+from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
 from app.db.models import AuditEvent, User, generate_uuid
 from app.domain_values import AuditTargetType
@@ -109,6 +110,7 @@ def create_admin_settings_router(
     # single thing the 404 in `admin_auth` is there to avoid. A dependency is
     # resolved first, so they get the same 404 either way.
     require_admin = admin_gate(session_factory)
+    require_admin_action = stepped_up(require_admin)
 
     @router.get("/api/admin/tunables")
     async def read_tunables(request: Request):
@@ -120,7 +122,7 @@ def create_admin_settings_router(
     async def change_tunables(
         request: Request,
         changes: TunableChanges,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Change settings as one set, persist them, and record who changed them."""
         if not changes.values and not changes.reset:

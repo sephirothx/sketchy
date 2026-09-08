@@ -37,6 +37,7 @@ from app.services.player_reports import (
     record_player_report,
 )
 from app.auth.sessions import revoke_all_sessions
+from app.auth.step_up import require_step_up
 from app.auth.warnings import pending_warning_payload
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
@@ -1011,6 +1012,9 @@ def create_moderation_router(
         """
         async with session_factory() as session:
             actor = await _reviewer(session, request)
+            # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
+            # on its own permission to suspend somebody.
+            require_step_up(request)
             report = await session.get(PlayerReport, report_id)
         if report is None or report.reported_user_id is None:
             raise HTTPException(status_code=404, detail="No such report.")
@@ -1186,6 +1190,9 @@ def create_moderation_router(
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
+                # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
+                # on its own permission to suspend somebody.
+                require_step_up(request)
                 report = await session.scalar(
                     select(PlayerReport)
                     .where(PlayerReport.id == report_id)
@@ -1244,6 +1251,9 @@ def create_moderation_router(
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
+                # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
+                # on its own permission to suspend somebody.
+                require_step_up(request)
                 report = await session.scalar(
                     select(PromptContentReport)
                     .where(PromptContentReport.id == report_id)
@@ -1409,6 +1419,9 @@ def create_moderation_router(
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
+                # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
+                # on its own permission to suspend somebody.
+                require_step_up(request)
                 target = await session.scalar(
                     select(User).where(User.id == body.user_id).with_for_update()
                 )
@@ -1553,6 +1566,9 @@ def create_moderation_router(
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
+                # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
+                # on its own permission to suspend somebody.
+                require_step_up(request)
                 ban = await session.scalar(
                     select(UserBan).where(UserBan.id == ban_id).with_for_update()
                 )
@@ -1596,6 +1612,9 @@ def create_moderation_router(
         async with session_factory() as session:
             async with session.begin():
                 reviewer = await _reviewer(session, request)
+                # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
+                # on its own permission to suspend somebody.
+                require_step_up(request)
                 target = await session.scalar(
                     select(User).where(User.id == body.user_id)
                 )

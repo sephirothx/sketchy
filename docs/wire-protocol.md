@@ -1561,9 +1561,9 @@ reloaded rather than served an older contract.
 | `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator. Takes down the reported account's picture, audits it, blocks re-upload for 7 days; `{ ok, removed }` (R-AVA-04) |
 | `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits — and `display-name` is what **provisions a guest** on a first visit (R-ACCT-00): choosing a name is the first act only a person about to play performs. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies |
 | `POST` | `/api/auth/register` | Claims the current account (`AUTH_REGISTER_LIMIT`) |
-| `POST` | `/api/auth/login` | Argon2id; rehashes stale-cost hashes on success (`AUTH_LOGIN_LIMIT`) |
+| `POST` | `/api/auth/login` | `{ username, password, code? }`. Argon2id; rehashes stale-cost hashes on success. Throttled on three keys at once — account, address, deployment — all counting **failures only**, plus a per-account backoff (R-RATE-12). A staff account must also produce its second factor (R-AUTH-20): with no `code` it answers `401` carrying `X-Sketchy-Second-Factor: required`, which is how the client knows to ask rather than to report a wrong password; a staff account that has not enrolled is `403`. A recovery code is accepted in the same field |
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
-| `GET` | `/api/auth/sessions` | Signed-in device list |
+| `GET` | `/api/auth/sessions` | Signed-in device list: `id`, `deviceLabel`, `createdAt`, `lastUsedAt`, `expiresAt`, `idleExpiresAt` (when silence alone ends it — usually far sooner than `expiresAt`), `anomalyAt` (last used from a browser it was not issued to, or `null`), `current` (R-AUTH-03, R-AUTH-22) |
 | `DELETE` | `/api/auth/sessions/{session_id}` | Revoke one device |
 | `GET`/`PUT` | `/api/auth/email` | `PUT` is rate limited (`AUTH_VERIFY_LIMIT`) |
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
@@ -1574,6 +1574,12 @@ reloaded rather than served an older contract.
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
 | `GET` | `/api/auth/data-exports/{export_id}/download` | The document: the stored gzip bytes as `Content-Encoding: gzip` when the request accepts it, else decompressed as it streams; `Content-Length` either way. Owner-only through the session, never a bearer URL (R-PRIV-14); v1 exports expire after 7 days |
+| `GET` | `/api/auth/second-factor` | `{ enrolled, confirmedAt, recoveryCodesRemaining, required, stepUpWindowSeconds }`. `required` is true when the account's role demands one |
+| `POST` | `/api/auth/second-factor/enrol` | Offers `{ secret, uri }` and **stores nothing** — the secret becomes a credential only when a code proves it arrived (R-AUTH-20), so an abandoned enrolment can lock nobody out (`AUTH_SECOND_FACTOR_LIMIT`) |
+| `POST` | `/api/auth/second-factor/confirm` | `{ secret, code }` → `{ ok, recoveryCodes }`. The ten codes appear **here and nowhere else**: only their SHA-256 hashes are kept. Re-enrolling replaces the secret and every code issued against the old one |
+| `POST` | `/api/auth/second-factor/recovery-codes` | `{ password }` → a fresh set, invalidating every previous code |
+| `DELETE` | `/api/auth/second-factor` | `{ password }`. Refused `409` when the account's role requires one: giving up the role is what removes the requirement |
+| `POST` | `/api/auth/step-up` | `{ code }` → `{ ok, expiresInSeconds }`. Opens the 15-minute window every destructive staff action needs (R-AUTH-21). Recorded on the session, so revoking the device revokes the proof |
 | `DELETE` | `/api/auth/account` | Password required for a registered account |
 
 ### Profiles and history — [`backend/app/api/profiles.py`](../backend/app/api/profiles.py)
@@ -1762,11 +1768,17 @@ preserve that cache distinction and send `Vary: Accept-Encoding`.
 
 Persistent, shared-database buckets keyed on an HMAC-SHA-256 digest of the client
 address under `IP_HASH_SECRET` — **raw IP addresses are never stored**
-([`backend/app/auth/rate_limit.py`](../backend/app/auth/rate_limit.py)).
+([`backend/app/auth/rate_limit.py`](../backend/app/auth/rate_limit.py)). Login is the
+exception to "keyed on the address": it is counted against three keys at once, and the
+account key is an HMAC of the lowercased username rather than of an address
+([`backend/app/auth/login_guard.py`](../backend/app/auth/login_guard.py), R-RATE-12).
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `AUTH_LOGIN_LIMIT` | 10 / 5 min | `POST /api/auth/login` |
+| `AUTH_LOGIN_LIMIT` | 10 / 5 min | `POST /api/auth/login`, keyed on the **address**; failures only |
+| `AUTH_LOGIN_ACCOUNT_LIMIT` | 10 / 15 min | The same route keyed on the **account** — the key a distributed attack cannot dodge (R-RATE-12); failures only |
+| `AUTH_LOGIN_GLOBAL_LIMIT` | 500 / 5 min | The same route for the whole deployment; failures only. `0` switches it off — it is the one bucket an attacker can saturate on purpose (N-17) |
+| `AUTH_SECOND_FACTOR_LIMIT` | 20 / 15 min | The `/api/auth/second-factor/*` and `/api/auth/step-up` routes |
 | `AUTH_REGISTER_LIMIT` | 10 / hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 / min | Name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 / hour | `POST /api/auth/password/forgot` |

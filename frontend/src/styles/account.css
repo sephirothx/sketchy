@@ -284,6 +284,67 @@
 .session-revoke-all { background: var(--danger); border-color: var(--danger) !important; color: var(--card); }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
+/* A session used from a browser it was not issued to. Given the warning
+   colour rather than the muted one every other line in the list has: it is the
+   one row somebody is meant to stop and look at (R-AUTH-22). */
+.session-anomaly { color: var(--warning); font-weight: 700; }
+
+.two-factor { max-width: 520px; text-align: left; }
+.two-factor label { display: block; font-weight: 700; margin-top: 12px; }
+.two-factor input {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font: inherit;
+  margin-top: 6px;
+  padding: 8px 10px;
+  width: 100%;
+}
+.two-factor button, .step-up button {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  margin-top: 14px;
+  padding: 8px 14px;
+}
+/* The key and the recovery codes are read off the screen and typed or copied
+   by hand, so both are monospaced and spaced out rather than set in the body
+   face, where a 1 and an l are a support ticket. */
+.two-factor-secret code, .two-factor-codes code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+}
+.two-factor-secret {
+  /* Neutral, not a warning tint: this is a key to copy, not a caution. */
+  background: var(--line);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+}
+.two-factor-codes ul {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.two-factor-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.step-up { max-width: 420px; text-align: left; }
+.step-up label { display: block; font-weight: 700; margin-top: 12px; }
+.step-up input {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font: inherit;
+  margin-top: 6px;
+  padding: 8px 10px;
+  width: 100%;
+}
+.step-up-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
 .account-data-dialog { max-width: 620px; text-align: left; }
 .account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }
 .account-data-section h4 { margin: 0; }

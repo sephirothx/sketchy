@@ -68,7 +68,12 @@ interface AuthStore {
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
   register: (username: string, password: string, email?: string) => Promise<AuthUser>;
-  login: (username: string, password: string) => Promise<AuthUser>;
+  /**
+   * `code` is the second factor, sent only when the server has asked for one
+   * (R-AUTH-20): a staff sign-in is refused once with a header saying a code
+   * is wanted, and the form retries with it.
+   */
+  login: (username: string, password: string, code?: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -308,10 +313,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     return user;
   },
 
-  login: async (username, password) => {
+  login: async (username, password, code) => {
     const user = await apiRequest<AuthUser>("/api/auth/login", {
       method: "POST",
-      body: { username, password },
+      body: code ? { username, password, code } : { username, password },
     });
     installIdentity(set, user);
     reconcileNameColor(user);

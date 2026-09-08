@@ -25,6 +25,7 @@ import {
 } from "../../lib/adminControls";
 import { playerNameClass, playerNameStyle } from "../../lib/playerName";
 import { useToast } from "../../lib/toast";
+import { STEP_UP_ABANDONED, useStepUp } from "../../hooks/useStepUp";
 
 /** Commands, kept apart from the settings on purpose.
 
@@ -56,6 +57,7 @@ export function ControlsPanel() {
   // scrolled to the bottom of, which is a confirmation nobody sees. The toast
   // is where the command they just pressed answers them.
   const { notify } = useToast();
+  const { guard, dialog: stepUpDialog } = useStepUp();
   // Which room's seats are open. Collapsed by default: the table is for
   // finding a room, and a list of every player in every room would bury it.
   const [openSeats, setOpenSeats] = useState<string | null>(null);
@@ -112,11 +114,22 @@ export function ControlsPanel() {
     };
   }, [roleQuery]);
 
-  function run(action: Promise<unknown>, message: string) {
+  /**
+   * Every command on this panel goes through here, which is why the step-up
+   * prompt lives here too: each of them is destructive, and R-AUTH-21 refuses
+   * one whose session has not proved its second factor recently.
+   *
+   * The action is a function rather than a promise so `guard` can run it
+   * again after the code is accepted - the retry is the operator's own
+   * command, re-sent, not a replay of anything they did not ask for.
+   */
+  function run(action: () => Promise<unknown>, message: string) {
     setBusy(true);
     setError(null);
-    void action
-      .then(() => {
+    void guard(action)
+      .then((result) => {
+        // The prompt was dismissed: nothing was done, so nothing is announced.
+        if (result === STEP_UP_ABANDONED) return;
         setDone(message);
         notify(message, "success");
         load();
@@ -142,6 +155,8 @@ export function ControlsPanel() {
   });
 
   return (
+    <>
+      {stepUpDialog}
     <div className="ops-controls">
       {error && (
         <p className="auth-error" role="alert">
@@ -188,7 +203,7 @@ export function ControlsPanel() {
             disabled={busy || admission.draining}
             onClick={() =>
               run(
-                setMaintenance(!paused, reason),
+                () => setMaintenance(!paused, reason),
                 paused ? "New rooms are open again." : "New rooms are paused.",
               )
             }
@@ -255,7 +270,7 @@ export function ControlsPanel() {
                         className="btn btn-ghost btn-compact"
                         disabled={busy || room.phase !== "drawing"}
                         onClick={() =>
-                          run(endTurn(room.id), "The turn was ended.")
+                          run(() => endTurn(room.id), "The turn was ended.")
                         }
                       >
                         End turn
@@ -267,7 +282,7 @@ export function ControlsPanel() {
                             className="btn btn-danger-ghost btn-compact"
                             disabled={busy}
                             onClick={() =>
-                              run(closeRoom(room.id), "The room was closed.")
+                              run(() => closeRoom(room.id), "The room was closed.")
                             }
                           >
                             Confirm close
@@ -319,7 +334,7 @@ export function ControlsPanel() {
                                     disabled={busy}
                                     onClick={() =>
                                       run(
-                                        kickPlayer(room.id, seat.id),
+                                        () => kickPlayer(room.id, seat.id),
                                         `${seat.nickname} was removed.`,
                                       )
                                     }
@@ -403,7 +418,7 @@ export function ControlsPanel() {
                 disabled={blocked}
                 onClick={() =>
                   run(
-                    initiateShutdown(
+                    () => initiateShutdown(
                       shutdownReason.trim(),
                       drainSeconds.trim() === ""
                         ? undefined
@@ -553,7 +568,7 @@ export function ControlsPanel() {
               run(
                 // The row the operator acted on changes in front of them: a
                 // message is a claim, a chip that has moved is the change.
-                setPlayerRole(target.id, role, roleReason.trim()).then((result) => {
+                () => setPlayerRole(target.id, role, roleReason.trim()).then((result) => {
                   const changed = { ...target, role: result.role as PlayerCandidate["role"] };
                   setSelected(changed);
                   setCandidates((current) =>
@@ -570,5 +585,6 @@ export function ControlsPanel() {
         </div>
       </section>
     </div>
+    </>
   );
 }

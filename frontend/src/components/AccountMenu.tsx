@@ -12,7 +12,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
-import { ApiError } from "../lib/api";
+import { ApiError, SecondFactorRequiredError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
 import { operatorEntries } from "../lib/operatorAccess";
@@ -22,6 +22,8 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { BugReportDialog } from "./BugReportDialog";
+import { TwoFactorDialog } from "./TwoFactorDialog";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import {
   BugIcon,
   BulbIcon,
@@ -89,6 +91,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [bugReportOpen, setBugReportOpen] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -293,6 +296,15 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   {entry.label}
                 </MenuItem>
               ))}
+              <MenuItem
+                icon={<ShieldIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setTwoFactorOpen(true);
+                }}
+              >
+                Two-factor authentication
+              </MenuItem>
               <div className="account-menu-divider" role="presentation" />
               {reportBugEntry}
               <div className="account-menu-divider" role="presentation" />
@@ -323,6 +335,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       {bugReportOpen && (
         <BugReportDialog onClose={() => setBugReportOpen(false)} />
       )}
+      {twoFactorOpen && (
+        <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
+      )}
     </div>
   );
 }
@@ -338,7 +353,12 @@ export function AuthDialog({
   suggestedUsername?: string;
   onClose: () => void;
   onSwitchMode: (mode: AuthMode) => void;
-  onSubmit: (username: string, password: string, email?: string) => Promise<unknown>;
+  onSubmit: (
+    username: string,
+    password: string,
+    email?: string,
+    code?: string,
+  ) => Promise<unknown>;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
@@ -348,6 +368,11 @@ export function AuthDialog({
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Revealed only once the server has said it wants one, so the field does not
+  // appear for the overwhelming majority of accounts that hold no second
+  // factor - and so this form never has to guess which accounts are staff.
+  const [code, setCode] = useState("");
+  const [codeWanted, setCodeWanted] = useState(false);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
   const isClaim = mode === "claim";
@@ -361,8 +386,8 @@ export function AuthDialog({
         setError(invalid);
         return;
       }
-      if (password.length < 8) {
-        setError("Password must be at least 8 characters.");
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setError(PASSWORD_TOO_SHORT);
         return;
       }
       // Optional, so an empty field is fine; a filled-in one that cannot work
@@ -375,9 +400,19 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(username.trim(), password, email.trim() || undefined);
+      await onSubmit(
+        username.trim(),
+        password,
+        email.trim() || undefined,
+        code.trim() || undefined,
+      );
       onClose();
     } catch (submitError) {
+      if (submitError instanceof SecondFactorRequiredError) {
+        // Not a failure to report as one: the password was right and the
+        // account wants its code. The field appears and the message says so.
+        setCodeWanted(true);
+      }
       setError(
         submitError instanceof ApiError
           ? submitError.message
@@ -448,6 +483,30 @@ export function AuthDialog({
             autoComplete={isClaim ? "new-password" : "current-password"}
             required
           />
+
+          {codeWanted && (
+            <>
+              <label htmlFor={`${titleId}-code`}>
+                Code from your authenticator app
+              </label>
+              <input
+                id={`${titleId}-code`}
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value);
+                  setError(null);
+                }}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={64}
+                autoFocus
+                required
+              />
+              <p className="modal-hint">
+                A recovery code works here too, and can be used once.
+              </p>
+            </>
+          )}
 
           {isClaim && (
             <>

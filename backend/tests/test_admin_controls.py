@@ -36,6 +36,8 @@ from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.rooms import RoomManager
 from app.services.shutdown import ShutdownCoordinator
 
+from tests.staffauth import enrol_second_factor, step_up
+
 
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
@@ -134,9 +136,28 @@ async def set_role(factory, user_id: str, role: str) -> None:
 
 
 async def an_admin(env, name="Operator") -> AsyncClient:
+    """An administrator who can actually act: role, second factor, step-up.
+
+    The role alone stopped being enough in #468 - every command below is a
+    destructive one, and R-AUTH-21 asks for the second factor again before
+    each. Enrolment happens before the promotion for the same reason it does
+    in production: it is done as an ordinary account.
+    """
     new_client, factory, *_ = env
     client = new_client()
     account = await register(client, name)
+    secret = await enrol_second_factor(client)
+    await set_role(factory, account["id"], UserRole.ADMIN.value)
+    await step_up(client, secret)
+    return client
+
+
+async def an_admin_without_step_up(env, name="Operator") -> AsyncClient:
+    """The same account, holding its role but not a live step-up."""
+    new_client, factory, *_ = env
+    client = new_client()
+    account = await register(client, name)
+    await enrol_second_factor(client)
     await set_role(factory, account["id"], UserRole.ADMIN.value)
     return client
 

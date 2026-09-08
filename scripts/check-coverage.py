@@ -63,13 +63,22 @@ TOTAL_BRANCH_FLOOR = 76.0
 MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # Authentication and session handling: the front door.
     "app/auth/rate_limit.py": (90.0, 71.0),
-    "app/auth/sessions.py": (90.0, 79.0),
+    "app/auth/sessions.py": (90.0, 81.0),
     "app/auth/tokens.py": (88.0, 78.0),
-    "app/auth/password.py": (92.0, 78.0),
+    "app/auth/password.py": (92.0, 82.0),
     "app/auth/middleware.py": (95.0, 73.0),
     "app/auth/recovery.py": (94.0, 80.0),
     "app/auth/bans.py": (85.0, 73.0),
     "app/auth/blocks.py": (98.0, 98.0),
+    # The four modules #468 added to the front door, plus the gate in front of
+    # every destructive staff action. `step_up.py` is small enough to hold at
+    # 98/98 - a branch of it that stops being exercised is a staff action that
+    # stopped being gated.
+    "app/auth/breached_passwords.py": (86.0, 79.0),
+    "app/auth/login_guard.py": (91.0, 84.0),
+    "app/auth/second_factor.py": (96.0, 93.0),
+    "app/auth/totp.py": (94.0, 85.0),
+    "app/auth/step_up.py": (98.0, 98.0),
     # Privacy: export and deletion have to be right the first time.
     "app/auth/account_data.py": (81.0, 73.0),
     "app/services/data_export_worker.py": (90.0, 80.0),

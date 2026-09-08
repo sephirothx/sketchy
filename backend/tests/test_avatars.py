@@ -25,6 +25,7 @@ from tests.png_fixture import png_bytes
 from tests.webp_fixture import webp_bytes
 
 from tests.dbfixtures import create_test_db
+from tests.staffauth import mark_staff_ready
 
 PASSWORD = "a-good-password"
 pytestmark = pytest.mark.asyncio
@@ -238,6 +239,7 @@ async def test_a_moderator_removes_a_reported_picture_and_blocks_reuploads(env):
         async with session.begin():
             row = await session.get(User, UUID(moderator["id"]))
             row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
     key = (
         await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=3)))
     ).json()["avatarKey"]
@@ -318,6 +320,7 @@ async def test_a_report_about_nobody_cannot_take_a_picture_down(env):
         async with session.begin():
             row = await session.get(User, UUID(moderator["id"]))
             row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
     missing = await moderator_http.post(
         "/api/moderation/reports/019c1000-0000-7000-8000-00000000dead/remove-avatar"
     )
