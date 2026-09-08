@@ -62,6 +62,7 @@ from webauthn.helpers.structs import (
     UserVerificationRequirement,
 )
 
+from app.auth.sessions import STAFF_ROLES
 from app.deployment import public_base_url
 from app.db.models import (
     User,
@@ -421,21 +422,26 @@ async def remove_passkey(
     *,
     user_id: str,
     passkey_id: str,
-    keep_one: bool,
+    required: bool,
 ) -> bool:
-    """Forget one credential, unless it is the last thing standing.
+    """Forget one credential, unless it is the last thing a staff account has.
 
-    The rule and the deletion are one transaction on purpose. Counting in one
-    and deleting in another is a race an account can lose against itself: two
-    requests removing the last two passkeys each see two, each decide the
-    other one is still there, and a staff account is left with nothing to
-    sign in with. The account row is taken for update first, so the two
-    requests queue rather than interleave - on SQLite the write lock does the
-    same job.
+    Everything the rule depends on is read by the statement that acts on it -
+    the role as much as the count. `required` is the deployment's switch
+    (`STAFF_SECOND_FACTOR_REQUIRED`) and is process configuration rather than
+    row state, so it is the one thing passed in.
+
+    The role in particular cannot come from the caller. It would be read when
+    the request arrived, and the account's own role is not fixed for the life
+    of a request: a former moderator still holding the passkey they signed in
+    with can start deleting it as an ordinary player, and be promoted on the
+    strength of that very passkey while the deletion is in flight. Deciding
+    from the role as it was is how a brand-new moderator ends up with nothing
+    to sign in with.
     """
     owner = UUID(user_id)
     conditions = [UserPasskey.id == UUID(passkey_id), UserPasskey.user_id == owner]
-    if keep_one:
+    if required:
         # The rule travels inside the DELETE rather than being read first and
         # trusted afterwards. Both halves of this are needed, and each covers
         # what the other cannot:
@@ -447,8 +453,18 @@ async def remove_passkey(
         #   UPDATE` entirely. Its write lock does serialize the statements,
         #   so the second one's count is evaluated after the first has
         #   committed - but only because the count is part of the statement.
+        #
+        # The same is why the role is a subquery and not an argument: a
+        # promotion committing while this request is in flight has to be
+        # visible to it, and only a value read by this statement can be.
         conditions.append(
             or_(
+                # Not staff, so there is no last credential to protect. Read
+                # here rather than handed in, for the reason above.
+                select(User.role)
+                .where(User.id == owner)
+                .scalar_subquery()
+                .notin_(STAFF_ROLES),
                 select(func.count())
                 .select_from(UserPasskey)
                 .where(UserPasskey.user_id == owner)

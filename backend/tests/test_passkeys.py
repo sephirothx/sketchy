@@ -22,6 +22,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.passkeys import LastFactorError, remove_passkey
 from app.auth.second_factor import second_factor_state
 from app.auth.totp import code_at, current_step
 from app.auth.routes import create_auth_router
@@ -652,6 +653,48 @@ async def test_two_assertions_at_once_cannot_walk_the_counter_backwards(env):
         ).one()
     assert accepted, [response.text for response in both]
     assert stored.sign_count == max(accepted)
+
+
+async def test_the_role_that_decides_the_last_credential_is_read_by_the_write(env):
+    """A promotion landing while a removal is in flight has to be seen.
+
+    The account most likely to be promoted still holds the passkey it signed
+    in with, and that passkey is *why* the promotion goes through outright.
+    So the two can meet: a former moderator, an ordinary player at the moment
+    they press Remove, is staff by the time the deletion runs. Deciding from
+    the role the request arrived with hands a brand-new moderator an account
+    with nothing to sign in with.
+
+    Read as the service sees it, which is the point: the caller passes only
+    the deployment's switch, and the role comes out of the same statement
+    that does the deleting.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Promoted")
+    await offer_a_role(factory, account["id"])
+    added = await add_passkey(client, SoftAuthenticator())
+
+    # Staff now, whatever the request that is about to run believed.
+    await make_staff(factory, account["id"], "moderator")
+    with pytest.raises(LastFactorError):
+        await remove_passkey(
+            factory,
+            user_id=account["id"],
+            passkey_id=added["passkey"]["id"],
+            required=True,
+        )
+    assert await _passkey_count(factory, account["id"]) == 1
+
+    # And an ordinary player may still remove their own.
+    await make_staff(factory, account["id"], "user")
+    assert await remove_passkey(
+        factory,
+        user_id=account["id"],
+        passkey_id=added["passkey"]["id"],
+        required=True,
+    )
+    assert await _passkey_count(factory, account["id"]) == 0
 
 
 async def test_two_removals_at_once_cannot_empty_a_staff_account(env):

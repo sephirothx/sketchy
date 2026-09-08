@@ -557,7 +557,14 @@ def create_admin_controls_router(
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         async with session_factory() as session:
             async with session.begin():
-                target = await session.get(User, target_id)
+                # Taken for update, so this queues against the account's own
+                # writes rather than interleaving with them. The one that
+                # matters is a credential being removed: a former moderator
+                # deleting the passkey they kept, promoted on the strength of
+                # it a moment later, is how a new moderator ends up with
+                # nothing to sign in with (R-AUTH-20). Both sides now decide
+                # from the row rather than from a snapshot of it.
+                target = await session.get(User, target_id, with_for_update=True)
                 if target is None:
                     raise HTTPException(status_code=404, detail="No such player.")
                 if target.state != AccountState.REGISTERED.value:

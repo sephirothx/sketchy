@@ -1459,16 +1459,17 @@ def create_auth_router(
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
         await _prove_password(user, body.password)
-        # Whether the rule applies is this route's question - it is about the
-        # role - and whether it is broken is decided inside the write, where
-        # the count cannot go stale between reading it and acting on it.
-        keep_one = user.role in STAFF_ROLES and staff_second_factor_required()
+        # The role is deliberately not read here. Whether this account is
+        # staff is decided by the statement that does the deleting, because a
+        # promotion can land between this request arriving and its write -
+        # and it can land *because of* the very passkey being deleted. All
+        # this route contributes is the deployment's switch.
         try:
             removed = await remove_passkey(
                 session_factory,
                 user_id=user.id,
                 passkey_id=passkey_id,
-                keep_one=keep_one,
+                required=staff_second_factor_required(),
             )
         except LastFactorError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
