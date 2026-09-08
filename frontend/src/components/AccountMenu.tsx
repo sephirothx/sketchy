@@ -13,6 +13,7 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useAuthStore } from "../store/authStore";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError, SecondFactorRequiredError } from "../lib/api";
+import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
 import { operatorEntries } from "../lib/operatorAccess";
@@ -375,6 +376,11 @@ export function AuthDialog({
   // factor - and so this form never has to guess which accounts are staff.
   const [code, setCode] = useState("");
   const [codeWanted, setCodeWanted] = useState(false);
+  // Offered from the start on a browser that can do it, because a passkey
+  // sign-in needs neither of the fields below (R-AUTH-23) - and forced when
+  // the server says the account has no code to type.
+  const [passkeyOnly, setPasskeyOnly] = useState(false);
+  const canUsePasskeys = passkeysAvailable();
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
   const isClaim = mode === "claim";
@@ -412,8 +418,10 @@ export function AuthDialog({
     } catch (submitError) {
       if (submitError instanceof SecondFactorRequiredError) {
         // Not a failure to report as one: the password was right and the
-        // account wants its code. The field appears and the message says so.
-        setCodeWanted(true);
+        // account wants its second factor. Which one decides what to show -
+        // a field for a code, or the passkey button and no field at all.
+        if (submitError.kind === "passkey") setPasskeyOnly(true);
+        else setCodeWanted(true);
       }
       setError(
         submitError instanceof ApiError
@@ -421,6 +429,28 @@ export function AuthDialog({
           : "Something went wrong. Please try again.",
       );
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithPasskey() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await assertPasskey();
+      // The session is set by the response; the store has to be told who it
+      // belongs to now, which is what every other sign-in path does.
+      await useAuthStore.getState().fetchMe();
+      onClose();
+    } catch (passkeyError) {
+      setError(
+        passkeyError instanceof DOMException
+          ? "No passkey was used. You can sign in with your password instead."
+          : passkeyError instanceof ApiError
+            ? passkeyError.message
+            : "That passkey was not accepted.",
+      );
       setBusy(false);
     }
   }
@@ -451,7 +481,30 @@ export function AuthDialog({
           </p>
         )}
 
-        <form onSubmit={submit} className="auth-form">
+        {/* Signing in, not claiming: a passkey belongs to an account that
+            already exists. Above the fields because it is the shorter route
+            for the accounts that hold one, and because a staff account may
+            have nothing else to offer. */}
+        {!isClaim && canUsePasskeys && (
+          <>
+            <button
+              type="button"
+              className="modal-button auth-passkey"
+              onClick={() => void signInWithPasskey()}
+              disabled={busy}
+            >
+              {busy ? "Waiting for your device…" : "Sign in with a passkey"}
+            </button>
+            {passkeyOnly ? (
+              <p className="modal-hint">
+                This account signs in with a passkey.
+              </p>
+            ) : (
+              <p className="auth-divider"><span>or</span></p>
+            )}
+          </>
+        )}
+        <form onSubmit={submit} className="auth-form" hidden={passkeyOnly}>
           <label htmlFor={`${titleId}-username`}>Username</label>
           {/* Pre-filled from the guest name but editable: this is where a typo
               gets fixed, and where you pick another if yours is taken. */}

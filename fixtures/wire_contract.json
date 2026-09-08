@@ -1892,6 +1892,14 @@
   "auth.recovery:reset_password": [
    "displayName"
   ],
+  "auth.routes:_passkey_payload": [
+   "backedUp",
+   "createdAt",
+   "lastUsedAt"
+  ],
+  "auth.routes:add_passkey": [
+   "roleGranted"
+  ],
   "auth.routes:confirm_second_factor": [
    "recoveryCodes",
    "roleGranted"
@@ -1901,6 +1909,8 @@
   ],
   "auth.routes:create_auth_router": [
    "anomalyAt",
+   "backedUp",
+   "canHold",
    "confirmedAt",
    "createdAt",
    "deliveryConfigured",
@@ -1918,7 +1928,8 @@
    "reminderDue",
    "roleGranted",
    "sessionsRevoked",
-   "stepUpWindowSeconds"
+   "stepUpWindowSeconds",
+   "steppedUp"
   ],
   "auth.routes:data_exports": [
    "nextRequestAt"
@@ -1931,6 +1942,9 @@
    "deliveryConfigured",
    "pendingAddress",
    "reminderDue"
+  ],
+  "auth.routes:read_passkeys": [
+   "canHold"
   ],
   "auth.routes:regenerate_recovery_codes": [
    "recoveryCodes"
@@ -1954,6 +1968,9 @@
   ],
   "auth.routes:step_up": [
    "expiresInSeconds"
+  ],
+  "auth.routes:verify_passkey": [
+   "steppedUp"
   ],
   "auth.warnings:pending_warning_payload": [
    "createdAt"

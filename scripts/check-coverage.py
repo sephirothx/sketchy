@@ -76,6 +76,7 @@ MODULE_FLOORS: dict[str, tuple[float, float]] = {
     # stopped being gated.
     "app/auth/breached_passwords.py": (86.0, 79.0),
     "app/auth/login_guard.py": (91.0, 84.0),
+    "app/auth/passkeys.py": (93.0, 79.0),
     "app/auth/pending_role.py": (98.0, 95.0),
     "app/auth/second_factor.py": (96.0, 93.0),
     "app/auth/totp.py": (94.0, 85.0),

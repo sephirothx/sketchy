@@ -670,9 +670,21 @@ account that has not enrolled does not promote it - the role is **offered**, and
 the account is told: over its socket if it is online, and on its next visit
 otherwise. Nothing about the account changes yet, so the offer can be set aside
 and picked up later from **Settings → Account**, where the entry now is. Setting
-up the authenticator is what makes the role take effect: scan the QR code (the
-setup key is beside it for anything that cannot scan), give the account password
-and one code from the app, and the role begins. An offer nobody takes up lapses
+up a second factor is what makes the role take effect.
+
+What it offers first is a **passkey**: your device confirms it is you with a
+fingerprint, your face, or its PIN, and the credential it makes is bound by the
+browser to this deployment's address. That is the difference that matters -
+there is nothing to type and nothing to read out, so a code cannot be talked out
+of a moderator over the phone and a lookalike site has nothing to collect. One
+gesture signs a staff account in afterwards: no username, no password. An
+account can hold several, and should - a laptop and a phone means losing one
+device is not losing the role.
+
+A device that cannot make a passkey uses an authenticator app instead, on the
+line below: scan the QR code (the setup key is beside it for anything that
+cannot scan), give the account password and one code from the app, and the role
+begins. An offer nobody takes up lapses
 after thirty days, and the operator's role panel shows it as pending until then,
 so a promotion waiting on somebody is visible rather than looking like one that
 never happened. An administrator who changes their mind withdraws it by setting
@@ -690,9 +702,10 @@ device - a session issued to a player must not become a moderator's, and a
 year-long cookie must not stay year-long on a staff account - while the browser
 that just proved a password and a code carries on, as staff.
 
-From then on the account cannot sign in without a code from the app, and is
-asked for one again, at most every fifteen minutes, before anything that
-suspends a player, changes a role, or reconfigures the running server. Reading
+From then on the account cannot sign in without its second factor, and is asked
+for it again, at most every fifteen minutes, before anything that suspends a
+player, changes a role, or reconfigures the running server - a passkey answers
+both, and answers the second in one tap. Reading
 the moderation queue is deliberately not gated: a check made on the way in would
 simply be done as a matter of routine.
 

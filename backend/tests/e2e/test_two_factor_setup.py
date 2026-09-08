@@ -69,6 +69,12 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
+            # A passkey is offered first (R-AUTH-23) and covered by
+            # `test_passkey_setup.py`; this is the app route beneath it, which
+            # is what a device with no authenticator of its own uses.
+            await dialog.get_by_role(
+                "button", name="Use an authenticator app instead"
+            ).click()
             # A QR code is what a phone points at; the key beside it is the
             # same secret written out, and is what this test can read.
             await expect(dialog.locator(".two-factor-qr")).to_be_visible()
