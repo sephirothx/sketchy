@@ -220,6 +220,8 @@ class SecondFactorConfirmBody(BaseModel):
     # credential only when this code proves it arrived intact.
     secret: str = Field(max_length=64)
     code: str = Field(max_length=16)
+    # Required only when this replaces a second factor that already exists.
+    password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
 
 
 class StepUpBody(BaseModel):
@@ -1262,9 +1264,22 @@ def create_auth_router(
         The codes are in this response and in no other: they exist as hashes
         from here on, exactly as session tokens do (R-AUTH-02), so a second
         request for the same set is not something this server can answer.
+
+        Replacing a second factor that already exists asks for the password,
+        as taking one off and reissuing its recovery codes already did. This
+        was the way round them: a stolen cookie could confirm an
+        attacker-controlled secret over the top of the account's own, which
+        for a staff account hands over R-AUTH-21's step-up as well - the
+        victim's authenticator stops working and the attacker's starts.
+        Setting one up for the first time does not ask, because it grants
+        nobody anything a stolen cookie did not already have (R-AUTH-20: a
+        player's second factor is preparation for a role, and does not gate
+        their sign-in).
         """
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
+        if (await second_factor_state(session_factory, user_id=user.id)).enrolled:
+            await _prove_password(user, body.password)
         codes = await confirm_enrolment(
             session_factory,
             user_id=user.id,

@@ -761,6 +761,9 @@ async def test_re_enrolling_retires_the_codes_of_the_old_secret(env):
             json={
                 "secret": second_offer["secret"],
                 "code": code_at(second_offer["secret"], current_step(time.time())),
+                # Replacing one asks for the password now, so a stolen cookie
+                # cannot swap the authenticator out.
+                "password": GOOD_PASSWORD,
             },
         )
     ).status_code == 200
@@ -987,3 +990,113 @@ async def test_guessing_a_password_at_the_second_factor_switch_is_throttled(env)
         if response.status_code == 429:
             break
     assert 429 in statuses
+
+
+# --- the second review of #679 -------------------------------------------
+
+@pytest.mark.asyncio
+async def test_using_a_session_pushes_its_idle_deadline_out(env):
+    """R-AUTH-03 says ninety days *unused*, not ninety days.
+
+    The deadline used to be recomputed from `idle_expires_at - last_used_at`
+    after `last_used_at` had already been moved to now - the time remaining
+    rather than the window - so adding it back returned the same deadline and
+    a session died ninety days after it was issued however much it was used.
+    """
+    _, factory, repo = env
+    user = await repo.create_anonymous("Busy")
+    issued = await create_session(
+        factory, user_id=user.id, device_label="Chrome on Windows"
+    )
+    first = issued.session.idle_expires_at
+    assert first is not None
+
+    # Used once, well past the write interval that records activity.
+    active_at = datetime.now(timezone.utc) + timedelta(days=30)
+    moved = await resolve_session(factory, issued.token, now=active_at)
+    assert moved is not None
+    assert moved.idle_expires_at > first
+    assert moved.idle_expires_at == active_at + PLAYER_LIFETIME.idle
+
+    # And so it is still alive past the deadline it was issued with.
+    later = first + timedelta(days=1)
+    assert await resolve_session(factory, issued.token, now=later) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_rotated_away_token_carries_no_step_up_through_the_grace(env):
+    """R-AUTH-21 must not be satisfiable by the copy rather than the browser.
+
+    A predecessor still resolves for sixty seconds so a parallel request is
+    not a logout, and the successor is issued with no step-up - so leaving the
+    grant on the predecessor meant a copied staff token could act on a proof
+    the real browser had just given up.
+    """
+    _, factory, repo = env
+    user = await repo.create_anonymous("Stepped")
+    await set_role(factory, user.id, UserRole.ADMIN)
+    issued = await create_session(
+        factory, user_id=user.id, device_label="Firefox on Linux"
+    )
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(AuthSession)
+                .where(AuthSession.id == UUID(issued.session.id))
+                .values(stepped_up_at=datetime.now(timezone.utc))
+            )
+    assert (await resolve_session(factory, issued.token)).is_stepped_up()
+
+    successor = await rotate_session(
+        factory,
+        session_id=issued.session.id,
+        user_id=user.id,
+        device_label=issued.session.device_label,
+    )
+    assert successor is not None
+
+    inside = datetime.now(timezone.utc) + ROTATION_GRACE - timedelta(seconds=5)
+    predecessor = await resolve_session(factory, issued.token, now=inside)
+    assert predecessor is not None, "the grace window still resolves it"
+    assert not predecessor.is_stepped_up()
+
+
+@pytest.mark.asyncio
+async def test_replacing_a_second_factor_needs_the_password(env):
+    """A stolen cookie must not be able to swap the authenticator out.
+
+    Confirming over an enrolment that already exists replaces the secret and
+    every recovery code with it, which for a staff account hands over the
+    step-up too.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Swapped")
+    await enrol_second_factor(http)
+
+    attacker_offer = (await http.post("/api/auth/second-factor/enrol")).json()
+    refused = await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": attacker_offer["secret"],
+            "code": code_at(attacker_offer["secret"], current_step(time.time())),
+        },
+    )
+    assert refused.status_code == 401
+
+    from app.db.models import UserSecondFactor
+
+    async with factory() as session:
+        held = await session.get(UserSecondFactor, UUID(account["id"]))
+    assert held is not None and held.secret != attacker_offer["secret"]
+
+    # With the password it is an ordinary re-enrolment.
+    accepted = await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": attacker_offer["secret"],
+            "code": code_at(attacker_offer["secret"], current_step(time.time())),
+            "password": GOOD_PASSWORD,
+        },
+    )
+    assert accepted.status_code == 200, accepted.text

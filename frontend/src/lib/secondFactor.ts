@@ -35,13 +35,19 @@ export function beginEnrolment(): Promise<EnrolmentOffer> {
   return apiRequest("/api/auth/second-factor/enrol", { method: "POST" });
 }
 
+/**
+ * `password` is required only when this replaces a second factor the account
+ * already has: swapping the authenticator out is as good as taking it off, so
+ * it asks for the same proof that removing one does.
+ */
 export function confirmEnrolment(
   secret: string,
   code: string,
+  password?: string,
 ): Promise<{ ok: boolean; recoveryCodes: string[] }> {
   return apiRequest("/api/auth/second-factor/confirm", {
     method: "POST",
-    body: { secret, code },
+    body: password ? { secret, code, password } : { secret, code },
   });
 }
 

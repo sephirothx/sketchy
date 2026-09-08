@@ -505,12 +505,15 @@ async def _revoke_rotation_chain(
 def _idle_deadline(record: AuthSession, used_at: datetime) -> datetime:
     """Push the idle window forward, never past the session's own expiry.
 
-    The window's length is the one this session was issued with, recovered
-    from the row rather than from the account's role, which keeps this a
-    property of the session instead of a second thing that has to be looked up.
+    The window comes from the lifetime the row itself records. It used to be
+    measured as `idle_expires_at - last_used_at`, which reads as "how long
+    this session is given" but is only that before anybody uses it: both
+    callers set `last_used_at` to now first, so the subtraction gave the time
+    *remaining*, and adding that back to now returned the deadline unchanged.
+    The window never moved, and a session was ended ninety days after it was
+    issued however much it had been used.
     """
-    window = record.idle_expires_at - record.last_used_at
-    return min(used_at + window, record.expires_at)
+    return min(used_at + lifetime_of(record).idle, record.expires_at)
 
 
 def _anomaly_reason(
@@ -610,7 +613,13 @@ async def rotate_session(
                     AuthSession.revoked_at.is_(None),
                     AuthSession.expires_at > rotated_at,
                 )
-                .values(revoked_at=rotated_at)
+                # The step-up goes with the revocation. A predecessor still
+                # resolves for sixty seconds (R-AUTH-22, so a parallel request
+                # is not a logout), and leaving the grant on it meant a copied
+                # staff token could authorize a destructive action inside that
+                # window using a proof the real browser had just given up -
+                # the successor is issued without one.
+                .values(revoked_at=rotated_at, stepped_up_at=None)
             )
             if revoked.rowcount != 1:
                 return None

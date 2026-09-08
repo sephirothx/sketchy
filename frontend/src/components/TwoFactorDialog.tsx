@@ -70,7 +70,11 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await confirmEnrolment(offer.secret, code);
+      const result = await confirmEnrolment(
+        offer.secret,
+        code,
+        password || undefined,
+      );
       setCodes(result.recoveryCodes);
       setOffer(null);
       setCode("");
@@ -149,10 +153,20 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           <>
             <p className="modal-body">
               An authenticator app produces a six-digit code that changes every
-              thirty seconds. With one set up, knowing your password is no
-              longer enough to sign in as you.
-              {state.required && (
-                <> This account's role requires it.</>
+              thirty seconds.{" "}
+              {state.required ? (
+                <>
+                  This account's role requires one: it is asked for when you
+                  sign in, and again before anything that suspends a player,
+                  changes a role, or reconfigures the server.
+                </>
+              ) : (
+                <>
+                  Moderators and administrators must have one, and it has to be
+                  set up before the role is granted — so this is the step to
+                  take first if you are being given one. It does not change how
+                  you sign in until then.
+                </>
               )}
             </p>
             <button type="button" onClick={() => void start()} disabled={busy}>
@@ -166,6 +180,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
             <p className="modal-body">
               Add this key to your authenticator app, then type the code it
               shows.
+              {state?.enrolled && (
+                <> Replacing the one you have also needs your password.</>
+              )}
             </p>
             <p className="two-factor-secret"><code>{offer.secret}</code></p>
             <label htmlFor={codeId}>Code from your app</label>
@@ -178,6 +195,18 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               maxLength={16}
               required
             />
+            {state?.enrolled && (
+              <label>
+                Your password
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+            )}
             <button type="submit" disabled={busy}>
               {busy ? "Checking…" : "Confirm"}
             </button>

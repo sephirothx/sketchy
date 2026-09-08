@@ -659,8 +659,12 @@ the date, so you can revoke it.
 
 #### Two-factor authentication
 
-Any account can add an authenticator app from **Settings → Account**; moderators
-and administrators must, and must do it *before* the role is granted — granting it
+Any account can add an authenticator app from **Settings → Account**. For a
+player it is preparation rather than protection: it is the step that has to come
+before a role is granted, and it does not change how they sign in — there is no
+way back from a lost authenticator for an ordinary player the way there is from a
+lost password, so their login is deliberately not gated on one. Moderators and
+administrators must have one, and must do it *before* the role is granted — granting it
 signs them out of every device, and a staff account cannot sign back in without a
 code, so the role is refused until the second factor exists. Being granted or losing
 a role therefore ends every session on the account: the notice says so and offers the

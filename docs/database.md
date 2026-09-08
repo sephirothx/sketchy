@@ -284,7 +284,7 @@ shared signing secret.
 
 **Both lifetimes are columns** (R-AUTH-03, #468): `expires_at` (365 days for a player,
 7 for staff) and `idle_expires_at` (90 days, 24 hours for staff), the latter moving
-forward with `last_used_at`, which was already maintained and throttled to one write
+forward with `last_used_at` by the whole window the lifetime allows, which was already maintained and throttled to one write
 per five minutes. `ck_auth_sessions_idle_within_expiry` keeps silence able to end a
 session early but never late. The span between `created_at` and `expires_at` is also
 what says *which* rule the row lives under — seven days for staff, a year for a player
