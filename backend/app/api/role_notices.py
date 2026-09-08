@@ -20,7 +20,8 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import RoleChangeNotice
+from app.auth.pending_role import pending_offer
+from app.db.models import RoleChangeNotice, User
 
 
 async def pending_role_notice_payload(
@@ -50,6 +51,19 @@ async def pending_role_notice_payload(
             .limit(1)
         )
         if notice is None:
+            return {"notice": None}
+        if notice.pending and not pending_offer(await session.get(User, target)):
+            # The invitation outlived the offer. A notice about a role is a
+            # message; `users.pending_role` is the fact, and the two part
+            # company whenever the offer ends without the row being settled -
+            # a lapse, most of all, which is nobody's write at all. Telling
+            # somebody a role is waiting when the server would grant nothing
+            # on enrolment sends them to do a thing for no reason, so the fact
+            # is what answers here.
+            #
+            # Nothing older is offered in its place: an offer is the newest
+            # thing that happened to this account's role, so there is nothing
+            # behind it still worth saying.
             return {"notice": None}
         return {
             "notice": {

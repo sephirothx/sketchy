@@ -932,7 +932,10 @@ audit event — `admin.role_changed` for a grant, `admin.role_offered` for an of
 there can be no role nobody was told about and no notice about a role that was never
 granted; a no-op change writes neither. Taking an offer up writes **no** notice: that
 is the account's own last action, done in a dialog that says what just happened, and a
-pop-up on the next page load would be the app talking to itself. A connected
+pop-up on the next page load would be the app talking to itself — it settles the offer's
+own notice instead, as withdrawing one does. A lapse settles nothing, because nothing
+writes when an offer lapses, so a `pending` notice is served only while
+`users.pending_role` still stands: the row is the message and the column is the fact. A connected
 player is told immediately over the socket (`role_changed`), and everybody else by
 `GET /api/role-notices/pending` on their next visit — the same two-route shape a warning
 uses, sharing one payload builder so they cannot drift.

@@ -28,10 +28,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.sessions import revoke_sessions
-from app.db.models import AuditEvent, User, generate_uuid
+from app.db.models import AuditEvent, RoleChangeNotice, User, generate_uuid
 from app.domain_values import AuditTargetType
 
 # How long an offer stands. Read from `users.pending_role_at`, which is the
@@ -99,6 +100,19 @@ async def take_up_offer(
             lapsed = offer_expired(offered_at, now)
             user.pending_role = None
             user.pending_role_at = None
+            # The invitation goes wherever the offer goes. Taken up or lapsed,
+            # a notice saying a role is waiting is now about nothing, and one
+            # left unacknowledged is served on the next visit - sending a
+            # moderator to set up the second factor they just set up.
+            await session.execute(
+                update(RoleChangeNotice)
+                .where(
+                    RoleChangeNotice.user_id == target,
+                    RoleChangeNotice.pending.is_(True),
+                    RoleChangeNotice.acknowledged_at.is_(None),
+                )
+                .values(acknowledged_at=now)
+            )
             if lapsed:
                 # Recorded rather than dropped: an administrator who granted a
                 # role a month ago and finds no moderator should be able to

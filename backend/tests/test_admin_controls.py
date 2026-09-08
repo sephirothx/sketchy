@@ -1071,6 +1071,20 @@ async def test_enrolling_takes_up_the_offer_and_ends_every_session(env):
     assert len(remaining) == 1
     assert {session.id for session in remaining}.isdisjoint(held_before)
 
+    # And the invitation is settled with the offer it was about. Left
+    # unacknowledged it would be served on the next visit, sending a
+    # moderator to set up the second factor they have just set up.
+    async with factory() as session:
+        unread = (
+            await session.scalars(
+                select(RoleChangeNotice).where(
+                    RoleChangeNotice.user_id == UUID(subject["id"]),
+                    RoleChangeNotice.acknowledged_at.is_(None),
+                )
+            )
+        ).all()
+    assert unread == []
+
 
 async def test_an_offer_nobody_took_up_lapses_rather_than_standing_for_ever(env):
     """Thirty days, because an offer is an invitation on somebody's account.
