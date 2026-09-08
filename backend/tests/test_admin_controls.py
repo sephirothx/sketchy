@@ -9,6 +9,7 @@ event in the same transaction, and refusals that leave nothing half-done.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
@@ -44,6 +45,7 @@ import time
 
 from app.auth.totp import code_at, current_step
 
+from tests.softauthenticator import SoftAuthenticator
 from tests.staffauth import enrol_second_factor, step_up
 
 
@@ -1220,6 +1222,64 @@ async def test_setting_the_role_back_withdraws_a_standing_offer(env):
             )
         ).all()
     assert unread == []
+
+
+async def test_a_returning_moderator_is_promoted_rather_than_offered(env):
+    """The account most likely to be promoted is one that was staff before.
+
+    They still hold the passkey they signed in with, so there is nothing for
+    them to set up - and judging that as "no second factor" offered them a
+    role they could not take up: the browser refuses to make a second
+    credential for one it already holds, and proving ownership the other way
+    asks for a code they never had. A passkey is proof already, because
+    registering it demanded the account's password (R-AUTH-23).
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    client = new_client()
+    subject = await register(client, "Returning")
+
+    # Offered, and taken up with a passkey the way a person does it.
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    authenticator = SoftAuthenticator()
+    options = json.loads(
+        (await client.post("/api/auth/passkeys/options")).json()["options"]
+    )
+    added = await client.post(
+        "/api/auth/passkeys",
+        json={
+            "credential": authenticator.register(
+                options, origin="http://localhost:8000"
+            ),
+            "password": PASSWORD,
+        },
+    )
+    assert added.status_code == 200, added.text
+    assert added.json()["roleGranted"] == "moderator"
+
+    # Off the rota, and back on it a month later.
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "user", "reason": "taking a break"},
+    )
+    again = await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "back from the break"},
+    )
+    assert again.status_code == 200, again.text
+    # Granted outright: there is nothing left for them to enrol.
+    assert again.json() == {
+        "id": subject["id"],
+        "role": "moderator",
+        "pendingRole": None,
+    }
+    async with factory() as session:
+        stored = await session.get(User, UUID(subject["id"]))
+        assert stored.role == "moderator"
+        assert stored.pending_role is None
 
 
 async def test_a_role_needs_a_factor_its_owner_proved(env):

@@ -426,6 +426,10 @@ and authenticators that keep no counter report zero throughout. `backed_up` says
 the platform syncs a copy, which is what lets the page tell somebody their only passkey
 lives on one device.
 
+There is no `password_proved_at` here, unlike `user_second_factors`: registering a passkey demands
+the account's password, so every row is one somebody proved was theirs. A promotion reads it that
+way (R-AUTH-20).
+
 ### `webauthn_challenges`
 `challenge` **PK** · `purpose` (`register`/`authenticate`, checked) · `user_id` (CASCADE,
 indexed, nullable) · `created_at` · `expires_at`, with
