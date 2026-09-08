@@ -31,16 +31,18 @@ async def use_guest_name(page, name: str) -> None:
     # The identity chip appears in every header once a name exists, so this
     # works on the lobby, the invite screen, and the create-room page alike.
     #
-    # Given longer than Playwright's default because this is the one step in
-    # the suite that reliably runs out of it: a shard is eight workers against
-    # one server on a two-core runner, and a cold Firefox - the only engine
-    # `test_multi_browser_game` uses, and the slowest to start - can take more
-    # than thirty seconds to come back with a full page. The POST above has
-    # already returned 200 by this point, so nothing about the product is
-    # being waited on twice; what follows still asserts the chip appears, so
-    # a reload that genuinely never completes still fails, just later.
-    await page.reload(timeout=60_000)
-    await page.wait_for_selector(".identity-chip")
+    # `domcontentloaded`, not the default `load`: the thing being waited for
+    # is the chip on the next line, and the app draws it as soon as its own
+    # bundle has run. Waiting for `load` waits for every last font and image
+    # as well, which is why this was the one step in the suite that reliably
+    # ran out of its timeout - a shard is eight workers against one server on
+    # a two-core runner, and a cold Firefox, the slowest engine to start and
+    # the only one `test_multi_browser_game` uses, has taken over a minute to
+    # call a page fully loaded there. Nothing is skipped by leaving earlier:
+    # the assertion below is unchanged and still fails if the name never
+    # arrives, and both waits keep a budget that outlasts a cold start.
+    await page.reload(timeout=60_000, wait_until="domcontentloaded")
+    await page.wait_for_selector(".identity-chip", timeout=60_000)
 
 
 async def register_account(page, username: str, password: str = "a-good-password") -> None:
