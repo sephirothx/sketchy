@@ -97,12 +97,13 @@ async def enrol_through_the_ui(page) -> str:
     # By accessible name: the settings overlay is a dialog too, and it
     # carries this row's label.
     dialog = page.get_by_role("dialog", name="Two-factor authentication")
-    await dialog.get_by_role("button", name="Set up").click()
+    # No page of explanation first: the dialog offers a secret as it opens.
     secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
     # Six boxes that submit themselves on the last digit, so there is no
     # button to press.
     await type_code(dialog, code_at(secret, current_step(time.time())))
-    await dialog.get_by_role("button", name="I have saved them").click()
+    await dialog.locator(".two-factor-ack input").check()
+    await dialog.get_by_role("button", name="Done").click()
     # Setting one up asks for no password, so a role still needs this: it is
     # what says the authenticator is the account owner's (R-AUTH-20).
     await dialog.get_by_label("Your password").fill("a-good-password")

@@ -664,29 +664,29 @@ moderator or administrator additionally needs you to confirm with your password
 that the authenticator is yours - the role check looks for a second factor its
 owner vouched for, not merely for one being present.
 
-Any account can add one from **Settings → Account**, beside the password and
-the signed-in devices. Setting it up shows a QR code to scan, with the setup key beside it to copy for
-anything that cannot scan — a desktop authenticator, a camera that will not
-focus. The ten recovery codes are shown once
-and can be downloaded as a text file, which is the only moment they exist
-outside a hash. For a
-player it is preparation rather than protection: it is the step that has to come
-before a role is granted, and it does not change how they sign in — there is no
-way back from a lost authenticator for an ordinary player the way there is from a
-lost password, so their login is deliberately not gated on one. Moderators and
-administrators must have one, and must do it *before* the role is granted — granting it
-signs them out of every device, and a staff account cannot sign back in without a
-code, so the role is refused until the second factor exists. Being granted or losing
-a role therefore ends every session on the account: the notice says so and offers the
-way back in, and it is acknowledged on the next visit rather than by the browser that
-has just been signed out. Setting it up shows a key to add to the app and then asks
-for one code to prove it arrived - nothing is stored until that code checks out, so
-an abandoned setup cannot lock you out. Ten single-use recovery codes are shown
-once and kept only as hashes; they work anywhere a code is asked for. Staff are
-asked for a code again, at most every fifteen minutes, before anything that
-suspends a player, changes a role, or reconfigures the running server. Reading the
-moderation queue is deliberately not gated: a check made on the way in would simply
-be done as a matter of routine.
+Any account can add one from **Settings → Account**, beside the password and the
+signed-in devices. Setting it up shows a QR code to scan, with the setup key
+beside it to copy for anything that cannot scan — a desktop authenticator, a
+camera that will not focus — and asks for one code to prove the secret arrived;
+nothing is stored until that code checks out, so an abandoned setup cannot lock
+you out. The ten recovery codes are shown once, can be downloaded as a text
+file, and the dialog does not close until you say you have kept them: that
+showing is the only moment they exist outside a hash. For a player it is
+preparation rather than protection: it is the step that has to come before a
+role is granted, and it does not change how they sign in — there is no way back
+from a lost authenticator for an ordinary player the way there is from a lost
+password, so their login is deliberately not gated on one. Moderators and
+administrators must have one, and must do it *before* the role is granted —
+granting it signs them out of every device, and a staff account cannot sign back
+in without a code, so the role is refused until the second factor exists. Being
+granted or losing a role therefore ends every session on the account: the notice
+says so and offers the way back in, and it is acknowledged on the next visit
+rather than by the browser that has just been signed out. The recovery codes are
+kept only as hashes, and work anywhere a code is asked for. Staff are asked for
+a code again, at most every fifteen minutes, before anything that suspends a
+player, changes a role, or reconfigures the running server. Reading the
+moderation queue is deliberately not gated: a check made on the way in would
+simply be done as a matter of routine.
 
 #### Recovery
 

@@ -7,7 +7,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { ApiError } from "../lib/api";
 import { downloadRecoveryCodes } from "../lib/recoveryCodeFile";
 import { SegmentedCodeInput } from "./SegmentedCodeInput";
-import { CopyIcon } from "./icons";
+import { CopyIcon, DownloadIcon } from "./icons";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import {
@@ -38,18 +38,25 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const keyId = useId();
+  const passwordId = useId();
 
   const [state, setState] = useState<SecondFactorState | null>(null);
   const [offer, setOffer] = useState<EnrolmentOffer | null>(null);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [codes, setCodes] = useState<string[] | null>(null);
+  const [savedCodes, setSavedCodes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { notify } = useToast();
   const username = useAuthStore((state) => state.user?.displayName ?? "account");
 
-  useFocusTrap(dialogRef, { active: true, onEscape: onClose });
+  // While the codes are up and unacknowledged there is no way out of the
+  // dialog but the tick: escaping or clicking away would take them with it,
+  // and they are shown exactly once.
+  const held = Boolean(codes) && !savedCodes;
+  const dismiss = () => { if (!held) onClose(); };
+  useFocusTrap(dialogRef, { active: true, onEscape: dismiss });
 
   async function copy(value: string, what: string) {
     try {
@@ -64,9 +71,17 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let active = true;
     void fetchSecondFactor()
-      .then((result) => { if (active) setState(result); })
+      .then((result) => {
+        if (!active) return;
+        setState(result);
+        // Straight into it. Somebody who opened this to set a second factor
+        // up does not need a page explaining that a second factor is a
+        // six-digit code first.
+        if (!result.enrolled) void start();
+      })
       .catch(() => { if (active) setError("Could not read your security settings."); });
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function failed(problem: unknown, fallback: string) {
@@ -100,6 +115,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       const result = await confirmEnrolment(offer.secret, entered, password || undefined);
+      setSavedCodes(false);
       setCodes(result.recoveryCodes);
       setOffer(null);
       setCode("");
@@ -130,6 +146,8 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
+      // A fresh set is a fresh promise to have kept them.
+      setSavedCodes(false);
       setCodes((await replaceRecoveryCodes(password)).recoveryCodes);
       setPassword("");
       setState(await fetchSecondFactor());
@@ -159,12 +177,15 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     <div
       className="modal-overlay"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) dismiss();
       }}
     >
+      {/* Only the two-column setup and the block of codes need the extra
+          room; the manage view is one password field, and is the width every
+          other dialog with one is. */}
       <div
         ref={dialogRef}
-        className="modal-card two-factor"
+        className={`modal-card two-factor${offer || codes ? " two-factor-wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -189,6 +210,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 className="btn btn-primary btn-compact"
                 onClick={() => downloadRecoveryCodes(username, codes)}
               >
+                <DownloadIcon size={15} />
                 Download as a file
               </button>
               <button
@@ -196,43 +218,30 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 className="btn btn-secondary btn-compact"
                 onClick={() => void copy(codes.join("\n"), "Recovery codes")}
               >
+                <CopyIcon size={15} />
                 Copy all
               </button>
             </div>
+            {/* A tick rather than a button, and the only way past: these exist
+                for the moment the authenticator is gone, and that is a bad
+                moment to discover they were skipped past. */}
+            <label className="two-factor-ack">
+              <input
+                type="checkbox"
+                checked={savedCodes}
+                onChange={(event) => setSavedCodes(event.target.checked)}
+              />
+              I have saved these somewhere safe
+            </label>
             <button
               type="button"
-              className="btn btn-ghost btn-compact"
+              className="modal-button"
               onClick={() => setCodes(null)}
+              disabled={!savedCodes}
             >
-              I have saved them
+              Done
             </button>
           </div>
-        )}
-
-        {!codes && state && !state.enrolled && !offer && (
-          <>
-            <p className="modal-body">
-              An authenticator app produces a six-digit code that changes every
-              thirty seconds.{" "}
-              {state.required ? (
-                <>
-                  This account's role requires one: it is asked for when you
-                  sign in, and again before anything that suspends a player,
-                  changes a role, or reconfigures the server.
-                </>
-              ) : (
-                <>
-                  Moderators and administrators must have one, and it has to be
-                  set up before the role is granted — so this is the step to
-                  take first if you are being given one. It does not change how
-                  you sign in until then.
-                </>
-              )}
-            </p>
-            <button type="button" onClick={() => void start()} disabled={busy}>
-              {busy ? "Setting up…" : "Set up"}
-            </button>
-          </>
         )}
 
         {!codes && offer && (
@@ -279,9 +288,14 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               />
 
             </div>
-            <button type="submit" className="modal-button" disabled={busy}>
-              {busy ? "Checking…" : "Confirm"}
-            </button>
+            <div className="two-factor-decide">
+              <button type="submit" className="modal-button" disabled={busy}>
+                {busy ? "Checking…" : "Confirm"}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>
+                Cancel
+              </button>
+            </div>
           </form>
         )}
 
@@ -291,24 +305,25 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               Two-factor authentication is on. You have{" "}
               {state.recoveryCodesRemaining} recovery{" "}
               {state.recoveryCodesRemaining === 1 ? "code" : "codes"} left.
+              {!state.passwordProved && (
+                <>
+                  {" "}Before this account can be given a moderator or
+                  administrator role, confirm with your password that the
+                  authenticator is yours.
+                </>
+              )}{" "}
+              Each of the changes below swaps a credential, so each asks for
+              your password.
             </p>
-            {!state.passwordProved && (
-              <p className="modal-hint">
-                Before this account can be given a moderator or administrator
-                role, confirm with your password that the authenticator is
-                yours.
-              </p>
-            )}
-            <label>
-              Your password
+            <div className="auth-form two-factor-manage">
+              <label htmlFor={passwordId}>Your password</label>
               <input
+                id={passwordId}
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
               />
-            </label>
-            <div className="two-factor-actions">
               {/* Only while it matters: setting a factor up asks for no
                   password, so one may be in place that nobody has proved
                   belongs to this account — which is the one thing a staff
@@ -316,30 +331,46 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               {!state.passwordProved && (
                 <button
                   type="button"
+                  className="modal-button"
                   onClick={() => void proveOwner()}
                   disabled={busy || !password}
                 >
                   Confirm it’s yours
                 </button>
               )}
-              <button type="button" onClick={() => void newCodes()} disabled={busy || !password}>
-                New recovery codes
-              </button>
-              {/*
-                Offered even when the role requires it: the server refuses,
-                and being told why by the thing you asked is clearer than an
-                option that silently is not there.
-              */}
-              <button type="button" onClick={() => void turnOff()} disabled={busy || !password}>
-                Turn off
-              </button>
+              <div className="two-factor-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  onClick={() => void newCodes()}
+                  disabled={busy || !password}
+                >
+                  New recovery codes
+                </button>
+                {/*
+                  Offered even when the role requires it: the server refuses,
+                  and being told why by the thing you asked is clearer than an
+                  option that silently is not there.
+                */}
+                <button
+                  type="button"
+                  className="btn btn-danger-ghost btn-compact"
+                  onClick={() => void turnOff()}
+                  disabled={busy || !password}
+                >
+                  Turn off
+                </button>
+              </div>
             </div>
           </>
         )}
 
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {offer ? "Cancel" : "Close"}
-        </button>
+        {/* The setup form and the codes carry their own way out. */}
+        {!offer && !codes && (
+          <button type="button" className="modal-dismiss" onClick={onClose}>
+            Close
+          </button>
+        )}
       </div>
     </div>
   );

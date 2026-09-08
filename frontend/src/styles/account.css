@@ -291,7 +291,7 @@
 
 /* The card stays centred like every other dialog - title, lead and dismiss
    all sit as they do elsewhere. Only the entry column reads left. */
-.two-factor { max-width: 600px; }
+.two-factor-wide { max-width: 640px; }
 /* The entry column is an `.auth-form` like every other dialog's, so labels,
    fields and spacing come from there rather than being restated. */
 
@@ -301,11 +301,20 @@
   align-items: start;
   display: grid;
   gap: 8px 20px;
-  grid-template-columns: 170px minmax(0, 1fr);
+  grid-template-columns: 210px minmax(0, 1fr);
   margin-top: 4px;
 }
 .two-factor-lead { grid-column: 1 / -1; margin: 0 0 6px; }
-.two-factor-setup .modal-button { grid-column: 1 / -1; margin-top: 14px; width: 100%; }
+/* Side by side under both columns, the primary first. */
+.two-factor-decide {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  grid-column: 1 / -1;
+  justify-content: center;
+  margin-top: 16px;
+}
+.two-factor-decide .modal-button { margin: 0; }
 .two-factor-scan { min-width: 0; text-align: center; }
 .two-factor-scan .modal-hint { margin: 8px 0 0; }
 .two-factor-entry { margin-top: 0; min-width: 0; text-align: left; }
@@ -386,6 +395,23 @@
   justify-content: center;
   margin-top: 14px;
 }
+/* The manage view is an `.auth-form` like the rest, so its field and label
+   come from there; only the row of destructive-ish actions is described. */
+.two-factor-manage { text-align: left; }
+
+/* The tick that has to be given before the codes go. Reads as a statement
+   rather than a control, which is what it is. */
+.two-factor-ack {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  justify-content: center;
+  margin: 4px 0 12px;
+}
+.two-factor-ack input { accent-color: var(--primary); height: 16px; width: 16px; }
+.two-factor-codes .modal-button { width: 100%; }
 .two-factor-codes ul {
   display: grid;
   gap: 6px;

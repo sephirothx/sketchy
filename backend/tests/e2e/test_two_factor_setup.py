@@ -56,7 +56,6 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
-            await dialog.get_by_role("button", name="Set up").click()
             # A QR code is what a phone points at; the key beside it is the
             # same secret written out, and is what this test can read.
             await expect(dialog.locator(".two-factor-qr")).to_be_visible()
@@ -71,8 +70,14 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await expect(codes).to_be_visible()
             assert await codes.locator("li").count() == 10
 
-            # Shown once: acknowledging them is the only way past.
-            await dialog.get_by_role("button", name="I have saved them").click()
+            # Shown once, so the way past is a tick that says they were kept:
+            # until it is given, "Done" is disabled and Escape does nothing.
+            done = dialog.get_by_role("button", name="Done")
+            await expect(done).to_be_disabled()
+            await page.keyboard.press("Escape")
+            await expect(codes).to_be_visible()
+            await dialog.locator(".two-factor-ack input").check()
+            await done.click()
             await expect(dialog).to_contain_text("Two-factor authentication is on")
             await expect(dialog).to_contain_text("10 recovery codes left")
 
