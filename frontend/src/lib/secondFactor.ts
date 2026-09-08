@@ -36,18 +36,19 @@ export function beginEnrolment(): Promise<EnrolmentOffer> {
 }
 
 /**
- * `password` is required only when this replaces a second factor the account
- * already has: swapping the authenticator out is as good as taking it off, so
- * it asks for the same proof that removing one does.
+ * The password is always required. What this writes is later taken as proof
+ * that the account's owner holds the factor — promotion to a staff role
+ * checks that one exists, not whose it is — so a session cookie on its own
+ * must not be enough to bind one.
  */
 export function confirmEnrolment(
   secret: string,
   code: string,
-  password?: string,
+  password: string,
 ): Promise<{ ok: boolean; recoveryCodes: string[] }> {
   return apiRequest("/api/auth/second-factor/confirm", {
     method: "POST",
-    body: password ? { secret, code, password } : { secret, code },
+    body: { secret, code, password },
   });
 }
 

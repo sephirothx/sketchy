@@ -70,11 +70,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await confirmEnrolment(
-        offer.secret,
-        code,
-        password || undefined,
-      );
+      const result = await confirmEnrolment(offer.secret, code, password);
       setCodes(result.recoveryCodes);
       setOffer(null);
       setCode("");
@@ -179,10 +175,8 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           <form onSubmit={(event) => void confirm(event)}>
             <p className="modal-body">
               Add this key to your authenticator app, then type the code it
-              shows.
-              {state?.enrolled && (
-                <> Replacing the one you have also needs your password.</>
-              )}
+              shows. Your password goes with it, so that nobody holding this
+              browser's session alone can bind a second factor to the account.
             </p>
             <p className="two-factor-secret"><code>{offer.secret}</code></p>
             <label htmlFor={codeId}>Code from your app</label>
@@ -195,18 +189,16 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               maxLength={16}
               required
             />
-            {state?.enrolled && (
-              <label>
-                Your password
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-              </label>
-            )}
+            <label>
+              Your password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
             <button type="submit" disabled={busy}>
               {busy ? "Checking…" : "Confirm"}
             </button>

@@ -19,14 +19,25 @@ from httpx import AsyncClient
 from app.auth.totp import code_at, current_step
 
 
-async def enrol_second_factor(client: AsyncClient) -> str:
-    """Complete enrolment for the signed-in account; return its secret."""
+async def enrol_second_factor(
+    client: AsyncClient, password: str = "a-good-password"
+) -> str:
+    """Complete enrolment for the signed-in account; return its secret.
+
+    The password goes with it: binding a second factor proves it, because the
+    row is later taken as evidence that the account's owner holds the factor
+    (R-AUTH-20).
+    """
     offer = await client.post("/api/auth/second-factor/enrol")
     assert offer.status_code == 200, offer.text
     secret = offer.json()["secret"]
     confirmed = await client.post(
         "/api/auth/second-factor/confirm",
-        json={"secret": secret, "code": code_at(secret, current_step(time.time()))},
+        json={
+            "secret": secret,
+            "code": code_at(secret, current_step(time.time())),
+            "password": password,
+        },
     )
     assert confirmed.status_code == 200, confirmed.text
     return secret

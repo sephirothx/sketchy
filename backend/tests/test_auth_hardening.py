@@ -33,6 +33,7 @@ from app.auth.routes import create_auth_router
 from app.auth.second_factor import (
     SecondFactorOutcome,
     confirm_enrolment,
+    second_factor_state,
     verify_second_factor,
 )
 from app.auth.sessions import (
@@ -450,7 +451,7 @@ async def test_a_staff_sign_in_asks_for_the_code_and_then_accepts_it(env):
     new_client, factory, _ = env
     http = new_client()
     account = await register(http, "Enrolled")
-    secret = await enrol_second_factor(http)
+    secret = await enrol_second_factor(http, GOOD_PASSWORD)
     await set_role(factory, account["id"], UserRole.MODERATOR)
 
     fresh = new_client()
@@ -579,6 +580,7 @@ async def test_recovery_codes_are_shown_once_and_stored_hashed(env):
         json={
             "secret": offer["secret"],
             "code": code_at(offer["secret"], current_step(time.time())),
+            "password": GOOD_PASSWORD,
         },
     )
     codes = confirmed.json()["recoveryCodes"]
@@ -609,7 +611,7 @@ async def test_a_staff_session_alone_does_not_suspend_anybody(env):
     new_client, factory, _ = env
     http = new_client()
     account = await register(http, "Operator")
-    await enrol_second_factor(http)
+    await enrol_second_factor(http, GOOD_PASSWORD)
     await set_role(factory, account["id"], UserRole.ADMIN)
 
     class FakeRequest:
@@ -634,7 +636,7 @@ async def test_a_fresh_step_up_opens_the_window(env):
     new_client, factory, _ = env
     http = new_client()
     account = await register(http, "Prover")
-    secret = await enrol_second_factor(http)
+    secret = await enrol_second_factor(http, GOOD_PASSWORD)
     await set_role(factory, account["id"], UserRole.ADMIN)
     await step_up(http, secret)
 
@@ -674,6 +676,7 @@ async def test_replacing_recovery_codes_invalidates_the_old_set(env):
             json={
                 "secret": offer["secret"],
                 "code": code_at(offer["secret"], current_step(time.time())),
+                "password": GOOD_PASSWORD,
             },
         )
     ).json()["recoveryCodes"]
@@ -702,7 +705,7 @@ async def test_the_password_is_required_to_touch_the_second_factor(env):
     new_client, _, _ = env
     http = new_client()
     await register(http, "Guarded")
-    await enrol_second_factor(http)
+    await enrol_second_factor(http, GOOD_PASSWORD)
 
     for path in (
         "/api/auth/second-factor/recovery-codes",
@@ -721,7 +724,7 @@ async def test_a_player_may_drop_their_second_factor_and_staff_may_not(env):
     new_client, factory, _ = env
     http = new_client()
     account = await register(http, "Droppable")
-    await enrol_second_factor(http)
+    await enrol_second_factor(http, GOOD_PASSWORD)
 
     await set_role(factory, account["id"], UserRole.MODERATOR)
     refused = await http.request(
@@ -750,6 +753,7 @@ async def test_re_enrolling_retires_the_codes_of_the_old_secret(env):
             json={
                 "secret": first_offer["secret"],
                 "code": code_at(first_offer["secret"], current_step(time.time())),
+                "password": GOOD_PASSWORD,
             },
         )
     ).json()["recoveryCodes"]
@@ -782,7 +786,11 @@ async def test_a_wrong_code_at_enrolment_stores_nothing(env):
     offer = (await http.post("/api/auth/second-factor/enrol")).json()
     refused = await http.post(
         "/api/auth/second-factor/confirm",
-        json={"secret": offer["secret"], "code": "000000"},
+        json={
+            "secret": offer["secret"],
+            "code": "000000",
+            "password": GOOD_PASSWORD,
+        },
     )
     assert refused.status_code == 400
     assert (await http.get("/api/auth/second-factor")).json()["enrolled"] is False
@@ -813,9 +821,8 @@ async def test_the_deployment_ceiling_catches_a_spray_no_other_key_sees(env, mon
     """Neither key repeats: a different username from a different host each time.
 
     This is the shape both other buckets are blind to, and the reason there is
-    a third one at all. The ceiling is lowered for the test rather than five
-    hundred failures being generated, since what is under test is that the key
-    exists and is consulted.
+    a third one at all. What it may not do is refuse the whole deployment -
+    see the clean-caller test below, and N-17.
     """
     _, factory, _ = env
     monkeypatch.setenv("AUTH_LOGIN_GLOBAL_LIMIT", "5")
@@ -824,10 +831,10 @@ async def test_the_deployment_ceiling_catches_a_spray_no_other_key_sees(env, mon
         await guard.note_failure(
             username=f"Sprayed{attempt}", address=f"10.5.5.{attempt}"
         )
-    # A name and an address neither of which has ever failed before.
-    verdict = await guard.check(username="Innocent", address="10.6.6.6")
-    assert not verdict.allowed
-
+    # A host that is part of the spray is held once the ceiling is reached.
+    assert not (
+        await guard.check(username="Sprayed0", address="10.5.5.0")
+    ).allowed
     assert await count_open_lockouts(factory) == 0
 
 
@@ -950,7 +957,7 @@ async def test_a_step_up_with_nowhere_to_record_it_is_not_a_success(env):
     new_client, factory, _ = env
     http = new_client()
     account = await register(http, "Racing")
-    secret = await enrol_second_factor(http)
+    secret = await enrol_second_factor(http, GOOD_PASSWORD)
 
     # Rotate underneath the browser: its cookie is now the predecessor, and
     # the grace window means it still resolves.
@@ -977,7 +984,7 @@ async def test_guessing_a_password_at_the_second_factor_switch_is_throttled(env)
     new_client, _, _ = env
     http = new_client()
     await register(http, "Bucketed")
-    await enrol_second_factor(http)
+    await enrol_second_factor(http, GOOD_PASSWORD)
 
     statuses = []
     for _ in range(40):
@@ -1072,7 +1079,7 @@ async def test_replacing_a_second_factor_needs_the_password(env):
     new_client, factory, _ = env
     http = new_client()
     account = await register(http, "Swapped")
-    await enrol_second_factor(http)
+    await enrol_second_factor(http, GOOD_PASSWORD)
 
     attacker_offer = (await http.post("/api/auth/second-factor/enrol")).json()
     refused = await http.post(
@@ -1100,3 +1107,82 @@ async def test_replacing_a_second_factor_needs_the_password(env):
         },
     )
     assert accepted.status_code == 200, accepted.text
+
+
+# --- the third review of #679 --------------------------------------------
+
+@pytest.mark.asyncio
+async def test_a_first_second_factor_also_needs_the_password(env):
+    """What the row is later taken to prove is what makes this matter.
+
+    Promotion checks that a second factor exists, not whose it is, so one
+    planted on a player with a stolen cookie becomes the staff factor as soon
+    as somebody grants the role - and the grant revokes every session, with no
+    operator way back from an authenticator the owner never had.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Planted")
+    offer = (await http.post("/api/auth/second-factor/enrol")).json()
+
+    refused = await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )
+    assert refused.status_code == 401
+    assert not (
+        await second_factor_state(factory, user_id=account["id"])
+    ).enrolled
+
+    accepted = await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+            "password": GOOD_PASSWORD,
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+
+
+@pytest.mark.asyncio
+async def test_a_saturated_deployment_bucket_still_lets_a_clean_caller_in(env, monkeypatch):
+    """A global ceiling must be a ceiling, not a lever.
+
+    Fifty addresses spending their own allowance fill it, and refusing on it
+    alone would then turn every correct password on the deployment into a 429
+    until the window rolled.
+    """
+    _, factory, _ = env
+    monkeypatch.setenv("AUTH_LOGIN_GLOBAL_LIMIT", "5")
+    guard = LoginGuard(factory)
+    for attempt in range(6):
+        await guard.note_failure(
+            username=f"Sprayed{attempt}", address=f"10.4.4.{attempt}"
+        )
+
+    # Somebody who has failed nothing gets to try, however full it is.
+    assert (await guard.check(username="Innocent", address="10.9.9.9")).allowed
+    # And somebody who is part of the traffic that filled it does not.
+    refused = await guard.check(username="Sprayed0", address="10.4.4.0")
+    assert not refused.allowed
+
+
+@pytest.mark.asyncio
+async def test_a_spray_is_still_bounded_once_the_deployment_bucket_is_full(env, monkeypatch):
+    """The ceiling's own job: one more attempt per key, not unlimited."""
+    _, factory, _ = env
+    monkeypatch.setenv("AUTH_LOGIN_GLOBAL_LIMIT", "5")
+    guard = LoginGuard(factory)
+    for attempt in range(6):
+        await guard.note_failure(
+            username=f"Spread{attempt}", address=f"10.3.3.{attempt}"
+        )
+    # A fresh address the sprayer has not used yet is allowed one attempt...
+    assert (await guard.check(username="Spread99", address="10.3.3.99")).allowed
+    await guard.note_failure(username="Spread99", address="10.3.3.99")
+    # ...and no more while the deployment bucket stays full.
+    assert not (await guard.check(username="Spread99", address="10.3.3.99")).allowed

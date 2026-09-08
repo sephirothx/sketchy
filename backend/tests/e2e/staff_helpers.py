@@ -96,6 +96,7 @@ async def enrol_through_the_ui(page) -> str:
     await dialog.get_by_label("Code from your app").fill(
         code_at(secret, current_step(time.time()))
     )
+    await dialog.get_by_label("Your password").fill("a-good-password")
     await dialog.get_by_role("button", name="Confirm").click()
     await dialog.get_by_role("button", name="I have saved them").click()
     await dialog.get_by_role("button", name="Close").click()

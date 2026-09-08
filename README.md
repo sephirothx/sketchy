@@ -659,7 +659,11 @@ the date, so you can revoke it.
 
 #### Two-factor authentication
 
-Any account can add an authenticator app from **Settings → Account**. For a
+Adding an authenticator app asks for your password as well as a code from the
+app, because what it records is later taken as proof that *you* hold it - the
+role check looks for a second factor, not for whose it is.
+
+Any account can add one from **Settings → Account**. For a
 player it is preparation rather than protection: it is the step that has to come
 before a role is granted, and it does not change how they sign in — there is no
 way back from a lost authenticator for an ordinary player the way there is from a
@@ -1073,7 +1077,7 @@ your players share one address:
 | --- | --- | --- |
 | `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login`, per address; failed attempts only |
 | `AUTH_LOGIN_ACCOUNT_LIMIT` | 10 per 15 minutes | The same route per account - the key a distributed attack cannot dodge; failed attempts only |
-| `AUTH_LOGIN_GLOBAL_LIMIT` | 500 per 5 minutes | The same route for the whole deployment; failed attempts only. Set `0` to switch it off: it is the one bucket an attacker can saturate deliberately |
+| `AUTH_LOGIN_GLOBAL_LIMIT` | 500 per 5 minutes | The same route for the whole deployment; failed attempts only. Once full it holds back only callers who have been failing themselves, so filling it costs an attacker their own attempts rather than everybody's logins. Set `0` to switch it off |
 | `AUTH_SECOND_FACTOR_LIMIT` | 20 per 15 minutes | Two-factor setup, code checks, and step-up |
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |

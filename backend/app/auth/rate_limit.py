@@ -416,6 +416,32 @@ class PersistentRateLimiter:
             checked_at,
         )
 
+    async def recent_hits(self, key: str) -> int:
+        """How much this key has spent inside its live window, without spending.
+
+        `peek` answers "would this be refused", which is not the same
+        question: a caller can be well under the ceiling and still be the
+        traffic a ceiling was raised about. Used by the login guard to tell a
+        caller who has been failing from one who has not (R-RATE-12).
+        """
+        key_hash = await self._key_hash(key)
+        checked_at = self._clock()
+        async with self._session_factory() as session:
+            state = (
+                await session.execute(
+                    select(
+                        AuthRateLimitBucket.attempt_count,
+                        AuthRateLimitBucket.window_expires_at,
+                    ).where(
+                        AuthRateLimitBucket.scope == self._scope,
+                        AuthRateLimitBucket.key_hash == key_hash,
+                    )
+                )
+            ).first()
+        if state is None or state.window_expires_at <= checked_at:
+            return 0
+        return int(state.attempt_count or 0)
+
     async def _finish(self, allowed: bool) -> bool:
         """Count the check and occasionally take out the expired buckets."""
         self._checks += 1

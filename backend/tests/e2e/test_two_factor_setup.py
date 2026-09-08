@@ -62,6 +62,9 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await dialog.get_by_label("Code from your app").fill(
                 code_at(secret, current_step(time.time()))
             )
+            # Binding a factor proves the password too, so that a session
+            # cookie on its own cannot plant one (R-AUTH-20).
+            await dialog.get_by_label("Your password").fill(PASSWORD)
             await dialog.get_by_role("button", name="Confirm").click()
 
             codes = dialog.get_by_role("list", name="Recovery codes")

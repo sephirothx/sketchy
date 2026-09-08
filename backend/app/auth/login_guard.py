@@ -118,11 +118,10 @@ class LoginGuard:
             window_seconds=900,
             clock=clock,
         )
-        # Generous, and a last resort rather than a first line: it is the only
-        # one of the three an attacker can saturate on purpose to make logins
-        # fail for everybody, so it sits far above any honest failure rate this
-        # server would produce. Set `AUTH_LOGIN_GLOBAL_LIMIT=0` to switch it
-        # off on a deployment that would rather take the spray than the risk.
+        # The ceiling that holds when neither other key repeats. It no longer
+        # refuses everybody when it fills - see `check` - so it can sit at a
+        # rate an honest deployment might actually reach without that being a
+        # denial of service. `AUTH_LOGIN_GLOBAL_LIMIT=0` switches it off.
         self._global_limit = _limit("AUTH_LOGIN_GLOBAL_LIMIT", 500)
         self._deployment = PersistentRateLimiter(
             session_factory,
@@ -146,15 +145,27 @@ class LoginGuard:
         took.
         """
         now = self._clock()
+        account_key = await self._account_key(username)
         locked_for = await self._lockout_remaining(username, now=now)
         if locked_for > 0:
             return LoginVerdict(allowed=False, retry_after_seconds=locked_for)
-        if not await self._account.peek(await self._account_key(username)):
+        if not await self._account.peek(account_key):
             return LoginVerdict(allowed=False, retry_after_seconds=900)
         if not await self._address.peek(address):
             return LoginVerdict(allowed=False, retry_after_seconds=300)
         if self._global_limit and not await self._deployment.peek(GLOBAL_LOGIN_KEY):
-            return LoginVerdict(allowed=False, retry_after_seconds=300)
+            # Saturated - but a deployment-wide bucket that refuses everybody
+            # is a lever rather than a ceiling: fifty addresses spending their
+            # own allowance fill it, and then nobody can sign in however right
+            # their password is. It binds the traffic that filled it instead.
+            # A caller with failures of their own against either key is part
+            # of that traffic and is refused; one with a clean record is not,
+            # so a spray is held to a single attempt per address or account
+            # while everybody else signs in as usual (R-RATE-12, N-17).
+            if await self._address.recent_hits(address) or await self._account.recent_hits(
+                account_key
+            ):
+                return LoginVerdict(allowed=False, retry_after_seconds=300)
         return LoginVerdict(allowed=True)
 
     async def note_failure(self, *, username: str, address: str) -> None:
