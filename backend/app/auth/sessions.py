@@ -186,13 +186,29 @@ def device_label_from_user_agent(user_agent: str | None) -> str:
     return f"{browser} on {platform}"
 
 
-def _session_data(record: AuthSession, role: str | None = None) -> SessionData:
-    """The immutable view of one row.
+def lifetime_of(record: AuthSession) -> SessionLifetime:
+    """The rule this session was issued under, read off the row.
 
-    Reads only the row. `role` is accepted so a caller that has just issued the
-    session can label it without a lookup; it never changes what is enforced,
-    which is what the row's own `expires_at` and `idle_expires_at` say.
+    From the span the row itself records rather than from the account's role,
+    which resolving a token deliberately does not look up (R-AUTH-03): a role
+    change revokes every session, so the span a live row carries is always the
+    one its owner's role allows. A staff session is issued for seven days and
+    a player's for a year, so the two are never close enough to confuse.
+
+    This is what makes rotation work for staff. Defaulting to the player rule
+    here - as an earlier version did by taking an optional role nobody on the
+    resolve path had - gave staff sessions the seven-day rotation interval,
+    which their own seven-day expiry meant they never reached.
     """
+    return (
+        STAFF_LIFETIME
+        if record.expires_at - record.created_at <= STAFF_LIFETIME.absolute
+        else PLAYER_LIFETIME
+    )
+
+
+def _session_data(record: AuthSession) -> SessionData:
+    """The immutable view of one row, reading only that row."""
     return SessionData(
         id=str(record.id),
         user_id=str(record.user_id),
@@ -200,7 +216,7 @@ def _session_data(record: AuthSession, role: str | None = None) -> SessionData:
         created_at=record.created_at,
         last_used_at=record.last_used_at,
         expires_at=record.expires_at,
-        lifetime=lifetime_for(role),
+        lifetime=lifetime_of(record),
         idle_expires_at=record.idle_expires_at,
         anomaly_at=record.anomaly_at,
         anomaly_count=record.anomaly_count,
@@ -255,7 +271,7 @@ async def create_session(
                 idle_expires_at=issued_at + lifetime.idle,
             )
             database.add(record)
-    return IssuedSession(token=raw_token, session=_session_data(record, role))
+    return IssuedSession(token=raw_token, session=_session_data(record))
 
 
 async def resolve_session(
@@ -522,13 +538,10 @@ def _anomaly_reason(
     ):
         return "device"
     # Staff sessions are the short ones, and the only ones for which an
-    # address change is worth the false positives. Recognised from the row's
-    # own window rather than from a role lookup.
-    is_staff_session = (
-        record.idle_expires_at - record.last_used_at <= STAFF_LIFETIME.idle
-    )
+    # address change is worth the false positives. Same reading of the row
+    # that decides rotation, so there is one rule rather than two.
     if (
-        is_staff_session
+        lifetime_of(record) is STAFF_LIFETIME
         and ip_hash
         and record.last_ip_hash
         and ip_hash != record.last_ip_hash
@@ -602,7 +615,7 @@ async def rotate_session(
             if revoked.rowcount != 1:
                 return None
             database.add(successor)
-    return IssuedSession(token=raw_token, session=_session_data(successor, role))
+    return IssuedSession(token=raw_token, session=_session_data(successor))
 
 
 async def record_step_up(

@@ -286,7 +286,9 @@ shared signing secret.
 7 for staff) and `idle_expires_at` (90 days, 24 hours for staff), the latter moving
 forward with `last_used_at`, which was already maintained and throttled to one write
 per five minutes. `ck_auth_sessions_idle_within_expiry` keeps silence able to end a
-session early but never late.
+session early but never late. The span between `created_at` and `expires_at` is also
+what says *which* rule the row lives under — seven days for staff, a year for a player
+— and so what its rotation cadence is; nothing on the read path asks the account.
 
 Deriving either from the account's role instead would mean joining `users` on the
 single hottest read this server has — once per HTTP request and once per socket

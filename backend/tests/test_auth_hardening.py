@@ -43,8 +43,10 @@ from app.auth.sessions import (
     create_session,
     lifetime_for,
     resolve_session,
+    list_active_sessions,
     revoke_all_sessions,
     rotate_session,
+    should_rotate,
 )
 from app.auth.totp import code_at, current_step, generate_secret
 from app.db.models import AuditEvent, AuthSession, User
@@ -895,3 +897,93 @@ async def test_a_cold_server_establishes_its_hashing_key_once(env, monkeypatch):
         rows = (await session.scalars(select(AppConfig.key))).all()
     # Exactly one key row, whoever won the race.
     assert list(rows) == ["ip_hash_secret"]
+
+
+# --- what the review of #679 found ---------------------------------------
+
+@pytest.mark.asyncio
+async def test_a_staff_session_rotates_daily_on_the_path_that_reads_it(env):
+    """The rotation cadence has to survive the round trip through the row.
+
+    `/api/auth/me` decides rotation from whatever `resolve_session_status`
+    hands back, and that path deliberately does not look up the account's
+    role. Reading the lifetime off the row is what keeps a staff session on
+    its one-day cadence there; taking the player default instead gave it a
+    seven-day interval that its own seven-day expiry meant it never reached.
+    """
+    _, factory, repo = env
+    user = await repo.create_anonymous("Rotator")
+    await set_role(factory, user.id, UserRole.MODERATOR)
+    issued = await create_session(
+        factory, user_id=user.id, device_label="Firefox on Linux"
+    )
+
+    resolved = await resolve_session(factory, issued.token)
+    assert resolved is not None
+    assert resolved.lifetime is STAFF_LIFETIME
+    a_day_later = datetime.now(timezone.utc) + timedelta(days=1, minutes=1)
+    assert should_rotate(resolved, now=a_day_later)
+    # And a player's, read back the same way, still waits a week.
+    player = await repo.create_anonymous("Ordinary")
+    player_session = await create_session(
+        factory, user_id=player.id, device_label="Chrome on Windows"
+    )
+    player_resolved = await resolve_session(factory, player_session.token)
+    assert player_resolved is not None
+    assert not should_rotate(player_resolved, now=a_day_later)
+
+
+@pytest.mark.asyncio
+async def test_a_step_up_with_nowhere_to_record_it_is_not_a_success(env):
+    """A right code and a session that cannot hold it is a refusal, not `ok`.
+
+    The case is the rotation grace window: a browser that lost the race holds
+    the predecessor token, which still *resolves* (R-AUTH-22 lets it, so a
+    parallel request is not a logout) but names a row that is already revoked.
+    The step-up update matches nothing there. Answering `ok` would send
+    somebody back into the action that refused them, to be refused again with
+    nothing changed.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Racing")
+    secret = await enrol_second_factor(http)
+
+    # Rotate underneath the browser: its cookie is now the predecessor, and
+    # the grace window means it still resolves.
+    live = (await list_active_sessions(factory, user_id=account["id"]))[0]
+    successor = await rotate_session(
+        factory,
+        session_id=live.id,
+        user_id=account["id"],
+        device_label=live.device_label,
+    )
+    assert successor is not None
+
+    response = await http.post(
+        "/api/auth/step-up",
+        json={"code": code_at(secret, current_step(time.time()) + 1)},
+    )
+    assert response.status_code == 409
+    assert not response.json().get("ok")
+
+
+@pytest.mark.asyncio
+async def test_guessing_a_password_at_the_second_factor_switch_is_throttled(env):
+    """The cheapest place to guess a password was the one with no bucket."""
+    new_client, _, _ = env
+    http = new_client()
+    await register(http, "Bucketed")
+    await enrol_second_factor(http)
+
+    statuses = []
+    for _ in range(40):
+        response = await http.request(
+            "DELETE",
+            "/api/auth/second-factor",
+            json={"password": "not-the-password-here"},
+        )
+        statuses.append(response.status_code)
+        if response.status_code == 429:
+            break
+    assert 429 in statuses

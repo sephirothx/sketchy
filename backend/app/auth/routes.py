@@ -1297,11 +1297,17 @@ def create_auth_router(
     async def remove_second_factor(body: PasswordProofBody, request: Request):
         """Turn it off, unless the account's role is the reason it is on.
 
+        Throttled like every other password proof on this router. It was the
+        one that was not, which made it the cheapest place for somebody
+        holding a stolen cookie to guess the password that would let them
+        take the second factor off an account.
+
         A moderator cannot remove their own second factor: it is the condition
         of the role, and letting them drop it would leave R-AUTH-20 enforced
         only against people who had not thought to. Giving up the role is what
         removes the requirement, and only an administrator can do that.
         """
+        await throttle(second_factor_limiter, request)
         user = await require_user(request)
         await _prove_password(user, body.password)
         if user.role in STAFF_ROLES and staff_second_factor_required():
@@ -1345,7 +1351,19 @@ def create_auth_router(
             )
         if outcome is SecondFactorOutcome.REJECTED:
             raise HTTPException(status_code=401, detail="That code is not right.")
-        await record_step_up(session_factory, session_id=session_id, user_id=user.id)
+        recorded = await record_step_up(
+            session_factory, session_id=session_id, user_id=user.id
+        )
+        if not recorded:
+            # The code was right and there was nowhere to put it: the row this
+            # request resolved through is revoked or expired, which a caller
+            # inside a rotation's grace window is holding by definition. Saying
+            # "ok" there would send them straight back into the action that
+            # refused them, to be refused again with nothing changed.
+            raise HTTPException(
+                status_code=409,
+                detail="This session has been replaced. Reload and try again.",
+            )
         return {
             "ok": True,
             "expiresInSeconds": int(STEP_UP_WINDOW.total_seconds()),
