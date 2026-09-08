@@ -382,16 +382,6 @@ export function AuthDialog({
   const [passkeyOnly, setPasskeyOnly] = useState(false);
   const canUsePasskeys = passkeysAvailable();
 
-  // Both of these are answers about one account and one attempt. Switching
-  // between signing in and creating an account starts a different one, and
-  // `passkeyOnly` left standing hides the form on a screen that offers no
-  // passkey button either - a dialog with nothing in it at all.
-  useEffect(() => {
-    setPasskeyOnly(false);
-    setCodeWanted(false);
-    setError(null);
-  }, [mode]);
-
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
   const isClaim = mode === "claim";
 
@@ -632,6 +622,14 @@ export function AuthDialog({
             className="auth-link"
             onClick={() => {
               setError(null);
+              // Both of these are answers about one account and one attempt,
+              // and this starts another. Cleared here rather than from an
+              // effect watching `mode`: this button is the only thing that
+              // changes it in place - reaching the dialog any other way
+              // mounts it afresh - so the reset belongs where the change is
+              // made, where nothing has rendered on the old answers yet.
+              setPasskeyOnly(false);
+              setCodeWanted(false);
               onSwitchMode(isClaim ? "login" : "claim");
             }}
           >
