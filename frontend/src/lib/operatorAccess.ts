@@ -80,6 +80,19 @@ export function roleNoticeFromPayload(payload: unknown): {
   };
 }
 
+/** What the push says is still outstanding on the account.
+
+Separate from the notice, and present even when there is none: a withdrawn
+offer settles its notice and ends the offer in one act, so the only thing that
+payload has to say is that nothing is waiting any more. Anything but a
+grantable role reads as nothing, the way a malformed notice is dropped rather
+than rendered. */
+export function pendingRoleFromPayload(payload: unknown): "moderator" | null {
+  if (!payload || typeof payload !== "object") return null;
+  const offered = (payload as { pendingRole?: unknown }).pendingRole;
+  return offered === "moderator" ? "moderator" : null;
+}
+
 /** A role as it is said to the person holding it, not as it is stored. */
 export function roleName(role: string): string {
   return role === "admin" ? "administrator" : role;

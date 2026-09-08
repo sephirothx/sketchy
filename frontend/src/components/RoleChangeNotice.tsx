@@ -1,6 +1,10 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 
-import { roleNoticeFromPayload, roleNoticeText } from "../lib/operatorAccess";
+import {
+  pendingRoleFromPayload,
+  roleNoticeFromPayload,
+  roleNoticeText,
+} from "../lib/operatorAccess";
 import {
   acknowledgeRoleNotice,
   fetchPendingRoleNotice,
@@ -75,6 +79,11 @@ export function RoleChangeNotice() {
     // A player who is online when the administrator acts hears it now; the
     // fetch above is the catch-up route for everybody else.
     function onRoleChanged(payload: unknown) {
+      // First, and whether or not anything is being said: a withdrawn offer
+      // is a push with no notice at all, and the account's own view of what
+      // is outstanding has to follow it or the app goes on offering the way
+      // into an enrolment that would now grant nothing.
+      useAuthStore.getState().applyPendingRole(pendingRoleFromPayload(payload));
       const pushed = roleNoticeFromPayload(payload);
       if (!pushed) return;
       // An offer revokes nothing - the account is still what it was, and
@@ -82,15 +91,6 @@ export function RoleChangeNotice() {
       // browser's session with it.
       setSignedOutByTheChange(!pushed.pending);
       setNotice(pushed);
-      // And the account carries the offer from here, not just this dialog:
-      // "Later" settles the notice, and without this the Settings entry and
-      // the menu reminder - the only two ways back to it - would stay hidden
-      // until the next reload, because `pendingRole` was last read at
-      // startup. `admin` is never pushed (R-ROLE-02), so a moderator offer is
-      // the only one that can arrive here.
-      if (pushed.pending && pushed.role === "moderator") {
-        useAuthStore.getState().applyPendingRole("moderator");
-      }
       // Deliberately no `applyRole` here any more. It existed to make the menu
       // match the new role without a reload, and there is no longer a
       // signed-in menu to correct: this browser's session went with the role

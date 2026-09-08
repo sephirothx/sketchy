@@ -27,7 +27,15 @@ from app.db.models import RoleChangeNotice, User
 async def pending_role_notice_payload(
     session_factory: async_sessionmaker[AsyncSession], user_id: str
 ) -> dict:
-    """The account's *newest* unacknowledged notice, or ``{"notice": None}``.
+    """The account's *newest* unacknowledged notice, and what is waiting on it.
+
+    Two things, because they answer different questions and both travel this
+    way. `notice` is what the account has still to be *told*; `pendingRole` is
+    what is *outstanding* on it - a staff role offered and waiting on a second
+    factor (R-AUTH-20). A withdrawal is the case that needs both: it settles
+    the notice, so there is nothing left to say, and it ends the offer, which
+    a connected browser has to hear or it goes on showing the way into an
+    enrolment that would now grant nothing.
 
     Newest rather than oldest, which is where this parts company with a
     warning. Two warnings are two things a moderator said and both are worth
@@ -39,8 +47,10 @@ async def pending_role_notice_payload(
     try:
         target = UUID(user_id)
     except (ValueError, TypeError):
-        return {"notice": None}
+        return {"notice": None, "pendingRole": None}
     async with session_factory() as session:
+        account = await session.get(User, target)
+        standing = pending_offer(account) if account is not None else None
         notice = await session.scalar(
             select(RoleChangeNotice)
             .where(
@@ -51,8 +61,8 @@ async def pending_role_notice_payload(
             .limit(1)
         )
         if notice is None:
-            return {"notice": None}
-        if notice.pending and not pending_offer(await session.get(User, target)):
+            return {"notice": None, "pendingRole": standing}
+        if notice.pending and standing is None:
             # The invitation outlived the offer. A notice about a role is a
             # message; `users.pending_role` is the fact, and the two part
             # company whenever the offer ends without the row being settled -
@@ -64,8 +74,9 @@ async def pending_role_notice_payload(
             # Nothing older is offered in its place: an offer is the newest
             # thing that happened to this account's role, so there is nothing
             # behind it still worth saying.
-            return {"notice": None}
+            return {"notice": None, "pendingRole": None}
         return {
+            "pendingRole": standing,
             "notice": {
                 "id": str(notice.id),
                 "role": notice.role,

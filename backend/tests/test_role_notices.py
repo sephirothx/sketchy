@@ -116,7 +116,7 @@ async def test_an_account_with_nothing_to_be_told_is_told_nothing(env):
     new_client, _ = env
     client = new_client()
     await register(client, "Ordinary")
-    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None}
+    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None, "pendingRole": None}
 
 
 async def test_a_notice_waits_for_a_player_who_was_offline(env):
@@ -195,7 +195,7 @@ async def test_acknowledging_settles_it_and_everything_before_it(env):
         await client.post(f"/api/role-notices/{newest}/acknowledge")
     ).status_code == 200
     assert await pending_rows(factory, account["id"]) == []
-    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None}
+    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None, "pendingRole": None}
 
 
 async def test_a_newer_notice_survives_an_acknowledgement_of_an_older_one(env):
@@ -229,7 +229,7 @@ async def test_somebody_elses_notice_is_not_there_to_be_read_or_dismissed(env):
     assert (
         await mine.post(f"/api/role-notices/{notice_id}/acknowledge")
     ).status_code == 404
-    assert (await mine.get("/api/role-notices/pending")).json() == {"notice": None}
+    assert (await mine.get("/api/role-notices/pending")).json() == {"notice": None, "pendingRole": None}
     assert len(await pending_rows(factory, other["id"])) == 1
 
 
@@ -254,7 +254,7 @@ async def test_a_visitor_without_a_session_is_asked_to_sign_in(env):
 async def test_the_payload_builder_shrugs_at_a_user_id_that_is_not_one(env):
     """Belt and braces: the socket push hands it whatever the router had."""
     _, factory = env
-    assert await pending_role_notice_payload(factory, "not-a-uuid") == {"notice": None}
+    assert await pending_role_notice_payload(factory, "not-a-uuid") == {"notice": None, "pendingRole": None}
 
 
 async def test_a_deleted_account_leaves_nothing_readable_behind(env):
@@ -273,7 +273,7 @@ async def test_a_deleted_account_leaves_nothing_readable_behind(env):
             user.username = None
             user.password_hash = None
 
-    assert await pending_role_notice_payload(factory, account["id"]) == {"notice": None}
+    assert await pending_role_notice_payload(factory, account["id"]) == {"notice": None, "pendingRole": None}
 
 
 async def test_acknowledging_twice_is_the_same_answer(env):

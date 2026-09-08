@@ -1524,7 +1524,8 @@
    "unratedCount"
   ],
   "api.role_notices:pending_role_notice_payload": [
-   "createdAt"
+   "createdAt",
+   "pendingRole"
   ],
   "api.room_presets:_config_payload": [
    "allowedTools",

@@ -565,6 +565,10 @@ def create_admin_controls_router(
                         detail="An administrator's role cannot be changed here.",
                     )
                 previous = target.role
+                # Set by the withdrawal below, and what tells the rest of this
+                # handler that the role itself is not moving.
+                withdrew = False
+                answer: dict | None = None
                 # Withdrawing an offer, which is its own thing and not a role
                 # change at all: the account holds what it always held, so
                 # nothing may be revoked and nobody may be told they are "no
@@ -602,125 +606,133 @@ def create_admin_controls_router(
                         )
                         .values(acknowledged_at=datetime.now(timezone.utc))
                     )
-                    if previous == body.role:
-                        return {"id": user_id, "role": previous, "pendingRole": None}
+                    # Not returned from here: the account has to be told, and
+                    # the push happens after the commit, so this falls out of
+                    # the transaction rather than out of the function.
+                    withdrew = previous == body.role
                 # Setting the role somebody already holds, with nothing
-                # waiting, is a no-op.
-                if previous == body.role:
+                # waiting, is the one case that changes nothing and tells
+                # nobody - an administrator pressing the button twice.
+                if previous == body.role and not withdrew:
                     return {
                         "id": user_id,
                         "role": previous,
                         "pendingRole": target.pending_role,
                     }
-                factor = (
-                    await session.get(UserSecondFactor, target_id)
-                    if body.role in STAFF_ROLES
-                    else None
-                )
-                if body.role in STAFF_ROLES and (
-                    factor is None or factor.password_proved_at is None
-                ):
-                    # The role is offered rather than granted (R-AUTH-20).
-                    # Granting it outright would revoke the account's sessions,
-                    # and a staff account cannot sign in without a code, so an
-                    # account promoted before it enrolled would be locked out
-                    # of the very page it would enrol from. The offer waits on
-                    # the other side of that: the account stays what it is, is
-                    # told, and enrolling is what takes it up.
-                    #
-                    # The factor has to be *theirs*, which is why a row is not
-                    # enough: this looks for a password proved against it, not
-                    # merely for one existing. Without that, a factor planted
-                    # with a stolen cookie would become the staff factor as
-                    # soon as anybody granted the role.
-                    now = datetime.now(timezone.utc)
-                    already = target.pending_role
-                    target.pending_role = body.role
-                    target.pending_role_at = now
-                    session.add(
-                        AuditEvent(
-                            id=generate_uuid(),
-                            event_type=ROLE_OFFERED_EVENT,
-                            actor_user_id=admin.id,
-                            target_user_id=target_id,
-                            target_type=AuditTargetType.USER.value,
-                            target_id=str(target_id),
-                            request_id=request_id,
-                            ip_hash=ip_hash,
-                            details={
-                                "role": body.role,
-                                "reason": body.reason,
-                                "replacing": already,
-                            },
-                            created_at=now,
-                        )
+                if withdrew:
+                    answer = {"id": user_id, "role": previous, "pendingRole": None}
+                # A withdrawal is the whole of the change: the role is not
+                # moving, so nothing below applies to it.
+                if not withdrew:
+                    factor = (
+                        await session.get(UserSecondFactor, target_id)
+                        if body.role in STAFF_ROLES
+                        else None
                     )
-                    # No sessions revoked and no role changed: nothing about
-                    # this account has changed yet except that it has
-                    # something to do.
-                    session.add(
-                        RoleChangeNotice(
-                            id=generate_uuid(),
-                            user_id=target_id,
-                            role=body.role,
-                            pending=True,
-                            created_at=now,
+                    if body.role in STAFF_ROLES and (
+                        factor is None or factor.password_proved_at is None
+                    ):
+                        # The role is offered rather than granted (R-AUTH-20).
+                        # Granting it outright would revoke the account's sessions,
+                        # and a staff account cannot sign in without a code, so an
+                        # account promoted before it enrolled would be locked out
+                        # of the very page it would enrol from. The offer waits on
+                        # the other side of that: the account stays what it is, is
+                        # told, and enrolling is what takes it up.
+                        #
+                        # The factor has to be *theirs*, which is why a row is not
+                        # enough: this looks for a password proved against it, not
+                        # merely for one existing. Without that, a factor planted
+                        # with a stolen cookie would become the staff factor as
+                        # soon as anybody granted the role.
+                        now = datetime.now(timezone.utc)
+                        already = target.pending_role
+                        target.pending_role = body.role
+                        target.pending_role_at = now
+                        session.add(
+                            AuditEvent(
+                                id=generate_uuid(),
+                                event_type=ROLE_OFFERED_EVENT,
+                                actor_user_id=admin.id,
+                                target_user_id=target_id,
+                                target_type=AuditTargetType.USER.value,
+                                target_id=str(target_id),
+                                request_id=request_id,
+                                ip_hash=ip_hash,
+                                details={
+                                    "role": body.role,
+                                    "reason": body.reason,
+                                    "replacing": already,
+                                },
+                                created_at=now,
+                            )
                         )
-                    )
-                    offered = body.role
-                    target_role = previous
-                else:
-                    offered = None
-                    target_role = body.role
-                    target.role = body.role
-                    # Whatever was waiting is answered by the role itself: a
-                    # demotion withdraws an offer, and a grant that goes
-                    # through outright leaves nothing to take up.
-                    target.pending_role = None
-                    target.pending_role_at = None
-                    session.add(
-                        AuditEvent(
-                            id=generate_uuid(),
-                            event_type=ROLE_CHANGED_EVENT,
-                            actor_user_id=admin.id,
-                            target_user_id=target_id,
-                            target_type=AuditTargetType.USER.value,
-                            target_id=str(target_id),
-                            request_id=request_id,
-                            ip_hash=ip_hash,
-                            details={
-                                "from": previous,
-                                "to": body.role,
-                                "reason": body.reason,
-                            },
-                            created_at=datetime.now(timezone.utc),
+                        # No sessions revoked and no role changed: nothing about
+                        # this account has changed yet except that it has
+                        # something to do.
+                        session.add(
+                            RoleChangeNotice(
+                                id=generate_uuid(),
+                                user_id=target_id,
+                                role=body.role,
+                                pending=True,
+                                created_at=now,
+                            )
                         )
-                    )
-                    # A role change ends every session the account holds, in
-                    # the same transaction (R-AUTH-20, #468). Two reasons, and
-                    # both matter. A staff role must not be reachable from a
-                    # session that was issued before the second factor was ever
-                    # required, so the promoted account signs in again and
-                    # produces a code. And a session's lifetime is fixed when
-                    # it is issued, so a year-long player cookie would
-                    # otherwise stay a year long on an account that is now
-                    # staff - which is exactly what R-AUTH-03 shortens staff
-                    # sessions to prevent.
-                    await revoke_sessions(session, user_id=target_id)
-                    # In the same transaction as the change it describes, so
-                    # there can be no role nobody was told about and no notice
-                    # about a role that was never granted. The reason stays in
-                    # the ledger above: it is text one administrator wrote for
-                    # another.
-                    session.add(
-                        RoleChangeNotice(
-                            id=generate_uuid(),
-                            user_id=target_id,
-                            role=body.role,
-                            pending=False,
-                            created_at=datetime.now(timezone.utc),
+                        offered = body.role
+                        target_role = previous
+                    else:
+                        offered = None
+                        target_role = body.role
+                        target.role = body.role
+                        # Whatever was waiting is answered by the role itself: a
+                        # demotion withdraws an offer, and a grant that goes
+                        # through outright leaves nothing to take up.
+                        target.pending_role = None
+                        target.pending_role_at = None
+                        session.add(
+                            AuditEvent(
+                                id=generate_uuid(),
+                                event_type=ROLE_CHANGED_EVENT,
+                                actor_user_id=admin.id,
+                                target_user_id=target_id,
+                                target_type=AuditTargetType.USER.value,
+                                target_id=str(target_id),
+                                request_id=request_id,
+                                ip_hash=ip_hash,
+                                details={
+                                    "from": previous,
+                                    "to": body.role,
+                                    "reason": body.reason,
+                                },
+                                created_at=datetime.now(timezone.utc),
+                            )
                         )
-                    )
+                        # A role change ends every session the account holds, in
+                        # the same transaction (R-AUTH-20, #468). Two reasons, and
+                        # both matter. A staff role must not be reachable from a
+                        # session that was issued before the second factor was ever
+                        # required, so the promoted account signs in again and
+                        # produces a code. And a session's lifetime is fixed when
+                        # it is issued, so a year-long player cookie would
+                        # otherwise stay a year long on an account that is now
+                        # staff - which is exactly what R-AUTH-03 shortens staff
+                        # sessions to prevent.
+                        await revoke_sessions(session, user_id=target_id)
+                        # In the same transaction as the change it describes, so
+                        # there can be no role nobody was told about and no notice
+                        # about a role that was never granted. The reason stays in
+                        # the ledger above: it is text one administrator wrote for
+                        # another.
+                        session.add(
+                            RoleChangeNotice(
+                                id=generate_uuid(),
+                                user_id=target_id,
+                                role=body.role,
+                                pending=False,
+                                created_at=datetime.now(timezone.utc),
+                            )
+                        )
         # After the commit, so a socket can never announce a role a rolled-back
         # transaction never granted. The no-op above returns before reaching
         # here, so an administrator re-pressing the button tells nobody twice.
@@ -732,6 +744,8 @@ def create_admin_controls_router(
         # be lost with nothing to show for it.
         if on_role_changed is not None:
             await on_role_changed(str(target_id))
+        if answer is not None:
+            return answer
         # No session revocation on a demotion: the gate loads the role fresh on
         # every request, so it is in force on the target's very next call. An
         # offer revokes nothing either, because nothing has changed yet.

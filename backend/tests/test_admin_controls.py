@@ -1132,6 +1132,37 @@ async def test_an_offer_nobody_took_up_lapses_rather_than_standing_for_ever(env)
     ]
 
 
+async def test_withdrawing_an_offer_reaches_the_account_it_was_made_to(env, role_pushes):
+    """The browser holding the offer has to hear that it is gone.
+
+    It is the one change with nothing to *say*: the notice is settled, so the
+    push carries no message - only what is outstanding, which is now nothing.
+    Without it the account goes on showing the way into an enrolment that
+    would grant it nothing.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Toldback")
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    assert role_pushes == [subject["id"]]
+
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "user", "reason": "thought better of it"},
+    )
+    assert role_pushes == [subject["id"], subject["id"]]
+
+    # And pressing it a third time changes nothing, so it tells nobody.
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "user", "reason": "still no"},
+    )
+    assert role_pushes == [subject["id"], subject["id"]]
+
+
 async def test_setting_the_role_back_withdraws_a_standing_offer(env):
     """An administrator changes their mind before anybody enrolled.
 
