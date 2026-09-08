@@ -139,10 +139,12 @@ class QueueDepths:
             ).all():
                 if state == FinishedGameHandoffState.FAILED.value:
                     handoff_failed += int(count or 0)
-                else:
-                    handoff_count += int(count or 0)
-                    if oldest is not None and (handoff_oldest is None or oldest < handoff_oldest):
-                        handoff_oldest = oldest
+                    continue
+                handoff_count += int(count or 0)
+                # `created_at` is NOT NULL, so a group that exists has a min.
+                handoff_oldest = (
+                    oldest if handoff_oldest is None else min(handoff_oldest, oldest)
+                )
         return QueueSnapshot(
             mail_outbox=QueueDepth(int(mail_count or 0), _age(mail_oldest, now)),
             data_exports=QueueDepth(int(export_count or 0), _age(export_oldest, now)),
