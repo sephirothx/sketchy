@@ -90,11 +90,13 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             # for a second failed whichever room or game happened to be
             # starting elsewhere. A room of our own is the same gate with none
             # of the blast radius.
-            await page.goto(BASE_URL)
-            await page.click('button:has-text("Create room")')
-            # Waited for by name: both the lobby and the setup page carry a
-            # "Create room" button, so clicking twice without this is a race
-            # against the navigation between them - one CI shard lost it.
+            # Straight to the setup route rather than through the lobby's
+            # button. How a room is reached is not what this test is about,
+            # and going by click meant waiting on a navigation between two
+            # pages that both carry a "Create room" button - a race this lost
+            # twice on CI, where a shard is slower than anything local.
+            # `test_waiting_room` covers the lobby's own path to it.
+            await page.goto(f"{BASE_URL}/create")
             await page.wait_for_selector(".create-room-page h1")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
