@@ -1467,6 +1467,7 @@
    "createdAt",
    "dataExports",
    "displayName",
+   "drawingStore",
    "eventType",
    "failedFlushes",
    "finishedGames",
@@ -1487,6 +1488,7 @@
    "activeGames",
    "ambiguousBatches",
    "dataExports",
+   "drawingStore",
    "failedFlushes",
    "finishedGames",
    "generatedAt",
@@ -2272,6 +2274,10 @@
    "nameColor",
    "playerId",
    "turnId"
+  ],
+  "services.drawing_storage:as_json": [
+   "readyRows",
+   "totalBytes"
   ],
   "services.game_flow:_begin_drawing": [
    "drawerId",

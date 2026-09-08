@@ -164,7 +164,18 @@ a realistic drawing stores about 4.5× smaller), read back under bounds taken
 from what the blob claims, and a frame too small to earn that is stored as it
 travels. Clients
 therefore never see a stored format at all, and the wire format stays free to
-change without rewriting a single stored row. Because a database column has no
+change without rewriting a single stored row.
+
+Those bytes stay in the primary database rather than an object store, and #471 settled
+that on measurement: a drawing is 67 KB of database per finished game — about five
+sixths of what a game adds — and the only blob kept indefinitely, read back in 1.4 ms.
+Moving it would not reduce the retained bytes, and it would break the all-or-nothing
+finished-game write. The decision is conditional and watched: `sketchy_drawing_store_bytes`
+reports the store's size and `SketchyDrawingStoreLarge` warns past 50 GB, which is where
+the alternatives get costed again. The measurements are in
+[docs/database.md](docs/database.md) under *Storing the drawings*.
+
+Because a database column has no
 integrity check of its own, an operator command walks **every** stored drawing
 below a watermark taken when it starts and reports the rows whose bytes fail
 their checksum, disagree with their recorded size or format, name a format this
@@ -1552,6 +1563,8 @@ backend/.venv/bin/python benchmarks/drawing_compression.py
 # What it saves in PostgreSQL per game: heap, TOAST, WAL, and one read (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50
+# Read its live sizes, never a backup taken from it: every turn it seeds carries the same
+# frame, so a `pg_dump` of its output compresses ~50x and says nothing about a real store.
 # Which permessage-deflate window and memLevel the server should use (bytes, CPU, memory)
 backend/.venv/bin/python benchmarks/deflate_windows.py
 
@@ -2046,6 +2059,13 @@ reporting last hour's success. Its two guest sessions are kept
 between runs in `--state` (default `~/.cache/sketchy/probe-sessions.json`) and only
 re-provisioned when the server no longer knows them, so a one-minute cadence stays
 well inside `GUEST_PROVISION_LIMIT`; make sure the cron user can write that path.
+
+One alert is not an incident at all. `SketchyDrawingStoreLarge` says the stored
+drawings have passed 50 GB, which is the size #471 named for reopening the decision to
+keep them in the primary database (see [docs/slo.md](docs/slo.md) and *Storing the
+drawings* in [docs/database.md](docs/database.md)). The store only grows, so it will
+not clear on its own and there is nothing to do at 3 a.m.: it wants an afternoon and
+the backup-restore numbers, not a fix.
 
 When something pages, the order to look in is the order the overview at
 `/admin/operations` lists its attention reasons: what is already lost (a dropped

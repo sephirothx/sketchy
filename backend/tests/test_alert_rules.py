@@ -15,7 +15,13 @@ import re
 import pytest
 import yaml
 
-from app.api.operations import _loop_lines, _prometheus_lines, _queue_lines
+from app.api.operations import (
+    _drawing_store_lines,
+    _loop_lines,
+    _prometheus_lines,
+    _queue_lines,
+)
+from app.services.drawing_storage import DrawingStoreSize
 from app.probe import PROBE_METRIC_NAMES
 from app.services.queue_depths import HandoffDepth, QueueDepth, QueueSnapshot
 from app.services.telemetry import PoolGauges, Telemetry, gauge_lines
@@ -52,6 +58,8 @@ def exposed_names() -> set[str]:
         ),
         # Non-empty queues, so the oldest-age gauges - omitted when empty - appear.
         *_queue_lines(QueueSnapshot(QueueDepth(1, 5.0), QueueDepth(1, 5.0), HandoffDepth(1, 5.0, 0))),
+        # A store with something in it, so both size gauges appear.
+        *_drawing_store_lines(DrawingStoreSize(4096, 1)),
         *gauge_lines("sketchy_db_ready", "x", 1),
     ]
     names: set[str] = set()

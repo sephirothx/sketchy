@@ -31,6 +31,15 @@ warnings, because each one is a cause the objectives above would show the effect
 `SketchyPoolSaturated`, `SketchySlowQueries`, `SketchyDiskLow` (page: a full disk is
 data loss), `SketchyMemoryHigh`.
 
+`SketchyDrawingStoreLarge` is neither, and is the only alert here that asks for a
+decision rather than a fix. `sketchy_drawing_store_bytes` is what the stored drawings
+occupy; #471 measured them, chose to keep the bytes in the primary database, and named
+50 GB as the size at which that choice is reopened, because past there the blobs
+dominate what a backup and a restore have to move (see *Storing the drawings* in
+[`database.md`](database.md)). The store only ever grows, so the alert cannot be
+transient and there is nothing to do at 3 a.m.: it fires once, warns, and stays until
+somebody costs the alternatives again.
+
 ## Error budgets
 
 | Objective | Budget over 30 days | What spends it |
