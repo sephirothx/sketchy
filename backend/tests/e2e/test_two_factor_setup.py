@@ -18,7 +18,7 @@ from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
 from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
-from tests.e2e.staff_helpers import set_role
+from tests.e2e.staff_helpers import set_role, type_code
 
 BASE_URL = "http://localhost:8000"
 PASSWORD = "a-good-password"
@@ -57,17 +57,13 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
             await dialog.get_by_role("button", name="Set up").click()
-            # A QR code is what a phone uses; the key behind "Enter a key
-            # instead" is the same secret for anything that cannot scan, and
-            # is what this test can read.
+            # A QR code is what a phone points at; the key beside it is the
+            # same secret written out, and is what this test can read.
             await expect(dialog.locator(".two-factor-qr")).to_be_visible()
-            await dialog.get_by_role("button", name="Enter a key instead").click()
             secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
             assert secret
 
-            await dialog.get_by_label("Code from your app").fill(
-                code_at(secret, current_step(time.time()))
-            )
+            await type_code(dialog, code_at(secret, current_step(time.time())))
             # Binding a factor proves the password too, so that a session
             # cookie on its own cannot plant one (R-AUTH-20).
             await dialog.get_by_label("Your password").fill(PASSWORD)
@@ -126,10 +122,9 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
             # The step the enrolment just spent cannot be reused, which is the
             # replay rule doing its job; the next one is accepted.
-            await prompt.get_by_label("Code from your authenticator app").fill(
-                code_at(secret, current_step(time.time()) + 1)
-            )
-            await prompt.get_by_role("button", name="Confirm").click()
+            # Six boxes that submit themselves on the last digit, so there is
+            # no button to press here.
+            await type_code(prompt, code_at(secret, current_step(time.time()) + 1))
             await expect(prompt).not_to_be_visible()
 
             # And the command the prompt interrupted actually ran: the row is

@@ -2,9 +2,12 @@ import { Suspense, lazy, useEffect, useId, useRef, useState } from "react";
 
 // Split out so the QR encoder is fetched when somebody actually enrols.
 const AuthenticatorQrCode = lazy(() => import("./AuthenticatorQrCode"));
+
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { ApiError } from "../lib/api";
 import { downloadRecoveryCodes } from "../lib/recoveryCodeFile";
+import { SegmentedCodeInput } from "./SegmentedCodeInput";
+import { CopyIcon } from "./icons";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import {
@@ -33,8 +36,8 @@ import {
 export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
-  const codeId = useId();
   const keyId = useId();
+  const passwordId = useId();
 
   const [state, setState] = useState<SecondFactorState | null>(null);
   const [offer, setOffer] = useState<EnrolmentOffer | null>(null);
@@ -43,7 +46,6 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   const [codes, setCodes] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showKey, setShowKey] = useState(false);
   const { notify } = useToast();
   const username = useAuthStore((state) => state.user?.displayName ?? "account");
 
@@ -85,11 +87,19 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
 
   async function confirm(event: React.FormEvent) {
     event.preventDefault();
+    await submitWith(code);
+  }
+
+  /** Takes the code explicitly: the last digit typed has not reached state
+      yet when the row itself asks to submit, so reading `code` there would
+      send five digits and be refused. */
+  async function submitWith(entered: string) {
     if (!offer || busy) return;
+    if (entered.length < 6 || !password) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await confirmEnrolment(offer.secret, code, password);
+      const result = await confirmEnrolment(offer.secret, entered, password);
       setCodes(result.recoveryCodes);
       setOffer(null);
       setCode("");
@@ -211,80 +221,80 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         )}
 
         {!codes && offer && (
-          <form onSubmit={(event) => void confirm(event)}>
-            <p className="modal-body">
-              Scan this with your authenticator app, then type the code it
-              shows. Your password goes with it, so that nobody holding this
-              browser's session alone can bind a second factor to the account.
-            </p>
-            <Suspense
-              fallback={<p className="modal-hint">Drawing the code…</p>}
-            >
-              <AuthenticatorQrCode
-                uri={offer.uri}
-                label="Scan this with your authenticator app to add this account"
-              />
-            </Suspense>
-            {/* The key is the fallback rather than the instruction: most
-                people scan, and the ones who cannot - a desktop authenticator,
-                a camera that will not focus - need it spelled out and
-                copyable rather than hidden. */}
-            {showKey ? (
-              <div className="two-factor-secret-block">
-                <p className="modal-hint" id={keyId}>
-                  Type or paste this key into the app instead.
-                </p>
-                <p className="two-factor-secret">
-                  <code>{offer.secret}</code>
-                </p>
+          <form className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
+            {/* Two panels: what your phone points at, and what you type.
+                Reads as one job on a laptop and stacks into two steps on a
+                phone, where the camera and the keyboard are the same device
+                and the QR is the part you skip. */}
+            <div className="two-factor-scan">
+              <div className="two-factor-frame">
+                <Suspense fallback={<p className="modal-hint">Drawing the code…</p>}>
+                  <AuthenticatorQrCode
+                    uri={offer.uri}
+                    label="Scan this with your authenticator app to add this account"
+                  />
+                </Suspense>
+              </div>
+              <p className="modal-hint">
+                Point your authenticator app at this to add the account.
+              </p>
+            </div>
+
+            <div className="two-factor-entry">
+              <label className="two-factor-field-label" htmlFor={keyId}>
+                Setup key
+              </label>
+              <div className="two-factor-secret">
+                <code id={keyId}>{offer.secret}</code>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-compact"
+                  className="btn btn-ghost btn-compact"
                   onClick={() => void copy(offer.secret, "Setup key")}
+                  aria-label="Copy the setup key"
                 >
-                  Copy key
+                  <CopyIcon size={15} />
                 </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-ghost btn-compact two-factor-reveal-key"
-                onClick={() => setShowKey(true)}
-              >
-                Can't scan it? Enter a key instead
-              </button>
-            )}
-            <label htmlFor={codeId}>Code from your app</label>
-            <input
-              id={codeId}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={16}
-              // Six digits and there is nothing else to decide, so the form
-              // does not make somebody reach for a button as well.
-              onInput={(event) => {
-                const digits = event.currentTarget.value.replace(/\D/g, "");
-                if (digits.length === 6 && password) {
-                  event.currentTarget.form?.requestSubmit();
-                }
-              }}
-              required
-            />
-            <label>
-              Your password
+              <p className="modal-hint">
+                Use this if you can’t scan the code — typing it in does the
+                same thing.
+              </p>
+
+              <span className="two-factor-field-label">Code from your app</span>
+              <SegmentedCodeInput
+                value={code}
+                onChange={setCode}
+                onComplete={(complete) => void submitWith(complete)}
+                label="Code from your authenticator app"
+                autoFocus
+                disabled={busy}
+              />
+
+              <label className="two-factor-field-label" htmlFor={passwordId}>
+                Your password
+              </label>
               <input
+                id={passwordId}
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
                 required
               />
-            </label>
-            <button type="submit" disabled={busy}>
-              {busy ? "Checking…" : "Confirm"}
-            </button>
+              <p className="modal-hint">
+                Adding a second factor changes how you sign in, so it asks for
+                your password the way changing it does.
+              </p>
+
+              <div className="two-factor-actions">
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  {busy ? "Checking…" : "Confirm"}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={onClose}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           </form>
         )}
 

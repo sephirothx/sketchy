@@ -469,7 +469,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   // Only so the row can say "Set up" or "Manage"; the dialog reads its own
-  // state when it opens.
+  // state when it opens. Read when the pane appears rather than only after
+  // the dialog has been opened once, or an account that already has a second
+  // factor is invited to "Set up" another.
   const [twoFactorState, setTwoFactorState] = useState<SecondFactorState | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [email, setEmail] = useState<EmailState | null>(null);
@@ -489,6 +491,24 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       active = false;
     };
   }, [isGuest, emailOpen]);
+
+  // The same shape as the email row above, and re-read when the dialog
+  // closes so the label follows what just happened in it.
+  useEffect(() => {
+    if (isGuest) return;
+    let active = true;
+    void fetchSecondFactor()
+      .then((state) => {
+        if (active) setTwoFactorState(state);
+      })
+      .catch(() => {
+        // The row falls back to offering the dialog, which reads its own
+        // state when it opens.
+      });
+    return () => {
+      active = false;
+    };
+  }, [isGuest, twoFactorOpen]);
 
   async function saveDisplayName() {
     const trimmed = draftName.trim();
@@ -855,12 +875,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       )}
       {sessionsOpen && <SessionManagerDialog onClose={() => setSessionsOpen(false)} />}
       {twoFactorOpen && (
-        <TwoFactorDialog
-          onClose={() => {
-            setTwoFactorOpen(false);
-            void fetchSecondFactor().then(setTwoFactorState).catch(() => {});
-          }}
-        />
+        <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
       )}
       {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
       {pendingFile && (

@@ -289,51 +289,103 @@
    one row somebody is meant to stop and look at (R-AUTH-22). */
 .session-anomaly { color: var(--warning); font-weight: 700; }
 
-.two-factor { max-width: 460px; text-align: left; }
-/* The dialog's own controls come from `primitives.css` like every other
-   dialog's; only the pieces this one alone has are described here. */
-.two-factor label { display: block; font-weight: 700; margin-top: 14px; }
-.two-factor input {
+.two-factor { max-width: 620px; text-align: left; }
+/* Controls come from `primitives.css` like every other dialog's; only the
+   pieces this one alone has are described here. */
+
+/* Scan on one side, type on the other. Stacks below the dialog's own
+   breakpoint, where the camera and the keyboard are the same device and the
+   QR is the half you skip. */
+.two-factor-setup {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
+  margin-top: 16px;
+}
+.two-factor-scan { text-align: center; }
+
+/* Corner brackets, so the code reads as something to point a camera at
+   rather than a picture. Drawn with a conic gradient rather than four
+   elements: it is decoration and should cost no DOM. */
+.two-factor-frame {
+  background:
+    conic-gradient(from 90deg at var(--corner) var(--corner), #0000 25%, var(--line-strong) 0)
+      0 0 / 18px 18px no-repeat,
+    conic-gradient(from 180deg at calc(100% - var(--corner)) var(--corner), #0000 25%, var(--line-strong) 0)
+      100% 0 / 18px 18px no-repeat,
+    conic-gradient(from 0deg at var(--corner) calc(100% - var(--corner)), #0000 25%, var(--line-strong) 0)
+      0 100% / 18px 18px no-repeat,
+    conic-gradient(from 270deg at calc(100% - var(--corner)) calc(100% - var(--corner)), #0000 25%, var(--line-strong) 0)
+      100% 100% / 18px 18px no-repeat;
+  --corner: 2px;
+  padding: 12px;
+}
+.two-factor-qr {
+  background: var(--qr-light);
+  border-radius: 6px;
+  display: block;
+  height: auto;
+  padding: 8px;
+  width: 100%;
+}
+
+.two-factor-entry { display: grid; gap: 0; }
+.two-factor-field-label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.two-factor-field-label:not(:first-child) { margin-top: 18px; }
+.two-factor-entry > input {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   font: inherit;
-  margin-top: 6px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   width: 100%;
 }
-.two-factor form > button[type="submit"] { margin-top: 16px; width: 100%; }
+.two-factor-entry .modal-hint { margin: 6px 0 0; }
 
-/* A quiet-zone card of its own, so the code keeps its contrast whatever the
-   dialog behind it is doing. The tokens are fixed rather than themed: a
-   scanner wants dark-on-light, and a "dark mode QR" is one that does not
-   read. */
-.two-factor-qr {
-  background: var(--qr-light);
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  display: block;
-  height: auto;
-  margin: 14px auto 4px;
-  max-width: 220px;
-  padding: 10px;
-  width: 100%;
-}
-
-.two-factor-reveal-key { display: block; margin: 0 auto; }
-.two-factor-secret-block { margin-top: 12px; text-align: center; }
-/* Read off a screen and typed by hand, so it is monospaced, spaced out, and
-   broken into groups rather than one long run of characters. */
-.two-factor-secret code, .two-factor-codes code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px;
-  letter-spacing: 0.12em;
-}
+/* The key is read off a screen and typed by hand: monospaced, spaced out
+   enough to tell O from 0, and with the copy button inside the field so it
+   is obvious what it copies. */
 .two-factor-secret {
+  align-items: center;
   background: var(--line);
   border-radius: 8px;
-  margin: 8px 0;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 8px 8px 12px;
+}
+.two-factor-secret code, .two-factor-codes code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  letter-spacing: 0.1em;
   overflow-wrap: anywhere;
-  padding: 10px 12px;
+}
+
+.code-boxes { display: flex; gap: 8px; }
+.code-box {
+  aspect-ratio: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  flex: 1 1 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 20px;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+}
+/* `a11y.css` already gives a focused text field its border colour and
+   suppresses the ring; a box this small wants the thicker border too, so the
+   focused digit is obvious at a glance. */
+.code-box:focus-visible { border-width: 2px; }
+
+.two-factor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
 }
 .two-factor-codes ul {
   display: grid;
@@ -349,11 +401,10 @@
   padding: 6px 8px;
   text-align: center;
 }
-.two-factor-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
+
+@media (max-width: 560px) {
+  .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .two-factor-scan { max-width: 220px; margin: 0 auto; }
 }
 
 .step-up { max-width: 420px; text-align: left; }
@@ -366,6 +417,14 @@
   padding: 8px 10px;
   width: 100%;
 }
+.step-up input {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font: inherit;
+  padding: 9px 11px;
+  width: 100%;
+}
+.step-up-swap { display: block; margin-top: 12px; padding-left: 0; }
 .step-up-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 
 .account-data-dialog { max-width: 620px; text-align: left; }

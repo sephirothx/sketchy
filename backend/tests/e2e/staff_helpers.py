@@ -97,14 +97,20 @@ async def enrol_through_the_ui(page) -> str:
     # carries this row's label.
     dialog = page.get_by_role("dialog", name="Two-factor authentication")
     await dialog.get_by_role("button", name="Set up").click()
-    # The key is the fallback behind the QR code now.
-    await dialog.get_by_role("button", name="Enter a key instead").click()
     secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
-    await dialog.get_by_label("Code from your app").fill(
-        code_at(secret, current_step(time.time()))
-    )
+    await type_code(dialog, code_at(secret, current_step(time.time())))
     await dialog.get_by_label("Your password").fill("a-good-password")
     await dialog.get_by_role("button", name="Confirm").click()
     await dialog.get_by_role("button", name="I have saved them").click()
     await dialog.get_by_role("button", name="Close").click()
     return secret
+
+
+async def type_code(scope, code: str) -> None:
+    """Fill the six boxes a code is entered into.
+
+    One box per digit, so `fill` on a single field no longer reaches it; the
+    first box takes the whole string, which is the paste path the component
+    handles and the one a person uses too.
+    """
+    await scope.locator(".code-box").first.fill(code)
