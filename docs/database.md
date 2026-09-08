@@ -1132,6 +1132,60 @@ account made while leaving the row saying so.
 was in that game; **every refusal is a 404**, so the endpoint never reveals whether a
 game exists.
 
+#### Storing the drawings
+
+The bytes stay in the primary database. That was a decision, not an omission, and #471
+took it on measurements rather than on the general principle that blobs belong in an
+object store. Measured on PostgreSQL 17 over 200 games seeded through the real writer
+(`benchmarks/drawing_store_footprint.py`, 4 seats × 8 turns, the realistic frame):
+
+| | |
+| --- | --- |
+| One stored drawing | 7,635 B (`SKCD` v1; 34.6 KB on the wire) |
+| `turn_drawings` per finished game | 67.2 KB — heap 1.6, TOAST 64.8, index 0.8 |
+| Every other history table per game | 13.2 KB |
+| WAL per game | 86.2 KB |
+| Reading one drawing back, checksum verified and decoded | 1.4 ms p95 |
+
+So a drawing is about **five sixths of what a finished game adds to the database**, and
+it is the only blob kept indefinitely: exports expire after seven days, envelopes are
+deleted as they are unpacked, a bug screenshot goes when the report is decided, and a
+picture belongs to an account that can be deleted. The retention table below is the
+whole argument — there is one unbounded blob, not six.
+
+What that costs at the documented scale target, and what it would cost to move:
+
+- **Growth.** The recorded load gate plays 50 games per 300 s. Saturated day and night
+  that is 14,400 games/day, about 1 GB a day; a tenth of that duty cycle is 36 GB a
+  year. Restore of a drawing-shaped gigabyte measured 15 s, so the first figure is past
+  any sane RTO inside a year and the second is not.
+- **Moving the bytes does not reduce them.** It changes which system holds them, adds
+  request and bandwidth costs, and adds a second store to restore to a *mutually*
+  consistent point.
+- **It would break the one write that must not break.** A finished game is written
+  all-or-nothing (R-HIST-03, R-HIST-26). A remote object is not in that transaction, so
+  a move means staged upload, manifest publication, idempotent retry, orphan
+  reconciliation and deletion tombstones — and it still would not fix what N-12 names,
+  since a database that is down at the moment a game ends loses the game either way.
+- **The option costs nothing to keep.** `object_key` already sits beside `payload`, and
+  `ck_turn_drawings_ready_identity` already accepts a key *or* inline bytes; avatars are
+  already content-addressed by SHA-256 (R-AVA-03). The seam is built and untaken.
+
+**When to reopen it.** Restore time is the binding constraint, so the trigger is a size:
+`turn_drawings` past **50 GB** (about 750,000 drawings), or a restore that breaches
+whatever RTO #458 fixes, whichever comes first. `sketchy_drawing_store_bytes` is that
+number, and `SketchyDrawingStoreLarge` watches it (see [slo.md](slo.md)) — a trigger
+nobody can see is not a trigger. The measurements above are laptop-class (Apple silicon,
+local SSD); a cloud host with slower storage moves the threshold down, not the argument.
+
+**One thing an operator must know before a restore drill.** Stored drawings are already
+deflated, so a backup of them **cannot be compressed below the live byte count**.
+Measured over 1 GB of distinct drawing-shaped blobs: the live data is 1045 MB,
+`pg_dump -Fc` produces 1082 MB in 51 s, and `pg_dump -Fc -Z0` produces 1898 MB in 12 s.
+Compression is not shrinking the data — it is only undoing pg_dump's own hex doubling
+of `bytea`, at four times the wall clock. The real choice for #458 is dump size against
+dump time, and `pg_dump -Fd -j N` is the option worth measuring, not `-Z6` by default.
+
 Because a database column has no integrity check of its own, an operator command walks
 the whole store (#610): a keyset over `(created_at, turn_id)` below a watermark taken at
 the start, metadata first and payloads in groups whose declared sizes fit a byte budget,
@@ -1563,7 +1617,7 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 | Codes from the removed persistent-room feature | Permanent | Never enter the reuse pool |
 | Guests with no completed game | 30 inactive days (default) | `app.auth.retention`, hourly |
 | Guests with history | 365 inactive days (default) | `app.auth.retention`, hourly; history survives via frozen snapshots |
-| Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — |
+| Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
 | Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | `services.prompt_reclaim`; revisions a game pins stay for ever |
 
 **Every sweep is bounded, scheduled, observable and fault-isolated** (#550,

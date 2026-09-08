@@ -1714,8 +1714,8 @@ class UploadedAvatarAsset(Base):
     """One account's uploaded picture: the bytes and what they are (#573).
 
     Small by construction - 256×256 WebP or PNG, 128 KiB at most - which is what keeps
-    the bytes in the primary database defensible until object storage (#471)
-    exists. `object_key` is the content address the picture is served under:
+    the bytes in the primary database defensible; #471 measured every blob and kept
+    them all there (N-18), a picture being the least of them. `object_key` is the content address the picture is served under:
     indexed for the fetch, not unique, because two accounts uploading the
     same bytes hold the same address and each keeps their own row.
     """

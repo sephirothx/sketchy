@@ -119,6 +119,15 @@ test("each threshold is a threshold, not a suggestion", () => {
   assert.deepEqual(at({ queues: { mailOutbox: { pending: 1, oldestSeconds: 60 } } }), []);
   assert.deepEqual(at({ queues: { mailOutbox: { pending: 1, oldestSeconds: 61 } } }), ["mail-backlog"]);
   assert.deepEqual(at({ database: { pool: { checkedOut: 10 } } }), ["pool-saturated"]);
+  // The drawing store is a review size, not a fault: at the line, nothing.
+  assert.deepEqual(at({ drawingStore: { totalBytes: ATTENTION.drawingStoreBytes, readyRows: 1 } }), []);
+  assert.deepEqual(
+    at({ drawingStore: { totalBytes: ATTENTION.drawingStoreBytes + 1, readyRows: 1 } }),
+    ["drawing-store-large"],
+  );
+  // Off PostgreSQL there is no reading, and an absent one must not read as an
+  // empty store that silences the trigger for ever.
+  assert.deepEqual(at({ drawingStore: null }), []);
   assert.deepEqual(at({ database: { historyWritesAbandoned: { lastHour: 1 } } }), ["history-lost"]);
   assert.deepEqual(at({ database: { readiness: { ok: false, reason: "timed out" } } }), ["database-down"]);
   assert.deepEqual(at({ recorder: { dropped: 3 } }), ["recorder-dropped"]);

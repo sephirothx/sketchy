@@ -275,6 +275,16 @@ export function DatabaseCard({ live, reasons }: { live: LiveSnapshot; reasons: A
           warning={flagged(reasons, "history-lost")}
         />
         <Cell
+          label="Drawings stored"
+          value={live.drawingStore ? formatBytes(live.drawingStore.totalBytes) : "—"}
+          note={
+            live.drawingStore
+              ? `${live.drawingStore.readyRows.toLocaleString()} drawings · reopens object storage past 50 GB`
+              : "no relation sizes on this engine"
+          }
+          warning={flagged(reasons, "drawing-store-large")}
+        />
+        <Cell
           label="Games staged"
           value={String(database.historyHandoff.staged)}
           note={`since start · replays: ${
