@@ -72,6 +72,11 @@
      for white text in dark mode, so buttons get their own pair. */
   --success-button: #2f9e44;
   --success-button-edge: #247c34;
+  /* A QR code is read by a camera, not by a person, so these do not follow
+     the theme: a scanner needs dark modules on a light quiet zone in both
+     light and dark mode. */
+  --qr-dark: #101010;
+  --qr-light: #ffffff;
   --warning: #b45309;
   --warning-soft: #fdf1dc;
   --warning-edge: #ebc98a;

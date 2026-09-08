@@ -1258,6 +1258,7 @@
    "isPublic",
    "isSpectator",
    "nameColor",
+   "pendingRole",
    "playerId",
    "roundNumber"
   ],
@@ -1277,7 +1278,11 @@
   ],
   "api.admin_controls:search_players": [
    "displayName",
-   "nameColor"
+   "nameColor",
+   "pendingRole"
+  ],
+  "api.admin_controls:set_role": [
+   "pendingRole"
   ],
   "api.admin_settings:_wire": [
    "bootValue",
@@ -1519,7 +1524,8 @@
    "unratedCount"
   ],
   "api.role_notices:pending_role_notice_payload": [
-   "createdAt"
+   "createdAt",
+   "pendingRole"
   ],
   "api.room_presets:_config_payload": [
    "allowedTools",
@@ -1651,7 +1657,8 @@
    "displayName",
    "isAnonymous",
    "lastLoginAt",
-   "nameColor"
+   "nameColor",
+   "pendingRole"
   ],
   "api.user_blocks:_block_payload": [
    "createdAt",
@@ -1886,7 +1893,11 @@
    "displayName"
   ],
   "auth.routes:confirm_second_factor": [
-   "recoveryCodes"
+   "recoveryCodes",
+   "roleGranted"
+  ],
+  "auth.routes:confirm_second_factor_owner": [
+   "roleGranted"
   ],
   "auth.routes:create_auth_router": [
    "anomalyAt",
@@ -1900,10 +1911,12 @@
    "idleExpiresAt",
    "lastUsedAt",
    "nextRequestAt",
+   "passwordProved",
    "pendingAddress",
    "recoveryCodes",
    "recoveryCodesRemaining",
    "reminderDue",
+   "roleGranted",
    "sessionsRevoked",
    "stepUpWindowSeconds"
   ],
@@ -1924,6 +1937,7 @@
   ],
   "auth.routes:second_factor": [
    "confirmedAt",
+   "passwordProved",
    "recoveryCodesRemaining",
    "stepUpWindowSeconds"
   ],

@@ -15,6 +15,9 @@ import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
 import { removeAvatar, uploadAvatar } from "../lib/avatars";
+import { TwoFactorDialog } from "./TwoFactorDialog";
+import { roleName } from "../lib/operatorAccess";
+import { fetchSecondFactor, type SecondFactorState } from "../lib/secondFactor";
 import { useToast } from "../lib/toast";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -61,6 +64,7 @@ import {
   GearIcon,
   ImageIcon,
   KeyIcon,
+  ShieldIcon,
   KeyboardIcon,
   LockIcon,
   MailIcon,
@@ -409,6 +413,11 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
   const isGuest = Boolean(user?.isAnonymous);
+  const pendingRole = user?.pendingRole ?? null;
+  // Staff have one to manage; somebody who has been offered a role has one to
+  // set up. Everybody else is shown nothing about it at all.
+  const showsTwoFactor =
+    !isGuest && (user?.role === "moderator" || user?.role === "admin" || Boolean(pendingRole));
   const activePlayerId = useGameStore((state) => state.playerId);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const setLocalNameColor = useSettingsStore((state) => state.setNameColor);
@@ -464,6 +473,12 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
+  // Only so the row can say "Set up" or "Manage"; the dialog reads its own
+  // state when it opens. Read when the pane appears rather than only after
+  // the dialog has been opened once, or an account that already has a second
+  // factor is invited to "Set up" another.
+  const [twoFactorState, setTwoFactorState] = useState<SecondFactorState | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [email, setEmail] = useState<EmailState | null>(null);
   const [noticeOpen, setNoticeOpen] = useState(signedInHere);
@@ -482,6 +497,24 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       active = false;
     };
   }, [isGuest, emailOpen]);
+
+  // The same shape as the email row above, and re-read when the dialog
+  // closes so the label follows what just happened in it.
+  useEffect(() => {
+    if (!showsTwoFactor) return;
+    let active = true;
+    void fetchSecondFactor()
+      .then((state) => {
+        if (active) setTwoFactorState(state);
+      })
+      .catch(() => {
+        // The row falls back to offering the dialog, which reads its own
+        // state when it opens.
+      });
+    return () => {
+      active = false;
+    };
+  }, [showsTwoFactor, twoFactorOpen]);
 
   async function saveDisplayName() {
     const trimmed = draftName.trim();
@@ -751,6 +784,31 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             </button>
           )}
         </Row>
+        {/* Only for the accounts it means anything to (R-AUTH-20). A second
+            factor is not something an ordinary player can use here - it does
+            not gate their sign-in, and there is no way back from a lost
+            authenticator the way there is from a lost password - so it is a
+            staff control, and it appears when somebody is staff or has just
+            been offered a role that waits on it. */}
+        {showsTwoFactor && (
+          <Row
+            label="Two-factor authentication"
+            hint={
+              pendingRole
+                ? `Set this up and the ${roleName(pendingRole)} role you have been offered takes effect.`
+                : "An authenticator app's code, on top of your password. Moderators and administrators must have one."
+            }
+          >
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact"
+              onClick={() => setTwoFactorOpen(true)}
+            >
+              <ShieldIcon size={15} />
+              {twoFactorState?.enrolled ? "Manage" : "Set up"}
+            </button>
+          </Row>
+        )}
         <Row
           label="Signed-in devices"
           locked={isGuest}
@@ -825,6 +883,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         <AddEmailDialog onClose={() => setEmailOpen(false)} onSaved={() => setEmailOpen(false)} />
       )}
       {sessionsOpen && <SessionManagerDialog onClose={() => setSessionsOpen(false)} />}
+      {twoFactorOpen && (
+        <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
+      )}
       {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
       {pendingFile && (
         <PictureCropDialog

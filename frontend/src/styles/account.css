@@ -289,52 +289,162 @@
    one row somebody is meant to stop and look at (R-AUTH-22). */
 .session-anomaly { color: var(--warning); font-weight: 700; }
 
-.two-factor { max-width: 520px; text-align: left; }
-.two-factor label { display: block; font-weight: 700; margin-top: 12px; }
-.two-factor input {
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  font: inherit;
-  margin-top: 6px;
-  padding: 8px 10px;
+/* The card stays centred like every other dialog - title, lead and dismiss
+   all sit as they do elsewhere. Only the entry column reads left. */
+.two-factor-wide { max-width: 640px; }
+/* The entry column is an `.auth-form` like every other dialog's, so labels,
+   fields and spacing come from there rather than being restated. */
+
+/* The two columns are the work; the lead above and the button below span
+   them, so the dialog still reads top-to-bottom like every other one. */
+.two-factor-setup {
+  align-items: start;
+  display: grid;
+  gap: 8px 20px;
+  grid-template-columns: 210px minmax(0, 1fr);
+  margin-top: 4px;
+}
+.two-factor-lead { grid-column: 1 / -1; margin: 0 0 6px; }
+/* Side by side under both columns, the primary first. */
+.two-factor-decide {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  grid-column: 1 / -1;
+  justify-content: center;
+  margin-top: 16px;
+}
+.two-factor-decide .modal-button { margin: 0; }
+.two-factor-scan { min-width: 0; text-align: center; }
+.two-factor-scan .modal-hint { margin: 8px 0 0; }
+.two-factor-entry { margin-top: 0; min-width: 0; text-align: left; }
+.two-factor-entry .modal-hint { margin: 0; }
+
+/* Corner brackets, so the code reads as something to point a camera at
+   rather than a picture. One element, four gradients. */
+.two-factor-frame {
+  --corner: 2px;
+  background:
+    conic-gradient(from 90deg at var(--corner) var(--corner), #0000 25%, var(--line-strong) 0)
+      0 0 / 16px 16px no-repeat,
+    conic-gradient(from 180deg at calc(100% - var(--corner)) var(--corner), #0000 25%, var(--line-strong) 0)
+      100% 0 / 16px 16px no-repeat,
+    conic-gradient(from 0deg at var(--corner) calc(100% - var(--corner)), #0000 25%, var(--line-strong) 0)
+      0 100% / 16px 16px no-repeat,
+    conic-gradient(from 270deg at calc(100% - var(--corner)) calc(100% - var(--corner)), #0000 25%, var(--line-strong) 0)
+      100% 100% / 16px 16px no-repeat;
+  padding: 10px;
+}
+.two-factor-qr {
+  background: var(--qr-light);
+  border-radius: var(--radius-sm);
+  display: block;
+  height: auto;
+  padding: 7px;
   width: 100%;
 }
-.two-factor button, .step-up button {
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  margin-top: 14px;
-  padding: 8px 14px;
+
+/* Read off a screen and typed by hand: monospaced, spaced enough to tell O
+   from 0, with the copy control inside the field so what it copies is
+   obvious. */
+.two-factor-secret {
+  align-items: center;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  padding: 6px 6px 6px 10px;
 }
-/* The key and the recovery codes are read off the screen and typed or copied
-   by hand, so both are monospaced and spaced out rather than set in the body
-   face, where a 1 and an l are a support ticket. */
 .two-factor-secret code, .two-factor-codes code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.08em;
-}
-.two-factor-secret {
-  /* Neutral, not a warning tint: this is a key to copy, not a caution. */
-  background: var(--line);
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
   overflow-wrap: anywhere;
-  padding: 10px 12px;
 }
+
+.two-factor-code-label { font-size: 13px; font-weight: 600; margin-top: 6px; }
+/* Grid, not flex: `minmax(0, 1fr)` is what stops six square boxes claiming
+   their own intrinsic width and carrying the dialog off the screen with
+   them. */
+.code-boxes {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.code-box {
+  aspect-ratio: 1;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  width: 100%;
+}
+.code-box:focus-visible { border-width: 2px; }
+
+.two-factor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 14px;
+}
+/* The manage view is an `.auth-form` like the rest, so its field and label
+   come from there; only the row of destructive-ish actions is described. */
+.two-factor-manage { text-align: left; }
+
+/* An offer asks something, so it has two ways on rather than one
+   acknowledgement. Laid out like the setup dialog's pair, for the same
+   reason: the thing to do first reads first. */
+.role-notice-decide {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 16px;
+}
+.role-notice-decide .modal-button { margin: 0; }
+
+/* The tick that has to be given before the codes go. Reads as a statement
+   rather than a control, which is what it is. */
+.two-factor-ack {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  justify-content: center;
+  margin: 4px 0 12px;
+}
+.two-factor-ack input { accent-color: var(--primary); height: 16px; width: 16px; }
+.two-factor-codes .modal-button { width: 100%; }
 .two-factor-codes ul {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   list-style: none;
-  margin: 12px 0;
+  margin: 14px 0;
   padding: 0;
 }
-.two-factor-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.two-factor-codes li {
+  background: var(--field);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  text-align: center;
+}
 
-.step-up { max-width: 420px; text-align: left; }
-.step-up label { display: block; font-weight: 700; margin-top: 12px; }
+@media (max-width: 560px) {
+  .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .two-factor-scan { margin: 0 auto; max-width: 190px; }
+}
+
+.step-up { max-width: 380px; text-align: left; }
 .step-up input {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -343,7 +453,15 @@
   padding: 8px 10px;
   width: 100%;
 }
-.step-up-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.step-up input {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font: inherit;
+  padding: 9px 11px;
+  width: 100%;
+}
+.step-up-swap { display: block; margin-top: 12px; padding-left: 0; }
+.step-up-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 
 .account-data-dialog { max-width: 620px; text-align: left; }
 .account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }

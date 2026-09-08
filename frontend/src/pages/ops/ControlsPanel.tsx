@@ -123,15 +123,22 @@ export function ControlsPanel() {
    * again after the code is accepted - the retry is the operator's own
    * command, re-sent, not a replay of anything they did not ask for.
    */
-  function run(action: () => Promise<unknown>, message: string) {
+  function run(
+    action: () => Promise<unknown>,
+    // A string when the outcome is known before the call, a function when the
+    // server decides which of two things happened - a role granted, or one
+    // offered and waiting on a second factor.
+    message: string | ((result: unknown) => string),
+  ) {
     setBusy(true);
     setError(null);
     void guard(action)
       .then((result) => {
         // The prompt was dismissed: nothing was done, so nothing is announced.
         if (result === STEP_UP_ABANDONED) return;
-        setDone(message);
-        notify(message, "success");
+        const said = typeof message === "string" ? message : message(result);
+        setDone(said);
+        notify(said, "success");
         load();
       })
       .catch((failure) => fail(failure, "That command was refused."))
@@ -498,6 +505,12 @@ export function ControlsPanel() {
                 <Chip kind={candidate.role === "user" ? "neutral" : "primary"}>
                   {candidate.role}
                 </Chip>
+                {/* What has been offered and not yet taken up. Without it a
+                    promotion that is waiting on somebody's second factor
+                    looks exactly like one nobody ever made. */}
+                {candidate.pendingRole && (
+                  <Chip kind="warm">{candidate.pendingRole} pending</Chip>
+                )}
                 {/* Two players may have chosen the same name; this is what
                     tells them apart without turning the card into a profile.
                     The whole id is on the element, for a copy or a ledger
@@ -569,14 +582,28 @@ export function ControlsPanel() {
                 // The row the operator acted on changes in front of them: a
                 // message is a claim, a chip that has moved is the change.
                 () => setPlayerRole(target.id, role, roleReason.trim()).then((result) => {
-                  const changed = { ...target, role: result.role as PlayerCandidate["role"] };
+                  const changed = {
+                    ...target,
+                    role: result.role as PlayerCandidate["role"],
+                    pendingRole: result.pendingRole,
+                  };
                   setSelected(changed);
                   setCandidates((current) =>
                     current.map((one) => (one.id === changed.id ? changed : one)),
                   );
                   setRoleReason("");
+                  return result;
                 }),
-                roleChangeMessage(target.displayName, role),
+                (result) =>
+                  roleChangeMessage(target.displayName, role, {
+                    pending: Boolean(
+                      (result as { pendingRole?: string | null } | null)?.pendingRole,
+                    ),
+                    // The account held `user` before and holds it after, so
+                    // "no longer a moderator" would be a sentence about
+                    // something that never happened. What ended was the offer.
+                    withdrawn: Boolean(target.pendingRole) && role === "user",
+                  }),
               );
             }}
           >

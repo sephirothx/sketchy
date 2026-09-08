@@ -6,6 +6,7 @@ import {
   canAdminister,
   canModerate,
   operatorEntries,
+  pendingRoleFromPayload,
   roleNoticeFromPayload,
   roleNoticeText,
 } from "../src/lib/operatorAccess.ts";
@@ -54,9 +55,37 @@ test("a pushed role notice is read out of the payload the server sends", () => {
   assert.deepEqual(notice, {
     id: "n-1",
     role: "moderator",
+    // Absent means granted: what the payload carried before an offer was a
+    // thing the server could send.
+    pending: false,
     createdAt: "2026-08-29T00:00:00+00:00",
   });
   assert.equal(roleNoticeFromPayload({ notice: { id: "n-2", role: "user" } }).role, "user");
+});
+
+test("an offered role is read as an offer, and says so in its own words", () => {
+  // The difference is the whole point: one reports, the other asks. A role
+  // that is waiting on a second factor has not happened yet.
+  const offered = roleNoticeFromPayload({
+    notice: { id: "n-6", role: "moderator", pending: true },
+  });
+  assert.equal(offered.pending, true);
+  const { title, body } = roleNoticeText("moderator", { pending: true });
+  assert.match(title, /waiting for you/);
+  assert.match(body, /two-factor/);
+  // And the granted wording is untouched by it.
+  assert.match(roleNoticeText("moderator").title, /You are now a moderator/);
+});
+
+test("the push says what is outstanding, even when it says nothing else", () => {
+  // Withdrawing an offer settles the notice and ends the offer together, so
+  // the payload that reaches a connected browser carries no notice at all -
+  // and the one thing it has to convey is that nothing is waiting now.
+  assert.equal(pendingRoleFromPayload({ notice: null, pendingRole: "moderator" }), "moderator");
+  assert.equal(pendingRoleFromPayload({ notice: null, pendingRole: null }), null);
+  for (const payload of [null, undefined, {}, "moderator", { pendingRole: "wizard" }]) {
+    assert.equal(pendingRoleFromPayload(payload), null);
+  }
 });
 
 test("a malformed notice is dropped rather than shown to a player", () => {

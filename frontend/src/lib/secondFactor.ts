@@ -13,6 +13,9 @@ export interface SecondFactorState {
   recoveryCodesRemaining: number;
   /** Whether this account's role makes it mandatory. */
   required: boolean;
+  /** Whether a staff role could be granted on this factor as it stands, or
+      whether the account's password still has to be proved for it. */
+  passwordProved: boolean;
   /** How long a step-up stands before it is asked for again. */
   stepUpWindowSeconds: number;
 }
@@ -36,19 +39,28 @@ export function beginEnrolment(): Promise<EnrolmentOffer> {
 }
 
 /**
- * The password is always required. What this writes is later taken as proof
- * that the account's owner holds the factor — promotion to a staff role
- * checks that one exists, not whose it is — so a session cookie on its own
- * must not be enough to bind one.
+ * `password` marks the factor as *proved* to belong to the account's owner,
+ * which is what a staff role requires (R-AUTH-20): the code says an
+ * authenticator produced it, the password says whose account it is being
+ * bound to. Giving it is also what takes up a role that was offered and is
+ * waiting on this enrolment — `roleGranted` names the role that just took
+ * effect, and with it every session on the account has ended.
+ *
+ * Optional at this layer because the endpoint accepts an enrolment without
+ * one; the form always sends it.
  */
 export function confirmEnrolment(
   secret: string,
   code: string,
-  password: string,
-): Promise<{ ok: boolean; recoveryCodes: string[] }> {
+  password?: string,
+): Promise<{
+  ok: boolean;
+  recoveryCodes: string[];
+  roleGranted: "moderator" | "admin" | null;
+}> {
   return apiRequest("/api/auth/second-factor/confirm", {
     method: "POST",
-    body: { secret, code, password },
+    body: password ? { secret, code, password } : { secret, code },
   });
 }
 
@@ -65,6 +77,23 @@ export function removeSecondFactor(password: string): Promise<{ ok: boolean }> {
   return apiRequest("/api/auth/second-factor", {
     method: "DELETE",
     body: { password },
+  });
+}
+
+/**
+ * Record that this factor is the account owner's — what a staff role needs
+ * and setting one up deliberately does not ask for.
+ *
+ * Both halves are the point: the password says the owner is here, the code
+ * says they hold the authenticator that is enrolled.
+ */
+export function confirmSecondFactorOwner(
+  password: string,
+  code: string,
+): Promise<{ ok: boolean; roleGranted: "moderator" | "admin" | null }> {
+  return apiRequest("/api/auth/second-factor/confirm-owner", {
+    method: "POST",
+    body: { password, code },
   });
 }
 

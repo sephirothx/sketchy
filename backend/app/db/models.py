@@ -301,6 +301,16 @@ class User(Base):
             name="ck_users_registered_credentials",
         ),
         _values_check("role", USER_ROLES, "ck_users_role"),
+        # The grantable roles only: `admin` is never offered over the network
+        # any more than it is granted over it.
+        _values_check("pending_role", GRANTABLE_ROLES, "ck_users_pending_role"),
+        # Both halves or neither. The timestamp is what the offer expires
+        # against, so a pending role with no date would be one that never
+        # lapses - the single state this deliberately does not have.
+        CheckConstraint(
+            "(pending_role IS NULL) = (pending_role_at IS NULL)",
+            name="ck_users_pending_role_dated",
+        ),
         Index("ix_users_state_last_active_at", "state", "last_active_at"),
         CheckConstraint(
             "email IS NULL OR email = lower(trim(email))",
@@ -338,6 +348,20 @@ class User(Base):
         default=UserRole.USER.value,
         server_default=UserRole.USER.value,
         nullable=False,
+    )
+    # A staff role that has been offered and is waiting on the account to set
+    # up its second factor (R-AUTH-20). It is not a role: nothing reads it for
+    # authorization, and the account is an ordinary player until enrolment
+    # moves the value into `role`. It lives here rather than in a table of its
+    # own because an account has at most one, and because the thing that
+    # clears it - a grant, a demotion, a lapse - is always a write to this
+    # same row.
+    pending_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # When it was offered, which is what it lapses against. An offer nobody
+    # took up is a standing invitation to the account, so it does not stand
+    # for ever.
+    pending_role_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
     )
     # A verified delivery flow does not ship yet. This field is deliberately
     # not exposed as a recovery channel until verification can be completed.
@@ -1553,6 +1577,13 @@ class RoleChangeNotice(Base):
     # should describe where the account stands, and `users.role` is the only
     # thing that can contradict it.
     role: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Whether this is a role the account *has* or one it has been offered and
+    # has still to take up by enrolling a second factor. Two messages that
+    # would otherwise be indistinguishable - "you are a moderator" and "you
+    # can be one" - and the second asks something of the reader.
+    pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -1866,6 +1897,15 @@ class UserSecondFactor(Base):
     )
     secret: Mapped[str] = mapped_column(String(64), nullable=False)
     confirmed_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # When somebody proved the account's password while binding this factor.
+    # Setting one up does not ask - it is a player's own business, and a
+    # factor bound with a stolen cookie gains an attacker nothing while a
+    # player's sign-in is not gated on it. A staff role is a different matter:
+    # R-AUTH-20 needs the factor to be the *owner's*, so promotion requires
+    # this to be set rather than merely requiring a row to exist.
+    password_proved_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

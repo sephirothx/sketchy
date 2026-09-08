@@ -143,6 +143,21 @@ test("the confirmation names the account it was about", () => {
   );
 });
 
+test("an offer is not a promotion, and withdrawing one is not a demotion", () => {
+  // Three outcomes wear the same button. Saying "is now a moderator" for an
+  // offer leaves an administrator expecting a moderator who is not one yet;
+  // saying "no longer a moderator" for a withdrawal describes a role the
+  // account never held.
+  assert.match(
+    roleChangeMessage("Marta", "moderator", { pending: true }),
+    /has been offered the moderator role/,
+  );
+  assert.equal(
+    roleChangeMessage("Marta", "user", { withdrawn: true }),
+    "The offer of the moderator role to Marta has been withdrawn.",
+  );
+});
+
 test("the line under the search box explains the rules the list obeys", () => {
   const searching = false;
   // An empty result is otherwise a control that has quietly declined to help.

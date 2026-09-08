@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a7b8c9d0e1f2_auth_hardening.py` (#468).
+`c9d0e1f2a3b4_pending_staff_role.py` (#468).
 
 To regenerate an authoritative dump of this schema:
 
@@ -240,6 +240,7 @@ One row per player identity, guest or registered.
 | `avatar_upload_blocked_until` | Set when a moderator removed the picture: no upload until then (R-AVA-04) |
 | `state` | `anonymous \| registered \| merged \| deleted` |
 | `role` | `user \| moderator \| admin` |
+| `pending_role`, `pending_role_at` | Nullable pair, both or neither (`ck_users_pending_role_dated`), the role checked against the *grantable* ones (`ck_users_pending_role`). A staff role that has been **offered** and is waiting on this account's second factor (R-AUTH-20). Not a role: nothing authorizes anything from it, and the account is an ordinary player until enrolment moves the value into `role`. `pending_role_at` is what the offer lapses against — thirty days, checked where it is used rather than swept |
 | `email`, `email_verified_at` | Nullable; normalized by trim + lowercase, enforced by `ck_users_email_normalized`; case-insensitively unique via `ix_users_email_lower` |
 | `created_at`, `updated_at`, `last_login_at`, `last_active_at` | |
 | `last_seen_at` | Nullable. Stamped when the account's last socket closes and when its first one opens (so a process that dies with the player online still leaves a time). What a profile shows as *last seen* (#469). Not `last_login_at` (a page load) and not `last_active_at` (retention); the three mean different things on purpose |
@@ -373,9 +374,21 @@ would otherwise be a list of which accounts exist and which are under attack, re
 by anything that can read the database.
 
 ### `user_second_factors`
-`user_id` **PK** (CASCADE) · `secret` · `confirmed_at` · `created_at` · `last_step` ·
-`failed_attempts` · `locked_until`, with `ck_user_second_factors_failed_attempts` and
+`user_id` **PK** (CASCADE) · `secret` · `confirmed_at` · `password_proved_at` ·
+`created_at` · `last_step` · `failed_attempts` · `locked_until`, with `ck_user_second_factors_failed_attempts` and
 `ck_user_second_factors_last_step`.
+
+`password_proved_at` records that somebody proved both the account's password and a
+code from this very factor. Setting one up deliberately asks for neither the password
+nor anything else — it is optional, and it does not gate a player's sign-in — so the
+column is what a **staff role** requires instead: promotion checks that the factor is
+the owner's rather than merely that a row exists, which is the difference between a
+second factor and one somebody planted with a stolen cookie. Both proofs are needed
+because they answer different halves of that question: the password says the account's
+owner is asking, the code says the authenticator enrolled is the one they hold. It is
+written by enrolment when a password came with it (the code is proved in that same
+request) or by `POST /api/auth/second-factor/confirm-owner` afterwards, and it is never
+backfilled — a null here means unproved, which fails closed.
 
 One row per account, written **only once enrolment is confirmed** by a code the account
 actually produced (R-AUTH-20): an unconfirmed secret lives in the enrolment response and
@@ -904,16 +917,25 @@ from a report **resolves that report in the same transaction**, and a report alr
 decided refuses the warning - which is also what stops a retry from warning twice.
 
 ### `role_change_notices`
-`id` · `user_id` (`SET NULL`) · `role` (`user`/`moderator`, checked) · `created_at` ·
-`acknowledged_at`, with `ix_role_change_notices_user_pending` on (`user_id`,
-`acknowledged_at`). The check is the *grantable* roles rather than every role:
+`id` · `user_id` (`SET NULL`) · `role` (`user`/`moderator`, checked) · `pending` ·
+`created_at` · `acknowledged_at`, with `ix_role_change_notices_user_pending` on
+(`user_id`, `acknowledged_at`). `pending` separates the two things an account can be
+told: that it **holds** a role, and that one is **waiting** for it. The second asks
+something of the reader — a second factor, before the role takes effect — so it cannot
+be worded like the first. The check is the *grantable* roles rather than every role:
 `admin` is never set over the network, so a notice about one could only arrive
 by mistake, and the database is where that mistake should stop.
 
 **Flow.** What an account still has to be told about its own role. Written by
-`PATCH /api/admin/players/{id}/role` in the same transaction as the change and the
-`admin.role_changed` audit event, so there can be no role nobody was told about and no
-notice about a role that was never granted; a no-op change writes neither. A connected
+`PATCH /api/admin/players/{id}/role` in the same transaction as the change and its
+audit event — `admin.role_changed` for a grant, `admin.role_offered` for an offer, `admin.role_offer_withdrawn` for one taken back — so
+there can be no role nobody was told about and no notice about a role that was never
+granted; a no-op change writes neither. Taking an offer up writes **no** notice: that
+is the account's own last action, done in a dialog that says what just happened, and a
+pop-up on the next page load would be the app talking to itself — it settles the offer's
+own notice instead, as withdrawing one does. A lapse settles nothing, because nothing
+writes when an offer lapses, so a `pending` notice is served only while
+`users.pending_role` still stands: the row is the message and the column is the fact. A connected
 player is told immediately over the socket (`role_changed`), and everybody else by
 `GET /api/role-notices/pending` on their next visit — the same two-route shape a warning
 uses, sharing one payload builder so they cannot drift.

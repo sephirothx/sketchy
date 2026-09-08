@@ -70,6 +70,7 @@ from app.domain_values import (
     TurnDrawingStatus,
 )
 from app.auth.avatars import validate_avatar_key
+from app.auth.pending_role import pending_offer
 from app.services.prompt_reclaim import retire_prompt_list
 from app.auth.erasure import (
     TOMBSTONE_SNAPSHOT,
@@ -229,6 +230,16 @@ def _same_membership(
     return True
 
 
+def _standing_offer(user: User) -> str | None:
+    """The offered role, or nothing once it has lapsed.
+
+    Filtered here rather than at the caller so a lapsed offer is invisible
+    everywhere at once: the account is told nothing is waiting, and it is
+    cleared for good the next time anything tries to take it up.
+    """
+    return pending_offer(user)
+
+
 def _to_user_data(user: User) -> UserData:
     """Convert a database User entity to a public UserData DTO (without password_hash)."""
     return UserData(
@@ -240,6 +251,7 @@ def _to_user_data(user: User) -> UserData:
         is_anonymous=user.is_anonymous,
         state=user.state,
         role=user.role,
+        pending_role=_standing_offer(user),
         created_at=user.created_at,
         updated_at=user.updated_at,
         last_login_at=user.last_login_at,

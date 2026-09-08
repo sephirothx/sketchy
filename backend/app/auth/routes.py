@@ -76,8 +76,10 @@ from app.api.serializers import user_payload
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
+from app.auth.pending_role import take_up_offer
 from app.auth.second_factor import (
     SecondFactorOutcome,
+    prove_second_factor_owner,
     begin_enrolment,
     confirm_enrolment,
     disable_second_factor,
@@ -235,6 +237,16 @@ class PasswordProofBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+
+
+class SecondFactorOwnerBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # Both, and for different reasons: the password says the account's owner
+    # is here, the code says they hold the authenticator. Either alone leaves
+    # the question this answers open (R-AUTH-20).
+    code: str = Field(max_length=16)
 
 
 class DeleteAccountBody(BaseModel):
@@ -1237,9 +1249,33 @@ def create_auth_router(
                 state.confirmed_at.isoformat() if state.confirmed_at else None
             ),
             "recoveryCodesRemaining": state.recovery_codes_remaining,
+            # Whether a staff role could be granted on this factor as it
+            # stands, or whether the password still has to be proved for it.
+            "passwordProved": state.password_proved,
             "required": user.role in STAFF_ROLES and staff_second_factor_required(),
             "stepUpWindowSeconds": int(STEP_UP_WINDOW.total_seconds()),
         }
+
+    async def _restore_this_device(
+        response: Response, request: Request, user_id: str, role: str
+    ) -> None:
+        """Sign this browser back in, as the role it has just taken up.
+
+        Taking up an offer revokes every session on the account, because a
+        staff role must not be reachable from a session issued before a code
+        was ever required and because a year-long player cookie must not stay
+        year-long on a staff account (R-AUTH-03). Both of those are about the
+        *old* credential, and neither is an argument for putting this browser
+        through a sign-in: it proved the password and a code from the new
+        factor one request ago, which is more than the sign-in it would be
+        sent to would ask for.
+
+        So the old session goes and a new one is minted here with the staff
+        lifetime. The practical difference is that the recovery codes in this
+        response can still be read: they are shown exactly once, and signing
+        the browser out from under them would take them off the screen.
+        """
+        await issue_cookie(response, request, user_id, role=role)
 
     @router.post("/second-factor/enrol")
     async def start_second_factor_enrolment(request: Request):
@@ -1259,44 +1295,116 @@ def create_auth_router(
         return {"secret": offer.secret, "uri": offer.uri}
 
     @router.post("/second-factor/confirm")
-    async def confirm_second_factor(body: SecondFactorConfirmBody, request: Request):
+    async def confirm_second_factor(
+        body: SecondFactorConfirmBody, request: Request, response: Response
+    ):
         """Prove the secret arrived, and receive the recovery codes.
 
         The codes are in this response and in no other: they exist as hashes
         from here on, exactly as session tokens do (R-AUTH-02), so a second
         request for the same set is not something this server can answer.
 
-        Binding a second factor asks for the password - the first one as much
-        as a replacement. Replacement obviously had to: a stolen cookie could
-        otherwise confirm an attacker-controlled secret over the account's
-        own, taking R-AUTH-21's step-up with it.
+        Setting one up asks for nothing but the code. A password here was a
+        lot to demand of somebody doing something optional, and the reason it
+        was demanded was never really about this moment - it was about
+        promotion, which used to check that a second factor *existed* rather
+        than whose it was. That question moved to where it belongs
+        (R-AUTH-20): a password given here is recorded as proof, and only the
+        role gate insists on having it.
 
-        The first one was let through on the grounds that it grants nobody
-        anything a stolen cookie did not already carry. That was wrong, and
-        wrong in a way worth writing down: it weighed what the row gives at
-        the moment it is written, when what matters is what it is later taken
-        to prove. Promotion checks that a second factor *exists*, not whose it
-        is (R-AUTH-20), so a factor planted on a player with a stolen cookie
-        becomes the staff factor the moment somebody is given the role - and
-        since the grant revokes every session and there is no operator way
-        back from a lost authenticator, the account's owner is then locked out
-        of it for good.
+        Replacing one still proves the password, because that destroys a
+        credential the way removing it does.
         """
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
-        await _prove_password(user, body.password)
+        already = await second_factor_state(session_factory, user_id=user.id)
+        if already.enrolled:
+            await _prove_password(user, body.password)
+        elif body.password:
+            # Offered rather than demanded: somebody who gives it here is
+            # spared the separate step before a role can be granted.
+            await _prove_password(user, body.password)
         codes = await confirm_enrolment(
             session_factory,
             user_id=user.id,
             secret=body.secret,
             code=body.code,
+            password_proved=bool(body.password),
         )
         if codes is None:
             raise HTTPException(
                 status_code=400,
                 detail="That code is not right. Check your authenticator app.",
             )
-        return {"ok": True, "recoveryCodes": codes}
+        # And if a role was waiting on exactly this, it is now theirs. The
+        # order matters: the factor is written first, so a failure here leaves
+        # an account with a second factor and an offer still standing rather
+        # than a staff role with nothing to sign in with.
+        granted = (
+            await take_up_offer(session_factory, user_id=user.id)
+            if body.password
+            else None
+        )
+        if granted:
+            await _restore_this_device(response, request, user.id, granted)
+        return {"ok": True, "recoveryCodes": codes, "roleGranted": granted}
+
+    @router.post("/second-factor/confirm-owner")
+    async def confirm_second_factor_owner(
+        body: SecondFactorOwnerBody, request: Request, response: Response
+    ):
+        """Record that this factor is the account owner's (R-AUTH-20).
+
+        Setting one up does not ask for a password, so a factor may be in
+        place without anybody having proved it belongs to whoever owns the
+        account. A staff role needs that proof, and this is how it is given -
+        without tearing the factor down and scanning it again.
+
+        Both proofs, because the two say different things. A password says
+        the account's owner is the one asking; a code says they hold the
+        authenticator that is enrolled. A password alone would be satisfied
+        by the owner of an account somebody else planted a factor on - the
+        exact case this gate exists to catch - because the owner would be
+        vouching for an authenticator they have never seen.
+
+        The password is checked first so that a wrong one costs no code
+        attempt: the failures counted against a factor lock it, and an
+        attacker holding only a session should not be able to lock the owner
+        out of proving their own.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        await _prove_password(user, body.password)
+        outcome = await verify_second_factor(
+            session_factory, user_id=user.id, code=body.code
+        )
+        if outcome is SecondFactorOutcome.NOT_ENROLLED:
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        if outcome is SecondFactorOutcome.LOCKED:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many codes were wrong. Please wait and try again.",
+            )
+        if outcome is SecondFactorOutcome.REJECTED:
+            # A code just spent - by the enrolment a moment ago, most likely -
+            # lands here too, so the way out is said rather than left to be
+            # guessed at.
+            raise HTTPException(
+                status_code=401,
+                detail="That code is not right. Wait for the next one and try again.",
+            )
+        if not await prove_second_factor_owner(session_factory, user_id=user.id):
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        # The same thing enrolment does, for a factor that was set up without a
+        # password and has only now been vouched for.
+        granted = await take_up_offer(session_factory, user_id=user.id)
+        if granted:
+            await _restore_this_device(response, request, user.id, granted)
+        return {"ok": True, "roleGranted": granted}
 
     @router.post("/second-factor/recovery-codes")
     async def regenerate_recovery_codes(body: PasswordProofBody, request: Request):

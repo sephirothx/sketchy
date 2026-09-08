@@ -18,7 +18,7 @@ from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import register_account, use_guest_name
 
 # Grants the role *and* the second factor R-AUTH-20 now requires of one.
-from tests.e2e.staff_helpers import enrol_through_the_ui, set_role
+from tests.e2e.staff_helpers import set_role, take_up_the_offer
 
 
 BASE_URL = "http://localhost:8000"
@@ -66,12 +66,6 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
 
             # By name. The id is never typed anywhere in this test, which is
             # the whole of #507's third complaint.
-            # Enrolment comes before the role: the route refuses to grant a
-            # staff role to an account with no second factor, so that nobody
-            # is promoted into an account they cannot sign in to.
-            await enrol_through_the_ui(player_page)
-            await admin_page.bring_to_front()
-
             await admin_page.fill("#ops-role-search", "PromoPlayer")
             row = admin_page.locator(".ops-role-results li", has_text="PromoPlayer")
             await expect(row).to_have_count(1)
@@ -81,34 +75,59 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
             await admin_page.click('button:has-text("Set role")')
 
             # The administrator's own feedback, where they are looking rather
-            # than at the top of a panel they scrolled past.
+            # than at the top of a panel they scrolled past - and it says what
+            # actually happened, which is an offer rather than a promotion.
             await expect(
-                admin_page.locator(".app-toast", has_text="PromoPlayer is now a moderator.")
+                admin_page.locator(
+                    ".app-toast", has_text="PromoPlayer has been offered the moderator role"
+                )
             ).to_be_visible()
-            await expect(row.locator(".chip", has_text="moderator")).to_be_visible()
+            await expect(row.locator(".chip", has_text="moderator pending")).to_be_visible()
 
-            # And the player, in a page that has not reloaded since before the
-            # promotion existed.
+            # And the player, in a page that has not reloaded since before any
+            # of this existed. The offer asks for something, so it has a way
+            # into it rather than an acknowledgement.
             await player_page.bring_to_front()
             notice = player_page.locator(
-                '[role="dialog"]', has_text="You are now a moderator"
+                '[role="dialog"]', has_text="The moderator role is waiting for you"
             )
             await expect(notice).to_be_visible()
-            # The change signed them out on every device (R-AUTH-20), so the
-            # notice offers the way back in rather than an acknowledgement
-            # this browser no longer holds the credential to make. It stays
-            # pending, and is acknowledged on their next visit.
-            await expect(notice).to_contain_text("signed out on every device")
-            await notice.locator('button:has-text("Sign in again")').click()
+            # Nothing has changed yet, so nothing was taken away: this browser
+            # is still signed in, which is what makes enrolling from it
+            # possible at all.
+            await expect(notice).not_to_contain_text("signed out on every device")
+            await notice.locator('button:has-text("Later")').click()
             await expect(notice).to_have_count(0)
 
-            # And they are signed out by the grant (R-AUTH-20): a staff role
-            # must not be reachable from a session issued before the second
-            # factor was ever asked for. Signing back in is what proves it.
+            # Still an ordinary player until they enrol.
             await player_page.reload()
             await expect(
-                player_page.get_by_role("button", name="Choose a name")
+                player_page.locator(".identity-chip")
             ).to_be_visible()
+
+            # Taking it up: the enrolment is the promotion.
+            await take_up_the_offer(player_page)
+
+            # Now the role is real. The session this browser held when it was
+            # a player's went with the change (R-AUTH-20) and a staff one took
+            # its place, so the account is still here and is now a moderator.
+            # Out of Settings, where the enrolment left them, and back to the
+            # lobby the menu lives on.
+            await player_page.goto(BASE_URL)
+            await expect(player_page.locator(".identity-chip")).to_be_visible()
+            await player_page.click(".identity-chip")
+            await expect(
+                player_page.get_by_role("menuitem", name="Moderation")
+            ).to_be_visible()
+            await player_page.keyboard.press("Escape")
+            await admin_page.bring_to_front()
+            await admin_page.reload()
+            await admin_page.wait_for_selector(
+                '[role="tab"][aria-selected="true"]:has-text("Controls")'
+            )
+            await admin_page.fill("#ops-role-search", "PromoPlayer")
+            promoted = admin_page.locator(".ops-role-results li", has_text="PromoPlayer")
+            await expect(promoted.locator(".chip", has_text="moderator")).to_be_visible()
         finally:
             # Through the database, so a failed assertion above does not leave
             # a moderator behind for the rest of the run.

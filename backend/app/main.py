@@ -405,9 +405,12 @@ async def push_role_change_to_account(user_id: str) -> None:
     "wherever they are" true - a player idling in the lobby learns now rather
     than on some later page load, and so does one seated in a game.
     """
+    # Emitted whether or not there is anything to *say*: the payload also
+    # carries what is still outstanding on the account, and a withdrawn offer
+    # is precisely the case with no message and a change worth hearing - the
+    # browser would otherwise go on offering the enrolment it asked for.
     payload = await pending_role_notice_payload(async_session_factory, user_id)
-    if payload.get("notice") is not None:
-        await sio.emit("role_changed", payload, to=f"user:{user_id}")
+    await sio.emit("role_changed", payload, to=f"user:{user_id}")
 
 
 def request_process_exit() -> None:

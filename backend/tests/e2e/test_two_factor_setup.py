@@ -18,16 +18,21 @@ from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
 from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
-from tests.e2e.staff_helpers import set_role
+from tests.e2e.staff_helpers import offer_role, type_code
 
 BASE_URL = "http://localhost:8000"
 PASSWORD = "a-good-password"
 
 
 async def _open_two_factor(page):
-    await page.click(".account-menu button")
-    await page.get_by_role("menuitem", name="Two-factor authentication").click()
-    return page.locator('[role="dialog"]', has_text="Two-factor authentication")
+    # Settings → Account, where it appears for an account with a role waiting
+    # on it - and for nobody else, since a second factor does nothing for an
+    # ordinary player (R-AUTH-20).
+    await page.goto(f"{BASE_URL}/settings/account")
+    await page.get_by_role("button", name="Set up").click()
+    # By accessible name: the settings overlay is a dialog too, and it
+    # carries this row's label.
+    return page.get_by_role("dialog", name="Two-factor authentication")
 
 
 @pytest.mark.asyncio
@@ -50,36 +55,54 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await use_guest_name(page, "TwoFactorPlayer")
             await register_account(page, "TwoFactorPlayer")
 
+            # Nothing about two-factor authentication is offered to a player
+            # with no role and none waiting: it would be a setting that gates
+            # nothing, on a credential with no way back if it were lost.
+            await page.goto(f"{BASE_URL}/settings/account")
+            await expect(
+                page.get_by_text("Two-factor authentication")
+            ).to_have_count(0)
+
+            # An administrator offers the role. Now there is something for it
+            # to be the last step of.
+            await offer_role("TwoFactorPlayer", "admin")
+
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
-            await dialog.get_by_role("button", name="Set up").click()
-
-            # The key the app would scan. It is in the page and nowhere else
-            # until the code below proves it arrived.
+            # A QR code is what a phone points at; the key beside it is the
+            # same secret written out, and is what this test can read.
+            await expect(dialog.locator(".two-factor-qr")).to_be_visible()
             secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
             assert secret
 
-            await dialog.get_by_label("Code from your app").fill(
-                code_at(secret, current_step(time.time()))
-            )
-            # Binding a factor proves the password too, so that a session
-            # cookie on its own cannot plant one (R-AUTH-20).
+            # The password says whose account the factor is being bound to;
+            # the code says an authenticator produced it. The role waiting on
+            # this is granted on the pair (R-AUTH-20). Six boxes that submit
+            # themselves on the last digit, so there is no button to press.
             await dialog.get_by_label("Your password").fill(PASSWORD)
-            await dialog.get_by_role("button", name="Confirm").click()
+            await type_code(dialog, code_at(secret, current_step(time.time())))
 
             codes = dialog.get_by_role("list", name="Recovery codes")
             await expect(codes).to_be_visible()
             assert await codes.locator("li").count() == 10
 
-            # Shown once: acknowledging them is the only way past.
-            await dialog.get_by_role("button", name="I have saved them").click()
-            await expect(dialog).to_contain_text("Two-factor authentication is on")
-            await expect(dialog).to_contain_text("10 recovery codes left")
-            await dialog.get_by_role("button", name="Close").click()
+            # Shown once, so the way past is a tick that says they were kept:
+            # until it is given, "Done" is disabled and Escape does nothing.
+            done = dialog.get_by_role("button", name="Done")
+            await expect(done).to_be_disabled()
+            await page.keyboard.press("Escape")
+            await expect(codes).to_be_visible()
+            await dialog.locator(".two-factor-ack input").check()
+            await done.click()
 
-            # Staff, with nothing proved since: exactly the state a browser
-            # is in once its step-up window has run out.
-            await set_role("TwoFactorPlayer", "admin")
+            # And the role that was waiting has begun. Every other device was
+            # signed out with it; this one, which proved a password and a code
+            # one request ago, is handed a session for the role it now holds.
+            await expect(dialog).to_contain_text("You are now an administrator")
+            await dialog.get_by_role("button", name="Done").click()
+
+            # Nothing proved since: exactly the state a browser is in once its
+            # step-up window has run out.
             await _clear_step_up("TwoFactorPlayer")
 
             # Closing a room this test opened itself, rather than pausing
@@ -118,12 +141,10 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             prompt = page.locator('[role="dialog"]', has_text="Confirm it is you")
             await expect(prompt).to_be_visible()
 
-            # The step the enrolment just spent cannot be reused, which is the
-            # replay rule doing its job; the next one is accepted.
-            await prompt.get_by_label("Code from your authenticator app").fill(
-                code_at(secret, current_step(time.time()) + 1)
-            )
-            await prompt.get_by_role("button", name="Confirm").click()
+            # The code showing on the phone right now, which is what a
+            # moderator would type. Six boxes that submit themselves on the
+            # last digit, so there is no button to press here.
+            await type_code(prompt, code_at(secret, current_step(time.time())))
             await expect(prompt).not_to_be_visible()
 
             # And the command the prompt interrupted actually ran: the row is
@@ -135,11 +156,20 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
 
 async def _clear_step_up(username: str) -> None:
-    """Take back the step-up `set_role` stamps, so the prompt is reachable."""
+    """Take back the step-up the sign-in stamps, so the prompt is reachable.
+
+    Forgets the spent TOTP step with it. Enrolment and the sign-in that
+    followed have each spent one, and a browser cannot wait out a 30-second
+    interval inside a suite that finishes in 40 - so without this the only
+    codes left to type are ones the verifier has already seen. What that rule
+    protects is checked where it can be checked properly, in
+    `test_auth_hardening.py`; what this test needs is a code its subject will
+    accept.
+    """
     from sqlalchemy import select, update
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    from app.db.models import AuthSession, User
+    from app.db.models import AuthSession, User, UserSecondFactor
     from tests.e2e.staff_helpers import database_url
 
     engine = create_async_engine(database_url())
@@ -154,6 +184,11 @@ async def _clear_step_up(username: str) -> None:
                     update(AuthSession)
                     .where(AuthSession.user_id == user_id)
                     .values(stepped_up_at=None)
+                )
+                await session.execute(
+                    update(UserSecondFactor)
+                    .where(UserSecondFactor.user_id == user_id)
+                    .values(last_step=0)
                 )
     finally:
         await engine.dispose()

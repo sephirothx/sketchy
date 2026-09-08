@@ -22,6 +22,7 @@ from app.api.role_notices import (
     pending_role_notice_payload,
 )
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.pending_role import OFFER_LIFETIME
 from app.auth.routes import create_auth_router
 from app.db.models import RoleChangeNotice, User, generate_uuid
 from app.domain_values import AccountState, UserRole
@@ -68,7 +69,9 @@ async def register(client: AsyncClient, username: str) -> dict:
     return response.json()
 
 
-async def add_notice(factory, user_id: str, role: str, *, ago_seconds: int = 0) -> str:
+async def add_notice(
+    factory, user_id: str, role: str, *, ago_seconds: int = 0, pending: bool = False
+) -> str:
     notice_id = generate_uuid()
     async with factory() as session:
         async with session.begin():
@@ -77,11 +80,22 @@ async def add_notice(factory, user_id: str, role: str, *, ago_seconds: int = 0) 
                     id=notice_id,
                     user_id=UUID(user_id),
                     role=role,
+                    pending=pending,
                     created_at=datetime.now(timezone.utc)
                     - timedelta(seconds=ago_seconds),
                 )
             )
     return str(notice_id)
+
+
+async def offer(factory, user_id: str, role: str, *, age: timedelta = timedelta()) -> str:
+    """The state a grant leaves behind: the offer, and the invitation to it."""
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(user_id))
+            user.pending_role = role
+            user.pending_role_at = datetime.now(timezone.utc) - age
+    return await add_notice(factory, user_id, role, pending=True)
 
 
 async def pending_rows(factory, user_id: str) -> list[RoleChangeNotice]:
@@ -102,7 +116,7 @@ async def test_an_account_with_nothing_to_be_told_is_told_nothing(env):
     new_client, _ = env
     client = new_client()
     await register(client, "Ordinary")
-    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None}
+    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None, "pendingRole": None}
 
 
 async def test_a_notice_waits_for_a_player_who_was_offline(env):
@@ -135,6 +149,38 @@ async def test_the_newest_notice_is_the_one_shown(env):
     assert (body["id"], body["role"]) == (newest, "user")
 
 
+async def test_an_offer_that_has_lapsed_is_no_longer_something_to_be_told(env):
+    """The invitation must not outlive the offer it is about.
+
+    Nothing writes when an offer lapses - that is the point of judging it by
+    the clock rather than sweeping for it - so the notice row is still sitting
+    there unacknowledged. Serving it would send somebody to enrol for a role
+    the server would no longer grant them.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Dawdler")
+    await offer(factory, account["id"], "moderator", age=OFFER_LIFETIME + timedelta(days=1))
+
+    assert (await client.get("/api/role-notices/pending")).json()["notice"] is None
+    # And the same answer from the builder the socket push shares.
+    assert (
+        await pending_role_notice_payload(factory, account["id"])
+    )["notice"] is None
+
+
+async def test_an_offer_that_still_stands_is_told(env):
+    """The other side of it, so the filter above cannot pass by refusing all."""
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Prompt")
+    await offer(factory, account["id"], "moderator")
+
+    notice = (await client.get("/api/role-notices/pending")).json()["notice"]
+    assert notice["role"] == "moderator"
+    assert notice["pending"] is True
+
+
 async def test_acknowledging_settles_it_and_everything_before_it(env):
     """The receipt records that the message landed. Anything older has nothing
     left to say, and leaving it pending would pop a stale role up on the next
@@ -149,7 +195,7 @@ async def test_acknowledging_settles_it_and_everything_before_it(env):
         await client.post(f"/api/role-notices/{newest}/acknowledge")
     ).status_code == 200
     assert await pending_rows(factory, account["id"]) == []
-    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None}
+    assert (await client.get("/api/role-notices/pending")).json() == {"notice": None, "pendingRole": None}
 
 
 async def test_a_newer_notice_survives_an_acknowledgement_of_an_older_one(env):
@@ -183,7 +229,7 @@ async def test_somebody_elses_notice_is_not_there_to_be_read_or_dismissed(env):
     assert (
         await mine.post(f"/api/role-notices/{notice_id}/acknowledge")
     ).status_code == 404
-    assert (await mine.get("/api/role-notices/pending")).json() == {"notice": None}
+    assert (await mine.get("/api/role-notices/pending")).json() == {"notice": None, "pendingRole": None}
     assert len(await pending_rows(factory, other["id"])) == 1
 
 
@@ -208,7 +254,7 @@ async def test_a_visitor_without_a_session_is_asked_to_sign_in(env):
 async def test_the_payload_builder_shrugs_at_a_user_id_that_is_not_one(env):
     """Belt and braces: the socket push hands it whatever the router had."""
     _, factory = env
-    assert await pending_role_notice_payload(factory, "not-a-uuid") == {"notice": None}
+    assert await pending_role_notice_payload(factory, "not-a-uuid") == {"notice": None, "pendingRole": None}
 
 
 async def test_a_deleted_account_leaves_nothing_readable_behind(env):
@@ -227,7 +273,7 @@ async def test_a_deleted_account_leaves_nothing_readable_behind(env):
             user.username = None
             user.password_hash = None
 
-    assert await pending_role_notice_payload(factory, account["id"]) == {"notice": None}
+    assert await pending_role_notice_payload(factory, account["id"]) == {"notice": None, "pendingRole": None}
 
 
 async def test_acknowledging_twice_is_the_same_answer(env):

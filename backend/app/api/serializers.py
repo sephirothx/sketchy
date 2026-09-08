@@ -40,6 +40,11 @@ def user_payload(user: UserData) -> dict:
         # those endpoints checks the role again for itself - it is what stops
         # the app showing a door that will not open.
         "role": user.role,
+        # What is waiting on them, if anything: a staff role that has been
+        # offered and takes effect when they enrol a second factor. The client
+        # shows the prompt and the Settings entry from this, and nothing else
+        # is shown to an account with no offer and no role (R-AUTH-20).
+        "pendingRole": user.pending_role,
         "createdAt": _timestamp(user.created_at),
         "lastLoginAt": _timestamp(user.last_login_at),
     }

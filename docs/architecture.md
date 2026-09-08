@@ -1506,6 +1506,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/auth/names.py`](../backend/app/auth/names.py) | The single naming rule shared by guest nicknames and account usernames. |
 | [`app/auth/password.py`](../backend/app/auth/password.py) | Argon2id password hashing, kept off the event loop. |
 | [`app/auth/password_reset.py`](../backend/app/auth/password_reset.py) | Operator-run password reset, for deployments that cannot send mail. |
+| [`app/auth/pending_role.py`](../backend/app/auth/pending_role.py) | A staff role offered, and waiting on the second factor that starts it. |
 | [`app/auth/rate_limit.py`](../backend/app/auth/rate_limit.py) | Local low-risk and persistent security-sensitive request rate limits. |
 | [`app/auth/recovery.py`](../backend/app/auth/recovery.py) | Getting back into an account whose password is gone. |
 | [`app/auth/retention.py`](../backend/app/auth/retention.py) | Bounded cleanup policy for stale anonymous account rows. |

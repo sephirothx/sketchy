@@ -154,6 +154,8 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "c9d0e1f2a3b4",
+        "b8c9d0e1f2a3",
         "a7b8c9d0e1f2",
         "e6f7a8b9c0d1",
         "d5e6f7a8b9c0",

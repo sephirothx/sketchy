@@ -27,6 +27,7 @@ from app.auth.totp import (
     generate_secret,
     hash_recovery_code,
     matching_step,
+    normalize_recovery_code,
     provisioning_uri,
 )
 from app.db.models import UserRecoveryCode, UserSecondFactor, generate_uuid
@@ -62,6 +63,9 @@ class SecondFactorState:
     confirmed_at: datetime | None = None
     recovery_codes_remaining: int = 0
     locked_until: datetime | None = None
+    # Whether anybody proved the password while binding it. Only a staff role
+    # asks (R-AUTH-20); an ordinary player never sees this.
+    password_proved: bool = False
 
 
 def begin_enrolment(*, account: str) -> EnrolmentOffer:
@@ -91,6 +95,7 @@ async def second_factor_state(
             confirmed_at=record.confirmed_at,
             recovery_codes_remaining=int(remaining or 0),
             locked_until=record.locked_until,
+            password_proved=record.password_proved_at is not None,
         )
 
 
@@ -100,6 +105,7 @@ async def confirm_enrolment(
     user_id: str,
     secret: str,
     code: str,
+    password_proved: bool = False,
     now: datetime | None = None,
 ) -> list[str] | None:
     """Store the secret if this code proves it, and hand back recovery codes.
@@ -130,6 +136,7 @@ async def confirm_enrolment(
                         secret=secret,
                         confirmed_at=confirmed_at,
                         created_at=confirmed_at,
+                        password_proved_at=confirmed_at if password_proved else None,
                         last_step=step,
                         failed_attempts=0,
                     )
@@ -137,6 +144,11 @@ async def confirm_enrolment(
             else:
                 existing.secret = secret
                 existing.confirmed_at = confirmed_at
+                # A replacement carries its own proof, and losing the old
+                # one's would silently un-promote somebody.
+                existing.password_proved_at = (
+                    confirmed_at if password_proved else existing.password_proved_at
+                )
                 existing.last_step = step
                 existing.failed_attempts = 0
                 existing.locked_until = None
@@ -150,6 +162,28 @@ async def confirm_enrolment(
                     )
                 )
     return codes
+
+
+async def prove_second_factor_owner(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    user_id: str,
+    now: datetime | None = None,
+) -> bool:
+    """Record that the account's own password was proved for this factor.
+
+    The caller checks the password; this only writes what that established.
+    It exists so somebody who set a factor up without one - which is the
+    ordinary path - can satisfy R-AUTH-20 without tearing the factor down and
+    scanning it again.
+    """
+    async with session_factory() as database:
+        async with database.begin():
+            record = await database.get(UserSecondFactor, UUID(user_id))
+            if record is None:
+                return False
+            record.password_proved_at = now or datetime.now(timezone.utc)
+            return True
 
 
 async def verify_second_factor(
@@ -217,9 +251,14 @@ async def _spend_recovery_code(
     be told yes, and they would if this read a row and then wrote a decision
     made from it.
     """
-    digest = hash_recovery_code(code)
-    if not digest:
+    # What was typed, with case and separators folded away. Nothing else is
+    # a recovery code: `!!!-!!!` normalizes to nothing at all, and hashing
+    # that would give a perfectly good digest of the empty string to compare
+    # against the table. The guard is on the code, not on its hash, because
+    # a hash is never empty.
+    if not normalize_recovery_code(code):
         return False
+    digest = hash_recovery_code(code)
     claimed = await database.execute(
         update(UserRecoveryCode)
         .where(

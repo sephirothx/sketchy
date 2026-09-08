@@ -21,6 +21,11 @@ export interface AuthUser {
   /** Decides which staff entries the menu offers. Never the authorization -
       every endpoint behind them checks the role again for itself. */
   role: "user" | "moderator" | "admin";
+  /** A staff role that has been offered and is waiting on this account to set
+      up a second factor (R-AUTH-20). Not a role: it authorizes nothing, and
+      it is the only reason an ordinary player is shown anything about
+      two-factor authentication at all. */
+  pendingRole: "moderator" | "admin" | null;
   createdAt: string | null;
   lastLoginAt: string | null;
 }
@@ -51,19 +56,22 @@ interface AuthStore {
   ensureIdentity: () => Promise<AuthUser>;
   fetchMe: () => Promise<AuthUser | null>;
   /**
-   * Adopt a role the account's own socket room just announced.
+   * Adopt an offer the account's own socket room just announced.
    *
-   * What the menu offers, and nothing else: the role has never been the
-   * authorization here (R-ROLE-01), so this cannot open a door - it stops the
-   * app from hiding one that has just been opened, or offering one that has
-   * just been closed, until the next reload.
+   * What the account UI offers, and nothing else: `pendingRole` authorizes
+   * nothing (R-ROLE-01), so this cannot open a door — it stops the app from
+   * hiding the one thing the offer asks for. Without it, a player who set the
+   * notice aside with "Later" would find no way to enrol until they reloaded,
+   * because the entry appears only for an account with an offer and that
+   * value was last read at startup.
    *
    * Deliberately not an identity change. `installIdentity` bumps
    * `identityVersion` and the callers around it bounce the socket, because the
-   * account underneath has changed; here it is the same account with a
-   * different role, and bouncing would drop the player out of whatever they
-   * are doing to learn something the socket already told them.
+   * account underneath has changed; here it is the same account with
+   * something waiting on it, and bouncing would drop the player out of
+   * whatever they are doing to learn something the socket already told them.
    */
+  applyPendingRole: (pendingRole: AuthUser["pendingRole"]) => void;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
   register: (username: string, password: string, email?: string) => Promise<AuthUser>;
@@ -247,6 +255,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (invalid) throw new IdentityRequiredError(invalid);
     return get().setDisplayName(chosen);
   },
+
+  applyPendingRole: (pendingRole) =>
+    set((state) => (state.user ? { user: { ...state.user, pendingRole } } : {})),
 
   setDisplayName: async (displayName) => {
     const had = get().user;

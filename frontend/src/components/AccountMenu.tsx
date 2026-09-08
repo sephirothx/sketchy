@@ -22,7 +22,6 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { BugReportDialog } from "./BugReportDialog";
-import { TwoFactorDialog } from "./TwoFactorDialog";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import {
   BugIcon,
@@ -91,7 +90,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [bugReportOpen, setBugReportOpen] = useState(false);
-  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -139,6 +137,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   if (!user || (user.isAnonymous && !user.displayName)) return null;
 
   const isGuest = user.isAnonymous;
+  const pendingRole = user.pendingRole ?? null;
   const staffEntries = operatorEntries(user.role, { isAnonymous: isGuest });
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
   // Cut down rather than absent: a compact guest keeps the actions that do not
@@ -221,6 +220,21 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           >
             Settings
           </MenuItem>
+          {/* What is outstanding on this account, and the only reminder of it
+              once the notice has been set aside: an offered role waits on a
+              second factor, and the offer lapses if nobody comes back to it
+              (R-AUTH-20). Gone the moment the role begins. */}
+          {pendingRole && (
+            <MenuItem
+              icon={<ShieldIcon size={16} />}
+              onClick={() => {
+                setMenuOpen(false);
+                openSettings("account");
+              }}
+            >
+              Finish your {pendingRole === "admin" ? "administrator" : "moderator"} role
+            </MenuItem>
+          )}
           {/* The two entries that leave the page. Hidden for a guest in a
               live game, where following one would give up their seat. */}
           {!seatBound && (
@@ -296,15 +310,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   {entry.label}
                 </MenuItem>
               ))}
-              <MenuItem
-                icon={<ShieldIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setTwoFactorOpen(true);
-                }}
-              >
-                Two-factor authentication
-              </MenuItem>
               <div className="account-menu-divider" role="presentation" />
               {reportBugEntry}
               <div className="account-menu-divider" role="presentation" />
@@ -334,9 +339,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       )}
       {bugReportOpen && (
         <BugReportDialog onClose={() => setBugReportOpen(false)} />
-      )}
-      {twoFactorOpen && (
-        <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
       )}
     </div>
   );
