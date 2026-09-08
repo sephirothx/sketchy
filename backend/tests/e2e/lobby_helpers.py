@@ -1,6 +1,8 @@
 """Shared lobby interactions for E2E tests."""
 from __future__ import annotations
 
+BASE_URL = "http://localhost:8000"
+
 
 async def use_guest_name(page, name: str) -> None:
     """Give this page's guest a specific name.
@@ -9,39 +11,50 @@ async def use_guest_name(page, name: str) -> None:
     on a particular name do not each have to walk the first-run block. That
     block, and renaming from Settings, are covered by test_auth_accounts.py.
     """
-    # Wait for the app's own provisioning to finish first. Setting the name
-    # while GET /api/auth/me is still in flight races it: both calls create an
-    # account, and whichever cookie lands second wins - usually discarding the
-    # name that was just set. The first-run block is what proves it has landed.
-    await page.wait_for_selector(".first-run, .identity-chip")
+    # On a page that has one loaded, wait for the app's own provisioning to
+    # finish first. Setting the name while GET /api/auth/me is still in flight
+    # races it: both calls create an account, and whichever cookie lands
+    # second wins - usually discarding the name that was just set. The
+    # first-run block is what proves it has landed.
+    named_before_any_page = page.url.startswith("about:")
+    if not named_before_any_page:
+        await page.wait_for_selector(".first-run, .identity-chip")
 
-    result = await page.evaluate(
-        """async (value) => {
-            const response = await fetch('/api/auth/display-name', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ displayName: value }),
-            });
-            return response.status;
-        }""",
-        name,
+    # Through the browser context's own cookie jar rather than from inside the
+    # page. It is the same request the page would make and lands in the same
+    # jar, and it needs no document - which is what lets a test name its
+    # player *before* the first load and skip the reload below entirely.
+    response = await page.request.post(
+        f"{BASE_URL}/api/auth/display-name", data={"displayName": name}
     )
-    assert result == 200, f"could not set guest name {name!r}: HTTP {result}"
+    assert response.status == 200, (
+        f"could not set guest name {name!r}: HTTP {response.status}"
+    )
+    if named_before_any_page:
+        # Nothing to reload: the first navigation this page makes will carry
+        # the cookie and render the name.
+        return
     # The store caches the account, so a reload is what picks the name up.
     # The identity chip appears in every header once a name exists, so this
     # works on the lobby, the invite screen, and the create-room page alike.
     #
     # `domcontentloaded`, not the default `load`: the thing being waited for
     # is the chip on the next line, and the app draws it as soon as its own
-    # bundle has run. Waiting for `load` waits for every last font and image
-    # as well, which is why this was the one step in the suite that reliably
-    # ran out of its timeout - a shard is eight workers against one server on
-    # a two-core runner, and a cold Firefox, the slowest engine to start and
-    # the only one `test_multi_browser_game` uses, has taken over a minute to
-    # call a page fully loaded there. Nothing is skipped by leaving earlier:
-    # the assertion below is unchanged and still fails if the name never
-    # arrives, and both waits keep a budget that outlasts a cold start.
-    await page.reload(timeout=60_000, wait_until="domcontentloaded")
+    # bundle has run, where `load` waits for every last font and image too.
+    #
+    # Retried once, because this is the step in the suite that has run out of
+    # its timeout twice on CI. A shard is eight workers against one server on
+    # a two-core runner; a navigation that does not come back inside a minute
+    # there is a starved machine rather than a broken page, and the second
+    # attempt has always been enough. What is asserted is unchanged - the chip
+    # still has to appear, so a name that never arrives still fails.
+    for attempt in (1, 2):
+        try:
+            await page.reload(timeout=60_000, wait_until="domcontentloaded")
+            break
+        except Exception:
+            if attempt == 2:
+                raise
     await page.wait_for_selector(".identity-chip", timeout=60_000)
 
 

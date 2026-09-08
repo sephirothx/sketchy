@@ -39,8 +39,15 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             assert len(code) > 0
 
             # Step 2: Player joins using room code from Browser 2 (Firefox)
-            await page2.goto(BASE_URL)
+            #
+            # Named before the first load, so Firefox makes one navigation
+            # here instead of two. It is the slowest engine to start and the
+            # only one this test uses, and the second navigation - a reload
+            # purely to pick up a name - is what has twice run out of its
+            # minute on a two-core runner with a shard's worth of Chromium
+            # beside it.
             await use_guest_name(page2, "BobGuesser")
+            await page2.goto(BASE_URL)
             await join_by_code(page2, code)
 
             # Wait for Browser 2 to enter waiting panel
