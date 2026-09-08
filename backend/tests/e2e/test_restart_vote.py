@@ -1,5 +1,5 @@
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
@@ -81,9 +81,13 @@ async def test_players_approve_restart_without_losing_room_context():
             ) == "true"
 
             await player_vote.locator('button:has-text("Keep playing")').click()
-            await host_page.wait_for_function(
-                "document.querySelector('[data-testid=restart-vote-banner]')?.textContent.includes('1 no')"
-            )
+            # A locator assertion rather than `wait_for_function`, which
+            # evaluates its predicate as a *string* and so needs `eval` in the
+            # page. This app forbids `unsafe-eval` on purpose (R-PLAT-20), so
+            # that call only ever worked while Playwright's injected helper
+            # happened to be installed in the frame - a race that any change
+            # to page timing can lose, and this one did.
+            await expect(host_vote).to_contain_text("1 no")
             await player_vote.locator('button:has-text("Restart")').click()
 
             await host_page.wait_for_selector(
