@@ -7,11 +7,11 @@ Create Date: 2026-09-08 14:00:00.000000
 The 2026-08-27 audit's PR-17 (#468) in one revision.
 
 `auth_sessions` gains what the shortened lifetimes and the anomaly signals
-need. The lifetimes themselves are not columns: the absolute bound is clamped
-at resolution against the account's current role, so promoting somebody to
-moderator shortens the sessions they already hold, and the idle bound is
-measured from `last_used_at`, which was already maintained. What has to be
-stored is the address a session was issued to and the one it was last used
+need, `idle_expires_at` among them. Both bounds are columns, deliberately. Deriving the idle window from the
+account's role would mean joining `users` on the single hottest read this
+server has - once per request and once per socket handshake - to learn
+something that cannot have changed, because a role change now revokes every
+session the account holds. What else has to be stored is the address a session was issued to and the one it was last used
 from - both keyed hashes, never addresses (R-PRIV-09) - so "this session has
 moved" is answerable, plus when that last happened and how often, and when
 this device last proved a second factor.
@@ -38,7 +38,28 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # Batch mode for SQLite's benefit: it rebuilds the table, which is the
     # only way it can add a CHECK constraint to one that already exists.
+    # Added nullable, backfilled, then made NOT NULL: an existing session has
+    # no idle deadline recorded, and the ninety-day player window measured from
+    # its last use is what it would have been given.
+    op.add_column(
+        "auth_sessions",
+        sa.Column("idle_expires_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.execute(
+        "UPDATE auth_sessions SET idle_expires_at = "
+        "MIN(DATETIME(last_used_at, '+90 days'), expires_at)"
+        if op.get_bind().dialect.name == "sqlite"
+        else "UPDATE auth_sessions SET idle_expires_at = "
+        "LEAST(last_used_at + INTERVAL '90 days', expires_at)"
+    )
     with op.batch_alter_table("auth_sessions") as batch:
+        batch.alter_column("idle_expires_at", nullable=False)
+        batch.create_index(
+            "ix_auth_sessions_idle_expires_at", ["idle_expires_at"], unique=False
+        )
+        batch.create_check_constraint(
+            "ck_auth_sessions_idle_within_expiry", "idle_expires_at <= expires_at"
+        )
         batch.add_column(sa.Column("ip_hash", sa.String(length=64), nullable=True))
         batch.add_column(
             sa.Column("last_ip_hash", sa.String(length=64), nullable=True)
@@ -143,6 +164,7 @@ def downgrade() -> None:
     op.drop_table("user_recovery_codes")
     op.drop_table("user_second_factors")
     with op.batch_alter_table("auth_sessions") as batch:
+        batch.drop_constraint("ck_auth_sessions_idle_within_expiry", type_="check")
         batch.drop_constraint("ck_auth_sessions_anomaly_pair", type_="check")
         batch.drop_constraint("ck_auth_sessions_anomaly_count", type_="check")
         batch.drop_column("stepped_up_at")
@@ -150,3 +172,5 @@ def downgrade() -> None:
         batch.drop_column("anomaly_at")
         batch.drop_column("last_ip_hash")
         batch.drop_column("ip_hash")
+        batch.drop_index("ix_auth_sessions_idle_expires_at")
+        batch.drop_column("idle_expires_at")

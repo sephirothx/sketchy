@@ -99,13 +99,12 @@ class SessionData:
     created_at: datetime
     last_used_at: datetime
     expires_at: datetime
-    # The rule this session lives under, resolved from the account's role at
-    # every resolution rather than frozen at issue. Promoting somebody to
-    # moderator therefore shortens the sessions they already hold, instead of
-    # leaving a year-long cookie attached to a staff account until they next
-    # sign in (#468).
+    # The rule this session was issued under. Frozen at issue, because a role
+    # change revokes every session the account holds (R-AUTH-20) - so there is
+    # no such thing as a live session issued under a role its owner no longer
+    # has, and resolving one never has to ask what their role is now.
     lifetime: SessionLifetime = PLAYER_LIFETIME
-    # When silence alone would end it: `last_used_at` plus the idle window.
+    # When silence alone would end it, as the row itself records.
     idle_expires_at: datetime | None = None
     # Set when this session was last used from a browser that does not match
     # the one it was issued to - or, for staff, a different network. What the
@@ -188,22 +187,21 @@ def device_label_from_user_agent(user_agent: str | None) -> str:
 
 
 def _session_data(record: AuthSession, role: str | None = None) -> SessionData:
-    """The immutable view of one row, with the lifetime its role implies.
+    """The immutable view of one row.
 
-    `expires_at` is the earlier of what the row says and what the role now
-    allows, so the number the device list shows is the one a resolution would
-    actually enforce rather than the one that was written at issue.
+    Reads only the row. `role` is accepted so a caller that has just issued the
+    session can label it without a lookup; it never changes what is enforced,
+    which is what the row's own `expires_at` and `idle_expires_at` say.
     """
-    lifetime = lifetime_for(role)
     return SessionData(
         id=str(record.id),
         user_id=str(record.user_id),
         device_label=record.device_label,
         created_at=record.created_at,
         last_used_at=record.last_used_at,
-        expires_at=min(record.expires_at, record.created_at + lifetime.absolute),
-        lifetime=lifetime,
-        idle_expires_at=record.last_used_at + lifetime.idle,
+        expires_at=record.expires_at,
+        lifetime=lifetime_for(role),
+        idle_expires_at=record.idle_expires_at,
         anomaly_at=record.anomaly_at,
         anomaly_count=record.anomaly_count,
         stepped_up_at=record.stepped_up_at,
@@ -231,11 +229,11 @@ async def create_session(
     issued_at = now or datetime.now(timezone.utc)
     raw_token = secrets.token_urlsafe(TOKEN_BYTES)
     if role is None:
-        # Read on its own connection, deliberately not inside the write
-        # transaction below. Guest provisioning is the hottest write path this
-        # server has, and SQLite serializes writers: a SELECT inside the
-        # write transaction holds the lock for the length of both, which under
-        # parallel load is enough to turn a page load into a timeout.
+        # Only when the caller could not say. Read on its own connection and
+        # not inside the write transaction below: guest provisioning is the
+        # hottest write path this server has, and SQLite serializes writers,
+        # so a SELECT inside the write transaction holds the lock for the
+        # length of both. Every caller that already knows the role passes it.
         async with session_factory() as reader:
             role = await reader.scalar(
                 select(User.role).where(User.id == UUID(user_id))
@@ -254,6 +252,7 @@ async def create_session(
                 created_at=issued_at,
                 last_used_at=issued_at,
                 expires_at=issued_at + lifetime.absolute,
+                idle_expires_at=issued_at + lifetime.idle,
             )
             database.add(record)
     return IssuedSession(token=raw_token, session=_session_data(record, role))
@@ -294,11 +293,14 @@ async def resolve_session_status(
     provision a replacement guest account. The raw token still never leaves
     this boundary or enters storage.
 
-    Three bounds are applied here, not one (#468): the row's own `expires_at`,
-    the absolute life the account's current role allows, and the idle window
-    measured from `last_used_at`. The middle one is why the account's role is
-    joined in - a promotion has to shorten sessions that already exist, and a
-    demotion must not be the thing that extends one.
+    Two bounds are applied here rather than one (#468), and both are columns
+    on the row this already reads: `expires_at`, and `idle_expires_at`, which
+    moves forward with `last_used_at`. Deliberately not derived from the
+    account's role - that would mean joining `users` on the single hottest
+    read in the server, once per request and once per socket handshake, to
+    learn something that cannot have changed: a role change revokes every
+    session the account holds (R-AUTH-20), so a live session is always one
+    issued under the role its owner has now.
 
     `ip_hash` and `device_label` describe the caller, and are compared against
     what this session has been used from before. They are optional because the
@@ -331,16 +333,13 @@ async def resolve_session_status(
                 await database.execute(
                     select(
                         AuthSession,
-                        User.role,
                         active_ban_created_at.label("banned_at"),
-                    )
-                    .join(User, User.id == AuthSession.user_id)
-                    .where(AuthSession.token_hash == digest)
+                    ).where(AuthSession.token_hash == digest)
                 )
             ).one_or_none()
             if result is None:
                 return SessionResolution(session=None)
-            record, role, banned_at = result
+            record, banned_at = result
             if banned_at is not None:
                 # A token that was valid when the ban landed remains usable
                 # only for the narrow export/delete escape hatch selected by
@@ -355,9 +354,7 @@ async def resolve_session_status(
                 )
                 return SessionResolution(
                     session=(
-                        _session_data(record, role)
-                        if was_active_when_banned
-                        else None
+                        _session_data(record) if was_active_when_banned else None
                     ),
                     banned_user_id=str(record.user_id),
                 )
@@ -372,7 +369,7 @@ async def resolve_session_status(
                     # in flight when this row rotated, not a thief. Let its own
                     # row answer; the successor cookie is already on its way
                     # back to it.
-                    return SessionResolution(session=_session_data(record, role))
+                    return SessionResolution(session=_session_data(record))
                 # Beyond the grace window a revoked predecessor is a copy
                 # somebody kept. Everything descended from it goes, which
                 # signs out the thief and the real device together - the
@@ -397,19 +394,14 @@ async def resolve_session_status(
                 )
                 return SessionResolution(session=None)
 
-            lifetime = lifetime_for(role)
-            absolute_deadline = min(
-                record.expires_at, record.created_at + lifetime.absolute
-            )
-            idle_deadline = record.last_used_at + lifetime.idle
-            if checked_at >= absolute_deadline or checked_at >= idle_deadline:
+            if (
+                checked_at >= record.expires_at
+                or checked_at >= record.idle_expires_at
+            ):
                 return SessionResolution(session=None)
 
             anomaly = _anomaly_reason(
-                record,
-                lifetime=lifetime,
-                ip_hash=ip_hash,
-                device_label=device_label,
+                record, ip_hash=ip_hash, device_label=device_label
             )
             if anomaly is not None:
                 # Recorded immediately rather than on the throttled write
@@ -419,6 +411,7 @@ async def resolve_session_status(
                 record.anomaly_count = (record.anomaly_count or 0) + 1
                 record.last_ip_hash = ip_hash or record.last_ip_hash
                 record.last_used_at = checked_at
+                record.idle_expires_at = _idle_deadline(record, checked_at)
                 # A step-up is an assertion about the browser holding the
                 # session. A session that has moved has to make it again.
                 record.stepped_up_at = None
@@ -435,9 +428,10 @@ async def resolve_session_status(
                 )
             elif checked_at - record.last_used_at >= LAST_USED_WRITE_INTERVAL:
                 record.last_used_at = checked_at
+                record.idle_expires_at = _idle_deadline(record, checked_at)
                 if ip_hash:
                     record.last_ip_hash = ip_hash
-        return SessionResolution(session=_session_data(record, role))
+        return SessionResolution(session=_session_data(record))
 
 
 async def _rotated_away_token(
@@ -492,10 +486,20 @@ async def _revoke_rotation_chain(
     return revoked
 
 
+def _idle_deadline(record: AuthSession, used_at: datetime) -> datetime:
+    """Push the idle window forward, never past the session's own expiry.
+
+    The window's length is the one this session was issued with, recovered
+    from the row rather than from the account's role, which keeps this a
+    property of the session instead of a second thing that has to be looked up.
+    """
+    window = record.idle_expires_at - record.last_used_at
+    return min(used_at + window, record.expires_at)
+
+
 def _anomaly_reason(
     record: AuthSession,
     *,
-    lifetime: SessionLifetime,
     ip_hash: str | None,
     device_label: str | None,
 ) -> str | None:
@@ -517,8 +521,14 @@ def _anomaly_reason(
         and device_label[:64] != record.device_label
     ):
         return "device"
+    # Staff sessions are the short ones, and the only ones for which an
+    # address change is worth the false positives. Recognised from the row's
+    # own window rather than from a role lookup.
+    is_staff_session = (
+        record.idle_expires_at - record.last_used_at <= STAFF_LIFETIME.idle
+    )
     if (
-        lifetime is STAFF_LIFETIME
+        is_staff_session
         and ip_hash
         and record.last_ip_hash
         and ip_hash != record.last_ip_hash
@@ -544,6 +554,7 @@ async def rotate_session(
     session_id: str,
     user_id: str,
     device_label: str,
+    role: str | None = None,
     ip_hash: str | None = None,
     now: datetime | None = None,
 ) -> IssuedSession | None:
@@ -560,9 +571,10 @@ async def rotate_session(
     raw_token = secrets.token_urlsafe(TOKEN_BYTES)
     async with session_factory() as database:
         async with database.begin():
-            role = await database.scalar(
-                select(User.role).where(User.id == UUID(user_id))
-            )
+            if role is None:
+                role = await database.scalar(
+                    select(User.role).where(User.id == UUID(user_id))
+                )
             lifetime = lifetime_for(role)
             successor = AuthSession(
                 id=generate_uuid(),
@@ -575,6 +587,7 @@ async def rotate_session(
                 created_at=rotated_at,
                 last_used_at=rotated_at,
                 expires_at=rotated_at + lifetime.absolute,
+                idle_expires_at=rotated_at + lifetime.idle,
             )
             revoked = await database.execute(
                 update(AuthSession)
@@ -702,22 +715,16 @@ async def list_active_sessions(
     """
     checked_at = now or datetime.now(timezone.utc)
     async with session_factory() as database:
-        rows = (
-            await database.execute(
-                select(AuthSession, User.role)
-                .join(User, User.id == AuthSession.user_id)
+        records = (
+            await database.scalars(
+                select(AuthSession)
                 .where(
                     AuthSession.user_id == UUID(user_id),
                     AuthSession.revoked_at.is_(None),
                     AuthSession.expires_at > checked_at,
+                    AuthSession.idle_expires_at > checked_at,
                 )
                 .order_by(AuthSession.last_used_at.desc())
             )
         ).all()
-        sessions = [_session_data(record, role) for record, role in rows]
-        return [
-            session
-            for session in sessions
-            if session.expires_at > checked_at
-            and (session.idle_expires_at or checked_at) > checked_at
-        ]
+        return [_session_data(record) for record in records]

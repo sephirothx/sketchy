@@ -36,6 +36,8 @@ from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.rooms import RoomManager
 from app.services.shutdown import ShutdownCoordinator
 
+from app.auth.sessions import list_active_sessions
+
 from tests.staffauth import enrol_second_factor, step_up
 
 
@@ -160,6 +162,22 @@ async def an_admin_without_step_up(env, name="Operator") -> AsyncClient:
     await enrol_second_factor(client)
     await set_role(factory, account["id"], UserRole.ADMIN.value)
     return client
+
+
+async def an_enrolled_player(env, name: str) -> tuple[AsyncClient, dict]:
+    """A registered account that may be promoted.
+
+    Enrolment comes before the role now (R-AUTH-20): granting a staff role
+    revokes the account's sessions, and a staff account cannot sign in without
+    a code, so promoting somebody who has not enrolled would lock them out of
+    the page they would enrol from. The route refuses it, and these tests
+    promote accounts that can actually hold the role.
+    """
+    new_client, *_ = env
+    client = new_client()
+    account = await register(client, name)
+    await enrol_second_factor(client)
+    return client, account
 
 
 async def audit_rows(factory) -> list[AuditEvent]:
@@ -703,7 +721,7 @@ async def test_the_search_is_invisible_to_anyone_who_is_not_an_administrator(env
 async def test_an_administrator_may_make_somebody_a_moderator(env):
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Helper")
+    _, subject = await an_enrolled_player(env, "Helper")
 
     response = await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
@@ -728,12 +746,53 @@ async def test_a_moderator_can_be_put_back_to_an_ordinary_player(env):
         assert (await session.get(User, UUID(subject["id"]))).role == "user"
 
 
+async def test_a_role_change_signs_the_account_out_everywhere(env):
+    """R-AUTH-20: a staff role must not be reachable from a session issued
+    before the second factor was ever required.
+
+    Signing them out is also what keeps a session's lifetime honest: it is
+    fixed when the session is issued, so a year-long player cookie would
+    otherwise stay a year long on an account that is now staff (#468).
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    target_http, target = await an_enrolled_player(env, "Elevated")
+
+    before = await list_active_sessions(factory, user_id=target["id"])
+    assert before
+
+    response = await admin.patch(
+        f"/api/admin/players/{target['id']}/role",
+        json={"role": UserRole.MODERATOR.value, "reason": "joining the rota"},
+    )
+    assert response.status_code == 200, response.text
+    assert await list_active_sessions(factory, user_id=target["id"]) == []
+    # And the cookie they were holding no longer identifies anybody.
+    assert (await target_http.get("/api/auth/me")).json() is None
+
+
+async def test_a_role_change_that_changes_nothing_leaves_sessions_alone(env):
+    """The no-op path returns before the revocation, as it does before the
+    notice: re-pressing the button must not sign somebody out."""
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    target_http = new_client()
+    target = await register(target_http, "Unchanged")
+
+    response = await admin.patch(
+        f"/api/admin/players/{target['id']}/role",
+        json={"role": UserRole.USER.value, "reason": "no change at all"},
+    )
+    assert response.status_code == 200
+    assert await list_active_sessions(factory, user_id=target["id"])
+
+
 async def test_a_promotion_reaches_the_promoted_account(env, role_pushes):
     """The other half of #507: the player is told, rather than discovering a
     Moderation entry in their menu on some later load."""
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Told")
+    _, subject = await an_enrolled_player(env, "Told")
 
     await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
@@ -759,7 +818,7 @@ async def test_the_push_names_the_account_the_way_its_sockets_do(env, role_pushe
     """
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Shouted")
+    _, subject = await an_enrolled_player(env, "Shouted")
 
     response = await admin.patch(
         f"/api/admin/players/{subject['id'].upper()}/role",
@@ -793,7 +852,7 @@ async def test_the_reason_never_leaves_the_ledger(env):
     no route from that sentence to the person it is about."""
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Subject")
+    _, subject = await an_enrolled_player(env, "Subject")
 
     await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
@@ -921,10 +980,33 @@ async def test_a_guest_cannot_hold_a_role(env):
     assert response.status_code == 400
 
 
+async def test_a_role_cannot_be_granted_before_the_second_factor(env):
+    """R-AUTH-20 in the order that avoids locking somebody out.
+
+    The grant revokes the account's sessions and a staff account cannot sign
+    in without a code, so granting first would leave the new moderator unable
+    to reach the page they would enrol from.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Unenrolled")
+
+    response = await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    assert response.status_code == 400
+    assert "two-factor" in response.json()["detail"].lower()
+    async with factory() as session:
+        assert (await session.get(User, UUID(subject["id"]))).role == "user"
+    # Refused whole: no audit row for a promotion that did not happen.
+    assert await audit_rows(factory) == []
+
+
 async def test_a_role_change_records_the_move_and_the_reason(env):
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Recorded")
+    _, subject = await an_enrolled_player(env, "Recorded")
     await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "moderator", "reason": "joining the safety rota"},

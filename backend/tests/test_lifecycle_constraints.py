@@ -225,9 +225,15 @@ async def test_reports_friendships_exports_mail_sessions_and_avatars_hold_their_
         await _accepts(factory, EmailOutboxEntry(id=generate_uuid(), state="failed", last_error="gave up", **mail))
 
         await _rejects(factory, AuthSession(id=generate_uuid(), user_id=a, token_hash="1" * 64, device_label="d",
-                                            created_at=NOW, expires_at=NOW - timedelta(seconds=1)))
+                                            created_at=NOW, expires_at=NOW - timedelta(seconds=1),
+                                            idle_expires_at=NOW - timedelta(seconds=1)))
         await _accepts(factory, AuthSession(id=generate_uuid(), user_id=a, token_hash="2" * 64, device_label="d",
-                                            created_at=NOW, expires_at=NOW + timedelta(days=1)))
+                                            created_at=NOW, expires_at=NOW + timedelta(days=1),
+                                            idle_expires_at=NOW + timedelta(days=1)))
+        # Silence may end a session early, never later than its own expiry.
+        await _rejects(factory, AuthSession(id=generate_uuid(), user_id=a, token_hash="3" * 64, device_label="d",
+                                            created_at=NOW, expires_at=NOW + timedelta(days=1),
+                                            idle_expires_at=NOW + timedelta(days=2)))
 
         avatar = dict(user_id=a, object_key="k", content_type="image/png", checksum_sha256="0" * 64, payload=b"x")
         await _rejects(factory, UploadedAvatarAsset(id=generate_uuid(), byte_size=0, width=1, height=1, **avatar))

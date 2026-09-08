@@ -74,3 +74,29 @@ async def set_role(username: str, role: str) -> None:
                 )
     finally:
         await engine.dispose()
+
+
+async def enrol_through_the_ui(page) -> str:
+    """Set up two-factor authentication the way a person does, and return the
+    secret so a later step can produce a code.
+
+    Used where a test needs an account that *may* be promoted: the role change
+    refuses an account with no second factor (R-AUTH-20), and doing it through
+    the dialog keeps that precondition honest rather than writing the row.
+    """
+    import time
+
+    from app.auth.totp import code_at, current_step
+
+    await page.click(".account-menu button")
+    await page.get_by_role("menuitem", name="Two-factor authentication").click()
+    dialog = page.locator('[role="dialog"]', has_text="Two-factor authentication")
+    await dialog.get_by_role("button", name="Set up").click()
+    secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
+    await dialog.get_by_label("Code from your app").fill(
+        code_at(secret, current_step(time.time()))
+    )
+    await dialog.get_by_role("button", name="Confirm").click()
+    await dialog.get_by_role("button", name="I have saved them").click()
+    await dialog.get_by_role("button", name="Close").click()
+    return secret

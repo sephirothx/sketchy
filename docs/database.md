@@ -282,14 +282,19 @@ database never contains a credential that can be replayed. Socket.IO handshakes 
 the same record as HTTP requests, so revocation applies on the next connection without a
 shared signing secret.
 
-**Neither lifetime is a column** (R-AUTH-03, #468). The absolute bound is the *earlier*
-of the stored `expires_at` and `created_at` plus what the account's **current role**
-allows — 365 days for a player, 7 for staff — computed at every resolution against a
-join on `users.role`, so promoting somebody shortens the sessions they already hold
-instead of leaving a year-long cookie on a staff account. The idle bound is
-`last_used_at` plus 90 days (24 hours for staff), and `last_used_at` was already
-maintained, throttled to one write per five minutes. Storing either would mean a row
-that disagrees with what the server enforces the moment a role changes.
+**Both lifetimes are columns** (R-AUTH-03, #468): `expires_at` (365 days for a player,
+7 for staff) and `idle_expires_at` (90 days, 24 hours for staff), the latter moving
+forward with `last_used_at`, which was already maintained and throttled to one write
+per five minutes. `ck_auth_sessions_idle_within_expiry` keeps silence able to end a
+session early but never late.
+
+Deriving either from the account's role instead would mean joining `users` on the
+single hottest read this server has — once per HTTP request and once per socket
+handshake — to learn something that cannot have changed: a **role change revokes every
+session the account holds** (R-AUTH-20), so a live session is always one issued under
+the role its owner has now. That revocation is also why a staff role cannot be granted
+to an account with no second factor: it would sign them out of the page they would
+enrol from.
 
 `ip_hash` is the address the session was **issued** to and `last_ip_hash` the one it was
 last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limiter uses

@@ -407,9 +407,9 @@ Every visitor is provisioned an anonymous account on first page load and remembe
 by an HttpOnly `sketchy_session` cookie. Session cookies carry opaque 256-bit random
 tokens; only SHA-256 hashes are stored. A session is bounded twice (R-AUTH-03): by an
 absolute life — 365 days for a player, 7 for a moderator or administrator — and by an
-idle window of 90 days (24 hours for staff) measured from its last use. Neither is
-frozen at issue: the absolute bound is re-derived from the account's *current* role at
-every resolution, so a promotion shortens the sessions somebody already holds. Tokens
+idle window of 90 days (24 hours for staff) measured from its last use. Both are columns on the row,
+fixed at issue, which is safe because a role change revokes every session the account
+holds — so a live session is always one issued under the role its owner has now. Tokens
 rotate weekly (daily for staff), which is per-device — the cookie is swapped on the
 browser making the request, and every other device stays signed in — and each rotation
 links its successor to its predecessor, so a predecessor presented afterwards is a

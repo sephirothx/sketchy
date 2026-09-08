@@ -337,7 +337,19 @@ def create_auth_router(
     def device_label(request: Request) -> str:
         return device_label_from_user_agent(request.headers.get("user-agent"))
 
-    async def issue_cookie(response: Response, request: Request, user_id: str) -> None:
+    async def issue_cookie(
+        response: Response,
+        request: Request,
+        user_id: str,
+        role: str | None = None,
+    ) -> None:
+        """Mint this device's session and set its cookie.
+
+        `role` decides the lifetime (R-AUTH-03) and every caller here already
+        knows it, so it is passed rather than looked up: guest provisioning is
+        the busiest write path this server has, and a second read on it buys
+        nothing but a connection.
+        """
         # From the request, not from a fresh lookup: the middleware has
         # already hashed this caller under the cached secret, and asking the
         # database again on every sign-in and every guest provisioned is a
@@ -346,6 +358,7 @@ def create_auth_router(
         issued = await create_session(
             session_factory,
             user_id=user_id,
+            role=role,
             device_label=device_label(request),
             # The baseline every later use of this session is compared against
             # (R-AUTH-22). A hash, never the address itself.
@@ -502,6 +515,7 @@ def create_auth_router(
                 session_factory,
                 session_id=auth_session.id,
                 user_id=user.id,
+                role=user.role,
                 device_label=device_label(request),
                 ip_hash=rotation_ip_hash,
             )
@@ -580,7 +594,8 @@ def create_auth_router(
                 await provision_limiter.refund(client_key(request))
                 await daily_provision_limiter.refund(GLOBAL_PROVISION_KEY)
                 raise
-            await issue_cookie(response, request, user.id)
+            # A freshly provisioned guest, so the role is known without asking.
+            await issue_cookie(response, request, user.id, role=user.role)
             return user_payload(user)
         if not user.is_anonymous:
             # A registered player's name is their username; changing it here
@@ -696,7 +711,7 @@ def create_auth_router(
             session_factory, user_id=claimed.id, values=body.settings
         )
         await revoke_current(request)
-        await issue_cookie(response, request, claimed.id)
+        await issue_cookie(response, request, claimed.id, role=claimed.role)
         if body.email:
             # Offered, not required, and never fatal: an address that cannot be
             # accepted must not undo an account that has just been claimed.
@@ -786,7 +801,9 @@ def create_auth_router(
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)
         await revoke_current(request)
-        await issue_cookie(response, request, credentials.user.id)
+        await issue_cookie(
+            response, request, credentials.user.id, role=credentials.user.role
+        )
         return user_payload(refreshed or credentials.user)
 
     @router.get("/sessions")
@@ -1203,7 +1220,7 @@ def create_auth_router(
         # Every session was revoked, this one included. Signing the caller
         # back in is what keeps a password change from also being a logout.
         clear_session_cookie(response, secure=is_secure_request(request))
-        await issue_cookie(response, request, user.id)
+        await issue_cookie(response, request, user.id, role=user.role)
         return {"ok": True}
 
     @router.get("/second-factor")

@@ -660,7 +660,9 @@ the date, so you can revoke it.
 #### Two-factor authentication
 
 Any account can add an authenticator app from **Settings → Account**; moderators
-and administrators must. Setting it up shows a key to add to the app and then asks
+and administrators must, and must do it *before* the role is granted — granting it
+signs them out of every device, and a staff account cannot sign back in without a
+code, so the role is refused until the second factor exists. Setting it up shows a key to add to the app and then asks
 for one code to prove it arrived - nothing is stored until that code checks out, so
 an abandoned setup cannot lock you out. Ten single-use recovery codes are shown
 once and kept only as hashes; they work anywhere a code is asked for. Staff are

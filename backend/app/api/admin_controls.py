@@ -22,9 +22,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
+from app.auth.sessions import STAFF_ROLES, revoke_sessions
 from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
-from app.db.models import AuditEvent, RoleChangeNotice, generate_uuid
+from app.db.models import AuditEvent, RoleChangeNotice, UserSecondFactor, generate_uuid
 from app.domain_values import AuditTargetType
 from app.db.models import User
 from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
@@ -556,6 +557,26 @@ def create_admin_controls_router(
                 previous = target.role
                 if previous == body.role:
                     return {"id": user_id, "role": previous}
+                if (
+                    body.role in STAFF_ROLES
+                    and await session.get(UserSecondFactor, target_id) is None
+                ):
+                    # Enrolment comes first, and has to (R-AUTH-20). Granting
+                    # the role revokes the account's sessions, and a staff
+                    # account cannot sign in without a code - so promoting
+                    # somebody who has not enrolled would lock them out of the
+                    # very page they would enrol from. Asking them to set it up
+                    # as an ordinary player, from their own account menu, is
+                    # also the only order in which nobody has to be trusted
+                    # with a window where the role exists without the factor.
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "That account needs two-factor authentication before "
+                            "it can hold this role. Ask them to set it up from "
+                            "their account menu first."
+                        ),
+                    )
                 target.role = body.role
                 session.add(
                     AuditEvent(
@@ -575,6 +596,16 @@ def create_admin_controls_router(
                         created_at=datetime.now(timezone.utc),
                     )
                 )
+                # A role change ends every session the account holds, in the
+                # same transaction (R-AUTH-20, #468). Two reasons, and both
+                # matter. A staff role must not be reachable from a session
+                # that was issued before the second factor was ever required,
+                # so the promoted account signs in again and produces a code.
+                # And a session's lifetime is fixed when it is issued, so a
+                # year-long player cookie would otherwise stay a year long on
+                # an account that is now staff - which is exactly what
+                # R-AUTH-03 shortens staff sessions to prevent.
+                await revoke_sessions(session, user_id=target_id)
                 # In the same transaction as the change it describes, so there
                 # can be no role nobody was told about and no notice about a
                 # role that was never granted. The reason stays in the ledger

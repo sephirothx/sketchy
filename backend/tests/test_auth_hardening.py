@@ -41,6 +41,7 @@ from app.auth.sessions import (
     create_session,
     lifetime_for,
     resolve_session,
+    revoke_all_sessions,
     rotate_session,
 )
 from app.auth.totp import code_at, current_step, generate_secret
@@ -297,16 +298,28 @@ async def test_a_staff_session_lives_a_week_rather_than_a_year(env):
 
 
 @pytest.mark.asyncio
-async def test_promotion_shortens_the_sessions_already_held(env):
-    """A year-long cookie must not survive on an account that is now staff."""
+async def test_a_sessions_lifetime_is_the_one_it_was_issued_under(env):
+    """Frozen at issue, and safe to freeze because a promotion ends it.
+
+    A role change revokes every session the account holds (R-AUTH-20), so a
+    live session is always one issued under the role its owner has now. That
+    is what lets resolution read two columns instead of joining `users` on
+    every request.
+    """
     _, factory, repo = env
     user = await repo.create_anonymous("Promoted")
     issued = await create_session(factory, user_id=user.id, device_label="Safari on macOS")
     assert issued.session.lifetime is PLAYER_LIFETIME
 
     await set_role(factory, user.id, UserRole.ADMIN)
-    later = datetime.now(timezone.utc) + timedelta(days=8)
-    assert await resolve_session(factory, issued.token, now=later) is None
+    # Set directly here, so nothing revoked it: the row still says a year.
+    still_live = await resolve_session(factory, issued.token)
+    assert still_live is not None
+    assert still_live.expires_at - still_live.created_at == PLAYER_LIFETIME.absolute
+
+    # And what the real promotion path does instead is end it outright.
+    assert await revoke_all_sessions(factory, user_id=user.id) == 1
+    assert await resolve_session(factory, issued.token) is None
 
 
 @pytest.mark.asyncio

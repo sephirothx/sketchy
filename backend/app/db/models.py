@@ -1759,6 +1759,11 @@ class AuthSession(Base):
         CheckConstraint(
             "anomaly_count >= 0", name="ck_auth_sessions_anomaly_count"
         ),
+        # Silence can end a session early but never extend it past its own
+        # expiry: a row claiming otherwise is a writer's bug, not a state.
+        CheckConstraint(
+            "idle_expires_at <= expires_at", name="ck_auth_sessions_idle_within_expiry"
+        ),
         # A session that has never looked wrong has no time at which it did.
         CheckConstraint(
             "(anomaly_at IS NULL) = (anomaly_count = 0)",
@@ -1801,6 +1806,14 @@ class AuthSession(Base):
     # from, both keyed HMACs rather than addresses: R-PRIV-09 forbids storing
     # a raw address, and comparing two digests answers "is this the same
     # network" without ever knowing which network it is (#468).
+    # When silence alone ends this session: `last_used_at` plus the idle window
+    # its account's role allows. Stored rather than derived, so resolving a
+    # token stays the single-row lookup it has always been - working the window
+    # out per request would mean joining `users` on the hottest read this
+    # server has, on every request and every socket handshake (#468).
+    idle_expires_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), nullable=False, index=True
+    )
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # When this session was last used from a browser or - for staff - a
