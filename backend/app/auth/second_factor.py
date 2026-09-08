@@ -27,6 +27,7 @@ from app.auth.totp import (
     generate_secret,
     hash_recovery_code,
     matching_step,
+    normalize_recovery_code,
     provisioning_uri,
 )
 from app.db.models import UserRecoveryCode, UserSecondFactor, generate_uuid
@@ -250,9 +251,14 @@ async def _spend_recovery_code(
     be told yes, and they would if this read a row and then wrote a decision
     made from it.
     """
-    digest = hash_recovery_code(code)
-    if not digest:
+    # What was typed, with case and separators folded away. Nothing else is
+    # a recovery code: `!!!-!!!` normalizes to nothing at all, and hashing
+    # that would give a perfectly good digest of the empty string to compare
+    # against the table. The guard is on the code, not on its hash, because
+    # a hash is never empty.
+    if not normalize_recovery_code(code):
         return False
+    digest = hash_recovery_code(code)
     claimed = await database.execute(
         update(UserRecoveryCode)
         .where(

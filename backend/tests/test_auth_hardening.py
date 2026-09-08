@@ -33,6 +33,7 @@ from app.auth.routes import create_auth_router
 from app.auth.second_factor import (
     SecondFactorOutcome,
     confirm_enrolment,
+    prove_second_factor_owner,
     second_factor_state,
     verify_second_factor,
 )
@@ -1226,6 +1227,53 @@ async def test_proving_a_factor_is_yours_needs_the_factor_as_well(env):
     assert not (
         await second_factor_state(factory, user_id=account["id"])
     ).password_proved
+
+
+@pytest.mark.asyncio
+async def test_nothing_is_vouched_for_when_there_is_no_factor_to_vouch_for(env):
+    """The endpoint checks first, but the write refuses on its own account.
+
+    Both a factor being torn down between the check and the write and a
+    caller that never checked land here, and the answer to each is that
+    there is nothing to record a proof against.
+    """
+    new_client, factory, _ = env
+    account = await register(new_client(), "Unfactored")
+    assert not await prove_second_factor_owner(factory, user_id=account["id"])
+    assert not (
+        await second_factor_state(factory, user_id=account["id"])
+    ).password_proved
+
+
+@pytest.mark.asyncio
+async def test_something_that_is_not_a_code_at_all_burns_nothing(env):
+    """`!!!-!!!` is not a wrong recovery code; it is not one.
+
+    Everything a recovery code is not made of is folded away before the
+    lookup, so a string of punctuation normalizes to nothing - and hashing
+    nothing gives a perfectly good digest that would go to the table as if it
+    were a guess.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Punctuator")
+    offer = (await http.post("/api/auth/second-factor/enrol")).json()
+    codes = (await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )).json()["recoveryCodes"]
+
+    outcome = await verify_second_factor(
+        factory, user_id=account["id"], code="!!!-!!!"
+    )
+    assert outcome is SecondFactorOutcome.REJECTED
+    # And the real ones are all still there.
+    assert (
+        await second_factor_state(factory, user_id=account["id"])
+    ).recovery_codes_remaining == len(codes)
 
 
 @pytest.mark.asyncio
