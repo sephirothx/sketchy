@@ -605,12 +605,67 @@ async def test_a_challenge_is_spent_by_an_attempt_that_failed(env):
     assert await _passkey_count(factory, account["id"]) == 0
 
 
+async def test_two_assertions_at_once_cannot_walk_the_counter_backwards(env):
+    """The counter is the one cloning signal WebAuthn gives (R-AUTH-23).
+
+    Verified against the value read a moment earlier and then written back,
+    two assertions each pass their own check and race: the later write wins,
+    and a lower counter landing last is the stored value going backwards -
+    after which the clone it would have caught looks current.
+
+    Where the concurrency is real: PostgreSQL, which the suite also runs
+    against. The SQLite fixture hands every session one shared connection, so
+    these two queue rather than interleave, and what this pins there is that
+    the outcome is the same one either way.
+    """
+    new_client, factory = env
+    owner = new_client()
+    account = await register(owner, "Counted")
+    await offer_a_role(factory, account["id"])
+    authenticator = SoftAuthenticator()
+    await add_passkey(owner, authenticator)
+
+    ahead = await assertion_options(new_client())
+    behind = await assertion_options(new_client())
+    both = await asyncio.gather(
+        new_client().post(
+            "/api/auth/passkeys/verify",
+            json={"credential": authenticator.sign(ahead, origin=ORIGIN, sign_count=7)},
+        ),
+        new_client().post(
+            "/api/auth/passkeys/verify",
+            json={"credential": authenticator.sign(behind, origin=ORIGIN, sign_count=3)},
+        ),
+    )
+    accepted = [
+        counter
+        for counter, response in zip((7, 3), both)
+        if response.status_code == 200
+    ]
+    # The one carrying the lower counter cannot be accepted after the higher
+    # one, and whatever was accepted is what the row holds.
+    async with factory() as session:
+        stored = (
+            await session.scalars(
+                select(UserPasskey).where(UserPasskey.user_id == UUID(account["id"]))
+            )
+        ).one()
+    assert accepted, [response.text for response in both]
+    assert stored.sign_count == max(accepted)
+    assert stored.sign_count >= max(accepted)
+
+
 async def test_two_removals_at_once_cannot_empty_a_staff_account(env):
     """An account racing itself, which is the only way this is reachable.
 
     Counting in one transaction and deleting in another lets both requests see
     two credentials, each conclude the other will remain, and leave a
-    moderator with nothing to sign in with.
+    moderator with nothing to sign in with. The count is part of the DELETE
+    for that reason, and the account row is locked for PostgreSQL's, where two
+    statements deleting different rows never block each other.
+
+    As above, the SQLite fixture serializes these on one connection; what it
+    pins here is the answer, and PostgreSQL is where the interleaving is real.
     """
     new_client, factory = env
     client = new_client()

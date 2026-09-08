@@ -40,7 +40,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from webauthn import (
     base64url_to_bytes,
@@ -366,8 +366,34 @@ async def verify_assertion(
                 raise PasskeyError(
                     "That passkey could not be verified. Please try again."
                 ) from error
-            row.sign_count = verified.new_sign_count
-            row.last_used_at = datetime.now(timezone.utc)
+            # Compare and swap, not read-then-write. Two assertions verified
+            # against the same stored counter each pass their own check and
+            # then race to write: the later write wins, and if it carried the
+            # *lower* counter the stored one has gone backwards - which is the
+            # single thing this column exists to notice. The old value travels
+            # in the WHERE, so exactly one of them lands and the other is told
+            # to try again.
+            #
+            # An authenticator that keeps no counter reports zero throughout,
+            # and zero swapped for zero still matches: two parallel sign-ins
+            # from such a device both succeed, which is right, because a
+            # counter that never moves says nothing about cloning either way.
+            moved = await session.execute(
+                update(UserPasskey)
+                .where(
+                    UserPasskey.credential_id == row.credential_id,
+                    UserPasskey.sign_count == row.sign_count,
+                )
+                .values(
+                    sign_count=verified.new_sign_count,
+                    last_used_at=datetime.now(timezone.utc),
+                )
+            )
+            if not moved.rowcount:
+                raise PasskeyError(
+                    "That passkey was used somewhere else at the same moment. "
+                    "Please try again."
+                )
             return Assertion(user_id=str(row.user_id), credential_id=row.credential_id)
 
 
@@ -407,37 +433,58 @@ async def remove_passkey(
     requests queue rather than interleave - on SQLite the write lock does the
     same job.
     """
+    owner = UUID(user_id)
+    conditions = [UserPasskey.id == UUID(passkey_id), UserPasskey.user_id == owner]
+    if keep_one:
+        # The rule travels inside the DELETE rather than being read first and
+        # trusted afterwards. Both halves of this are needed, and each covers
+        # what the other cannot:
+        #
+        # * The lock below serializes two requests on PostgreSQL, where they
+        #   would otherwise delete different rows without ever blocking each
+        #   other and both see a count taken before either committed.
+        # * The condition here is what protects SQLite, which ignores `FOR
+        #   UPDATE` entirely. Its write lock does serialize the statements,
+        #   so the second one's count is evaluated after the first has
+        #   committed - but only because the count is part of the statement.
+        conditions.append(
+            or_(
+                select(func.count())
+                .select_from(UserPasskey)
+                .where(UserPasskey.user_id == owner)
+                .scalar_subquery()
+                > 1,
+                exists(
+                    select(UserSecondFactor.user_id).where(
+                        UserSecondFactor.user_id == owner
+                    )
+                ),
+            )
+        )
+
     async with session_factory() as session:
         async with session.begin():
             await session.execute(
-                select(User.id).where(User.id == UUID(user_id)).with_for_update()
+                select(User.id).where(User.id == owner).with_for_update()
             )
-            row = await session.scalar(
-                select(UserPasskey).where(
+            removed = await session.execute(delete(UserPasskey).where(*conditions))
+            if removed.rowcount:
+                return True
+            # Nothing went: either there was no such credential, or the rule
+            # refused it. Which one decides what the caller is told, and is
+            # read inside the same transaction.
+            still_there = await session.scalar(
+                select(UserPasskey.credential_id).where(
                     UserPasskey.id == UUID(passkey_id),
-                    UserPasskey.user_id == UUID(user_id),
+                    UserPasskey.user_id == owner,
                 )
             )
-            if row is None:
+            if still_there is None:
                 return False
-            if keep_one:
-                held = len(
-                    (
-                        await session.scalars(
-                            select(UserPasskey.credential_id).where(
-                                UserPasskey.user_id == UUID(user_id)
-                            )
-                        )
-                    ).all()
-                )
-                factor = await session.get(UserSecondFactor, UUID(user_id))
-                if held <= 1 and factor is None:
-                    raise LastFactorError(
-                        "This is the only thing this account can sign in with. "
-                        "Add another passkey or an authenticator app first."
-                    )
-            await session.delete(row)
-            return True
+            raise LastFactorError(
+                "This is the only thing this account can sign in with. "
+                "Add another passkey or an authenticator app first."
+            )
 
 
 def _client_challenge(credential: dict) -> str:
