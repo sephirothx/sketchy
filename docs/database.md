@@ -656,7 +656,9 @@ delivered by a sweeper (`EMAIL_SWEEP_SECONDS`, default 30). A suspension is ther
 never undone by an unreachable relay, and a reset message is retried with backoff and
 then recorded as failed rather than disappearing. With no `SMTP_HOST` the messages are
 **logged instead of sent**, which is the only way the confirmation and reset flows can
-be completed on a deployment without mail.
+be completed on a deployment without mail — outside production, where startup refuses a
+missing `SMTP_HOST` outright and the console transport refuses to write a body at all,
+so a live reset link never reaches a log store (#466).
 
 A verification or reset payload carries the **raw link token** only while the row is
 `pending` — a retry has to rebuild the link, and the token is unrecoverable from the

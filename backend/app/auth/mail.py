@@ -14,6 +14,12 @@ With no SMTP host configured the console transport logs the message instead.
 That is the zero-configuration default the rest of the deployment story assumes
 - embedded SQLite, generated signing key - and it means a self-hoster who never
 sets up mail still sees what would have been sent.
+
+Outside production only. A reset link in a log store is a credential in a
+place nobody scoped for one, so `SKETCHY_ENV=production` refuses to start
+without a relay (`deployment.validate_mail_configuration`) and the console
+transport refuses to write a body there even if something reaches it anyway
+(#466).
 """
 from __future__ import annotations
 
@@ -32,7 +38,8 @@ from uuid import UUID
 from sqlalchemy import delete, func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.deployment import public_base_url
+from app.deployment import is_production, public_base_url
+from app.logging_config import redact
 from app.services.sweeps import (
     SweepBudget,
     SweepReport,
@@ -142,9 +149,31 @@ class EmailTransport(Protocol):
 
 
 class ConsoleTransport:
-    """The zero-configuration default: log what would have been sent."""
+    """The zero-configuration default: log what would have been sent.
+
+    The whole body, unredacted, link token included - that is the point of it
+    on a checkout with no relay, and `LOG_FORMAT=text` leaves it readable so
+    the account flow can actually be completed there.
+
+    Which is precisely why it must not run in production, where the same line
+    puts a live reset link into a log store kept longer than the hour the
+    token lives and readable by everyone with access to it. Startup already
+    refuses a production process with no relay; this is the second lock, on
+    the one statement that writes a body, so the prohibition holds for any
+    caller that builds a console transport by hand. Raising rather than
+    logging a redacted line leaves a failed outbox row with the reason on it,
+    which is a misconfiguration somebody can see.
+    """
+
+    def __init__(self, environ: Mapping[str, str] | None = None) -> None:
+        self._environ = environ
 
     async def send(self, message: OutgoingMessage) -> None:
+        if is_production(self._environ):
+            raise RuntimeError(
+                "the console transport logs the message body and must not run "
+                "in production; configure SMTP_HOST"
+            )
         logger.info(
             "email (not sent, no SMTP configured) to=%s subject=%s\n%s",
             message.to_address,
@@ -214,7 +243,10 @@ def transport_from_environment(
     values = os.environ if environ is None else environ
     host = values.get("SMTP_HOST", "").strip()
     if not host:
-        return ConsoleTransport()
+        # Handed the same mapping, so the transport judges the environment
+        # this selection was made from rather than a live one that may have
+        # been monkeypatched apart from it.
+        return ConsoleTransport(values)
     return SmtpTransport(
         host=host,
         port=int(values.get("SMTP_PORT", "587")),
@@ -471,10 +503,15 @@ async def deliver_pending(
             continue
         if await _record_failure(session_factory, claim, error, checked_at=checked_at):
             failed += 1
+            # The domain says which relay or provider was involved, which
+            # is what a delivery failure is diagnosed from; the local part
+            # only names the person. Redacted here rather than left to the
+            # JSON formatter, so the line is safe under `LOG_FORMAT=text`
+            # too.
             logger.warning(
                 "giving up on %s to %s after %d attempts: %s",
                 claim.template,
-                claim.to_address,
+                redact(claim.to_address),
                 claim.attempts,
                 error,
             )

@@ -572,7 +572,7 @@ process. These deployment settings can be tuned without code changes:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL` |
+| `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL`, and a missing `SMTP_HOST` |
 | `DB_POOL_SIZE` | `5` | Persistent connections per process |
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
@@ -583,7 +583,7 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MIGRATION_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `60` | The same three for `python -m app.db.migrate` (`sketchy-migration`); the lock budget covers the deploy advisory lock |
 | `DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `120` | The same three for every operator command (`sketchy-maintenance`): retention, projection rebuilds, drawing verification, exports, mail, metrics, the admin bootstrap and the operator reset |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
-| `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent |
+| `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent — which production refuses to start without, since that would put live reset links in the log and send nothing (#466) |
 | `SMTP_PORT` | `587` | Relay port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
 | `SMTP_STARTTLS` | `1` | Upgrade the connection before sending |
@@ -591,7 +591,7 @@ process. These deployment settings can be tuned without code changes:
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
-| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable |
+| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable, and the transport that prints them does not run in production |
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
@@ -769,6 +769,14 @@ recorded as failed rather than disappearing. With no `SMTP_HOST` set the
 messages are logged instead of sent, so a self-hoster can see what would have
 gone out - including the confirmation and reset links, which is the only way
 that flow can be completed on a deployment without mail.
+
+That is a development behaviour. With `SKETCHY_ENV=production` the server
+refuses to start without `SMTP_HOST`, and the console transport refuses to
+write a body even if something reaches it: the same line that makes recovery
+possible on a checkout would put a live reset link in a log store kept far
+longer than the hour the token lives, while every player who forgot a password
+waited for a message nobody was sending. A delivery that is given up on is
+logged with the recipient's domain and not their address.
 
 The address is used to reset a password, and to tell someone their account was
 suspended or their content hidden. Nothing else is ever sent to it.

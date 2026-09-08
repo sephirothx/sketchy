@@ -18,6 +18,7 @@ from app.db import create_db_engine
 
 from app.auth.mail import (
     CLAIM_LEASE,
+    ConsoleTransport,
     MAX_ATTEMPTS,
     MAX_CONCURRENT_SENDS,
     EmailTemplate,
@@ -408,5 +409,80 @@ async def test_purge_refuses_a_batch_size_that_cannot_finish(tmp_path):
     try:
         with pytest.raises(ValueError):
             await purge_expired_outbox_entries(factory, batch_size=0)
+    finally:
+        await engine.dispose()
+
+
+async def test_the_console_transport_writes_the_whole_message_outside_production(caplog):
+    """The link with its token in it, which is what makes recovery completable
+    on a checkout that has no relay (R-AUTH-12)."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="app.auth.mail"):
+        await ConsoleTransport({"SKETCHY_ENV": "development"}).send(
+            OutgoingMessage(
+                to_address="player@example.test",
+                subject="Reset your Sketchy password",
+                body="Choose a new password here: http://localhost:8000/reset-password?token=abc123",
+            )
+        )
+    assert "token=abc123" in caplog.text
+
+
+async def test_the_console_transport_refuses_to_log_a_body_in_production(caplog):
+    """#466: a reset link in a log store is a live credential somewhere
+    nobody scoped for one. Startup already refuses a production process with
+    no relay; this is the lock on the statement that would write the body."""
+    import logging
+
+    message = OutgoingMessage(
+        to_address="player@example.test",
+        subject="Reset your Sketchy password",
+        body="Choose a new password here: https://sketchy.example/reset-password?token=abc123",
+    )
+    with caplog.at_level(logging.DEBUG, logger="app.auth.mail"):
+        with pytest.raises(RuntimeError, match="must not run in production"):
+            await ConsoleTransport({"SKETCHY_ENV": "production"}).send(message)
+    assert "abc123" not in caplog.text
+    assert "player@example.test" not in caplog.text
+
+
+async def test_production_with_no_relay_selects_a_transport_that_will_not_log():
+    """Belt and braces on the startup guard: even reached from an operator
+    command in an environment that got past it, the fallback sends nothing to
+    the log."""
+    from app.auth.mail import transport_from_environment
+
+    carrier = transport_from_environment({"SKETCHY_ENV": "production"})
+    assert isinstance(carrier, ConsoleTransport)
+    with pytest.raises(RuntimeError, match="must not run in production"):
+        await carrier.send(
+            OutgoingMessage(to_address="p@example.test", subject="s", body="b")
+        )
+
+
+async def test_giving_up_on_a_message_names_the_domain_and_not_the_person(tmp_path, caplog):
+    """The line a failing relay is diagnosed from. The domain says which
+    provider was involved; the local part only names somebody, and this is
+    redacted here rather than left to the JSON formatter so it holds under
+    `LOG_FORMAT=text` too."""
+    import logging
+
+    engine, factory = await outbox(tmp_path)
+
+    class BrokenTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError("relay refused")
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+            at = datetime.now(timezone.utc)
+            for _ in range(MAX_ATTEMPTS):
+                await deliver_pending(factory, transport=BrokenTransport(), now=at)
+                at += timedelta(hours=3)
+        assert "player0@example.test" not in caplog.text
+        assert "***@example.test" in caplog.text
+        # Still diagnosable: the template and the relay's own answer.
+        assert "relay refused" in caplog.text
     finally:
         await engine.dispose()

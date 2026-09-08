@@ -9,6 +9,7 @@ from app.deployment import (
     public_base_url,
     shutdown_drain_seconds,
     validate_database_configuration,
+    validate_mail_configuration,
     validate_public_base_url,
     validate_python_runtime,
     validate_worker_topology,
@@ -219,3 +220,55 @@ def test_production_refuses_a_public_url_that_is_not_its_https_origin(url, reaso
 def test_the_public_url_default_is_the_development_server():
     assert public_base_url({}) == "http://localhost:8000"
     assert public_base_url({"PUBLIC_BASE_URL": "https://sketchy.example/"}) == "https://sketchy.example"
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {},
+        {"SKETCHY_ENV": "development"},
+        {"SKETCHY_ENV": "test"},
+        {"SKETCHY_ENV": "development", "SMTP_HOST": ""},
+    ],
+)
+def test_a_deployment_without_mail_still_runs_outside_production(environ):
+    """R-AUTH-05 and R-AUTH-12: a checkout with no relay is a supported
+    deployment, and its console transport is how account recovery completes
+    there."""
+    validate_mail_configuration(environ)
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["relay.example", " relay.example ", "127.0.0.1"],
+)
+def test_production_with_a_relay_starts(host):
+    validate_mail_configuration({"SKETCHY_ENV": "production", "SMTP_HOST": host})
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {"SKETCHY_ENV": "production"},
+        {"SKETCHY_ENV": "production", "SMTP_HOST": ""},
+        {"SKETCHY_ENV": "production", "SMTP_HOST": "   "},
+    ],
+)
+def test_production_without_a_relay_refuses_to_start(environ):
+    """#466: the fallback logs the message. In production that writes a live
+    reset link into a log store and sends nothing to the player waiting for
+    one - two failures, neither of them visible until somebody needs to
+    recover an account."""
+    with pytest.raises(RuntimeError, match="SMTP_HOST is required"):
+        validate_mail_configuration(environ)
+
+
+def test_the_mail_refusal_says_what_to_set_without_quoting_the_environment():
+    """It goes straight into a deployment log, like the database one."""
+    with pytest.raises(RuntimeError) as refusal:
+        validate_mail_configuration(
+            {"SKETCHY_ENV": "production", "SMTP_PASSWORD": "hunter2"}
+        )
+    message = str(refusal.value)
+    assert "SMTP_HOST" in message
+    assert "hunter2" not in message
