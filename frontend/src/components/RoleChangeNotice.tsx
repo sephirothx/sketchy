@@ -82,6 +82,15 @@ export function RoleChangeNotice() {
       // browser's session with it.
       setSignedOutByTheChange(!pushed.pending);
       setNotice(pushed);
+      // And the account carries the offer from here, not just this dialog:
+      // "Later" settles the notice, and without this the Settings entry and
+      // the menu reminder - the only two ways back to it - would stay hidden
+      // until the next reload, because `pendingRole` was last read at
+      // startup. `admin` is never pushed (R-ROLE-02), so a moderator offer is
+      // the only one that can arrive here.
+      if (pushed.pending && pushed.role === "moderator") {
+        useAuthStore.getState().applyPendingRole("moderator");
+      }
       // Deliberately no `applyRole` here any more. It existed to make the menu
       // match the new role without a reload, and there is no longer a
       // signed-in menu to correct: this browser's session went with the role

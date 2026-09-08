@@ -675,7 +675,10 @@ setup key is beside it for anything that cannot scan), give the account password
 and one code from the app, and the role begins. An offer nobody takes up lapses
 after thirty days, and the operator's role panel shows it as pending until then,
 so a promotion waiting on somebody is visible rather than looking like one that
-never happened.
+never happened. An administrator who changes their mind withdraws it by setting
+the account back, which takes nothing away from the player: they were never a
+moderator, so they stay signed in and are told nothing about a role they never
+had.
 
 The password and the code are both asked for because they answer different
 questions: the password says the account's owner is the one setting this up, the

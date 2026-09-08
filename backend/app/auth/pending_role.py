@@ -39,6 +39,7 @@ from app.domain_values import AuditTargetType
 OFFER_LIFETIME = timedelta(days=30)
 
 ROLE_OFFERED_EVENT = "admin.role_offered"
+ROLE_OFFER_WITHDRAWN_EVENT = "admin.role_offer_withdrawn"
 ROLE_OFFER_LAPSED_EVENT = "admin.role_offer_lapsed"
 ROLE_TAKEN_UP_EVENT = "admin.role_taken_up"
 

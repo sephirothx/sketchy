@@ -1122,26 +1122,59 @@ async def test_setting_the_role_back_withdraws_a_standing_offer(env):
     """An administrator changes their mind before anybody enrolled.
 
     The account holds `user` throughout, so this is the one case where
-    setting the role it already has is not a no-op.
+    setting the role it already has is not a no-op - and it is not a role
+    change either. Nothing about the account moved, so nothing may be taken
+    from it: not its sessions, and not a notice telling somebody they are no
+    longer a moderator about a role they never held.
     """
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Reconsidered")
+    client = new_client()
+    subject = await register(client, "Reconsidered")
     await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "moderator", "reason": "joining the safety rota"},
     )
+    held = await list_active_sessions(factory, user_id=subject["id"])
+    assert held
 
     withdrawn = await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "user", "reason": "thought better of it"},
     )
     assert withdrawn.status_code == 200, withdrawn.text
-    assert withdrawn.json()["pendingRole"] is None
+    assert withdrawn.json() == {
+        "id": subject["id"],
+        "role": "user",
+        "pendingRole": None,
+    }
     async with factory() as session:
         stored = await session.get(User, UUID(subject["id"]))
         assert stored.pending_role is None
         assert stored.pending_role_at is None
+
+    # Still signed in, on the same session, and still able to play.
+    assert await list_active_sessions(factory, user_id=subject["id"]) == held
+    assert (await client.get("/api/auth/me")).status_code == 200
+
+    # Recorded as what it was, not as a role change.
+    assert [row.event_type for row in await audit_rows(factory)] == [
+        "admin.role_offered",
+        "admin.role_offer_withdrawn",
+    ]
+    # And nothing is left waiting to tell them a role is on its way: the
+    # invitation goes with the offer, or it would surface on their next visit
+    # and send them to enrol for nothing.
+    async with factory() as session:
+        unread = (
+            await session.scalars(
+                select(RoleChangeNotice).where(
+                    RoleChangeNotice.user_id == UUID(subject["id"]),
+                    RoleChangeNotice.acknowledged_at.is_(None),
+                )
+            )
+        ).all()
+    assert unread == []
 
 
 async def test_a_role_needs_a_factor_its_owner_proved(env):

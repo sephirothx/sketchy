@@ -18,11 +18,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
-from app.auth.pending_role import ROLE_OFFERED_EVENT, pending_offer
+from app.auth.pending_role import (
+    ROLE_OFFER_WITHDRAWN_EVENT,
+    ROLE_OFFERED_EVENT,
+    pending_offer,
+)
 from app.auth.sessions import STAFF_ROLES, revoke_sessions
 from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
@@ -561,13 +565,48 @@ def create_admin_controls_router(
                         detail="An administrator's role cannot be changed here.",
                     )
                 previous = target.role
-                # Setting the role somebody already holds is a no-op, unless
-                # it withdraws an offer: an administrator who changed their
-                # mind about a promotion sets the account back to `user`, and
-                # it still holds `user` while the offer stands.
-                if previous == body.role and not (
-                    target.pending_role and body.role not in STAFF_ROLES
-                ):
+                # Withdrawing an offer, which is its own thing and not a role
+                # change at all: the account holds what it always held, so
+                # nothing may be revoked and nobody may be told they are "no
+                # longer a moderator" about a role they never had. An
+                # administrator does it by setting the account back to what it
+                # is, which is why this comes before the no-op check.
+                if target.pending_role and body.role not in STAFF_ROLES:
+                    withdrawn = target.pending_role
+                    target.pending_role = None
+                    target.pending_role_at = None
+                    session.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type=ROLE_OFFER_WITHDRAWN_EVENT,
+                            actor_user_id=admin.id,
+                            target_user_id=target_id,
+                            target_type=AuditTargetType.USER.value,
+                            target_id=str(target_id),
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                            details={"role": withdrawn, "reason": body.reason},
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
+                    # And the invitation goes with it. A notice saying a role
+                    # is waiting is a notice about something that no longer
+                    # exists, and it would otherwise surface on the next visit
+                    # and send somebody to enrol for nothing.
+                    await session.execute(
+                        update(RoleChangeNotice)
+                        .where(
+                            RoleChangeNotice.user_id == target_id,
+                            RoleChangeNotice.pending.is_(True),
+                            RoleChangeNotice.acknowledged_at.is_(None),
+                        )
+                        .values(acknowledged_at=datetime.now(timezone.utc))
+                    )
+                    if previous == body.role:
+                        return {"id": user_id, "role": previous, "pendingRole": None}
+                # Setting the role somebody already holds, with nothing
+                # waiting, is a no-op.
+                if previous == body.role:
                     return {
                         "id": user_id,
                         "role": previous,

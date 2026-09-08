@@ -128,6 +128,11 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setSavedCodes(false);
       setCodes(result.recoveryCodes);
       setGranted(result.roleGranted);
+      // Nothing is waiting once this lands, whichever way it went: the offer
+      // either became a role or had already lapsed, and both are cleared
+      // server-side. Saying so here is what takes the reminder out of the
+      // menu without a reload.
+      useAuthStore.getState().applyPendingRole(null);
       setOffer(null);
       setCode("");
       setPassword("");

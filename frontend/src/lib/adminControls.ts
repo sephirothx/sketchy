@@ -335,8 +335,13 @@ too thin: the one thing an operator needs confirmed is *which* account. */
 export function roleChangeMessage(
   displayName: string,
   role: "user" | "moderator",
-  { pending = false }: { pending?: boolean } = {},
+  { pending = false, withdrawn = false }: { pending?: boolean; withdrawn?: boolean } = {},
 ): string {
+  // An offer that was never taken up. Nothing about the account changed, so
+  // neither of the sentences below is true of it.
+  if (withdrawn) {
+    return `The offer of the moderator role to ${displayName} has been withdrawn.`;
+  }
   // An offer is not a promotion, and saying so would leave an administrator
   // expecting a moderator who is not one yet. The role begins when the
   // account sets up its second factor (R-AUTH-20), which may be today or on

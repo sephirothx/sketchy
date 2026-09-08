@@ -599,6 +599,10 @@ export function ControlsPanel() {
                     pending: Boolean(
                       (result as { pendingRole?: string | null } | null)?.pendingRole,
                     ),
+                    // The account held `user` before and holds it after, so
+                    // "no longer a moderator" would be a sentence about
+                    // something that never happened. What ended was the offer.
+                    withdrawn: Boolean(target.pendingRole) && role === "user",
                   }),
               );
             }}

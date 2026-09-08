@@ -928,7 +928,7 @@ by mistake, and the database is where that mistake should stop.
 
 **Flow.** What an account still has to be told about its own role. Written by
 `PATCH /api/admin/players/{id}/role` in the same transaction as the change and its
-audit event — `admin.role_changed` for a grant, `admin.role_offered` for an offer — so
+audit event — `admin.role_changed` for a grant, `admin.role_offered` for an offer, `admin.role_offer_withdrawn` for one taken back — so
 there can be no role nobody was told about and no notice about a role that was never
 granted; a no-op change writes neither. Taking an offer up writes **no** notice: that
 is the account's own last action, done in a dialog that says what just happened, and a
