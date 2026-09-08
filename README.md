@@ -660,9 +660,12 @@ the date, so you can revoke it.
 #### Two-factor authentication
 
 Adding an authenticator app asks only for a code from the app. Becoming a
-moderator or administrator additionally needs you to confirm with your password
-that the authenticator is yours - the role check looks for a second factor its
-owner vouched for, not merely for one being present.
+moderator or administrator additionally needs you to confirm that the
+authenticator is yours - your password and a code from it, together - because
+the role check looks for a second factor its owner vouched for, not merely for
+one being present. Both are asked for because they say different things: the
+password says the account's owner is the one asking, the code says the
+authenticator in place is the one they hold.
 
 Any account can add one from **Settings → Account**, beside the password and the
 signed-in devices. Setting it up shows a QR code to scan, with the setup key

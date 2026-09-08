@@ -82,11 +82,15 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await expect(dialog).to_contain_text("10 recovery codes left")
 
             # A role needs the factor to be provably the owner's, which
-            # setting it up did not establish. This is where that is given.
-            await expect(dialog).to_contain_text("confirm with your password")
+            # setting it up did not establish. This is where that is given,
+            # and it takes both halves: the password says the owner is here,
+            # a code says the authenticator enrolled is the one they hold.
+            await expect(dialog).to_contain_text("with your password and a code")
             await dialog.get_by_label("Your password").fill(PASSWORD)
+            # One step on from the code enrolment spent a moment ago.
+            await type_code(dialog, code_at(secret, current_step(time.time()) + 1))
             await dialog.get_by_role("button", name="Confirm it’s yours").click()
-            await expect(dialog).not_to_contain_text("confirm with your password")
+            await expect(dialog).not_to_contain_text("with your password and a code")
             await dialog.get_by_role("button", name="Close").click()
 
             # Staff, with nothing proved since: exactly the state a browser
@@ -130,11 +134,10 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             prompt = page.locator('[role="dialog"]', has_text="Confirm it is you")
             await expect(prompt).to_be_visible()
 
-            # The step the enrolment just spent cannot be reused, which is the
-            # replay rule doing its job; the next one is accepted.
-            # Six boxes that submit themselves on the last digit, so there is
-            # no button to press here.
-            await type_code(prompt, code_at(secret, current_step(time.time()) + 1))
+            # The code showing on the phone right now, which is what a
+            # moderator would type. Six boxes that submit themselves on the
+            # last digit, so there is no button to press here.
+            await type_code(prompt, code_at(secret, current_step(time.time())))
             await expect(prompt).not_to_be_visible()
 
             # And the command the prompt interrupted actually ran: the row is
@@ -146,11 +149,19 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
 
 async def _clear_step_up(username: str) -> None:
-    """Take back the step-up `set_role` stamps, so the prompt is reachable."""
+    """Take back the step-up `set_role` stamps, so the prompt is reachable.
+
+    Forgets the spent TOTP step with it. Enrolment and the ownership proof
+    have each spent one, and a browser cannot wait out a 30-second interval
+    inside a suite that finishes in 40 - so without this the only codes left
+    to type are ones the verifier has already seen. What that rule protects
+    is checked where it can be checked properly, in `test_auth_hardening.py`;
+    what this test needs is a code its subject will accept.
+    """
     from sqlalchemy import select, update
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    from app.db.models import AuthSession, User
+    from app.db.models import AuthSession, User, UserSecondFactor
     from tests.e2e.staff_helpers import database_url
 
     engine = create_async_engine(database_url())
@@ -165,6 +176,11 @@ async def _clear_step_up(username: str) -> None:
                     update(AuthSession)
                     .where(AuthSession.user_id == user_id)
                     .values(stepped_up_at=None)
+                )
+                await session.execute(
+                    update(UserSecondFactor)
+                    .where(UserSecondFactor.user_id == user_id)
+                    .values(last_step=0)
                 )
     finally:
         await engine.dispose()

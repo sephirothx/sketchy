@@ -1163,7 +1163,10 @@ async def test_a_role_needs_a_second_factor_somebody_proved_was_theirs(env):
     # A wrong password proves nothing.
     refused = await http.post(
         "/api/auth/second-factor/confirm-owner",
-        json={"password": "not-the-password-here"},
+        json={
+            "password": "not-the-password-here",
+            "code": code_at(offer["secret"], current_step(time.time()) + 1),
+        },
     )
     assert refused.status_code == 401
     assert not (
@@ -1171,10 +1174,58 @@ async def test_a_role_needs_a_second_factor_somebody_proved_was_theirs(env):
     ).password_proved
 
     proved = await http.post(
-        "/api/auth/second-factor/confirm-owner", json={"password": GOOD_PASSWORD}
+        "/api/auth/second-factor/confirm-owner",
+        json={
+            "password": GOOD_PASSWORD,
+            # The step after the one enrolment spent: a code is single-use,
+            # and the one typed a moment ago is gone.
+            "code": code_at(offer["secret"], current_step(time.time()) + 1),
+        },
     )
     assert proved.status_code == 200
     assert (await second_factor_state(factory, user_id=account["id"])).password_proved
+
+
+@pytest.mark.asyncio
+async def test_proving_a_factor_is_yours_needs_the_factor_as_well(env):
+    """A password alone says the owner is here, not whose authenticator it is.
+
+    The case: somebody with a stolen cookie enrols their own secret, which
+    setting one up permits by design. The account's owner is later made a
+    moderator, is asked to confirm, and gives their password - vouching for
+    an authenticator they have never seen. The gate would pass and the role
+    would land on the attacker's factor, so the code is asked for too.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Vouching")
+    planted = (await http.post("/api/auth/second-factor/enrol")).json()
+    await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": planted["secret"],
+            "code": code_at(planted["secret"], current_step(time.time())),
+        },
+    )
+
+    # The owner's password, and no code from the factor: refused.
+    without = await http.post(
+        "/api/auth/second-factor/confirm-owner", json={"password": GOOD_PASSWORD}
+    )
+    assert without.status_code == 422
+    # A code that is not this factor's is no better.
+    wrong = await http.post(
+        "/api/auth/second-factor/confirm-owner",
+        json={"password": GOOD_PASSWORD, "code": "000000"},
+    )
+    assert wrong.status_code == 401
+    assert not (
+        await second_factor_state(factory, user_id=account["id"])
+    ).password_proved
+    # And with nothing proved, the role is still refused (R-AUTH-20).
+    assert not (
+        await second_factor_state(factory, user_id=account["id"])
+    ).password_proved
 
 
 @pytest.mark.asyncio

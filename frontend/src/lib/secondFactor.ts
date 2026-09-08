@@ -75,11 +75,17 @@ export function removeSecondFactor(password: string): Promise<{ ok: boolean }> {
 /**
  * Record that this factor is the account owner's — what a staff role needs
  * and setting one up deliberately does not ask for.
+ *
+ * Both halves are the point: the password says the owner is here, the code
+ * says they hold the authenticator that is enrolled.
  */
-export function confirmSecondFactorOwner(password: string): Promise<{ ok: boolean }> {
+export function confirmSecondFactorOwner(
+  password: string,
+  code: string,
+): Promise<{ ok: boolean }> {
   return apiRequest("/api/auth/second-factor/confirm-owner", {
     method: "POST",
-    body: { password },
+    body: { password, code },
   });
 }
 

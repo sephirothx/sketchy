@@ -1034,11 +1034,19 @@ async def test_a_role_needs_a_factor_its_owner_proved(env):
         json={"role": "moderator", "reason": "joining the safety rota"},
     )
     assert refused.status_code == 400
-    assert "own password" in refused.json()["detail"]
+    assert "confirmed as its own" in refused.json()["detail"]
 
-    await client.post(
-        "/api/auth/second-factor/confirm-owner", json={"password": PASSWORD}
+    proved = await client.post(
+        "/api/auth/second-factor/confirm-owner",
+        json={
+            "password": PASSWORD,
+            # The password says the owner is here; the code says the
+            # authenticator enrolled is theirs. The step after the one
+            # enrolment spent, because a code is single-use.
+            "code": code_at(offer["secret"], current_step(time.time()) + 1),
+        },
     )
+    assert proved.status_code == 200, proved.text
     granted = await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "moderator", "reason": "joining the safety rota"},

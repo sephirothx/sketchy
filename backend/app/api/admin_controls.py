@@ -572,18 +572,18 @@ def create_admin_controls_router(
                     # very page they would enrol from.
                     #
                     # And the factor has to be *theirs*: this checks that
-                    # somebody proved the account's password while binding it,
-                    # not merely that a row exists. Setting one up asks for no
-                    # password, so without this a factor planted with a stolen
-                    # cookie would become the staff factor the moment anybody
-                    # granted the role.
+                    # somebody proved the account's password *and* a code from
+                    # the factor itself, not merely that a row exists. Setting
+                    # one up asks for no password, so without this a factor
+                    # planted with a stolen cookie would become the staff
+                    # factor the moment anybody granted the role.
                     raise HTTPException(
                         status_code=400,
                         detail=(
                             "That account needs two-factor authentication, "
-                            "confirmed with its own password, before it can hold "
-                            "this role. Ask them to set it up in Settings → "
-                            "Account first."
+                            "confirmed as its own, before it can hold this "
+                            "role. Ask them to set it up in Settings → Account "
+                            "first."
                         ),
                     )
                 target.role = body.role

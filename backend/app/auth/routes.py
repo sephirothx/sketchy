@@ -238,6 +238,16 @@ class PasswordProofBody(BaseModel):
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
+class SecondFactorOwnerBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # Both, and for different reasons: the password says the account's owner
+    # is here, the code says they hold the authenticator. Either alone leaves
+    # the question this answers open (R-AUTH-20).
+    code: str = Field(max_length=16)
+
+
 class DeleteAccountBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1305,17 +1315,51 @@ def create_auth_router(
         return {"ok": True, "recoveryCodes": codes}
 
     @router.post("/second-factor/confirm-owner")
-    async def confirm_second_factor_owner(body: PasswordProofBody, request: Request):
+    async def confirm_second_factor_owner(
+        body: SecondFactorOwnerBody, request: Request
+    ):
         """Record that this factor is the account owner's (R-AUTH-20).
 
         Setting one up does not ask for a password, so a factor may be in
         place without anybody having proved it belongs to whoever owns the
         account. A staff role needs that proof, and this is how it is given -
         without tearing the factor down and scanning it again.
+
+        Both proofs, because the two say different things. A password says
+        the account's owner is the one asking; a code says they hold the
+        authenticator that is enrolled. A password alone would be satisfied
+        by the owner of an account somebody else planted a factor on - the
+        exact case this gate exists to catch - because the owner would be
+        vouching for an authenticator they have never seen.
+
+        The password is checked first so that a wrong one costs no code
+        attempt: the failures counted against a factor lock it, and an
+        attacker holding only a session should not be able to lock the owner
+        out of proving their own.
         """
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
         await _prove_password(user, body.password)
+        outcome = await verify_second_factor(
+            session_factory, user_id=user.id, code=body.code
+        )
+        if outcome is SecondFactorOutcome.NOT_ENROLLED:
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        if outcome is SecondFactorOutcome.LOCKED:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many codes were wrong. Please wait and try again.",
+            )
+        if outcome is SecondFactorOutcome.REJECTED:
+            # A code just spent - by the enrolment a moment ago, most likely -
+            # lands here too, so the way out is said rather than left to be
+            # guessed at.
+            raise HTTPException(
+                status_code=401,
+                detail="That code is not right. Wait for the next one and try again.",
+            )
         if not await prove_second_factor_owner(session_factory, user_id=user.id):
             raise HTTPException(
                 status_code=409, detail="Two-factor authentication is not set up."

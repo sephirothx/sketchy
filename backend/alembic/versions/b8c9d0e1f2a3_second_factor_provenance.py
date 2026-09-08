@@ -13,6 +13,17 @@ cookie would have become the staff factor.
 `password_proved_at` moves that question to where it belongs. Enrolment is
 free; the column records whether anybody proved the password while binding
 the factor, and only the role gate insists on it.
+
+Existing rows are deliberately left null rather than backfilled as proved.
+The revision that creates the table is `a7b8c9d0e1f2`, one step back and not
+yet released, so there are no such rows to rescue - and were there any, a
+blanket backfill would be the wrong answer to them. By the time this column
+exists a factor can have been bound with no password at all, so "a row is
+here" is not evidence of "its owner put it here"; marking every row proved
+would hand provenance to exactly the planted factor the role gate exists to
+refuse. Null fails closed, and the way out of it is one `confirm-owner` call,
+which asks for the password and a code from the factor - something its owner
+can give and somebody who planted it cannot.
 """
 from collections.abc import Sequence
 

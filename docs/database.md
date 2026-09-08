@@ -377,12 +377,17 @@ by anything that can read the database.
 `created_at` · `last_step` · `failed_attempts` · `locked_until`, with `ck_user_second_factors_failed_attempts` and
 `ck_user_second_factors_last_step`.
 
-`password_proved_at` records whether anybody proved the account's password while
-binding this factor. Setting one up deliberately does not ask — it is optional, and it
-does not gate a player's sign-in — so the column is what a **staff role** requires
-instead: promotion checks that the factor is the owner's rather than merely that a row
-exists, which is the difference between a second factor and one somebody planted with a
-stolen cookie.
+`password_proved_at` records that somebody proved both the account's password and a
+code from this very factor. Setting one up deliberately asks for neither the password
+nor anything else — it is optional, and it does not gate a player's sign-in — so the
+column is what a **staff role** requires instead: promotion checks that the factor is
+the owner's rather than merely that a row exists, which is the difference between a
+second factor and one somebody planted with a stolen cookie. Both proofs are needed
+because they answer different halves of that question: the password says the account's
+owner is asking, the code says the authenticator enrolled is the one they hold. It is
+written by enrolment when a password came with it (the code is proved in that same
+request) or by `POST /api/auth/second-factor/confirm-owner` afterwards, and it is never
+backfilled — a null here means unproved, which fails closed.
 
 One row per account, written **only once enrolment is confirmed** by a code the account
 actually produced (R-AUTH-20): an unconfirmed secret lives in the enrolment response and

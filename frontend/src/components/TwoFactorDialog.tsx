@@ -131,11 +131,13 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await confirmSecondFactorOwner(password);
+      await confirmSecondFactorOwner(password, code);
       setPassword("");
+      setCode("");
       setState(await fetchSecondFactor());
       notify("Confirmed. This account can now be given a staff role.", "success");
     } catch (problem) {
+      setCode("");
       failed(problem, "Could not confirm it.");
     } finally {
       setBusy(false);
@@ -308,8 +310,8 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               {!state.passwordProved && (
                 <>
                   {" "}Before this account can be given a moderator or
-                  administrator role, confirm with your password that the
-                  authenticator is yours.
+                  administrator role, confirm that the authenticator is yours
+                  with your password and a code from it.
                 </>
               )}{" "}
               Each of the changes below swaps a credential, so each asks for
@@ -327,16 +329,27 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               {/* Only while it matters: setting a factor up asks for no
                   password, so one may be in place that nobody has proved
                   belongs to this account — which is the one thing a staff
-                  role needs of it (R-AUTH-20). */}
+                  role needs of it (R-AUTH-20). Both halves are asked for
+                  here: the password says the owner is present, the code says
+                  the authenticator in place is theirs. */}
               {!state.passwordProved && (
-                <button
-                  type="button"
-                  className="modal-button"
-                  onClick={() => void proveOwner()}
-                  disabled={busy || !password}
-                >
-                  Confirm it’s yours
-                </button>
+                <>
+                  <span className="two-factor-code-label">Code from your app</span>
+                  <SegmentedCodeInput
+                    value={code}
+                    onChange={setCode}
+                    label="Code from your authenticator app"
+                    disabled={busy}
+                  />
+                  <button
+                    type="button"
+                    className="modal-button"
+                    onClick={() => void proveOwner()}
+                    disabled={busy || !password || code.length < 6}
+                  >
+                    Confirm it’s yours
+                  </button>
+                </>
               )}
               <div className="two-factor-actions">
                 <button

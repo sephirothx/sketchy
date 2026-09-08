@@ -104,9 +104,12 @@ async def enrol_through_the_ui(page) -> str:
     await type_code(dialog, code_at(secret, current_step(time.time())))
     await dialog.locator(".two-factor-ack input").check()
     await dialog.get_by_role("button", name="Done").click()
-    # Setting one up asks for no password, so a role still needs this: it is
-    # what says the authenticator is the account owner's (R-AUTH-20).
+    # Setting one up asks for no password, so a role still needs this: the
+    # password says the owner is here, the code says the authenticator is
+    # theirs (R-AUTH-20). The step *after* the one enrolment just spent,
+    # because a code is single-use.
     await dialog.get_by_label("Your password").fill("a-good-password")
+    await type_code(dialog, code_at(secret, current_step(time.time()) + 1))
     await dialog.get_by_role("button", name="Confirm it’s yours").click()
     await dialog.get_by_role("button", name="Close").click()
     return secret
