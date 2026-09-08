@@ -1,7 +1,7 @@
 import { useClock } from "../hooks/useClock";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AuthDialog, type AuthMode } from "../components/AccountMenu";
+import { AuthDialog, authSubmitter, type AuthMode } from "../components/AccountMenu";
 import { AppHeader } from "../components/AppHeader";
 import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { avatarInitial, identityColor } from "../lib/avatar";
@@ -634,11 +634,8 @@ function ProfileView({ userId }: { userId: string }) {
           mode={authMode}
           suggestedUsername={authMode === "claim" ? subject?.displayName ?? "" : ""}
           onClose={() => setAuthMode(null)}
-          onSubmit={async (username, password) => {
-            const account = await (authMode === "login" ? login : register)(
-              username,
-              password,
-            );
+          onSubmit={async (credentials) => {
+            const account = await authSubmitter(authMode, login, register)(credentials);
             // Claiming keeps the same user id, so this view never remounts and
             // would otherwise keep showing the guest it loaded - name, badge,
             // and an invitation to claim an account that now exists.

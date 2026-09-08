@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../store/authStore";
-import { AuthDialog, type AuthMode } from "./AccountMenu";
+import { AuthDialog, authSubmitter, type AuthMode} from "./AccountMenu";
 import type { ScoreEntry, ScoringMode } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { competitionRanks, crownOutcome } from "../lib/standings";
@@ -249,7 +249,7 @@ export function GameEndOverlay({
         suggestedUsername={user?.displayName ?? ""}
         onClose={() => setAuthMode(null)}
         onSwitchMode={setAuthMode}
-        onSubmit={authMode === "login" ? login : register}
+        onSubmit={authSubmitter(authMode, login, register)}
       />
     )}
   </main>;

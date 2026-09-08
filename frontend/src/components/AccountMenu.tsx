@@ -11,6 +11,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useAuthStore } from "../store/authStore";
+import { authSubmitter, type AuthCredentials, type AuthMode } from "../lib/authSubmit";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError, SecondFactorRequiredError } from "../lib/api";
 import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
@@ -37,7 +38,8 @@ import {
   ZapIcon,
 } from "./icons";
 
-export type AuthMode = "claim" | "login";
+export type { AuthMode, AuthCredentials } from "../lib/authSubmit";
+export { authSubmitter } from "../lib/authSubmit";
 
 function MenuItem({
   icon,
@@ -335,7 +337,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           suggestedUsername={isGuest ? user.displayName : ""}
           onClose={() => setMode(null)}
           onSwitchMode={setMode}
-          onSubmit={mode === "login" ? login : register}
+          onSubmit={authSubmitter(mode, login, register)}
         />
       )}
       {bugReportOpen && (
@@ -356,12 +358,13 @@ export function AuthDialog({
   suggestedUsername?: string;
   onClose: () => void;
   onSwitchMode: (mode: AuthMode) => void;
-  onSubmit: (
-    username: string,
-    password: string,
-    email?: string,
-    code?: string,
-  ) => Promise<unknown>;
+  /** One object rather than four positions. `login` and `register` take
+      different arguments in a different order, and a function of three
+      parameters is assignable to a type of four - so passing one where the
+      other was expected type-checks perfectly and silently drops whatever
+      came last. That is how the second factor stopped being sent: the code
+      went into `login`'s third parameter, which is not `code`. */
+  onSubmit: (credentials: AuthCredentials) => Promise<unknown>;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
@@ -408,12 +411,12 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(
-        username.trim(),
+      await onSubmit({
+        username: username.trim(),
         password,
-        email.trim() || undefined,
-        code.trim() || undefined,
-      );
+        email: email.trim() || undefined,
+        code: code.trim() || undefined,
+      });
       onClose();
     } catch (submitError) {
       if (submitError instanceof SecondFactorRequiredError) {

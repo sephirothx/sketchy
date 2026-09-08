@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useAuthStore } from "../store/authStore";
-import { AuthDialog, type AuthMode } from "./AccountMenu";
+import { AuthDialog, authSubmitter, type AuthMode } from "./AccountMenu";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { ApiError } from "../lib/api";
 
@@ -162,7 +162,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
           mode={mode}
           onClose={() => setMode(null)}
           onSwitchMode={setMode}
-          onSubmit={mode === "login" ? login : register}
+onSubmit={authSubmitter(mode, login, register)}
         />
       )}
     </section>

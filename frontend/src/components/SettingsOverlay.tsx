@@ -28,7 +28,7 @@ import {
   type SettingsLocationState,
   type SettingsSection,
 } from "../hooks/useSettingsRoute";
-import { AuthDialog, type AuthMode } from "./AccountMenu";
+import { AuthDialog, authSubmitter, type AuthMode} from "./AccountMenu";
 import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
@@ -876,7 +876,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           suggestedUsername={isGuest ? (user?.displayName ?? "") : ""}
           onClose={() => setAuthMode(null)}
           onSwitchMode={setAuthMode}
-          onSubmit={authMode === "login" ? login : register}
+          onSubmit={authSubmitter(authMode, login, register)}
         />
       )}
       {emailOpen && (

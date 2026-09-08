@@ -107,6 +107,32 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await expect(dialog).to_contain_text("You are now a moderator")
             await dialog.get_by_role("button", name="Done").click()
 
+            # Signing in again, with the code - the one thing an account with
+            # a second factor does that nothing else here does, and the thing
+            # that was quietly broken: the dialog handed `login` the code in
+            # the argument `register` uses for an email, so the server was
+            # asked to accept a sign-in with no code and said so.
+            await page.evaluate(
+                "async () => { await fetch('/api/auth/logout', {method: 'POST'}); }"
+            )
+            await page.goto(BASE_URL)
+            await page.click(".first-run-login")
+            form = page.locator(".modal-card").filter(has_text="Password")
+            await form.get_by_label("Username").fill("TwoFactorPlayer")
+            await form.get_by_label("Password", exact=True).fill(PASSWORD)
+            await form.locator('button[type="submit"]').click()
+            # Asked for, rather than assumed: the field appears only once the
+            # server has said the password was right and it wants a code.
+            code_field = form.get_by_label("Code from your authenticator app")
+            await expect(code_field).to_be_visible()
+            # One step on from the enrolment's, which is spent.
+            await code_field.fill(code_at(secret, current_step(time.time()) + 1))
+            await form.locator('button[type="submit"]').click()
+            await expect(form).to_have_count(0)
+            await expect(page.locator(".identity-chip")).to_contain_text(
+                "TwoFactorPlayer"
+            )
+
             # Administrator from here, written rather than offered: only a
             # moderator role can be offered, and what the rest of this test is
             # about is the step-up prompt, which the operator's own commands
