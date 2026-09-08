@@ -26,6 +26,7 @@ from app.repositories.interfaces import (
 )
 from app.rooms import RoomManager
 from app.services.game_flow import GameFlowService
+from app.services.game_handoff import FinishedGameHandoffWorker
 from app.services.friend_invites import FriendInviteBook
 from app.services.friends import FriendService
 from app.services.lobby_chat import LobbyChatLog
@@ -50,6 +51,7 @@ def register_all_handlers(
     user_repo: UserRepository | None = None,
     game_history_repo: GameHistoryRepository | None = None,
     prompt_list_repo: PromptListRepository | None = None,
+    finished_games: FinishedGameHandoffWorker | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
     block_service: BlockService | None = None,
     friend_service: FriendService | None = None,
@@ -63,6 +65,7 @@ def register_all_handlers(
         user_repo=user_repo,
         game_history_repo=game_history_repo,
         prompt_list_repo=prompt_list_repo,
+        finished_games=finished_games,
         session_factory=session_factory,
         block_service=(
             block_service

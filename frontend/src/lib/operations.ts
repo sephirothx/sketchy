@@ -206,13 +206,22 @@ export type ServerSignals = {
     historyWritesAbandoned: {
       total: number;
       lastHour: number;
-      byReason: { timeout: number; error: number };
+      /** Staging losses (timeout, error) and replay losses (conflict, exhausted, unreadable). */
+      byReason: { timeout: number; error: number; conflict: number; exhausted: number; unreadable: number };
+    };
+    /** The durable handoff (#541): games staged since start, and how replay attempts ended. */
+    historyHandoff: {
+      staged: number;
+      duplicate: number;
+      replays: Record<string, number>;
     };
     readiness: { ok: boolean; reason: string | null; checkedAgoSeconds: number } | null;
   };
   queues: {
     mailOutbox: QueueDepth & { sweepSeconds: number };
     dataExports: QueueDepth;
+    /** Finished games staged and not yet in history (#541), and those given up on. */
+    finishedGames: QueueDepth & { failed: number; sweepSeconds: number };
   };
   loops: Record<string, LoopStatus>;
   series: {
@@ -298,6 +307,8 @@ export const ATTENTION = {
   socketErrorRate: 0.01,
   mailOldestFactor: 2,
   exportOldestSeconds: 600,
+  /** A staged game older than the retry schedule's second step is not a blip. */
+  handoffOldestSeconds: 300,
   poolFillRatio: 1,
   abandonmentPercent: 25,
 } as const;
@@ -403,6 +414,13 @@ export function attentionReasons(live: LiveSnapshot): AttentionReason[] {
   const exports = live.queues?.dataExports;
   if (exports && exports.oldestSeconds !== null && exports.oldestSeconds > ATTENTION.exportOldestSeconds) {
     add("export-stuck", "queues", "An export is stuck", `The oldest unfinished account export has waited ${formatDuration(exports.oldestSeconds)}.`);
+  }
+  const handoff = live.queues?.finishedGames;
+  if (handoff && handoff.oldestSeconds !== null && handoff.oldestSeconds > ATTENTION.handoffOldestSeconds) {
+    add("history-backlog", "queues", "Finished games are not reaching history", `The oldest staged game has waited ${formatDuration(handoff.oldestSeconds)}.`);
+  }
+  if (handoff && handoff.failed > 0) {
+    add("history-failed", "queues", "Finished games were lost", `${handoff.failed} staged ${handoff.failed === 1 ? "game" : "games"} could not be written into history.`);
   }
   const rate = abandonmentRate(live.games);
   if (rate !== null && rate >= ATTENTION.abandonmentPercent) {

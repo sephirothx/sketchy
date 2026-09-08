@@ -28,6 +28,11 @@ from app.handlers.payloads import (
 )
 from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_highlights import build_game_highlights
+from app.services.game_handoff import (
+    WRITE_TIMEOUT_SECONDS,
+    EnvelopeTooLarge,
+    FinishedGameEnvelope,
+)
 from app.services.game_history import build_game_history
 from app.services.runtime_metrics import metrics
 from app.services.prompt_usage import tally_prompt_usage
@@ -52,36 +57,11 @@ logger = logging.getLogger("sketchy.game_flow")
 TIMER_OVERRUN_REPORT_MS = 250
 
 # Long enough for a healthy write on a loaded server, short enough that a hung
-# database cannot pin the coroutine that ends a game.
-HISTORY_WRITE_TIMEOUT_SECONDS = 10
-# A finished-game write holds every seat's account row, and the web role's
-# lock budget (app.db.POSTGRES_ROLE_BUDGETS) is a few seconds: a deletion, a
-# projection rebuild or another save can make it lose that wait. Losing it
-# is transient, so the write is tried again a bounded number of times before
-# the game is given up as unrecorded.
-HISTORY_WRITE_ATTEMPTS = 3
-HISTORY_WRITE_RETRY_SECONDS = 0.5
-# SQLSTATEs that say "try again", not "this game cannot be written": lock
-# wait exceeded, deadlock chosen as victim, serialization failure.
-_TRANSIENT_SQLSTATES = frozenset({"55P03", "40P01", "40001"})
-
-
-def _is_transient_lock_failure(error: BaseException) -> bool:
-    """Whether a save failed on a lock the next attempt may get."""
-    seen: set[int] = set()
-    current: BaseException | None = error
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        for attribute in ("sqlstate", "pgcode"):
-            if getattr(current, attribute, None) in _TRANSIENT_SQLSTATES:
-                return True
-        current = getattr(current, "orig", None) or current.__cause__
-    return False
-# Prompt-usage metrics are a separate transaction from the history write, so
-# they get their own budget - but the same ceiling, so the two post-game
-# writes together cannot pin the coroutine for longer than a player would
-# wait before reloading anyway.
-PROMPT_USAGE_WRITE_TIMEOUT_SECONDS = 10
+# database cannot pin the coroutine that ends a game. Since #541 the one
+# write a room waits on is the staging of the finished game's envelope; the
+# history itself is written by the handoff loop with its own budget and
+# retries. The reaction path and the entry path share this bound.
+HISTORY_WRITE_TIMEOUT_SECONDS = WRITE_TIMEOUT_SECONDS
 # The same ten seconds the entry path and the finished-game write allow. A
 # game start that cannot read its prompts must refuse rather than hang the
 # host, and an unbounded database call on a request path is its own finding.
@@ -1132,11 +1112,10 @@ class GameFlowService:
         )
         room.game = None
         self._note_history_write_started(room, game, history)
-        await self._persist_game_history(room, history)
+        await self._hand_off_finished_game(room, FinishedGameEnvelope(history) if history else None)
         return True
 
-    @staticmethod
-    def _note_history_write_started(room: Room, game: Game, history) -> None:
+    def _note_history_write_started(self, room: Room, game: Game, history) -> None:
         """Tell the room which game it just held and whether a row is coming.
 
         A reaction given from the recap is a write to that game's row, so the
@@ -1146,75 +1125,68 @@ class GameFlowService:
         forgotten its game but not yet said what became of it.
         """
         room.last_game_id = game.id
-        room.last_game_history = "pending" if history is not None else "unrecorded"
+        room.last_game_history = (
+            "pending"
+            if history is not None and self._ctx.finished_games is not None
+            else "unrecorded"
+        )
 
-    async def _persist_game_history(self, room: Room, history) -> None:
-        """Write a finished game's snapshot: the only write this epic makes.
+    async def _hand_off_finished_game(
+        self, room: Room, envelope: FinishedGameEnvelope | None
+    ) -> None:
+        """Stage a finished game for the handoff loop: the one write a room waits on.
 
         Runs after the room has been told the game ended, and is bounded,
         because a database that is slow or down must not keep a room from
-        ending its game. Failure is logged and swallowed for the same
-        reason: there is nothing a player could do about it.
+        ending its game. The envelope is history, drawings and prompt usage
+        together (#541); once it is staged the loop owns it, retries it, and
+        reports back through `note_history_outcome`. If staging itself fails
+        the game is lost, and that is counted exactly as a lost write was:
+        there is nothing a player could do about it either way.
         """
-        if not self._ctx.game_history_repo or history is None:
+        worker = self._ctx.finished_games
+        if worker is None or envelope is None:
             # `_note_history_write_started` already said "unrecorded".
             return
         started = time.monotonic()
         try:
-            for attempt in range(1, HISTORY_WRITE_ATTEMPTS + 1):
-                try:
-                    await asyncio.wait_for(
-                        self._ctx.game_history_repo.save_game(
-                            history.record,
-                            history.participants,
-                            history.turns,
-                            history.score_events,
-                            history.drawings,
-                            history.reactions,
-                        ),
-                        timeout=HISTORY_WRITE_TIMEOUT_SECONDS,
-                    )
-                except Exception as error:
-                    if attempt == HISTORY_WRITE_ATTEMPTS or not _is_transient_lock_failure(error):
-                        raise
-                    logger.warning(
-                        "Game history write for room %s lost a lock (attempt %s of %s); retrying",
-                        room.id,
-                        attempt,
-                        HISTORY_WRITE_ATTEMPTS,
-                    )
-                    await asyncio.sleep(HISTORY_WRITE_RETRY_SECONDS * attempt)
-                else:
-                    break
+            await asyncio.wait_for(
+                worker.stage(envelope), timeout=HISTORY_WRITE_TIMEOUT_SECONDS
+            )
         except asyncio.TimeoutError:
-            # save_game runs in one transaction, so the cancellation this
-            # raises rolls the partial write back rather than leaving half
-            # a game behind.
             logger.error(
-                "Timed out persisting game history for room %s after %ss",
+                "Timed out staging game history for room %s after %ss",
                 room.id,
                 HISTORY_WRITE_TIMEOUT_SECONDS,
             )
-            self._note_abandoned_write(room, "game", "timeout", started)
-            self._note_history_write_finished(room, history, "failed")
+            self._note_abandoned_write(room, "handoff", "timeout", started)
+            self.note_history_outcome(envelope.game_id, "failed", room=room)
+        except EnvelopeTooLarge as error:
+            logger.error("Game %s for room %s cannot be staged: %s", envelope.game_id, room.id, error)
+            self._note_abandoned_write(room, "handoff", "too_large", started)
+            self.note_history_outcome(envelope.game_id, "failed", room=room)
         except Exception:
-            logger.exception("Failed to persist game history for room %s", room.id)
-            self._note_abandoned_write(room, "game", "error", started)
-            self._note_history_write_finished(room, history, "failed")
-        else:
-            self._note_history_write_finished(room, history, "recorded")
+            logger.exception("Failed to stage game history for room %s", room.id)
+            self._note_abandoned_write(room, "handoff", "error", started)
+            self.note_history_outcome(envelope.game_id, "failed", room=room)
 
-    @staticmethod
-    def _note_history_write_finished(room: Room, history, state: str) -> None:
-        """Record how the write went - for the game the room still calls its last.
+    def note_history_outcome(
+        self, game_id: str, state: str, *, room: Room | None = None
+    ) -> None:
+        """Record how a game's write went - for the room that still calls it its last.
 
-        The write is bounded at ten seconds, and a rematch can start and be
-        abandoned inside that. A completion arriving after the room has moved
-        on to a newer game must not speak for it: it would mark a row that is
-        still being written as recorded, or a recorded one as failed.
+        Called by the handoff loop when a replay ends ("recorded" or
+        "failed"), and here when staging fails. A rematch can start and be
+        abandoned while the loop is still working, so an outcome arriving
+        after the room has moved on to a newer game must not speak for it:
+        it would mark a row still being written as recorded, or a recorded
+        one as failed. Without a room in hand, the room is found by the
+        game it last held; a room that is gone has nobody left to tell.
         """
-        if room.last_game_id == history.record.id:
-            room.last_game_history = state
+        rooms = [room] if room is not None else list(self._ctx.room_manager.rooms.values())
+        for candidate in rooms:
+            if candidate.last_game_id == game_id:
+                candidate.last_game_history = state
 
     @staticmethod
     def _note_abandoned_write(room: Room, kind: str, reason: str, started: float) -> None:
@@ -1236,27 +1208,16 @@ class GameFlowService:
         )
         telemetry.history_write_abandoned(kind, reason)
 
-    async def _record_prompt_usage(
-        self,
-        room: Room,
-        game: Game,
-        *,
-        occurred_at: datetime,
-    ) -> None:
-        """Append a finished game's prompt-list facts.
+    def _prompt_usage_for(self, game: Game, *, occurred_at: datetime):
+        """A finished game's prompt-list facts, or None when it has none.
 
-        Runs after the room has been told the game ended, and is bounded,
-        for the same reasons as `_persist_game_history`: nothing a player
-        can see depends on these facts, so a database that is slow or
-        locked must not be able to hold a room open waiting for them.
-
-        The whole game goes in one call, and the repository writes it in
-        one transaction. Failure is logged and swallowed, like the history
-        write: there is nothing a player could do about it.
+        The whole game is one batch keyed by the game's id (R-HIST-01), and
+        it rides in the same envelope as the history so the two are staged
+        together and replayed under one manifest (#541).
         """
         revision_ids = game.prompt_source_revision_ids
         if not self._ctx.prompt_list_repo or not revision_ids:
-            return
+            return None, ()
         usage = tally_prompt_usage(
             game.completed_turns,
             batch_id=game.id,
@@ -1265,23 +1226,8 @@ class GameFlowService:
             hint_mode=game.hint_mode,
         )
         if not usage:
-            return
-        started = time.monotonic()
-        try:
-            await asyncio.wait_for(
-                self._ctx.prompt_list_repo.record_prompt_usage(revision_ids, usage),
-                timeout=PROMPT_USAGE_WRITE_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            logger.error(
-                "Timed out recording prompt usage for room %s after %ss",
-                room.id,
-                PROMPT_USAGE_WRITE_TIMEOUT_SECONDS,
-            )
-            self._note_abandoned_write(room, "prompt_usage", "timeout", started)
-        except Exception:
-            logger.exception("Failed to record prompt usage for room %s", room.id)
-            self._note_abandoned_write(room, "prompt_usage", "error", started)
+            return None, ()
+        return usage, tuple(revision_ids)
 
     async def _finish_or_next(self, room: Room) -> None:
         game = room.game
@@ -1346,8 +1292,11 @@ class GameFlowService:
             await self._emit_room_state(room)
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.
-            await self._persist_game_history(room, history)
-            await self._record_prompt_usage(room, game, occurred_at=finished_at)
+            usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
+            await self._hand_off_finished_game(
+                room,
+                FinishedGameEnvelope(history, usage, revision_ids) if history else None,
+            )
         else:
             await self._start_turn(room)
 

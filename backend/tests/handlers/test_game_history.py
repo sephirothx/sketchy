@@ -17,6 +17,9 @@ from tests.handlers.helpers import (
     build_context,
     build_room,
     play_to_completion,
+    replay_staged,
+    replay_through_backoff,
+    staged_rows,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -138,6 +141,7 @@ async def test_departed_player_still_counts_as_a_participant():
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     assert len(history.saved) == 1
     saved = history.saved[0]
@@ -185,6 +189,7 @@ async def test_a_game_everyone_walks_out_of_is_still_recorded():
         room_manager.remove_player(room, player.id)
         await flow._remove_player_from_game(room, player.id)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     assert room.game is None
     # This used to be thrown away. `_persist_game_history` ran only for a game
@@ -233,6 +238,7 @@ async def test_an_opponent_leaving_does_not_erase_the_turns_played():
     if room.game is not None:
         await flow._finish_or_next(room)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     assert len(history.saved) == 1
     saved = history.saved[0]
@@ -273,6 +279,7 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     saved = history.saved[0]
     first_round = saved.turns[0]
@@ -358,6 +365,7 @@ async def test_a_player_who_never_guesses_correctly_keeps_attempt_and_hint_facts
         ctx.timers.cancel_phase_timer(room.id)
         await flow._finish_or_next(room)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     first_turn = history.saved[0].turns[0]
     outcome = first_turn.participant_outcomes[0]
@@ -381,23 +389,21 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
     ctx = build_context(room_manager, history)
     flow = ctx.game_flow
 
-    class RestartingWordRepo(StubPromptListRepo):
-        """Stands in for the prompt-stat writes, and restarts the room mid-way.
+    # The staging insert is the one write that runs once the game is
+    # finished - exactly the window where the room is already reporting
+    # itself as waiting - so the restart is made to land inside it.
+    store = ctx.finished_games.store
+    original_stage = store.stage
+    interleaving = {"restarted": False}
 
-        These run only once the game is finished, which is exactly the window
-        where the room is already reporting itself as waiting.
-        """
+    async def restarting_stage(staged, *, now):
+        if not interleaving["restarted"]:
+            interleaving["restarted"] = True
+            await flow._start_fresh_game(room, room.player_list())
+        return await original_stage(staged, now=now)
 
-        def __init__(self) -> None:
-            super().__init__(PROMPTS)
-            self.restarted = False
-
-        async def record_prompt_usage(self, slugs, usage):
-            if not self.restarted:
-                self.restarted = True
-                await flow._start_fresh_game(room, room.player_list())
-
-    ctx.prompt_list_repo = RestartingWordRepo()
+    store.stage = restarting_stage
+    ctx.prompt_list_repo = StubPromptListRepo(PROMPTS)
     room.prompt_list_slugs = ["english_standard"]
     attach_curated_sources(room)
 
@@ -417,8 +423,9 @@ async def test_the_result_is_snapshotted_before_the_room_reopens():
         await flow._finish_or_next(room)
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
-    assert ctx.prompt_list_repo.restarted, "the interleaving under test never happened"
+    assert interleaving["restarted"], "the interleaving under test never happened"
     assert len(history.saved) == 1
     saved = history.saved[0]
     assert len(saved.turns) == 2
@@ -465,40 +472,59 @@ async def test_a_failing_write_does_not_break_the_end_of_the_game():
     assert "game_ended" in emitted
 
 
-async def test_a_write_that_lost_its_lock_is_tried_again(monkeypatch):
+async def test_a_write_that_lost_its_lock_is_tried_again_by_the_loop():
     """A lock wait past the web role's budget is transient: a deletion or a
-    rebuild held the seat's account for a moment. The game is written on
-    the next attempt rather than given up as unrecorded."""
-    from app.services import game_flow
-
-    monkeypatch.setattr(game_flow, "HISTORY_WRITE_RETRY_SECONDS", 0)
+    rebuild held the seat's account for a moment. The game stays staged and
+    is written on a later attempt rather than given up as unrecorded (#541)."""
     room_manager, room, players = build_room(rounds=1)
     history = FakeGameHistoryRepository(lost_locks=2)
     ctx = build_context(room_manager, history)
 
     await play_to_completion(ctx, room, players)
 
+    # Staged, one attempt made and lost, the row handed back with a wait.
+    assert history.attempts == 1
+    assert history.saved == []
+    assert room.last_game_history == "pending"
+    [row] = staged_rows(ctx).values()
+    assert row.state == "pending" and row.attempts == 1
+    assert row.next_attempt_at > ctx.handoff_clock.now
+
+    await replay_staged(ctx)
+    assert history.attempts == 1, "not due yet: the backoff is honoured"
+
+    await replay_through_backoff(ctx, 2)
     assert history.attempts == 3
     assert len(history.saved) == 1
+    assert staged_rows(ctx) == {}
     assert room.last_game_history == "recorded"
 
 
-async def test_a_write_that_keeps_losing_its_lock_is_given_up_and_counted(monkeypatch):
-    from app.services import game_flow
+async def test_a_write_that_keeps_failing_is_given_up_and_counted(signals):
+    from app.services.game_handoff import MAX_ATTEMPTS
 
-    monkeypatch.setattr(game_flow, "HISTORY_WRITE_RETRY_SECONDS", 0)
     room_manager, room, players = build_room(rounds=1)
-    history = FakeGameHistoryRepository(lost_locks=10)
+    history = FakeGameHistoryRepository(lost_locks=100)
     ctx = build_context(room_manager, history)
 
     await play_to_completion(ctx, room, players)
+    await replay_through_backoff(ctx, MAX_ATTEMPTS + 2)
 
-    assert history.attempts == game_flow.HISTORY_WRITE_ATTEMPTS
+    assert history.attempts == MAX_ATTEMPTS
     assert history.saved == []
     assert room.last_game_history == "failed"
+    [row] = staged_rows(ctx).values()
+    assert (row.state, row.failure_code) == ("failed", "exhausted")
+    assert row.payload is None, "a failed row keeps no content"
+    assert [lost_write(event) for event in abandoned_writes()] == [
+        {"kind": "replay", "reason": "exhausted"}
+    ]
+    assert signals.history_writes_abandoned.get(("replay", "exhausted")) == 1
 
 
-async def test_an_ordinary_failure_is_not_retried():
+async def test_a_refused_write_is_left_staged_for_the_loop():
+    """An ordinary failure used to be final. Now it is a wait: the envelope
+    is the record, and nothing is counted as lost until the loop gives up."""
     room_manager, room, players = build_room(rounds=1)
     history = FakeGameHistoryRepository(fail=True)
     ctx = build_context(room_manager, history)
@@ -506,7 +532,24 @@ async def test_an_ordinary_failure_is_not_retried():
     await play_to_completion(ctx, room, players)
 
     assert history.attempts == 1
+    assert room.last_game_history == "pending"
+    assert abandoned_writes() == []
+
+
+async def test_a_conflicting_game_is_given_up_at_once(signals):
+    """The database already holds this id with different content: the
+    second attempt would find the same thing, so there is no second attempt."""
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository(conflict=True)
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, players)
+
+    assert history.attempts == 1
     assert room.last_game_history == "failed"
+    [row] = staged_rows(ctx).values()
+    assert (row.state, row.failure_code, row.payload) == ("failed", "conflict", None)
+    assert signals.history_writes_abandoned.get(("replay", "conflict")) == 1
 
 
 async def test_history_is_skipped_entirely_without_a_repository():
@@ -571,24 +614,42 @@ async def test_game_ended_is_emitted_before_any_word_usage_is_written():
 
 
 async def test_a_hung_word_list_database_cannot_hold_the_end_of_a_game_open():
-    """A locked database must cost the counters, not the room."""
+    """A locked database must cost the counters, not the room. The room
+    never waits on the usage write at all now: it is staged with the game
+    and written by the loop, whose own hang is bounded and retried."""
+    from app.services import game_handoff
+
     room_manager, room, players = build_room(rounds=1)
     room.prompt_list_slugs = ["english_standard"]
     attach_curated_sources(room)
     words = FakeWordListRepository(hang=True)
-    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history, words)
 
-    with patch.object(game_flow, "PROMPT_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
+    with patch.object(game_handoff, "REPLAY_TIMEOUT_SECONDS", 0.05):
         await play_to_completion(ctx, room, players)
 
     assert words.calls == [], "the hung writes never landed"
+    # The history half of the envelope is done; only the usage is owed - and
+    # the recap is already open, because the game is in history.
+    assert len(history.saved) == 1
+    assert room.last_game_history == "recorded"
+    [row] = staged_rows(ctx).values()
+    assert (row.history_state, row.usage_state, row.state) == ("done", "pending", "pending")
     # The room was still told the game ended, with the real standings rather
     # than the blank list a racing `start_game` would have left behind.
     payload = emitted_payload(ctx, "game_ended")
     assert payload is not None
     assert [entry["nickname"] for entry in payload["scores"]]
     assert room.state == "waiting"
-    assert room.game is None
+
+    # Once the database answers, the retry writes the usage and only the
+    # usage: the history is not written twice.
+    words._hang = False
+    await replay_through_backoff(ctx, 1)
+    assert len(words.calls) == 1
+    assert len(history.saved) == 1
+    assert staged_rows(ctx) == {}
 
 
 async def test_every_turn_and_list_is_folded_into_a_single_write():
@@ -681,6 +742,7 @@ async def test_a_game_everyone_closes_their_tab_on_is_recorded():
     assert not room.connected_players()
     await ctx.remove_room_if_empty(room.id)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     assert room_manager.get_room(room.id) is None
     assert len(history.saved) == 1
@@ -699,6 +761,7 @@ async def test_a_room_closed_without_a_game_records_nothing():
         room_manager.remove_player(room, player.id)
     await ctx.remove_room_if_empty(room.id)
     await ctx.timers.close()
+    await replay_staged(ctx)
 
     assert history.saved == []
 
@@ -718,74 +781,110 @@ def abandoned_writes() -> list:
     ]
 
 
+def lost_write(event) -> dict:
+    """Which write and why; a replay's event also names the game."""
+    return {key: event.details[key] for key in ("kind", "reason")}
+
+
 @pytest.fixture
 def signals(monkeypatch):
     from app.services.runtime_metrics import metrics
     from app.services.telemetry import Telemetry
 
+    from app.services import game_handoff
+
     store = Telemetry()
     monkeypatch.setattr(game_flow, "telemetry", store)
+    monkeypatch.setattr(game_handoff, "telemetry", store)
     metrics.drain()
     yield store
     metrics.drain()
 
 
-async def test_a_history_write_the_database_refused_is_counted_as_an_error(signals):
+async def test_a_game_that_cannot_be_staged_is_counted_as_an_error(signals):
+    """The one write the room waits on. A database that refuses it loses
+    the game, and that is recorded exactly as a lost write always was."""
     room_manager, room, players = build_room(rounds=1)
-    ctx = build_context(room_manager, FakeGameHistoryRepository(fail=True))
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    ctx.finished_games.store.fail_stage = RuntimeError("database unavailable")
 
     await play_to_completion(ctx, room, players)
 
     events = abandoned_writes()
-    assert [event.details for event in events] == [{"kind": "game", "reason": "error"}]
+    assert [event.details for event in events] == [{"kind": "handoff", "reason": "error"}]
     assert events[0].room_id == room.id
-    assert signals.history_writes_abandoned.get(("game", "error")) == 1
+    assert signals.history_writes_abandoned.get(("handoff", "error")) == 1
+    assert room.last_game_history == "failed"
     # And the game still ended for the players.
     assert room.state == "waiting"
 
 
-async def test_a_history_write_that_hung_is_counted_as_a_timeout(signals):
+async def test_a_staging_that_hung_is_counted_as_a_timeout(signals):
     room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    ctx.finished_games.store.hang_stage = True
 
-    class HungRepo(FakeGameHistoryRepository):
-        async def save_game(self, *args):
-            await asyncio.sleep(3600)
-
-    ctx = build_context(room_manager, HungRepo())
     with patch.object(game_flow, "HISTORY_WRITE_TIMEOUT_SECONDS", 0.05):
         await play_to_completion(ctx, room, players)
 
     events = abandoned_writes()
-    assert [event.details for event in events] == [{"kind": "game", "reason": "timeout"}]
+    assert [event.details for event in events] == [{"kind": "handoff", "reason": "timeout"}]
     assert events[0].value >= 50
-    assert signals.history_writes_abandoned.get(("game", "timeout")) == 1
+    assert signals.history_writes_abandoned.get(("handoff", "timeout")) == 1
+    assert room.state == "waiting"
 
 
-async def test_prompt_usage_losses_are_counted_under_their_own_kind(signals):
+async def test_a_replay_that_hung_is_retried_not_counted_as_lost(signals):
+    """A staged game outlives a hung write: the attempt is bounded, the row
+    is handed back, and nothing is lost until the loop gives up."""
+    from app.services import game_handoff
+
     room_manager, room, players = build_room(rounds=1)
-    attach_curated_sources(room)
-    words = FakeWordListRepository(hang=True)
-    ctx = build_context(room_manager, FakeGameHistoryRepository(), words)
-    with patch.object(game_flow, "PROMPT_USAGE_WRITE_TIMEOUT_SECONDS", 0.05):
+
+    class HungRepo(FakeGameHistoryRepository):
+        async def save_game(self, *args):
+            self.attempts += 1
+            await asyncio.sleep(3600)
+
+    history = HungRepo()
+    ctx = build_context(room_manager, history)
+    with patch.object(game_handoff, "REPLAY_TIMEOUT_SECONDS", 0.05):
         await play_to_completion(ctx, room, players)
-    assert [event.details for event in abandoned_writes()] == [
-        {"kind": "prompt_usage", "reason": "timeout"}
-    ]
+
+    assert abandoned_writes() == []
+    assert signals.history_replays.get(("retried",)) == 1
+    assert room.last_game_history == "pending"
+    [row] = staged_rows(ctx).values()
+    assert row.state == "pending" and row.attempts == 1
+
+
+async def test_a_usage_write_that_conflicts_is_given_up_without_touching_the_history(signals):
+    """Facts already recorded stay recorded (R-PRIV-06): a conflicting usage
+    batch fails the envelope, and the history half written before it is
+    neither undone nor written again."""
+    from app.repositories.interfaces import PromptUsageConflictError
 
     room_manager, room, players = build_room(rounds=1)
     attach_curated_sources(room)
 
-    class RefusingWords(FakeWordListRepository):
+    class ConflictingWords(FakeWordListRepository):
         async def record_prompt_usage(self, prompt_list_revision_ids, usage):
-            raise RuntimeError("locked")
+            raise PromptUsageConflictError("different facts under this batch id")
 
-    ctx = build_context(room_manager, FakeGameHistoryRepository(), RefusingWords())
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history, ConflictingWords())
     await play_to_completion(ctx, room, players)
-    assert [event.details for event in abandoned_writes()] == [
-        {"kind": "prompt_usage", "reason": "error"}
+
+    assert len(history.saved) == 1
+    [row] = staged_rows(ctx).values()
+    assert (row.state, row.failure_code, row.history_state) == ("failed", "conflict", "done")
+    # The counters were lost, not the game: counted under their own kind,
+    # and the room's recap is open because the history is there.
+    assert [lost_write(event) for event in abandoned_writes()] == [
+        {"kind": "prompt_usage", "reason": "conflict"}
     ]
-    assert signals.history_writes_abandoned.get(("prompt_usage", "timeout")) == 1
-    assert signals.history_writes_abandoned.get(("prompt_usage", "error")) == 1
+    assert signals.history_writes_abandoned.get(("prompt_usage", "conflict")) == 1
+    assert room.last_game_history == "recorded"
 
 
 async def test_a_write_that_lands_is_not_counted_as_lost(signals):

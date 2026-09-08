@@ -228,7 +228,13 @@ def test_history_write_losses_are_counted_by_reason_and_over_the_last_hour():
     assert losses == {
         "total": 2,
         "lastHour": 1,
-        "byReason": {"timeout": 1, "error": 1},
+        "byReason": {
+            "timeout": 1,
+            "error": 1,
+            "conflict": 0,
+            "exhausted": 0,
+            "unreadable": 0,
+        },
     }
     assert (
         'sketchy_history_writes_abandoned_total{kind="game",reason="timeout"} 1'

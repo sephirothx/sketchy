@@ -131,7 +131,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
+| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
@@ -866,6 +866,58 @@ database query per chat line.
 The finished-game write is **one transaction, keyed on the game's stable UUIDv7**,
 implemented in [`backend/app/services/game_history.py`](../backend/app/services/game_history.py)
 and [`backend/app/repositories/sqlalchemy.py`](../backend/app/repositories/sqlalchemy.py).
+Since #541 it is not the write the room waits on: the room stages the whole game as one
+envelope row first, and a supervised loop performs the history write from that row.
+
+### `finished_game_envelopes`
+The durable handoff (#541, R-HIST-26). One row per finished or abandoned game, written
+by the room in a single small INSERT the moment the game ends, and deleted by the replay
+loop once the game is in history — so a table with no rows is the healthy state, and a
+row is a game that is on its way or that was lost.
+
+`game_id` **PK** (the game's own UUIDv7, R-HIST-01) · `envelope_version` ·
+`payload` (deflated JSON: the history rows, the drawings as base64, the prompt-usage
+batch; nullable, **null on a failed row**) · `byte_size` · `checksum_sha256` ·
+`state` (`pending \| processing \| failed`) · `history_state`, `usage_state`
+(`pending \| done \| none` — the two parts under one manifest, so a crash between them
+resumes only the missing one; `none` is decided at staging when the game had no usage
+to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `claimed_at`,
+`claim_token` (a claim is the pair; every later write is fenced by the token) ·
+`failure_code` (`conflict \| exhausted \| unreadable`) · `last_error` · `created_at` ·
+`failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
+loop's queue scan.
+
+The checks keep a row honest: a `failed` row has a code and a time and **no payload**;
+any other row has a payload; a `processing` row has both halves of its claim.
+
+**Flow.** The staging insert is bounded like the direct write was (10 s) and is the one
+thing that can still lose a game: a database that is down at the moment a game ends.
+That loss is recorded exactly as before (`history.write_abandoned`, kind `handoff`) —
+the issue is explicit that an outbox in the same unavailable database is not an outage
+guarantee, and this table does not pretend to be one. Everything after the insert is
+guaranteed: the loop
+([`backend/app/services/game_handoff.py`](../backend/app/services/game_handoff.py))
+claims one due row at a time (`FOR UPDATE SKIP LOCKED` on PostgreSQL, a compare-and-set
+UPDATE on both engines), writes history through `save_game` and usage through
+`record_prompt_usage`, marks each part done, and deletes the row. Both writes are
+idempotent by content (R-HIST-02), so a commit whose acknowledgement was lost is simply
+tried again. A transient failure hands the row back with backoff — 1 s, 5 s, 30 s,
+2 min, 10 min, 30 min, 60 min, eight attempts in all — and then fails it as `exhausted`;
+a conflict (the database already holds this game or this batch with different content)
+fails on first sight; an envelope this build cannot read fails as `unreadable`. A failure
+after the history half is written loses only the usage counters and is counted under
+kind `prompt_usage`; the room's recap opens the moment the history is in. A claim
+older than 15 minutes belongs to a process that died and is taken over with a new
+token; a planned shutdown hands a claim back at once. Failed rows keep their metadata
+**30 days** for the operations page (`sketchy_finished_games_failed`) and are purged by
+the loop's own sweep; their payload is dropped the moment they fail, so nothing an
+erased account authored (#606) sits here longer than the retry window — and the replay
+itself runs through the same erasure barrier as every writer (R-PRIV-15), so content
+erased while an envelope waited is tombstoned on the way in, never restored.
+
+```bash
+cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # replay by hand
+```
 
 ### `game_records`
 | Column | Notes |
@@ -1273,7 +1325,12 @@ idempotency triple is the identity, so it is the key.
 
 **Flow.** Each finished game appends one idempotent fact per used prompt/version and
 pinned list revision, with the authoritative occurrence time plus scoring and hint modes
-(`batch_id` is the game's UUIDv7, which is what makes a retry idempotent). The writer
+(`batch_id` is the game's UUIDv7, which is what makes a retry idempotent). Since #541
+the batch is also a fact of its own: `prompt_usage_batches` (`batch_id` **PK** ·
+`payload_hash` · `fact_count` · `recorded_at`) records that the batch was written and
+with what content, so a retry can tell an identical batch (idempotent) from a different
+one under the same id (`PromptUsageConflictError`), and a batch that touched no pinned
+prompt (zero facts, still a row) from one never written at all. The writer
 reads only the memberships the game touched — the pinned revisions intersected with the
 offered and picked versions, in chunks of 500 — rather than every membership of every
 pinned revision (#613); the revision predicate stays, so nothing outside the game's

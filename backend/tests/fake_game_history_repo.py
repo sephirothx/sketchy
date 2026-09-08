@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from app.repositories.interfaces import (
     DrawingReactionResult,
     GameDetail,
+    GameHistoryConflictError,
     GameHistoryRepository,
     GameParticipantInput,
     GameRecordInput,
@@ -50,9 +51,14 @@ def _lock_not_available() -> Exception:
 class FakeGameHistoryRepository(GameHistoryRepository):
     """Captures `save_game` calls so tests can assert on what was persisted."""
 
-    def __init__(self, *, fail: bool = False, lost_locks: int = 0) -> None:
+    def __init__(
+        self, *, fail: bool = False, lost_locks: int = 0, conflict: bool = False
+    ) -> None:
         self.saved: list[SavedGame] = []
         self.fail = fail
+        # The database already holds this game id with different content:
+        # the one failure a replay never retries (#541).
+        self.conflict = conflict
         # How many saves in a row lose their lock wait the way PostgreSQL
         # reports it (SQLSTATE 55P03), before one goes through.
         self.lost_locks = lost_locks
@@ -77,6 +83,8 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self.attempts += 1
         if self.fail:
             raise RuntimeError("database unavailable")
+        if self.conflict:
+            raise GameHistoryConflictError(f"Game '{game_record.id}' conflicted")
         if self.lost_locks:
             self.lost_locks -= 1
             raise _lock_not_available()

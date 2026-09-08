@@ -28,6 +28,7 @@ from app.db.models import (
     PromptListRevision,
     PromptListRevisionItem,
     PromptTag,
+    PromptUsageBatch,
     PromptUsageFact,
     PromptVersion,
     PromptVersionAlias,
@@ -90,6 +91,7 @@ from app.repositories.interfaces import (
     DrawingReactionResult,
     GameDetail,
     GameHistoryConflictError,
+    PromptUsageConflictError,
     GameHistoryRepository,
     GameParticipantInput,
     GameParticipantSummary,
@@ -265,6 +267,24 @@ async def _identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...
         )
     ).all()
     return (canonical, *aliases)
+
+
+def _prompt_usage_hash(revision_ids: Sequence[UUID], usage: PromptUsage) -> str:
+    """Canonical digest of one usage batch, to tell a retry from a conflict."""
+    payload = {
+        "revision_ids": sorted(_public_id(revision_id) for revision_id in revision_ids),
+        "offers": sorted((key, count) for key, count in usage.offers.items()),
+        "picks": sorted(
+            (key, totals.picks, totals.correct_guesses, totals.total_guessers)
+            for key, totals in usage.picks.items()
+        ),
+        "occurred_at": usage.occurred_at.isoformat(),
+        "scoring_mode": usage.scoring_mode,
+        "hint_mode": usage.hint_mode,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def _to_game_summary(game: GameRecord, *, with_rule_snapshot: bool = True) -> GameSummary:
@@ -865,6 +885,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         turns: list[TurnRecordInput],
         score_events: list[ScoreEventInput] | None = None,
         reactions: list[TurnDrawingReactionInput] | None = None,
+        drawings: list[TurnDrawingInput] | None = None,
     ) -> str:
         """Canonical digest used only to distinguish retries from conflicts."""
         payload = {
@@ -887,6 +908,24 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 "finished_at": game_record.finished_at.isoformat(),
                 "visibility": game_record.visibility,
             },
+            # The drawings are content too (#541): a retry that carries
+            # different bytes, or a drawing where the first attempt had
+            # none, is a different game and must say so.
+            "drawings": sorted(
+                (
+                    {
+                        "turn_id": item.turn_id,
+                        "unavailable_reason": item.unavailable_reason,
+                        "payload_sha256": (
+                            None
+                            if item.payload is None
+                            else hashlib.sha256(item.payload).hexdigest()
+                        ),
+                    }
+                    for item in drawings or []
+                ),
+                key=lambda item: item["turn_id"],
+            ),
             "participants": sorted(
                 (
                     {
@@ -1006,7 +1045,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
             raise ValueError("Unknown game prompt source mode")
         payload_hash = self._payload_hash(
-            game_record, participants, turns, score_events, reactions
+            game_record, participants, turns, score_events, reactions, drawings
         )
         try:
             async with self._session_factory() as session:
@@ -3621,16 +3660,20 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return
         if batch_id is None:
             raise ValueError("Prompt usage batch ID must be a UUID.")
+        payload_hash = _prompt_usage_hash(revision_ids, usage)
         async with self._session_factory() as session:
             async with session.begin():
-                if await session.scalar(
-                    select(PromptUsageFact.batch_id).where(
-                        PromptUsageFact.batch_id == batch_id
-                    ).limit(1)
-                ):
+                existing = await session.get(PromptUsageBatch, batch_id)
+                if existing is not None:
                     # A committed-after-timeout retry of the same finished game
-                    # is harmless. One transaction means a batch is all-or-none.
-                    return
+                    # is harmless; the same id carrying different facts is not
+                    # (#541). One transaction means a batch is all-or-none, so
+                    # the batch row is proof the facts are there too.
+                    if existing.payload_hash == payload_hash:
+                        return
+                    raise PromptUsageConflictError(
+                        f"Prompt usage batch '{batch_id}' was retried with different facts."
+                    )
                 # Only the memberships the game actually touched: a pinned
                 # revision may hold five hundred prompts and the game offered
                 # a few dozen, so the SELECT is filtered by the offered and
@@ -3684,6 +3727,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                             ),
                         )
                     )
+                # Written even when nothing matched - a batch of zero facts is
+                # a game that offered nothing from its pinned lists, which is
+                # not the same as a game whose usage was never written.
+                session.add(
+                    PromptUsageBatch(
+                        batch_id=batch_id,
+                        payload_hash=payload_hash,
+                        fact_count=len(facts),
+                    )
+                )
                 session.add_all(facts)
 
     async def get_prompt_stats(

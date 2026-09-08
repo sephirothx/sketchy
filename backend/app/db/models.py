@@ -34,8 +34,13 @@ from app.domain_values import (
     BugReportScreenshotStatus,
     GAME_OUTCOMES,
     GAME_VISIBILITIES,
+    FINISHED_GAME_HANDOFF_STATES,
+    HANDOFF_FAILURE_CODES,
+    HANDOFF_PART_STATES,
+    FinishedGameHandoffState,
     GameOutcome,
     GameVisibility,
+    HandoffPartState,
     RUNTIME_EVENT_TYPES,
     AUTH_TOKEN_PURPOSES,
     EMAIL_OUTBOX_STATES,
@@ -2001,6 +2006,120 @@ class GameRecord(Base):
         back_populates="game",
         cascade="all, delete-orphan",
         order_by="ScoreEvent.event_order",
+    )
+
+
+class FinishedGameEnvelope(Base):
+    """A finished game written down whole, before it is unpacked into history (#541).
+
+    The row is the queue. `game_flow` stages one envelope per finished or
+    abandoned game in a single small insert - history, drawings and prompt
+    usage together, versioned and bounded - and the replay loop claims it,
+    writes the two parts, and deletes the row. A crash at any point leaves
+    a row that says exactly what is still missing; a claim left behind by a
+    dead process is reclaimed once it is stale. Terminal failures keep the
+    row as a record and drop the payload, so nothing an erased account
+    authored sits here longer than the retry window.
+    """
+
+    __tablename__ = "finished_game_envelopes"
+    __table_args__ = (
+        _values_check(
+            "state", FINISHED_GAME_HANDOFF_STATES, "ck_finished_game_envelopes_state"
+        ),
+        _values_check(
+            "history_state", HANDOFF_PART_STATES, "ck_finished_game_envelopes_history"
+        ),
+        _values_check(
+            "usage_state", HANDOFF_PART_STATES, "ck_finished_game_envelopes_usage"
+        ),
+        _values_check(
+            "failure_code", HANDOFF_FAILURE_CODES, "ck_finished_game_envelopes_failure"
+        ),
+        CheckConstraint("attempts >= 0", name="ck_finished_game_envelopes_attempts"),
+        CheckConstraint("byte_size >= 0", name="ck_finished_game_envelopes_byte_size"),
+        # A failed row has said why and when, and holds no bytes; any other
+        # row holds the envelope it exists to carry.
+        CheckConstraint(
+            "(state = 'failed') = (failed_at IS NOT NULL AND failure_code IS NOT NULL)",
+            name="ck_finished_game_envelopes_failed",
+        ),
+        CheckConstraint(
+            "state = 'failed' OR payload IS NOT NULL",
+            name="ck_finished_game_envelopes_payload",
+        ),
+        # A claim is a pair: when it was taken and by which fencing token.
+        CheckConstraint(
+            "(state = 'processing') = (claimed_at IS NOT NULL AND claim_token IS NOT NULL)",
+            name="ck_finished_game_envelopes_claim",
+        ),
+        Index("ix_finished_game_envelopes_due", "state", "next_attempt_at"),
+    )
+
+    # The game's own UUIDv7 (R-HIST-01): one envelope per game, ever.
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    )
+    envelope_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(16),
+        default=FinishedGameHandoffState.PENDING.value,
+        server_default=text("'pending'"),
+        nullable=False,
+    )
+    history_state: Mapped[str] = mapped_column(
+        String(16),
+        default=HandoffPartState.PENDING.value,
+        server_default=text("'pending'"),
+        nullable=False,
+    )
+    usage_state: Mapped[str] = mapped_column(
+        String(16),
+        default=HandoffPartState.PENDING.value,
+        server_default=text("'pending'"),
+        nullable=False,
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    next_attempt_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    failure_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    failed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class PromptUsageBatch(Base):
+    """One finished game's prompt-usage batch, as a fact of its own (#541).
+
+    The facts table says what was offered and picked; this says that the
+    batch was written, with what content, so a retry can tell an identical
+    batch (idempotent) from a different one under the same id (a conflict),
+    and a batch that touched no pinned prompt (zero facts, still written)
+    from one that was never written at all.
+    """
+
+    __tablename__ = "prompt_usage_batches"
+    __table_args__ = (
+        CheckConstraint("fact_count >= 0", name="ck_prompt_usage_batches_fact_count"),
+    )
+
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    )
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    fact_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
 

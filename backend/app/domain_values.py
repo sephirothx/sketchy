@@ -331,6 +331,10 @@ class RuntimeEventType(StrEnum):
     # A finished game's history, or its prompt-usage facts, that the server
     # gave up writing. The swallow is deliberate (a slow database must not
     # hold a room open); the count is what makes the loss visible (#482).
+    # Since #541 the kinds are `handoff` (the finished game could not be
+    # staged: the database was down as it ended) and `replay` (staged, then
+    # given up on for good: a conflict, retries exhausted, or an envelope
+    # this build cannot read).
     HISTORY_WRITE_ABANDONED = "history.write_abandoned"
 
 
@@ -346,6 +350,51 @@ class GameOutcome(StrEnum):
     FINISHED = "finished"
     ABANDONED = "abandoned"
     SHUTDOWN = "shutdown"
+
+
+class FinishedGameHandoffState(StrEnum):
+    """Where a staged finished game is on its way into history (#541).
+
+    A finished game is written down whole, as one envelope row, before
+    anything tries to unpack it into the history tables; the row is the
+    queue. `pending` waits for the replay loop, `processing` is claimed by
+    it (a stale claim is reclaimed), and `failed` is terminal - the payload
+    is dropped, the row stays as a record. A game that made it into history
+    has no row at all: the history is the record.
+    """
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    FAILED = "failed"
+
+
+class HandoffPartState(StrEnum):
+    """One of the two writes an envelope carries, under one manifest.
+
+    History and prompt usage are written by different repositories in
+    different transactions, so an envelope records each on its own: a crash
+    between them resumes the one that is missing rather than both.
+    """
+
+    PENDING = "pending"
+    DONE = "done"
+    # There was nothing of this kind to write: a game with no prompt-list
+    # sources has no usage. Distinct from "not written yet".
+    NONE = "none"
+
+
+class HandoffFailureCode(StrEnum):
+    """Why a staged finished game will never be replayed."""
+
+    # The database already holds this game id with different content, or
+    # this batch id with different usage. Never retried: the second attempt
+    # would find the same thing.
+    CONFLICT = "conflict"
+    # Transient failures for as long as the backoff schedule allows.
+    EXHAUSTED = "exhausted"
+    # An envelope version this build cannot decode, or bytes that fail
+    # their own checksum.
+    UNREADABLE = "unreadable"
 
 
 class GameVisibility(StrEnum):
@@ -464,6 +513,9 @@ REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
 GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)
+FINISHED_GAME_HANDOFF_STATES = tuple(state.value for state in FinishedGameHandoffState)
+HANDOFF_PART_STATES = tuple(state.value for state in HandoffPartState)
+HANDOFF_FAILURE_CODES = tuple(code.value for code in HandoffFailureCode)
 RUNTIME_EVENT_TYPES = tuple(event.value for event in RuntimeEventType)
 AUTH_TOKEN_PURPOSES = tuple(purpose.value for purpose in AuthTokenPurpose)
 EMAIL_OUTBOX_STATES = tuple(state.value for state in EmailOutboxState)
