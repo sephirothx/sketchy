@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
-import { AuthDialog, type AuthMode } from "./AccountMenu";
+import { AuthDialog } from "./AccountMenu";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { Canvas, type CanvasRef } from "./Canvas";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { GuessPips } from "./GuessPips";
@@ -82,7 +83,7 @@ export function ConnectedDrawingReactionControl({
           suggestedUsername={user?.displayName ?? ""}
           onClose={() => setAuthMode(null)}
           onSwitchMode={setAuthMode}
-          onSubmit={authMode === "login" ? login : register}
+          onSubmit={authSubmitter(authMode, login, register)}
         />
       )}
     </>

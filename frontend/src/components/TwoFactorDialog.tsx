@@ -10,6 +10,7 @@ import { SegmentedCodeInput } from "./SegmentedCodeInput";
 import { CopyIcon, DownloadIcon } from "./icons";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
+import { passkeysAvailable, registerPasskey, fetchPasskeys, forgetPasskey, type Passkey } from "../lib/passkeys";
 import {
   beginEnrolment,
   confirmEnrolment,
@@ -49,6 +50,14 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   // The role this enrolment just started, when one was waiting on it. Also
   // means every session on the account has ended, including this one.
   const [granted, setGranted] = useState<string | null>(null);
+  // Passkeys this account holds, and whether this browser can make one. The
+  // dialog offers the app route to a device that cannot (R-AUTH-23).
+  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
+  const canUsePasskeys = passkeysAvailable();
+  // Either kind counts. An account whose only credential is a passkey has
+  // nothing enrolled in `state`, and would otherwise be shown the setup
+  // chooser it has already been through.
+  const hasFactor = Boolean(state?.enrolled) || (passkeys?.length ?? 0) > 0;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { notify } = useToast();
@@ -73,18 +82,16 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     let active = true;
+    void fetchPasskeys()
+      .then((result) => { if (active) setPasskeys(result.passkeys); })
+      .catch(() => { if (active) setPasskeys([]); });
     void fetchSecondFactor()
       .then((result) => {
         if (!active) return;
         setState(result);
-        // Straight into it. Somebody who opened this to set a second factor
-        // up does not need a page explaining that a second factor is a
-        // six-digit code first.
-        if (!result.enrolled) void start();
       })
       .catch(() => { if (active) setError("Could not read your security settings."); });
     return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function failed(problem: unknown, fallback: string) {
@@ -142,6 +149,55 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       if (!result.roleGranted) setState(await fetchSecondFactor());
     } catch (problem) {
       failed(problem, "That code was not accepted.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPasskey() {
+    if (!password) {
+      setError("Your password confirms this passkey is yours.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await registerPasskey(password);
+      setPassword("");
+      setGranted(result.roleGranted);
+      useAuthStore.getState().applyPendingRole(null);
+      setPasskeys((current) => [...(current ?? []), result.passkey]);
+      if (!result.roleGranted) {
+        setState(await fetchSecondFactor());
+        notify("Passkey added.", "success");
+        onClose();
+      }
+    } catch (problem) {
+      // The browser's own refusals arrive as DOMException - a cancelled
+      // prompt, a device that will not do it - and read badly as-is.
+      if (problem instanceof DOMException) {
+        setError("That passkey was not created. You can try again.");
+      } else {
+        failed(problem, "Could not add that passkey.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removePasskey(passkeyId: string) {
+    if (!password) {
+      setError("Your password is needed to remove a passkey.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await forgetPasskey(passkeyId, password);
+      setPassword("");
+      setPasskeys((current) => (current ?? []).filter((one) => one.id !== passkeyId));
+    } catch (problem) {
+      failed(problem, "Could not remove that passkey.");
     } finally {
       setBusy(false);
     }
@@ -275,6 +331,46 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
+        {/* The first thing offered, and the reason the app route is now the
+            fallback rather than the only way: a passkey cannot be read out
+            over the phone, which is the one attack a code has no answer for
+            (R-AUTH-23). Somebody on a device that cannot make one is not
+            stuck - the app is still there, one line below. */}
+        {!codes && !granted && !offer && passkeys !== null && !hasFactor && (
+          <div className="auth-form two-factor-choose">
+            <p className="modal-body">
+              Moderators and administrators sign in with a passkey: your
+              device confirms it is you — a fingerprint, your face, or its
+              PIN — and nothing is typed that could be given away.
+            </p>
+            <label htmlFor={passwordId}>Your password</label>
+            <input
+              id={passwordId}
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+            />
+            <p className="modal-hint">Confirms the passkey is being added by you.</p>
+            <button
+              type="button"
+              className="modal-button"
+              onClick={() => void addPasskey()}
+              disabled={busy || !password || !canUsePasskeys}
+            >
+              {busy ? "Waiting for your device…" : "Set up a passkey"}
+            </button>
+            <p className="modal-hint two-factor-fallback">
+              {canUsePasskeys
+                ? "No passkey on this device? "
+                : "This browser cannot make a passkey. "}
+              <button type="button" className="auth-link" onClick={() => void start()}>
+                Use an authenticator app instead
+              </button>
+            </p>
+          </div>
+        )}
+
         {!codes && !granted && offer && (
           <form className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
             <p className="modal-body two-factor-lead">
@@ -376,13 +472,17 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {!codes && !granted && state?.enrolled && (
+        {!codes && !granted && !offer && hasFactor && (
           <>
             <p className="modal-body">
-              Two-factor authentication is on. You have{" "}
-              {state.recoveryCodesRemaining} recovery{" "}
-              {state.recoveryCodesRemaining === 1 ? "code" : "codes"} left.
-              {!state.passwordProved && (
+              Two-factor authentication is on.{" "}
+              {state?.enrolled && (
+                <>
+                  You have {state.recoveryCodesRemaining} recovery{" "}
+                  {state.recoveryCodesRemaining === 1 ? "code" : "codes"} left.
+                </>
+              )}
+              {state?.enrolled && !state.passwordProved && (
                 <>
                   {" "}Before this account can be given a moderator or
                   administrator role, confirm that the authenticator is yours
@@ -392,6 +492,31 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               Each of the changes below swaps a credential, so each asks for
               your password.
             </p>
+            {/* What this account can actually sign in with, listed like the
+                signed-in devices are: several is the point, because losing
+                one device should not be losing the role. */}
+            {(passkeys?.length ?? 0) > 0 && (
+              <ul className="two-factor-passkeys" aria-label="Passkeys">
+                {(passkeys ?? []).map((passkey) => (
+                  <li key={passkey.id}>
+                    <span className="two-factor-passkey-name">
+                      {passkey.label}
+                      {!passkey.backedUp && (
+                        <span className="modal-hint"> · on this device only</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-danger-ghost btn-compact"
+                      onClick={() => void removePasskey(passkey.id)}
+                      disabled={busy || !password}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="auth-form two-factor-manage">
               <label htmlFor={passwordId}>Your password</label>
               <input
@@ -407,7 +532,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   role needs of it (R-AUTH-20). Both halves are asked for
                   here: the password says the owner is present, the code says
                   the authenticator in place is theirs. */}
-              {!state.passwordProved && (
+              {state?.enrolled && !state.passwordProved && (
                 <>
                   <span className="two-factor-code-label">Code from your app</span>
                   <SegmentedCodeInput
@@ -427,27 +552,55 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 </>
               )}
               <div className="two-factor-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-compact"
-                  onClick={() => void newCodes()}
-                  disabled={busy || !password}
-                >
-                  New recovery codes
-                </button>
-                {/*
-                  Offered even when the role requires it: the server refuses,
-                  and being told why by the thing you asked is clearer than an
-                  option that silently is not there.
-                */}
-                <button
-                  type="button"
-                  className="btn btn-danger-ghost btn-compact"
-                  onClick={() => void turnOff()}
-                  disabled={busy || !password}
-                >
-                  Turn off
-                </button>
+                {canUsePasskeys && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => void addPasskey()}
+                    disabled={busy || !password}
+                  >
+                    Add a passkey
+                  </button>
+                )}
+                {/* Both of these are about the authenticator app, and an
+                    account whose only credential is a passkey has none: the
+                    endpoints answer 409, so offering them is offering a
+                    refusal. What that account wants instead is the app it
+                    does not have yet. */}
+                {state?.enrolled ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-compact"
+                      onClick={() => void newCodes()}
+                      disabled={busy || !password}
+                    >
+                      New recovery codes
+                    </button>
+                    {/*
+                      Offered even when the role requires it: the server
+                      refuses, and being told why by the thing you asked is
+                      clearer than an option that silently is not there.
+                    */}
+                    <button
+                      type="button"
+                      className="btn btn-danger-ghost btn-compact"
+                      onClick={() => void turnOff()}
+                      disabled={busy || !password}
+                    >
+                      Turn off
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => void start()}
+                    disabled={busy}
+                  >
+                    Add an authenticator app
+                  </button>
+                )}
               </div>
             </div>
           </>

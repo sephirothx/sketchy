@@ -411,6 +411,50 @@
 }
 .role-notice-decide .modal-button { margin: 0; }
 
+/* The passkey route, above the fields it replaces. */
+.auth-passkey { margin-top: 14px; width: 100%; }
+.auth-divider {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+.auth-divider::before,
+.auth-divider::after {
+  background: var(--line-strong);
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
+.two-factor-choose { text-align: left; }
+.two-factor-choose .modal-hint { margin: 2px 0 0; }
+.two-factor-fallback { text-align: center; margin-top: 12px !important; }
+
+/* What the account can sign in with. A row each, because the point of the
+   list is that there is more than one. */
+.two-factor-passkeys {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  text-align: left;
+}
+.two-factor-passkeys li {
+  align-items: center;
+  background: var(--field);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 6px 6px 6px 10px;
+}
+.two-factor-passkey-name { font-size: 14px; }
+
 /* The tick that has to be given before the codes go. Reads as a statement
    rather than a control, which is what it is. */
 .two-factor-ack {
@@ -460,6 +504,7 @@
   padding: 9px 11px;
   width: 100%;
 }
+.step-up-passkey { margin: 4px 0 14px; width: 100%; }
 .step-up-swap { display: block; margin-top: 12px; padding-left: 0; }
 .step-up-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 

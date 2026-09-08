@@ -133,7 +133,9 @@ async def take_up_the_offer(page, password: str = "a-good-password") -> str:
     # By accessible name: the settings overlay is a dialog too, and it
     # carries this row's label.
     dialog = page.get_by_role("dialog", name="Two-factor authentication")
-    # No page of explanation first: the dialog offers a secret as it opens.
+    # The passkey is what the dialog offers first (R-AUTH-23); this helper is
+    # about the authenticator app, which is the route below it.
+    await dialog.get_by_role("button", name="Use an authenticator app instead").click()
     secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
     # The password says whose account this is being bound to; the code says an
     # authenticator produced it. The role is granted on the pair.

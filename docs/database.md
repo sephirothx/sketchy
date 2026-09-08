@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c9d0e1f2a3b4_pending_staff_role.py` (#468).
+`d0e1f2a3b4c5_staff_passkeys.py` (#684).
 
 To regenerate an authoritative dump of this schema:
 
@@ -405,6 +405,48 @@ first, and R-AUTH-21's step-up is required again per action.
 code single-use **inside its own step** — a relayed code finds it already gone.
 `failed_attempts` and `locked_until` stop a machine grinding six digits behind a password
 it already has, which the login throttle in front does not cover.
+
+### `user_passkeys`
+`credential_id` **PK** · `id` (opaque, unique) · `user_id` (CASCADE, indexed) · `public_key` ·
+`sign_count` · `label` · `backed_up` · `created_at` · `last_used_at`, with
+`ck_user_passkeys_sign_count`.
+
+The opposite of `user_second_factors` in the way that matters: what is stored is a
+**public** key. TOTP is symmetric, so that table holds what the authenticator holds and a
+database read hands over a working credential; this one holds a verifier and nothing that
+can produce a signature (R-AUTH-23). The credential id is the primary key because that is
+what a sign-in arrives holding — the browser names the credential and the account is read
+from the row, rather than claimed by the caller. `id` exists so a page can name one for
+deletion without putting the credential id in a URL.
+
+Several rows per account on purpose: a laptop and a phone are two, and losing one device
+must not be losing the role. `sign_count` is the authenticator's own counter, stored to be
+compared — a decrease is the one signal WebAuthn gives that a credential has been cloned,
+and authenticators that keep no counter report zero throughout. `backed_up` says whether
+the platform syncs a copy, which is what lets the page tell somebody their only passkey
+lives on one device.
+
+Deleted with the account rather than by cascade: erasure anonymises the `users` row instead of removing it,
+so `ON DELETE CASCADE` never fires and `account_data.py` clears these tables by hand (R-AUTH-23).
+
+There is no `password_proved_at` here, unlike `user_second_factors`: registering a passkey demands
+the account's password, so every row is one somebody proved was theirs. A promotion reads it that
+way (R-AUTH-20).
+
+### `webauthn_challenges`
+`challenge` **PK** · `purpose` (`register`/`authenticate`, checked) · `user_id` (CASCADE,
+indexed, nullable) · `created_at` · `expires_at`, with
+`ix_webauthn_challenges_expires_at`.
+
+Both ceremonies rest on a challenge that the server chose and that can be spent once: one
+the client could pick is a signature an attacker could have collected in advance, and one
+that outlives its use is a signature they could replay. So it is stored rather than carried
+in the page, deleted as it is read, and lives five minutes. `purpose` keeps the ceremonies
+apart — a challenge minted to add a credential must not be spendable as a sign-in.
+`user_id` is null for a sign-in, which is asked for before anybody has said who they are.
+
+Nothing sweeps this table on a timer: each new ceremony deletes what has expired, which
+bounds it by how many are in flight rather than by how many were ever started.
 
 ### `user_recovery_codes`
 `id` **PK** · `user_id` (CASCADE) · `code_hash` · `created_at` · `used_at`, with

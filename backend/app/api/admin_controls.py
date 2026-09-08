@@ -30,7 +30,13 @@ from app.auth.pending_role import (
 from app.auth.sessions import STAFF_ROLES, revoke_sessions
 from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
-from app.db.models import AuditEvent, RoleChangeNotice, UserSecondFactor, generate_uuid
+from app.db.models import (
+    AuditEvent,
+    RoleChangeNotice,
+    UserPasskey,
+    UserSecondFactor,
+    generate_uuid,
+)
 from app.domain_values import AuditTargetType
 from app.db.models import User
 from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
@@ -551,7 +557,14 @@ def create_admin_controls_router(
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         async with session_factory() as session:
             async with session.begin():
-                target = await session.get(User, target_id)
+                # Taken for update, so this queues against the account's own
+                # writes rather than interleaving with them. The one that
+                # matters is a credential being removed: a former moderator
+                # deleting the passkey they kept, promoted on the strength of
+                # it a moment later, is how a new moderator ends up with
+                # nothing to sign in with (R-AUTH-20). Both sides now decide
+                # from the row rather than from a snapshot of it.
+                target = await session.get(User, target_id, with_for_update=True)
                 if target is None:
                     raise HTTPException(status_code=404, detail="No such player.")
                 if target.state != AccountState.REGISTERED.value:
@@ -629,9 +642,33 @@ def create_admin_controls_router(
                         if body.role in STAFF_ROLES
                         else None
                     )
-                    if body.role in STAFF_ROLES and (
-                        factor is None or factor.password_proved_at is None
-                    ):
+                    # A passkey counts, and counts as proved: registering one
+                    # demands the account's password (R-AUTH-23), so every row
+                    # in `user_passkeys` is one somebody proved was theirs -
+                    # which is why that table has no column saying so.
+                    #
+                    # Looking only at the authenticator app was a dead end for
+                    # the account most likely to be promoted: a former
+                    # moderator still holding the passkey they signed in with
+                    # was judged to hold nothing, offered the role, and could
+                    # not take the offer up - the browser refuses to make a
+                    # second credential for a credential it already has, and
+                    # proving ownership the other way asks for a code they
+                    # never had.
+                    holds_passkey = (
+                        await session.scalar(
+                            select(UserPasskey.credential_id)
+                            .where(UserPasskey.user_id == target_id)
+                            .limit(1)
+                        )
+                        is not None
+                        if body.role in STAFF_ROLES
+                        else False
+                    )
+                    proved = holds_passkey or (
+                        factor is not None and factor.password_proved_at is not None
+                    )
+                    if body.role in STAFF_ROLES and not proved:
                         # The role is offered rather than granted (R-AUTH-20).
                         # Granting it outright would revoke the account's sessions,
                         # and a staff account cannot sign in without a code, so an

@@ -22,7 +22,7 @@ from app.auth.account_data import (
     next_export_allowed_at,
     open_export_artifact,
 )
-from app.domain_values import DataExportStatus
+from app.domain_values import AccountState, DataExportStatus
 from app.auth.middleware import (
     clear_session_cookie,
     is_secure_request,
@@ -76,6 +76,16 @@ from app.api.serializers import user_payload
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
+from app.auth.passkeys import (
+    LastFactorError,
+    PasskeyError,
+    authentication_options as passkey_authentication_options_json,
+    list_passkeys,
+    register_passkey,
+    registration_options as passkey_registration_options_json,
+    remove_passkey,
+    verify_assertion,
+)
 from app.auth.pending_role import take_up_offer
 from app.auth.second_factor import (
     SecondFactorOutcome,
@@ -233,6 +243,26 @@ class StepUpBody(BaseModel):
     code: str = Field(max_length=64)
 
 
+class PasskeyRegistrationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # The browser's own object, passed through to the verifier rather than
+    # picked apart here: what it contains is WebAuthn's business, and every
+    # field of it is checked against a challenge this server chose.
+    credential: dict
+    # Both proofs, for the reason R-AUTH-20 gives about a second factor: the
+    # assertion says an authenticator is present, the password says whose
+    # account it is being bound to.
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    label: str | None = Field(default=None, max_length=64)
+
+
+class PasskeyAssertionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    credential: dict
+
+
 class PasswordProofBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -352,13 +382,29 @@ def create_auth_router(
     def device_label(request: Request) -> str:
         return device_label_from_user_agent(request.headers.get("user-agent"))
 
+    def _passkey_payload(row) -> dict:
+        return {
+            "id": row.id,
+            "label": row.label,
+            "createdAt": row.created_at.isoformat(),
+            "lastUsedAt": row.last_used_at.isoformat() if row.last_used_at else None,
+            # Whether the platform keeps a copy of it, so somebody with one
+            # unsynced passkey can be told what their recovery codes are for.
+            "backedUp": row.backed_up,
+        }
+
     async def issue_cookie(
         response: Response,
         request: Request,
         user_id: str,
         role: str | None = None,
-    ) -> None:
-        """Mint this device's session and set its cookie.
+    ) -> str:
+        """Mint this device's session and set its cookie; return its id.
+
+        The id is returned because a caller that has just proved something
+        stronger than a password may want to record it against the session it
+        just minted - a passkey assertion, which is the proof a step-up asks
+        for (R-AUTH-23).
 
         `role` decides the lifetime (R-AUTH-03) and every caller here already
         knows it, so it is passed rather than looked up: guest provisioning is
@@ -387,6 +433,42 @@ def create_auth_router(
                 (issued.session.expires_at - issued.session.created_at).total_seconds()
             ),
         )
+        return issued.session.id
+
+    async def _sign_this_browser_in(response: Response, request: Request, account):
+        """Everything that follows a proof, whatever the proof was.
+
+        A password and a passkey answer different questions and arrive at the
+        same place: this browser is that account now. What has to happen then
+        is the same either way - the guest identity being carried is folded
+        into the account and its sessions end (R-ACCT-04), the login is
+        stamped, the guest's own session is revoked, and this device is given
+        a cookie for the account with the lifetime its role calls for.
+
+        Shared rather than repeated because the half that went missing when a
+        second sign-in path was added was the guest merge, and what that costs
+        somebody is the game they were in the middle of.
+        """
+        current_user_id = getattr(request.state, "user_id", None)
+        current = await user_repo.get_by_id(current_user_id) if current_user_id else None
+        if current is not None and current.is_anonymous and current.id != account.id:
+            try:
+                await user_repo.merge_guest_into_account(current.id, account.id)
+            except IdentityMergeError as error:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Guest progress could not be linked to this account.",
+                ) from error
+            if on_identity_merged is not None:
+                on_identity_merged(current.id, account.id)
+            await revoke_all_sessions(session_factory, user_id=current.id)
+
+        refreshed = await user_repo.touch_last_login(account.id)
+        await revoke_current(request)
+        session_id = await issue_cookie(
+            response, request, account.id, role=account.role
+        )
+        return refreshed or account, session_id
 
     async def revoke_current(request: Request) -> None:
         session_id = getattr(request.state, "session_id", None)
@@ -421,7 +503,18 @@ def create_auth_router(
         if user.role not in STAFF_ROLES or not staff_second_factor_required():
             return None
         state = await second_factor_state(session_factory, user_id=user.id)
+        holds_passkey = bool(await list_passkeys(session_factory, user_id=user.id))
         if not state.enrolled:
+            if holds_passkey:
+                # There is a way in and this is not it. Said as a refusal of
+                # the password route rather than of the account, because the
+                # account is fine and the browser only has to be pointed at
+                # the passkey it already holds (R-AUTH-23).
+                return HTTPException(
+                    status_code=401,
+                    detail="Sign in with your passkey.",
+                    headers={"X-Sketchy-Second-Factor": "passkey"},
+                )
             return HTTPException(
                 status_code=403,
                 detail=(
@@ -794,32 +887,8 @@ def create_auth_router(
                 replacement_hash,
             )
 
-        current_user_id = getattr(request.state, "user_id", None)
-        current = await user_repo.get_by_id(current_user_id) if current_user_id else None
-        if (
-            current is not None
-            and current.is_anonymous
-            and current.id != credentials.user.id
-        ):
-            try:
-                await user_repo.merge_guest_into_account(
-                    current.id, credentials.user.id
-                )
-            except IdentityMergeError as error:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Guest progress could not be linked to this account.",
-                ) from error
-            if on_identity_merged is not None:
-                on_identity_merged(current.id, credentials.user.id)
-            await revoke_all_sessions(session_factory, user_id=current.id)
-
-        refreshed = await user_repo.touch_last_login(credentials.user.id)
-        await revoke_current(request)
-        await issue_cookie(
-            response, request, credentials.user.id, role=credentials.user.role
-        )
-        return user_payload(refreshed or credentials.user)
+        account, _ = await _sign_this_browser_in(response, request, credentials.user)
+        return user_payload(account)
 
     @router.get("/sessions")
     async def sessions(request: Request):
@@ -1252,6 +1321,11 @@ def create_auth_router(
             # Whether a staff role could be granted on this factor as it
             # stands, or whether the password still has to be proved for it.
             "passwordProved": state.password_proved,
+            # How many passkeys stand beside it. The row that opens this
+            # dialog asks one question - "is there anything set up?" - and
+            # answering it from the authenticator app alone told an account
+            # holding only a passkey to set one up (R-AUTH-23).
+            "passkeys": len(await list_passkeys(session_factory, user_id=user.id)),
             "required": user.role in STAFF_ROLES and staff_second_factor_required(),
             "stepUpWindowSeconds": int(STEP_UP_WINDOW.total_seconds()),
         }
@@ -1276,6 +1350,192 @@ def create_auth_router(
         the browser out from under them would take them off the screen.
         """
         await issue_cookie(response, request, user_id, role=role)
+
+    # --- passkeys (R-AUTH-23) ---------------------------------------------
+    #
+    # Staff only, and deliberately: two-factor authentication is a staff
+    # control (R-AUTH-20), and a passkey is what it is made of now. Whether an
+    # ordinary player may hold one - and whether it could replace their
+    # password - is an open question rather than a refusal (#684), and the
+    # blocker is recovery: email is optional on this deployment, so a
+    # passkey-only player who loses their platform account has no route back
+    # that this server can offer.
+
+    def _may_hold_a_passkey(user) -> bool:
+        """Staff, or somebody a role is waiting on."""
+        return user.role in STAFF_ROLES or bool(getattr(user, "pending_role", None))
+
+    async def _require_passkey_holder(request: Request):
+        user = await require_user(request)
+        if user.is_anonymous or not _may_hold_a_passkey(user):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Passkeys are for moderator and administrator accounts. "
+                    "You will be asked to set one up if you are ever offered "
+                    "a role."
+                ),
+            )
+        return user
+
+    @router.post("/passkeys/options")
+    async def passkey_registration_options(request: Request):
+        """What the browser needs to make a credential.
+
+        Throttled with the second factor, which is the same thing being set
+        up: a page reloading in a loop should not mint challenges for ever.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await _require_passkey_holder(request)
+        return {
+            "options": await passkey_registration_options_json(
+                session_factory,
+                user_id=user.id,
+                account=user.username or user.display_name,
+                display_name=user.display_name,
+            )
+        }
+
+    @router.post("/passkeys")
+    async def add_passkey(body: PasskeyRegistrationBody, request: Request, response: Response):
+        """Keep the public key, and start a role that was waiting on it.
+
+        The password is asked for here and not at every later assertion: it is
+        what says this credential is being added by the account's owner rather
+        than by somebody holding a stolen cookie, which is the same question
+        `password_proved_at` answers for an authenticator app.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await _require_passkey_holder(request)
+        await _prove_password(user, body.password)
+        try:
+            registered = await register_passkey(
+                session_factory,
+                user_id=user.id,
+                credential=body.credential,
+                label=(body.label or device_label(request))[:64],
+            )
+        except PasskeyError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        # A passkey answers R-AUTH-20 on its own - registering it proved the
+        # password, and a promotion reads the credential itself - so a role
+        # waiting on this is now theirs.
+        #
+        # Deliberately *not* `prove_second_factor_owner`: that vouches for an
+        # authenticator app, and this ceremony proves nothing about one. A
+        # factor planted with a stolen cookie would otherwise become trusted
+        # the moment its victim added a passkey, which is the planted-factor
+        # attack R-AUTH-20 exists to refuse, arriving through a side door.
+        granted = await take_up_offer(session_factory, user_id=user.id)
+        if granted:
+            await _restore_this_device(response, request, user.id, granted)
+        return {"passkey": _passkey_payload(registered), "roleGranted": granted}
+
+    @router.get("/passkeys")
+    async def read_passkeys(request: Request):
+        """Everything this account can sign in with."""
+        user = await require_user(request)
+        if user.is_anonymous or not _may_hold_a_passkey(user):
+            return {"passkeys": [], "canHold": False}
+        return {
+            "passkeys": [
+                _passkey_payload(row)
+                for row in await list_passkeys(session_factory, user_id=user.id)
+            ],
+            "canHold": True,
+        }
+
+    @router.delete("/passkeys/{passkey_id}")
+    async def forget_passkey(
+        passkey_id: str, body: PasswordProofBody, request: Request
+    ):
+        """Remove one credential, unless it is the last thing standing.
+
+        A staff account may not take away its own last way in: the same rule
+        that stops one deleting its authenticator app, and for the same
+        reason - giving up the role is what removes the requirement, not
+        deleting the credential the role depends on.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        await _prove_password(user, body.password)
+        # The role is deliberately not read here. Whether this account is
+        # staff is decided by the statement that does the deleting, because a
+        # promotion can land between this request arriving and its write -
+        # and it can land *because of* the very passkey being deleted. All
+        # this route contributes is the deployment's switch.
+        try:
+            removed = await remove_passkey(
+                session_factory,
+                user_id=user.id,
+                passkey_id=passkey_id,
+                required=staff_second_factor_required(),
+            )
+        except LastFactorError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        if not removed:
+            raise HTTPException(status_code=404, detail="No such passkey.")
+        return {"ok": True}
+
+    @router.post("/passkeys/challenge")
+    async def passkey_challenge(request: Request):
+        """A challenge to sign. Answered to anybody, on purpose.
+
+        Signing in with a passkey happens before anybody has said who they
+        are, and the challenge says nothing about who holds what: it is a
+        random number this server will remember for five minutes.
+        """
+        await throttle(second_factor_limiter, request)
+        return {
+            "options": await passkey_authentication_options_json(session_factory)
+        }
+
+    @router.post("/passkeys/verify")
+    async def verify_passkey(
+        body: PasskeyAssertionBody, request: Request, response: Response
+    ):
+        """Sign in with a passkey, or prove it is still you.
+
+        One endpoint because it is one act: an assertion over a challenge this
+        server chose, verified against a stored public key. What it is *for*
+        is decided by whether the caller already holds a session on the
+        account that signed - stepping up if so, signing in if not.
+        """
+        await throttle(second_factor_limiter, request)
+        try:
+            assertion = await verify_assertion(session_factory, credential=body.credential)
+        except PasskeyError as error:
+            raise HTTPException(status_code=401, detail=str(error)) from error
+
+        account = await user_repo.get_by_id(assertion.user_id)
+        # Registered, not merely present. An account that was deleted keeps its
+        # row - erasure anonymises rather than removes it, so history stays
+        # readable - and a credential is refused against one on its own
+        # account, whatever else may have been left behind.
+        if account is None or account.state != AccountState.REGISTERED.value:
+            raise HTTPException(status_code=401, detail="That passkey is not registered here.")
+        if await is_user_banned(session_factory, account.id):
+            raise HTTPException(status_code=403, detail="This account is suspended.")
+
+        if getattr(request.state, "user_id", None) == account.id:
+            session_id = getattr(request.state, "session_id", None)
+            if session_id and await record_step_up(
+                session_factory, session_id=session_id, user_id=account.id
+            ):
+                return {"ok": True, "user": user_payload(account), "steppedUp": True}
+            raise HTTPException(
+                status_code=409,
+                detail="This session has been replaced. Reload and try again.",
+            )
+
+        signed_in, session_id = await _sign_this_browser_in(response, request, account)
+        # The assertion *is* the proof a step-up asks for, and it happened one
+        # request ago. A code is not treated this way because a code can be
+        # relayed and this cannot: that difference is the whole of R-AUTH-23.
+        await record_step_up(
+            session_factory, session_id=session_id, user_id=account.id
+        )
+        return {"ok": True, "user": user_payload(signed_in), "steppedUp": True}
 
     @router.post("/second-factor/enrol")
     async def start_second_factor_enrolment(request: Request):
@@ -1318,7 +1578,16 @@ def create_auth_router(
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
         already = await second_factor_state(session_factory, user_id=user.id)
-        if already.enrolled:
+        # Anything already in place makes this a *change* rather than a first
+        # setup, and a change asks for the password. A passkey counts: a staff
+        # account whose only credential is one used to fall through the branch
+        # below, so a stolen cookie could add an authenticator app of its own
+        # choosing without proving anything - and then step up with its codes,
+        # which is the whole of what R-AUTH-21 keeps a stolen cookie away from.
+        holds_something = already.enrolled or bool(
+            await list_passkeys(session_factory, user_id=user.id)
+        )
+        if holds_something:
             await _prove_password(user, body.password)
         elif body.password:
             # Offered rather than demanded: somebody who gives it here is
@@ -1465,6 +1734,24 @@ def create_auth_router(
         session_id = getattr(request.state, "session_id", None)
         if not session_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
+        # An authenticator app nobody has vouched for is not a way to unlock a
+        # destructive action, even though it is a way to sign in beside a
+        # password. The difference is what each one costs an attacker: a
+        # sign-in needs the password they do not have, and a step-up needs only
+        # the session they already stole. A factor planted on an ordinary
+        # player who was later promoted on the strength of a *passkey* would
+        # otherwise be a step-up credential the account's owner never saw
+        # (R-AUTH-20, R-AUTH-23). Its recovery codes go with it: they were
+        # issued to the same factor.
+        enrolled = await second_factor_state(session_factory, user_id=user.id)
+        if enrolled.enrolled and not enrolled.password_proved:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "This authenticator has not been confirmed as yours. Use a "
+                    "passkey, or confirm it with your password in Settings."
+                ),
+            )
         outcome = await verify_second_factor(
             session_factory, user_id=user.id, code=body.code
         )

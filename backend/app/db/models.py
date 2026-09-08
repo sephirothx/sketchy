@@ -1953,6 +1953,102 @@ class UserRecoveryCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
+class UserPasskey(Base):
+    """One WebAuthn credential an account can sign in with (R-AUTH-23).
+
+    The opposite of `user_second_factors` in the one way that matters: what is
+    stored here is a **public** key. TOTP is symmetric, so this server has to
+    hold what the authenticator holds and a database read hands an attacker a
+    working credential; a passkey leaves nothing here that can produce a
+    signature. That, and the origin binding the browser enforces, is what a
+    relayed code cannot survive.
+
+    Several per account on purpose - a laptop and a phone are two - so that
+    losing one device is not losing the role. The credential id is the primary
+    key because that is what a sign-in arrives holding: the browser names the
+    credential, and the account is read from the row rather than claimed by
+    the caller.
+    """
+
+    __tablename__ = "user_passkeys"
+    __table_args__ = (
+        CheckConstraint("sign_count >= 0", name="ck_user_passkeys_sign_count"),
+        Index("ix_user_passkeys_user", "user_id"),
+        UniqueConstraint("id", name="uq_user_passkeys_id"),
+    )
+
+    # Base64url, as the browser sends it and as `exclude_credentials` needs it
+    # back. Kept in that form rather than decoded so nothing has to agree on a
+    # byte encoding across two languages and two databases.
+    credential_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    # A second, opaque id, so a page can name a credential for deletion
+    # without putting the credential id in a URL.
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False, default=generate_uuid
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    public_key: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # The authenticator's own counter. Stored to be compared: one that goes
+    # backwards is the only signal WebAuthn gives that a credential has been
+    # cloned. Authenticators that keep no counter report zero throughout.
+    sign_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Whether the platform syncs a copy of this credential. Somebody whose
+    # only passkey is not backed up is one lost device from their recovery
+    # codes, and the page can say so rather than leaving them to find out.
+    backed_up: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class WebauthnChallenge(Base):
+    """A challenge this server handed out, until it is spent (R-AUTH-23).
+
+    The security of both ceremonies rests on the challenge being the server's
+    choice and being usable once: one the client could pick is a signature an
+    attacker could have collected in advance, and one that outlives its use is
+    a signature they could replay. So it is stored, deleted as it is read, and
+    given a short life.
+
+    `purpose` keeps the two ceremonies apart. A challenge minted to add a
+    credential must not be spendable as a sign-in, which is exactly what one
+    shared pool would allow.
+    """
+
+    __tablename__ = "webauthn_challenges"
+    __table_args__ = (
+        _values_check(
+            "purpose", ("register", "authenticate"), "ck_webauthn_challenges_purpose"
+        ),
+        Index("ix_webauthn_challenges_expires_at", "expires_at"),
+        # An account being erased cascades through this, and a cascade with no
+        # index behind it is a scan of the table per row deleted.
+        Index("ix_webauthn_challenges_user", "user_id"),
+    )
+
+    challenge: Mapped[str] = mapped_column(String(255), primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Null for a sign-in, which is asked for before anybody knows who is
+    # asking: the credential itself says whose it is when it comes back.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
 class AuthLoginLockout(Base):
     """Consecutive failures against one login key, and the backoff they bought.
 

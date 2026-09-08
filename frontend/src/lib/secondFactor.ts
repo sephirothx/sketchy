@@ -18,6 +18,10 @@ export interface SecondFactorState {
   passwordProved: boolean;
   /** How long a step-up stands before it is asked for again. */
   stepUpWindowSeconds: number;
+  /** Passkeys held beside it (R-AUTH-23). What the Settings row needs, which
+      is whether anything at all is set up rather than whether an
+      authenticator app is. */
+  passkeys: number;
 }
 
 /**

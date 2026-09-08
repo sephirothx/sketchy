@@ -30,9 +30,15 @@ export const STEP_UP_HEADER = "x-sketchy-step-up";
 export const SECOND_FACTOR_HEADER = "x-sketchy-second-factor";
 
 export class SecondFactorRequiredError extends ApiError {
-  constructor(message: string) {
+  /** Which one the account holds. `passkey` means the password route cannot
+      finish at all — there is no code to type, and the form has to offer the
+      passkey instead of a field (R-AUTH-23). */
+  readonly kind: "required" | "passkey";
+
+  constructor(message: string, kind: "required" | "passkey" = "required") {
     super(401, message);
     this.name = "SecondFactorRequiredError";
+    this.kind = kind;
   }
 }
 
@@ -122,8 +128,12 @@ export async function apiRequest<T>(
       if (response.status === 403 && response.headers.get(STEP_UP_HEADER)) {
         throw new StepUpRequiredError(detail);
       }
-      if (response.status === 401 && response.headers.get(SECOND_FACTOR_HEADER)) {
-        throw new SecondFactorRequiredError(detail);
+      const secondFactor = response.headers.get(SECOND_FACTOR_HEADER);
+      if (response.status === 401 && secondFactor) {
+        throw new SecondFactorRequiredError(
+          detail,
+          secondFactor === "passkey" ? "passkey" : "required",
+        );
       }
       throw new ApiError(response.status, detail);
     }

@@ -11,8 +11,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useAuthStore } from "../store/authStore";
+import { authSubmitter, type AuthCredentials, type AuthMode } from "../lib/authSubmit";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { ApiError, SecondFactorRequiredError } from "../lib/api";
+import { passkeysAvailable } from "../lib/passkeys";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
 import { operatorEntries } from "../lib/operatorAccess";
@@ -35,8 +37,6 @@ import {
   UserIcon,
   ZapIcon,
 } from "./icons";
-
-export type AuthMode = "claim" | "login";
 
 function MenuItem({
   icon,
@@ -334,7 +334,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           suggestedUsername={isGuest ? user.displayName : ""}
           onClose={() => setMode(null)}
           onSwitchMode={setMode}
-          onSubmit={mode === "login" ? login : register}
+          onSubmit={authSubmitter(mode, login, register)}
         />
       )}
       {bugReportOpen && (
@@ -355,12 +355,13 @@ export function AuthDialog({
   suggestedUsername?: string;
   onClose: () => void;
   onSwitchMode: (mode: AuthMode) => void;
-  onSubmit: (
-    username: string,
-    password: string,
-    email?: string,
-    code?: string,
-  ) => Promise<unknown>;
+  /** One object rather than four positions. `login` and `register` take
+      different arguments in a different order, and a function of three
+      parameters is assignable to a type of four - so passing one where the
+      other was expected type-checks perfectly and silently drops whatever
+      came last. That is how the second factor stopped being sent: the code
+      went into `login`'s third parameter, which is not `code`. */
+  onSubmit: (credentials: AuthCredentials) => Promise<unknown>;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
@@ -375,6 +376,11 @@ export function AuthDialog({
   // factor - and so this form never has to guess which accounts are staff.
   const [code, setCode] = useState("");
   const [codeWanted, setCodeWanted] = useState(false);
+  // Offered from the start on a browser that can do it, because a passkey
+  // sign-in needs neither of the fields below (R-AUTH-23) - and forced when
+  // the server says the account has no code to type.
+  const [passkeyOnly, setPasskeyOnly] = useState(false);
+  const canUsePasskeys = passkeysAvailable();
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
   const isClaim = mode === "claim";
@@ -402,18 +408,20 @@ export function AuthDialog({
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(
-        username.trim(),
+      await onSubmit({
+        username: username.trim(),
         password,
-        email.trim() || undefined,
-        code.trim() || undefined,
-      );
+        email: email.trim() || undefined,
+        code: code.trim() || undefined,
+      });
       onClose();
     } catch (submitError) {
       if (submitError instanceof SecondFactorRequiredError) {
         // Not a failure to report as one: the password was right and the
-        // account wants its code. The field appears and the message says so.
-        setCodeWanted(true);
+        // account wants its second factor. Which one decides what to show -
+        // a field for a code, or the passkey button and no field at all.
+        if (submitError.kind === "passkey") setPasskeyOnly(true);
+        else setCodeWanted(true);
       }
       setError(
         submitError instanceof ApiError
@@ -421,6 +429,29 @@ export function AuthDialog({
           : "Something went wrong. Please try again.",
       );
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithPasskey() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // Through the store, which does what a password sign-in does after its
+      // own proof: gives up the guest's seat, adopts the account and bounces
+      // the socket onto it. Setting the user alone left the socket playing as
+      // somebody this browser had stopped being.
+      await useAuthStore.getState().signInWithPasskey();
+      onClose();
+    } catch (passkeyError) {
+      setError(
+        passkeyError instanceof DOMException
+          ? "No passkey was used. You can sign in with your password instead."
+          : passkeyError instanceof ApiError
+            ? passkeyError.message
+            : "That passkey was not accepted.",
+      );
       setBusy(false);
     }
   }
@@ -451,6 +482,36 @@ export function AuthDialog({
           </p>
         )}
 
+        {/* Signing in, not claiming: a passkey belongs to an account that
+            already exists. Above the fields because it is the shorter route
+            for the accounts that hold one, and because a staff account may
+            have nothing else to offer. */}
+        {!isClaim && canUsePasskeys && (
+          <>
+            <button
+              type="button"
+              className="modal-button auth-passkey"
+              onClick={() => void signInWithPasskey()}
+              disabled={busy}
+            >
+              {busy ? "Waiting for your device…" : "Sign in with a passkey"}
+            </button>
+            {passkeyOnly ? (
+              <p className="modal-hint">
+                This account signs in with a passkey.
+              </p>
+            ) : (
+              <p className="auth-divider"><span>or</span></p>
+            )}
+          </>
+        )}
+        {/* Not `hidden`: that attribute is a user-agent default, and
+            `.auth-form { display: flex }` beats it - the form stayed on
+            screen inviting a second attempt at a password route the server
+            has just said cannot finish. Rendering the decision leaves no
+            room for a stylesheet to disagree with it. The two links below
+            sit outside the form, so the way on is still there. */}
+        {!(passkeyOnly && !isClaim) && (
         <form onSubmit={submit} className="auth-form">
           <label htmlFor={`${titleId}-username`}>Username</label>
           {/* Pre-filled from the guest name but editable: this is where a typo
@@ -544,6 +605,7 @@ export function AuthDialog({
             {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
           </button>
         </form>
+        )}
 
         {!isClaim && (
           <p className="auth-switch">
@@ -560,6 +622,14 @@ export function AuthDialog({
             className="auth-link"
             onClick={() => {
               setError(null);
+              // Both of these are answers about one account and one attempt,
+              // and this starts another. Cleared here rather than from an
+              // effect watching `mode`: this button is the only thing that
+              // changes it in place - reaching the dialog any other way
+              // mounts it afresh - so the reset belongs where the change is
+              // made, where nothing has rendered on the old answers yet.
+              setPasskeyOnly(false);
+              setCodeWanted(false);
               onSwitchMode(isClaim ? "login" : "claim");
             }}
           >

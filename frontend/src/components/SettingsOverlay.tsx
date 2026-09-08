@@ -28,7 +28,8 @@ import {
   type SettingsLocationState,
   type SettingsSection,
 } from "../hooks/useSettingsRoute";
-import { AuthDialog, type AuthMode } from "./AccountMenu";
+import { AuthDialog } from "./AccountMenu";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
@@ -805,7 +806,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               onClick={() => setTwoFactorOpen(true)}
             >
               <ShieldIcon size={15} />
-              {twoFactorState?.enrolled ? "Manage" : "Set up"}
+              {twoFactorState && (twoFactorState.enrolled || twoFactorState.passkeys > 0)
+                ? "Manage"
+                : "Set up"}
             </button>
           </Row>
         )}
@@ -876,7 +879,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           suggestedUsername={isGuest ? (user?.displayName ?? "") : ""}
           onClose={() => setAuthMode(null)}
           onSwitchMode={setAuthMode}
-          onSubmit={authMode === "login" ? login : register}
+          onSubmit={authSubmitter(authMode, login, register)}
         />
       )}
       {emailOpen && (

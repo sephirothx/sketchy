@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { SegmentedCodeInput } from "./SegmentedCodeInput";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { ApiError } from "../lib/api";
+import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
 import { stepUp } from "../lib/secondFactor";
 
 /**
@@ -34,6 +35,7 @@ export function StepUpDialog({
   const [useRecovery, setUseRecovery] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const canUsePasskeys = passkeysAvailable();
 
   useFocusTrap(dialogRef, { active: true, onEscape: onCancel });
 
@@ -57,6 +59,28 @@ export function StepUpDialog({
     }
   }
 
+  /** The passkey route, which is the same assertion a sign-in makes. Offered
+      first because it is one gesture and cannot be relayed - the code below
+      is what a device with no passkey uses (R-AUTH-23). */
+  async function proveWithPasskey() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await assertPasskey();
+      onProved();
+    } catch (problem) {
+      setError(
+        problem instanceof DOMException
+          ? "That passkey was not used. You can try again."
+          : problem instanceof ApiError
+            ? problem.message
+            : "That passkey was not accepted.",
+      );
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="modal-overlay">
       <div
@@ -70,6 +94,16 @@ export function StepUpDialog({
         <h3 id={titleId} className="modal-title">Confirm it is you</h3>
         <p className="modal-body">{reason}</p>
         {error && <p className="auth-error" role="alert">{error}</p>}
+        {canUsePasskeys && (
+          <button
+            type="button"
+            className="modal-button step-up-passkey"
+            onClick={() => void proveWithPasskey()}
+            disabled={busy}
+          >
+            {busy ? "Waiting for your device…" : "Use your passkey"}
+          </button>
+        )}
         <form onSubmit={(event) => void submit(event)}>
           {useRecovery ? (
             <>
