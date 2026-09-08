@@ -94,7 +94,12 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
                 '[role="dialog"]', has_text="You are now a moderator"
             )
             await expect(notice).to_be_visible()
-            await notice.locator('button:has-text("Understood")').click()
+            # The change signed them out on every device (R-AUTH-20), so the
+            # notice offers the way back in rather than an acknowledgement
+            # this browser no longer holds the credential to make. It stays
+            # pending, and is acknowledged on their next visit.
+            await expect(notice).to_contain_text("signed out on every device")
+            await notice.locator('button:has-text("Sign in again")').click()
             await expect(notice).to_have_count(0)
 
             # And they are signed out by the grant (R-AUTH-20): a staff role

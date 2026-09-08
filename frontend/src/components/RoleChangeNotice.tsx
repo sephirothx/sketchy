@@ -31,6 +31,13 @@ export function RoleChangeNotice() {
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const [notice, setNotice] = useState<PendingRoleNotice | null>(null);
   const [busy, setBusy] = useState(false);
+  // Whether this notice arrived *as the change happened*, over the socket. A
+  // role change revokes every session the account holds (R-AUTH-20), so that
+  // is also the moment this browser stopped being signed in: it cannot
+  // acknowledge anything, and the honest thing to offer is the way back in.
+  // The notice stays pending server-side and is acknowledged on the next
+  // visit, by the fetch below, where the session is real again.
+  const [signedOutByTheChange, setSignedOutByTheChange] = useState(false);
 
   useEffect(() => {
     // A guest cannot hold a role, so there can be no notice waiting for one -
@@ -40,7 +47,11 @@ export function RoleChangeNotice() {
     let cancelled = false;
     void fetchPendingRoleNotice()
       .then((result) => {
-        if (!cancelled) setNotice(result.notice);
+        if (cancelled) return;
+        // Arrived on a later visit, so this session is fine and the button
+        // does what it always did.
+        setSignedOutByTheChange(false);
+        setNotice(result.notice);
       })
       .catch(() => {
         // Nothing to do: the notice stays pending server-side and is fetched
@@ -57,11 +68,12 @@ export function RoleChangeNotice() {
     function onRoleChanged(payload: unknown) {
       const pushed = roleNoticeFromPayload(payload);
       if (!pushed) return;
+      setSignedOutByTheChange(true);
       setNotice(pushed);
-      // So the staff entries the menu offers match the role the account now
-      // holds, without waiting for a reload. It decides what to show and never
-      // what to allow - every endpoint behind those entries checks again.
-      useAuthStore.getState().applyRole(pushed.role);
+      // Deliberately no `applyRole` here any more. It existed to make the menu
+      // match the new role without a reload, and there is no longer a
+      // signed-in menu to correct: this browser's session went with the role
+      // change, and the next thing it does is sign in again.
     }
     socket.on("role_changed", onRoleChanged);
     return () => {
@@ -74,6 +86,15 @@ export function RoleChangeNotice() {
 
   async function dismiss() {
     if (busy || !notice) return;
+    if (signedOutByTheChange) {
+      // Nothing to acknowledge with: the credential this browser holds was
+      // revoked by the change this notice is about. Clearing it locally is
+      // what makes the sign-in form reachable, and the notice will be waiting
+      // - still unacknowledged - when they are back.
+      setNotice(null);
+      await useAuthStore.getState().logout();
+      return;
+    }
     const settling = notice.id;
     setBusy(true);
     try {
@@ -105,13 +126,23 @@ export function RoleChangeNotice() {
           {title}
         </h3>
         <p className="modal-body">{body}</p>
+        {signedOutByTheChange && (
+          <p className="modal-body">
+            You have been signed out on every device so the change can take
+            effect. Sign in again to carry on.
+          </p>
+        )}
         <button
           type="button"
           className="modal-button"
           disabled={busy}
           onClick={() => void dismiss()}
         >
-          {busy ? "One moment…" : "Understood"}
+          {busy
+            ? "One moment…"
+            : signedOutByTheChange
+              ? "Sign in again"
+              : "Understood"}
         </button>
       </div>
     </div>

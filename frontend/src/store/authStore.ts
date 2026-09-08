@@ -64,7 +64,6 @@ interface AuthStore {
    * different role, and bouncing would drop the player out of whatever they
    * are doing to learn something the socket already told them.
    */
-  applyRole: (role: AuthUser["role"]) => void;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
   register: (username: string, password: string, email?: string) => Promise<AuthUser>;
@@ -237,9 +236,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     })();
     return inFlightFetchMe;
   },
-
-  applyRole: (role) =>
-    set((state) => (state.user ? { user: { ...state.user, role } } : {})),
 
   setNameDraft: (nameDraft) => set({ nameDraft }),
 
