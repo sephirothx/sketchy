@@ -1,6 +1,7 @@
 """Migration replay, downgrade, drift, and hand-written schema checks."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 import uuid
 import warnings
@@ -125,6 +126,49 @@ async def _assert_hand_written_indexes(engine: AsyncEngine) -> None:
         assert "where" in normalized
 
 
+async def _assert_pending_role_is_checked(engine: AsyncEngine) -> None:
+    """A migrated database refuses an offer the models would refuse.
+
+    Alembic compares columns, types and indexes; it does not compare CHECK
+    constraints, so a value set written one way in `models.py` and another way
+    in the migration passes every other assertion here and leaves two
+    databases that accept different rows. That is what happened to
+    `ck_users_pending_role`, which allowed `admin` in the migration and `user`
+    in the models while the application can only ever write `moderator`
+    (R-AUTH-20). Asking the database to take a bad row is the check that does
+    not care how either side is spelled.
+    """
+    for refused in ("admin", "user", "wizard"):
+        async with engine.connect() as connection:
+            with pytest.raises(IntegrityError):
+                await connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(id, display_name, state, role, pending_role, pending_role_at) "
+                        "VALUES (:id, 'Offeree', 'anonymous', 'user', :role, :at)"
+                    ),
+                    {
+                        "id": str(uuid.uuid4()),
+                        "role": refused,
+                        "at": datetime(2026, 9, 8, tzinfo=timezone.utc),
+                    },
+                )
+            await connection.rollback()
+
+    # And takes the one it should, so the check above cannot pass by refusing
+    # everything.
+    async with engine.connect() as connection:
+        await connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, display_name, state, role, pending_role, pending_role_at) "
+                "VALUES (:id, 'Offeree', 'anonymous', 'user', 'moderator', :at)"
+            ),
+            {"id": str(uuid.uuid4()), "at": datetime(2026, 9, 8, tzinfo=timezone.utc)},
+        )
+        await connection.rollback()
+
+
 async def _assert_payload_storage(engine: AsyncEngine, expected: str) -> None:
     """Stored drawings are deflated already, so PostgreSQL keeps them out of
     line uncompressed: EXTERNAL ('e'), not the EXTENDED ('x') default. Alembic
@@ -178,6 +222,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
             ("user_bans", "source_report_id"): "SET NULL",
         }
     await _assert_hand_written_indexes(engine)
+    await _assert_pending_role_is_checked(engine)
     await _assert_payload_storage(engine, "e")
 
     # Run the newest revisions backward and replay them.

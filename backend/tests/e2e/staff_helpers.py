@@ -36,8 +36,12 @@ def database_url() -> str:
     return url
 
 
-async def offer_role(username: str, role: str) -> None:
+async def offer_role(username: str, role: str = "moderator") -> None:
     """Record the offer an administrator's grant would record.
+
+    Moderator, because that is the only role an offer can be for: `admin` is
+    not granted over the network and so cannot be waited for either, and the
+    CHECK on `users.pending_role` says so.
 
     A staff role is not granted outright to an account with no proved second
     factor (R-AUTH-20): it waits, and enrolling is what takes it up. Written

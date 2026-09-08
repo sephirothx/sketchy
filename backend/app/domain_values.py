@@ -492,6 +492,12 @@ FRIENDSHIP_STATES = tuple(state.value for state in FriendshipState)
 # first one is made by a guarded server-side command, and `api/admin_controls`
 # carries the reasoning where the refusal is enforced.
 GRANTABLE_ROLES = (UserRole.USER.value, UserRole.MODERATOR.value)
+# The roles that can be *offered* and left waiting on a second factor
+# (R-AUTH-20). Narrower than the grantable ones in both directions: `user` is
+# not a staff role, so there is nothing to wait for, and `admin` is not
+# grantable over the network at all. Only a moderator role is ever written to
+# `users.pending_role`, and the CHECK there says exactly that.
+OFFERABLE_ROLES = (UserRole.MODERATOR.value,)
 DATA_EXPORT_STATUSES = tuple(status.value for status in DataExportStatus)
 DATA_EXPORT_ARTIFACT_ENCODINGS = tuple(
     encoding.value for encoding in DataExportArtifactEncoding

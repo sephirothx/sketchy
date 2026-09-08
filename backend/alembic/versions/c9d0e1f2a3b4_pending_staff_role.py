@@ -73,9 +73,15 @@ def upgrade() -> None:
         batch.add_column(
             sa.Column("pending_role_at", sa.DateTime(timezone=True), nullable=True)
         )
+        # A moderator role and nothing else. `user` is not a staff role, so
+        # there is nothing for an account to wait for; `admin` is not granted
+        # over the network at all, so it cannot be offered over it either.
+        # Spelled out rather than derived from `app.domain_values`, because a
+        # migration says what a database was asked for on the day it ran and
+        # must not change meaning when a constant does.
         batch.create_check_constraint(
             "ck_users_pending_role",
-            "pending_role IS NULL OR pending_role IN ('moderator', 'admin')",
+            "pending_role IS NULL OR pending_role IN ('moderator')",
         )
         batch.create_check_constraint(
             "ck_users_pending_role_dated",
