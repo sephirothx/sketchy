@@ -639,7 +639,7 @@ async def test_two_assertions_at_once_cannot_walk_the_counter_backwards(env):
     )
     accepted = [
         counter
-        for counter, response in zip((7, 3), both)
+        for counter, response in zip((7, 3), both, strict=True)
         if response.status_code == 200
     ]
     # The one carrying the lower counter cannot be accepted after the higher
@@ -652,7 +652,6 @@ async def test_two_assertions_at_once_cannot_walk_the_counter_backwards(env):
         ).one()
     assert accepted, [response.text for response in both]
     assert stored.sign_count == max(accepted)
-    assert stored.sign_count >= max(accepted)
 
 
 async def test_two_removals_at_once_cannot_empty_a_staff_account(env):
