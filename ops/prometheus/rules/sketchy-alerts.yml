@@ -180,3 +180,12 @@ groups:
           summary: "Resident memory is over 1.5 GB ({{ $value | humanize1024 }}B)"
           description: "Sized for a single worker on a small host; adjust to the deployment. A steady climb with no load is a leak."
           runbook: "README.md#on-call"
+
+      - alert: SketchyDrawingStoreLarge
+        expr: sketchy_drawing_store_bytes > 50e9
+        for: 1h
+        labels: {severity: warn}
+        annotations:
+          summary: "Stored drawings are over 50 GB ({{ $value | humanize1024 }}B)"
+          description: "#471 kept drawing bytes in the primary database on measured sizes, and named this as the size at which that is reopened: past here the blobs dominate backup and restore, and object storage has to be costed again. Not an incident - the store only grows - so it is a warning to act on in daylight."
+          runbook: "README.md#on-call"

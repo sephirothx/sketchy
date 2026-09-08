@@ -10,7 +10,7 @@ the whole surface.
 
 WebP rather than PNG alone because a photograph at 256×256 is ~136 KiB as a
 lossless PNG - over the cap - and ~22 KiB as WebP, and the primary database is
-where these bytes live until object storage (#471) exists. PNG stays accepted
+where these bytes live; #471 measured the blobs and kept them inline (N-18). PNG stays accepted
 because it is what an older Safari produces from a canvas.
 
 Keys are content-addressed - the SHA-256 of the bytes, plus the extension -

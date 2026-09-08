@@ -1,4 +1,9 @@
-"""Operator check that every stored drawing is still readable.
+"""What the drawing store holds: that it is still readable, and how big it is.
+
+Two operator questions about the same table. The walk below answers whether
+every stored drawing can still be read back; `DrawingStoreFootprint` answers
+how much room they take, which is what #471's decision to keep the bytes in
+the primary database is conditional on.
 
 A stored drawing is only as good as the decoder that can read it back, and
 both of those - the checksum recorded beside the bytes, and the registry entry
@@ -30,11 +35,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.canvas_history import decode_binary_canvas_history
@@ -329,3 +336,91 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# How long a size reading is reused. The store grows by kilobytes per finished
+# game, so a reading minutes old is as true as a fresh one, and the point of
+# caching here is that an open operations page and a scraper together cost the
+# catalogue one lookup rather than one per poll.
+DEFAULT_SIZE_CACHE_SECONDS = 300.0
+
+
+@dataclass(frozen=True)
+class DrawingStoreSize:
+    """What the drawing store occupies, and what it holds.
+
+    `total_bytes` is the whole relation - heap, its TOAST relation and its
+    indexes - because that is the number a backup and a restore actually move;
+    the payloads live in TOAST, so the heap alone understates the store by
+    about forty times.
+    """
+
+    total_bytes: int
+    ready_rows: int
+
+    def as_json(self) -> dict[str, object]:
+        return {"totalBytes": self.total_bytes, "readyRows": self.ready_rows}
+
+
+class DrawingStoreFootprint:
+    """The size of the drawing store, for an operator to watch it grow (#471).
+
+    Drawings are the only blob kept indefinitely - exports expire, envelopes
+    are deleted when they are unpacked, screenshots go when the report is
+    decided, and a picture belongs to an account that can be deleted - and
+    they are about five sixths of what a finished game adds to the database.
+    So this one series is what says whether storage is still a decision that
+    can be left alone. #471 chose to keep the bytes inline on measurements
+    recorded in `database.md`, and named a size at which that is reopened;
+    a number nobody can see is not a trigger, which is what this exists for.
+
+    PostgreSQL only. `pg_total_relation_size` is a catalogue lookup rather
+    than a scan, so it is cheap enough to answer a scrape; SQLite has no
+    equivalent and is not a deployment target (R-PLAT-11), so there the
+    reading is absent rather than guessed at.
+    """
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        cache_seconds: float = DEFAULT_SIZE_CACHE_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._session_factory = session_factory
+        self._cache_seconds = cache_seconds
+        self._clock = clock
+        self._cached: tuple[float, DrawingStoreSize | None] | None = None
+        self._reading = asyncio.Lock()
+
+    async def read(self) -> DrawingStoreSize | None:
+        cached = self._fresh()
+        if cached is not None:
+            return cached[0]
+        async with self._reading:
+            cached = self._fresh()
+            if cached is not None:
+                return cached[0]
+            size = await self._query()
+            self._cached = (self._clock(), size)
+            return size
+
+    def _fresh(self) -> tuple[DrawingStoreSize | None] | None:
+        cached = self._cached
+        if cached is None or self._clock() - cached[0] >= self._cache_seconds:
+            return None
+        return (cached[1],)
+
+    async def _query(self) -> DrawingStoreSize | None:
+        async with self._session_factory() as session:
+            if session.get_bind().dialect.name != "postgresql":
+                return None
+            total = await session.scalar(
+                text("SELECT pg_total_relation_size('turn_drawings')")
+            )
+            ready = await session.scalar(
+                select(func.count()).select_from(TurnDrawing).where(
+                    TurnDrawing.status == TurnDrawingStatus.READY.value
+                )
+            )
+        return DrawingStoreSize(int(total or 0), int(ready or 0))

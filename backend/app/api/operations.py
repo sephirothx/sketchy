@@ -36,6 +36,7 @@ from app.db.models import (
 from app.domain_values import AuditTargetType, GameOutcome
 from app.services.mail_delivery import sweep_interval_seconds
 from app.services.game_handoff import sweep_interval_seconds as handoff_sweep_interval_seconds
+from app.services.drawing_storage import DrawingStoreFootprint, DrawingStoreSize
 from app.services.queue_depths import QueueDepths, QueueSnapshot
 from app.services.readiness import ReadinessProbe
 from app.services.runtime_metrics import (
@@ -119,6 +120,41 @@ async def _queue_depths_for_scrape(queues: QueueDepths) -> QueueSnapshot | None:
     except Exception:
         logger.warning("queue depths left out of the scrape", exc_info=True)
         return None
+
+
+async def _drawing_store_for_scrape(
+    drawings: DrawingStoreFootprint,
+) -> DrawingStoreSize | None:
+    """The drawing store's size, on the same terms as the queue depths.
+
+    Cached for minutes rather than seconds, so most scrapes cost nothing at
+    all; a scrape that does reach the database must still not fail on it, and
+    on SQLite there is no reading to take.
+    """
+    try:
+        return await asyncio.wait_for(drawings.read(), timeout=QUEUE_SCRAPE_TIMEOUT_SECONDS)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("drawing store size left out of the scrape", exc_info=True)
+        return None
+
+
+def _drawing_store_lines(size: DrawingStoreSize | None) -> list[str]:
+    if size is None:
+        return []
+    return [
+        *gauge_lines(
+            "sketchy_drawing_store_bytes",
+            "Bytes the stored drawings occupy, including TOAST and indexes (#471).",
+            size.total_bytes,
+        ),
+        *gauge_lines(
+            "sketchy_drawing_store_rows",
+            "Stored drawings held.",
+            size.ready_rows,
+        ),
+    ]
 
 
 def _queue_lines(queues: QueueSnapshot | None) -> list[str]:
@@ -291,6 +327,7 @@ def create_operations_router(
     readiness: ReadinessProbe | None = None,
     telemetry: Telemetry | None = None,
     queue_depths: QueueDepths | None = None,
+    drawing_store: DrawingStoreFootprint | None = None,
     mail_sweep_seconds: float | None = None,
     handoff_sweep_seconds: float | None = None,
 ) -> APIRouter:
@@ -304,6 +341,9 @@ def create_operations_router(
     require_admin = admin_gate(session_factory)
     store = telemetry if telemetry is not None else default_telemetry
     queues = queue_depths if queue_depths is not None else QueueDepths(session_factory)
+    drawings = (
+        drawing_store if drawing_store is not None else DrawingStoreFootprint(session_factory)
+    )
     sweep_seconds = (
         mail_sweep_seconds if mail_sweep_seconds is not None else sweep_interval_seconds()
     )
@@ -361,6 +401,7 @@ def create_operations_router(
             *store.prometheus_lines(),
             *_loop_lines(loop_snapshot()),
             *_queue_lines(await _queue_depths_for_scrape(queues)),
+            *_drawing_store_lines(await _drawing_store_for_scrape(drawings)),
         ]
         database = await scraped_database_readiness()
         if database is not None:
@@ -380,6 +421,7 @@ def create_operations_router(
         stored = await stored_event_count(session_factory)
         signals = store.snapshot()
         queue_snapshot = await queues.read()
+        drawing_size = await drawings.read()
         database = dict(signals["database"])  # type: ignore[arg-type]
         database["readiness"] = database_readiness()
         async with session_factory() as session:
@@ -420,6 +462,8 @@ def create_operations_router(
                 "abandoned": outcomes.get(GameOutcome.ABANDONED.value, 0),
                 "shutdown": outcomes.get(GameOutcome.SHUTDOWN.value, 0),
             },
+            # Absent on SQLite, which has no relation-size catalogue (#471).
+            "drawingStore": None if drawing_size is None else drawing_size.as_json(),
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "windowMinutes": signals["windowMinutes"],
             "http": signals["http"],

@@ -126,6 +126,11 @@ export type LoopStatus = {
 
 export type QueueDepth = { pending: number; oldestSeconds: number | null };
 
+/** What the stored drawings occupy (#471). Null off PostgreSQL, which has no
+ *  relation-size catalogue - absent rather than a zero that would read as an
+ *  empty store. */
+export type DrawingStore = { totalBytes: number; readyRows: number };
+
 /** The size distribution of one command's or event's payload, in bytes. */
 export type PayloadSizeRow = {
   event: string;
@@ -217,6 +222,7 @@ export type ServerSignals = {
     };
     readiness: { ok: boolean; reason: string | null; checkedAgoSeconds: number } | null;
   };
+  drawingStore: DrawingStore | null;
   queues: {
     mailOutbox: QueueDepth & { sweepSeconds: number };
     dataExports: QueueDepth;
@@ -311,6 +317,9 @@ export const ATTENTION = {
   handoffOldestSeconds: 300,
   poolFillRatio: 1,
   abandonmentPercent: 25,
+  /** The size #471 named for reopening inline drawing storage; the same number
+   *  `SketchyDrawingStoreLarge` alerts on, so the page and the alert agree. */
+  drawingStoreBytes: 50e9,
 } as const;
 
 export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues";
@@ -406,6 +415,15 @@ export function attentionReasons(live: LiveSnapshot): AttentionReason[] {
   const fill = poolFill(live.database?.pool ?? null);
   if (fill !== null && fill >= ATTENTION.poolFillRatio) {
     add("pool-saturated", "database", "Connection pool saturated", "Every database connection is in use; new queries are waiting.");
+  }
+  const drawings = live.drawingStore;
+  if (drawings && drawings.totalBytes > ATTENTION.drawingStoreBytes) {
+    add(
+      "drawing-store-large",
+      "database",
+      "Stored drawings are past their review size",
+      `The drawings occupy ${formatBytes(drawings.totalBytes)}. Nothing is broken and this will not clear on its own: it is the size at which keeping them in the primary database gets costed against object storage again.`,
+    );
   }
   const mail = live.queues?.mailOutbox;
   if (mail && mail.oldestSeconds !== null && mail.oldestSeconds > mail.sweepSeconds * ATTENTION.mailOldestFactor) {
