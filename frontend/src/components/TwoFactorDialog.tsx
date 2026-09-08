@@ -252,10 +252,17 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               />
               I have saved these somewhere safe
             </label>
+            {/* Done means done. Behind these codes is the manage view, which
+                is a different errand - somebody who came here to set a factor
+                up has finished, and would be handed a password field and a
+                "Turn off" button for their trouble. It is one click away from
+                the row they started at, marked "Manage", when they want it.
+                A role that has just taken effect is the exception: that panel
+                is the outcome of this ceremony, not a way of managing it. */}
             <button
               type="button"
               className="modal-button"
-              onClick={() => setCodes(null)}
+              onClick={() => (granted ? setCodes(null) : onClose())}
               disabled={!savedCodes}
             >
               Done
