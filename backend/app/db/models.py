@@ -81,6 +81,7 @@ from app.domain_values import (
     TURN_PARTICIPANT_OUTCOMES,
     TURN_PARTICIPANT_STATES,
     GRANTABLE_ROLES,
+    OFFERABLE_ROLES,
     USER_ROLES,
     USER_THEMES,
     AccountState,
@@ -301,9 +302,10 @@ class User(Base):
             name="ck_users_registered_credentials",
         ),
         _values_check("role", USER_ROLES, "ck_users_role"),
-        # The grantable roles only: `admin` is never offered over the network
-        # any more than it is granted over it.
-        _values_check("pending_role", GRANTABLE_ROLES, "ck_users_pending_role"),
+        # Narrower than the grantable roles, and deliberately: `user` is not a
+        # staff role, so it is not something an account can be left waiting
+        # for, and `admin` is not granted over the network at all.
+        _values_check("pending_role", OFFERABLE_ROLES, "ck_users_pending_role"),
         # Both halves or neither. The timestamp is what the offer expires
         # against, so a pending role with no date would be one that never
         # lapses - the single state this deliberately does not have.
