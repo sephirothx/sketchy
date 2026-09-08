@@ -22,7 +22,6 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { BugReportDialog } from "./BugReportDialog";
-import { TwoFactorDialog } from "./TwoFactorDialog";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import {
   BugIcon,
@@ -91,7 +90,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const [mode, setMode] = useState<AuthMode | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [bugReportOpen, setBugReportOpen] = useState(false);
-  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -296,15 +294,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   {entry.label}
                 </MenuItem>
               ))}
-              <MenuItem
-                icon={<ShieldIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setTwoFactorOpen(true);
-                }}
-              >
-                Two-factor authentication
-              </MenuItem>
               <div className="account-menu-divider" role="presentation" />
               {reportBugEntry}
               <div className="account-menu-divider" role="presentation" />
@@ -334,9 +323,6 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
       )}
       {bugReportOpen && (
         <BugReportDialog onClose={() => setBugReportOpen(false)} />
-      )}
-      {twoFactorOpen && (
-        <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
       )}
     </div>
   );

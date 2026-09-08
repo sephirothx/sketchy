@@ -289,8 +289,10 @@
    one row somebody is meant to stop and look at (R-AUTH-22). */
 .session-anomaly { color: var(--warning); font-weight: 700; }
 
-.two-factor { max-width: 520px; text-align: left; }
-.two-factor label { display: block; font-weight: 700; margin-top: 12px; }
+.two-factor { max-width: 460px; text-align: left; }
+/* The dialog's own controls come from `primitives.css` like every other
+   dialog's; only the pieces this one alone has are described here. */
+.two-factor label { display: block; font-weight: 700; margin-top: 14px; }
 .two-factor input {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -299,39 +301,60 @@
   padding: 8px 10px;
   width: 100%;
 }
-.two-factor button, .step-up button {
+.two-factor form > button[type="submit"] { margin-top: 16px; width: 100%; }
+
+/* A quiet-zone card of its own, so the code keeps its contrast whatever the
+   dialog behind it is doing. The tokens are fixed rather than themed: a
+   scanner wants dark-on-light, and a "dark mode QR" is one that does not
+   read. */
+.two-factor-qr {
+  background: var(--qr-light);
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  margin-top: 14px;
-  padding: 8px 14px;
+  border-radius: 10px;
+  display: block;
+  height: auto;
+  margin: 14px auto 4px;
+  max-width: 220px;
+  padding: 10px;
+  width: 100%;
 }
-/* The key and the recovery codes are read off the screen and typed or copied
-   by hand, so both are monospaced and spaced out rather than set in the body
-   face, where a 1 and an l are a support ticket. */
+
+.two-factor-reveal-key { display: block; margin: 0 auto; }
+.two-factor-secret-block { margin-top: 12px; text-align: center; }
+/* Read off a screen and typed by hand, so it is monospaced, spaced out, and
+   broken into groups rather than one long run of characters. */
 .two-factor-secret code, .two-factor-codes code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.08em;
+  font-size: 15px;
+  letter-spacing: 0.12em;
 }
 .two-factor-secret {
-  /* Neutral, not a warning tint: this is a key to copy, not a caution. */
   background: var(--line);
-  border: 1px solid var(--line-strong);
   border-radius: 8px;
+  margin: 8px 0;
   overflow-wrap: anywhere;
   padding: 10px 12px;
 }
 .two-factor-codes ul {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   list-style: none;
-  margin: 12px 0;
+  margin: 14px 0;
   padding: 0;
 }
-.two-factor-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.two-factor-codes li {
+  background: var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+}
+.two-factor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
 
 .step-up { max-width: 420px; text-align: left; }
 .step-up label { display: block; font-weight: 700; margin-top: 12px; }
@@ -343,7 +366,7 @@
   padding: 8px 10px;
   width: 100%;
 }
-.step-up-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.step-up-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 
 .account-data-dialog { max-width: 620px; text-align: left; }
 .account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }

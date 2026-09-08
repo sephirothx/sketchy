@@ -26,6 +26,7 @@ from app.db.models import AuthSession, User, UserSecondFactor
 # Any valid base32; no code is ever computed from it, because these helpers
 # stamp the step-up directly rather than proving one.
 PLACEHOLDER_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+BASE_URL = "http://localhost:8000"
 
 
 def database_url() -> str:
@@ -88,10 +89,16 @@ async def enrol_through_the_ui(page) -> str:
 
     from app.auth.totp import code_at, current_step
 
-    await page.click(".account-menu button")
-    await page.get_by_role("menuitem", name="Two-factor authentication").click()
-    dialog = page.locator('[role="dialog"]', has_text="Two-factor authentication")
+    # Settings → Account, where it now lives beside the password and the
+    # signed-in devices rather than in the header menu.
+    await page.goto(f"{BASE_URL}/settings/account")
+    await page.get_by_role("button", name="Set up").click()
+    # By accessible name: the settings overlay is a dialog too, and it
+    # carries this row's label.
+    dialog = page.get_by_role("dialog", name="Two-factor authentication")
     await dialog.get_by_role("button", name="Set up").click()
+    # The key is the fallback behind the QR code now.
+    await dialog.get_by_role("button", name="Enter a key instead").click()
     secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
     await dialog.get_by_label("Code from your app").fill(
         code_at(secret, current_step(time.time()))

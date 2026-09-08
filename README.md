@@ -663,7 +663,12 @@ Adding an authenticator app asks for your password as well as a code from the
 app, because what it records is later taken as proof that *you* hold it - the
 role check looks for a second factor, not for whose it is.
 
-Any account can add one from **Settings → Account**. For a
+Any account can add one from **Settings → Account**, beside the password and
+the signed-in devices. Setting it up shows a QR code to scan; anything that
+cannot scan — a desktop authenticator, a camera that will not focus — can open
+**Enter a key instead** and copy the key. The ten recovery codes are shown once
+and can be downloaded as a text file, which is the only moment they exist
+outside a hash. For a
 player it is preparation rather than protection: it is the step that has to come
 before a role is granted, and it does not change how they sign in — there is no
 way back from a lost authenticator for an ordinary player the way there is from a

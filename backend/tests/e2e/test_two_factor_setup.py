@@ -25,9 +25,13 @@ PASSWORD = "a-good-password"
 
 
 async def _open_two_factor(page):
-    await page.click(".account-menu button")
-    await page.get_by_role("menuitem", name="Two-factor authentication").click()
-    return page.locator('[role="dialog"]', has_text="Two-factor authentication")
+    # Settings → Account, where it now lives beside the password and the
+    # signed-in devices rather than in the header menu.
+    await page.goto(f"{BASE_URL}/settings/account")
+    await page.get_by_role("button", name="Set up").click()
+    # By accessible name: the settings overlay is a dialog too, and it
+    # carries this row's label.
+    return page.get_by_role("dialog", name="Two-factor authentication")
 
 
 @pytest.mark.asyncio
@@ -53,9 +57,11 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
             await dialog.get_by_role("button", name="Set up").click()
-
-            # The key the app would scan. It is in the page and nowhere else
-            # until the code below proves it arrived.
+            # A QR code is what a phone uses; the key behind "Enter a key
+            # instead" is the same secret for anything that cannot scan, and
+            # is what this test can read.
+            await expect(dialog.locator(".two-factor-qr")).to_be_visible()
+            await dialog.get_by_role("button", name="Enter a key instead").click()
             secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
             assert secret
 

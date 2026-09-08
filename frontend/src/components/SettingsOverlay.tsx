@@ -15,6 +15,8 @@ import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
 import { removeAvatar, uploadAvatar } from "../lib/avatars";
+import { TwoFactorDialog } from "./TwoFactorDialog";
+import { fetchSecondFactor, type SecondFactorState } from "../lib/secondFactor";
 import { useToast } from "../lib/toast";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -61,6 +63,7 @@ import {
   GearIcon,
   ImageIcon,
   KeyIcon,
+  ShieldIcon,
   KeyboardIcon,
   LockIcon,
   MailIcon,
@@ -464,6 +467,10 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
+  // Only so the row can say "Set up" or "Manage"; the dialog reads its own
+  // state when it opens.
+  const [twoFactorState, setTwoFactorState] = useState<SecondFactorState | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [email, setEmail] = useState<EmailState | null>(null);
   const [noticeOpen, setNoticeOpen] = useState(signedInHere);
@@ -752,6 +759,28 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           )}
         </Row>
         <Row
+          label="Two-factor authentication"
+          locked={isGuest}
+          hint={
+            isGuest
+              ? "Guests have no account to protect."
+              : "An authenticator app's code, on top of your password. Moderators and administrators must have one."
+          }
+        >
+          {isGuest ? (
+            <NeedsAccount />
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact"
+              onClick={() => setTwoFactorOpen(true)}
+            >
+              <ShieldIcon size={15} />
+              {twoFactorState?.enrolled ? "Manage" : "Set up"}
+            </button>
+          )}
+        </Row>
+        <Row
           label="Signed-in devices"
           locked={isGuest}
           hint={
@@ -825,6 +854,14 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         <AddEmailDialog onClose={() => setEmailOpen(false)} onSaved={() => setEmailOpen(false)} />
       )}
       {sessionsOpen && <SessionManagerDialog onClose={() => setSessionsOpen(false)} />}
+      {twoFactorOpen && (
+        <TwoFactorDialog
+          onClose={() => {
+            setTwoFactorOpen(false);
+            void fetchSecondFactor().then(setTwoFactorState).catch(() => {});
+          }}
+        />
+      )}
       {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
       {pendingFile && (
         <PictureCropDialog
