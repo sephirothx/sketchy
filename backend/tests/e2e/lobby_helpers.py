@@ -30,7 +30,16 @@ async def use_guest_name(page, name: str) -> None:
     # The store caches the account, so a reload is what picks the name up.
     # The identity chip appears in every header once a name exists, so this
     # works on the lobby, the invite screen, and the create-room page alike.
-    await page.reload()
+    #
+    # Given longer than Playwright's default because this is the one step in
+    # the suite that reliably runs out of it: a shard is eight workers against
+    # one server on a two-core runner, and a cold Firefox - the only engine
+    # `test_multi_browser_game` uses, and the slowest to start - can take more
+    # than thirty seconds to come back with a full page. The POST above has
+    # already returned 200 by this point, so nothing about the product is
+    # being waited on twice; what follows still asserts the chip appears, so
+    # a reload that genuinely never completes still fails, just later.
+    await page.reload(timeout=60_000)
     await page.wait_for_selector(".identity-chip")
 
 
