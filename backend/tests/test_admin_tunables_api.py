@@ -35,6 +35,8 @@ from app.services.config_store import read_prefixed
 from app.services.tunables import build_runtime_settings
 
 
+from tests.staffauth import mark_staff_ready
+
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
@@ -94,6 +96,8 @@ async def promote(factory, user_id: str) -> None:
         async with session.begin():
             user = await session.get(User, UUID(user_id))
             user.role = UserRole.ADMIN.value
+    # The role plus what R-AUTH-20 and R-AUTH-21 now require of it.
+    await mark_staff_ready(factory, user_id)
 
 
 async def an_admin(env) -> AsyncClient:

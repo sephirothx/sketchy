@@ -634,6 +634,54 @@ it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
 name of their choosing; setting a username and password later claims that same
 account, so stats collected as a guest carry over.
 
+A password must be at least twelve characters, and is checked against more than
+its length before it is ever hashed: a short password written twice, a word with
+a year on the end, a row of keys walked to its end, or anything built out of your
+own name or address is refused, and the refusal says which of those it was.
+The check runs here, on this server, against a list committed beside the code -
+nothing about a password is ever sent anywhere, and a deployment with no outbound
+network gets exactly the same protection.
+
+#### Signed-in devices
+
+**Settings → Account → Signed-in devices** lists every browser signed in to the
+account, with a coarse device name, when it was last used, and when it will sign
+itself out on its own. A device you stop using lapses after ninety days even
+though the cookie itself lasts a year - people come back to this game after
+months, so being signed out is the failure worth avoiding, and the idle window is
+what bounds a cookie copied off a machine you no longer have. Each browser's
+token is also quietly replaced once a week, which is per-device: the browser doing
+it swaps its own cookie and every other device stays signed in. If a replaced
+token is ever used afterwards, that means a second copy of it exists - so that
+device is signed out entirely and has to sign in again, which is how you find out.
+A session used from a browser it was not issued to is flagged in the list, with
+the date, so you can revoke it.
+
+#### Two-factor authentication
+
+Adding an authenticator app asks for your password as well as a code from the
+app, because what it records is later taken as proof that *you* hold it - the
+role check looks for a second factor, not for whose it is.
+
+Any account can add one from **Settings → Account**. For a
+player it is preparation rather than protection: it is the step that has to come
+before a role is granted, and it does not change how they sign in — there is no
+way back from a lost authenticator for an ordinary player the way there is from a
+lost password, so their login is deliberately not gated on one. Moderators and
+administrators must have one, and must do it *before* the role is granted — granting it
+signs them out of every device, and a staff account cannot sign back in without a
+code, so the role is refused until the second factor exists. Being granted or losing
+a role therefore ends every session on the account: the notice says so and offers the
+way back in, and it is acknowledged on the next visit rather than by the browser that
+has just been signed out. Setting it up shows a key to add to the app and then asks
+for one code to prove it arrived - nothing is stored until that code checks out, so
+an abandoned setup cannot lock you out. Ten single-use recovery codes are shown
+once and kept only as hashes; they work anywhere a code is asked for. Staff are
+asked for a code again, at most every fifteen minutes, before anything that
+suspends a player, changes a role, or reconfigures the running server. Reading the
+moderation queue is deliberately not gated: a check made on the way in would simply
+be done as a matter of routine.
+
 #### Recovery
 
 Claiming an account can offer an email address. It is optional, and stays
@@ -1006,7 +1054,16 @@ parameters, so a redundant schema version column is not used.
 
 The authentication endpoints are rate limited per client address in shared
 database buckets. Login, registration, and account/name lookup limits survive
-restarts and apply once across every replica. Bucket keys are HMAC-SHA-256
+restarts and apply once across every replica.
+
+**Login is counted three ways, not one.** A per-address limit is no limit at all
+against a botnet, which never reuses an address, so signing in is counted against
+the account, the address, and the deployment at once - and all three count
+*failures only*, so signing in correctly costs nothing and a household sharing one
+address never meets them. Consecutive failures against one account additionally buy
+an increasing wait (a minute, then five, fifteen, an hour), remembered across
+windows and cleared by one correct password. The account is keyed by a hash of the
+username, never the username itself. Bucket keys are HMAC-SHA-256
 digests under `IP_HASH_SECRET` (or an automatically generated database secret),
 so raw IP addresses are never stored. Expired buckets are cleaned in bounded
 batches. Lower-risk profile and prompt-statistics throttles remain
@@ -1018,7 +1075,10 @@ your players share one address:
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login` |
+| `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login`, per address; failed attempts only |
+| `AUTH_LOGIN_ACCOUNT_LIMIT` | 10 per 15 minutes | The same route per account - the key a distributed attack cannot dodge; failed attempts only |
+| `AUTH_LOGIN_GLOBAL_LIMIT` | 500 per 5 minutes | The same route for the whole deployment; failed attempts only. Once full it holds back only callers who have been failing themselves, so filling it costs an attacker their own attempts rather than everybody's logins. Set `0` to switch it off |
+| `AUTH_SECOND_FACTOR_LIMIT` | 20 per 15 minutes | Two-factor setup, code checks, and step-up |
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |

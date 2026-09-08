@@ -1885,17 +1885,27 @@
   "auth.recovery:reset_password": [
    "displayName"
   ],
+  "auth.routes:confirm_second_factor": [
+   "recoveryCodes"
+  ],
   "auth.routes:create_auth_router": [
+   "anomalyAt",
+   "confirmedAt",
    "createdAt",
    "deliveryConfigured",
    "deviceLabel",
    "expiresAt",
+   "expiresInSeconds",
    "identitiesAnonymized",
+   "idleExpiresAt",
    "lastUsedAt",
    "nextRequestAt",
    "pendingAddress",
+   "recoveryCodes",
+   "recoveryCodesRemaining",
    "reminderDue",
-   "sessionsRevoked"
+   "sessionsRevoked",
+   "stepUpWindowSeconds"
   ],
   "auth.routes:data_exports": [
    "nextRequestAt"
@@ -1909,14 +1919,27 @@
    "pendingAddress",
    "reminderDue"
   ],
+  "auth.routes:regenerate_recovery_codes": [
+   "recoveryCodes"
+  ],
+  "auth.routes:second_factor": [
+   "confirmedAt",
+   "recoveryCodesRemaining",
+   "stepUpWindowSeconds"
+  ],
   "auth.routes:sessions": [
+   "anomalyAt",
    "createdAt",
    "deviceLabel",
    "expiresAt",
+   "idleExpiresAt",
    "lastUsedAt"
   ],
   "auth.routes:set_email": [
    "pendingAddress"
+  ],
+  "auth.routes:step_up": [
+   "expiresInSeconds"
   ],
   "auth.warnings:pending_warning_payload": [
    "createdAt"

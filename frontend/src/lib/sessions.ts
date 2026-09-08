@@ -6,6 +6,18 @@ export interface AccountSession {
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
+  /**
+   * When silence alone ends this device's session — ninety days after it was
+   * last used, or a day for staff. Usually much sooner than `expiresAt`, so
+   * it is the date worth showing.
+   */
+  idleExpiresAt: string | null;
+  /**
+   * Set when this session was last used from a browser it was not issued to.
+   * Deliberately just a time: the server keeps a hash of the address and
+   * could not say where even if it wanted to.
+   */
+  anomalyAt: string | null;
   current: boolean;
 }
 

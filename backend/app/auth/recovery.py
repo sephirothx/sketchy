@@ -324,6 +324,48 @@ async def password_reset_link_is_usable(
         )
 
 
+async def password_reset_identity(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    token: str,
+    now: datetime | None = None,
+) -> tuple[str | None, str | None]:
+    """The name and address behind a live reset link, for password screening.
+
+    R-AUTH-19 refuses a password built out of the identity it protects, and a
+    reset is the one flow where the server would otherwise not know whose
+    password is being set until after the token had been spent - which is far
+    too late to refuse anything (R-AUTH-10 admits exactly one consumer).
+
+    Reads without consuming, like `password_reset_link_is_usable` beside it,
+    and tells nobody anything they did not already have: answering at all
+    requires holding the token, and the token was mailed to the address it
+    would name.
+    """
+    from app.auth.tokens import hash_token
+    from app.db.models import AuthToken
+
+    checked_at = now or datetime.now(timezone.utc)
+    async with session_factory() as session:
+        if not await token_is_usable(
+            session,
+            token=token,
+            purpose=AuthTokenPurpose.PASSWORD_RESET,
+            now=checked_at,
+        ):
+            return (None, None)
+        record = await session.scalar(
+            select(AuthToken).where(
+                AuthToken.token_hash == hash_token(token),
+                AuthToken.purpose == AuthTokenPurpose.PASSWORD_RESET.value,
+            )
+        )
+        if record is None:
+            return (None, None)
+        user = await session.get(User, record.user_id)
+        return (user.username, user.email) if user is not None else (None, None)
+
+
 async def change_password(
     session_factory: async_sessionmaker[AsyncSession],
     *,

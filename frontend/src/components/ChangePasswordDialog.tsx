@@ -4,8 +4,9 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { ApiError } from "../lib/api";
 import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
 import { useToast } from "../lib/toast";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 
-const MIN_PASSWORD_LENGTH = 8;
+
 
 /**
  * Changing a password you still know (R-AUTH-17).
@@ -48,7 +49,7 @@ export function ChangePasswordDialog({
     event.preventDefault();
     if (busy) return;
     if (next.length < MIN_PASSWORD_LENGTH) {
-      setError(`A password needs at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setError(PASSWORD_TOO_SHORT);
       return;
     }
     if (next !== confirm) {

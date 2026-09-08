@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.services.room_quotas import RoomCapacityService
 from app.auth.sessions import (
-    ROTATE_AFTER,
+    PLAYER_LIFETIME,
     create_session,
     device_label_from_user_agent,
     hash_session_token,
@@ -66,7 +66,7 @@ async def test_rotation_revokes_predecessor_and_preserves_device(database):
         now=started,
     )
     assert should_rotate(
-        issued.session, now=started + ROTATE_AFTER + timedelta(seconds=1)
+        issued.session, now=started + PLAYER_LIFETIME.rotate_after + timedelta(seconds=1)
     )
 
     replacement = await rotate_session(
@@ -74,11 +74,21 @@ async def test_rotation_revokes_predecessor_and_preserves_device(database):
         session_id=issued.session.id,
         user_id=user.id,
         device_label=issued.session.device_label,
-        now=started + ROTATE_AFTER + timedelta(seconds=1),
+        now=started + PLAYER_LIFETIME.rotate_after + timedelta(seconds=1),
     )
     assert replacement is not None
-    assert await resolve_session(factory, issued.token) is None
-    assert await resolve_session(factory, replacement.token) is not None
+    # Resolved at the moment of the rotation rather than at the wall clock:
+    # this session was minted with a 2026-01-01 date, and the ninety-day idle
+    # window (R-AUTH-03) would otherwise have ended it long before the test
+    # ran.
+    just_after = started + PLAYER_LIFETIME.rotate_after + timedelta(minutes=5)
+    # The successor is the live one, and the predecessor is spent. Checked in
+    # this order on purpose: presenting the predecessor is what R-AUTH-22
+    # calls a replay, and a replay takes the whole chain down with it - so
+    # asking about the successor afterwards would be asking about a session
+    # the previous line had just revoked.
+    assert await resolve_session(factory, replacement.token, now=just_after) is not None
+    assert await resolve_session(factory, issued.token, now=just_after) is None
 
 
 @pytest.mark.asyncio

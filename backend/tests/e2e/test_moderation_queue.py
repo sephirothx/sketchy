@@ -6,35 +6,20 @@ holding the pen - so what the queue shows is what that path stored, not a row
 planted for the page.
 """
 import asyncio
-import os
 
 import pytest
 from playwright.async_api import async_playwright
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import User
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
+
+# Grants the role *and* the second factor R-AUTH-20 now requires of one.
+from tests.e2e.staff_helpers import set_role
 
 
 BASE_URL = "http://localhost:8000"
 
 
-async def set_role(username: str, role: str) -> None:
-    url = os.environ.get("SKETCHY_E2E_DATABASE_URL")
-    if not url:
-        pytest.skip("SKETCHY_E2E_DATABASE_URL is not set; run via scripts/test-e2e.sh")
-    engine = create_async_engine(url)
-    try:
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with factory() as session:
-            async with session.begin():
-                await session.execute(
-                    update(User).where(User.username == username).values(role=role)
-                )
-    finally:
-        await engine.dispose()
 
 
 async def _choose_prompt(pages):

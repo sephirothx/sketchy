@@ -8,6 +8,7 @@ from functools import partial
 from socketio.exceptions import ConnectionRefusedError
 
 from app.auth.sessions import (
+    device_label_from_user_agent,
     resolve_session_status,
     session_token_from_cookie_header,
 )
@@ -73,7 +74,18 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         user_id = None
         if ctx.session_factory is not None:
             token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
-            resolution = await resolve_session_status(ctx.session_factory, token)
+            resolution = await resolve_session_status(
+                ctx.session_factory,
+                token,
+                # The browser the handshake came from, so a session used from
+                # a different one is flagged here too (R-AUTH-22). The address
+                # is deliberately not hashed on this path: it would cost the
+                # HMAC key lookup on every connection, and a socket arrives
+                # from the same browser the HTTP request that preceded it did.
+                device_label=device_label_from_user_agent(
+                    environ.get("HTTP_USER_AGENT")
+                ),
+            )
             if resolution.banned_user_id is not None:
                 raise ConnectionRefusedError("This account is suspended.")
             auth_session = resolution.session

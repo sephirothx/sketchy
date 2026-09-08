@@ -9,12 +9,13 @@ import os
 
 import pytest
 from playwright.async_api import async_playwright
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import BugReport, User
+from app.db.models import BugReport
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
+from tests.e2e.staff_helpers import set_role
 
 
 BASE_URL = "http://localhost:8000"
@@ -25,23 +26,10 @@ async def promote_to_admin(username: str) -> None:
 
     The URL comes from the runner rather than being guessed: the suite gets a
     throwaway database per run, and a test that wrote to the developer's own
-    would be a nasty surprise.
+    would be a nasty surprise. Since #468 the role travels with the second
+    factor it requires, so `set_role` grants both.
     """
-    url = os.environ.get("SKETCHY_E2E_DATABASE_URL")
-    if not url:
-        pytest.skip("SKETCHY_E2E_DATABASE_URL is not set; run via scripts/test-e2e.sh")
-    engine = create_async_engine(url)
-    try:
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with factory() as session:
-            async with session.begin():
-                await session.execute(
-                    update(User)
-                    .where(User.username == username)
-                    .values(role=UserRole.ADMIN.value)
-                )
-    finally:
-        await engine.dispose()
+    await set_role(username, UserRole.ADMIN.value)
 
 
 async def open_bug_dialog(page) -> None:

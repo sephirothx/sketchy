@@ -22,8 +22,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
+from app.auth.sessions import STAFF_ROLES, revoke_sessions
+from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
-from app.db.models import AuditEvent, RoleChangeNotice, generate_uuid
+from app.db.models import AuditEvent, RoleChangeNotice, UserSecondFactor, generate_uuid
 from app.domain_values import AuditTargetType
 from app.db.models import User
 from app.deployment import MAX_SHUTDOWN_DRAIN_SECONDS
@@ -132,6 +134,10 @@ def create_admin_controls_router(
     # single thing the 404 in `admin_auth` is there to avoid. A dependency is
     # resolved first, so they get the same 404 either way.
     require_admin = admin_gate(session_factory)
+    # The same gate, plus a live step-up. Every route that changes a running
+    # server uses this one; the ones that only read use `require_admin`
+    # (R-AUTH-21).
+    require_admin_action = stepped_up(require_admin)
 
     async def _audit(request, admin, *, event, target_type, target_id, details):
         request_id, ip_hash = await audit_coordinates(request, session_factory)
@@ -166,7 +172,7 @@ def create_admin_controls_router(
     async def set_maintenance(
         request: Request,
         body: MaintenanceRequest,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Stop or resume admitting new rooms, games and restart votes.
 
@@ -274,7 +280,7 @@ def create_admin_controls_router(
     @router.delete("/api/admin/rooms/{room_id}")
     async def close_room(room_id: str, request: Request):
         """End a room now, telling everyone in it before their sockets close."""
-        admin = await require_admin(request)
+        admin = await require_admin_action(request)
         room = _room_or_404(room_id)
         await _audit(
             request, admin,
@@ -300,7 +306,7 @@ def create_admin_controls_router(
     @router.delete("/api/admin/rooms/{room_id}/players/{player_id}")
     async def kick_player(room_id: str, player_id: str, request: Request):
         """Remove one seat, by the same sequence a room's own vote uses."""
-        admin = await require_admin(request)
+        admin = await require_admin_action(request)
         room = _room_or_404(room_id)
         if player_id not in room.players:
             raise HTTPException(status_code=404, detail="No such player.")
@@ -327,7 +333,7 @@ def create_admin_controls_router(
         stuck behind a drawer who has stopped drawing wants the turn over, not
         the game.
         """
-        admin = await require_admin(request)
+        admin = await require_admin_action(request)
         room = _room_or_404(room_id)
         if room.game is None or room.game.phase != Phase.DRAWING:
             raise HTTPException(
@@ -361,7 +367,7 @@ def create_admin_controls_router(
     async def initiate_shutdown(
         request: Request,
         body: ShutdownRequest,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Stop this process, draining live games first.
 
@@ -508,7 +514,7 @@ def create_admin_controls_router(
         user_id: str,
         request: Request,
         body: RoleRequest,
-        admin: User = Depends(require_admin),
+        admin: User = Depends(require_admin_action),
     ):
         """Grant or revoke the moderator role, with a reason on the record."""
         if body.role not in GRANTABLE_ROLES:
@@ -551,6 +557,26 @@ def create_admin_controls_router(
                 previous = target.role
                 if previous == body.role:
                     return {"id": user_id, "role": previous}
+                if (
+                    body.role in STAFF_ROLES
+                    and await session.get(UserSecondFactor, target_id) is None
+                ):
+                    # Enrolment comes first, and has to (R-AUTH-20). Granting
+                    # the role revokes the account's sessions, and a staff
+                    # account cannot sign in without a code - so promoting
+                    # somebody who has not enrolled would lock them out of the
+                    # very page they would enrol from. Asking them to set it up
+                    # as an ordinary player, from their own account menu, is
+                    # also the only order in which nobody has to be trusted
+                    # with a window where the role exists without the factor.
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "That account needs two-factor authentication before "
+                            "it can hold this role. Ask them to set it up from "
+                            "their account menu first."
+                        ),
+                    )
                 target.role = body.role
                 session.add(
                     AuditEvent(
@@ -570,6 +596,16 @@ def create_admin_controls_router(
                         created_at=datetime.now(timezone.utc),
                     )
                 )
+                # A role change ends every session the account holds, in the
+                # same transaction (R-AUTH-20, #468). Two reasons, and both
+                # matter. A staff role must not be reachable from a session
+                # that was issued before the second factor was ever required,
+                # so the promoted account signs in again and produces a code.
+                # And a session's lifetime is fixed when it is issued, so a
+                # year-long player cookie would otherwise stay a year long on
+                # an account that is now staff - which is exactly what
+                # R-AUTH-03 shortens staff sessions to prevent.
+                await revoke_sessions(session, user_id=target_id)
                 # In the same transaction as the change it describes, so there
                 # can be no role nobody was told about and no notice about a
                 # role that was never granted. The reason stays in the ledger

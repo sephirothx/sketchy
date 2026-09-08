@@ -15,6 +15,35 @@ export class ApiError extends Error {
 }
 
 /**
+ * The header a staff refusal carries when it means *not yet* rather than
+ * *not you* (R-AUTH-21): the action needs the second factor proved again.
+ * Distinguished by a header rather than by reading the sentence, so the
+ * wording can change without breaking the branch that depends on it.
+ */
+export const STEP_UP_HEADER = "x-sketchy-step-up";
+
+/**
+ * Sent with a 401 from `POST /api/auth/login` when the account holds a second
+ * factor and no code was given. Distinguishes "now type the code" from "that
+ * password is wrong", which look identical in the status alone.
+ */
+export const SECOND_FACTOR_HEADER = "x-sketchy-second-factor";
+
+export class SecondFactorRequiredError extends ApiError {
+  constructor(message: string) {
+    super(401, message);
+    this.name = "SecondFactorRequiredError";
+  }
+}
+
+export class StepUpRequiredError extends ApiError {
+  constructor(message: string) {
+    super(403, message);
+    this.name = "StepUpRequiredError";
+  }
+}
+
+/**
  * Same-origin JSON fetch that carries the session cookie.
  *
  * `credentials: "same-origin"` is the browser default for same-origin requests
@@ -90,6 +119,12 @@ export async function apiRequest<T>(
       const detail =
         (payload && typeof payload.detail === "string" && payload.detail)
         || `Request failed with ${response.status}`;
+      if (response.status === 403 && response.headers.get(STEP_UP_HEADER)) {
+        throw new StepUpRequiredError(detail);
+      }
+      if (response.status === 401 && response.headers.get(SECOND_FACTOR_HEADER)) {
+        throw new SecondFactorRequiredError(detail);
+      }
       throw new ApiError(response.status, detail);
     }
     return payload as T;

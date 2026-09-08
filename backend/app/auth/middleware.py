@@ -1,13 +1,23 @@
 """Session cookie plumbing for HTTP requests and Socket.IO handshakes."""
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import hmac
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.auth.bans import suspension_payload
-from app.auth.sessions import SESSION_TTL, cookie_name, resolve_session_status
+from app.auth.rate_limit import client_key, get_ip_hash_secret
+from app.auth.sessions import (
+    SESSION_TTL,
+    cookie_name,
+    device_label_from_user_agent,
+    resolve_session_status,
+)
 from app.deployment import is_production
 
 COOKIE_MAX_AGE = int(SESSION_TTL.total_seconds())
@@ -43,7 +53,13 @@ def cookie_is_secure(secure: bool) -> bool:
     return secure or is_production()
 
 
-def set_session_cookie(response: Response, token: str, *, secure: bool) -> None:
+def set_session_cookie(
+    response: Response,
+    token: str,
+    *,
+    secure: bool,
+    max_age: int | None = None,
+) -> None:
     """Attach the session token as an HttpOnly cookie.
 
     HttpOnly keeps the token out of JavaScript entirely. SameSite=Strict keeps
@@ -57,7 +73,10 @@ def set_session_cookie(response: Response, token: str, *, secure: bool) -> None:
     response.set_cookie(
         cookie_name(),
         token,
-        max_age=COOKIE_MAX_AGE,
+        # The cookie is told the session's own life, not a fixed year: a staff
+        # session lasts a week (#468), and a cookie outliving the record it
+        # names is a browser sending a credential the server will only reject.
+        max_age=max_age if max_age is not None else COOKIE_MAX_AGE,
         httponly=True,
         samesite="strict",
         secure=cookie_is_secure(secure),
@@ -86,11 +105,62 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, session_factory: async_sessionmaker[AsyncSession]) -> None:
         super().__init__(app)
         self._session_factory = session_factory
+        # The deployment's HMAC key, read once and then held. Without the
+        # cache this would be a database round trip per request purely to
+        # hash an address that is only ever compared with another hash.
+        self._ip_secret: str | None = None
+        # And read once *in total*, not once per request in flight. A cold
+        # server has no key row yet, and this now runs on every request: the
+        # first page load is a dozen of them at once, each finding nothing
+        # cached, each trying to insert the same row, each losing on the
+        # unique key and retrying. That pile-up lands precisely when the first
+        # page is loading, which is where it was seen (#468). One caller
+        # establishes it; the rest wait on the lock and find it done.
+        self._ip_secret_lock = asyncio.Lock()
+
+    async def _caller_ip_hash(self, request: Request) -> str | None:
+        """Who is calling, as a digest. Never the address itself (R-PRIV-09)."""
+        secret = self._ip_secret
+        if secret is None:
+            async with self._ip_secret_lock:
+                # Checked again inside the lock: whoever held it before this
+                # caller has almost certainly just established it.
+                if self._ip_secret is None:
+                    try:
+                        self._ip_secret = await get_ip_hash_secret(
+                            self._session_factory
+                        )
+                    except Exception:
+                        # A signal, not a gate. If the key cannot be
+                        # established the request still proceeds; the anomaly
+                        # is simply not recorded.
+                        return None
+                secret = self._ip_secret
+        return hmac.new(
+            secret.encode("utf-8"),
+            client_key(request).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
 
     async def dispatch(self, request: Request, call_next):
         raw_token = request.cookies.get(cookie_name(), "")
         request.state.session_token = raw_token
-        resolution = await resolve_session_status(self._session_factory, raw_token)
+        # Computed once here and left on the request, for every route that
+        # wants it. Issuing a cookie needs the caller's address digest too,
+        # and reaching for it separately meant a database round trip per
+        # sign-in and per guest provisioned - which on SQLite is a write
+        # transaction taken on the one path an unauthenticated flood already
+        # hits hardest. The secret is cached on this middleware, so having it
+        # here costs an HMAC.
+        request.state.client_ip_hash = await self._caller_ip_hash(request)
+        resolution = await resolve_session_status(
+            self._session_factory,
+            raw_token,
+            ip_hash=request.state.client_ip_hash if raw_token else None,
+            device_label=device_label_from_user_agent(
+                request.headers.get("user-agent")
+            ),
+        )
         privacy_escape_hatch = (
             request.url.path.startswith("/api/auth/data-exports")
             or request.url.path == "/api/auth/account"

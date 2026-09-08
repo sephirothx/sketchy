@@ -38,12 +38,13 @@ import os
 
 import pytest
 from playwright.async_api import async_playwright
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import AppConfig, AuditEvent, User
+from app.db.models import AppConfig, AuditEvent
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.staff_helpers import set_role
 
 
 BASE_URL = "http://localhost:8000"
@@ -57,19 +58,8 @@ def _database_url() -> str:
 
 
 async def promote_to_admin(username: str) -> None:
-    """Make one account staff, through the same throwaway database the server uses."""
-    engine = create_async_engine(_database_url())
-    try:
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with factory() as session:
-            async with session.begin():
-                await session.execute(
-                    update(User)
-                    .where(User.username == username)
-                    .values(role=UserRole.ADMIN.value)
-                )
-    finally:
-        await engine.dispose()
+    """Make one account staff: the role, and the second factor it now needs."""
+    await set_role(username, UserRole.ADMIN.value)
 
 
 async def stored_settings() -> dict:

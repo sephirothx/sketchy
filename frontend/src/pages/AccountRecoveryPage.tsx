@@ -11,6 +11,7 @@ import {
   requestPasswordReset,
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
+import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 
 type Mode = "forgot" | "reset" | "verify";
 
@@ -104,8 +105,8 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   async function submitReset(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(PASSWORD_TOO_SHORT);
       return;
     }
     setBusy(true);

@@ -13,12 +13,12 @@ import os
 
 import pytest
 from playwright.async_api import async_playwright, expect
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import User
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import register_account, use_guest_name
+
+# Grants the role *and* the second factor R-AUTH-20 now requires of one.
+from tests.e2e.staff_helpers import enrol_through_the_ui, set_role
 
 
 BASE_URL = "http://localhost:8000"
@@ -31,19 +31,6 @@ def _database_url() -> str:
     return url
 
 
-async def set_role(username: str, role: str) -> None:
-    """Move one account's role through the same throwaway database the server
-    uses - the way every other end-to-end test makes an account staff."""
-    engine = create_async_engine(_database_url())
-    try:
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with factory() as session:
-            async with session.begin():
-                await session.execute(
-                    update(User).where(User.username == username).values(role=role)
-                )
-    finally:
-        await engine.dispose()
 
 
 async def a_registered_page(browser, username: str):
@@ -79,6 +66,12 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
 
             # By name. The id is never typed anywhere in this test, which is
             # the whole of #507's third complaint.
+            # Enrolment comes before the role: the route refuses to grant a
+            # staff role to an account with no second factor, so that nobody
+            # is promoted into an account they cannot sign in to.
+            await enrol_through_the_ui(player_page)
+            await admin_page.bring_to_front()
+
             await admin_page.fill("#ops-role-search", "PromoPlayer")
             row = admin_page.locator(".ops-role-results li", has_text="PromoPlayer")
             await expect(row).to_have_count(1)
@@ -101,13 +94,20 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
                 '[role="dialog"]', has_text="You are now a moderator"
             )
             await expect(notice).to_be_visible()
-            await notice.locator('button:has-text("Understood")').click()
+            # The change signed them out on every device (R-AUTH-20), so the
+            # notice offers the way back in rather than an acknowledgement
+            # this browser no longer holds the credential to make. It stays
+            # pending, and is acknowledged on their next visit.
+            await expect(notice).to_contain_text("signed out on every device")
+            await notice.locator('button:has-text("Sign in again")').click()
             await expect(notice).to_have_count(0)
 
-            # The menu offers what the role now allows, still without a reload.
-            await player_page.click(".identity-chip")
+            # And they are signed out by the grant (R-AUTH-20): a staff role
+            # must not be reachable from a session issued before the second
+            # factor was ever asked for. Signing back in is what proves it.
+            await player_page.reload()
             await expect(
-                player_page.get_by_role("menuitem", name="Moderation")
+                player_page.get_by_role("button", name="Choose a name")
             ).to_be_visible()
         finally:
             # Through the database, so a failed assertion above does not leave

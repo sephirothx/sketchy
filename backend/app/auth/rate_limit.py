@@ -379,6 +379,69 @@ class PersistentRateLimiter:
         # If callers cannot agree on the bucket, fail closed.
         return False
 
+    async def peek(self, key: str) -> bool:
+        """Whether this key would be refused right now, without spending.
+
+        A limiter that only charges failures needs to ask before it knows
+        whether there is anything to charge (#468). `check` cannot answer
+        that: it spends, and refunding afterwards would mean every successful
+        login wrote two rows to give back what it took.
+
+        Reading without writing is a weaker guarantee than `check` offers, and
+        deliberately so - two attempts that peek together can both be allowed
+        through the last slot. That is the right trade here, because the thing
+        being counted is failures, and the attempt that follows a peek charges
+        them itself.
+        """
+        key_hash = await self._key_hash(key)
+        checked_at = self._clock()
+        async with self._session_factory() as session:
+            state = (
+                await session.execute(
+                    select(
+                        AuthRateLimitBucket.attempt_count,
+                        AuthRateLimitBucket.window_expires_at,
+                    ).where(
+                        AuthRateLimitBucket.scope == self._scope,
+                        AuthRateLimitBucket.key_hash == key_hash,
+                    )
+                )
+            ).first()
+        if state is None:
+            return True
+        return not bucket_is_full(
+            state.attempt_count,
+            state.window_expires_at,
+            self._limit,
+            checked_at,
+        )
+
+    async def recent_hits(self, key: str) -> int:
+        """How much this key has spent inside its live window, without spending.
+
+        `peek` answers "would this be refused", which is not the same
+        question: a caller can be well under the ceiling and still be the
+        traffic a ceiling was raised about. Used by the login guard to tell a
+        caller who has been failing from one who has not (R-RATE-12).
+        """
+        key_hash = await self._key_hash(key)
+        checked_at = self._clock()
+        async with self._session_factory() as session:
+            state = (
+                await session.execute(
+                    select(
+                        AuthRateLimitBucket.attempt_count,
+                        AuthRateLimitBucket.window_expires_at,
+                    ).where(
+                        AuthRateLimitBucket.scope == self._scope,
+                        AuthRateLimitBucket.key_hash == key_hash,
+                    )
+                )
+            ).first()
+        if state is None or state.window_expires_at <= checked_at:
+            return 0
+        return int(state.attempt_count or 0)
+
     async def _finish(self, allowed: bool) -> bool:
         """Count the check and occasionally take out the expired buckets."""
         self._checks += 1

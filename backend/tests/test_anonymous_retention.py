@@ -145,6 +145,10 @@ async def _session_row(session, user_id, *, expires_at, revoked_at=None):
         # Created before it expires, as the row now insists (#553).
         created_at=expires_at - timedelta(days=30),
         expires_at=expires_at,
+        # The idle bound is a column now (#468). These rows are about the
+        # expiry sweep, so it is set to the expiry: never the reason a row
+        # here is or is not kept.
+        idle_expires_at=expires_at,
         revoked_at=revoked_at,
     )
     session.add(row)

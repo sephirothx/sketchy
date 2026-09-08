@@ -7,9 +7,10 @@ Companion documents: [`architecture.md`](architecture.md) ·
 [`../GLOSSARY.md`](../GLOSSARY.md)
 
 Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py).
-Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — one baseline
+Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
-into it (#557, §13).
+into it (#557, §13), and the revisions written since. Current head:
+`a7b8c9d0e1f2_auth_hardening.py` (#468).
 
 To regenerate an authoritative dump of this schema:
 
@@ -88,6 +89,8 @@ keeps the suspension honest.
 ```mermaid
 erDiagram
     users ||--o{ auth_sessions : "has devices"
+    users ||--o| user_second_factors : "proves with"
+    users ||--o{ user_recovery_codes : "falls back on"
     users ||--o{ identity_aliases : "merges guests"
     users ||--o{ user_blocks : "blocks"
     users ||--o{ friendships : "befriends"
@@ -128,7 +131,7 @@ erDiagram
 | Domain | Tables |
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
-| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
+| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
@@ -261,8 +264,11 @@ Notable design points:
 One revocable signed-in device.
 
 `id` · `user_id` (CASCADE) · `token_hash` VARCHAR(64) **unique** · `device_label` ·
-`rotated_from_id` (self-FK, unique, `SET NULL`) · `created_at` · `last_used_at` ·
-`expires_at` · `revoked_at`.
+`rotated_from_id` (self-FK, unique, `SET NULL`) · `ip_hash` · `last_ip_hash` ·
+`anomaly_at` · `anomaly_count` · `stepped_up_at` · `created_at` · `last_used_at` ·
+`expires_at` · `revoked_at`, with `ck_auth_sessions_anomaly_count` and
+`ck_auth_sessions_anomaly_pair` (a session that never looked wrong has no time at
+which it did).
 
 Expired rows are purged 30 days past `expires_at`, at startup and hourly. The
 condition is **expiry, not revocation**: a revoked but unexpired row still keeps a
@@ -272,10 +278,43 @@ under an **active suspension are never purged** — it cannot sign in to make an
 so that row is its only route to the export and deletion R-BAN-04 keeps available.
 
 Cookies carry opaque 256-bit random tokens; **only SHA-256 hashes are stored**, so the
-database never contains a credential that can be replayed. Tokens rotate halfway
-through their one-year maximum lifetime. Socket.IO handshakes resolve the same record as
-HTTP requests, so revocation applies on the next connection without a shared signing
-secret.
+database never contains a credential that can be replayed. Socket.IO handshakes resolve
+the same record as HTTP requests, so revocation applies on the next connection without a
+shared signing secret.
+
+**Both lifetimes are columns** (R-AUTH-03, #468): `expires_at` (365 days for a player,
+7 for staff) and `idle_expires_at` (90 days, 24 hours for staff), the latter moving
+forward with `last_used_at` by the whole window the lifetime allows, which was already maintained and throttled to one write
+per five minutes. `ck_auth_sessions_idle_within_expiry` keeps silence able to end a
+session early but never late. The span between `created_at` and `expires_at` is also
+what says *which* rule the row lives under — seven days for staff, a year for a player
+— and so what its rotation cadence is; nothing on the read path asks the account.
+
+Deriving either from the account's role instead would mean joining `users` on the
+single hottest read this server has — once per HTTP request and once per socket
+handshake — to learn something that cannot have changed: a **role change revokes every
+session the account holds** (R-AUTH-20), so a live session is always one issued under
+the role its owner has now. That revocation is also why a staff role cannot be granted
+to an account with no second factor: it would sign them out of the page they would
+enrol from.
+
+`ip_hash` is the address the session was **issued** to and `last_ip_hash` the one it was
+last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limiter uses
+— raw addresses are never stored, so these answer "same network?" without knowing which
+network. `anomaly_at`/`anomaly_count` record a session used from a browser it was not
+issued to, or for staff from a different address; a player's address change is
+deliberately *not* an anomaly, because a phone crossing between mobile data and wi-fi
+does it several times an hour. An anomaly clears `stepped_up_at`, which is otherwise the
+last time this device proved its second factor (R-AUTH-21) — held here rather than in
+memory so revoking the device revokes its step-up with it.
+
+`rotated_from_id` is what makes theft **detectable** (R-AUTH-22): rotation revokes the
+predecessor and points the successor at it, so a predecessor presented after its
+successor exists is a second copy rather than an unknown cookie. Every session descended
+from it is revoked and a `session.token_replayed` audit event is written. A 60-second
+grace lets a just-rotated predecessor still resolve, because a browser with requests in
+flight can lose that race, and signing somebody out for using their browser normally is
+not a security outcome.
 
 ### `auth_tokens`
 One-shot credentials for flows that leave the app and come back.
@@ -317,6 +356,54 @@ the forwarded header is attacker-controlled. Buckets
 are shared, so limits survive restarts and apply once across every replica. Expired
 buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets without
 exposing or re-identifying old keys.
+
+### `auth_login_lockouts`
+`key_hash` **PK** · `consecutive_failures` · `locked_until` · `updated_at`, with
+`ck_auth_login_lockouts_failures` and `ix_auth_login_lockouts_locked_until`.
+
+Separate from `auth_rate_limit_buckets` because it is a different shape (R-RATE-12,
+#468). A bucket is a count inside a fixed window that forgets everything when the window
+rolls, which is what a rate limit should do; a lockout has to remember **across**
+windows, since the point of backing off is that the tenth failure costs more than the
+second, and it is cleared by a success rather than by time. Rows untouched for a day are
+dropped, so a finished attack does not follow an account for a week.
+
+`key_hash` is an HMAC of the **lowercased username**, never the username: this table
+would otherwise be a list of which accounts exist and which are under attack, readable
+by anything that can read the database.
+
+### `user_second_factors`
+`user_id` **PK** (CASCADE) · `secret` · `confirmed_at` · `created_at` · `last_step` ·
+`failed_attempts` · `locked_until`, with `ck_user_second_factors_failed_attempts` and
+`ck_user_second_factors_last_step`.
+
+One row per account, written **only once enrolment is confirmed** by a code the account
+actually produced (R-AUTH-20): an unconfirmed secret lives in the enrolment response and
+nowhere else, so a secret generated and then abandoned never becomes a credential and
+can lock nobody out.
+
+The secret is stored as it must be. TOTP is symmetric — the server has to hold what the
+authenticator holds in order to check a code — and no hashing scheme changes that. This
+is the honest cost of choosing TOTP over WebAuthn (N-15), and it is why a database read
+is not the only thing between a leak and a staff account: the password is still required
+first, and R-AUTH-21's step-up is required again per action.
+
+`last_step` is the 30-second interval whose code was last spent, which is what makes a
+code single-use **inside its own step** — a relayed code finds it already gone.
+`failed_attempts` and `locked_until` stop a machine grinding six digits behind a password
+it already has, which the login throttle in front does not cover.
+
+### `user_recovery_codes`
+`id` **PK** · `user_id` (CASCADE) · `code_hash` · `created_at` · `used_at`, with
+`uq_user_recovery_codes_code` and `ix_user_recovery_codes_user`.
+
+Ten single-use codes issued at enrolment, shown exactly once, hashed with SHA-256 for the
+same reason session tokens are (R-AUTH-02): these are high-entropy values this server
+generated, so a slow hash buys nothing, and the database must not contain a replayable
+credential. **Spent rather than deleted**, so somebody can be told how many they have
+left without the count being a guess. Re-enrolling deletes every code issued against the
+old secret — a recovery code that still opened an account after its authenticator had
+been replaced would be the hole this closes.
 
 ### `friendships`
 `user_low_id` + `user_high_id` composite **PK** (both CASCADE) ·

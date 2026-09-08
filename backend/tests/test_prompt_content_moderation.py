@@ -30,6 +30,8 @@ from app.repositories.sqlalchemy import (
 
 from tests.dbfixtures import create_test_db
 
+from tests.staffauth import mark_staff_ready
+
 pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
@@ -85,6 +87,7 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
             reviewer = await session.get(User, UUID(moderator["id"]))
             assert reviewer is not None
             reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
 
     prompt_list = await prompts.create_owned(
         owner["id"],
@@ -317,6 +320,7 @@ async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
         async with session.begin():
             reviewer = await session.get(User, UUID(moderator["id"]))
             reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
 
     prompt_list = await prompts.create_owned(
         owner["id"],

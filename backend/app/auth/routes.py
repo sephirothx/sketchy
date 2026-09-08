@@ -29,9 +29,12 @@ from app.auth.middleware import (
     set_session_cookie,
 )
 from app.auth.sessions import (
+    STAFF_ROLES,
+    STEP_UP_WINDOW,
     create_session,
     device_label_from_user_agent,
     list_active_sessions,
+    record_step_up,
     revoke_all_sessions,
     revoke_session,
     rotate_session,
@@ -46,7 +49,6 @@ from app.auth.names import (
 from app.auth.password import (
     DUMMY_HASH,
     MAX_PASSWORD_LENGTH,
-    PASSWORD_RULE_MESSAGE,
     PasswordPolicyError,
     hash_password,
     password_needs_rehash,
@@ -63,6 +65,7 @@ from app.auth.recovery import (
     change_password,
     confirm_email,
     email_state,
+    password_reset_identity,
     password_reset_link_is_usable,
     mark_reminder_shown,
     request_email_verification,
@@ -72,6 +75,16 @@ from app.auth.recovery import (
 from app.api.serializers import user_payload
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
+from app.auth.login_guard import LoginGuard
+from app.auth.second_factor import (
+    SecondFactorOutcome,
+    begin_enrolment,
+    confirm_enrolment,
+    disable_second_factor,
+    replace_recovery_codes,
+    second_factor_state,
+    verify_second_factor,
+)
 from app.rooms import normalize_name_color
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
@@ -99,6 +112,21 @@ def _limit(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
+def staff_second_factor_required() -> bool:
+    """Whether a staff role demands an enrolled second factor to sign in.
+
+    On by default, and switchable off for exactly one situation: a deployment
+    that has just promoted its first moderators and needs them able to sign in
+    long enough to enrol. Leaving it off is leaving R-AUTH-20 unenforced, so
+    the readiness surface reports it as a finding rather than as a setting.
+    """
+    return os.environ.get("STAFF_SECOND_FACTOR_REQUIRED", "1").strip() not in (
+        "0",
+        "false",
+        "no",
+    )
+
+
 # GET /api/auth/me runs on every page load, so recording a login timestamp on
 # each one would mean a write per visitor per load.
 LAST_LOGIN_THROTTLE_SECONDS = 300
@@ -124,6 +152,10 @@ class CredentialsBody(BaseModel):
 
     username: str = Field(max_length=MAX_NAME_LENGTH)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # Sent only by a staff sign-in, and only on the second attempt: the first
+    # one is what tells the browser a code is wanted (R-AUTH-20). Bounded
+    # generously because a recovery code is longer than a TOTP code.
+    code: str | None = Field(default=None, max_length=64)
 
 
 class RegistrationBody(CredentialsBody):
@@ -180,6 +212,31 @@ class ChangePasswordBody(BaseModel):
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
+class SecondFactorConfirmBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Echoed back from the enrolment offer, because nothing was stored: the
+    # secret lives in the browser between the two calls and becomes a
+    # credential only when this code proves it arrived intact.
+    secret: str = Field(max_length=64)
+    code: str = Field(max_length=16)
+    # Always required: what this writes is later taken as proof the account's
+    # owner holds the factor (R-AUTH-20).
+    password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
+
+
+class StepUpBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(max_length=64)
+
+
+class PasswordProofBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+
+
 class DeleteAccountBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -207,12 +264,9 @@ def create_auth_router(
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
     # deploys, crashes, and multiple application replicas.
-    login_limiter = PersistentRateLimiter(
-        session_factory,
-        scope="login",
-        limit=_limit("AUTH_LOGIN_LIMIT", 10),
-        window_seconds=300,
-    )
+    # Account, address and deployment, all counting failures only (#468).
+    # The old per-address bucket is one of the three it owns.
+    login_guard = LoginGuard(session_factory)
     register_limiter = PersistentRateLimiter(
         session_factory,
         scope="register",
@@ -241,6 +295,15 @@ def create_auth_router(
         scope="guest_provision_day",
         limit=_limit("GUEST_PROVISION_DAILY_LIMIT", 5000),
         window_seconds=86400,
+    )
+    # Guessing six digits is worth throttling on its own account, and an
+    # enrolment page reloading in a loop should not mint secrets forever.
+    # Tighter than login because nobody legitimately does this often.
+    second_factor_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="second_factor",
+        limit=_limit("AUTH_SECOND_FACTOR_LIMIT", 20),
+        window_seconds=900,
     )
     # Mailing costs somebody else's inbox, so both of these are tighter than
     # the flows that only cost a database round trip.
@@ -277,14 +340,40 @@ def create_auth_router(
     def device_label(request: Request) -> str:
         return device_label_from_user_agent(request.headers.get("user-agent"))
 
-    async def issue_cookie(response: Response, request: Request, user_id: str) -> None:
+    async def issue_cookie(
+        response: Response,
+        request: Request,
+        user_id: str,
+        role: str | None = None,
+    ) -> None:
+        """Mint this device's session and set its cookie.
+
+        `role` decides the lifetime (R-AUTH-03) and every caller here already
+        knows it, so it is passed rather than looked up: guest provisioning is
+        the busiest write path this server has, and a second read on it buys
+        nothing but a connection.
+        """
+        # From the request, not from a fresh lookup: the middleware has
+        # already hashed this caller under the cached secret, and asking the
+        # database again on every sign-in and every guest provisioned is a
+        # write transaction bought for nothing.
+        ip_hash = getattr(request.state, "client_ip_hash", None)
         issued = await create_session(
             session_factory,
             user_id=user_id,
+            role=role,
             device_label=device_label(request),
+            # The baseline every later use of this session is compared against
+            # (R-AUTH-22). A hash, never the address itself.
+            ip_hash=ip_hash,
         )
         set_session_cookie(
-            response, issued.token, secure=is_secure_request(request)
+            response,
+            issued.token,
+            secure=is_secure_request(request),
+            max_age=int(
+                (issued.session.expires_at - issued.session.created_at).total_seconds()
+            ),
         )
 
     async def revoke_current(request: Request) -> None:
@@ -300,6 +389,81 @@ def create_auth_router(
             raise HTTPException(
                 status_code=429, detail="Too many attempts. Please wait and try again."
             )
+
+    async def _staff_second_factor_gate(user, body, *, address: str):
+        """Refuse a staff sign-in that cannot produce its second factor.
+
+        Returns the refusal rather than raising it, so the caller decides
+        where in the sequence it lands - which matters, because it has to be
+        after the password check and before any session is issued.
+
+        A staff account with no second factor enrolled is refused too, and
+        told to enrol. That is the whole force of R-AUTH-20: the alternative,
+        letting a moderator work until they get round to enrolling, is a
+        requirement that describes an intention rather than a rule. Enrolment
+        is done from the account page while still an ordinary player, or by
+        signing in during the grace an operator grants with
+        `STAFF_SECOND_FACTOR_REQUIRED=0` on a deployment that has just
+        promoted somebody.
+        """
+        if user.role not in STAFF_ROLES or not staff_second_factor_required():
+            return None
+        state = await second_factor_state(session_factory, user_id=user.id)
+        if not state.enrolled:
+            return HTTPException(
+                status_code=403,
+                detail=(
+                    "This account needs two-factor authentication before it "
+                    "can sign in. Ask an administrator to help you enrol."
+                ),
+            )
+        code = (body.code or "").strip()
+        if not code:
+            # 401 with a machine-readable reason: the browser has to know to
+            # ask for a code rather than to say the password was wrong.
+            return HTTPException(
+                status_code=401,
+                detail="Enter the code from your authenticator app.",
+                headers={"X-Sketchy-Second-Factor": "required"},
+            )
+        outcome = await verify_second_factor(
+            session_factory, user_id=user.id, code=code
+        )
+        if outcome is SecondFactorOutcome.ACCEPTED:
+            return None
+        if outcome is SecondFactorOutcome.RECOVERY_CODE_SPENT:
+            return None
+        if outcome is SecondFactorOutcome.LOCKED:
+            return HTTPException(
+                status_code=429,
+                detail="Too many codes were wrong. Please wait and try again.",
+            )
+        await login_guard.note_failure(username=body.username, address=address)
+        return HTTPException(
+            status_code=401,
+            detail="That code is not right.",
+            headers={"X-Sketchy-Second-Factor": "required"},
+        )
+
+    async def _prove_password(user, password: str | None) -> None:
+        """Refuse unless the caller can produce the account's own password.
+
+        Turning off a second factor, or replacing the codes that bypass it,
+        is worth as much to somebody holding a stolen cookie as any staff
+        action - so both ask for the one thing a stolen cookie does not carry.
+        """
+        credentials = (
+            await user_repo.get_credentials_by_username(user.username)
+            if user.username
+            else None
+        )
+        if (
+            credentials is None
+            or credentials.user.id != user.id
+            or not password
+            or not await verify_password(credentials.password_hash, password)
+        ):
+            raise HTTPException(status_code=401, detail="Password is incorrect.")
 
     async def refuse_a_registered_name(name: str) -> None:
         """A guest may not play under a name that belongs to an account."""
@@ -349,17 +513,25 @@ def create_auth_router(
         # Rotate rather than merely extending the same credential, limiting
         # how long a copied token remains useful while preserving active guests.
         if auth_session and should_rotate(auth_session):
+            rotation_ip_hash = getattr(request.state, "client_ip_hash", None)
             rotated = await rotate_session(
                 session_factory,
                 session_id=auth_session.id,
                 user_id=user.id,
+                role=user.role,
                 device_label=device_label(request),
+                ip_hash=rotation_ip_hash,
             )
             if rotated is not None:
                 set_session_cookie(
                     response,
                     rotated.token,
                     secure=is_secure_request(request),
+                    max_age=int(
+                        (
+                            rotated.session.expires_at - rotated.session.created_at
+                        ).total_seconds()
+                    ),
                 )
         return user_payload(refreshed or user)
 
@@ -425,7 +597,8 @@ def create_auth_router(
                 await provision_limiter.refund(client_key(request))
                 await daily_provision_limiter.refund(GLOBAL_PROVISION_KEY)
                 raise
-            await issue_cookie(response, request, user.id)
+            # A freshly provisioned guest, so the role is known without asking.
+            await issue_cookie(response, request, user.id, role=user.role)
             return user_payload(user)
         if not user.is_anonymous:
             # A registered player's name is their username; changing it here
@@ -489,9 +662,15 @@ def create_auth_router(
         except NameError_ as error:
             raise HTTPException(status_code=400, detail=NAME_RULE_MESSAGE) from error
         try:
-            password = validate_password(body.password)
+            password = validate_password(
+                body.password, username=username, email=body.email
+            )
         except PasswordPolicyError as error:
-            raise HTTPException(status_code=400, detail=PASSWORD_RULE_MESSAGE) from error
+            # The policy's own words, not the generic length sentence: it now
+            # refuses for reasons the length sentence does not describe, and
+            # "must be 12-128 characters" in answer to a breached password
+            # sends somebody straight back with the same password plus a digit.
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
         user_id = getattr(request.state, "user_id", None)
         current = await user_repo.get_by_id(user_id) if user_id else None
@@ -535,7 +714,7 @@ def create_auth_router(
             session_factory, user_id=claimed.id, values=body.settings
         )
         await revoke_current(request)
-        await issue_cookie(response, request, claimed.id)
+        await issue_cookie(response, request, claimed.id, role=claimed.role)
         if body.email:
             # Offered, not required, and never fatal: an address that cannot be
             # accepted must not undo an account that has just been claimed.
@@ -560,7 +739,14 @@ def create_auth_router(
         rows keep their original user ids and presentation, while account
         history and statistics resolve across both identities.
         """
-        await throttle(login_limiter, request)
+        address = client_key(request)
+        verdict = await login_guard.check(username=body.username, address=address)
+        if not verdict.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=verdict.message,
+                headers={"Retry-After": str(verdict.retry_after_seconds)},
+            )
         credentials = await user_repo.get_credentials_by_username(body.username)
         # Hash even when the username does not exist. Skipping it would return
         # noticeably faster and turn response time into a username oracle,
@@ -568,9 +754,25 @@ def create_auth_router(
         password_hash = credentials.password_hash if credentials else DUMMY_HASH
         matched = await verify_password(password_hash, body.password)
         if credentials is None or not matched:
+            # Charged here rather than before the check, so signing in
+            # correctly costs nothing at all and the ceilings can be low
+            # enough to matter (#468). A username that does not exist is
+            # charged exactly like one that does: the counters must not be
+            # the thing that answers R-AUTH-09's question.
+            await login_guard.note_failure(username=body.username, address=address)
             raise HTTPException(status_code=401, detail="Incorrect username or password.")
         if await is_user_banned(session_factory, credentials.user.id):
             raise HTTPException(status_code=403, detail="This account is suspended.")
+        # A staff account signs in only if it can also prove its second factor
+        # (R-AUTH-20). Checked after the password so a wrong password is never
+        # told that this account has one, and before anything is issued so a
+        # half-authenticated staff session never exists.
+        staff_gate = await _staff_second_factor_gate(
+            credentials.user, body, address=address
+        )
+        if staff_gate is not None:
+            raise staff_gate
+        await login_guard.note_success(username=body.username)
 
         if await password_needs_rehash(credentials.password_hash):
             replacement_hash = await hash_password(body.password)
@@ -602,7 +804,9 @@ def create_auth_router(
 
         refreshed = await user_repo.touch_last_login(credentials.user.id)
         await revoke_current(request)
-        await issue_cookie(response, request, credentials.user.id)
+        await issue_cookie(
+            response, request, credentials.user.id, role=credentials.user.role
+        )
         return user_payload(refreshed or credentials.user)
 
     @router.get("/sessions")
@@ -621,6 +825,21 @@ def create_auth_router(
                     "createdAt": record.created_at.isoformat(),
                     "lastUsedAt": record.last_used_at.isoformat(),
                     "expiresAt": record.expires_at.isoformat(),
+                    # When silence alone would end it, which for most devices
+                    # arrives long before `expiresAt` does (R-AUTH-03).
+                    "idleExpiresAt": (
+                        record.idle_expires_at.isoformat()
+                        if record.idle_expires_at
+                        else None
+                    ),
+                    # Shown so somebody can recognize a session that is not
+                    # theirs and revoke it (R-AUTH-22). Deliberately a plain
+                    # "used from somewhere new", with no address and no place
+                    # name: the server holds a hash and could not say where
+                    # even if it should.
+                    "anomalyAt": (
+                        record.anomaly_at.isoformat() if record.anomaly_at else None
+                    ),
                     "current": record.id == current_id,
                 }
                 for record in records
@@ -921,10 +1140,17 @@ def create_auth_router(
     async def perform_password_reset(
         body: ResetPasswordBody, request: Request, response: Response
     ):
+        # Read without consuming, so a password refused below leaves the link
+        # unspent (R-AUTH-08, R-AUTH-10).
+        reset_username, reset_email = await password_reset_identity(
+            session_factory, token=body.token
+        )
         try:
-            password = validate_password(body.password)
+            password = validate_password(
+                body.password, username=reset_username, email=reset_email
+            )
         except PasswordPolicyError as error:
-            raise HTTPException(status_code=400, detail=PASSWORD_RULE_MESSAGE) from error
+            raise HTTPException(status_code=400, detail=str(error)) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         user_id = await reset_password(
             session_factory,
@@ -961,10 +1187,18 @@ def create_auth_router(
             raise HTTPException(
                 status_code=403, detail="Create an account to set a password."
             )
+        # The account's own address, read for the screening rule alone
+        # (R-AUTH-19): `UserData` deliberately carries no email, and this is
+        # a once-in-a-while endpoint rather than a hot path.
+        known_email = (
+            await email_state(session_factory, user_id=UUID(user.id))
+        ).address
         try:
-            password = validate_password(body.password)
+            password = validate_password(
+                body.password, username=user.username, email=known_email
+            )
         except PasswordPolicyError as error:
-            raise HTTPException(status_code=400, detail=PASSWORD_RULE_MESSAGE) from error
+            raise HTTPException(status_code=400, detail=str(error)) from error
         credentials = (
             await user_repo.get_credentials_by_username(user.username)
             if user.username
@@ -989,8 +1223,171 @@ def create_auth_router(
         # Every session was revoked, this one included. Signing the caller
         # back in is what keeps a password change from also being a logout.
         clear_session_cookie(response, secure=is_secure_request(request))
-        await issue_cookie(response, request, user.id)
+        await issue_cookie(response, request, user.id, role=user.role)
         return {"ok": True}
+
+    @router.get("/second-factor")
+    async def second_factor(request: Request):
+        """What this account holds, and whether its role demands one."""
+        user = await require_user(request)
+        state = await second_factor_state(session_factory, user_id=user.id)
+        return {
+            "enrolled": state.enrolled,
+            "confirmedAt": (
+                state.confirmed_at.isoformat() if state.confirmed_at else None
+            ),
+            "recoveryCodesRemaining": state.recovery_codes_remaining,
+            "required": user.role in STAFF_ROLES and staff_second_factor_required(),
+            "stepUpWindowSeconds": int(STEP_UP_WINDOW.total_seconds()),
+        }
+
+    @router.post("/second-factor/enrol")
+    async def start_second_factor_enrolment(request: Request):
+        """Offer a secret. Nothing is stored until a code proves it arrived.
+
+        Throttled, because each call is a fresh secret and an enrolment page
+        left reloading would otherwise be an unbounded source of them.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        if user.is_anonymous:
+            raise HTTPException(
+                status_code=403,
+                detail="Create an account before setting up two-factor authentication.",
+            )
+        offer = begin_enrolment(account=user.username or user.display_name)
+        return {"secret": offer.secret, "uri": offer.uri}
+
+    @router.post("/second-factor/confirm")
+    async def confirm_second_factor(body: SecondFactorConfirmBody, request: Request):
+        """Prove the secret arrived, and receive the recovery codes.
+
+        The codes are in this response and in no other: they exist as hashes
+        from here on, exactly as session tokens do (R-AUTH-02), so a second
+        request for the same set is not something this server can answer.
+
+        Binding a second factor asks for the password - the first one as much
+        as a replacement. Replacement obviously had to: a stolen cookie could
+        otherwise confirm an attacker-controlled secret over the account's
+        own, taking R-AUTH-21's step-up with it.
+
+        The first one was let through on the grounds that it grants nobody
+        anything a stolen cookie did not already carry. That was wrong, and
+        wrong in a way worth writing down: it weighed what the row gives at
+        the moment it is written, when what matters is what it is later taken
+        to prove. Promotion checks that a second factor *exists*, not whose it
+        is (R-AUTH-20), so a factor planted on a player with a stolen cookie
+        becomes the staff factor the moment somebody is given the role - and
+        since the grant revokes every session and there is no operator way
+        back from a lost authenticator, the account's owner is then locked out
+        of it for good.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        await _prove_password(user, body.password)
+        codes = await confirm_enrolment(
+            session_factory,
+            user_id=user.id,
+            secret=body.secret,
+            code=body.code,
+        )
+        if codes is None:
+            raise HTTPException(
+                status_code=400,
+                detail="That code is not right. Check your authenticator app.",
+            )
+        return {"ok": True, "recoveryCodes": codes}
+
+    @router.post("/second-factor/recovery-codes")
+    async def regenerate_recovery_codes(body: PasswordProofBody, request: Request):
+        """Replace the set, proving the password first."""
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        await _prove_password(user, body.password)
+        state = await second_factor_state(session_factory, user_id=user.id)
+        if not state.enrolled:
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        return {"recoveryCodes": await replace_recovery_codes(
+            session_factory, user_id=user.id
+        )}
+
+    @router.delete("/second-factor")
+    async def remove_second_factor(body: PasswordProofBody, request: Request):
+        """Turn it off, unless the account's role is the reason it is on.
+
+        Throttled like every other password proof on this router. It was the
+        one that was not, which made it the cheapest place for somebody
+        holding a stolen cookie to guess the password that would let them
+        take the second factor off an account.
+
+        A moderator cannot remove their own second factor: it is the condition
+        of the role, and letting them drop it would leave R-AUTH-20 enforced
+        only against people who had not thought to. Giving up the role is what
+        removes the requirement, and only an administrator can do that.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        await _prove_password(user, body.password)
+        if user.role in STAFF_ROLES and staff_second_factor_required():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Two-factor authentication is required for this account's role."
+                ),
+            )
+        removed = await disable_second_factor(session_factory, user_id=user.id)
+        if not removed:
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        return {"ok": True}
+
+    @router.post("/step-up")
+    async def step_up(body: StepUpBody, request: Request):
+        """Prove the second factor again, for one short window (R-AUTH-21).
+
+        The proof is recorded against this session rather than this request,
+        so a moderator working through a queue is asked once rather than per
+        action - and revoking the device revokes the proof with it.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        session_id = getattr(request.state, "session_id", None)
+        if not session_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        outcome = await verify_second_factor(
+            session_factory, user_id=user.id, code=body.code
+        )
+        if outcome is SecondFactorOutcome.NOT_ENROLLED:
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        if outcome is SecondFactorOutcome.LOCKED:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many codes were wrong. Please wait and try again.",
+            )
+        if outcome is SecondFactorOutcome.REJECTED:
+            raise HTTPException(status_code=401, detail="That code is not right.")
+        recorded = await record_step_up(
+            session_factory, session_id=session_id, user_id=user.id
+        )
+        if not recorded:
+            # The code was right and there was nowhere to put it: the row this
+            # request resolved through is revoked or expired, which a caller
+            # inside a rotation's grace window is holding by definition. Saying
+            # "ok" there would send them straight back into the action that
+            # refused them, to be refused again with nothing changed.
+            raise HTTPException(
+                status_code=409,
+                detail="This session has been replaced. Reload and try again.",
+            )
+        return {
+            "ok": True,
+            "expiresInSeconds": int(STEP_UP_WINDOW.total_seconds()),
+        }
 
     @router.post("/logout")
     async def logout(request: Request, response: Response):
