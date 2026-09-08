@@ -434,6 +434,41 @@ def create_auth_router(
         )
         return issued.session.id
 
+    async def _sign_this_browser_in(response: Response, request: Request, account):
+        """Everything that follows a proof, whatever the proof was.
+
+        A password and a passkey answer different questions and arrive at the
+        same place: this browser is that account now. What has to happen then
+        is the same either way - the guest identity being carried is folded
+        into the account and its sessions end (R-ACCT-04), the login is
+        stamped, the guest's own session is revoked, and this device is given
+        a cookie for the account with the lifetime its role calls for.
+
+        Shared rather than repeated because the half that went missing when a
+        second sign-in path was added was the guest merge, and what that costs
+        somebody is the game they were in the middle of.
+        """
+        current_user_id = getattr(request.state, "user_id", None)
+        current = await user_repo.get_by_id(current_user_id) if current_user_id else None
+        if current is not None and current.is_anonymous and current.id != account.id:
+            try:
+                await user_repo.merge_guest_into_account(current.id, account.id)
+            except IdentityMergeError as error:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Guest progress could not be linked to this account.",
+                ) from error
+            if on_identity_merged is not None:
+                on_identity_merged(current.id, account.id)
+            await revoke_all_sessions(session_factory, user_id=current.id)
+
+        refreshed = await user_repo.touch_last_login(account.id)
+        await revoke_current(request)
+        session_id = await issue_cookie(
+            response, request, account.id, role=account.role
+        )
+        return refreshed or account, session_id
+
     async def revoke_current(request: Request) -> None:
         session_id = getattr(request.state, "session_id", None)
         user_id = getattr(request.state, "user_id", None)
@@ -851,32 +886,8 @@ def create_auth_router(
                 replacement_hash,
             )
 
-        current_user_id = getattr(request.state, "user_id", None)
-        current = await user_repo.get_by_id(current_user_id) if current_user_id else None
-        if (
-            current is not None
-            and current.is_anonymous
-            and current.id != credentials.user.id
-        ):
-            try:
-                await user_repo.merge_guest_into_account(
-                    current.id, credentials.user.id
-                )
-            except IdentityMergeError as error:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Guest progress could not be linked to this account.",
-                ) from error
-            if on_identity_merged is not None:
-                on_identity_merged(current.id, credentials.user.id)
-            await revoke_all_sessions(session_factory, user_id=current.id)
-
-        refreshed = await user_repo.touch_last_login(credentials.user.id)
-        await revoke_current(request)
-        await issue_cookie(
-            response, request, credentials.user.id, role=credentials.user.role
-        )
-        return user_payload(refreshed or credentials.user)
+        account, _ = await _sign_this_browser_in(response, request, credentials.user)
+        return user_payload(account)
 
     @router.get("/sessions")
     async def sessions(request: Request):
@@ -1400,10 +1411,15 @@ def create_auth_router(
             )
         except PasskeyError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
-        # A passkey answers R-AUTH-20 the way an authenticator app does, and
-        # the password was proved a moment ago, so a role waiting on this is
-        # now theirs.
-        await prove_second_factor_owner(session_factory, user_id=user.id)
+        # A passkey answers R-AUTH-20 on its own - registering it proved the
+        # password, and a promotion reads the credential itself - so a role
+        # waiting on this is now theirs.
+        #
+        # Deliberately *not* `prove_second_factor_owner`: that vouches for an
+        # authenticator app, and this ceremony proves nothing about one. A
+        # factor planted with a stolen cookie would otherwise become trusted
+        # the moment its victim added a passkey, which is the planted-factor
+        # attack R-AUTH-20 exists to refuse, arriving through a side door.
         granted = await take_up_offer(session_factory, user_id=user.id)
         if granted:
             await _restore_this_device(response, request, user.id, granted)
@@ -1501,16 +1517,14 @@ def create_auth_router(
                 detail="This session has been replaced. Reload and try again.",
             )
 
-        session_id = await issue_cookie(
-            response, request, account.id, role=account.role
-        )
+        signed_in, session_id = await _sign_this_browser_in(response, request, account)
         # The assertion *is* the proof a step-up asks for, and it happened one
         # request ago. A code is not treated this way because a code can be
         # relayed and this cannot: that difference is the whole of R-AUTH-23.
         await record_step_up(
             session_factory, session_id=session_id, user_id=account.id
         )
-        return {"ok": True, "user": user_payload(account), "steppedUp": True}
+        return {"ok": True, "user": user_payload(signed_in), "steppedUp": True}
 
     @router.post("/second-factor/enrol")
     async def start_second_factor_enrolment(request: Request):

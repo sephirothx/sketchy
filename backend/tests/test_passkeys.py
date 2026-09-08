@@ -10,6 +10,7 @@ and that a counter going backwards is caught.
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -20,9 +21,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.second_factor import second_factor_state
+from app.auth.totp import code_at, current_step
 from app.auth.routes import create_auth_router
 from app.auth.sessions import list_active_sessions
-from app.db.models import User, UserPasskey, WebauthnChallenge
+from app.db.models import IdentityAlias, User, UserPasskey, WebauthnChallenge
+from app.domain_values import AccountState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
 from tests.dbfixtures import create_test_db
@@ -370,6 +374,79 @@ async def test_spent_and_stale_challenges_do_not_pile_up(env):
     assert len(remaining) == 1
     assert remaining[0].expires_at.year > 2020
     assert account["id"]
+
+
+async def test_a_passkey_vouches_for_itself_and_for_nothing_else(env):
+    """Adding one must not legitimise an authenticator app nobody proved.
+
+    The planted-factor attack R-AUTH-20 refuses, arriving by a side door: a
+    stolen cookie binds an authenticator app, the account's owner later adds a
+    passkey, and if that vouched for everything on the account the planted app
+    would become a way in that satisfies a promotion. This ceremony proves a
+    passkey and a password, and says nothing about a code.
+    """
+    new_client, factory = env
+    client = new_client()
+    account = await register(client, "Planted")
+    await offer_a_role(factory, account["id"])
+
+    # What a stolen cookie can do: bind an app, without the password.
+    offer = (await client.post("/api/auth/second-factor/enrol")).json()
+    confirmed = await client.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert not (await second_factor_state(factory, user_id=account["id"])).password_proved
+
+    # And what the owner does next says nothing about it.
+    added = await add_passkey(client, SoftAuthenticator())
+    assert added["roleGranted"] == "moderator"
+    assert not (await second_factor_state(factory, user_id=account["id"])).password_proved
+
+
+async def test_signing_in_with_a_passkey_carries_the_guest_along(env):
+    """The half a second sign-in path is most likely to lose (R-ACCT-04).
+
+    Somebody who has been playing as a guest and then signs in has a game
+    behind them; the account they sign into has to inherit it, and the guest
+    identity has to stop being a separate account with sessions of its own.
+    """
+    new_client, factory = env
+    owner = new_client()
+    account = await register(owner, "Carried")
+    await offer_a_role(factory, account["id"])
+    authenticator = SoftAuthenticator()
+    await add_passkey(owner, authenticator)
+
+    # A different browser, playing as a guest.
+    guest = new_client()
+    named = await guest.post(
+        "/api/auth/display-name", json={"displayName": "PassingBy"}
+    )
+    assert named.status_code == 200, named.text
+    guest_id = named.json()["id"]
+    assert guest_id != account["id"]
+
+    options = await assertion_options(guest)
+    signed_in = await guest.post(
+        "/api/auth/passkeys/verify",
+        json={"credential": authenticator.sign(options, origin=ORIGIN)},
+    )
+    assert signed_in.status_code == 200, signed_in.text
+
+    async with factory() as session:
+        source = await session.get(User, UUID(guest_id))
+        alias = await session.scalar(
+            select(IdentityAlias).where(IdentityAlias.source_user_id == UUID(guest_id))
+        )
+    assert source.state == AccountState.MERGED.value
+    assert alias is not None and str(alias.target_user_id) == account["id"]
+    # And the guest's own sessions are gone with it.
+    assert await list_active_sessions(factory, user_id=guest_id) == []
 
 
 async def test_a_response_that_is_not_one_is_refused_rather_than_parsed(env):
