@@ -18,7 +18,7 @@ from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
 from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
-from tests.e2e.staff_helpers import offer_role, type_code
+from tests.e2e.staff_helpers import offer_role, set_role, type_code
 
 BASE_URL = "http://localhost:8000"
 PASSWORD = "a-good-password"
@@ -65,7 +65,7 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
             # An administrator offers the role. Now there is something for it
             # to be the last step of.
-            await offer_role("TwoFactorPlayer", "admin")
+            await offer_role("TwoFactorPlayer")
 
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
@@ -98,9 +98,14 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             # And the role that was waiting has begun. Every other device was
             # signed out with it; this one, which proved a password and a code
             # one request ago, is handed a session for the role it now holds.
-            await expect(dialog).to_contain_text("You are now an administrator")
+            await expect(dialog).to_contain_text("You are now a moderator")
             await dialog.get_by_role("button", name="Done").click()
 
+            # Administrator from here, written rather than offered: only a
+            # moderator role can be offered, and what the rest of this test is
+            # about is the step-up prompt, which the operator's own commands
+            # are the clearest example of.
+            await set_role("TwoFactorPlayer", "admin")
             # Nothing proved since: exactly the state a browser is in once its
             # step-up window has run out.
             await _clear_step_up("TwoFactorPlayer")
