@@ -18,15 +18,16 @@ from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
 from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
-from tests.e2e.staff_helpers import set_role, type_code
+from tests.e2e.staff_helpers import offer_role, type_code
 
 BASE_URL = "http://localhost:8000"
 PASSWORD = "a-good-password"
 
 
 async def _open_two_factor(page):
-    # Settings → Account, where it now lives beside the password and the
-    # signed-in devices rather than in the header menu.
+    # Settings → Account, where it appears for an account with a role waiting
+    # on it - and for nobody else, since a second factor does nothing for an
+    # ordinary player (R-AUTH-20).
     await page.goto(f"{BASE_URL}/settings/account")
     await page.get_by_role("button", name="Set up").click()
     # By accessible name: the settings overlay is a dialog too, and it
@@ -54,6 +55,18 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await use_guest_name(page, "TwoFactorPlayer")
             await register_account(page, "TwoFactorPlayer")
 
+            # Nothing about two-factor authentication is offered to a player
+            # with no role and none waiting: it would be a setting that gates
+            # nothing, on a credential with no way back if it were lost.
+            await page.goto(f"{BASE_URL}/settings/account")
+            await expect(
+                page.get_by_text("Two-factor authentication")
+            ).to_have_count(0)
+
+            # An administrator offers the role. Now there is something for it
+            # to be the last step of.
+            await offer_role("TwoFactorPlayer", "admin")
+
             dialog = await _open_two_factor(page)
             await expect(dialog).to_be_visible()
             # A QR code is what a phone points at; the key beside it is the
@@ -62,8 +75,11 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
             assert secret
 
-            # Six boxes that submit themselves on the last digit, and no
-            # password: setting one up asks for nothing else (R-AUTH-20).
+            # The password says whose account the factor is being bound to;
+            # the code says an authenticator produced it. The role waiting on
+            # this is granted on the pair (R-AUTH-20). Six boxes that submit
+            # themselves on the last digit, so there is no button to press.
+            await dialog.get_by_label("Your password").fill(PASSWORD)
             await type_code(dialog, code_at(secret, current_step(time.time())))
 
             codes = dialog.get_by_role("list", name="Recovery codes")
@@ -78,24 +94,15 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await expect(codes).to_be_visible()
             await dialog.locator(".two-factor-ack input").check()
             await done.click()
-            await expect(dialog).to_contain_text("Two-factor authentication is on")
-            await expect(dialog).to_contain_text("10 recovery codes left")
 
-            # A role needs the factor to be provably the owner's, which
-            # setting it up did not establish. This is where that is given,
-            # and it takes both halves: the password says the owner is here,
-            # a code says the authenticator enrolled is the one they hold.
-            await expect(dialog).to_contain_text("with your password and a code")
-            await dialog.get_by_label("Your password").fill(PASSWORD)
-            # One step on from the code enrolment spent a moment ago.
-            await type_code(dialog, code_at(secret, current_step(time.time()) + 1))
-            await dialog.get_by_role("button", name="Confirm it’s yours").click()
-            await expect(dialog).not_to_contain_text("with your password and a code")
-            await dialog.get_by_role("button", name="Close").click()
+            # And the role that was waiting has begun. Every other device was
+            # signed out with it; this one, which proved a password and a code
+            # one request ago, is handed a session for the role it now holds.
+            await expect(dialog).to_contain_text("You are now an administrator")
+            await dialog.get_by_role("button", name="Done").click()
 
-            # Staff, with nothing proved since: exactly the state a browser
-            # is in once its step-up window has run out.
-            await set_role("TwoFactorPlayer", "admin")
+            # Nothing proved since: exactly the state a browser is in once its
+            # step-up window has run out.
             await _clear_step_up("TwoFactorPlayer")
 
             # Closing a room this test opened itself, rather than pausing
@@ -149,14 +156,15 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
 
 
 async def _clear_step_up(username: str) -> None:
-    """Take back the step-up `set_role` stamps, so the prompt is reachable.
+    """Take back the step-up the sign-in stamps, so the prompt is reachable.
 
-    Forgets the spent TOTP step with it. Enrolment and the ownership proof
-    have each spent one, and a browser cannot wait out a 30-second interval
-    inside a suite that finishes in 40 - so without this the only codes left
-    to type are ones the verifier has already seen. What that rule protects
-    is checked where it can be checked properly, in `test_auth_hardening.py`;
-    what this test needs is a code its subject will accept.
+    Forgets the spent TOTP step with it. Enrolment and the sign-in that
+    followed have each spent one, and a browser cannot wait out a 30-second
+    interval inside a suite that finishes in 40 - so without this the only
+    codes left to type are ones the verifier has already seen. What that rule
+    protects is checked where it can be checked properly, in
+    `test_auth_hardening.py`; what this test needs is a code its subject will
+    accept.
     """
     from sqlalchemy import select, update
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

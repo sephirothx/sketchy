@@ -13,7 +13,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import time
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -29,6 +29,12 @@ from app.auth.login_guard import (
 )
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.password import MIN_PASSWORD_LENGTH, PasswordPolicyError, validate_password
+from app.auth.pending_role import (
+    OFFER_LIFETIME,
+    offer_expired,
+    pending_offer,
+    take_up_offer,
+)
 from app.auth.routes import create_auth_router
 from app.auth.second_factor import (
     SecondFactorOutcome,
@@ -1274,6 +1280,35 @@ async def test_something_that_is_not_a_code_at_all_burns_nothing(env):
     assert (
         await second_factor_state(factory, user_id=account["id"])
     ).recovery_codes_remaining == len(codes)
+
+
+def test_an_offer_is_judged_against_the_clock_whatever_shape_its_timestamp_is():
+    """A naive timestamp is a stored one, not a different moment.
+
+    SQLite hands datetimes back without a timezone, and comparing one against
+    an aware `now` raises rather than answering - which in this function would
+    have turned "has this offer lapsed?" into a 500 on the enrolment that was
+    trying to take it up.
+    """
+    now = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+    naive = (now - OFFER_LIFETIME + timedelta(days=1)).replace(tzinfo=None)
+    assert not offer_expired(naive, now)
+    assert offer_expired((now - OFFER_LIFETIME - timedelta(minutes=1)).replace(tzinfo=None), now)
+    # No date at all is nothing to stand on, so it does not stand.
+    assert offer_expired(None, now)
+
+    account = SimpleNamespace(pending_role=None, pending_role_at=None)
+    assert pending_offer(account, now) is None
+    account = SimpleNamespace(pending_role="moderator", pending_role_at=naive)
+    assert pending_offer(account, now) == "moderator"
+
+
+@pytest.mark.asyncio
+async def test_taking_up_an_offer_for_something_that_is_not_an_account(env):
+    """The id comes from a session, but the function does not assume it."""
+    _, factory, _ = env
+    assert await take_up_offer(factory, user_id="not-a-uuid") is None
+    assert await take_up_offer(factory, user_id=str(uuid4())) is None
 
 
 @pytest.mark.asyncio

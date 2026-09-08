@@ -138,6 +138,10 @@ export interface PlayerCandidate {
   displayName: string;
   nameColor: string | null;
   role: "user" | "moderator" | "admin";
+  /** A role offered and waiting on this account's second factor, so a
+      promotion that has not landed is visible as a promotion rather than as
+      nothing at all (R-AUTH-20). */
+  pendingRole?: string | null;
 }
 
 /** Find an account by part of its name, or by a full id.
@@ -153,7 +157,7 @@ export function setPlayerRole(
   userId: string,
   role: "user" | "moderator",
   reason: string,
-): Promise<{ id: string; role: string }> {
+): Promise<{ id: string; role: string; pendingRole: string | null }> {
   return apiRequest(`/api/admin/players/${userId}/role`, {
     method: "PATCH",
     body: { role, reason },
@@ -331,7 +335,15 @@ too thin: the one thing an operator needs confirmed is *which* account. */
 export function roleChangeMessage(
   displayName: string,
   role: "user" | "moderator",
+  { pending = false }: { pending?: boolean } = {},
 ): string {
+  // An offer is not a promotion, and saying so would leave an administrator
+  // expecting a moderator who is not one yet. The role begins when the
+  // account sets up its second factor (R-AUTH-20), which may be today or on
+  // their next visit.
+  if (pending) {
+    return `${displayName} has been offered the moderator role. It takes effect when they set up two-factor authentication.`;
+  }
   return role === "moderator"
     ? `${displayName} is now a moderator.`
     : `${displayName} is no longer a moderator.`;

@@ -16,6 +16,7 @@ import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../li
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
 import { removeAvatar, uploadAvatar } from "../lib/avatars";
 import { TwoFactorDialog } from "./TwoFactorDialog";
+import { roleName } from "../lib/operatorAccess";
 import { fetchSecondFactor, type SecondFactorState } from "../lib/secondFactor";
 import { useToast } from "../lib/toast";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
@@ -412,6 +413,11 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
   const isGuest = Boolean(user?.isAnonymous);
+  const pendingRole = user?.pendingRole ?? null;
+  // Staff have one to manage; somebody who has been offered a role has one to
+  // set up. Everybody else is shown nothing about it at all.
+  const showsTwoFactor =
+    !isGuest && (user?.role === "moderator" || user?.role === "admin" || Boolean(pendingRole));
   const activePlayerId = useGameStore((state) => state.playerId);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const setLocalNameColor = useSettingsStore((state) => state.setNameColor);
@@ -495,7 +501,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   // The same shape as the email row above, and re-read when the dialog
   // closes so the label follows what just happened in it.
   useEffect(() => {
-    if (isGuest) return;
+    if (!showsTwoFactor) return;
     let active = true;
     void fetchSecondFactor()
       .then((state) => {
@@ -508,7 +514,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
     return () => {
       active = false;
     };
-  }, [isGuest, twoFactorOpen]);
+  }, [showsTwoFactor, twoFactorOpen]);
 
   async function saveDisplayName() {
     const trimmed = draftName.trim();
@@ -778,18 +784,21 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             </button>
           )}
         </Row>
-        <Row
-          label="Two-factor authentication"
-          locked={isGuest}
-          hint={
-            isGuest
-              ? "Guests have no account to protect."
-              : "An authenticator app's code, on top of your password. Moderators and administrators must have one."
-          }
-        >
-          {isGuest ? (
-            <NeedsAccount />
-          ) : (
+        {/* Only for the accounts it means anything to (R-AUTH-20). A second
+            factor is not something an ordinary player can use here - it does
+            not gate their sign-in, and there is no way back from a lost
+            authenticator the way there is from a lost password - so it is a
+            staff control, and it appears when somebody is staff or has just
+            been offered a role that waits on it. */}
+        {showsTwoFactor && (
+          <Row
+            label="Two-factor authentication"
+            hint={
+              pendingRole
+                ? `Set this up and the ${roleName(pendingRole)} role you have been offered takes effect.`
+                : "An authenticator app's code, on top of your password. Moderators and administrators must have one."
+            }
+          >
             <button
               type="button"
               className="btn btn-secondary btn-compact"
@@ -798,8 +807,8 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               <ShieldIcon size={15} />
               {twoFactorState?.enrolled ? "Manage" : "Set up"}
             </button>
-          )}
-        </Row>
+          </Row>
+        )}
         <Row
           label="Signed-in devices"
           locked={isGuest}

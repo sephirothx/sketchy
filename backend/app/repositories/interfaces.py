@@ -62,6 +62,10 @@ class UserData:
     state: str = "anonymous"
     role: str = "user"
     last_seen_at: datetime | None = None
+    # A staff role offered and waiting on this account's second factor. Not a
+    # role: nothing authorizes anything from it, and it is here so the client
+    # can show what is outstanding (R-AUTH-20).
+    pending_role: str | None = None
 
 
 @dataclass(frozen=True)

@@ -659,36 +659,38 @@ the date, so you can revoke it.
 
 #### Two-factor authentication
 
-Adding an authenticator app asks only for a code from the app. Becoming a
-moderator or administrator additionally needs you to confirm that the
-authenticator is yours - your password and a code from it, together - because
-the role check looks for a second factor its owner vouched for, not merely for
-one being present. Both are asked for because they say different things: the
-password says the account's owner is the one asking, the code says the
-authenticator in place is the one they hold.
+Two-factor authentication is a staff control, and it is not shown to anybody
+else. A player with no role and none waiting sees nothing about it in Settings:
+it would not gate their sign-in, and there is no way back from a lost
+authenticator the way there is from a lost password, so it is a setting that
+could only cost them something.
 
-Any account can add one from **Settings → Account**, beside the password and the
-signed-in devices. Setting it up shows a QR code to scan, with the setup key
-beside it to copy for anything that cannot scan — a desktop authenticator, a
-camera that will not focus — and asks for one code to prove the secret arrived;
-nothing is stored until that code checks out, so an abandoned setup cannot lock
-you out. The ten recovery codes are shown once, can be downloaded as a text
-file, and the dialog does not close until you say you have kept them: that
-showing is the only moment they exist outside a hash. For a player it is
-preparation rather than protection: it is the step that has to come before a
-role is granted, and it does not change how they sign in — there is no way back
-from a lost authenticator for an ordinary player the way there is from a lost
-password, so their login is deliberately not gated on one. Moderators and
-administrators must have one, and must do it *before* the role is granted —
-granting it signs them out of every device, and a staff account cannot sign back
-in without a code, so the role is refused until the second factor exists. Being
-granted or losing a role therefore ends every session on the account: the notice
-says so and offers the way back in, and it is acknowledged on the next visit
-rather than by the browser that has just been signed out. The recovery codes are
-kept only as hashes, and work anywhere a code is asked for. Staff are asked for
-a code again, at most every fifteen minutes, before anything that suspends a
-player, changes a role, or reconfigures the running server. Reading the
-moderation queue is deliberately not gated: a check made on the way in would
+It appears when a role does. An administrator granting the moderator role to an
+account that has not enrolled does not promote it - the role is **offered**, and
+the account is told: over its socket if it is online, and on its next visit
+otherwise. Nothing about the account changes yet, so the offer can be set aside
+and picked up later from **Settings → Account**, where the entry now is. Setting
+up the authenticator is what makes the role take effect: scan the QR code (the
+setup key is beside it for anything that cannot scan), give the account password
+and one code from the app, and the role begins. An offer nobody takes up lapses
+after thirty days, and the operator's role panel shows it as pending until then,
+so a promotion waiting on somebody is visible rather than looking like one that
+never happened.
+
+The password and the code are both asked for because they answer different
+questions: the password says the account's owner is the one setting this up, the
+code says they hold the authenticator being bound. A role is granted on the pair.
+The ten recovery codes are shown once, can be downloaded as a text file, and the
+dialog does not close until you say you have kept them: that showing is the only
+moment they exist outside a hash. Taking up a role signs out every *other*
+device - a session issued to a player must not become a moderator's, and a
+year-long cookie must not stay year-long on a staff account - while the browser
+that just proved a password and a code carries on, as staff.
+
+From then on the account cannot sign in without a code from the app, and is
+asked for one again, at most every fifteen minutes, before anything that
+suspends a player, changes a role, or reconfigures the running server. Reading
+the moderation queue is deliberately not gated: a check made on the way in would
 simply be done as a matter of routine.
 
 #### Recovery

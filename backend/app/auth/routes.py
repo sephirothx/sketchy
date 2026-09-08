@@ -76,6 +76,7 @@ from app.api.serializers import user_payload
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
+from app.auth.pending_role import take_up_offer
 from app.auth.second_factor import (
     SecondFactorOutcome,
     prove_second_factor_owner,
@@ -1255,6 +1256,27 @@ def create_auth_router(
             "stepUpWindowSeconds": int(STEP_UP_WINDOW.total_seconds()),
         }
 
+    async def _restore_this_device(
+        response: Response, request: Request, user_id: str, role: str
+    ) -> None:
+        """Sign this browser back in, as the role it has just taken up.
+
+        Taking up an offer revokes every session on the account, because a
+        staff role must not be reachable from a session issued before a code
+        was ever required and because a year-long player cookie must not stay
+        year-long on a staff account (R-AUTH-03). Both of those are about the
+        *old* credential, and neither is an argument for putting this browser
+        through a sign-in: it proved the password and a code from the new
+        factor one request ago, which is more than the sign-in it would be
+        sent to would ask for.
+
+        So the old session goes and a new one is minted here with the staff
+        lifetime. The practical difference is that the recovery codes in this
+        response can still be read: they are shown exactly once, and signing
+        the browser out from under them would take them off the screen.
+        """
+        await issue_cookie(response, request, user_id, role=role)
+
     @router.post("/second-factor/enrol")
     async def start_second_factor_enrolment(request: Request):
         """Offer a secret. Nothing is stored until a code proves it arrived.
@@ -1273,7 +1295,9 @@ def create_auth_router(
         return {"secret": offer.secret, "uri": offer.uri}
 
     @router.post("/second-factor/confirm")
-    async def confirm_second_factor(body: SecondFactorConfirmBody, request: Request):
+    async def confirm_second_factor(
+        body: SecondFactorConfirmBody, request: Request, response: Response
+    ):
         """Prove the secret arrived, and receive the recovery codes.
 
         The codes are in this response and in no other: they exist as hashes
@@ -1312,11 +1336,22 @@ def create_auth_router(
                 status_code=400,
                 detail="That code is not right. Check your authenticator app.",
             )
-        return {"ok": True, "recoveryCodes": codes}
+        # And if a role was waiting on exactly this, it is now theirs. The
+        # order matters: the factor is written first, so a failure here leaves
+        # an account with a second factor and an offer still standing rather
+        # than a staff role with nothing to sign in with.
+        granted = (
+            await take_up_offer(session_factory, user_id=user.id)
+            if body.password
+            else None
+        )
+        if granted:
+            await _restore_this_device(response, request, user.id, granted)
+        return {"ok": True, "recoveryCodes": codes, "roleGranted": granted}
 
     @router.post("/second-factor/confirm-owner")
     async def confirm_second_factor_owner(
-        body: SecondFactorOwnerBody, request: Request
+        body: SecondFactorOwnerBody, request: Request, response: Response
     ):
         """Record that this factor is the account owner's (R-AUTH-20).
 
@@ -1364,7 +1399,12 @@ def create_auth_router(
             raise HTTPException(
                 status_code=409, detail="Two-factor authentication is not set up."
             )
-        return {"ok": True}
+        # The same thing enrolment does, for a factor that was set up without a
+        # password and has only now been vouched for.
+        granted = await take_up_offer(session_factory, user_id=user.id)
+        if granted:
+            await _restore_this_device(response, request, user.id, granted)
+        return {"ok": True, "roleGranted": granted}
 
     @router.post("/second-factor/recovery-codes")
     async def regenerate_recovery_codes(body: PasswordProofBody, request: Request):

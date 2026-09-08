@@ -10,6 +10,10 @@ export interface PendingRoleNotice {
   id: string;
   /** The role the account holds now, not the step it took. */
   role: "user" | "moderator";
+  /** Whether the role is theirs or is waiting on them: a staff role takes
+      effect only once a second factor is enrolled (R-AUTH-20), so an offer
+      asks for something where a grant only reports. */
+  pending: boolean;
   createdAt: string;
 }
 

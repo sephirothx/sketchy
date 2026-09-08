@@ -21,6 +21,11 @@ export interface AuthUser {
   /** Decides which staff entries the menu offers. Never the authorization -
       every endpoint behind them checks the role again for itself. */
   role: "user" | "moderator" | "admin";
+  /** A staff role that has been offered and is waiting on this account to set
+      up a second factor (R-AUTH-20). Not a role: it authorizes nothing, and
+      it is the only reason an ordinary player is shown anything about
+      two-factor authentication at all. */
+  pendingRole: "moderator" | "admin" | null;
   createdAt: string | null;
   lastLoginAt: string | null;
 }

@@ -137,6 +137,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   if (!user || (user.isAnonymous && !user.displayName)) return null;
 
   const isGuest = user.isAnonymous;
+  const pendingRole = user.pendingRole ?? null;
   const staffEntries = operatorEntries(user.role, { isAnonymous: isGuest });
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
   // Cut down rather than absent: a compact guest keeps the actions that do not
@@ -219,6 +220,21 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           >
             Settings
           </MenuItem>
+          {/* What is outstanding on this account, and the only reminder of it
+              once the notice has been set aside: an offered role waits on a
+              second factor, and the offer lapses if nobody comes back to it
+              (R-AUTH-20). Gone the moment the role begins. */}
+          {pendingRole && (
+            <MenuItem
+              icon={<ShieldIcon size={16} />}
+              onClick={() => {
+                setMenuOpen(false);
+                openSettings("account");
+              }}
+            >
+              Finish your {pendingRole === "admin" ? "administrator" : "moderator"} role
+            </MenuItem>
+          )}
           {/* The two entries that leave the page. Hidden for a guest in a
               live game, where following one would give up their seat. */}
           {!seatBound && (

@@ -9,6 +9,7 @@ event in the same transaction, and refusals that leave nothing half-done.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from app.api.admin_controls import (
     read_paused,
 )
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.pending_role import OFFER_LIFETIME
 from app.auth.routes import create_auth_router
 from app.db import create_db_engine
 from app.db.models import AuditEvent, Base, RoleChangeNotice, User, generate_uuid
@@ -667,16 +669,17 @@ async def test_two_players_with_the_same_name_are_both_offered(env):
 async def test_the_search_says_nothing_the_role_control_does_not_need(env):
     """The bound that keeps this from becoming a player directory.
 
-    A name, the colour its owner chose and the role being changed - nothing a
-    room does not already show every player seated in it. Usernames, dates or
-    game counts here would be a surveillance surface, and those belong behind
-    the audited activity view.
+    A name, the colour its owner chose, the role being changed and any offer
+    of one still standing - nothing a room does not already show every player
+    seated in it, plus the state of the very control this list is for.
+    Usernames, dates or game counts here would be a surveillance surface, and
+    those belong behind the audited activity view.
     """
     new_client, *_ = env
     admin = await an_admin(env)
     await register(new_client(), "Marta")
     row = (await _accounts(admin, "Marta"))[0]
-    assert set(row) == {"id", "displayName", "nameColor", "role"}
+    assert set(row) == {"id", "displayName", "nameColor", "role", "pendingRole"}
 
 
 async def test_looking_for_a_player_writes_nothing_to_the_ledger(env):
@@ -984,27 +987,161 @@ async def test_a_guest_cannot_hold_a_role(env):
     assert response.status_code == 400
 
 
-async def test_a_role_cannot_be_granted_before_the_second_factor(env):
+async def test_a_role_granted_before_the_second_factor_is_offered_not_given(env):
     """R-AUTH-20 in the order that avoids locking somebody out.
 
-    The grant revokes the account's sessions and a staff account cannot sign
-    in without a code, so granting first would leave the new moderator unable
-    to reach the page they would enrol from.
+    Granting outright revokes the account's sessions, and a staff account
+    cannot sign in without a code - so a grant that landed before enrolment
+    would leave the new moderator unable to reach the page they would enrol
+    from. The grant records an offer instead: nothing about the account
+    changes, and enrolling is what takes it up.
     """
     new_client, factory, *_ = env
     admin = await an_admin(env)
-    subject = await register(new_client(), "Unenrolled")
+    client = new_client()
+    subject = await register(client, "Unenrolled")
 
     response = await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "moderator", "reason": "joining the safety rota"},
     )
-    assert response.status_code == 400
-    assert "two-factor" in response.json()["detail"].lower()
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "id": subject["id"],
+        "role": "user",
+        "pendingRole": "moderator",
+    }
     async with factory() as session:
-        assert (await session.get(User, UUID(subject["id"]))).role == "user"
-    # Refused whole: no audit row for a promotion that did not happen.
-    assert await audit_rows(factory) == []
+        stored = await session.get(User, UUID(subject["id"]))
+        assert stored.role == "user"
+        assert stored.pending_role == "moderator"
+        assert stored.pending_role_at is not None
+    # And the session it is holding is still good: an offer takes nothing
+    # away, so the account can reach the page it has to enrol from.
+    assert (await client.get("/api/auth/me")).status_code == 200
+    assert [row.event_type for row in await audit_rows(factory)] == [
+        "admin.role_offered"
+    ]
+
+
+async def test_enrolling_takes_up_the_offer_and_ends_every_session(env):
+    """The other half: the role begins when the factor exists, not before.
+
+    Which is also when the sessions end - the same revocation a direct grant
+    does, moved to the moment the role actually starts, so the account signs
+    back in and produces a code straight away.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    client = new_client()
+    subject = await register(client, "Offered")
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+
+    held_before = {
+        session.id
+        for session in await list_active_sessions(factory, user_id=subject["id"])
+    }
+    assert held_before
+
+    offer = (await client.post("/api/auth/second-factor/enrol")).json()
+    confirmed = await client.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+            "password": PASSWORD,
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["roleGranted"] == "moderator"
+
+    async with factory() as session:
+        stored = await session.get(User, UUID(subject["id"]))
+        assert stored.role == "moderator"
+        assert stored.pending_role is None
+        assert stored.pending_role_at is None
+    # Every session the account held is gone, exactly as a direct grant would
+    # have done - and one new one is in their place, for the browser that just
+    # proved a password and a code. Without it the recovery codes in that same
+    # response would have gone off the screen with the session.
+    remaining = await list_active_sessions(factory, user_id=subject["id"])
+    assert len(remaining) == 1
+    assert {session.id for session in remaining}.isdisjoint(held_before)
+
+
+async def test_an_offer_nobody_took_up_lapses_rather_than_standing_for_ever(env):
+    """Thirty days, because an offer is an invitation on somebody's account.
+
+    Enrolling after it has run out sets up the factor and grants nothing; the
+    administrator has to offer it again, which is the point - a grant nobody
+    chased for a month should not land the day it is finally noticed.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    client = new_client()
+    subject = await register(client, "Dawdler")
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    async with factory() as session:
+        async with session.begin():
+            stored = await session.get(User, UUID(subject["id"]))
+            stored.pending_role_at = datetime.now(timezone.utc) - (
+                OFFER_LIFETIME + timedelta(days=1)
+            )
+
+    # The account is told nothing is waiting any more.
+    assert (await client.get("/api/auth/me")).json()["pendingRole"] is None
+
+    offer = (await client.post("/api/auth/second-factor/enrol")).json()
+    confirmed = await client.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+            "password": PASSWORD,
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["roleGranted"] is None
+    async with factory() as session:
+        stored = await session.get(User, UUID(subject["id"]))
+        assert stored.role == "user"
+        # Cleared where it was found, rather than left to be met again.
+        assert stored.pending_role is None
+    assert "admin.role_offer_lapsed" in [
+        row.event_type for row in await audit_rows(factory)
+    ]
+
+
+async def test_setting_the_role_back_withdraws_a_standing_offer(env):
+    """An administrator changes their mind before anybody enrolled.
+
+    The account holds `user` throughout, so this is the one case where
+    setting the role it already has is not a no-op.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    subject = await register(new_client(), "Reconsidered")
+    await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+
+    withdrawn = await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "user", "reason": "thought better of it"},
+    )
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["pendingRole"] is None
+    async with factory() as session:
+        stored = await session.get(User, UUID(subject["id"]))
+        assert stored.pending_role is None
+        assert stored.pending_role_at is None
 
 
 async def test_a_role_needs_a_factor_its_owner_proved(env):
@@ -1029,12 +1166,20 @@ async def test_a_role_needs_a_factor_its_owner_proved(env):
         },
     )
 
-    refused = await admin.patch(
+    # A row exists, so this could have been a grant. It is an offer instead,
+    # because nobody has said the authenticator is the account owner's.
+    held = await admin.patch(
         f"/api/admin/players/{subject['id']}/role",
         json={"role": "moderator", "reason": "joining the safety rota"},
     )
-    assert refused.status_code == 400
-    assert "confirmed as its own" in refused.json()["detail"]
+    assert held.status_code == 200, held.text
+    assert held.json() == {
+        "id": subject["id"],
+        "role": "user",
+        "pendingRole": "moderator",
+    }
+    async with factory() as session:
+        assert (await session.get(User, UUID(subject["id"]))).role == "user"
 
     proved = await client.post(
         "/api/auth/second-factor/confirm-owner",
@@ -1047,11 +1192,11 @@ async def test_a_role_needs_a_factor_its_owner_proved(env):
         },
     )
     assert proved.status_code == 200, proved.text
-    granted = await admin.patch(
-        f"/api/admin/players/{subject['id']}/role",
-        json={"role": "moderator", "reason": "joining the safety rota"},
-    )
-    assert granted.status_code == 200, granted.text
+    # Vouching for it takes up what was waiting, with no second visit from
+    # the administrator.
+    assert proved.json()["roleGranted"] == "moderator"
+    async with factory() as session:
+        assert (await session.get(User, UUID(subject["id"]))).role == "moderator"
 
 
 async def test_a_role_change_records_the_move_and_the_reason(env):

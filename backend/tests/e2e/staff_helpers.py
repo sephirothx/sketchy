@@ -36,6 +36,32 @@ def database_url() -> str:
     return url
 
 
+async def offer_role(username: str, role: str) -> None:
+    """Record the offer an administrator's grant would record.
+
+    A staff role is not granted outright to an account with no proved second
+    factor (R-AUTH-20): it waits, and enrolling is what takes it up. Written
+    here rather than driven through the operations page, because the suites
+    that need an account with something waiting on it are not about how an
+    administrator reaches the button.
+    """
+    engine = create_async_engine(database_url())
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(User)
+                    .where(User.username == username)
+                    .values(
+                        pending_role=role,
+                        pending_role_at=datetime.now(timezone.utc),
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
 async def set_role(username: str, role: str) -> None:
     """Move one account's role, and give staff what the role now requires."""
     engine = create_async_engine(database_url())
@@ -78,20 +104,26 @@ async def set_role(username: str, role: str) -> None:
         await engine.dispose()
 
 
-async def enrol_through_the_ui(page) -> str:
-    """Set up two-factor authentication the way a person does, and return the
+async def take_up_the_offer(page, password: str = "a-good-password") -> str:
+    """Enrol the second factor a standing offer is waiting on, and return the
     secret so a later step can produce a code.
 
-    Used where a test needs an account that *may* be promoted: the role change
-    refuses an account with no second factor (R-AUTH-20), and doing it through
-    the dialog keeps that precondition honest rather than writing the row.
+    This *is* the promotion (R-AUTH-20): an administrator offers the role, the
+    account stays what it was, and setting up the factor is what makes the
+    role take effect. Every *other* device is signed out with it; this one is
+    handed a fresh session for the role it now holds, so the page this ran in
+    comes back staff rather than signed out.
+
+    Driven through the dialog rather than written into the database, because
+    the ceremony being reachable is half of what the flow is for: the entry
+    only appears at all once something is waiting on it.
     """
     import time
 
     from app.auth.totp import code_at, current_step
 
-    # Settings → Account, where it now lives beside the password and the
-    # signed-in devices rather than in the header menu.
+    # Settings → Account, where the entry appears for an account that has been
+    # offered a role - and for no other player.
     await page.goto(f"{BASE_URL}/settings/account")
     await page.get_by_role("button", name="Set up").click()
     # By accessible name: the settings overlay is a dialog too, and it
@@ -99,19 +131,16 @@ async def enrol_through_the_ui(page) -> str:
     dialog = page.get_by_role("dialog", name="Two-factor authentication")
     # No page of explanation first: the dialog offers a secret as it opens.
     secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
+    # The password says whose account this is being bound to; the code says an
+    # authenticator produced it. The role is granted on the pair.
+    await dialog.get_by_label("Your password").fill(password)
     # Six boxes that submit themselves on the last digit, so there is no
     # button to press.
     await type_code(dialog, code_at(secret, current_step(time.time())))
     await dialog.locator(".two-factor-ack input").check()
     await dialog.get_by_role("button", name="Done").click()
-    # Setting one up asks for no password, so a role still needs this: the
-    # password says the owner is here, the code says the authenticator is
-    # theirs (R-AUTH-20). The step *after* the one enrolment just spent,
-    # because a code is single-use.
-    await dialog.get_by_label("Your password").fill("a-good-password")
-    await type_code(dialog, code_at(secret, current_step(time.time()) + 1))
-    await dialog.get_by_role("button", name="Confirm it’s yours").click()
-    await dialog.get_by_role("button", name="Close").click()
+    # And the role that was waiting has begun.
+    await dialog.get_by_role("button", name="Done").click()
     return secret
 
 

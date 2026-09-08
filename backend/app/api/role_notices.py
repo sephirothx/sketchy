@@ -55,6 +55,10 @@ async def pending_role_notice_payload(
             "notice": {
                 "id": str(notice.id),
                 "role": notice.role,
+                # Whether the role is theirs or is waiting on them. The second
+                # asks for something - a second factor, before it takes effect
+                # (R-AUTH-20) - so it cannot be worded like the first.
+                "pending": notice.pending,
                 "createdAt": notice.created_at.isoformat(),
             }
         }

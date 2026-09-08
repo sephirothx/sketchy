@@ -61,6 +61,7 @@ claiming it is a payload that should never have existed. */
 export function roleNoticeFromPayload(payload: unknown): {
   id: string;
   role: "user" | "moderator";
+  pending: boolean;
   createdAt: string;
 } | null {
   if (!payload || typeof payload !== "object") return null;
@@ -72,8 +73,16 @@ export function roleNoticeFromPayload(payload: unknown): {
   return {
     id: notice.id,
     role: notice.role,
+    // Absent means granted: a payload from before the offer existed is a
+    // role the account already holds.
+    pending: notice.pending === true,
     createdAt: typeof notice.createdAt === "string" ? notice.createdAt : "",
   };
+}
+
+/** A role as it is said to the person holding it, not as it is stored. */
+export function roleName(role: string): string {
+  return role === "admin" ? "administrator" : role;
 }
 
 /** What the account is told, in its own words rather than the ledger's.
@@ -81,10 +90,25 @@ export function roleNoticeFromPayload(payload: unknown): {
 The reason an administrator recorded is never shown here - it was written for
 other administrators and can name a report or somebody else. What the player
 needs is what changed and what it means for them. */
-export function roleNoticeText(role: "user" | "moderator"): {
+export function roleNoticeText(
+  role: "user" | "moderator",
+  { pending = false }: { pending?: boolean } = {},
+): {
   title: string;
   body: string;
 } {
+  if (pending) {
+    return {
+      title: "The moderator role is waiting for you",
+      body:
+        "An administrator has offered you the moderator role. It takes effect " +
+        "once you set up two-factor authentication: moderators sign in with a " +
+        "code from an authenticator app, and the role starts the moment that " +
+        "is in place. Your other devices are signed out when it does. Nothing " +
+        "changes until you set it up, and the offer waits in Settings if now " +
+        "is not the time.",
+    };
+  }
   if (role === "moderator") {
     return {
       title: "You are now a moderator",

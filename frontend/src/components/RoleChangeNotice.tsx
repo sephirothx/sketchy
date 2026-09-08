@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 
 import { roleNoticeFromPayload, roleNoticeText } from "../lib/operatorAccess";
 import {
@@ -9,6 +9,12 @@ import {
 } from "../lib/roleNotices";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
+
+// The same chunk Settings pulls, and for the same reason: the QR encoder is
+// fetched by somebody who is about to enrol, not by everybody who plays.
+const TwoFactorDialog = lazy(() =>
+  import("./TwoFactorDialog").then((module) => ({ default: module.TwoFactorDialog })),
+);
 
 /** Tell a player that their own role changed, once.
 
@@ -38,6 +44,9 @@ export function RoleChangeNotice() {
   // The notice stays pending server-side and is acknowledged on the next
   // visit, by the fetch below, where the session is real again.
   const [signedOutByTheChange, setSignedOutByTheChange] = useState(false);
+  // Straight from the notice into the thing it asks for, rather than sending
+  // somebody to find a setting they have never opened.
+  const [enrolling, setEnrolling] = useState(false);
 
   useEffect(() => {
     // A guest cannot hold a role, so there can be no notice waiting for one -
@@ -68,7 +77,10 @@ export function RoleChangeNotice() {
     function onRoleChanged(payload: unknown) {
       const pushed = roleNoticeFromPayload(payload);
       if (!pushed) return;
-      setSignedOutByTheChange(true);
+      // An offer revokes nothing - the account is still what it was, and
+      // still signed in - so only a role that actually changed takes this
+      // browser's session with it.
+      setSignedOutByTheChange(!pushed.pending);
       setNotice(pushed);
       // Deliberately no `applyRole` here any more. It existed to make the menu
       // match the new role without a reload, and there is no longer a
@@ -81,8 +93,21 @@ export function RoleChangeNotice() {
     };
   }, []);
 
+  // Before the notice check, not after: choosing "Set it up now" settles the
+  // notice, and a dialog that unmounted the moment its receipt landed would
+  // be a button that opens nothing.
+  if (enrolling) {
+    return (
+      <Suspense fallback={null}>
+        {/* Closing it leaves the account exactly where it was: the offer
+            stands, and the Settings entry is still there to come back to. */}
+        <TwoFactorDialog onClose={() => setEnrolling(false)} />
+      </Suspense>
+    );
+  }
+
   if (!notice) return null;
-  const { title, body } = roleNoticeText(notice.role);
+  const { title, body } = roleNoticeText(notice.role, { pending: notice.pending });
 
   async function dismiss() {
     if (busy || !notice) return;
@@ -132,18 +157,45 @@ export function RoleChangeNotice() {
             effect. Sign in again to carry on.
           </p>
         )}
-        <button
-          type="button"
-          className="modal-button"
-          disabled={busy}
-          onClick={() => void dismiss()}
-        >
-          {busy
-            ? "One moment…"
-            : signedOutByTheChange
-              ? "Sign in again"
-              : "Understood"}
-        </button>
+        {notice.pending ? (
+          // Two ways on, because this one asks for something. "Later" still
+          // acknowledges: they were told, and what is outstanding is the
+          // offer itself, which the account carries until it is taken up.
+          <div className="role-notice-decide">
+            <button
+              type="button"
+              className="modal-button"
+              disabled={busy}
+              onClick={() => {
+                setEnrolling(true);
+                void dismiss();
+              }}
+            >
+              Set it up now
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => void dismiss()}
+            >
+              Later
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="modal-button"
+            disabled={busy}
+            onClick={() => void dismiss()}
+          >
+            {busy
+              ? "One moment…"
+              : signedOutByTheChange
+                ? "Sign in again"
+                : "Understood"}
+          </button>
+        )}
       </div>
     </div>
   );

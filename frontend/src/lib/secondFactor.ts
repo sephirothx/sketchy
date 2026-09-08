@@ -39,17 +39,25 @@ export function beginEnrolment(): Promise<EnrolmentOffer> {
 }
 
 /**
- * `password` is optional, and setting a factor up for the first time does not
- * ask for one. It is what marks the factor as *proved* to belong to the
- * account's owner, which is what a staff role later requires (R-AUTH-20) —
- * promotion checks that a factor exists and that somebody proved the password
- * when binding it, not merely that a row is there.
+ * `password` marks the factor as *proved* to belong to the account's owner,
+ * which is what a staff role requires (R-AUTH-20): the code says an
+ * authenticator produced it, the password says whose account it is being
+ * bound to. Giving it is also what takes up a role that was offered and is
+ * waiting on this enrolment — `roleGranted` names the role that just took
+ * effect, and with it every session on the account has ended.
+ *
+ * Optional at this layer because the endpoint accepts an enrolment without
+ * one; the form always sends it.
  */
 export function confirmEnrolment(
   secret: string,
   code: string,
   password?: string,
-): Promise<{ ok: boolean; recoveryCodes: string[] }> {
+): Promise<{
+  ok: boolean;
+  recoveryCodes: string[];
+  roleGranted: "moderator" | "admin" | null;
+}> {
   return apiRequest("/api/auth/second-factor/confirm", {
     method: "POST",
     body: password ? { secret, code, password } : { secret, code },
@@ -82,7 +90,7 @@ export function removeSecondFactor(password: string): Promise<{ ok: boolean }> {
 export function confirmSecondFactorOwner(
   password: string,
   code: string,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; roleGranted: "moderator" | "admin" | null }> {
   return apiRequest("/api/auth/second-factor/confirm-owner", {
     method: "POST",
     body: { password, code },

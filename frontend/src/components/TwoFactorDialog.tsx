@@ -46,6 +46,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState("");
   const [codes, setCodes] = useState<string[] | null>(null);
   const [savedCodes, setSavedCodes] = useState(false);
+  // The role this enrolment just started, when one was waiting on it. Also
+  // means every session on the account has ended, including this one.
+  const [granted, setGranted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { notify } = useToast();
@@ -111,15 +114,27 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   async function submitWith(entered: string) {
     if (!offer || busy) return;
     if (entered.length < 6) return;
+    // Both halves or neither: sending the code alone would bind a factor
+    // nobody has vouched for, and a role waiting on this enrolment would go
+    // on waiting with nothing to say why.
+    if (!password) {
+      setError("Your password confirms the authenticator is yours.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const result = await confirmEnrolment(offer.secret, entered, password || undefined);
       setSavedCodes(false);
       setCodes(result.recoveryCodes);
+      setGranted(result.roleGranted);
       setOffer(null);
       setCode("");
-      setState(await fetchSecondFactor());
+      setPassword("");
+      // Only when the account is still signed in to be asked. Taking up a
+      // role ends every session, so this read would be a 401 and the state it
+      // wants is on the other side of signing back in.
+      if (!result.roleGranted) setState(await fetchSecondFactor());
     } catch (problem) {
       failed(problem, "That code was not accepted.");
     } finally {
@@ -131,9 +146,11 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await confirmSecondFactorOwner(password, code);
+      const result = await confirmSecondFactorOwner(password, code);
       setPassword("");
       setCode("");
+      setGranted(result.roleGranted);
+      if (result.roleGranted) return;
       setState(await fetchSecondFactor());
       notify("Confirmed. This account can now be given a staff role.", "success");
     } catch (problem) {
@@ -246,7 +263,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!codes && offer && (
+        {!codes && !granted && offer && (
           <form className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
             <p className="modal-body two-factor-lead">
               Scan the code with an authenticator app, then type the six digits
@@ -279,6 +296,22 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               </div>
               <p className="modal-hint">Use this if you can’t scan.</p>
 
+              <label className="two-factor-code-label" htmlFor={passwordId}>
+                Your password
+              </label>
+              <input
+                id={passwordId}
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+              />
+              {/* Asked for here rather than later because of what it proves.
+                  The code says an authenticator produced it; the password
+                  says whose account it is being bound to, and a role is
+                  granted on the pair (R-AUTH-20). */}
+              <p className="modal-hint">Confirms the authenticator is yours.</p>
+
               <span className="two-factor-code-label">Code from your app</span>
               <SegmentedCodeInput
                 value={code}
@@ -291,7 +324,11 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
 
             </div>
             <div className="two-factor-decide">
-              <button type="submit" className="modal-button" disabled={busy}>
+              <button
+                type="submit"
+                className="modal-button"
+                disabled={busy || !password || code.length < 6}
+              >
                 {busy ? "Checking…" : "Confirm"}
               </button>
               <button type="button" className="btn btn-ghost" onClick={onClose}>
@@ -301,7 +338,33 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </form>
         )}
 
-        {!codes && state?.enrolled && (
+        {!codes && granted && (
+          <>
+            <p className="modal-body">
+              <strong>
+                You are now {granted === "admin" ? "an administrator" : "a moderator"}.
+              </strong>{" "}
+              Two-factor authentication is on, and the role that was waiting
+              for it has taken effect. Your other devices have been signed out;
+              this one carries on, and each sign-in from here asks for a code.
+            </p>
+            <button
+              type="button"
+              className="modal-button"
+              onClick={() => {
+                // The role only reaches the menu when the account is read
+                // again: this browser's session was replaced by the one the
+                // server minted for the role it now holds.
+                void useAuthStore.getState().fetchMe();
+                onClose();
+              }}
+            >
+              Done
+            </button>
+          </>
+        )}
+
+        {!codes && !granted && state?.enrolled && (
           <>
             <p className="modal-body">
               Two-factor authentication is on. You have{" "}
@@ -378,8 +441,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {/* The setup form and the codes carry their own way out. */}
-        {!offer && !codes && (
+        {/* The setup form, the codes and the role that just started each carry
+            their own way out. */}
+        {!offer && !codes && !granted && (
           <button type="button" className="modal-dismiss" onClick={onClose}>
             Close
           </button>
