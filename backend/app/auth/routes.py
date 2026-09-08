@@ -78,6 +78,7 @@ from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
 from app.auth.second_factor import (
     SecondFactorOutcome,
+    prove_second_factor_owner,
     begin_enrolment,
     confirm_enrolment,
     disable_second_factor,
@@ -1237,6 +1238,9 @@ def create_auth_router(
                 state.confirmed_at.isoformat() if state.confirmed_at else None
             ),
             "recoveryCodesRemaining": state.recovery_codes_remaining,
+            # Whether a staff role could be granted on this factor as it
+            # stands, or whether the password still has to be proved for it.
+            "passwordProved": state.password_proved,
             "required": user.role in STAFF_ROLES and staff_second_factor_required(),
             "stepUpWindowSeconds": int(STEP_UP_WINDOW.total_seconds()),
         }
@@ -1266,30 +1270,32 @@ def create_auth_router(
         from here on, exactly as session tokens do (R-AUTH-02), so a second
         request for the same set is not something this server can answer.
 
-        Binding a second factor asks for the password - the first one as much
-        as a replacement. Replacement obviously had to: a stolen cookie could
-        otherwise confirm an attacker-controlled secret over the account's
-        own, taking R-AUTH-21's step-up with it.
+        Setting one up asks for nothing but the code. A password here was a
+        lot to demand of somebody doing something optional, and the reason it
+        was demanded was never really about this moment - it was about
+        promotion, which used to check that a second factor *existed* rather
+        than whose it was. That question moved to where it belongs
+        (R-AUTH-20): a password given here is recorded as proof, and only the
+        role gate insists on having it.
 
-        The first one was let through on the grounds that it grants nobody
-        anything a stolen cookie did not already carry. That was wrong, and
-        wrong in a way worth writing down: it weighed what the row gives at
-        the moment it is written, when what matters is what it is later taken
-        to prove. Promotion checks that a second factor *exists*, not whose it
-        is (R-AUTH-20), so a factor planted on a player with a stolen cookie
-        becomes the staff factor the moment somebody is given the role - and
-        since the grant revokes every session and there is no operator way
-        back from a lost authenticator, the account's owner is then locked out
-        of it for good.
+        Replacing one still proves the password, because that destroys a
+        credential the way removing it does.
         """
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
-        await _prove_password(user, body.password)
+        already = await second_factor_state(session_factory, user_id=user.id)
+        if already.enrolled:
+            await _prove_password(user, body.password)
+        elif body.password:
+            # Offered rather than demanded: somebody who gives it here is
+            # spared the separate step before a role can be granted.
+            await _prove_password(user, body.password)
         codes = await confirm_enrolment(
             session_factory,
             user_id=user.id,
             secret=body.secret,
             code=body.code,
+            password_proved=bool(body.password),
         )
         if codes is None:
             raise HTTPException(
@@ -1297,6 +1303,24 @@ def create_auth_router(
                 detail="That code is not right. Check your authenticator app.",
             )
         return {"ok": True, "recoveryCodes": codes}
+
+    @router.post("/second-factor/confirm-owner")
+    async def confirm_second_factor_owner(body: PasswordProofBody, request: Request):
+        """Record that this factor is the account owner's (R-AUTH-20).
+
+        Setting one up does not ask for a password, so a factor may be in
+        place without anybody having proved it belongs to whoever owns the
+        account. A staff role needs that proof, and this is how it is given -
+        without tearing the factor down and scanning it again.
+        """
+        await throttle(second_factor_limiter, request)
+        user = await require_user(request)
+        await _prove_password(user, body.password)
+        if not await prove_second_factor_owner(session_factory, user_id=user.id):
+            raise HTTPException(
+                status_code=409, detail="Two-factor authentication is not set up."
+            )
+        return {"ok": True}
 
     @router.post("/second-factor/recovery-codes")
     async def regenerate_recovery_codes(body: PasswordProofBody, request: Request):

@@ -13,6 +13,7 @@ import { useAuthStore } from "../store/authStore";
 import {
   beginEnrolment,
   confirmEnrolment,
+  confirmSecondFactorOwner,
   fetchSecondFactor,
   removeSecondFactor,
   replaceRecoveryCodes,
@@ -37,7 +38,6 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const keyId = useId();
-  const passwordId = useId();
 
   const [state, setState] = useState<SecondFactorState | null>(null);
   const [offer, setOffer] = useState<EnrolmentOffer | null>(null);
@@ -95,17 +95,32 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       send five digits and be refused. */
   async function submitWith(entered: string) {
     if (!offer || busy) return;
-    if (entered.length < 6 || !password) return;
+    if (entered.length < 6) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await confirmEnrolment(offer.secret, entered, password);
+      const result = await confirmEnrolment(offer.secret, entered, password || undefined);
       setCodes(result.recoveryCodes);
       setOffer(null);
       setCode("");
       setState(await fetchSecondFactor());
     } catch (problem) {
       failed(problem, "That code was not accepted.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function proveOwner() {
+    setBusy(true);
+    setError(null);
+    try {
+      await confirmSecondFactorOwner(password);
+      setPassword("");
+      setState(await fetchSecondFactor());
+      notify("Confirmed. This account can now be given a staff role.", "success");
+    } catch (problem) {
+      failed(problem, "Could not confirm it.");
     } finally {
       setBusy(false);
     }
@@ -222,10 +237,10 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
 
         {!codes && offer && (
           <form className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
-            {/* Two panels: what your phone points at, and what you type.
-                Reads as one job on a laptop and stacks into two steps on a
-                phone, where the camera and the keyboard are the same device
-                and the QR is the part you skip. */}
+            <p className="modal-body two-factor-lead">
+              Scan the code with an authenticator app, then type the six digits
+              it shows back.
+            </p>
             <div className="two-factor-scan">
               <div className="two-factor-frame">
                 <Suspense fallback={<p className="modal-hint">Drawing the code…</p>}>
@@ -235,15 +250,11 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   />
                 </Suspense>
               </div>
-              <p className="modal-hint">
-                Point your authenticator app at this to add the account.
-              </p>
+              <p className="modal-hint">Point your app at this.</p>
             </div>
 
-            <div className="two-factor-entry">
-              <label className="two-factor-field-label" htmlFor={keyId}>
-                Setup key
-              </label>
+            <div className="auth-form two-factor-entry">
+              <label htmlFor={keyId}>Setup key</label>
               <div className="two-factor-secret">
                 <code id={keyId}>{offer.secret}</code>
                 <button
@@ -255,12 +266,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   <CopyIcon size={15} />
                 </button>
               </div>
-              <p className="modal-hint">
-                Use this if you can’t scan the code — typing it in does the
-                same thing.
-              </p>
+              <p className="modal-hint">Use this if you can’t scan.</p>
 
-              <span className="two-factor-field-label">Code from your app</span>
+              <span className="two-factor-code-label">Code from your app</span>
               <SegmentedCodeInput
                 value={code}
                 onChange={setCode}
@@ -270,31 +278,10 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 disabled={busy}
               />
 
-              <label className="two-factor-field-label" htmlFor={passwordId}>
-                Your password
-              </label>
-              <input
-                id={passwordId}
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-                required
-              />
-              <p className="modal-hint">
-                Adding a second factor changes how you sign in, so it asks for
-                your password the way changing it does.
-              </p>
-
-              <div className="two-factor-actions">
-                <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? "Checking…" : "Confirm"}
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={onClose}>
-                  Cancel
-                </button>
-              </div>
             </div>
+            <button type="submit" className="modal-button" disabled={busy}>
+              {busy ? "Checking…" : "Confirm"}
+            </button>
           </form>
         )}
 
@@ -305,6 +292,13 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               {state.recoveryCodesRemaining} recovery{" "}
               {state.recoveryCodesRemaining === 1 ? "code" : "codes"} left.
             </p>
+            {!state.passwordProved && (
+              <p className="modal-hint">
+                Before this account can be given a moderator or administrator
+                role, confirm with your password that the authenticator is
+                yours.
+              </p>
+            )}
             <label>
               Your password
               <input
@@ -315,6 +309,19 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
             <div className="two-factor-actions">
+              {/* Only while it matters: setting a factor up asks for no
+                  password, so one may be in place that nobody has proved
+                  belongs to this account — which is the one thing a staff
+                  role needs of it (R-AUTH-20). */}
+              {!state.passwordProved && (
+                <button
+                  type="button"
+                  onClick={() => void proveOwner()}
+                  disabled={busy || !password}
+                >
+                  Confirm it’s yours
+                </button>
+              )}
               <button type="button" onClick={() => void newCodes()} disabled={busy || !password}>
                 New recovery codes
               </button>
@@ -330,7 +337,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        <button type="button" className="modal-dismiss" onClick={onClose}>Close</button>
+        <button type="button" className="modal-dismiss" onClick={onClose}>
+          {offer ? "Cancel" : "Close"}
+        </button>
       </div>
     </div>
   );

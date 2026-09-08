@@ -36,6 +36,8 @@ async def enrol_second_factor(
         json={
             "secret": secret,
             "code": code_at(secret, current_step(time.time())),
+            # Optional at setup, and given here because these accounts go on
+            # to hold roles, which is the one thing that needs it.
             "password": password,
         },
     )
@@ -94,6 +96,7 @@ async def mark_staff_ready(factory, user_id) -> None:
                         secret="JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
                         confirmed_at=now,
                         created_at=now,
+                        password_proved_at=now,
                         last_step=0,
                         failed_attempts=0,
                     )

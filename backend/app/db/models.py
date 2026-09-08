@@ -1866,6 +1866,15 @@ class UserSecondFactor(Base):
     )
     secret: Mapped[str] = mapped_column(String(64), nullable=False)
     confirmed_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    # When somebody proved the account's password while binding this factor.
+    # Setting one up does not ask - it is a player's own business, and a
+    # factor bound with a stolen cookie gains an attacker nothing while a
+    # player's sign-in is not gated on it. A staff role is a different matter:
+    # R-AUTH-20 needs the factor to be the *owner's*, so promotion requires
+    # this to be set rather than merely requiring a row to exist.
+    password_proved_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

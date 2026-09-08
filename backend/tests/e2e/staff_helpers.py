@@ -59,6 +59,7 @@ async def set_role(username: str, role: str) -> None:
                             secret=PLACEHOLDER_SECRET,
                             confirmed_at=now,
                             created_at=now,
+                            password_proved_at=now,
                             last_step=0,
                             failed_attempts=0,
                         )
@@ -98,10 +99,14 @@ async def enrol_through_the_ui(page) -> str:
     dialog = page.get_by_role("dialog", name="Two-factor authentication")
     await dialog.get_by_role("button", name="Set up").click()
     secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
+    # Six boxes that submit themselves on the last digit, so there is no
+    # button to press.
     await type_code(dialog, code_at(secret, current_step(time.time())))
-    await dialog.get_by_label("Your password").fill("a-good-password")
-    await dialog.get_by_role("button", name="Confirm").click()
     await dialog.get_by_role("button", name="I have saved them").click()
+    # Setting one up asks for no password, so a role still needs this: it is
+    # what says the authenticator is the account owner's (R-AUTH-20).
+    await dialog.get_by_label("Your password").fill("a-good-password")
+    await dialog.get_by_role("button", name="Confirm it’s yours").click()
     await dialog.get_by_role("button", name="Close").click()
     return secret
 

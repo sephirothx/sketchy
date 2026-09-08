@@ -1112,32 +1112,79 @@ async def test_replacing_a_second_factor_needs_the_password(env):
 # --- the third review of #679 --------------------------------------------
 
 @pytest.mark.asyncio
-async def test_a_first_second_factor_also_needs_the_password(env):
-    """What the row is later taken to prove is what makes this matter.
+async def test_setting_up_a_second_factor_asks_for_no_password(env):
+    """It is optional and a player's own business, so it does not ask.
 
-    Promotion checks that a second factor exists, not whose it is, so one
-    planted on a player with a stolen cookie becomes the staff factor as soon
-    as somebody grants the role - and the grant revokes every session, with no
-    operator way back from an authenticator the owner never had.
+    What the password was really guarding is promotion, and that is where the
+    check now lives - see the test below.
     """
     new_client, factory, _ = env
     http = new_client()
-    account = await register(http, "Planted")
+    account = await register(http, "Unbothered")
     offer = (await http.post("/api/auth/second-factor/enrol")).json()
 
-    refused = await http.post(
+    accepted = await http.post(
         "/api/auth/second-factor/confirm",
         json={
             "secret": offer["secret"],
             "code": code_at(offer["secret"], current_step(time.time())),
         },
     )
+    assert accepted.status_code == 200, accepted.text
+    state = await second_factor_state(factory, user_id=account["id"])
+    assert state.enrolled
+    # In place, but nobody has said it is theirs.
+    assert not state.password_proved
+
+
+@pytest.mark.asyncio
+async def test_a_role_needs_a_second_factor_somebody_proved_was_theirs(env):
+    """R-AUTH-20's real requirement, in the place it actually bites.
+
+    Promotion used to check that a factor existed, not whose it was - so one
+    planted with a stolen cookie became the staff factor as soon as anybody
+    granted the role, and the account's owner was locked out of it for good.
+    """
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Provable")
+    offer = (await http.post("/api/auth/second-factor/enrol")).json()
+    await http.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )
+    assert not (
+        await second_factor_state(factory, user_id=account["id"])
+    ).password_proved
+
+    # A wrong password proves nothing.
+    refused = await http.post(
+        "/api/auth/second-factor/confirm-owner",
+        json={"password": "not-the-password-here"},
+    )
     assert refused.status_code == 401
     assert not (
         await second_factor_state(factory, user_id=account["id"])
-    ).enrolled
+    ).password_proved
 
-    accepted = await http.post(
+    proved = await http.post(
+        "/api/auth/second-factor/confirm-owner", json={"password": GOOD_PASSWORD}
+    )
+    assert proved.status_code == 200
+    assert (await second_factor_state(factory, user_id=account["id"])).password_proved
+
+
+@pytest.mark.asyncio
+async def test_a_password_given_at_setup_counts_as_the_proof(env):
+    """Offered rather than demanded: giving it saves the separate step."""
+    new_client, factory, _ = env
+    http = new_client()
+    account = await register(http, "Forehanded")
+    offer = (await http.post("/api/auth/second-factor/enrol")).json()
+    await http.post(
         "/api/auth/second-factor/confirm",
         json={
             "secret": offer["secret"],
@@ -1145,7 +1192,7 @@ async def test_a_first_second_factor_also_needs_the_password(env):
             "password": GOOD_PASSWORD,
         },
     )
-    assert accepted.status_code == 200, accepted.text
+    assert (await second_factor_state(factory, user_id=account["id"])).password_proved
 
 
 @pytest.mark.asyncio

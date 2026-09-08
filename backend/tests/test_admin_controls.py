@@ -38,6 +38,10 @@ from app.services.shutdown import ShutdownCoordinator
 
 from app.auth.sessions import list_active_sessions
 
+import time
+
+from app.auth.totp import code_at, current_step
+
 from tests.staffauth import enrol_second_factor, step_up
 
 
@@ -1001,6 +1005,45 @@ async def test_a_role_cannot_be_granted_before_the_second_factor(env):
         assert (await session.get(User, UUID(subject["id"]))).role == "user"
     # Refused whole: no audit row for a promotion that did not happen.
     assert await audit_rows(factory) == []
+
+
+async def test_a_role_needs_a_factor_its_owner_proved(env):
+    """A second factor is not enough; it has to be theirs (R-AUTH-20).
+
+    Setting one up asks for no password, so a factor planted with a stolen
+    cookie would otherwise become the staff factor the moment anybody granted
+    the role - and the grant revokes every session, leaving the account's
+    owner locked out with no way back.
+    """
+    new_client, factory, *_ = env
+    admin = await an_admin(env)
+    client = new_client()
+    subject = await register(client, "Unproved")
+    # Enrolled, but nobody has said the authenticator is theirs.
+    offer = (await client.post("/api/auth/second-factor/enrol")).json()
+    await client.post(
+        "/api/auth/second-factor/confirm",
+        json={
+            "secret": offer["secret"],
+            "code": code_at(offer["secret"], current_step(time.time())),
+        },
+    )
+
+    refused = await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    assert refused.status_code == 400
+    assert "own password" in refused.json()["detail"]
+
+    await client.post(
+        "/api/auth/second-factor/confirm-owner", json={"password": PASSWORD}
+    )
+    granted = await admin.patch(
+        f"/api/admin/players/{subject['id']}/role",
+        json={"role": "moderator", "reason": "joining the safety rota"},
+    )
+    assert granted.status_code == 200, granted.text
 
 
 async def test_a_role_change_records_the_move_and_the_reason(env):

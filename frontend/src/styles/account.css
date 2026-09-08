@@ -289,126 +289,124 @@
    one row somebody is meant to stop and look at (R-AUTH-22). */
 .session-anomaly { color: var(--warning); font-weight: 700; }
 
-.two-factor { max-width: 620px; text-align: left; }
-/* Controls come from `primitives.css` like every other dialog's; only the
-   pieces this one alone has are described here. */
+/* The card stays centred like every other dialog - title, lead and dismiss
+   all sit as they do elsewhere. Only the entry column reads left. */
+.two-factor { max-width: 600px; }
+/* The entry column is an `.auth-form` like every other dialog's, so labels,
+   fields and spacing come from there rather than being restated. */
 
-/* Scan on one side, type on the other. Stacks below the dialog's own
-   breakpoint, where the camera and the keyboard are the same device and the
-   QR is the half you skip. */
+/* The two columns are the work; the lead above and the button below span
+   them, so the dialog still reads top-to-bottom like every other one. */
 .two-factor-setup {
+  align-items: start;
   display: grid;
-  gap: 22px;
-  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
-  margin-top: 16px;
+  gap: 8px 20px;
+  grid-template-columns: 170px minmax(0, 1fr);
+  margin-top: 4px;
 }
-.two-factor-scan { text-align: center; }
+.two-factor-lead { grid-column: 1 / -1; margin: 0 0 6px; }
+.two-factor-setup .modal-button { grid-column: 1 / -1; margin-top: 14px; width: 100%; }
+.two-factor-scan { min-width: 0; text-align: center; }
+.two-factor-scan .modal-hint { margin: 8px 0 0; }
+.two-factor-entry { margin-top: 0; min-width: 0; text-align: left; }
+.two-factor-entry .modal-hint { margin: 0; }
 
 /* Corner brackets, so the code reads as something to point a camera at
-   rather than a picture. Drawn with a conic gradient rather than four
-   elements: it is decoration and should cost no DOM. */
+   rather than a picture. One element, four gradients. */
 .two-factor-frame {
+  --corner: 2px;
   background:
     conic-gradient(from 90deg at var(--corner) var(--corner), #0000 25%, var(--line-strong) 0)
-      0 0 / 18px 18px no-repeat,
+      0 0 / 16px 16px no-repeat,
     conic-gradient(from 180deg at calc(100% - var(--corner)) var(--corner), #0000 25%, var(--line-strong) 0)
-      100% 0 / 18px 18px no-repeat,
+      100% 0 / 16px 16px no-repeat,
     conic-gradient(from 0deg at var(--corner) calc(100% - var(--corner)), #0000 25%, var(--line-strong) 0)
-      0 100% / 18px 18px no-repeat,
+      0 100% / 16px 16px no-repeat,
     conic-gradient(from 270deg at calc(100% - var(--corner)) calc(100% - var(--corner)), #0000 25%, var(--line-strong) 0)
-      100% 100% / 18px 18px no-repeat;
-  --corner: 2px;
-  padding: 12px;
+      100% 100% / 16px 16px no-repeat;
+  padding: 10px;
 }
 .two-factor-qr {
   background: var(--qr-light);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: block;
   height: auto;
-  padding: 8px;
+  padding: 7px;
   width: 100%;
 }
 
-.two-factor-entry { display: grid; gap: 0; }
-.two-factor-field-label {
-  display: block;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-.two-factor-field-label:not(:first-child) { margin-top: 18px; }
-.two-factor-entry > input {
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  font: inherit;
-  padding: 9px 11px;
-  width: 100%;
-}
-.two-factor-entry .modal-hint { margin: 6px 0 0; }
-
-/* The key is read off a screen and typed by hand: monospaced, spaced out
-   enough to tell O from 0, and with the copy button inside the field so it
-   is obvious what it copies. */
+/* Read off a screen and typed by hand: monospaced, spaced enough to tell O
+   from 0, with the copy control inside the field so what it copies is
+   obvious. */
 .two-factor-secret {
   align-items: center;
-  background: var(--line);
-  border-radius: 8px;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: space-between;
-  padding: 8px 8px 8px 12px;
+  padding: 6px 6px 6px 10px;
 }
 .two-factor-secret code, .two-factor-codes code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 14px;
-  letter-spacing: 0.1em;
+  font-size: 13px;
+  letter-spacing: 0.06em;
   overflow-wrap: anywhere;
 }
 
-.code-boxes { display: flex; gap: 8px; }
+.two-factor-code-label { font-size: 13px; font-weight: 600; margin-top: 6px; }
+/* Grid, not flex: `minmax(0, 1fr)` is what stops six square boxes claiming
+   their own intrinsic width and carrying the dialog off the screen with
+   them. */
+.code-boxes {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
 .code-box {
   aspect-ratio: 1;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  flex: 1 1 0;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 20px;
+  font-size: 18px;
   min-width: 0;
   padding: 0;
   text-align: center;
+  width: 100%;
 }
-/* `a11y.css` already gives a focused text field its border colour and
-   suppresses the ring; a box this small wants the thicker border too, so the
-   focused digit is obvious at a glance. */
 .code-box:focus-visible { border-width: 2px; }
 
 .two-factor-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 22px;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 14px;
 }
 .two-factor-codes ul {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   list-style: none;
   margin: 14px 0;
   padding: 0;
 }
 .two-factor-codes li {
-  background: var(--line);
-  border-radius: 6px;
+  background: var(--field);
+  border-radius: var(--radius-sm);
   padding: 6px 8px;
   text-align: center;
 }
 
 @media (max-width: 560px) {
-  .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .two-factor-scan { max-width: 220px; margin: 0 auto; }
+  .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .two-factor-scan { margin: 0 auto; max-width: 190px; }
 }
 
-.step-up { max-width: 420px; text-align: left; }
-.step-up label { display: block; font-weight: 700; margin-top: 12px; }
+.step-up { max-width: 380px; text-align: left; }
 .step-up input {
   border: 1px solid var(--line-strong);
   border-radius: 8px;

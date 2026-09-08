@@ -63,11 +63,9 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             secret = (await dialog.locator(".two-factor-secret code").inner_text()).strip()
             assert secret
 
+            # Six boxes that submit themselves on the last digit, and no
+            # password: setting one up asks for nothing else (R-AUTH-20).
             await type_code(dialog, code_at(secret, current_step(time.time())))
-            # Binding a factor proves the password too, so that a session
-            # cookie on its own cannot plant one (R-AUTH-20).
-            await dialog.get_by_label("Your password").fill(PASSWORD)
-            await dialog.get_by_role("button", name="Confirm").click()
 
             codes = dialog.get_by_role("list", name="Recovery codes")
             await expect(codes).to_be_visible()
@@ -77,6 +75,13 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await dialog.get_by_role("button", name="I have saved them").click()
             await expect(dialog).to_contain_text("Two-factor authentication is on")
             await expect(dialog).to_contain_text("10 recovery codes left")
+
+            # A role needs the factor to be provably the owner's, which
+            # setting it up did not establish. This is where that is given.
+            await expect(dialog).to_contain_text("confirm with your password")
+            await dialog.get_by_label("Your password").fill(PASSWORD)
+            await dialog.get_by_role("button", name="Confirm it’s yours").click()
+            await expect(dialog).not_to_contain_text("confirm with your password")
             await dialog.get_by_role("button", name="Close").click()
 
             # Staff, with nothing proved since: exactly the state a browser

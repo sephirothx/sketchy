@@ -659,14 +659,15 @@ the date, so you can revoke it.
 
 #### Two-factor authentication
 
-Adding an authenticator app asks for your password as well as a code from the
-app, because what it records is later taken as proof that *you* hold it - the
-role check looks for a second factor, not for whose it is.
+Adding an authenticator app asks only for a code from the app. Becoming a
+moderator or administrator additionally needs you to confirm with your password
+that the authenticator is yours - the role check looks for a second factor its
+owner vouched for, not merely for one being present.
 
 Any account can add one from **Settings → Account**, beside the password and
-the signed-in devices. Setting it up shows a QR code to scan; anything that
-cannot scan — a desktop authenticator, a camera that will not focus — can open
-**Enter a key instead** and copy the key. The ten recovery codes are shown once
+the signed-in devices. Setting it up shows a QR code to scan, with the setup key beside it to copy for
+anything that cannot scan — a desktop authenticator, a camera that will not
+focus. The ten recovery codes are shown once
 and can be downloaded as a text file, which is the only moment they exist
 outside a hash. For a
 player it is preparation rather than protection: it is the step that has to come

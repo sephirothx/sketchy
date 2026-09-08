@@ -1900,6 +1900,7 @@
    "idleExpiresAt",
    "lastUsedAt",
    "nextRequestAt",
+   "passwordProved",
    "pendingAddress",
    "recoveryCodes",
    "recoveryCodesRemaining",
@@ -1924,6 +1925,7 @@
   ],
   "auth.routes:second_factor": [
    "confirmedAt",
+   "passwordProved",
    "recoveryCodesRemaining",
    "stepUpWindowSeconds"
   ],

@@ -373,9 +373,16 @@ would otherwise be a list of which accounts exist and which are under attack, re
 by anything that can read the database.
 
 ### `user_second_factors`
-`user_id` **PK** (CASCADE) · `secret` · `confirmed_at` · `created_at` · `last_step` ·
-`failed_attempts` · `locked_until`, with `ck_user_second_factors_failed_attempts` and
+`user_id` **PK** (CASCADE) · `secret` · `confirmed_at` · `password_proved_at` ·
+`created_at` · `last_step` · `failed_attempts` · `locked_until`, with `ck_user_second_factors_failed_attempts` and
 `ck_user_second_factors_last_step`.
+
+`password_proved_at` records whether anybody proved the account's password while
+binding this factor. Setting one up deliberately does not ask — it is optional, and it
+does not gate a player's sign-in — so the column is what a **staff role** requires
+instead: promotion checks that the factor is the owner's rather than merely that a row
+exists, which is the difference between a second factor and one somebody planted with a
+stolen cookie.
 
 One row per account, written **only once enrolment is confirmed** by a code the account
 actually produced (R-AUTH-20): an unconfirmed secret lives in the enrolment response and

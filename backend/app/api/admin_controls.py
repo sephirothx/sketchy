@@ -557,24 +557,33 @@ def create_admin_controls_router(
                 previous = target.role
                 if previous == body.role:
                     return {"id": user_id, "role": previous}
-                if (
-                    body.role in STAFF_ROLES
-                    and await session.get(UserSecondFactor, target_id) is None
+                factor = (
+                    await session.get(UserSecondFactor, target_id)
+                    if body.role in STAFF_ROLES
+                    else None
+                )
+                if body.role in STAFF_ROLES and (
+                    factor is None or factor.password_proved_at is None
                 ):
                     # Enrolment comes first, and has to (R-AUTH-20). Granting
                     # the role revokes the account's sessions, and a staff
                     # account cannot sign in without a code - so promoting
                     # somebody who has not enrolled would lock them out of the
-                    # very page they would enrol from. Asking them to set it up
-                    # as an ordinary player, from their own account menu, is
-                    # also the only order in which nobody has to be trusted
-                    # with a window where the role exists without the factor.
+                    # very page they would enrol from.
+                    #
+                    # And the factor has to be *theirs*: this checks that
+                    # somebody proved the account's password while binding it,
+                    # not merely that a row exists. Setting one up asks for no
+                    # password, so without this a factor planted with a stolen
+                    # cookie would become the staff factor the moment anybody
+                    # granted the role.
                     raise HTTPException(
                         status_code=400,
                         detail=(
-                            "That account needs two-factor authentication before "
-                            "it can hold this role. Ask them to set it up from "
-                            "their account menu first."
+                            "That account needs two-factor authentication, "
+                            "confirmed with its own password, before it can hold "
+                            "this role. Ask them to set it up in Settings → "
+                            "Account first."
                         ),
                     )
                 target.role = body.role
