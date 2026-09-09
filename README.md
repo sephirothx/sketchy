@@ -74,6 +74,10 @@ keyboard that takes half the screen, and one thumb.
   **Friends** also suggests registered accounts you finished a game with in the last
   30 days. That list is built only from games you sat in yourself — there is still
   no way to search for, or reach, somebody you have never played with.
+  A request arriving, and one you sent being accepted, are both announced wherever
+  you are — a live game included — and the number waiting for an answer sits on your
+  account chip. A request that was declined is not announced: your list simply stops
+  showing it.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.

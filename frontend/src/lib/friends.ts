@@ -271,3 +271,56 @@ export function addableRecentPlayers(
   ]);
   return players.filter((player) => !known.has(player.userId));
 }
+
+/** What moved between two readings of the lists.
+
+`friends_changed` is deliberately contentless — one event covers a request
+arriving and one being answered, and the listing endpoint is the truth either
+way. So what happened is worked out here, by comparing the lists before and
+after the refetch it triggers. No wire change, and it is the only way to tell
+"somebody asked" from "somebody said yes", which was silent before.
+
+**A vanished outgoing request is not reported, and that is the whole point.**
+An outgoing row disappears when it is declined, and naming that would go
+further than R-FRIEND-05 allows: the list not pretending the row is still
+pending is one thing, announcing the refusal is another.
+
+`accepted` requires the entry to have been *outgoing* before. A friendship the
+reader made themselves — by accepting a request, or by asking somebody who had
+already asked them — also appears in `friends` for the first time, and telling
+somebody what they just did is noise. */
+export interface FriendListChanges {
+  /** Requests that were not waiting a moment ago. */
+  arrived: FriendEntry[];
+  /** Requests this account sent that have since been said yes to. */
+  accepted: FriendEntry[];
+}
+
+export const NO_FRIEND_CHANGES: FriendListChanges = { arrived: [], accepted: [] };
+
+function idsOf(entries: FriendEntry[]): Set<string> {
+  return new Set(entries.map((entry) => entry.userId));
+}
+
+export function friendListChanges(
+  before: FriendLists,
+  after: FriendLists,
+): FriendListChanges {
+  const knewIncoming = idsOf(before.incoming);
+  const knewFriends = idsOf(before.friends);
+  const hadAsked = idsOf(before.outgoing);
+  return {
+    arrived: after.incoming.filter((entry) => !knewIncoming.has(entry.userId)),
+    accepted: after.friends.filter(
+      (entry) => !knewFriends.has(entry.userId) && hadAsked.has(entry.userId),
+    ),
+  };
+}
+
+/** How many requests are waiting for an answer.
+
+The badge's number, and the only count worth showing: a friendship needs
+nothing, and a request this account sent is waiting on somebody else. */
+export function waitingRequestCount(lists: FriendLists): number {
+  return lists.incoming.length;
+}
