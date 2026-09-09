@@ -451,7 +451,15 @@ function ProfileView({ userId }: { userId: string }) {
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
   const friendLists = useFriendsStore((s) => s.lists);
-  const viewerIsFriend = isFriend(friendLists, userId);
+  // Nothing about a friendship is drawn until the lists are an answer about
+  // *this* viewer. Empty lists and unread lists are the same shape, and
+  // guessing wrong here is not cosmetic: an incoming request would be shown
+  // as "Add friend", and pressing it accepts (asking back is how you say
+  // yes) - so the page would have offered one thing and done another.
+  const friendsKnown = useFriendsStore(
+    (s) => s.loaded && s.ownerId === (currentUser?.id ?? null),
+  );
+  const viewerIsFriend = friendsKnown && isFriend(friendLists, userId);
 
   // Which list is current. Bumped when a reload starts and again when it
   // replaces the list, so a page fetched for the previous one - a "load
@@ -581,13 +589,13 @@ function ProfileView({ userId }: { userId: string }) {
                 standing in it right now, and a profile is linked from every
                 game's participant list (R-FRIEND-10). */}
             <FriendButton
-              action={profileFriendActionFor(
+              action={!friendsKnown ? "none" : profileFriendActionFor(
                 { userId, isAnonymous: subject.isAnonymous },
                 friendLists,
                 currentUser
                   ? { userId: currentUser.id, isAnonymous: currentUser.isAnonymous }
                   : null,
-              )}
+                )}
               userId={userId}
               displayName={shownName}
             />

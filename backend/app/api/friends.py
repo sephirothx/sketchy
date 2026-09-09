@@ -33,6 +33,22 @@ from app.services.friends import (
 )
 
 
+#: Names *why* a 403 from these endpoints happened.
+#:
+#: A status alone cannot say. The middleware answers 403 for a suspended
+#: account before any of this runs, and step-up answers 403 with a header of
+#: its own - so a client that reads "403" as "this caller is a guest" is
+#: reading two other refusals as that too. A guest's refusal is the only one
+#: that means *there is no list*, and a client acts on it: it shows an empty
+#: friends list and says so. Getting that wrong wipes a real account's lists
+#: off the screen.
+#:
+#: A header rather than a body field, following `X-Sketchy-Step-Up`: the
+#: refusal keeps FastAPI's ordinary `{"detail": ...}` shape, and the reason
+#: rides beside it where a client can read it without parsing anything.
+ACCOUNT_REQUIRED_HEADER = "X-Sketchy-Account-Required"
+
+
 async def _current_account(
     session_factory: async_sessionmaker[AsyncSession], request: Request
 ) -> User:
@@ -50,7 +66,11 @@ async def _current_account(
     if user is None or user.state == AccountState.DELETED.value:
         raise HTTPException(status_code=401, detail="Sign in first.")
     if user.is_anonymous:
-        raise HTTPException(status_code=403, detail=REGISTER_FIRST)
+        raise HTTPException(
+            status_code=403,
+            detail=REGISTER_FIRST,
+            headers={ACCOUNT_REQUIRED_HEADER: "1"},
+        )
     return user
 
 

@@ -126,7 +126,10 @@ function App() {
   const refreshFriends = useFriendsStore((state) => state.refresh);
   const myAccountId = useAuthStore((state) => state.user?.id ?? null);
   useEffect(() => {
-    void refreshFriends();
+    // The account is handed over rather than looked up: the store clears its
+    // baseline when the owner changes, so signing in never announces the new
+    // account's waiting requests as if they had just arrived.
+    void refreshFriends(myAccountId);
   }, [refreshFriends, myAccountId]);
   const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
   const [serverFull, setServerFull] = useState<string | null>(null);

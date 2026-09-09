@@ -304,3 +304,29 @@ nothing, and a request this account sent is waiting on somebody else. */
 export function waitingRequestCount(lists: FriendLists): number {
   return lists.incoming.length;
 }
+
+
+/** Whether a failed friend-list read is the guest refusal rather than a fault.
+
+The two have to be told apart, because only one of them is an answer. A guest
+is refused, and that refusal *is* their list: they have none, and every
+control that would use one is hidden. A timeout, a dropped connection or a 500
+says nothing about who this account is friends with, and treating it as "no
+friends, and we know it" is worse than saying nothing — the lists empty on
+screen, a profile starts deriving *Add friend* from a state that is not true,
+and the next successful read diffs against the false empty list and announces
+every request that was already waiting.
+
+Matched on the name the server's own header put there, not on the status: a
+403 is not a reason. A suspended account is refused with one too, before this
+endpoint runs at all, and reading that as "no friends" wipes a real account's
+lists off the screen and leaves the next good read announcing everything on
+them as new.
+
+Duck-typed on the name rather than importing `AccountRequiredError`, so this
+stays in a module with no runtime imports and can be checked without a
+bundler. */
+export function isNoFriendListRefusal(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  return (error as { name?: unknown }).name === "AccountRequiredError";
+}

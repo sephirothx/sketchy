@@ -445,7 +445,14 @@ async def test_an_account_with_more_games_than_a_statement_can_bind_still_rebuil
 
     from app.db.models import GameParticipant, GameRecord, TurnRecord
 
-    factory, engine = await create_test_db()
+    # The maintenance budget, because that is the engine production rebuilds
+    # on: `_run_cli` opens `maintenance_engine()`, whose statement timeout is
+    # minutes rather than the seconds a player's request gets. Streaming an
+    # account's whole 33,000-game history is the work this test exists to
+    # exercise, and holding it to the web budget only ever measured how busy
+    # the runner was - it failed on CI five times across four pull requests,
+    # none of which touched this code.
+    factory, engine = await create_test_db(role="maintenance")
     users = SqlAlchemyUserRepository(factory)
     try:
         player = await users.create_anonymous("Veteran")
@@ -493,11 +500,25 @@ async def test_an_account_with_more_games_than_a_statement_can_bind_still_rebuil
                     "duration_seconds": 30,
                 }
             )
-        async with factory() as session:
-            async with session.begin():
-                await session.execute(insert(GameRecord), games)
-                await session.execute(insert(GameParticipant), seats)
-                await session.execute(insert(TurnRecord), turns)
+        # Seeded in chunks. The point of this test is what the *rebuild* does
+        # with 33,000 games, not what one INSERT does with them: sent whole,
+        # each of these three is a single statement big enough to run past the
+        # role's seven-second `statement_timeout` on a busy runner, and the
+        # test then fails during its own setup with an error about the thing
+        # it is not testing. It failed that way four times across three pull
+        # requests before this. The rows, and the assertions over them, are
+        # unchanged.
+        for table, rows_in in (
+            (GameRecord, games),
+            (GameParticipant, seats),
+            (TurnRecord, turns),
+        ):
+            for start_at in range(0, len(rows_in), 2_000):
+                async with factory() as session:
+                    async with session.begin():
+                        await session.execute(
+                            insert(table), rows_in[start_at : start_at + 2_000]
+                        )
 
         rows = await rebuild_user_stats_projection(factory, user_id=UUID(player.id))
 

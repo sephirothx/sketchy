@@ -480,9 +480,24 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_text("1", timeout=SETTLE_MS)
 
+            # Declining is deliberately not on it: a refusal is kept, so it
+            # belongs behind the confirmation the friends surface gives it.
+            await expect(
+                toast.get_by_role("button", name="Decline")
+            ).to_have_count(0)
+
             # Answered from the toast itself - without opening the menu, the
             # surface, or leaving the room.
             await toast.get_by_role("button", name="Accept").click()
+
+            # The asker is told, and this is checked first because it is the
+            # only assertion here with a deadline: an acceptance is read
+            # rather than acted on, so its toast keeps the ordinary five
+            # seconds. Everything below is a settled state that waits.
+            await expect(asker.locator(".app-toast").filter(
+                has_text=target_name
+            ).first).to_be_visible(timeout=SETTLE_MS)
+
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_count(0, timeout=SETTLE_MS)
@@ -490,17 +505,6 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
             # nothing is worse than no button.
             await expect(toast).to_have_count(0, timeout=SETTLE_MS)
             await expect(target.locator('[data-testid="waiting-room"]')).to_be_visible()
-
-            # Declining is deliberately not on it: a refusal is kept, so it
-            # belongs behind the confirmation the friends surface gives it.
-            await expect(
-                target.locator(".app-toast").get_by_role("button", name="Decline")
-            ).to_have_count(0)
-
-            # And the asker is told their request was answered - silent before.
-            await expect(asker.locator(".app-toast").filter(
-                has_text=target_name
-            ).first).to_be_visible(timeout=SETTLE_MS)
         finally:
             await asker_context.close()
             await target_context.close()
@@ -569,4 +573,110 @@ async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
         finally:
             for context in contexts:
                 await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_signing_in_does_not_announce_requests_that_were_already_there():
+    """A change of identity is a new baseline, not a list of changes.
+
+    The notice is a diff across two reads, so signing in compares "no friends"
+    against a whole account's worth of them and would announce every waiting
+    request as having just arrived. The badge is the right way to learn about
+    a backlog; a burst of toasts on login is not.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        asker_context = await browser.new_context()
+        owner_context = await browser.new_context()
+        fresh_context = await browser.new_context()
+        asker = await asker_context.new_page()
+        owner = await owner_context.new_page()
+        fresh = await fresh_context.new_page()
+        asker_name, owner_name = unique("Asker"), unique("Owner")
+        password = "a-good-password"
+
+        try:
+            await sign_up(asker, asker_name)
+            await sign_up(owner, owner_name)
+            await ask_from_profile(asker, owner_name)
+            # The request is waiting before the fresh browser ever signs in.
+            await expect(
+                owner.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1", timeout=SETTLE_MS)
+
+            await fresh.goto(BASE_URL)
+            await fresh.click(".first-run-login")
+            login = fresh.get_by_role("dialog", name="Log in")
+            await login.get_by_label("Username").fill(owner_name)
+            await login.get_by_label("Password").fill(password)
+            await login.get_by_role("button", name="Log in", exact=True).click()
+            await login.wait_for(state="hidden")
+
+            # The backlog is counted, which is how it should be learned about.
+            await expect(
+                fresh.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1", timeout=SETTLE_MS)
+            # And not announced: nothing here is new, it was waiting.
+            await expect(fresh.locator(".app-toast")).to_have_count(0)
+        finally:
+            for context in (asker_context, owner_context, fresh_context):
+                await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_friend_mark_survives_the_narrow_layout():
+    """R-FRIEND-13 says *wherever* a player is drawn, and a phone draws them
+    somewhere else.
+
+    Under 900px the sidebar roster is not mounted at all: the waiting room
+    draws its own tile grid instead. The seats are asked for once for the
+    whole room precisely so that the mark does not belong to whichever panel
+    happened to fetch it.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        ada_context = await browser.new_context()
+        bob_context = await browser.new_context()
+        ada, bob = await ada_context.new_page(), await bob_context.new_page()
+        ada_name, bob_name = unique("Ada"), unique("Bob")
+
+        try:
+            await sign_up(ada, ada_name)
+            await sign_up(bob, bob_name)
+            await make_friends(ada, bob, ada_name, bob_name)
+
+            await bob.click('button:has-text("Create room")')
+            await bob.click('button:has-text("Public")')
+            await bob.click('button:has-text("Create room")')
+            await bob.wait_for_selector(".room-copy-button")
+            code = await bob.locator(".room-copy-button").first.get_attribute(
+                "data-room-code"
+            )
+            await join_by_code(ada, code)
+            await ada.wait_for_selector('[data-testid="waiting-room"]')
+
+            # Narrowed once seated, rather than joined on a phone: getting in
+            # is a different flow there (a thumb dock rather than the header),
+            # and this is about what the room draws, not how it was entered.
+            await ada.set_viewport_size({"width": 420, "height": 900})
+
+            # The narrow waiting roster, which is a different component from
+            # the sidebar one and used to draw no marks at all.
+            tile = ada.locator(
+                f'.waiting-roster-tile:has(.waiting-roster-name:has-text("{bob_name}"))'
+            )
+            await expect(tile).to_be_visible(timeout=SETTLE_MS)
+            await expect(tile.locator(".avatar-friend")).to_have_count(
+                1, timeout=SETTLE_MS
+            )
+            # And still only for the one reading: Ada's own tile is unmarked.
+            own = ada.locator(
+                f'.waiting-roster-tile:has(.waiting-roster-name:has-text("{ada_name}"))'
+            )
+            await expect(own.locator(".avatar-friend")).to_have_count(0)
+        finally:
+            await ada_context.close()
+            await bob_context.close()
             await browser.close()

@@ -8,6 +8,7 @@ import { competitionRanks, crownOutcome } from "../lib/standings";
 import { Avatar } from "./ui/Avatar";
 import { SectionLabel } from "./ui/Card";
 import { BrushIcon, CrownIcon, TimerRing, TrophyIcon } from "./icons";
+import { useRoomFriendsStore } from "../store/roomFriendsStore";
 
 interface GameEndOverlayProps {
   scores: ScoreEntry[];
@@ -63,6 +64,9 @@ export function GameEndOverlay({
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  // The podium and the standings draw the same seats the roster does, so they
+  // carry the same mark (R-FRIEND-13).
+  const friendSeats = useRoomFriendsStore((state) => state.seatIds);
   // The strongest moment to ask: their result is on screen and there is now
   // something to lose.
   const isUnclaimedGuest = Boolean(user?.isAnonymous && user.displayName);
@@ -142,6 +146,7 @@ export function GameEndOverlay({
                     nameColor={entry.nameColor}
                     avatarUrl={entry.avatarUrl}
                     isAnonymous={entry.isAnonymous}
+                    isFriend={friendSeats.has(entry.playerId)}
                     size={place === 1 ? 52 : 42}
                   />
                   <span className="game-end-podium-name">
@@ -152,6 +157,9 @@ export function GameEndOverlay({
                       {entry.nickname}
                     </span>
                     {entry.playerId === myPlayerId && <span className="game-end-you">you</span>}
+                    {friendSeats.has(entry.playerId) && (
+                      <span className="visually-hidden">Friend</span>
+                    )}
                   </span>
                   <div className="game-end-podium-block" style={{ height, background: color }}>
                     <span className="game-end-podium-place">{place}</span>
@@ -171,11 +179,15 @@ export function GameEndOverlay({
                     nameColor={score.nameColor}
                     avatarUrl={score.avatarUrl}
                     isAnonymous={score.isAnonymous}
+                    isFriend={friendSeats.has(score.playerId)}
                     size={26}
                   />
                   <span className="game-end-standing-name">
                     <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>
                     {score.playerId === myPlayerId ? <span className="game-end-you">you</span> : null}
+                    {friendSeats.has(score.playerId) && (
+                      <span className="visually-hidden">Friend</span>
+                    )}
                   </span>
                   <strong>{score.score}</strong>
                 </li>

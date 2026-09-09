@@ -71,15 +71,22 @@ def assert_disposable(url: str) -> None:
         )
 
 
-def create_test_engine(url: str | None = None) -> AsyncEngine:
+def create_test_engine(url: str | None = None, *, role: str = "web") -> AsyncEngine:
     """An engine configured like the application's, for the URL given.
 
     Defaults to `TEST_DATABASE_URL`, then to in-memory SQLite. SQLite engines
     get the production pragmas and a per-connection foreign-key check.
+
+    `role` picks the PostgreSQL budget, and defaults to the one nearly every
+    test wants: a web request, with the statement timeout a player's request
+    actually gets. A test that exercises work production runs on a different
+    engine - `maintenance_engine()`, for a rebuild or a sweep - asks for that
+    role instead, so it is held to the budget its own code path has rather
+    than to one it would never run under.
     """
     resolved = url or os.environ.get("TEST_DATABASE_URL") or SQLITE_MEMORY_URL
     engine = create_async_engine(
-        resolved, echo=False, connect_args=get_engine_connect_args(resolved)
+        resolved, echo=False, connect_args=get_engine_connect_args(resolved, role=role)
     )
     if resolved.startswith("sqlite"):
         event.listen(engine.sync_engine, "connect", configure_sqlite_connection)
@@ -145,12 +152,17 @@ async def _run_driver_script(conn: AsyncConnection, script: str) -> None:
         await driver.execute(script)
 
 
-async def create_test_db() -> tuple[async_sessionmaker[AsyncSession], AsyncEngine]:
-    """A session factory and its engine over an empty, integrity-enforcing schema."""
+async def create_test_db(
+    *, role: str = "web"
+) -> tuple[async_sessionmaker[AsyncSession], AsyncEngine]:
+    """A session factory and its engine over an empty, integrity-enforcing schema.
+
+    See `create_test_engine` for `role`.
+    """
     external_url = os.environ.get("TEST_DATABASE_URL")
     if external_url:
         assert_disposable(external_url)
-        engine = create_test_engine(external_url)
+        engine = create_test_engine(external_url, role=role)
         # The external database is migrated before this suite starts. Keep the
         # schema intact so tests exercise Alembic's output, while isolating
         # tests by removing application rows in dependency order.

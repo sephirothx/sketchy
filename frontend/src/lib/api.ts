@@ -14,6 +14,24 @@ export class ApiError extends Error {
   }
 }
 
+/** The header naming a 403 that means *this caller has no account*. */
+export const ACCOUNT_REQUIRED_HEADER = "X-Sketchy-Account-Required";
+
+/** A 403 the server has named, rather than one a caller has guessed at.
+
+Its own type for the same reason `StepUpRequiredError` has one: a status is
+not a reason, and the callers that act on this refusal act on it *hard* - the
+friends list treats it as "there is no list" and shows an empty one. A
+suspension is also a 403 on the same path. */
+export class AccountRequiredError extends ApiError {
+  constructor(message: string) {
+    super(403, message);
+    // Read by `isNoFriendListRefusal`, which lives in a module with no
+    // runtime imports and so cannot name this class.
+    this.name = "AccountRequiredError";
+  }
+}
+
 /**
  * The header a staff refusal carries when it means *not yet* rather than
  * *not you* (R-AUTH-21): the action needs the second factor proved again.
@@ -127,6 +145,12 @@ export async function apiRequest<T>(
         || `Request failed with ${response.status}`;
       if (response.status === 403 && response.headers.get(STEP_UP_HEADER)) {
         throw new StepUpRequiredError(detail);
+      }
+      // "You need an account for this", told apart from every other 403 by
+      // the server rather than guessed from the status - a suspension is one
+      // too, and reads the same way from here (R-FRIEND-03).
+      if (response.status === 403 && response.headers.get(ACCOUNT_REQUIRED_HEADER)) {
+        throw new AccountRequiredError(detail);
       }
       const secondFactor = response.headers.get(SECOND_FACTOR_HEADER);
       if (response.status === 401 && secondFactor) {

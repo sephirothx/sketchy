@@ -21,6 +21,7 @@ import {
   GameplayRegion,
 } from "../components/GameRoomRegions";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
@@ -85,6 +86,12 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [colorSuggestionBusy, setColorSuggestionBusy] = useState(false);
   const [restartClock, setRestartClock] = useState(() => Date.now());
   const isMobile = useMediaQuery("(max-width: 900px)");
+  // Which seats belong to friends, asked once for the whole room. Here rather
+  // than in the sidebar roster that first used it: that panel is not mounted
+  // on a narrow layout, where the waiting roster and the guess pips draw the
+  // same players and want the same marks (R-FRIEND-13). This component is the
+  // one thing mounted for as long as the room is.
+  useRoomFriendSeats();
 
   useVisualViewportCssVars();
 
