@@ -1119,6 +1119,19 @@
   white-space: nowrap;
 }
 
+/* A registered name is a link to that profile. Undecorated until it is
+   pointed at, so the row still reads as a list rather than as a paragraph of
+   links; the underline on hover and the focus ring are what say it is one. */
+a.online-player-name {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.online-player-name:hover,
+a.online-player-name:focus-visible {
+  text-decoration: underline;
+}
+
 /* Grey italics is the only cue separating an unclaimed name from a registered
    one, so it is the same treatment the in-room player list uses. */
 .online-player-name.is-guest {

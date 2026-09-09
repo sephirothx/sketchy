@@ -1,10 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
+  addableRecentPlayers,
   friendsSurface,
   friendsSurfaceIsEmpty,
   type FriendEntry,
+  type RecentPlayer,
 } from "../lib/friends";
+import { listRecentPlayers } from "../lib/friendsApi";
+import { FriendButton } from "./FriendButton";
 import { useCloseOverlay } from "../hooks/useOverlayRoute";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useAuthStore } from "../store/authStore";
@@ -51,6 +55,7 @@ export function FriendsOverlay() {
   const accept = useFriendsStore((state) => state.accept);
   const remove = useFriendsStore((state) => state.remove);
   const [confirming, setConfirming] = useState<Confirming>(null);
+  const [recent, setRecent] = useState<RecentPlayer[]>([]);
 
   // Opened from a menu that may have been sitting there a while, and the lists
   // move without this screen being on. Cheap, and the alternative is a stale
@@ -59,9 +64,37 @@ export function FriendsOverlay() {
     void refresh();
   }, [refresh]);
 
+  // Fetched here rather than app-wide: it costs a join over game history, and
+  // nothing outside this screen reads it. A guest is refused, which is the
+  // ordinary case rather than a fault - they simply get no suggestions.
+  useEffect(() => {
+    if (isGuest) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const found = await listRecentPlayers();
+        if (!cancelled) setRecent(found);
+      } catch {
+        // A suggestion list is the one thing here that may simply not
+        // arrive: everything else on the screen is still true without it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest]);
+
   useFocusTrap(dialogRef, { onEscape: close, initialFocusRef: closeButtonRef });
 
   const surface = useMemo(() => friendsSurface(lists), [lists]);
+  // Filtered against the lists rather than by the server: an account missing
+  // from the endpoint's answer would be readable, and "missing because they
+  // declined you" is the fact R-FRIEND-04 refuses to disclose. So the server
+  // returns everyone and the client drops only what it can already see.
+  const suggestions = useMemo(
+    () => addableRecentPlayers(recent, lists),
+    [recent, lists],
+  );
 
   return (
     <div
@@ -108,7 +141,7 @@ export function FriendsOverlay() {
             </p>
           ) : !loaded ? (
             <p className="friends-empty">Loading…</p>
-          ) : friendsSurfaceIsEmpty(surface) ? (
+          ) : friendsSurfaceIsEmpty(surface) && suggestions.length === 0 ? (
             <p className="friends-empty">
               No friends yet. Add somebody from the lobby, or from a game you
               are both in.
@@ -176,6 +209,7 @@ export function FriendsOverlay() {
                   </button>
                 )}
               />
+              <RecentPlayersSection players={suggestions} />
             </>
           )}
         </div>
@@ -257,6 +291,51 @@ function FriendsSection({
               {entry.displayName}
             </span>
             <span className="friends-row-actions">{renderActions(entry)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+
+/** People the viewer finished a game with lately, and has not asked yet.
+
+The answer to "I played with them yesterday and now I cannot find them": the
+lobby only ever knew who was standing in it, and this knows who somebody has
+actually been playing with. Not a search and not a directory (N-06) - every
+row here is somebody the viewer has already met, in a game they were both in.
+
+Last, under the lists it suggests additions to, because it is an offer rather
+than something waiting for an answer. */
+function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
+  if (players.length === 0) return null;
+  return (
+    <section className="friends-section">
+      <h4 className="friends-section-heading">Recently played with</h4>
+      <ul className="friends-list" data-testid="friends-recent">
+        {players.map((player) => (
+          <li key={player.userId} className="friends-row">
+            <Avatar
+              name={player.displayName}
+              nameColor={player.nameColor ?? undefined}
+              avatarUrl={player.avatarUrl}
+              isAnonymous={false}
+              size={32}
+            />
+            <span
+              className="friends-row-name"
+              style={player.nameColor ? { color: player.nameColor } : undefined}
+            >
+              {player.displayName}
+            </span>
+            <span className="friends-row-actions">
+              <FriendButton
+                action="add"
+                userId={player.userId}
+                displayName={player.displayName}
+              />
+            </span>
           </li>
         ))}
       </ul>

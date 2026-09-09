@@ -7,8 +7,11 @@ import {
   friendsSurface,
   friendsSurfaceIsEmpty,
   isFriend,
+  addableRecentPlayers,
   parseFriendInvite,
   parseFriendLists,
+  parseRecentPlayers,
+  profileFriendActionFor,
   withFriendsFirst,
 } from "../src/lib/friends.ts";
 
@@ -188,4 +191,67 @@ test("a surface is empty only when all three groups are", () => {
     ),
     false,
   );
+});
+
+// --------------------------------------------- reaching one specific person
+
+test("a profile offers a friendship only where one can exist", () => {
+  const me = { userId: "me", isAnonymous: false };
+  const them = { userId: "them", isAnonymous: false };
+  assert.equal(profileFriendActionFor(them, NO_FRIENDS, me), "add");
+  // Nobody is their own friend, and a guest on either side cannot hold one.
+  assert.equal(profileFriendActionFor(me, NO_FRIENDS, me), "none");
+  assert.equal(
+    profileFriendActionFor({ userId: "them", isAnonymous: true }, NO_FRIENDS, me),
+    "none",
+  );
+  assert.equal(
+    profileFriendActionFor(them, NO_FRIENDS, { userId: "me", isAnonymous: true }),
+    "none",
+  );
+  // Signed out, and a profile that has not loaded yet.
+  assert.equal(profileFriendActionFor(them, NO_FRIENDS, null), "none");
+  assert.equal(profileFriendActionFor(null, NO_FRIENDS, me), "none");
+});
+
+test("a profile reflects which way an existing request points", () => {
+  const me = { userId: "me", isAnonymous: false };
+  const them = { userId: "them", isAnonymous: false };
+  const of = (key) => profileFriendActionFor(them, { ...NO_FRIENDS, [key]: [entry("them")] }, me);
+  assert.equal(of("friends"), "friends");
+  assert.equal(of("incoming"), "accept");
+  assert.equal(of("outgoing"), "sent");
+});
+
+test("recent players are parsed and a malformed row is dropped, not faked", () => {
+  const parsed = parseRecentPlayers({
+    players: [
+      { userId: "a", displayName: "Ada", nameColor: "#4f9", avatarUrl: null, lastPlayedAt: "2026-09-01T00:00:00Z" },
+      { userId: "", displayName: "Nameless" },
+      { displayName: "No id" },
+      "not an object",
+    ],
+  });
+  assert.deepEqual(parsed.map((row) => row.userId), ["a"]);
+  assert.equal(parsed[0].nameColor, "#4f9");
+  assert.deepEqual(parseRecentPlayers(null), []);
+  assert.deepEqual(parseRecentPlayers({ players: "nope" }), []);
+});
+
+test("a suggestion is dropped once it is on one of the lists, but a refusal is not", () => {
+  const players = [
+    { userId: "friend", displayName: "F", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+    { userId: "asked-me", displayName: "I", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+    { userId: "i-asked", displayName: "O", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+    { userId: "declined-me", displayName: "D", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+  ];
+  const left = addableRecentPlayers(players, {
+    friends: [entry("friend")],
+    incoming: [entry("asked-me")],
+    outgoing: [entry("i-asked")],
+  });
+  // The refusal stays: dropping it would make the absence readable, which is
+  // exactly what R-FRIEND-04 refuses to disclose. Its button quietly does
+  // nothing, which is what a decline is meant to feel like.
+  assert.deepEqual(left.map((row) => row.userId), ["declined-me"]);
 });

@@ -31,6 +31,9 @@ import {
 } from "../lib/profile";
 import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
+import { profileFriendActionFor } from "../lib/friends";
+import { useFriendsStore } from "../store/friendsStore";
+import { FriendButton } from "../components/FriendButton";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -446,6 +449,7 @@ function ProfileView({ userId }: { userId: string }) {
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
+  const friendLists = useFriendsStore((s) => s.lists);
 
   // Which list is current. Bumped when a reload starts and again when it
   // replaces the list, so a page fetched for the previous one - a "load
@@ -556,6 +560,21 @@ function ProfileView({ userId }: { userId: string }) {
                 )}
               </p>
             </div>
+            {/* The one place a person is reachable after the game they were
+                in has ended. The lobby can only offer this to whoever is
+                standing in it right now, and a profile is linked from every
+                game's participant list (R-FRIEND-10). */}
+            <FriendButton
+              action={profileFriendActionFor(
+                { userId, isAnonymous: subject.isAnonymous },
+                friendLists,
+                currentUser
+                  ? { userId: currentUser.id, isAnonymous: currentUser.isAnonymous }
+                  : null,
+              )}
+              userId={userId}
+              displayName={shownName}
+            />
           </header>
 
           {isOwnProfile && subject.isAnonymous && (

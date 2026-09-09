@@ -123,3 +123,11 @@
   gap: 6px;
   flex: 0 0 auto;
 }
+
+/* "Request sent" where a button would be, so the row keeps its shape. */
+.friend-button-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
