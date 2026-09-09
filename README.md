@@ -61,9 +61,11 @@ keyboard that takes half the screen, and one thumb.
   account menu, holds every friendship and every request in either direction whether or
   not the other person is online, and opens over whatever page you are on, so a request
   that arrives while you are drawing can be answered without leaving the game. The
-  lobby's online list is presence and nothing else — it carries no way to ask and
-  no report of a request, because a row there comes and goes as people open and
-  close tabs. A request that arrives offers **Accept** on the notice itself, and
+  lobby's online list carries no *report* of a request in either direction,
+  because a row there comes and goes as people open and close tabs and a request
+  reported on one could be answered only while its sender happened to still be
+  standing there; a row's menu does offer the ask, alongside opening the profile,
+  since an action taken once and finished is not state to be read. A request that arrives offers **Accept** on the notice itself, and
   lingers long enough to reach mid-turn. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
@@ -946,16 +948,19 @@ line retention did not keep cannot be cited, so its author's name is plain text
 and nothing explains why; a player's own lines, and every line seen by a guest,
 are plain for the same reasons the room gives.
 
-A **picture** is reported from where it is actually seen: the flag on a row of
-the lobby's online list, and the one beside the name on a profile. Until now it
-could only be reported from inside a room, which is the one place it is least
-likely to be met - it is on every lobby row and on every profile, and the people
-who object to one are usually not sitting at a table with its owner. There is
-no reason to pick, the control saying what it is for, and nothing to cite: the
-server reads which picture is on the account and records it. Every complaint
-about one account's picture is one incident, whichever screen it was sent from,
-and an account with no picture offers no control and is refused if asked
-anyway. If the picture changes before a moderator looks, the queue says so and
+What an account *carries* - its **name** and its **picture** - is reported from
+where it is actually seen. A row in the lobby's online list opens a menu, the
+way a seat in a room already does: **Open player profile**, **Add as friend**,
+and **Report**. On a profile the same report sits beside the name. Until now
+both could only be reported from inside a room, which is the one place either is
+least likely to be met - they are on every lobby row and on every profile, and
+the people who object are usually not sitting at a table with their owner.
+Nothing is cited, there being nothing said to cite. The dialog offers the
+picture as a reason only when there is one, since a complaint about a picture
+that does not exist is refused; the name is always there, and where it is the
+only reason the dialog says so instead of offering a choice of one. Every
+complaint about one account's name or picture is one incident, whichever screen
+it came from. If the picture changes before a moderator looks, the queue says so and
 shows the one on the account now - the old one is gone, an upload deleting what
 it replaces, so it is never quietly shown in its place. A picture that has been
 *taken down* says that instead, and says who did it: a removal a moderator
@@ -1116,7 +1121,7 @@ sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial. A picture can be
-reported - from the lobby, from a profile, or from a room - a moderator can
+reported - from the lobby's row menu, from a profile, or from a room - a moderator can
 remove it through the report, and removal blocks uploads for a week. The export
 carries the bytes; deletion removes them.
 

@@ -12,6 +12,7 @@ import {
   parseFriendInvite,
   parseFriendLists,
   parseRecentPlayers,
+  lobbyRowMayOfferFriendship,
   profileFriendActionFor,
   waitingRequestCount,
   withFriendsFirst,
@@ -312,4 +313,43 @@ test("a fault is not an answer about who somebody is friends with", () => {
   ]) {
     assert.equal(isNoFriendListRefusal(error), false, String(error));
   }
+});
+
+// ------------------------------------------------- offering from a lobby row
+
+test("a lobby row offers a friendship where one can exist, and not to a friend", () => {
+  const me = { userId: "me", isAnonymous: false };
+  const them = { userId: "them", isAnonymous: false };
+  assert.equal(lobbyRowMayOfferFriendship(them, NO_FRIENDS, me), true);
+  assert.equal(
+    lobbyRowMayOfferFriendship(them, { ...NO_FRIENDS, friends: [{ userId: "them" }] }, me),
+    false,
+  );
+  // Nobody is their own friend, and a guest on either side cannot hold one.
+  assert.equal(lobbyRowMayOfferFriendship(me, NO_FRIENDS, me), false);
+  assert.equal(
+    lobbyRowMayOfferFriendship({ userId: "them", isAnonymous: true }, NO_FRIENDS, me),
+    false,
+  );
+  assert.equal(
+    lobbyRowMayOfferFriendship(them, NO_FRIENDS, { userId: "me", isAnonymous: true }),
+    false,
+  );
+  assert.equal(lobbyRowMayOfferFriendship(them, NO_FRIENDS, null), false);
+});
+
+test("a lobby row says nothing about a request in either direction", () => {
+  const me = { userId: "me", isAnonymous: false };
+  const them = { userId: "them", isAnonymous: false };
+  // R-FRIEND-11 keeps request state off the presence list, so a request
+  // already sent - or one waiting to be answered - leaves the offer exactly
+  // where it was. Pressing it is what the server resolves.
+  assert.equal(
+    lobbyRowMayOfferFriendship(them, { ...NO_FRIENDS, outgoing: [{ userId: "them" }] }, me),
+    true,
+  );
+  assert.equal(
+    lobbyRowMayOfferFriendship(them, { ...NO_FRIENDS, incoming: [{ userId: "them" }] }, me),
+    true,
+  );
 });

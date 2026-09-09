@@ -582,3 +582,41 @@ async def test_a_player_taking_their_own_picture_down_is_not_read_as_a_removal(e
     assert picture["status"] == "removed"
     assert picture["removedByModerator"] is False
     assert picture["removedFromThisIncident"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_name_is_reported_against_the_account_like_a_picture(env):
+    """A name belongs to the account, not to anything it said, so complaints
+    about one meet where complaints about a picture do (R-AVA-06). Unlike a
+    picture it is always there, so it is never refused for want of one, and
+    it names no picture that could have changed."""
+    new_client, factory = env
+    target_http = new_client()
+    target = await register(target_http, "BadName")
+    for name in ("NameRepA", "NameRepB"):
+        reporter_http = new_client()
+        await register(reporter_http, name)
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "inappropriate_name",
+                "details": f"{name} objects to it.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PlayerReport).where(
+                    PlayerReport.reported_user_id == UUID(target["id"])
+                )
+            )
+        ).all()
+    assert len(rows) == 2
+    # One bucket, so the two are one incident.
+    assert {row.scope for row in rows} == {"profile"}
+    assert all(row.room_instance_id is None for row in rows)
+    # No picture was complained about, so none is recorded.
+    assert all(row.reported_avatar_key is None for row in rows)

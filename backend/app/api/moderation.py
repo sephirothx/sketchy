@@ -1267,11 +1267,21 @@ def create_moderation_router(
                 # about something that does not exist is a dead end for
                 # whoever has to read it.
                 about_picture = body.reason == ReportReason.INAPPROPRIATE_AVATAR
+                # What the account itself carries, rather than anything it
+                # said: its name and its picture, which are what the lobby row
+                # and the profile page show and so what they offer to report
+                # (R-AVA-06). Both belong to the account, so both are scoped
+                # to it.
+                about_account = about_picture or (
+                    body.reason == ReportReason.INAPPROPRIATE_NAME
+                )
                 if about_picture and target.avatar_key is None:
                     raise HTTPException(
                         status_code=422,
                         detail="That player has no picture to report.",
                     )
+                # Only a complaint about the picture names one. A name report
+                # has no picture to have changed.
                 reported_avatar_key = target.avatar_key if about_picture else None
                 # Where the complaint happened, and so which incident it
                 # belongs to (#620). Read off the evidence the checks above
@@ -1283,10 +1293,10 @@ def create_moderation_router(
                     else:
                         scope = ReportScope.ROOM
                         room_instance_id = retained_messages[0].room_instance_id
-                elif about_picture:
-                    # A picture belongs to the account, not to a room or a
-                    # line of chat, so every complaint about one meets in the
-                    # same bucket whichever screen it was sent from.
+                elif about_account:
+                    # A name and a picture belong to the account, not to a
+                    # room or a line of chat, so every complaint about one
+                    # meets in the same bucket whichever screen it came from.
                     scope, room_instance_id = ReportScope.PROFILE, None
                 else:
                     # Cited nothing and named nothing: no place to look, so it

@@ -5,7 +5,7 @@ import { AuthDialog } from "../components/AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AppHeader } from "../components/AppHeader";
 import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons";
-import { ReportPictureDialog } from "../components/ReportPictureDialog";
+import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
@@ -601,20 +601,20 @@ function ProfileView({ userId }: { userId: string }) {
               userId={userId}
               displayName={shownName}
             />
-            {/* The other place a picture is actually looked at, and so the
-                other place it has to be reportable from (R-AVA-04). Offered
-                on the same terms as the lobby's: somebody else's account,
-                holding an identity of your own, and a picture there to
-                complain about. */}
+            {/* The other place an account's name and picture are actually
+                looked at, and so the other place they have to be reportable
+                from (R-AVA-06). Offered on the same terms as the lobby's:
+                somebody else's registered account, and an identity of your
+                own to report from (R-MOD-06). No picture is not a reason to
+                withhold it - the name is always there to complain about. */}
             {!isOwnProfile &&
               !currentUser?.isAnonymous &&
-              !subject.isAnonymous &&
-              subject.avatarUrl && (
+              !subject.isAnonymous && (
                 <button
                   type="button"
                   className="btn btn-ghost btn-compact profile-report-picture"
-                  title={`Report ${shownName}'s picture`}
-                  aria-label={`Report ${shownName}'s picture`}
+                  title={`Report ${shownName}`}
+                  aria-label={`Report ${shownName}`}
                   onClick={() => setReportingPicture(true)}
                 >
                   <FlagIcon size={14} />
@@ -622,8 +622,8 @@ function ProfileView({ userId }: { userId: string }) {
               )}
           </header>
 
-          {reportingPicture && subject.avatarUrl && (
-            <ReportPictureDialog
+          {reportingPicture && (
+            <ReportAccountDialog
               userId={userId}
               displayName={shownName}
               avatarUrl={subject.avatarUrl}
