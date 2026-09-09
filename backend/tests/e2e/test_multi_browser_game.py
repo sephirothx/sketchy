@@ -1,8 +1,72 @@
 import pytest
-from playwright.async_api import async_playwright, expect
+from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
+
+# The turn-results screen, recorded by the page on the frame it appears.
+#
+# The results phase is half a second in this suite (`TURN_RESULTS_SECONDS` in
+# scripts/test-e2e.sh), so that screen exists for about that long and is then
+# gone for good. Everything asserted about it below is a claim about what a
+# player was shown at the turn boundary, and asking afterwards can only answer
+# for a screen that has already been replaced: the rows are gone, and so is the
+# guesser's chat input once they become the next drawer. A retrying assertion
+# does not help, because there is nothing left to retry for. That is how this
+# test failed on CI as `.turn-results-score-row` expected 2, got 0, and passed
+# on re-run (#724) - two round trips between spotting the overlay and counting
+# its rows is well inside half a second on a contended runner.
+#
+# So the page records it, and the test reads the recording. The record is taken
+# on the frame after the rows are inserted, which is late enough to include the
+# effects the turn boundary fires - the mobile keyboard dismissal among them -
+# and early enough to be the screen that was actually put in front of a player.
+# In page time that frame is 16ms after the overlay however loaded the machine
+# is; it is only the driver's round trips that stretch.
+#
+# Nothing here is a tolerance. A screen that never arrives still fails, as a
+# wait for a recording that never appears, and the row count is asserted
+# against rather than assumed.
+WATCH_TURN_RESULTS = """
+() => {
+  window.__turnResults = null;
+  const record = () => {
+    const rows = [...document.querySelectorAll('.turn-results-score-row')];
+    if (!rows.length) return false;
+    observer.disconnect();
+    requestAnimationFrame(() => {
+      const settled = [...document.querySelectorAll('.turn-results-score-row')];
+      const input = document.querySelector('.chat-input input');
+      window.__turnResults = {
+        tops: settled.map((row) => Math.round(row.getBoundingClientRect().top)),
+        places: settled.map(
+          (row) => row.querySelector('.turn-results-score-rank')?.textContent ?? ''
+        ),
+        markers: settled.reduce(
+          (total, row) => total + row.querySelectorAll('.rank-up, .rank-down').length,
+          0
+        ),
+        chatInputFocused: Boolean(input) && document.activeElement === input,
+        guessFocused: Boolean(document.querySelector('.game-room.guess-focused')),
+      };
+    });
+    return true;
+  };
+  const observer = new MutationObserver(record);
+  observer.observe(document.body, { childList: true, subtree: true });
+  record();
+}
+"""
+
+
+async def turn_results_screen(page):
+    """What `page` was showing on the frame its turn-results rows appeared.
+
+    `WATCH_TURN_RESULTS` must have been evaluated on the page before the turn
+    ended, and each evaluation of it covers exactly one results screen.
+    """
+    await page.wait_for_function("() => window.__turnResults")
+    return await page.evaluate("() => window.__turnResults")
 
 @pytest.mark.asyncio
 async def test_multi_browser_gameplay_scenario(assert_input_contract):
@@ -387,28 +451,19 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await guess_input.focus()
             assert await guess_input.evaluate("input => document.activeElement === input")
             prompt = await drawer_page.locator('.prompt-reveal').inner_text()
+            await guesser_page.evaluate(WATCH_TURN_RESULTS)
             await guess_input.fill(prompt)
             await guess_input.press('Enter')
-            await guesser_page.wait_for_selector('[data-testid="turn-results-overlay"]')
-            assert await guess_input.evaluate("input => document.activeElement === input")
-            assert not await guesser_page.query_selector('.game-room.guess-focused')
+            results = await turn_results_screen(guesser_page)
+            assert results["chatInputFocused"]
+            assert not results["guessFocused"]
 
             # This is the first turn, so every player came into it on zero and
             # therefore ranked first. The rows are offset to animate overtakes,
             # and offsetting them by a difference of ranks rather than of row
             # positions once stacked the whole list onto one line.
-            # Waited for by the thing being measured, not by its container:
-            # the overlay is present a frame before its rows are, and reading
-            # positions out of an empty list fails as "no rows" on a loaded
-            # machine while passing everywhere else (R-ENG-09).
-            await expect(
-                guesser_page.locator(".turn-results-score-row")
-            ).to_have_count(2)
-            tops = await guesser_page.evaluate(
-                """() => [...document.querySelectorAll('.turn-results-score-row')]
-                     .map(row => Math.round(row.getBoundingClientRect().top))"""
-            )
-            assert len(tops) >= 2, f"expected a row per player, got {tops}"
+            tops = results["tops"]
+            assert len(tops) == 2, f"expected a row per player, got {tops}"
             assert tops == sorted(tops) and len(set(tops)) == len(tops), (
                 f"turn-results rows overlap or are out of order: {tops}"
             )
@@ -417,15 +472,11 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # is awarded the sum of the guessers' scores, which here is the one
             # guesser's. Both are therefore first, and neither may be shown as
             # second - and neither can have lost a place to get there.
-            places = await guesser_page.locator(
-                ".turn-results-score-rank"
-            ).all_inner_texts()
-            assert places == ["#1", "#1"], f"tied players were not both first: {places}"
-            markers = await guesser_page.locator(
-                ".turn-results-score-row .rank-up, .turn-results-score-row .rank-down"
-            ).count()
-            assert markers == 0, (
-                f"{markers} rows report a place change on the first turn"
+            assert results["places"] == ["#1", "#1"], (
+                f"tied players were not both first: {results['places']}"
+            )
+            assert results["markers"] == 0, (
+                f"{results['markers']} rows report a place change on the first turn"
             )
 
             # Step 9: The next turn swaps roles. On mobile the turn boundary must
@@ -444,27 +495,25 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await mobile_input.focus()
             await next_guesser.wait_for_selector('.game-room.guess-focused')
             next_word = await next_drawer.locator('.prompt-reveal').inner_text()
+            await next_guesser.evaluate(WATCH_TURN_RESULTS)
             await mobile_input.fill(next_word)
             await mobile_input.press('Enter')
-            await next_guesser.wait_for_selector('[data-testid="turn-results-overlay"]')
 
             # Second turn: there is a previous order now, so the rows start in
             # it and slide. Only distinctness is asserted, not order - a row
             # that is about to be overtaken genuinely starts below its final
             # seat, and the slide itself never runs here because the suite
-            # gives the whole results phase half a second.
-            tops = await next_guesser.evaluate(
-                """() => [...document.querySelectorAll('.turn-results-score-row')]
-                     .map(row => Math.round(row.getBoundingClientRect().top))"""
-            )
-            assert len(set(tops)) == len(tops), (
+            # gives the whole results phase half a second. The row count is
+            # asserted with it: distinctness alone is true of no rows at all,
+            # so a screen this test never saw used to pass here.
+            results = await turn_results_screen(next_guesser)
+            tops = results["tops"]
+            assert len(tops) == 2 and len(set(tops)) == len(tops), (
                 f"turn-results rows share a line while rearranging: {tops}"
             )
 
-            assert not await mobile_input.evaluate(
-                "input => document.activeElement === input"
-            )
-            assert not await next_guesser.query_selector('.game-room.guess-focused')
+            assert not results["chatInputFocused"]
+            assert not results["guessFocused"]
 
         finally:
             await context1.close()
