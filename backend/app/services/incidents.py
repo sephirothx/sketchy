@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 from uuid import UUID
 
 from app.db.models import PlayerReport, PlayerReportMessageEvidence
@@ -46,7 +47,23 @@ class IncidentKey:
     standalone: UUID | None = None
 
 
-def incident_key(report: PlayerReport) -> IncidentKey:
+class Groupable(Protocol):
+    """The columns an incident is grouped by, and nothing else.
+
+    Stated as a protocol so the queue can group from a light row - five
+    columns, no evidence - and load the reports only for the page it is
+    actually going to render. The grouping rule then has one implementation
+    whether it is handed a row or a report.
+    """
+
+    id: UUID
+    reported_user_id: UUID | None
+    scope: str
+    room_instance_id: UUID | None
+    created_at: datetime
+
+
+def incident_key(report: Groupable) -> IncidentKey:
     if report.reported_user_id is None or report.scope == ReportScope.UNSCOPED.value:
         return IncidentKey(None, report.scope, None, report.id)
     return IncidentKey(report.reported_user_id, report.scope, report.room_instance_id)
@@ -160,7 +177,7 @@ class Incident:
         )
 
 
-def group_into_incidents(reports: list[PlayerReport]) -> list[Incident]:
+def group_into_incidents(reports: list) -> list[Incident]:
     """Reports as incidents, each oldest-first, ordered by when it opened.
 
     The queue stays oldest-first on the first report of each incident. Volume

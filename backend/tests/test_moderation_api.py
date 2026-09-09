@@ -2534,3 +2534,88 @@ async def test_a_permanent_suspension_carries_no_end_date(env):
     # Issued without a report, so there is nothing of theirs to show back.
     assert notice["messages"] == []
     assert notice["drawings"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_queue_loads_evidence_only_for_the_page_it_renders(env):
+    """Grouping needs every report at once; rendering needs one page of them.
+
+    So the page is planned from five light columns and the evidence is loaded
+    for the reports on it and no others. Reading the whole queue with its
+    evidence would pull every pinned line of every waiting report to show a
+    fraction of them - R-PLAT-14's rule, on rows rather than blobs (#620).
+    """
+    from sqlalchemy import event
+
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "PageLoadMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    now = datetime.now(timezone.utc)
+    on_page_line = None
+    for index in range(4):
+        target_http, reporter_http = new_client(), new_client()
+        target = await register(target_http, f"PlTgt{index}")
+        reporter = await register(reporter_http, f"PlRep{index}")
+        line = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RoomMessage(
+                        id=line,
+                        room_instance_id=generate_uuid(),
+                        sender_user_id=UUID(target["id"]),
+                        sender_player_id=generate_uuid(),
+                        sender_display_name_snapshot=f"PlTgt{index}",
+                        sender_is_anonymous_snapshot=False,
+                        is_spectator=False,
+                        message_kind="chat",
+                        near_miss_kind=None,
+                        audience="room",
+                        audience_user_ids=[target["id"], reporter["id"]],
+                        text=f"line for incident {index}",
+                        created_at=now + timedelta(minutes=index),
+                        expires_at=now + timedelta(days=30),
+                    )
+                )
+        assert (
+            await _room_report(reporter_http, target["id"], line, "Look.")
+        ).status_code == 201
+        if index == 0:
+            on_page_line = f"line for incident {index}"
+
+    engine = factory.kw["bind"]
+    seen: list[str] = []
+
+    def before(conn, cursor, statement, parameters, context, executemany):
+        seen.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", before)
+    try:
+        page = await moderator_http.get(
+            "/api/moderation/reports",
+            params={"status": "pending", "limit": 1, "offset": 0},
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", before)
+
+    assert page.status_code == 200, page.text
+    body = page.json()
+    assert body["total"] == 4 and body["hasMore"] is True
+    [incident] = body["incidents"]
+    assert [line["text"] for line in incident["evidence"]] == [on_page_line]
+
+    evidence_reads = [
+        statement
+        for statement in seen
+        if statement.lstrip().upper().startswith("SELECT")
+        and "player_report_message_evidence" in statement
+    ]
+    assert evidence_reads, "the evidence read must be visible to the capture"
+    # One report on the page, so one id bound into the evidence load - not
+    # the four the grouping had to consider.
+    assert all(
+        statement.count("?") + statement.count("$") <= 2
+        for statement in evidence_reads
+    ), evidence_reads

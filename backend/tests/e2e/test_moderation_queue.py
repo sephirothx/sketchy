@@ -107,7 +107,11 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await set_role("QueueModerator", UserRole.MODERATOR.value)
             await moderator_page.goto(f"{BASE_URL}/moderation")
 
-            case = moderator_page.locator(".mod-queue-item", has_text=DETAILS)
+            # The queue shows incidents now: an entry carries the player it
+            # is about and the reasons given, never a report's own words. So
+            # it is found by this test's own player rather than by a reason
+            # several of the suite's tests share.
+            case = moderator_page.locator(".mod-queue-item", has_text=names[drawer])
             await case.wait_for()
             await case.click()
             figure = moderator_page.locator('[data-testid="mod-drawing"]')
@@ -132,7 +136,7 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await case.wait_for(state="detached")
 
             await moderator_page.get_by_role("button", name="Closed").click()
-            closed = moderator_page.locator(".mod-queue-item", has_text=DETAILS)
+            closed = moderator_page.locator(".mod-queue-item", has_text=names[drawer])
             await closed.wait_for()
             await closed.click()
             await moderator_page.locator('[data-testid="mod-drawing"] canvas').wait_for()

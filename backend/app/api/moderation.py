@@ -1115,30 +1115,64 @@ def create_moderation_router(
         """The queue as incidents: reports of one thing, read once (#620).
 
         `limit` and `offset` page **incidents**, not reports, because an
-        incident is what a moderator now reads and decides. The reports
-        themselves are read whole first, which R-MOD-15 permits of the open
-        queue and which grouping requires: a page taken before grouping would
-        cut an incident in half and show a moderator four of five complaints
-        with no way to tell. `MAX_OPEN_QUEUE_REPORTS` is a backstop rather
-        than a page - if the open queue ever grew past it, the oldest
-        incidents are still the ones this answers with, which is the order the
-        queue is worked in.
+        incident is what a moderator now reads and decides. Grouping needs
+        every report in hand at once - a page taken before it would cut an
+        incident in half and show a moderator four of five complaints with no
+        way to tell - so the page is planned from five light columns and only
+        then are the reports on it loaded with their evidence. Reading the
+        whole queue *with* its evidence to render fifty incidents would pull
+        every pinned line of every waiting report to show a fraction of them
+        (R-PLAT-14's rule, on rows rather than blobs).
+
+        `MAX_OPEN_QUEUE_REPORTS` is a backstop rather than a page: if the open
+        queue ever grew past it, the oldest incidents are still the ones this
+        answers with, which is the order the queue is worked in.
         """
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PlayerReport).options(*_REPORT_PAYLOAD_LOADS)
+            plan = select(
+                PlayerReport.id,
+                PlayerReport.reported_user_id,
+                PlayerReport.scope,
+                PlayerReport.room_instance_id,
+                PlayerReport.created_at,
+            )
             if status is not None:
-                statement = statement.where(PlayerReport.status == status.value)
-            reports = (
-                await session.scalars(
-                    statement.order_by(
+                plan = plan.where(PlayerReport.status == status.value)
+            keys = (
+                await session.execute(
+                    plan.order_by(
                         PlayerReport.created_at.asc(), PlayerReport.id.asc()
                     ).limit(MAX_OPEN_QUEUE_REPORTS)
                 )
             ).all()
-            incidents = group_into_incidents(list(reports))
-            page = incidents[offset : offset + limit]
-            on_page = [report for incident in page for report in incident.reports]
+            planned = group_into_incidents(list(keys))
+            page_plan = planned[offset : offset + limit]
+            wanted = [
+                report_id
+                for incident in page_plan
+                for report_id in incident.report_ids
+            ]
+            reports = (
+                (
+                    await session.scalars(
+                        select(PlayerReport)
+                        .where(PlayerReport.id.in_(wanted))
+                        .options(*_REPORT_PAYLOAD_LOADS)
+                    )
+                ).all()
+                if wanted
+                else []
+            )
+            by_id = {report.id: report for report in reports}
+            page = [
+                Incident(
+                    incident.key,
+                    tuple(by_id[report_id] for report_id in incident.report_ids),
+                )
+                for incident in page_plan
+            ]
+            on_page = list(reports)
             player_context = await _reported_player_context(session, on_page)
             decisions = await _decisions(session, on_page)
             return {
@@ -1146,8 +1180,8 @@ def create_moderation_router(
                     _incident_payload(incident, player_context, decisions)
                     for incident in page
                 ],
-                "total": len(incidents),
-                "hasMore": len(incidents) > offset + limit,
+                "total": len(planned),
+                "hasMore": len(planned) > offset + limit,
             }
 
     @router.post("/moderation/reports/{report_id}/remove-avatar")
