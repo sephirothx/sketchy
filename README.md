@@ -1045,6 +1045,13 @@ suspension. That is what a warning is *for* — the step between nothing and a
 suspension — and a notice that does not say so informs without deterring. It
 names no ladder, because nothing enforces one.
 
+Whoever sent a report is told it was **reviewed** — a count of their own
+reports and nothing else, once, as a notice rather than an interruption.
+Reporting into silence is what teaches people not to report; what was decided
+is the reported player's business, and an outcome told back to whoever asked
+about them would turn a report into a way of finding things out about
+somebody.
+
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
 game that stops and a page that starts refusing things. A player mid-game hears

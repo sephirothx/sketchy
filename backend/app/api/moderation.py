@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -2330,6 +2330,53 @@ def create_moderation_router(
         if on_user_warned is not None:
             await on_user_warned(str(body.user_id))
         return payload
+
+    @router.get("/reports/reviewed")
+    async def reports_reviewed(request: Request):
+        """How many of the caller's own reports have been decided since they
+        were last told.
+
+        A count and nothing else. What was decided is the reported player's
+        business, and an outcome handed back to whoever asked about them would
+        make a report a way of learning things about somebody (R-MOD-20). A
+        number about your own reports discloses nothing about anyone else.
+        """
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        async with session_factory() as session:
+            count = await session.scalar(
+                select(func.count(PlayerReport.id)).where(
+                    PlayerReport.reporter_user_id == UUID(user_id),
+                    PlayerReport.status != ReportStatus.PENDING.value,
+                    PlayerReport.reporter_notified_at.is_(None),
+                )
+            )
+        return {"count": int(count or 0)}
+
+    @router.post("/reports/reviewed/acknowledge")
+    async def acknowledge_reports_reviewed(request: Request):
+        """Stamp the caller's decided reports as told, so it is said once.
+
+        All of them together: the message is a count rather than a list, so
+        there is nothing to acknowledge one at a time.
+        """
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        now = datetime.now(timezone.utc)
+        async with session_factory() as session:
+            async with session.begin():
+                stamped = await session.execute(
+                    update(PlayerReport)
+                    .where(
+                        PlayerReport.reporter_user_id == UUID(user_id),
+                        PlayerReport.status != ReportStatus.PENDING.value,
+                        PlayerReport.reporter_notified_at.is_(None),
+                    )
+                    .values(reporter_notified_at=now)
+                )
+        return {"ok": True, "acknowledged": stamped.rowcount or 0}
 
     @router.get("/warnings/pending")
     async def pending_warning(request: Request):

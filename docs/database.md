@@ -732,6 +732,12 @@ account and the entry reads *Deleted player* while standing exactly as it was.
 Reasons: `harassment`, `offensive_drawing`, `inappropriate_name`, `cheating`, `spam`.
 `ck_player_reports_not_self` forbids self-reports.
 
+`reporter_notified_at` records that the reporter was told their report had been
+looked at, which is what stops it being said twice. It records only the telling —
+never what was decided, which is the reported player's business (R-MOD-20). The
+partial index `ix_player_reports_reporter_unannounced` answers the one question
+asked on every page load, over only the rows that can still answer yes.
+
 **Where the complaint happened**, so reports of one incident are read and decided
 together (#620). `scope` and `room_instance_id` are one fact in two columns and
 `ck_player_reports_scope_instance` keeps them from disagreeing: a room report names the
