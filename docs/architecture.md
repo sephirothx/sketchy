@@ -1026,6 +1026,17 @@ the whole pending set in id order, and re-checks the named report inside that se
 so the unlocked read is never what a decision acts on, and the loser of the race gets
 the 409 a slow retry would.
 
+The closed stream groups on the decision instead. `decision_group_id` is what makes
+that possible and is why the column exists: keying closed history on the open incident
+key would merge two incidents in one room instance decided a week apart, and the
+decision is what actually closed each of them. Because the id is a UUIDv7 minted when
+the decision is taken, ordering by it *is* ordering by when it was decided, so
+`list_closed_cases` takes its page from an ordered walk of
+`ix_player_reports_decision_group` (and its content twin) that stops as soon as it has
+enough groups — rather than aggregating every report ever decided to find the newest.
+The page therefore counts decisions, not rows, which is also what stops a pile-on
+swallowing one.
+
 What the *player* is then shown widens with it. A warning or suspension still names
 one report (`source_report_id`), but `cited_notice_messages` reads the cited lines of
 every report sharing that report's `decision_group_id`. Widening cannot leak: cited

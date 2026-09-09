@@ -21,7 +21,11 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.db.models import PlayerReport, PlayerReportMessageEvidence
+from app.db.models import (
+    PlayerReport,
+    PlayerReportMessageEvidence,
+    PromptContentReport,
+)
 from app.domain_values import ReportScope
 
 
@@ -194,3 +198,88 @@ def group_into_incidents(reports: list) -> list[Incident]:
     ]
     incidents.sort(key=lambda incident: (incident.opened_at, incident.id))
     return incidents
+
+
+@dataclass(frozen=True)
+class ContentIncidentKey:
+    """What makes two prompt-content reports the same incident.
+
+    The target, and nothing else. A list or an exact prompt version is a
+    durable thing rather than a moment in a room, so unlike a player report
+    there is no place or time to bound it with - and no column to add: the
+    report already names what it is about.
+    """
+
+    target_type: str
+    target_id: str
+
+
+def content_incident_key(report: PromptContentReport) -> ContentIncidentKey:
+    target = report.prompt_version_id or report.prompt_list_id
+    return ContentIncidentKey(report.target_type, str(target))
+
+
+@dataclass(frozen=True)
+class ContentIncident:
+    """Reports about one piece of prompt content, oldest first."""
+
+    key: ContentIncidentKey
+    reports: tuple[PromptContentReport, ...]
+
+    @property
+    def id(self) -> UUID:
+        return self.reports[0].id
+
+    @property
+    def report_ids(self) -> tuple[UUID, ...]:
+        return tuple(report.id for report in self.reports)
+
+    @property
+    def opened_at(self) -> datetime:
+        return self.reports[0].created_at
+
+    @property
+    def latest_at(self) -> datetime:
+        return self.reports[-1].created_at
+
+    @property
+    def reasons(self) -> tuple[str, ...]:
+        seen: dict[str, None] = {}
+        for report in self.reports:
+            seen.setdefault(report.reason, None)
+        return tuple(seen)
+
+
+def group_into_content_incidents(
+    reports: list[PromptContentReport],
+) -> list[ContentIncident]:
+    """Content reports as incidents, oldest first. `group_into_incidents`'
+    rule, on the key content reports already carry."""
+    grouped: dict[ContentIncidentKey, list[PromptContentReport]] = {}
+    for report in reports:
+        grouped.setdefault(content_incident_key(report), []).append(report)
+    incidents = [
+        ContentIncident(
+            key, tuple(sorted(rows, key=lambda row: (row.created_at, row.id)))
+        )
+        for key, rows in grouped.items()
+    ]
+    incidents.sort(key=lambda incident: (incident.opened_at, incident.id))
+    return incidents
+
+
+def group_by_decision(reports: list) -> dict[UUID, list]:
+    """Decided reports by the moderator action that decided them.
+
+    The closed stream groups on the **decision**, never on the key an open
+    incident was grouped by: two incidents in one room instance decided a
+    week apart are two entries, and the scope key alone would merge them into
+    one. `decision_group_id` is the fact that keeps them apart, and it is
+    written by whatever decided them rather than derived afterwards.
+    """
+    grouped: dict[UUID, list] = {}
+    for report in reports:
+        grouped.setdefault(report.decision_group_id, []).append(report)
+    for rows in grouped.values():
+        rows.sort(key=lambda row: (row.created_at, row.id))
+    return grouped

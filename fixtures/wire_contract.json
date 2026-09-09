@@ -1393,6 +1393,24 @@
    "revokedByUserId",
    "userId"
   ],
+  "api.moderation:_content_incident_payload": [
+   "createdAt",
+   "decisionGroupId",
+   "latestReportedAt",
+   "listName",
+   "moderationState",
+   "openedAt",
+   "promptListId",
+   "promptVersionId",
+   "reportedOwnerUserId",
+   "reporterCount",
+   "reporterUserId",
+   "resolutionNote",
+   "reviewedAt",
+   "reviewedBy",
+   "reviewedByUserId",
+   "targetType"
+  ],
   "api.moderation:_evidence_line_payload": [
    "citedBy",
    "copiedAt",
@@ -1428,36 +1446,6 @@
    "reporterUserId",
    "turnId"
   ],
-  "api.moderation:_prompt_content_report_payload": [
-   "createdAt",
-   "listName",
-   "moderationState",
-   "promptListId",
-   "promptVersionId",
-   "reportedOwnerUserId",
-   "reporterUserId",
-   "resolutionNote",
-   "reviewedAt",
-   "reviewedBy",
-   "reviewedByUserId",
-   "targetType",
-   "updatedAt"
-  ],
-  "api.moderation:_report_payload": [
-   "contextSnapshot",
-   "createdAt",
-   "gameId",
-   "messageEvidence",
-   "reportedPlayer",
-   "reportedUserId",
-   "reporterUserId",
-   "resolutionNote",
-   "reviewedAt",
-   "reviewedBy",
-   "reviewedByUserId",
-   "turnId",
-   "updatedAt"
-  ],
   "api.moderation:_reported_player_context": [
    "activeSuspension",
    "avatarUrl",
@@ -1480,6 +1468,9 @@
    "userId"
   ],
   "api.moderation:list_closed_cases": [
+   "hasMore"
+  ],
+  "api.moderation:list_prompt_content_reports": [
    "hasMore"
   ],
   "api.moderation:list_reports": [
@@ -2491,7 +2482,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 18,
+ "protocolVersion": 19,
  "refusal": {
   "codes": [
    "invalid_payload",
