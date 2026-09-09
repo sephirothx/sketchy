@@ -104,11 +104,33 @@ export interface IncidentReport {
   createdAt: string;
   /** The canvas as this reporter saw it, if they attached one. */
   drawing: PlayerReportDrawing | null;
-  /** This complaint was about a picture the account no longer carries. The
-      old one is gone - an upload deletes the one it replaces - so this says
-      the moderator is looking at a different picture, never that the old one
-      can be shown. */
-  pictureChangedSince: boolean;
+  /** What became of the picture this complaint was about; null when it was
+      not about one. The reported picture is never recoverable - an upload
+      deletes the one it replaces - so this says what is there instead,
+      never that the old one can be shown. */
+  pictureStatus: PictureStatus | null;
+}
+
+/** `same` - still the picture that was complained about. `replaced` - a
+different one is there now. `removed` - there is none, which is a different
+thing from a different one and reads as the opposite of it if they are
+conflated. */
+export type PictureStatus = "same" | "replaced" | "removed";
+
+/** What became of the picture an incident is about, said once for the case.
+
+`removed` is the state worth separating: a picture a moderator has already
+taken down would otherwise read as "a different picture now", which is the
+opposite of what was done to it - and the moderator reading that is often the
+one who did it, moments earlier, from this very case. */
+export interface IncidentPicture {
+  status: PictureStatus;
+  /** Whether somebody carried the removal out, rather than the player taking
+      their own picture down - which is not a punishment and sets no block. */
+  removedByModerator: boolean;
+  removedAt: string | null;
+  /** Removed through one of this incident's own reports. */
+  removedFromThisIncident: boolean;
 }
 
 /** What was last decided about this same incident, when there has been one.
@@ -168,10 +190,10 @@ export interface ModerationIncident {
   reviewedAt: string | null;
   /** Which moderator action decided it; null while it waits. */
   decisionGroupId: string | null;
-  /** Any complaint here was about a picture that has since been replaced or
-      taken down. The decision is still about the picture the account carries
+  /** What became of the picture this incident is about; null when it is not
+      about one. The decision is still about the picture the account carries
       now, which is the one Remove picture acts on. */
-  pictureChangedSince: boolean;
+  picture: IncidentPicture | null;
   /** Null on a first complaint, which is most of them. */
   priorDecision: PriorDecision | null;
 }

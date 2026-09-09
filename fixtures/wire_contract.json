@@ -1439,7 +1439,7 @@
    "gameId",
    "latestReportedAt",
    "openedAt",
-   "pictureChangedSince",
+   "pictureStatus",
    "priorDecision",
    "reportId",
    "reportedPlayer",
@@ -1447,6 +1447,11 @@
    "reporterCount",
    "reporterUserId",
    "turnId"
+  ],
+  "api.moderation:_incident_picture": [
+   "removedAt",
+   "removedByModerator",
+   "removedFromThisIncident"
   ],
   "api.moderation:_prior_decisions": [
    "decidedAt",

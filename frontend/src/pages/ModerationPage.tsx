@@ -23,6 +23,7 @@ import {
   type ContentIncident,
   type IncidentEvidence,
   type PlayerReportDrawing,
+  type IncidentPicture,
   type ModerationIncident,
   type PriorDecision,
   type ReportOutcome,
@@ -213,8 +214,11 @@ function ReportersPanel({
               <time dateTime={report.createdAt}>
                 {formatWhen(report.createdAt, dateTime)}
               </time>
-              {report.pictureChangedSince && (
+              {report.pictureStatus === "replaced" && (
                 <Chip kind="warning">Different picture now</Chip>
+              )}
+              {report.pictureStatus === "removed" && (
+                <Chip kind="neutral">Picture gone</Chip>
               )}
             </div>
             <p className="mod-case-details">
@@ -225,6 +229,52 @@ function ReportersPanel({
         ))}
       </ol>
     </>
+  );
+}
+
+/** What became of the picture the case is about, when it is about one.
+
+Only says anything when the picture is no longer the one complained about,
+because "still the reported picture" is what a moderator assumes and does not
+need telling. The removal case is the one this exists for: a picture already
+taken down read as merely "a different picture now", which is the opposite of
+what happened to it - and most often the moderator reading it is the one who
+removed it, from this very case, a minute earlier. */
+function PictureBanner({
+  picture,
+  dateTime,
+}: {
+  picture: IncidentPicture | null;
+  dateTime: (date: Date) => string;
+}) {
+  if (!picture || picture.status === "same") return null;
+  const when = picture.removedAt
+    ? formatWhen(picture.removedAt, dateTime)
+    : null;
+  return (
+    <aside className="mod-picture-note" data-testid="mod-picture-note">
+      {picture.status === "removed" ? (
+        <p>
+          <strong>
+            {picture.removedByModerator
+              ? picture.removedFromThisIncident
+                ? "Already removed from this case"
+                : "Already removed by a moderator"
+              : "The player took this picture down themselves"}
+          </strong>
+          {when ? ` — ${when}.` : "."}{" "}
+          {picture.removedByModerator
+            ? "The account has no picture, and cannot upload one for a week."
+            : "The account has no picture. Taking your own down is not a punishment and sets no block."}
+        </p>
+      ) : (
+        <p>
+          <strong>This is a different picture.</strong> The one complained
+          about is gone — an upload deletes what it replaces — so what is shown
+          is the one on the account now, and the one a removal would act on.
+        </p>
+      )}
+    </aside>
   );
 }
 
@@ -699,6 +749,11 @@ export function ModerationPage() {
                   ))}
                 </div>
               </div>
+
+              <PictureBanner
+                picture={playerCase.picture}
+                dateTime={dateTime}
+              />
 
               <PriorDecisionBanner
                 prior={playerCase.priorDecision}

@@ -1635,3 +1635,22 @@
   margin: 0;
   padding-left: 10px;
 }
+
+/* What became of the picture the case is about. Quieter than the prior
+   decision beside it: that changes whether to decide at all, this changes
+   what "the picture" refers to while deciding. Neutral rather than amber,
+   because a picture already removed is usually the moderator's own work
+   rather than something to be warned about. */
+.mod-picture-note {
+  background: var(--surface-sunk, color-mix(in srgb, var(--ink) 4%, transparent));
+  border: 1px solid var(--rule, color-mix(in srgb, var(--ink) 12%, transparent));
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  padding: 10px 13px;
+}
+
+.mod-picture-note p {
+  color: var(--ink);
+  font-size: 13px;
+  margin: 0;
+}

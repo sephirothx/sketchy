@@ -1024,7 +1024,12 @@ so the ordering rule (oldest first, never by how many complained) and the merge 
 Two things a moderator needs *before* deciding are read at the same time as the queue.
 A report about a picture recorded which picture, and an upload deletes the one it
 replaces, so the queue compares that key against the live one and says the picture has
-changed rather than showing a different one in its place (R-AVA-07). And because a
+changed rather than showing a different one in its place. A picture that is *gone* is
+told apart from a different one, and a removal somebody carried out from a player taking
+their own down — read from the `avatar.removed` ledger entry, which is the only thing
+that knows which — because "a different picture now" said of one a moderator has already
+removed is the opposite of what happened, and the reviewer reading it is usually the one
+who did it (R-AVA-07). And because a
 decided incident is closed for good, a repeat complaint opens a new one — correct, and
 on its own indistinguishable from a first — so a pending incident carries the last
 decision taken about its own key, note included (R-MOD-18). Keyed on the incident, not

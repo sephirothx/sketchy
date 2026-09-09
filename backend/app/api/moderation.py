@@ -566,16 +566,122 @@ def _evidence_line_payload(
     }
 
 
-def _picture_changed(report: PlayerReport, live_avatar_key: str | None) -> bool:
-    """Whether the picture a complaint was about is still the one on record.
+def _accounts_with_no_picture(
+    reports: list[PlayerReport], player_context: dict[UUID, dict]
+) -> set[UUID]:
+    """Accounts on this page complained about over a picture that is now gone.
 
-    Only ever true for a report that named a picture: everything else has no
-    picture to have changed, and would otherwise read as changed the moment
-    the account uploaded one.
+    Narrow on purpose: the ledger is only read for the accounts where "gone"
+    is actually ambiguous, so a queue of ordinary reports asks nothing extra
+    of it.
+    """
+    return {
+        report.reported_user_id
+        for report in reports
+        if report.reported_avatar_key is not None
+        and report.reported_user_id is not None
+        and player_context.get(report.reported_user_id, {}).get("_avatarKey") is None
+    }
+
+
+async def _avatar_removals(
+    session: AsyncSession, user_ids: set[UUID]
+) -> dict[UUID, dict]:
+    """The last time each account's picture was taken down, and by whom.
+
+    Read from the ledger rather than guessed from the account: a null
+    `avatar_key` says the picture is gone and nothing else, and "gone" covers
+    two different things a moderator must not have to tell apart by eye - a
+    removal somebody carried out, very possibly their own a minute ago, and a
+    player quietly taking their own picture down, which is not a punishment
+    and sets no block (R-AVA-04).
+
+    `avatar_upload_blocked_until` is not used for this even though a
+    moderator's removal sets it, because the block is applied even when there
+    was nothing to remove; it says a removal happened, not that this picture
+    was what it removed.
+    """
+    if not user_ids:
+        return {}
+    events = (
+        await session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.event_type == "avatar.removed",
+                AuditEvent.target_user_id.in_(user_ids),
+            )
+            .order_by(AuditEvent.created_at.asc())
+        )
+    ).all()
+    # Assigned in order, so the newest removal per account is the one left.
+    return {
+        event.target_user_id: {
+            # Snake_case deliberately: this dict is internal, and a camelCase
+            # key here would read as a wire name to the contract check.
+            "by_moderator": bool((event.details or {}).get("by_moderator")),
+            "at": event.created_at.isoformat() if event.created_at else None,
+            "report_id": (event.details or {}).get("report_id"),
+        }
+        for event in events
+        if event.target_user_id is not None
+    }
+
+
+def _picture_status(report: PlayerReport, live_avatar_key: str | None) -> str | None:
+    """What became of the picture one complaint was about.
+
+    `None` for a report that named no picture: it has none to have changed,
+    and would otherwise read as changed the moment the account uploaded one.
     """
     if report.reported_avatar_key is None:
-        return False
-    return report.reported_avatar_key != live_avatar_key
+        return None
+    if live_avatar_key is None:
+        return "removed"
+    if report.reported_avatar_key == live_avatar_key:
+        return "same"
+    return "replaced"
+
+
+def _incident_picture(
+    incident: Incident, live_avatar_key: str | None, removal: dict | None
+) -> dict | None:
+    """What became of the picture this incident is about, said once.
+
+    Null when no complaint here named a picture. `removed` is the state that
+    needed telling apart: a picture that is simply gone read as "a different
+    picture now", which is the opposite of what a moderator had just done to
+    it. So the removal says whether somebody carried it out, when, and
+    whether it was from this case - which is the one they are most likely to
+    be looking at when they wonder.
+    """
+    named = [
+        status
+        for status in (
+            _picture_status(report, live_avatar_key) for report in incident.reports
+        )
+        if status is not None
+    ]
+    if not named:
+        return None
+    if live_avatar_key is None:
+        detail = removal or {}
+        report_id = detail.get("report_id")
+        return {
+            "status": "removed",
+            "removedByModerator": detail.get("by_moderator", False),
+            "removedAt": detail.get("at"),
+            "removedFromThisIncident": report_id is not None
+            and report_id in {str(report.id) for report in incident.reports},
+        }
+    # Several reporters can name several pictures - one is swapped while the
+    # complaints are still arriving - so the incident is only unchanged when
+    # every complaint that named one named the one still there.
+    return {
+        "status": "same" if all(status == "same" for status in named) else "replaced",
+        "removedByModerator": False,
+        "removedAt": None,
+        "removedFromThisIncident": False,
+    }
 
 
 def _incident_payload(
@@ -583,6 +689,7 @@ def _incident_payload(
     player_context: dict[UUID, dict] | None = None,
     decisions: dict[UUID, _Decision] | None = None,
     prior: dict[UUID, dict] | None = None,
+    removals: dict[UUID, dict] | None = None,
 ) -> dict:
     """One incident as a queue entry: who it is about, who complained, and
     the whole of what they complained about, read once.
@@ -608,13 +715,18 @@ def _incident_payload(
     return {
         "id": str(incident.id),
         "reportedPlayer": shown_context,
-        # True when any complaint here was about a picture that has since
-        # been replaced or taken down. The decision is still about the
-        # account's picture as it stands now, which is the one Remove picture
-        # acts on - the flag exists so that is a choice rather than a
-        # substitution nobody mentioned.
-        "pictureChangedSince": any(
-            _picture_changed(report, live_avatar_key) for report in incident.reports
+        # What became of the picture this incident is about, when it is about
+        # one. The decision is still about the picture the account carries
+        # now, which is what Remove picture acts on - this exists so that is
+        # a choice rather than a substitution nobody mentioned, and so a
+        # picture a moderator has already taken down does not read as merely
+        # a different one.
+        "picture": _incident_picture(
+            incident,
+            live_avatar_key,
+            (removals or {}).get(first.reported_user_id)
+            if first.reported_user_id
+            else None,
         ),
         "reportedUserId": (
             str(first.reported_user_id) if first.reported_user_id else None
@@ -642,7 +754,7 @@ def _incident_payload(
                 # longer carries. The old one is gone - an upload deletes the
                 # one it replaces - so this says the moderator is looking at a
                 # different picture, and never pretends to show the old one.
-                "pictureChangedSince": _picture_changed(report, live_avatar_key),
+                "pictureStatus": _picture_status(report, live_avatar_key),
             }
             for report in incident.reports
         ],
@@ -1291,9 +1403,14 @@ def create_moderation_router(
             player_context = await _reported_player_context(session, on_page)
             decisions = await _decisions(session, on_page)
             prior = await _prior_decisions(session, page)
+            removals = await _avatar_removals(
+                session, _accounts_with_no_picture(on_page, player_context)
+            )
             return {
                 "incidents": [
-                    _incident_payload(incident, player_context, decisions, prior)
+                    _incident_payload(
+                        incident, player_context, decisions, prior, removals
+                    )
                     for incident in page
                 ],
                 "total": len(planned),
@@ -1430,6 +1547,9 @@ def create_moderation_router(
             )
             player_context = await _reported_player_context(session, list(players))
             decisions = await _decisions(session, list(players), list(content))
+            removals = await _avatar_removals(
+                session, _accounts_with_no_picture(list(players), player_context)
+            )
             by_player_group = group_by_decision(list(players))
             by_content_group = group_by_decision(list(content))
             # Back into the page's order: `IN` returns rows in whatever order
@@ -1443,6 +1563,7 @@ def create_moderation_router(
                         ),
                         player_context,
                         decisions,
+                        removals=removals,
                     )
                     for kind, group in page
                     if kind == "player"

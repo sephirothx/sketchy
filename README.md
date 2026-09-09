@@ -957,7 +957,12 @@ about one account's picture is one incident, whichever screen it was sent from,
 and an account with no picture offers no control and is refused if asked
 anyway. If the picture changes before a moderator looks, the queue says so and
 shows the one on the account now - the old one is gone, an upload deleting what
-it replaces, so it is never quietly shown in its place.
+it replaces, so it is never quietly shown in its place. A picture that has been
+*taken down* says that instead, and says who did it: a removal a moderator
+carried out - naming this case, when it was this case - reads as already
+removed rather than as a different picture, which is the opposite of what
+happened to it, and a player quietly taking their own down reads as neither,
+because that is not a punishment and sets no block.
 
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
