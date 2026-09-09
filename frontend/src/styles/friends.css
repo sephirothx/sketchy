@@ -131,3 +131,19 @@
   color: var(--muted);
   white-space: nowrap;
 }
+
+/* Stated, not offered: a profile that shows nothing is ambiguous about
+   whether these two are friends. Wears the success colour rather than the
+   primary one, because it reports a state instead of inviting a press. */
+.friend-button-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success-ink);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}

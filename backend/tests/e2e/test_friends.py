@@ -384,3 +384,47 @@ async def test_your_own_profile_offers_you_no_friendship_with_yourself():
         finally:
             await context.close()
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_profile_says_whether_you_are_already_friends():
+    """A profile with no control on it is ambiguous.
+
+    Blank reads the same whether these two are friends, whether the viewer is
+    signed out, or whether the page has not finished loading - and a profile
+    is the natural place to ask "are we friends?".
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        ada_context = await browser.new_context()
+        bob_context = await browser.new_context()
+        ada, bob = await ada_context.new_page(), await bob_context.new_page()
+        ada_name, bob_name = unique("Ada"), unique("Bob")
+
+        try:
+            await sign_up(ada, ada_name)
+            await sign_up(bob, bob_name)
+
+            await row_for(ada, bob_name).locator("a.online-player-name").click()
+            await ada.wait_for_selector(".profile-identity")
+            # Not friends yet: an offer, and no claim either way.
+            await expect(ada.get_by_role("button", name="Add friend")).to_be_visible(
+                timeout=SETTLE_MS
+            )
+            await expect(ada.locator(".friend-button-badge")).to_have_count(0)
+
+            await ada.goto(BASE_URL)
+            await make_friends(ada, bob, ada_name, bob_name)
+
+            await row_for(ada, bob_name).locator("a.online-player-name").click()
+            await ada.wait_for_selector(".profile-identity")
+            await expect(ada.locator(".friend-button-badge")).to_have_text(
+                "Friends", timeout=SETTLE_MS
+            )
+            # Said, not offered: ending one is confirmed on the surface.
+            await expect(ada.get_by_role("button", name="Remove")).to_have_count(0)
+            await expect(ada.get_by_role("button", name="Add friend")).to_have_count(0)
+        finally:
+            await ada_context.close()
+            await bob_context.close()
+            await browser.close()

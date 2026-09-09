@@ -1,7 +1,7 @@
 import { useFriendsStore } from "../store/friendsStore";
 import type { FriendAction } from "../lib/friends";
 import { Button } from "./ui/Button";
-import { PlusIcon } from "./icons";
+import { CheckIcon, PlusIcon } from "./icons";
 
 /** The one control for "become friends with this person".
 
@@ -11,10 +11,14 @@ lobby's row is deliberately not this: it is an icon in a dense list with a
 presence status beside it, and squeezing both into one component made each
 worse.
 
-`friends` and `none` render nothing. Ending a friendship belongs on the
-friends surface, where it is confirmed first (R-FRIEND-10) — a Remove button
-sitting on somebody's profile is one mis-click away from revoking a way into a
-game. */
+An existing friendship is **stated**, not left blank. A profile with no
+control on it is ambiguous — it reads the same whether these two are friends,
+whether the viewer is signed out, or whether the page has not finished loading
+— and "are we friends?" is a question a profile is the natural place to answer.
+
+It is not a control. Ending a friendship belongs on the friends surface, where
+it is confirmed first (R-FRIEND-10): a Remove button sitting beside somebody's
+statistics is one mis-click away from revoking a way into a game. */
 export function FriendButton({
   action,
   userId,
@@ -60,6 +64,14 @@ export function FriendButton({
     return (
       <span className="friend-button-status" aria-label={`Friend request sent to ${displayName}`}>
         Request sent
+      </span>
+    );
+  }
+  if (action === "friends") {
+    return (
+      <span className="friend-button-badge" aria-label={`You and ${displayName} are friends`}>
+        <CheckIcon size={14} />
+        Friends
       </span>
     );
   }
