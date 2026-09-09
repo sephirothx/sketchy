@@ -18,7 +18,10 @@ answer that has always worked.
 
 Version 2 dropped `lobbyPollIntervalMs`: the lobby is told about rooms over its
 channel now (#462) and has no cadence of its own to be given. Version 3 added
-the drawing allowance (#597). */
+the drawing allowance (#597). Version 4 added the AFK input window (#677),
+which is the same kind of number for the same reason: only watching somebody
+play settles how recently a client must have seen a hand on the controls
+before it answers an AFK check on their behalf. */
 
 export interface ClientConfig {
   flushIntervalMs: number;
@@ -27,6 +30,9 @@ export interface ClientConfig {
   under the allowance instead of bursting into a silent refusal. */
   drawingFramesPerWindow: number;
   drawingWindowSeconds: number;
+  /** How recently this client must have seen a pointer or a key to answer an
+  `afk_check` for the player, rather than asking them. Version 4 (#677). */
+  afkInputWindowMs: number;
 }
 
 /** What the client uses until a server says otherwise, and if one never does. */
@@ -34,6 +40,7 @@ export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   flushIntervalMs: 80,
   drawingFramesPerWindow: 100,
   drawingWindowSeconds: 2,
+  afkInputWindowMs: 60_000,
 };
 
 /** The bounds the server enforces, mirrored so a bad payload cannot get through.
@@ -45,6 +52,10 @@ const BOUNDS: Record<keyof ClientConfig, { min: number; max: number }> = {
   flushIntervalMs: { min: 10, max: 200 },
   drawingFramesPerWindow: { min: 50, max: 400 },
   drawingWindowSeconds: { min: 0.5, max: 10 },
+  // A window of zero would ask somebody who is typing; one of an hour would
+  // answer for somebody who left. Neither breaks the client, but both defeat
+  // the check, so the same mirrored-bounds rule applies.
+  afkInputWindowMs: { min: 5_000, max: 600_000 },
 };
 
 function reading(
@@ -61,7 +72,7 @@ function reading(
 }
 
 /** The notice shape this build understands. */
-export const CLIENT_CONFIG_CONTRACT_VERSION = 3;
+export const CLIENT_CONFIG_CONTRACT_VERSION = 4;
 
 /** Read a `client_config` notice, or `null` if it is not one this build knows.
 
@@ -80,6 +91,7 @@ export function parseClientConfig(payload: unknown): ClientConfig | null {
     flushIntervalMs: reading(record, "flushIntervalMs"),
     drawingFramesPerWindow: reading(record, "drawingFramesPerWindow"),
     drawingWindowSeconds: reading(record, "drawingWindowSeconds"),
+    afkInputWindowMs: reading(record, "afkInputWindowMs"),
   };
 }
 

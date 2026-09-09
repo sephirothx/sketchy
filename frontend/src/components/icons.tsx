@@ -24,6 +24,11 @@ interface IconBaseProps extends IconProps {
   children: ReactNode;
 }
 
+interface MarkBaseProps extends IconBaseProps {
+  /** The dark casing painted under the coloured line, in viewBox units. */
+  casingWidth?: number;
+}
+
 function IconBase({ size = 16, strokeWidth = 2, children }: IconBaseProps) {
   return (
     <svg
@@ -53,25 +58,62 @@ export function VolumeIcon(p: IconProps) { return <IconBase {...p}><path d="M11 
 export function EyeOffIcon(p: IconProps) { return <IconBase {...p}><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 5.2A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17.5 17.5 0 0 1-3.2 4.1" /><path d="M6.6 6.6C3.9 8.5 2 12 2 12s3.5 7 10 7c1.6 0 3-.4 4.3-1" /></IconBase>; }
 export function MoonIcon(p: IconProps) { return <IconBase {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></IconBase>; }
 export function CrownIcon(p: IconProps) { return <IconBase {...p}><path d="M3 17h18l-1-9-4.5 3.5L12 6l-3.5 5.5L4 8l-1 9Z" /><path d="M4 21h16" /></IconBase>; }
-/** The crown alone, without its base line: the avatar mark (#574), where a
-    filled silhouette is all there is room for. */
-export function CrownMarkIcon(p: IconProps) { return <IconBase {...p}><path d="M3 18h18l-1-10-4.5 3.5L12 6l-3.5 5.5L4 8l-1 10Z" /></IconBase>; }
-/** The friend mark: two heads and shoulders, filled rather than stroked.
-
-Not `UsersIcon` at a smaller size. That one is a 24px stroke drawing, and the
-same trade the crown makes applies harder here - a stroked two-person glyph at
-12px is a scribble, and this shape has twice as much in it. So it is authored
-as solid silhouettes, sized and spaced to survive the disc corner, and painted
-with a contour underneath (see `.avatar-friend`) so it separates from any
-player colour or uploaded picture. */
-export function FriendMarkIcon({ size = 24 }: { size?: number }) {
+/** An avatar-corner mark (#574): the same outline drawn twice, a dark casing
+ * underneath the coloured line.
+ *
+ * The marks are stroke drawings like the rest of the set (#706) rather than
+ * the filled silhouettes they started as. A stroke drawing on its own would
+ * dissolve into an arbitrary player colour or an uploaded picture, so the
+ * casing takes the job the fill used to do: it separates the mark from
+ * whatever is under it while leaving the shape open, which is what makes it
+ * read as the same icon language as every other glyph here. Drawing it as a
+ * group underneath rather than as `paint-order: stroke` matters for a
+ * multi-path glyph — the whole casing is laid down first, so the coloured
+ * lines meet each other on top of it instead of each cutting into the next.
+ *
+ * Colours live in primitives.css (`.avatar-crown`, `.avatar-friend`); the two
+ * widths are geometry and stay with the shape. */
+function MarkBase({ size = 16, strokeWidth = 2.2, casingWidth = 4, children }: MarkBaseProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <circle cx="16.2" cy="8.4" r="3.1" />
-      <path d="M16.2 12.6c3.2 0 5.8 2.1 5.8 4.8V19H10.4v-1.6c0-2.7 2.6-4.8 5.8-4.8Z" />
-      <circle cx="8.6" cy="8" r="4" />
-      <path d="M8.6 13.4c3.6 0 6.5 2.4 6.5 5.3v1.5H2.1v-1.5c0-2.9 2.9-5.3 6.5-5.3Z" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      style={{ flex: "none" }}
+    >
+      <g className="mark-casing" strokeWidth={casingWidth}>{children}</g>
+      <g className="mark-line" strokeWidth={strokeWidth}>{children}</g>
     </svg>
+  );
+}
+
+/** The crown alone, without its base line: the host mark on the avatar's
+    top-right (#574). */
+export function CrownMarkIcon({ size }: IconProps) {
+  return <MarkBase size={size} strokeWidth={2.4} casingWidth={5}><path d="M3 18h18l-1-10-4.5 3.5L12 6l-3.5 5.5L4 8l-1 10Z" /></MarkBase>;
+}
+
+/** The friend mark: two heads and shoulders on the avatar's bottom-right.
+
+Not `UsersIcon` at a smaller size. That one is drawn for a name line, where it
+sits at 16px on a flat surface; this one has to survive a disc corner at 15px
+over any colour. So the front figure is bigger and lower, the back one is
+reduced to the two arcs that say "somebody else is there", and the gaps
+between them are opened up until the casing underneath (see `MarkBase`) stops
+welding them together. */
+export function FriendMarkIcon({ size }: IconProps) {
+  return (
+    <MarkBase size={size} strokeWidth={2.1} casingWidth={3.8}>
+      <circle cx="9.5" cy="9" r="4.3" />
+      <path d="M2 20.6a7.5 7.5 0 0 1 15 0" />
+      <path d="M17.6 6.4a3.4 3.4 0 0 1 0 6.4" />
+      <path d="M19 15.4a5.6 5.6 0 0 1 3 4.6" />
+    </MarkBase>
   );
 }
 

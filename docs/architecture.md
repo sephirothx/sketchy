@@ -300,6 +300,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
 | Runtime observations (30 days) and permanent daily roll-ups | Database | Yes |
 | Who is connected, and whether they are seated | `PresenceRegistry` (memory) | No |
+| When each socket last did something a person did, and which have an open **AFK check** | `ActivityLedger` and `AfkWatch` (memory) | No |
 | The public room list a watching lobby holds | `LobbyBroadcaster` (memory, derived from `RoomManager`) | No |
 | The last 50 lobby chat lines, for an arrival | `LobbyChatLog` (memory, re-seeded from the retained rows at startup) | Effectively — a restart reads the most recent fifty back from `room_messages` |
 | Live counts of rooms/players/games | In-process counters | No, deliberately |
@@ -1167,6 +1168,16 @@ expiry, and the per-player reconnect grace. Application-owned rather than scatte
 `create_task` calls, so teardown is a single `close()` and a room removal cannot leak
 a task that fires into a room that no longer exists.
 
+The AFK check is deliberately **not** one of them. It is a supervised sweep
+([`services/afk.py`](../backend/app/services/afk.py)) on the shape the presence
+loop uses, not a task per seat: at a five-minute window the granularity of a
+few seconds is not observable, the client answers before the deadline in the
+ordinary case so almost no seat reaches it, and four hundred timer tasks
+rearmed on every command would cost more than the pass they replace. The sweep
+interval is derived from the check window rather than fixed, so tuning the
+windows down — as the E2E suite does — cannot leave a check open for a whole
+extra interval.
+
 ### Naming and the wire contract
 
 Nothing in either language checks that the two sides agree on a name — a payload key
@@ -1648,6 +1659,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
+| [`app/services/afk.py`](../backend/app/services/afk.py) | When a person stopped answering, and what the room does about it. |
 | [`app/services/avatars.py`](../backend/app/services/avatars.py) | Uploading, serving and removing a player's picture (#573). |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
@@ -1715,7 +1727,7 @@ is the reference for all of it.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 
-The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-404-source.svg` is the artwork of record, and the generator writes `frontend/src/components/notFoundArt.ts` and `docs/ui-mockups/tools/notFoundArt.mjs` from it. Unlike the wordmark it keeps literal colours rather than tokens — it hangs on the canvas sheet, which is `white` in both themes (`.canvas-stack`), so ink that answered to the theme would only get weaker on the one ground it ever sits on. The generator maps each authored fill onto a chosen colour — mostly the same-family swatch from the game's own drawing palette (`COLOR_PAIRS` in `lib/drawingRules.ts`), so the doodle is close to a drawing a player could have made — and it refuses to run if a re-export introduces a fill it has no mapping for.
+The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-404-source.svg` is the artwork of record, and the generator writes `frontend/src/components/notFoundArt.ts` and `docs/ui-mockups/tools/notFoundArt.mjs` from it. Unlike the wordmark it keeps literal colours rather than tokens — it hangs on the canvas sheet, which is `white` in both themes (`.canvas-stack`), so ink that answered to the theme would only get weaker on the one ground it ever sits on. The generator maps each authored fill onto a chosen colour — mostly the same-family swatch the game's own drawing palette (`COLOR_PAIRS` in `lib/drawingRules.ts`) held when the drawing was made, so the doodle is close to a drawing a player could have made — and it refuses to run if a re-export introduces a fill it has no mapping for. That map is a copy of the palette rather than a view of it, and #702 has since moved one of the swatches it names; the ink stays as it was drawn, because re-tinting finished artwork to chase a swatch would change a picture for no reason a reader could see.
 
 The crash page's ladybird is the third drawing on that pipe: `scripts/brand/sketchy-bug-source.svg` is the artwork of record and the generator writes `frontend/src/components/crashArt.ts` and `docs/ui-mockups/tools/crashArt.mjs`, with the same palette rule and the same counting of paths per fill. Like the wordmark it is an Inkscape original; the generator also reads Inkscape's `<circle>` elements (the spots and eyes) as two-arc paths and skips a dot under a tenth of a millimetre, which is a stray click rather than a mark.
 

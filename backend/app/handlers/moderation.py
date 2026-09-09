@@ -44,6 +44,15 @@ async def toggle_afk(ctx: HandlerContext, sid, data=None):
 
     target_afk = not player.is_afk if payload.afk is None else payload.afk
 
+    # An explicit `afk: false` from somebody already not AFK is the ordinary
+    # answer to an AFK check (#677), and it happens once per idle window for
+    # every seat that is quietly watching. The command itself is what resets
+    # the inactivity clock, at the door; there is nothing left for the room to
+    # hear, so it is not told. Broadcasting an unchanged flag would put a
+    # whole `room_state` on the wire for every watcher, every window.
+    if target_afk == player.is_afk:
+        return {"ok": True, "isAfk": player.is_afk}
+
     player.is_afk = target_afk
     await ctx.game_flow._emit_room_state(room)
 

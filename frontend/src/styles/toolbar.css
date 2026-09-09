@@ -268,26 +268,6 @@
   cursor: pointer;
 }
 
-.recent-colors-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.recent-colors-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--faint);
-  margin-right: 2px;
-  user-select: none;
-}
-
-.recent-swatch {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-}
-
 .toolbar-actions {
   display: flex;
   gap: 6px;
@@ -450,18 +430,11 @@
   display: none;
 }
 
-.toolbar-mobile-colors,
-.toolbar-mobile-recent {
+.toolbar-mobile-colors {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-}
-
-.toolbar-mobile-recent {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
 }
 
 /* 44 rather than 36: these are the popover's only targets, and a swatch that

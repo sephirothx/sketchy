@@ -289,9 +289,17 @@ console.log("wrote scripts/brand/raster/{icon-square,icon-maskable,og-image}.svg
 // a drawing *on the canvas* - and `.canvas-stack` is a white sheet in both
 // themes, so ink chosen to respond to the theme would only get weaker on the
 // one ground it ever sits on. The sources' flat RGB primaries are the author's
-// placeholders; each maps to the same-family swatch from COLOR_PAIRS in
-// frontend/src/lib/drawingRules.ts, which is what a player would have had to
-// hand - except the yellow spark, which is Stefano's own brighter yellow.
+// placeholders; each was taken from the same-family swatch of COLOR_PAIRS in
+// frontend/src/lib/drawingRules.ts, so the doodle is close to a drawing a
+// player could have made - except the yellow spark, which is Stefano's own
+// brighter yellow.
+//
+// These are now a copy of that palette rather than a view of it, and #702 has
+// since moved one of them: `blue` is the #3f48cc the drawing was made with,
+// which the palette has replaced with #1234de. The ink stays as it was drawn,
+// because the drawings are finished artwork and re-tinting one to chase a
+// swatch would change a picture nobody asked to change. A new drawing should
+// be painted from the palette as it stands.
 //
 // Matched by ROLE - the fill literal - and not by id, for the same reason the
 // logo is: Inkscape renumbers ids on every re-export.

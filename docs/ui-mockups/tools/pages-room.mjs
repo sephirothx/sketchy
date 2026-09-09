@@ -165,7 +165,7 @@ const toolBtn = (svg, label, key, active = false) => `
   <span aria-hidden="true" style="position: absolute; bottom: 2px; right: 5px; font-size: 9px; font-weight: 800; color: ${active ? T.primary : T.faint}">${key}</span>
 </button>`;
 
-const paletteColors = ['#ffffff', '#000000', '#c1c1c1', '#4c4c4c', '#ed1c24', '#7f0000', '#ff7f27', '#a0522d', '#fff200', '#c9a227', '#b5e61d', '#2d5b1e', '#22b14c', '#1c6b5a', '#7ac9e8', '#2e5090', '#3f48cc', '#1b1b6e', '#a349a4', '#5c2d91', '#ec6ea8', '#7b3f61', '#ffae85', '#a9714b', '#c69c6d', '#5b3a1e'];
+const paletteColors = ['#ffffff', '#000000', '#c1c1c1', '#4c4c4c', '#ed1c24', '#7f0000', '#ff7f27', '#a0522d', '#fff200', '#c9a227', '#94ad3a', '#2d5b1e', '#22b14c', '#1c6b5a', '#7ac9e8', '#0292b2', '#1234de', '#1b1b6e', '#a349a4', '#5c2d91', '#ec6ea8', '#7b3f61', '#ffae85', '#a9714b', '#c69c6d', '#5b3a1e'];
 
 const swatch = (c, active = false) =>
   `<button type="button" aria-label="${c}" style="width: 26px; height: 26px; border-radius: 6px; padding: 0; background-color: ${c}; border: 1px solid rgba(0, 0, 0, 0.15)${active ? `; box-shadow: 0 0 0 2.5px ${T.primary}; transform: scale(1.12)` : ''}"></button>`;
