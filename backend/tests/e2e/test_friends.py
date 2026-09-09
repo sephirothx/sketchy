@@ -318,4 +318,113 @@ async def test_the_online_panel_reports_a_request_without_answering_it():
         finally:
             await asker_context.close()
             await target_context.close()
+
+
+@pytest.mark.asyncio
+async def test_a_profile_is_reachable_from_the_lobby_and_offers_a_friendship():
+    """The other half of the gap: reaching one specific person (R-FRIEND-10).
+
+    Before this, a friendship could only be offered by a lobby row or a seat
+    in the same room - both of which need the other person to be there at that
+    moment. A profile is linked from every game's participant list and from
+    the lobby, and outlives both.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        ada_context = await browser.new_context()
+        bob_context = await browser.new_context()
+        ada, bob = await ada_context.new_page(), await bob_context.new_page()
+        ada_name, bob_name = unique("Ada"), unique("Bob")
+
+        try:
+            await sign_up(ada, ada_name)
+            await sign_up(bob, bob_name)
+
+            row = row_for(ada, bob_name)
+            await expect(row).to_be_visible(timeout=SETTLE_MS)
+            # The name is the way in. A guest's is not a link, which the
+            # existing guest test already pins from the other direction.
+            await row.locator("a.online-player-name").click()
+            await ada.wait_for_selector(".profile-identity")
+            assert "/profile/" in ada.url
+
+            add = ada.get_by_role("button", name="Add friend")
+            await expect(add).to_be_visible(timeout=SETTLE_MS)
+            await add.click()
+            # The profile settles into the state the request left behind.
+            await expect(ada.locator(".friend-button-status")).to_have_text(
+                "Request sent", timeout=SETTLE_MS
+            )
+
+            # And it arrived, which is what the surface on the other side is
+            # for - Bob never had to be looking at the lobby.
+            await open_friends(bob)
+            await expect(
+                bob.locator('[data-testid="friends-incoming"]')
+            ).to_contain_text(ada_name, timeout=SETTLE_MS)
+        finally:
+            await ada_context.close()
+            await bob_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_your_own_profile_offers_you_no_friendship_with_yourself():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        name = unique("Solo")
+
+        try:
+            await sign_up(page, name)
+            await page.goto(f"{BASE_URL}/profile")
+            await page.wait_for_selector(".profile-identity")
+            await expect(page.get_by_role("button", name="Add friend")).to_have_count(0)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_a_profile_says_whether_you_are_already_friends():
+    """A profile with no control on it is ambiguous.
+
+    Blank reads the same whether these two are friends, whether the viewer is
+    signed out, or whether the page has not finished loading - and a profile
+    is the natural place to ask "are we friends?".
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        ada_context = await browser.new_context()
+        bob_context = await browser.new_context()
+        ada, bob = await ada_context.new_page(), await bob_context.new_page()
+        ada_name, bob_name = unique("Ada"), unique("Bob")
+
+        try:
+            await sign_up(ada, ada_name)
+            await sign_up(bob, bob_name)
+
+            await row_for(ada, bob_name).locator("a.online-player-name").click()
+            await ada.wait_for_selector(".profile-identity")
+            # Not friends yet: an offer, and no claim either way.
+            await expect(ada.get_by_role("button", name="Add friend")).to_be_visible(
+                timeout=SETTLE_MS
+            )
+            await expect(ada.locator(".friend-button-badge")).to_have_count(0)
+
+            await ada.goto(BASE_URL)
+            await make_friends(ada, bob, ada_name, bob_name)
+
+            await row_for(ada, bob_name).locator("a.online-player-name").click()
+            await ada.wait_for_selector(".profile-identity")
+            await expect(ada.locator(".friend-button-badge")).to_have_text(
+                "Friends", timeout=SETTLE_MS
+            )
+            # Said, not offered: ending one is confirmed on the surface.
+            await expect(ada.get_by_role("button", name="Remove")).to_have_count(0)
+            await expect(ada.get_by_role("button", name="Add friend")).to_have_count(0)
+        finally:
+            await ada_context.close()
+            await bob_context.close()
             await browser.close()

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { sessionFrom } from "../lib/roomEntryState";
 import { emitWithAck } from "../lib/socket";
@@ -93,16 +93,24 @@ export function OnlinePlayersPanel() {
                   isAnonymous={player.isAnonymous}
                   size={28}
                 />
-                <span
-                  className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
-                  style={
-                    player.isAnonymous || !player.nameColor
-                      ? undefined
-                      : { color: player.nameColor }
-                  }
-                >
-                  {player.displayName}
-                </span>
+                {/* The name is a link, because presence already carries the
+                    account id — R-ROOM-07 carves that out for the lobby
+                    precisely because a friend request needs a stable target.
+                    A guest has no profile worth opening: their identity is a
+                    browser, so the name stays plain text for them. */}
+                {player.isAnonymous ? (
+                  <span className="online-player-name is-guest">
+                    {player.displayName}
+                  </span>
+                ) : (
+                  <Link
+                    to={`/profile/${player.userId}`}
+                    className="online-player-name"
+                    style={player.nameColor ? { color: player.nameColor } : undefined}
+                  >
+                    {player.displayName}
+                  </Link>
+                )}
 
                 <span className="online-player-actions">
                   {action === "add" && (

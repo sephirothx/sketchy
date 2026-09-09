@@ -1359,6 +1359,20 @@
    "respondedAt",
    "userId"
   ],
+  "api.friends:create_recent_players_router": [
+   "avatarUrl",
+   "displayName",
+   "lastPlayedAt",
+   "nameColor",
+   "userId"
+  ],
+  "api.friends:recent_players": [
+   "avatarUrl",
+   "displayName",
+   "lastPlayedAt",
+   "nameColor",
+   "userId"
+  ],
   "api.moderation:_ban_payload": [
    "bannedByUserId",
    "createdAt",

@@ -66,7 +66,14 @@ keyboard that takes half the screen, and one thumb.
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
   leaves nothing behind. Guests are not offered friendships, since a guest name belongs
-  to a browser and is purged after a month of not playing.
+  to a browser and is purged after a month of not playing. Somebody you are not
+  sharing a lobby with is still reachable: every registered name in the online list
+  links to that player's profile, and a profile carries the same **Add friend**
+  control — and says plainly when you already are friends — so the person you
+  finished a game with yesterday can be added today.
+  **Friends** also suggests registered accounts you finished a game with in the last
+  30 days. That list is built only from games you sat in yourself — there is still
+  no way to search for, or reach, somebody you have never played with.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
