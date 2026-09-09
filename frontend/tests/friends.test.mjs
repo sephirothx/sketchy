@@ -353,3 +353,23 @@ test("a lobby row says nothing about a request in either direction", () => {
     true,
   );
 });
+
+// ------------------------------------- an acceptance that lands during a load
+
+test("an acceptance is only noticed when the request was seen first", () => {
+  const them = { userId: "them", displayName: "Them" };
+
+  // The ordinary path: this client watched the request go out, so the move
+  // from outgoing to friends is a transition it can see.
+  const watched = friendListChanges(
+    { ...NO_FRIENDS, outgoing: [them] },
+    { ...NO_FRIENDS, friends: [them] },
+  );
+  assert.deepEqual(watched.accepted, [them]);
+
+  // The page reloaded while the answer was in flight, so the first lists this
+  // client ever saw already contain the friendship. There is no transition
+  // left to notice, and nothing tells the asker they were accepted (#724).
+  const missed = friendListChanges(NO_FRIENDS, { ...NO_FRIENDS, friends: [them] });
+  assert.deepEqual(missed.accepted, []);
+});

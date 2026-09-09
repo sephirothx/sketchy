@@ -25,16 +25,12 @@ export interface ToastContextValue {
 
 /** How many toasts stand at once.
 
-Three was too few. A notice that has to be *acted on* - a friend request
-carrying Accept (R-FRIEND-12) - was being pushed off the stack by two
-informational ones that happened to land first, and then the only way to
-answer was to go looking for the friends surface. Losing an unread "your
-export is ready" costs nothing; losing the one with a button on it costs the
-thing it was for.
-
-Five, not more: past that a stack of toasts is its own problem, and the answer
-to "everything is shouting" is not a taller pile. */
-export const MAX_TOASTS = 5;
+Three. It was briefly raised to five on the theory that an actionable notice
+was being evicted by informational ones, which turned out to be wrong - the
+failure it was meant to fix recurred with the higher cap, and the screen it
+failed on held exactly one toast. Nothing evicts anything at one. Put back
+rather than left at a number chosen for a reason that did not hold. */
+export const MAX_TOASTS = 3;
 
 /** The stack after one more toast arrives, and which ones fell off it.
 

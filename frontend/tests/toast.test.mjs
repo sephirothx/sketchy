@@ -36,13 +36,8 @@ test("whatever falls off is handed back, so its timer can be cleared", () => {
   );
 });
 
-test("the cap leaves room for a notice that has to be acted on", () => {
-  // Three was the old cap, and two informational toasts were enough to push a
-  // friend request - the one carrying Accept - off the screen before anybody
-  // could answer it (#724).
-  assert.ok(MAX_TOASTS > 3);
-  const informational = stack(2);
-  const { kept, evicted } = keepRecentToasts(informational, { id: 42 });
+test("a toast arriving on a screen below the cap evicts nothing", () => {
+  const { kept, evicted } = keepRecentToasts(stack(1), { id: 42 });
   assert.deepEqual(evicted, []);
   assert.ok(kept.some((toast) => toast.id === 42));
 });
