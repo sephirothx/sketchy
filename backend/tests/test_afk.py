@@ -264,6 +264,40 @@ async def test_marking_a_drawer_forfeits_the_turn_wherever_it_lands():
 
 
 @pytest.mark.asyncio
+async def test_a_seat_that_goes_while_the_pass_is_out_is_not_marked():
+    """Asking one seat awaits, and the next seat can leave inside that await.
+
+    The reconnect grace owns a seat whose socket has gone, not this. Marking
+    one anyway would have them come back AFK, and would move the host off
+    somebody whose only offence was a dropped connection.
+    """
+    clock = FakeClock()
+    manager, room, first = _room_with()
+    second = manager.add_player(room, "Bob")
+    second.sid = "sid-bob"
+
+    flow = AsyncMock()
+    sio, watch, activity = _watch(manager, clock, game_flow=flow)
+    activity.note(first.sid)
+    activity.note(second.sid)
+    clock.advance(300)
+    await watch.flush()  # both asked
+    clock.advance(25)
+
+    # Bob's socket drops while the sweep is partway through the room. Marking
+    # Ann broadcasts her new state, and that await is where the pass gives up
+    # control - by the time it comes back, Bob's seat is a different question.
+    async def drop_bob(*args, **kwargs):
+        second.connected = False
+
+    flow._emit_room_state.side_effect = drop_bob
+    await watch.flush()
+
+    assert first.is_afk, "Ann was still there to be marked"
+    assert not second.is_afk, "Bob had already gone"
+
+
+@pytest.mark.asyncio
 async def test_a_check_open_on_a_departed_socket_is_dropped():
     """The map must not grow across a long-lived process."""
     clock = FakeClock()

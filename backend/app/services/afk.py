@@ -152,8 +152,8 @@ def decide(
     return CHECK if idle_seconds >= timing.afk_inactivity_seconds else NOTHING
 
 
-def checkable_players(room: Room) -> list[Player]:
-    """Seats the check applies to.
+def is_checkable(player: Player) -> bool:
+    """Whether the check applies to this seat, right now.
 
     Spectators are left out: nothing waits on one, so there is nothing to
     interrupt them for, and the flag would change nothing about the room.
@@ -161,14 +161,17 @@ def checkable_players(room: Room) -> list[Player]:
     produces, and a disconnected seat because its socket is gone - the
     reconnect grace, not this, is what decides its fate.
     """
-    return [
-        player
-        for player in room.players.values()
-        if player.connected
+    return bool(
+        player.connected
         and player.sid
         and not player.is_spectator
         and not player.is_afk
-    ]
+    )
+
+
+def checkable_players(room: Room) -> list[Player]:
+    """The seats of one room the check applies to."""
+    return [player for player in room.players.values() if is_checkable(player)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,8 +236,16 @@ class AfkWatch:
         raised = 0
         for room in list(self._room_manager.rooms.values()):
             for player in checkable_players(room):
+                # Re-read rather than trust the snapshot: asking one seat
+                # awaits, and a seat later in the same pass can disconnect,
+                # take the flag itself or stand up as a spectator while that
+                # await is out. Acting on the stale answer would mark somebody
+                # who is already gone - and move the host off them - for a
+                # silence the reconnect grace, not this, is responsible for.
+                if not is_checkable(player):
+                    continue
                 sid = player.sid
-                assert sid is not None  # checkable_players filtered on it
+                assert sid is not None  # is_checkable filtered on it
                 idle = self._activity.idle_seconds(sid)
                 # Activity closes an open check wherever it happened, without
                 # the command path having to know a check exists. The seat is
@@ -357,6 +368,7 @@ __all__ = [
     "NOTHING",
     "RAISE",
     "checkable_players",
+    "is_checkable",
     "decide",
     "start_afk_loop",
     "stop_afk_loop",
