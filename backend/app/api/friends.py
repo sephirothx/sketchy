@@ -132,7 +132,7 @@ def create_friends_router(
         yet. It rides the read the client already makes rather than needing
         one of its own, and it is a fact on the row rather than a difference
         between two reads - a client that was reloading when the answer came
-        has no earlier read to compare against (R-FRIEND-13).
+        has no earlier read to compare against (R-FRIEND-14).
         """
         me = await current_account(request)
         listing = await friend_service.listing(me.id)

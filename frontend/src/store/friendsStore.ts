@@ -127,7 +127,7 @@ function absorb(
     // can tell - a fresh tab is not the moment to announce a week of
     // requests. What the server says is owed is a different thing: it is a
     // fact rather than a difference, and this is exactly the read that used
-    // to swallow it (R-FRIEND-13).
+    // to swallow it (R-FRIEND-14).
     set({
       lists: next,
       loaded: true,
