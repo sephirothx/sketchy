@@ -724,11 +724,37 @@ account and the entry reads *Deleted player* while standing exactly as it was.
 ### `player_reports`
 `id` · `reporter_user_id` / `reported_user_id` (`SET NULL`) · `game_id` / `turn_id`
 (`SET NULL`) · `reason` · `details` TEXT · `context_snapshot` (JSON) ·
+`scope` (`room \| lobby \| unscoped`) · `room_instance_id` ·
+`decision_group_id` ·
 `status` (`pending \| resolved \| dismissed`) · `reviewed_by_user_id` ·
 `resolution_note` · timestamps.
 
 Reasons: `harassment`, `offensive_drawing`, `inappropriate_name`, `cheating`, `spam`.
 `ck_player_reports_not_self` forbids self-reports.
+
+**Where the complaint happened**, so reports of one incident are read and decided
+together (#620). `scope` and `room_instance_id` are one fact in two columns and
+`ck_player_reports_scope_instance` keeps them from disagreeing: a room report names the
+room instance it happened in, and nothing else names one. Both report paths already knew
+this and threw it away — the socket handler holds the live room
+(`Room.retention_scope_id`), and `POST /api/reports` has already proved that every cited
+line came from one room instance or all from the lobby before it writes. Neither reads
+it from a client. `room_instance_id` carries **no foreign key**, exactly as
+`room_messages.room_instance_id` does not: rooms live in the process, have no row to
+point at, and a report has to outlive the room it was filed in.
+
+`unscoped` is a REST report that cited nothing. It names no place to look, so it stands
+alone rather than joining a bucket it merely resembles. Every lobby report about one
+account shares the one bucket, because the lobby has no instance to name.
+
+**Which decision covered the report.** `decision_group_id` is minted once per moderator
+action rather than once per report, so a decision over an incident leaves every report it
+covered pointing at one value; `ck_player_reports_decision_group` says a decided report
+carries one and a pending report does not, the same shape as
+`ck_player_reports_reviewed_identity` beside it and for the same reason. The id is a
+UUIDv7, which is what lets the closed-case stream page decisions from an ordered walk of
+the partial index `ix_player_reports_decision_group` rather than aggregating every report
+ever decided to find the newest ones.
 `uq_player_reports_open_target (reporter_user_id, reported_user_id)` is a **partial
 unique index**: one reporter holds **one open report per player**. Saying it again while
 a moderator has yet to look adds no evidence and buries the queue; once decided, the
@@ -866,8 +892,14 @@ Player-authored prompt content has a separate, target-specific flow.
 `id` · `reporter_user_id` / `reported_owner_user_id` · `prompt_list_id` /
 `prompt_version_id` (both `SET NULL`) · `target_type` (`list \| prompt`) ·
 `list_name_snapshot` · `prompt_snapshot` · `reason` · `details` ·
+`decision_group_id` ·
 `status` · `reviewed_by_user_id` · `resolution_note` ·
 `resolution_moderation_state` · timestamps.
+
+`decision_group_id` and `ck_prompt_content_reports_decision_group` are
+`player_reports`' rule restated, for the same reason and paged from the same kind of
+partial index. A content report needs no `scope` beside it: its target already names the
+incident.
 
 Reasons: `inappropriate`, `hateful_or_abusive`, `sexual_content`, `violence`, `spam`,
 `other`. `ck_prompt_content_reports_target_snapshot` requires a prompt snapshot for a

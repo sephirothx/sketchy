@@ -1654,6 +1654,7 @@ async def test_closed_cases_are_one_stream_newest_decision_first_and_paged(
                         reviewed_by_user_id=UUID(moderator["id"]),
                         resolution_note="Decided.",
                         reviewed_at=base + timedelta(minutes=minute),
+                        decision_group_id=generate_uuid(),
                     )
                 )
 
@@ -1879,3 +1880,152 @@ async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
     assert picture.headers["cache-control"] == "private, no-store"
     # The escape hatch opens that one path and nothing beside it.
     assert (await suspended_http.get("/api/warnings/pending")).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_report_records_where_the_complaint_happened(env):
+    """The incident a report belongs to, written from what the server already
+    proved rather than from anything a client said (#620).
+
+    A REST report is scoped by the evidence it cited - the one room instance
+    every line came from, or the lobby, which the mixing rule above makes
+    unambiguous. A report that cited nothing names no place to look and is
+    `unscoped`, so it never joins a bucket it merely resembles."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    target_http = new_client()
+    reporter = await register(reporter_http, "ScopeReporter")
+    target = await register(target_http, "ScopeTarget")
+    now = datetime.now(timezone.utc)
+    instance = generate_uuid()
+    room_line, lobby_line = generate_uuid(), generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            common = {
+                "sender_user_id": UUID(target["id"]),
+                "sender_display_name_snapshot": "ScopeTarget",
+                "sender_is_anonymous_snapshot": False,
+                "is_spectator": False,
+                "message_kind": "chat",
+                "near_miss_kind": None,
+                "created_at": now,
+                "expires_at": now + timedelta(days=30),
+            }
+            session.add_all(
+                [
+                    RoomMessage(
+                        id=room_line,
+                        room_instance_id=instance,
+                        sender_player_id=generate_uuid(),
+                        audience="room",
+                        audience_user_ids=[reporter["id"], target["id"]],
+                        text="Said in the room",
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=lobby_line,
+                        room_instance_id=None,
+                        sender_player_id=None,
+                        audience="lobby",
+                        audience_user_ids=[],
+                        text="Said in the lobby",
+                        **common,
+                    ),
+                ]
+            )
+
+    async def scope_of(message_ids):
+        response = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": "Please look.",
+                "messageIds": [str(message_id) for message_id in message_ids],
+            },
+        )
+        assert response.status_code == 201, response.text
+        report_id = UUID(response.json()["id"])
+        async with factory() as session:
+            async with session.begin():
+                row = await session.get(PlayerReport, report_id)
+                scope = (row.scope, row.room_instance_id)
+                # Decided straight away so the reporter may file the next
+                # one: one open report per reporter per target (R-MOD-05).
+                row.status = ReportStatus.DISMISSED.value
+                row.reviewed_at = datetime.now(timezone.utc)
+                row.decision_group_id = generate_uuid()
+        return scope
+
+    assert await scope_of([room_line]) == ("room", instance)
+    assert await scope_of([lobby_line]) == ("lobby", None)
+    assert await scope_of([]) == ("unscoped", None)
+
+
+@pytest.mark.asyncio
+async def test_every_decision_records_which_decision_covered_the_report(env):
+    """A decided report says which moderator action decided it, so reports of
+    one incident can later point at one decision (#620). Dismissing, warning
+    and suspending all write it, and a pending report carries none."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "GroupMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    async def report_from(name):
+        reporter_http, target_http = new_client(), new_client()
+        await register(reporter_http, f"{name}Rep")
+        target = await register(target_http, f"{name}Tgt")
+        response = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": "Please look.",
+            },
+        )
+        assert response.status_code == 201, response.text
+        return target, UUID(response.json()["id"])
+
+    async def group_of(report_id):
+        async with factory() as session:
+            return (await session.get(PlayerReport, report_id)).decision_group_id
+
+    _, pending = await report_from("Pend")
+    assert await group_of(pending) is None
+
+    _, dismissed = await report_from("Dism")
+    response = await moderator_http.patch(
+        f"/api/moderation/reports/{dismissed}",
+        json={"status": "dismissed", "note": "Nothing in it."},
+    )
+    assert response.status_code == 200, response.text
+    assert await group_of(dismissed) is not None
+
+    warned_target, warned = await report_from("Warn")
+    response = await moderator_http.post(
+        "/api/moderation/warnings",
+        json={
+            "userId": warned_target["id"],
+            "reason": "Watch your language.",
+            "reportId": str(warned),
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert await group_of(warned) is not None
+
+    banned_target, banned = await report_from("Ban")
+    response = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": banned_target["id"],
+            "reason": "Enough.",
+            "reportId": str(banned),
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert await group_of(banned) is not None
+
+    # Every decision is its own, so no two of them share a group id.
+    groups = [await group_of(row) for row in (dismissed, warned, banned)]
+    assert len(set(groups)) == 3

@@ -34,7 +34,7 @@ from app.db.models import (
     UserBlock,
     generate_uuid,
 )
-from app.domain_values import AuditTargetType
+from app.domain_values import AuditTargetType, ReportScope
 from app.game import Phase
 from app.rooms import Room
 
@@ -153,6 +153,8 @@ def record_player_report(
     reported_user_id: UUID,
     game_id: UUID | None,
     turn_id: UUID | None,
+    scope: ReportScope,
+    room_instance_id: UUID | None,
     reason: str,
     details: str,
     messages: list[RoomMessage],
@@ -175,6 +177,12 @@ def record_player_report(
     (`drawing_from_live_room`); it is kept for as long as the report is, for
     the reason the messages are.
 
+    `scope` and `room_instance_id` say where the complaint happened, so this
+    report can be read and decided beside the others about the same incident
+    (#620). The caller works it out from something it has already proved - the
+    live room it holds, or the one room instance every cited line came from -
+    and never from a client's claim about where it was.
+
     Returns the unflushed row. Its `created_at` comes from the database, so a
     caller that needs the timestamp has to flush before reading it - returning
     a snapshot from here would hand back a null.
@@ -185,6 +193,8 @@ def record_player_report(
         reported_user_id=reported_user_id,
         game_id=game_id,
         turn_id=turn_id,
+        scope=scope.value,
+        room_instance_id=room_instance_id,
         reason=reason,
         details=details,
         context_snapshot={

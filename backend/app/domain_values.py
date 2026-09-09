@@ -263,6 +263,23 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class ReportScope(StrEnum):
+    """Where a report's complaint happened, so reports of one incident meet.
+
+    A room instance is what "the same incident" means in this game: it bounds
+    the complaint in place and, because the instance ends when the room does,
+    in time as well - without a window anybody has to pick a number for. The
+    lobby has no instance to name, so every lobby report about one account
+    shares the one bucket. `UNSCOPED` is a report that cited nothing and so
+    names no place to look; it stands alone rather than joining a bucket it
+    only resembles.
+    """
+
+    ROOM = "room"
+    LOBBY = "lobby"
+    UNSCOPED = "unscoped"
+
+
 class BugReportArea(StrEnum):
     """Where in the product a bug was met.
 
@@ -516,6 +533,7 @@ BUG_REPORT_SCREENSHOT_STATUSES = tuple(
     status.value for status in BugReportScreenshotStatus
 )
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
+REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
 GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)

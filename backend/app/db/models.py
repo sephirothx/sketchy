@@ -70,6 +70,7 @@ from app.domain_values import (
     REACTION_EMOJI_CODES,
     REPORT_EVIDENCE_ROLES,
     REPORT_REASONS,
+    REPORT_SCOPES,
     REPORT_STATUSES,
     RETAINED_MESSAGE_AUDIENCES,
     RETAINED_MESSAGE_KINDS,
@@ -94,6 +95,7 @@ from app.domain_values import (
     PromptLanguage,
     PromptListVisibility,
     ReportReason,
+    ReportScope,
     ReportStatus,
     TurnEndReason,
     UserRole,
@@ -795,6 +797,26 @@ class PlayerReport(Base):
     __table_args__ = (
         _values_check("reason", REPORT_REASONS, "ck_player_reports_reason"),
         _values_check("status", REPORT_STATUSES, "ck_player_reports_status"),
+        _values_check("scope", REPORT_SCOPES, "ck_player_reports_scope"),
+        # The scope and the instance are one fact written in two columns, so
+        # neither may stand without the other: a room report names the room it
+        # happened in, and nothing else names one. Said this way rather than
+        # left to convention, because a null instance beside scope 'room'
+        # would be a gap that silently drops the report out of its incident
+        # rather than a statement a reader can check.
+        CheckConstraint(
+            "(scope = 'room' AND room_instance_id IS NOT NULL)"
+            " OR (scope <> 'room' AND room_instance_id IS NULL)",
+            name="ck_player_reports_scope_instance",
+        ),
+        # A decided report belongs to exactly one decision, whether that
+        # decision covered five reports or one; a pending one belongs to none
+        # yet. The same shape as the reviewed-identity check above, and for
+        # the same reason: a decision is a decision, and the row says so.
+        CheckConstraint(
+            "status = 'pending' OR decision_group_id IS NOT NULL",
+            name="ck_player_reports_decision_group",
+        ),
         # A decision is a decision: a reviewed row carries when (#553). Who
         # may become NULL when the moderator's account is deleted.
         CheckConstraint(
@@ -802,6 +824,17 @@ class PlayerReport(Base):
             name="ck_player_reports_reviewed_identity",
         ),
         Index("ix_player_reports_status_created_at", "status", "created_at"),
+        # Decided rows only, one entry per report that has a decision. The
+        # closed-case stream reads its page as distinct decision groups newest
+        # first; because the id is time-ordered, that is an ordered scan of
+        # this index that stops as soon as it has enough groups, instead of
+        # an aggregate over every report ever decided.
+        Index(
+            "ix_player_reports_decision_group",
+            "decision_group_id",
+            postgresql_where=text("decision_group_id IS NOT NULL"),
+            sqlite_where=text("decision_group_id IS NOT NULL"),
+        ),
         CheckConstraint(
             "reporter_user_id IS NULL OR reported_user_id IS NULL "
             "OR reporter_user_id != reported_user_id",
@@ -857,6 +890,31 @@ class PlayerReport(Base):
     details: Mapped[str] = mapped_column(Text, nullable=False)
     context_snapshot: Mapped[dict] = mapped_column(
         PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
+    # Where the complaint happened, so reports of one incident can be read and
+    # decided together. Both report routes already work this out - the socket
+    # path holds the live room, the REST path proves every cited line came
+    # from one room instance or all from the lobby - and until now both threw
+    # it away.
+    scope: Mapped[str] = mapped_column(
+        String(16),
+        default=ReportScope.UNSCOPED.value,
+        server_default=ReportScope.UNSCOPED.value,
+        nullable=False,
+    )
+    # A runtime correlation id with no foreign key, exactly as RoomMessage
+    # carries it: rooms live in the process and have no row to point at, and a
+    # report has to outlive the room it was filed in.
+    room_instance_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    # Which decision covered this report. Minted per decision rather than per
+    # report, so one moderator action over an incident leaves every report it
+    # decided pointing at the same value. Time-ordered (UUIDv7), which is what
+    # lets the closed-case stream take its page from an ordered index scan
+    # instead of aggregating every decided row to find the newest decisions.
+    decision_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
     status: Mapped[str] = mapped_column(
         String(16),
@@ -1172,6 +1230,12 @@ class PromptContentReport(Base):
             "status = 'pending' OR reviewed_at IS NOT NULL",
             name="ck_prompt_content_reports_reviewed_identity",
         ),
+        # A content report belongs to exactly one decision once decided, the
+        # rule player reports carry (`ck_player_reports_decision_group`).
+        CheckConstraint(
+            "status = 'pending' OR decision_group_id IS NOT NULL",
+            name="ck_prompt_content_reports_decision_group",
+        ),
         _values_check(
             "resolution_moderation_state",
             PROMPT_CONTENT_MODERATION_STATES,
@@ -1193,6 +1257,14 @@ class PromptContentReport(Base):
         ),
         Index(
             "ix_prompt_content_reports_status_created_at", "status", "created_at"
+        ),
+        # `ix_player_reports_decision_group`'s twin: the closed-case stream
+        # pages both tables the same way.
+        Index(
+            "ix_prompt_content_reports_decision_group",
+            "decision_group_id",
+            postgresql_where=text("decision_group_id IS NOT NULL"),
+            sqlite_where=text("decision_group_id IS NOT NULL"),
         ),
         # One open report per reporter per target. Reporting the same content
         # again while a moderator has yet to look at it adds no evidence and
@@ -1260,6 +1332,12 @@ class PromptContentReport(Base):
         nullable=False,
     )
     details: Mapped[str] = mapped_column(Text, nullable=False)
+    # Which decision covered this report - `PlayerReport.decision_group_id`,
+    # for the same reason and minted the same way. A content report needs no
+    # scope column beside it: its target already names the incident.
+    decision_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String(16),
         default=ReportStatus.PENDING.value,
