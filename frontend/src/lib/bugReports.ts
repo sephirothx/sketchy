@@ -23,7 +23,10 @@ export type BugReportArea =
 
 export type BugReportSeverity = "blocks_play" | "major" | "minor";
 export type BugReportStatus = "pending" | "resolved" | "dismissed";
-export type ScreenshotStatus = "none" | "ready" | "erased";
+/** `erased` means a decision took the picture with it; `expired` means the
+ *  ninety-day ceiling came first and nobody decided anything (R-BUG-13). The
+ *  reviewer of a still-pending report is owed the difference. */
+export type ScreenshotStatus = "none" | "ready" | "erased" | "expired";
 
 /** Offered in this order: where a player thinks they were, in the words they
     would use, ending in the honest escape hatch. */
@@ -398,6 +401,12 @@ export function bugReportTriageText(report: BugReport): string {
     );
   } else if (report.screenshot.status === "erased") {
     lines.push("erased when the report was decided");
+  } else if (report.screenshot.status === "expired") {
+    lines.push(
+      `expired unreviewed: ${report.screenshot.width ?? "?"}x${report.screenshot.height ?? "?"} `
+      + `${report.screenshot.contentType ?? "image"} ${report.screenshot.byteSize ?? 0} bytes`,
+      `sha256: ${report.screenshot.checksum ?? "unknown"}`,
+    );
   } else {
     lines.push("none");
   }

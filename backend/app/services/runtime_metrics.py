@@ -47,6 +47,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 
@@ -411,9 +412,7 @@ async def purge_expired_events(
         .order_by(RuntimeEvent.occurred_at, RuntimeEvent.id),
         delete_for=lambda ids: delete(RuntimeEvent).where(RuntimeEvent.id.in_(ids)),
         budget=budget or sweep_budget_from_env(),
-        overdue=select(func.min(RuntimeEvent.occurred_at)).where(
-            RuntimeEvent.occurred_at < cutoff
-        ),
+        probe=overdue_probe(RuntimeEvent.occurred_at, RuntimeEvent.occurred_at < cutoff),
         now=cutoff,
     )
 
@@ -424,22 +423,19 @@ async def run_metrics_loop(
     interval_seconds: float | None = None,
     health: LoopHealth | None = None,
 ) -> None:
-    """Flush for ever, purging once a day's worth of flushes have gone by."""
+    """Flush for ever. Purging the rows flushed here is the retention loop's.
+
+    It used to be both: an hour's worth of flushes, then a purge, on a loop
+    whose health said only "an iteration failed" - so `runtime_events` was
+    the one retained table with no budget report, no backlog measurement and
+    no fault isolation of its own, and a purge that failed every hour looked
+    like a flush that failed every hour. It is a sweep like the others now
+    (#478), and this loop does one thing.
+    """
     interval = interval_seconds or flush_seconds()
-    since_purge = 0.0
     while True:
         try:
             await flush_events(session_factory)
-            since_purge += interval
-            if since_purge >= 3600:
-                since_purge = 0.0
-                removed = await purge_expired_events(session_factory)
-                if removed:
-                    logger.info("runtime metrics: purged %d expired events", removed)
-            # Last, so an iteration whose purge failed does not also report a
-            # success. On a purge cycle the earlier placement recorded both,
-            # and `last_success` advancing past a failed iteration is worse
-            # than useless - it is the number an alert would trust.
             if health is not None:
                 health.record_success()
         except asyncio.CancelledError:

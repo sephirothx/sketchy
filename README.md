@@ -640,7 +640,7 @@ process. These deployment settings can be tuned without code changes:
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
-| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, room codes, retired lists, guests |
+| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, room codes, runtime events, bug-report screenshots, retired lists, guests |
 | `RETENTION_SWEEP_ROW_BUDGET` | `5000` | Rows one sweep may delete per run; a run that spends it comes back after 5 s rather than an hour |
 | `RETENTION_SWEEP_BATCH_ROWS` | `500` | Rows per committed delete batch inside a sweep |
 | `RETENTION_SWEEP_SECONDS_BUDGET` | `30` | Seconds one sweep may spend per run |
@@ -853,10 +853,31 @@ history rows survive through frozen presentation snapshots. Cleanup is bounded
 to 500 accounts per run, previews by default, and records aggregate audit
 evidence when applied. Every sweep in that loop — messages, outbox mail,
 one-shot tokens, sessions, exports, shutdown abandonments, rate-limit
-buckets, retired room codes, retired prompt lists and guests — deletes in
+buckets, retired room codes, raw runtime events, unreviewed bug-report
+screenshots, retired prompt lists and guests — deletes in
 committed batches within a per-run row and time budget, reports what it
 removed and how far behind it is under `retention_sweep` in `/api/health`,
-and cannot stop the sweeps after it by failing. The same hourly sweep reclaims deleted prompt lists:
+and cannot stop the sweeps after it by failing.
+
+Each of those tables also states a **deletion SLA**: how long a row may still
+be there after it became eligible for removal, which is a lag allowance on the
+machinery rather than on the policy — six hours for the ordinary tables, a day
+for guests and retired lists. Every sweep measures what it left, on every run:
+the age of the oldest non-exempt row it should already have removed, and how
+many are waiting. Both are counted over the sweep's own eligibility predicate,
+so a suspended account's sessions, a pinned prompt revision, a persistent room
+code and pending mail are never counted as lateness, and a table that owes
+nothing reports a zero rather than nothing at all. A table past its SLA, one
+whose sweep is failing, and one spending its whole budget every pass each raise
+their own alert naming that table — fault isolation means nothing else will.
+The table is in [docs/database.md](docs/database.md) §10 and the objective is
+SLO-10 in [docs/slo.md](docs/slo.md).
+
+An undecided bug report's screenshot has a ceiling of its own: 90 days from
+filing, after which the pixels are erased and the row reads `expired` rather
+than `erased` — nobody decided anything, and a reviewer opening the still
+pending report should be told which of the two happened. The report and every
+piece of screenshot metadata stay. The same hourly sweep reclaims deleted prompt lists:
 deleting a list takes it out of reach at once, but a revision a finished game
 pinned stays for that game's history, and the rest — unpinned revisions, the
 list row, prompts nothing names any more — is removed a day later, once any
@@ -1494,6 +1515,7 @@ backend/
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
+      bug_report_retention.py A ceiling on how long an undecided bug report keeps its screenshot
     presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model
@@ -2256,6 +2278,16 @@ reverse is the pool or the disk. Its per-player view answers "which account keep
 disconnecting", and because that is a surveillance surface on the game's own
 players, every use writes an audit event naming both who looked and who was
 looked at.
+
+`SketchyRetentionBehind` is the one alert that says a **policy** is being
+missed rather than a component being broken, and it names the table. Read
+`sketchy_retention_backlog_rows` and `sketchy_retention_sweep_exhausted` for
+that table first: a spent budget with a growing backlog wants a larger
+`RETENTION_SWEEP_ROW_BUDGET` or a shorter `RETENTION_SWEEP_SECONDS`, not a
+restart. `SketchyRetentionSweepFailing` is the other shape — the sweep is
+raising, the exception is in the logs under `retention sweep <table> failed`,
+and every other table is still being swept, which is why nothing else shows
+it. The same rows are on `/admin/operations` under **Retention**.
 
 The running server flushes and purges on its own. For cron-driven deployments,
 or to see what is stuck:

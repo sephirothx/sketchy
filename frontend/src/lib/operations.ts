@@ -126,6 +126,26 @@ export type LoopStatus = {
 
 export type QueueDepth = { pending: number; oldestSeconds: number | null };
 
+/** One retained table's last sweep, and the policy it is held to (#478).
+    `overdueSeconds` is the age of the oldest row that should already have
+    gone, counted only over rows the policy does not exempt, and `slaSeconds`
+    is how long past eligibility a row may remain. `breached` is the server's
+    answer to whether the two are in the wrong order - decided in one place
+    so the page and the alert rule cannot disagree. */
+export type RetentionTable = {
+  table: string;
+  rows: number | null;
+  backlogRows: number | null;
+  overdueSeconds: number | null;
+  slaSeconds: number | null;
+  sweepSeconds: number | null;
+  exhausted: boolean;
+  failed: boolean;
+  removedTotal: number | null;
+  failuresTotal: number | null;
+  breached: boolean;
+};
+
 /** What the stored drawings occupy (#471). Null off PostgreSQL, which has no
  *  relation-size catalogue - absent rather than a zero that would read as an
  *  empty store. */
@@ -230,6 +250,8 @@ export type ServerSignals = {
     finishedGames: QueueDepth & { failed: number; sweepSeconds: number };
   };
   loops: Record<string, LoopStatus>;
+  /** One row per retained table, empty until the retention loop's first pass. */
+  retention: RetentionTable[];
   series: {
     httpPerMinute: MinuteSeries;
     socketPerMinute: MinuteSeries;
@@ -322,7 +344,7 @@ export const ATTENTION = {
   drawingStoreBytes: 50e9,
 } as const;
 
-export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues";
+export type AttentionCard = "recorder" | "traffic" | "process" | "database" | "queues" | "retention";
 
 export type AttentionReason = {
   key: string;
@@ -381,6 +403,26 @@ export function attentionReasons(live: LiveSnapshot): AttentionReason[] {
         "queues",
         `${name} loop failing`,
         `The ${name} loop has failed ${loop.consecutiveFailures} times in a row.`,
+      );
+    }
+  }
+  for (const table of live.retention ?? []) {
+    // A failing sweep first: it is a fault, where being behind may only be a
+    // budget. Both name the table, because fault isolation means nothing else
+    // will - the loop itself goes on looking healthy.
+    if (table.failed) {
+      add(
+        `retention-failing:${table.table}`,
+        "retention",
+        `${table.table} retention sweep failing`,
+        `The ${table.table} retention sweep raised on its last run. The other sweeps are unaffected, which is why nothing else shows it.`,
+      );
+    } else if (table.breached) {
+      add(
+        `retention-behind:${table.table}`,
+        "retention",
+        `${table.table} past its retention SLA`,
+        `The oldest ${table.table} row that should already have gone is ${formatDuration(table.overdueSeconds)} past eligibility, against an allowance of ${formatDuration(table.slaSeconds)}.`,
       );
     }
   }

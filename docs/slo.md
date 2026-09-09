@@ -25,6 +25,17 @@ resets every in-memory series; Prometheus keeps the history.
 | **SLO-7** | Command handlers are fast | `sketchy:socket_p95_seconds:5m` | p95 < 100 ms | `SketchySlowCommands` (warn, 10 m) |
 | **SLO-8** | Nothing a player did is lost | `sketchy_history_writes_abandoned_total`, `sketchy_events_dropped_total` | zero | `SketchyHistoryWritesLost` (page), `SketchyRecorderDropping` (warn) |
 | **SLO-9** | Deferred work is carried out | `sketchy_mail_outbox_oldest_seconds`, `sketchy_data_exports_oldest_seconds`, `sketchy_finished_games_oldest_seconds`, `sketchy_loop_*` | oldest < 10 min (a staged finished game < 1 h, its retry schedule); every loop running and not failing | `SketchyMailBacklog`, `SketchyExportStuck`, `SketchyFinishedGamesStuck`, `SketchyLoopFailing` (warn), `SketchyLoopStopped` (page) |
+| **SLO-10** | Data is deleted when policy says it is | `sketchy_retention_overdue_seconds` against `sketchy_retention_sla_seconds`, per table | every table inside its own deletion SLA — six hours past eligibility, a day for guests and retired lists ([`database.md`](database.md) §10) | `SketchyRetentionBehind` (warn, 30 m); `SketchyRetentionSweepFailing` (warn, 2 h) and `SketchyRetentionSweepStarved` (warn, 6 h) name the table |
+
+SLO-10 is the one objective that is a promise to somebody outside the deployment rather
+than to a player at the keyboard, which is why it is measured rather than assumed. A
+retention loop that runs every hour and never fails is not evidence that anything was
+deleted on time: it is evidence that something ran. What is measured instead is what
+each sweep *left* — the age of the oldest row it should already have removed, over the
+sweep's own eligibility predicate so that rows a policy exempts (a suspended account's
+sessions, a pinned prompt revision, protected report evidence) are never counted as
+lateness. Because a clean table reports a zero rather than nothing, "no series" is a
+broken exporter and not a compliant table.
 
 Saturation signals - pool fill, statement p95, disk, memory - are not objectives but
 warnings, because each one is a cause the objectives above would show the effect of:

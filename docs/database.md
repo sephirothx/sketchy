@@ -973,17 +973,32 @@ prompt in play, chat text, or a query string.
 **Screenshots** follow `turn_drawings` rather than inventing storage:
 `screenshot_payload` with `screenshot_byte_size`, `screenshot_checksum_sha256`,
 `screenshot_content_type`, dimensions, and a `screenshot_status` of
-`none | ready | erased`. The server sniffs the magic bytes, re-derives the size and
-digest, and rejects anything that is not a real PNG or WebP under 2 MB.
+`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size
+and digest, and rejects anything that is not a real PNG or WebP under 2 MB.
 `ck_bug_reports_screenshot_ready_identity` requires a `ready` row to hold the bytes and
-their identity; `ck_bug_reports_screenshot_erased` makes erasure **structural** — a
-decided report cannot retain pixels, whatever a future code path does.
+their identity; `ck_bug_reports_screenshot_erased` and
+`ck_bug_reports_screenshot_expired` make both erasures **structural** — neither a decided
+nor an expired report can retain pixels, whatever a future code path does.
+
+**`erased` and `expired` are different facts.** `erased` means a decision was made and
+took the picture with it. `expired` means nobody decided anything and the 90-day ceiling
+came first (R-BUG-13, #478): "erased when the report is decided" is a ceiling exactly as
+long as somebody decides, and an unattended pending report used to hold up to 2 MiB of
+somebody's screen indefinitely — the one retained thing in §10 with no maximum age at
+all. Labelling that as `erased` would put a decision on the record that never happened,
+and leave the reviewer opening the still-pending report no way to tell. The report row,
+its status and every piece of screenshot metadata survive either way, so the record
+still says a picture existed and what shape it was.
+`ix_bug_reports_screenshot_expiry` — `created_at` over pending rows still holding a
+picture — is what both the hourly sweep's candidate batch and its overdue probe read.
 
 The admin queue and the account export read this table **without the screenshot column**: `screenshot_payload` is deferred with `raiseload`, so up to 200 rows of up to 2 MiB each are never transferred to serialise the shape of a picture nobody is looking at (#611, R-PLAT-14). Only the screenshot route selects the bytes.
 
 **Deciding is one-way.** A pending report receives one resolution with a required note,
 and the same transaction erases the screenshot. Submission and each decision append an
-audit event naming the report; the ledger never records what the report said.
+audit event naming the report; the ledger never records what the report said. Expiry
+appends no per-report event — nobody did anything — only one aggregate row per sweep run
+counting the pictures that went.
 
 ### `user_bans`
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
@@ -1718,27 +1733,75 @@ cd backend && .venv/bin/python -m app.services.runtime_metrics --purge
 
 ## 10. Retention summary
 
-| Data | Retention | Mechanism |
-| --- | --- | --- |
-| Friendships, including refusals | Indefinite | Deleted with either account (CASCADE), and on a block |
-| Retained messages, room and lobby alike | 30 days | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup |
-| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) |
-| Expired one-shot tokens | Until expiry; consumed on presentation | Hourly retention sweep (nothing scheduled it before #550) |
-| Pinned report evidence | Protected report policy (outlives the message) | Copied on report submission |
-| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | Rolled up first, then purged hourly from the metrics loop, bounded |
-| Daily runtime roll-ups | Permanent | — |
-| Shutdown abandonments | 90 days | Hourly retention sweep (startup-only before #550) |
-| Bug report rows | Indefinite | — |
-| Bug report screenshots | Until the report is decided | Erased in the deciding transaction; `ck_bug_reports_screenshot_erased` |
-| Data exports | 7 days (format v1) | `expires_at`; hourly retention sweep |
-| Expired sessions | 30 days past `expires_at` | Hourly retention sweep; rows of a suspended account are kept |
-| Expired rate-limit buckets | Their window | One batch every 100 checks, and the hourly retention sweep |
-| Ephemeral room codes | 30 days retirement, then reusable | `retired_until`; freed by the hourly retention sweep (collision-triggered only before #550) |
-| Codes from the removed persistent-room feature | Permanent | Never enter the reuse pool |
-| Guests with no completed game | 30 inactive days (default) | `app.auth.retention`, hourly |
-| Guests with history | 365 inactive days (default) | `app.auth.retention`, hourly; history survives via frozen snapshots |
-| Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
-| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | `services.prompt_reclaim`; revisions a game pins stay for ever |
+Two different numbers live in this section and they must not be confused. **Retention**
+is how long the data is wanted. The **deletion SLA** is how long a row may still be here
+*after* that window has passed — a lag allowance on the machinery, not on the policy.
+"30 days" says when a message stops being wanted; "6 h" says that a sweep which has not
+removed it six hours later is a fault somebody should hear about. What is measured
+against the SLA is the age of the oldest row a sweep should already have removed,
+counted only over rows the policy does not exempt (R-PRIV-17).
+
+| Data | Retention | Deletion SLA | Exempt | Mechanism |
+| --- | --- | --- | --- | --- |
+| Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block |
+| Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup |
+| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) |
+| Expired one-shot tokens | Until expiry; consumed on presentation | 6 h | — | Hourly retention sweep (nothing scheduled it before #550) |
+| Pinned report evidence | Protected report policy (outlives the message) | — | Permanently kept: it is the evidence | Copied on report submission |
+| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | 6 h | — | Rolled up first, then swept hourly by the retention loop (the metrics loop's own purge before #478) |
+| Daily runtime roll-ups | Permanent | — | Permanently kept | — |
+| Shutdown abandonments | 90 days | 6 h | — | Hourly retention sweep (startup-only before #550) |
+| Bug report rows | Indefinite | — | Permanently kept: a defect outlives its triage | — |
+| Bug report screenshots | Until the report is decided, **and 90 days either way** | 6 h | The report row and every piece of screenshot metadata | Erased in the deciding transaction; expired unreviewed by the hourly sweep; `ck_bug_reports_screenshot_erased` and `ck_bug_reports_screenshot_expired` |
+| Data exports | 7 days (format v1) | 6 h | — | `expires_at`; hourly retention sweep |
+| Expired sessions | 30 days past `expires_at` | 6 h | Sessions of a suspended account, their only route to export and deletion (R-BAN-04) | Hourly retention sweep |
+| Expired rate-limit buckets | Their window | 6 h | — | One batch every 100 checks, and the hourly retention sweep |
+| Ephemeral room codes | 30 days retirement, then reusable | 6 h | Codes of the removed persistent-room feature, which never re-enter the pool | `retired_until`; freed by the hourly retention sweep (collision-triggered only before #550) |
+| Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool |
+| Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly |
+| Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly |
+| Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
+| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; not backlog-measured, because a pinned tombstone is exempt for ever and its age would climb with nothing wrong |
+
+The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
+[`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep
+rather than restated here in prose that could drift from them. Six hours is six
+scheduled passes of an hourly loop that also catches up in five seconds when it is
+behind: reaching it means the loop missed its window six times over. A day is for the
+two sweeps whose per-run ceiling is deliberately small — guests cascade across a dozen
+tables, retired lists walk revisions, versions and concepts — so a backlog is worked off
+over several passes by design.
+
+**Retention that runs is not retention that complies.** A sweep removing five thousand
+rows an hour from a table growing by six thousand is healthy by every signal that
+existed before #478: the loop is alive, no iteration failed, rows are going. So every
+sweep also measures what it *left*, on every run and not only on a run cut short — the
+age of the oldest non-exempt row still eligible, and how many there are, counted to
+`BACKLOG_CAP` (10,000) because "more than ten thousand overdue" and "eight hundred
+thousand" call for the same action and only one of them costs a sequential scan an hour.
+Both are measured over the sweep's own eligibility predicate, so a suspended account's
+sessions, a pinned prompt revision, a persistent room code and pending mail are absent
+from the backlog exactly as they are absent from the candidates. A table that owes
+nothing reports **zero rather than nothing**: an absent Prometheus series does not
+compare greater than its allowance, so a rule written on a metric that appears only
+while a sweep is behind is silent for precisely as long as nobody is looking.
+
+Per table, on `/metrics` and under `retention` on the operations page:
+`sketchy_retention_overdue_seconds`, `sketchy_retention_sla_seconds` (identical labels,
+so one rule holds every table to its own policy), `sketchy_retention_backlog_rows`,
+`sketchy_retention_sweep_seconds`, `sketchy_retention_sweep_exhausted`,
+`sketchy_retention_sweep_failed`, `sketchy_retention_rows_removed_total` and
+`sketchy_retention_sweep_failures_total`. The alerts are `SketchyRetentionBehind`,
+`SketchyRetentionSweepFailing` and `SketchyRetentionSweepStarved`, all naming the table
+— because fault isolation means nothing else will: one sweep failing every hour leaves
+the other eleven succeeding and the loop looking merely intermittent
+([`slo.md`](slo.md) SLO-10).
+
+Deletion evidence in `audit_events` is deliberately **aggregate and sparse**: the guest
+purge writes one row per applied run (R-PRIV-10), screenshot expiry writes one row per
+run saying how many pictures went and never whose, and the sweeps over rows that hold no
+personal content write none at all. A ledger row per purged session would be a second
+copy of the retention log, at 24 permanent rows a day, saying nothing the metrics do not.
 
 **Every sweep is bounded, scheduled, observable and fault-isolated** (#550,
 [`services/sweeps.py`](../backend/app/services/sweeps.py)). The hourly retention loop
@@ -1746,11 +1809,12 @@ runs the sweeps above in a fixed order, each through `delete_in_batches`: an ind
 deterministically ordered select of at most `RETENTION_SWEEP_BATCH_ROWS` (500) keys,
 deleted in a transaction of their own, repeated until the table is clean or the run's
 `RETENTION_SWEEP_ROW_BUDGET` (5,000 rows) or `RETENTION_SWEEP_SECONDS_BUDGET` (30 s) is
-spent. A sweep cut short reports so, with the age of the oldest row still overdue, and
-the loop comes back after `CATCH_UP_SECONDS` (5) instead of an hour until nothing is
-behind; a sweep that raises is logged and counted on the loop's health and the sweeps
-after it still run. Each sweep's rows, batches, duration and backlog appear under the
-`retention_sweep` loop in `/api/health`. Startup runs no purge of its own: the loop's
+spent. A screenshot's expiry is the one sweep that takes `erase_in_batches` instead —
+same batching, same budget, same probe, an `UPDATE` because the retention window is over
+a column and the row must survive it. A sweep cut short reports so, and the loop comes
+back after `CATCH_UP_SECONDS` (5) instead of an hour until nothing is behind; a sweep that raises is logged and counted on the loop's health and the sweeps
+after it still run. Each sweep's rows, batches, duration, backlog and SLA
+appear under the `retention_sweep` loop in `/api/health`. Startup runs no purge of its own: the loop's
 first pass starts immediately, bounded, so a backlog left by a long outage cannot delay
 serving. The chat writer only inserts; before #550 its first batch also ran the message
 purge inside its own transaction.

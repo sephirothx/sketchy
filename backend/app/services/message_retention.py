@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.erasure import erased_identity_ids
@@ -15,6 +15,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 from app.db.models import RoomMessage
@@ -55,9 +56,7 @@ async def purge_expired_room_messages(
         .order_by(RoomMessage.expires_at, RoomMessage.id),
         delete_for=lambda ids: delete(RoomMessage).where(RoomMessage.id.in_(ids)),
         budget=budget or sweep_budget_from_env(),
-        overdue=select(func.min(RoomMessage.expires_at)).where(
-            RoomMessage.expires_at <= cutoff
-        ),
+        probe=overdue_probe(RoomMessage.expires_at, RoomMessage.expires_at <= cutoff),
         now=cutoff,
     )
 

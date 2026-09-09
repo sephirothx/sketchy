@@ -48,6 +48,7 @@ from app.services.runtime_metrics import (
 from app.services.telemetry import (
     Telemetry,
     gauge_lines,
+    labelled_counter_lines,
     labelled_gauge_lines,
     telemetry as default_telemetry,
 )
@@ -94,6 +95,94 @@ def _loop_lines(loops: dict[str, dict[str, object]]) -> list[str]:
             "Seconds since the loop last completed an iteration.",
             ("loop",),
             rows("seconds_since_success"),
+        ),
+    ]
+
+
+def retention_sweeps_from(loops: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    """Each retention sweep's last run, from whichever loop reported one.
+
+    The retention loop records what every table did on its health, so this is
+    process memory: the compliance series cost the database nothing at scrape
+    time, and they are the same numbers the operations page shows.
+    """
+    found: dict[str, dict[str, object]] = {}
+    for entry in loops.values():
+        detail = entry.get("detail")
+        sweeps = detail.get("sweeps") if isinstance(detail, dict) else None
+        if isinstance(sweeps, dict):
+            for table, report in sweeps.items():
+                if isinstance(report, dict):
+                    found[table] = report
+    return found
+
+
+def _retention_lines(sweeps: dict[str, dict[str, object]]) -> list[str]:
+    """Per-table retention compliance, in a form an alert rule can watch.
+
+    `sketchy_retention_overdue_seconds` and `sketchy_retention_sla_seconds`
+    carry identical labels on purpose: one rule comparing the two covers
+    every table without naming any of them or restating a policy that lives
+    in `auth/retention.py`. A table that is clean reports a zero rather than
+    nothing at all, because an absent series is not less than its allowance -
+    it is silence (#478).
+    """
+    names = sorted(sweeps)
+
+    def rows(key: str, *, cast=lambda value: value, default=None):
+        for name in names:
+            value = sweeps[name].get(key, default)
+            if value is not None:
+                yield (name,), cast(value)
+
+    return [
+        *labelled_gauge_lines(
+            "sketchy_retention_overdue_seconds",
+            "Age of the oldest non-exempt row this sweep should already have removed.",
+            ("table",),
+            rows("oldest_overdue_seconds"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_retention_sla_seconds",
+            "How long this table's rows may remain after becoming eligible for removal.",
+            ("table",),
+            rows("sla_seconds"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_retention_backlog_rows",
+            "Non-exempt rows still eligible for removal, counted no further than the cap.",
+            ("table",),
+            rows("backlog"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_retention_sweep_seconds",
+            "How long this table's last sweep took.",
+            ("table",),
+            rows("seconds"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_retention_sweep_exhausted",
+            "Whether the last sweep of this table spent its budget with work left.",
+            ("table",),
+            rows("exhausted", cast=int, default=False),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_retention_sweep_failed",
+            "Whether the last sweep of this table raised.",
+            ("table",),
+            rows("failed", cast=int, default=False),
+        ),
+        *labelled_counter_lines(
+            "sketchy_retention_rows_removed_total",
+            "Rows this sweep has removed or erased since the process started.",
+            ("table",),
+            rows("removed_total"),
+        ),
+        *labelled_counter_lines(
+            "sketchy_retention_sweep_failures_total",
+            "Runs of this sweep that raised since the process started.",
+            ("table",),
+            rows("failures_total"),
         ),
     ]
 
@@ -196,6 +285,31 @@ def _queue_lines(queues: QueueSnapshot | None) -> list[str]:
             "Staged finished games given up on and kept as a record.",
             queues.finished_games.failed,
         ),
+    ]
+
+
+def _retention_json(sweeps: dict[str, dict[str, object]]) -> list[dict[str, object]]:
+    """The same compliance numbers for the in-app page, one row per table.
+
+    `breached` is the sweep's own verdict, carried rather than recomputed:
+    whether a table is past its SLA is a policy question with one answer, and
+    two surfaces deciding it separately is how they come to disagree.
+    """
+    return [
+        {
+            "table": table,
+            "rows": sweeps[table].get("rows"),
+            "backlogRows": sweeps[table].get("backlog"),
+            "overdueSeconds": sweeps[table].get("oldest_overdue_seconds"),
+            "slaSeconds": sweeps[table].get("sla_seconds"),
+            "sweepSeconds": sweeps[table].get("seconds"),
+            "exhausted": bool(sweeps[table].get("exhausted")),
+            "failed": bool(sweeps[table].get("failed")),
+            "removedTotal": sweeps[table].get("removed_total"),
+            "failuresTotal": sweeps[table].get("failures_total"),
+            "breached": bool(sweeps[table].get("breached")),
+        }
+        for table in sorted(sweeps)
     ]
 
 
@@ -400,6 +514,7 @@ def create_operations_router(
             *_prometheus_lines(),
             *store.prometheus_lines(),
             *_loop_lines(loop_snapshot()),
+            *_retention_lines(retention_sweeps_from(loop_snapshot())),
             *_queue_lines(await _queue_depths_for_scrape(queues)),
             *_drawing_store_lines(await _drawing_store_for_scrape(drawings)),
         ]
@@ -482,6 +597,7 @@ def create_operations_router(
                 },
             },
             "loops": _camel_loops(loop_snapshot()),
+            "retention": _retention_json(retention_sweeps_from(loop_snapshot())),
             "series": signals["series"],
         }
 

@@ -309,6 +309,51 @@ export function DatabaseCard({ live, reasons }: { live: LiveSnapshot; reasons: A
   );
 }
 
+/** Per-table retention compliance (#478).
+ *
+ *  A loop that runs is not a policy that is kept: what this card shows is
+ *  what each sweep *left* behind - how far past its allowance the oldest row
+ *  it should already have removed is, and how many are waiting. A table that
+ *  owes nothing says so, because "no number" and "nothing overdue" have to
+ *  look different for the panel to be worth reading. */
+export function RetentionCard({ live, reasons }: { live: LiveSnapshot; reasons: AttentionReason[] }) {
+  const tables = live.retention ?? [];
+  return (
+    <SignalCard
+      title="Retention"
+      sub="What each table still owes, against the deletion SLA it is held to"
+      card="retention"
+      reasons={reasons}
+      wide
+    >
+      {tables.map((table) => (
+        <div
+          key={table.table}
+          className={`ops-health-row${table.failed || table.breached ? " is-warning" : ""}`}
+        >
+          <span className="ops-health-dot" aria-hidden="true" />
+          <strong className="ops-loop-name">{table.table}</strong>
+          <span>
+            {table.failed
+              ? "last sweep failed"
+              : table.overdueSeconds === null
+                ? "backlog not measured"
+                : table.overdueSeconds > 0
+                  ? `oldest overdue ${formatDuration(table.overdueSeconds)}`
+                  : "nothing overdue"}
+            {table.slaSeconds !== null && ` · SLA ${formatDuration(table.slaSeconds)}`}
+            {table.backlogRows ? ` · ${table.backlogRows} waiting` : ""}
+            {table.exhausted && " · budget spent"}
+            {table.removedTotal ? ` · ${table.removedTotal} removed since start` : ""}
+            {table.failuresTotal ? ` · ${table.failuresTotal} failures since start` : ""}
+          </span>
+        </div>
+      ))}
+      {tables.length === 0 && <p className="ops-empty">The retention loop has not finished a pass yet.</p>}
+    </SignalCard>
+  );
+}
+
 export function QueuesCard({ live, reasons }: { live: LiveSnapshot; reasons: AttentionReason[] }) {
   const { queues } = live;
   const loops = Object.entries(live.loops).sort(([left], [right]) => left.localeCompare(right));

@@ -148,6 +148,44 @@ groups:
           summary: "Statement p95 is over 50 ms ({{ $value | humanizeDuration }})"
           runbook: "README.md#on-call"
 
+      # Retention that runs is not retention that complies: a sweep removing
+      # five thousand rows an hour on a table growing by six thousand looks
+      # perfectly healthy. Both series carry the same `table` label, so this
+      # one rule holds every table to its own SLA without naming any of them;
+      # the policy lives in backend/app/auth/retention.py and docs/database.md
+      # §10, and this rule stays true when it changes.
+      - alert: SketchyRetentionBehind
+        expr: sketchy_retention_overdue_seconds > sketchy_retention_sla_seconds
+        for: 30m
+        labels: {severity: warn}
+        annotations:
+          summary: "Retention on {{ $labels.table }} is past its SLA: oldest overdue row is {{ $value | humanizeDuration }} old"
+          description: "The sweep is alive and behind, or starved of budget. sketchy_retention_backlog_rows says how much is waiting and sketchy_retention_sweep_exhausted whether the budget is the limit; raise RETENTION_SWEEP_ROW_BUDGET or shorten RETENTION_SWEEP_SECONDS before assuming a fault."
+          runbook: "README.md#on-call"
+
+      # Per-table, because the loop's own counters cannot say which table:
+      # every sweep is fault-isolated, so one failing every hour leaves the
+      # other eleven succeeding and the loop looking merely intermittent.
+      - alert: SketchyRetentionSweepFailing
+        expr: sketchy_retention_sweep_failed == 1
+        for: 2h
+        labels: {severity: warn}
+        annotations:
+          summary: "The {{ $labels.table }} retention sweep has been failing for two hours"
+          description: "Fault isolation keeps the other sweeps running, so nothing else will show this. The exception is in the logs under 'retention sweep {{ $labels.table }} failed'."
+          runbook: "README.md#on-call"
+
+      # Budget spent on every pass for six hours. Not yet a breach - the
+      # catch-up tick may still be keeping up - but it is the shape that
+      # becomes one, and the fix (a bigger budget) is the same either way.
+      - alert: SketchyRetentionSweepStarved
+        expr: sketchy_retention_sweep_exhausted == 1
+        for: 6h
+        labels: {severity: warn}
+        annotations:
+          summary: "The {{ $labels.table }} retention sweep has spent its whole budget on every pass for six hours"
+          runbook: "README.md#on-call"
+
       - alert: SketchyMailBacklog
         expr: sketchy_mail_outbox_oldest_seconds > 600
         for: 10m
