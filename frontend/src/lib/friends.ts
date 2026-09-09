@@ -73,7 +73,11 @@ export function parseFriendLists(payload: unknown): FriendLists {
   };
 }
 
-/** What the lobby offers on one online player's row.
+/** Where a friendship with one online player has got to.
+
+Named for the state rather than for a control: the row acts on `add` and only
+*reports* `accept` and `sent`, because a request is answered on the friends
+surface (R-FRIEND-10).
 
 Kept as a derivation over the lists rather than as flags on the row, because
 the presence channel and the friend lists arrive independently and neither is
@@ -146,4 +150,48 @@ export function parseFriendInvite(payload: unknown): FriendInvite | null {
     inviteToken: body.inviteToken,
     expiresIn,
   };
+}
+
+/** The friends surface, in the order it is read (R-FRIEND-10).
+
+Three groups rather than one list, because the answer each asks for is
+different: an incoming request wants an answer, an outgoing one wants leaving
+alone or withdrawing, and a friendship wants neither. Derived here rather than
+in the component so the ordering is checkable without a browser.
+
+Requests are newest first — a fresh ask is the one still on somebody's mind —
+and friendships are alphabetical, because a friend list is scanned for a name
+rather than read from the top. `localeCompare` rather than `<`, so an accented
+name sorts where a reader expects it rather than after `z`. */
+export interface FriendsSurface {
+  incoming: FriendEntry[];
+  outgoing: FriendEntry[];
+  friends: FriendEntry[];
+}
+
+function newestFirst(entries: FriendEntry[]): FriendEntry[] {
+  return [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function friendsSurface(lists: FriendLists): FriendsSurface {
+  return {
+    incoming: newestFirst(lists.incoming),
+    outgoing: newestFirst(lists.outgoing),
+    friends: [...lists.friends].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+    ),
+  };
+}
+
+/** Whether the surface has nothing in it at all.
+
+One check rather than three at the call site: the empty state is about the
+whole surface, and a reader with two pending requests and no friends is not
+looking at an empty screen. */
+export function friendsSurfaceIsEmpty(surface: FriendsSurface): boolean {
+  return (
+    surface.incoming.length === 0 &&
+    surface.outgoing.length === 0 &&
+    surface.friends.length === 0
+  );
 }

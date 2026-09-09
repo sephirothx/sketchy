@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   NO_FRIENDS,
   friendActionFor,
+  friendsSurface,
+  friendsSurfaceIsEmpty,
   isFriend,
   parseFriendInvite,
   parseFriendLists,
@@ -131,4 +133,59 @@ test("an invitation with no name still says somebody sent it", () => {
     expiresIn: 60,
   });
   assert.equal(parsed.displayName, "A friend");
+});
+
+// --------------------------------------------------- the friends surface
+
+const surfaceEntry = (userId, extra = {}) => entry(userId, extra);
+
+test("the surface orders requests newest first and friends by name", () => {
+  const { incoming, outgoing, friends } = friendsSurface({
+    friends: [
+      surfaceEntry("zoe", { displayName: "Zoe" }),
+      surfaceEntry("ana", { displayName: "ana" }),
+      surfaceEntry("bob", { displayName: "Bob" }),
+    ],
+    incoming: [
+      surfaceEntry("old", { createdAt: "2026-01-01T00:00:00Z" }),
+      surfaceEntry("new", { createdAt: "2026-09-01T00:00:00Z" }),
+    ],
+    outgoing: [
+      surfaceEntry("sent-old", { createdAt: "2026-02-01T00:00:00Z" }),
+      surfaceEntry("sent-new", { createdAt: "2026-08-01T00:00:00Z" }),
+    ],
+  });
+  assert.deepEqual(incoming.map((row) => row.userId), ["new", "old"]);
+  assert.deepEqual(outgoing.map((row) => row.userId), ["sent-new", "sent-old"]);
+  // Case-insensitively, so "ana" is not exiled after "Zoe".
+  assert.deepEqual(friends.map((row) => row.userId), ["ana", "bob", "zoe"]);
+});
+
+test("the surface does not reorder the lists it was handed", () => {
+  const lists = {
+    ...NO_FRIENDS,
+    incoming: [
+      surfaceEntry("old", { createdAt: "2026-01-01T00:00:00Z" }),
+      surfaceEntry("new", { createdAt: "2026-09-01T00:00:00Z" }),
+    ],
+  };
+  friendsSurface(lists);
+  assert.deepEqual(lists.incoming.map((row) => row.userId), ["old", "new"]);
+});
+
+test("a surface is empty only when all three groups are", () => {
+  assert.equal(friendsSurfaceIsEmpty(friendsSurface(NO_FRIENDS)), true);
+  // One waiting request is not an empty screen, even with no friends at all.
+  assert.equal(
+    friendsSurfaceIsEmpty(
+      friendsSurface({ ...NO_FRIENDS, incoming: [surfaceEntry("asker")] }),
+    ),
+    false,
+  );
+  assert.equal(
+    friendsSurfaceIsEmpty(
+      friendsSurface({ ...NO_FRIENDS, outgoing: [surfaceEntry("asked")] }),
+    ),
+    false,
+  );
 });

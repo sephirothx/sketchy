@@ -69,6 +69,12 @@ def test_app_tsx_is_where_this_thinks_it_is():
         "/my-prompt-lists",
         "/profile",
         "/profile/0193f0c1-2b3d-7e00-8a11-6f9c0d2e4b5a",
+        # Overlay routes. They render no page of their own - the table draws
+        # whatever is underneath - but they are still URLs somebody can link
+        # to, and a 404 for one would make a bookmarked overlay look broken.
+        "/settings",
+        "/settings/appearance",
+        "/friends",
         "/forgot-password",
         "/reset-password",
         "/verify-email",
@@ -84,6 +90,7 @@ def test_app_tsx_is_where_this_thinks_it_is():
         "/Admin/Operations",
         "/My-Prompt-Lists",
         "/Forgot-Password",
+        "/Friends",
     ],
 )
 def test_a_page_the_client_has_is_a_client_route(path):

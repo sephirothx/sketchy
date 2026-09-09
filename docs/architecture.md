@@ -229,6 +229,17 @@ Routes ([`frontend/src/App.tsx:59`](../frontend/src/App.tsx)):
 | `/admin/bug-reports` | [`BugReportsPage`](../frontend/src/pages/BugReportsPage.tsx) |
 | `*` | [`NotFoundPage`](../frontend/src/pages/NotFoundPage.tsx) |
 
+Two more routes render no page of their own. `/settings/:section` (R-SET-06) and
+`/friends` (R-FRIEND-10) are **overlays**: the table above is rendered against the
+location the overlay was opened *from*, and the overlay is drawn beside it, so
+opening one never unmounts a live room. They are still routes, so they can be
+linked and bookmarked, and they are still in the server's list, so a bookmarked
+overlay does not answer 404. The shared half — which paths are overlays, and the
+history state naming the page underneath — is
+[`lib/overlayRoutes.ts`](../frontend/src/lib/overlayRoutes.ts) and
+[`hooks/useOverlayRoute.ts`](../frontend/src/hooks/useOverlayRoute.ts); a third
+overlay adds a pattern there rather than a second copy of the mechanism.
+
 A URL that matches none of the others is served the same shell, so the client can
 draw `NotFoundPage`, but **with a 404 status** — otherwise every typo tells a crawler
 or an uptime probe that a page exists. Deciding that needs the route list on the

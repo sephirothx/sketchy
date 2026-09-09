@@ -35,15 +35,33 @@ async def sign_up(page, username: str) -> None:
     await register_account(page, username)
 
 
+async def open_friends(page) -> None:
+    """Reach the friends surface the way a player does, from the account menu."""
+    await page.locator(".account-menu > button").first.click()
+    await page.get_by_role("menuitem", name="Friends").click()
+    await page.wait_for_selector('[data-testid="friends"]')
+
+
 async def make_friends(asker, accepter, asker_name: str, accepter_name: str) -> None:
-    """Ask from one lobby and accept from the other."""
+    """Ask from one lobby, and answer it where requests are answered.
+
+    Which is the friends surface, not the lobby row: the online panel says a
+    request is waiting and stops there (R-FRIEND-10).
+    """
     row = row_for(asker, accepter_name)
     await expect(row).to_be_visible(timeout=SETTLE_MS)
     await row.locator(".online-add-friend").click()
 
-    incoming = row_for(accepter, asker_name).get_by_role("button", name="Accept")
+    await expect(row_for(accepter, asker_name)).to_contain_text(
+        "Wants to be friends", timeout=SETTLE_MS
+    )
+    await open_friends(accepter)
+    incoming = accepter.locator('[data-testid="friends-incoming"]').get_by_role(
+        "button", name="Accept"
+    )
     await expect(incoming).to_be_visible(timeout=SETTLE_MS)
     await incoming.click()
+    await accepter.get_by_role("button", name="Close friends").click()
     # Both sides settle on a friendship: the asker's row stops offering to ask.
     await expect(row.locator(".online-add-friend")).to_have_count(
         0, timeout=SETTLE_MS
@@ -165,4 +183,139 @@ async def test_a_guest_is_not_offered_a_friendship_it_cannot_have():
         finally:
             await guest_context.close()
             await member_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_friends_surface_shows_a_request_from_somebody_offline():
+    """The gap the surface exists to close (R-FRIEND-10).
+
+    Everything the lobby offers is about who is online. A request from
+    somebody who has since closed their tab, and a request you sent that you
+    would like back, both live nowhere else - so this proves the surface holds
+    them once the other browser is gone, and that cancelling a sent request
+    works from there.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        asker_context = await browser.new_context()
+        target_context = await browser.new_context()
+        asker = await asker_context.new_page()
+        target = await target_context.new_page()
+        asker_name, target_name = unique("Asker"), unique("Target")
+
+        try:
+            await sign_up(asker, asker_name)
+            await sign_up(target, target_name)
+
+            row = row_for(asker, target_name)
+            await expect(row).to_be_visible(timeout=SETTLE_MS)
+            await row.locator(".online-add-friend").click()
+            # The lobby row settles before the asker's browser is the only one
+            # left, so what follows is about the surface rather than a race.
+            # Asserted over the row: it carries two statuses, the friendship's
+            # and the presence one, and this is about the first.
+            await expect(row).to_contain_text("Request sent", timeout=SETTLE_MS)
+
+            # The target's own surface holds the request with the asker gone.
+            await open_friends(target)
+            incoming = target.locator('[data-testid="friends-incoming"]')
+            await expect(incoming).to_contain_text(asker_name, timeout=SETTLE_MS)
+
+            # And the asker can see and withdraw what they sent, which the
+            # lobby only ever showed while the other person was online.
+            await open_friends(asker)
+            outgoing = asker.locator('[data-testid="friends-outgoing"]')
+            await expect(outgoing).to_contain_text(target_name, timeout=SETTLE_MS)
+            await outgoing.get_by_role("button", name="Cancel").click()
+            await expect(asker.locator('[data-testid="friends-outgoing"]')).to_have_count(
+                0, timeout=SETTLE_MS
+            )
+
+            # Cancelling deletes the row rather than leaving a refusal, so it
+            # is gone from the other side too (R-FRIEND-05).
+            await expect(
+                target.locator('[data-testid="friends-incoming"]')
+            ).to_have_count(0, timeout=SETTLE_MS)
+        finally:
+            await asker_context.close()
+            await target_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_friends_surface_draws_over_a_live_room():
+    """Answering a request must not cost a seat (R-FRIEND-10, R-SET-06).
+
+    The whole reason this is an overlay on a route rather than a page.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        name = unique("Seated")
+
+        try:
+            await sign_up(page, name)
+            await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+            room_url = page.url
+
+            await open_friends(page)
+            assert page.url.endswith("/friends")
+            # The room is still mounted underneath, not unmounted and replaced.
+            await expect(page.locator('[data-testid="waiting-room"]')).to_be_visible()
+
+            await page.get_by_role("button", name="Close friends").click()
+            await expect(page.locator('[data-testid="friends"]')).to_have_count(0)
+            assert page.url == room_url
+            await expect(page.locator('[data-testid="waiting-room"]')).to_be_visible()
+        finally:
+            await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_online_panel_reports_a_request_without_answering_it():
+    """Who is online says who is around; Friends is where a request is answered.
+
+    A pair of answer buttons on a row that comes and goes with presence is a
+    decision taken in the wrong place - and a decline in particular is kept
+    (R-FRIEND-05), so it belongs behind the confirmation the surface gives it.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        asker_context = await browser.new_context()
+        target_context = await browser.new_context()
+        asker = await asker_context.new_page()
+        target = await target_context.new_page()
+        asker_name, target_name = unique("Asker"), unique("Target")
+
+        try:
+            await sign_up(asker, asker_name)
+            await sign_up(target, target_name)
+
+            row = row_for(asker, target_name)
+            await expect(row).to_be_visible(timeout=SETTLE_MS)
+            await row.locator(".online-add-friend").click()
+
+            await expect(row_for(target, asker_name)).to_contain_text(
+                "Wants to be friends", timeout=SETTLE_MS
+            )
+            # Stated, not offered - anywhere on the panel, for anyone.
+            panel = target.locator('[data-testid="online-players-list"]')
+            await expect(panel.get_by_role("button", name="Accept")).to_have_count(0)
+            await expect(panel.get_by_role("button", name="Decline")).to_have_count(0)
+            # And the block that used to carry requests from offline senders is
+            # gone with it: the surface holds those now.
+            await expect(
+                target.locator('[data-testid="friend-requests"]')
+            ).to_have_count(0)
+
+            # The mirror of it on the sender's side.
+            await expect(row).to_contain_text("Request sent", timeout=SETTLE_MS)
+        finally:
+            await asker_context.close()
+            await target_context.close()
             await browser.close()
