@@ -1446,6 +1446,7 @@ older build is still found and still becomes disconnected.
 | E2E | `backend/tests/e2e/` | Real multi-browser Playwright sessions across Chromium and Firefox |
 | Benchmarks | `benchmarks/`, `frontend/benchmarks/` | Diagnostic baselines, deliberately **not** CI thresholds |
 | Repository hygiene | `backend/tests/test_repo_artifacts.py` | No database, env file, or private key is tracked - by name or by bytes |
+| Document invariants | `backend/tests/test_requirements_ids.py` | Every requirement and non-goal ID in `docs/requirements.md` names exactly one thing |
 
 Two rules keep the E2E suite fast: a test waits on the condition it actually cares
 about (never a fixed sleep sized to outlast it), and where it genuinely must sit out a

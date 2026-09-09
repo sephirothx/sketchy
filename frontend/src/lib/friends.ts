@@ -35,7 +35,7 @@ export interface FriendLists {
       them about yet. Read off the row rather than derived from the lists
       moving: a client that was reloading when the answer came has no earlier
       read to compare against, and being accepted is not something anybody
-      should have to be looking at the right moment to learn (R-FRIEND-13). */
+      should have to be looking at the right moment to learn (R-FRIEND-14). */
   announce: FriendEntry[];
 }
 
@@ -325,7 +325,7 @@ function idsOf(entries: FriendEntry[]): Set<string> {
 a difference between two reads, so a reader who was not present for the move
 still gets it. `arrived` stays a diff - an incoming request that goes
 unannounced is still sitting in the list with a badge over it, while an
-acceptance leaves no trace at all (R-FRIEND-13). */
+acceptance leaves no trace at all (R-FRIEND-14). */
 export function friendListChanges(
   before: FriendLists,
   after: FriendLists,

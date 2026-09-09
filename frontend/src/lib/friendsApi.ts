@@ -34,7 +34,7 @@ export function acceptFriend(userId: string): Promise<{ status: string }> {
 Sent after the message is shown. Recording first loses the news whenever the
 render does not happen, and recording everything outstanding swallows an
 acceptance that landed in between; the failure this leaves is being told
-twice (R-FRIEND-13). */
+twice (R-FRIEND-14). */
 export function announcedFriendships(
   userIds: string[],
 ): Promise<{ ok: boolean; announced: number }> {
