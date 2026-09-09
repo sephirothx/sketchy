@@ -8,6 +8,7 @@ locks, and either way a second sweep could take the same row.
 from __future__ import annotations
 
 import asyncio
+import smtplib
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -18,6 +19,7 @@ from app.db import create_db_engine
 
 from app.auth.mail import (
     CLAIM_LEASE,
+    ConsoleTransport,
     MAX_ATTEMPTS,
     MAX_CONCURRENT_SENDS,
     EmailTemplate,
@@ -408,5 +410,245 @@ async def test_purge_refuses_a_batch_size_that_cannot_finish(tmp_path):
     try:
         with pytest.raises(ValueError):
             await purge_expired_outbox_entries(factory, batch_size=0)
+    finally:
+        await engine.dispose()
+
+
+async def test_the_console_transport_writes_the_whole_message_outside_production(caplog):
+    """The link with its token in it, which is what makes recovery completable
+    on a checkout that has no relay (R-AUTH-12)."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="app.auth.mail"):
+        await ConsoleTransport({"SKETCHY_ENV": "development"}).send(
+            OutgoingMessage(
+                to_address="player@example.test",
+                subject="Reset your Sketchy password",
+                body="Choose a new password here: http://localhost:8000/reset-password?token=abc123",
+            )
+        )
+    assert "token=abc123" in caplog.text
+
+
+async def test_the_console_transport_refuses_to_log_a_body_in_production(caplog):
+    """#466: a reset link in a log store is a live credential somewhere
+    nobody scoped for one. Startup already refuses a production process with
+    no relay; this is the lock on the statement that would write the body."""
+    import logging
+
+    message = OutgoingMessage(
+        to_address="player@example.test",
+        subject="Reset your Sketchy password",
+        body="Choose a new password here: https://sketchy.example/reset-password?token=abc123",
+    )
+    with caplog.at_level(logging.DEBUG, logger="app.auth.mail"):
+        with pytest.raises(RuntimeError, match="must not run in production"):
+            await ConsoleTransport({"SKETCHY_ENV": "production"}).send(message)
+    assert "abc123" not in caplog.text
+    assert "player@example.test" not in caplog.text
+
+
+async def test_production_with_no_relay_selects_a_transport_that_will_not_log():
+    """Belt and braces on the startup guard: even reached from an operator
+    command in an environment that got past it, the fallback sends nothing to
+    the log."""
+    from app.auth.mail import transport_from_environment
+
+    carrier = transport_from_environment({"SKETCHY_ENV": "production"})
+    assert isinstance(carrier, ConsoleTransport)
+    with pytest.raises(RuntimeError, match="must not run in production"):
+        await carrier.send(
+            OutgoingMessage(to_address="p@example.test", subject="s", body="b")
+        )
+
+
+async def test_giving_up_on_a_message_names_the_domain_and_not_the_person(tmp_path, caplog):
+    """The line a failing relay is diagnosed from. The domain says which
+    provider was involved; the local part only names somebody, and this is
+    redacted here rather than left to the JSON formatter so it holds under
+    `LOG_FORMAT=text` too."""
+    import logging
+
+    engine, factory = await outbox(tmp_path)
+
+    class BrokenTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError("relay refused")
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+            at = datetime.now(timezone.utc)
+            for _ in range(MAX_ATTEMPTS):
+                await deliver_pending(factory, transport=BrokenTransport(), now=at)
+                at += timedelta(hours=3)
+        assert "player0@example.test" not in caplog.text
+        assert "***@example.test" in caplog.text
+        # Still diagnosable: the template and the relay's own answer.
+        assert "relay refused" in caplog.text
+    finally:
+        await engine.dispose()
+
+
+async def test_a_relay_that_names_the_recipient_in_its_refusal_is_redacted_too(
+    tmp_path, caplog
+):
+    """`SMTPRecipientsRefused` stringifies with the address inside it, so the
+    error a relay hands back carries the recipient whether or not the line
+    reporting it redacts the one on the outbox row. Redacted where the string
+    is made, so the log line and `last_error` - a column kept 30 days - are
+    both safe under `LOG_FORMAT=text`, which switches the JSON formatter's
+    redaction off."""
+    import logging
+
+    engine, factory = await outbox(tmp_path)
+
+    class RefusingTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise smtplib.SMTPRecipientsRefused(
+                {message.to_address: (550, b"5.1.1 no such mailbox")}
+            )
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+            at = datetime.now(timezone.utc)
+            for _ in range(MAX_ATTEMPTS):
+                await deliver_pending(factory, transport=RefusingTransport(), now=at)
+                at += timedelta(hours=3)
+        assert "player0@example.test" not in caplog.text
+        assert "***@example.test" in caplog.text
+        # And the same string as it was stored, not only as it was logged.
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "player0@example.test" not in entry.last_error
+        # Still the relay's own answer, which is what diagnoses this.
+        assert "5.1.1" in entry.last_error
+    finally:
+        await engine.dispose()
+
+
+async def test_a_long_relay_error_cannot_be_cut_into_a_visible_address(tmp_path):
+    """`last_error` is a 256-character column. Redacting after that cut would
+    let it land inside the address - past the `@`, before enough of the domain
+    for the pattern to recognise one - and leave the local part standing.
+    Redacting first spends the budget on text that is already safe.
+
+    The padding is the length that tells the two orders apart; a relay that
+    answers at length before naming who it refused is the real shape of it.
+    """
+    engine, factory = await outbox(tmp_path)
+
+    class VerboseTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError("x" * 239 + message.to_address)
+
+    try:
+        at = datetime.now(timezone.utc)
+        for _ in range(MAX_ATTEMPTS):
+            await deliver_pending(factory, transport=VerboseTransport(), now=at)
+            at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "player0@" not in entry.last_error
+    finally:
+        await engine.dispose()
+
+
+# The local parts are a sentinel rather than a name, so the assertion can be
+# "no fragment of it survives" rather than "the whole of it does not" - the
+# pattern this replaces masked `foo!bar@x` as `foo!***@x`, which passes the
+# weaker check while leaking the half that identifies somebody.
+@pytest.mark.parametrize(
+    "address",
+    [
+        "zqx!zqx@example.test",
+        '"zqx"@example.test',
+        "zqx'zqx@example.test",
+        "zqx@a.b",
+        "a=zqx#{zqx}@example.test",
+    ],
+)
+async def test_any_address_the_account_layer_stores_is_masked_on_the_way_out(
+    tmp_path, caplog, address
+):
+    """`normalize_email` asks only for a non-blank local part, an `@`, and a
+    domain with a dot in it. The recipient is masked by splitting the address
+    this row already holds, not by finding one in text, so the shapes that
+    slip past a pattern - a local part with atext specials in it, a quoted
+    one, a single-character final label - are masked here the same as any
+    other, in the log line and in `last_error` alike."""
+    import logging
+
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'shapes.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        async with session.begin():
+            queue_email(
+                session,
+                to_address=address,
+                template=EmailTemplate.VERIFY_EMAIL,
+                payload={"displayName": "Player", "token": "t"},
+            )
+
+    _, _, domain = address.rpartition("@")
+
+    class RefusingTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise smtplib.SMTPRecipientsRefused(
+                {message.to_address: (550, b"5.1.1 no such mailbox")}
+            )
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+            at = datetime.now(timezone.utc)
+            for _ in range(MAX_ATTEMPTS):
+                await deliver_pending(factory, transport=RefusingTransport(), now=at)
+                at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        for written in (caplog.text, entry.last_error):
+            assert "zqx" not in written
+            # The domain stays: it is what says which relay was involved.
+            assert f"***@{domain}" in written
+        assert "5.1.1" in entry.last_error
+    finally:
+        await engine.dispose()
+
+
+async def test_a_recipient_whose_domain_could_be_read_as_a_backreference(tmp_path):
+    """The mask carries a domain this process did not choose. Substituted by
+    a function rather than a replacement string, so a backslash in it is a
+    character and not a group reference."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'odd.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    address = "player@ex\\1ample.test"
+    async with factory() as session:
+        async with session.begin():
+            queue_email(
+                session,
+                to_address=address,
+                template=EmailTemplate.VERIFY_EMAIL,
+                payload={"displayName": "Player", "token": "t"},
+            )
+
+    class RefusingTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError(f"550 no mailbox {message.to_address}")
+
+    try:
+        at = datetime.now(timezone.utc)
+        for _ in range(MAX_ATTEMPTS):
+            await deliver_pending(factory, transport=RefusingTransport(), now=at)
+            at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "player@" not in entry.last_error
     finally:
         await engine.dispose()

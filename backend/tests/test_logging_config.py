@@ -118,6 +118,17 @@ def test_the_text_format_is_the_development_console_verbatim():
         ("cookie sketchy_session=deadbeef; Path=/", "cookie sketchy_session=***; Path=/"),
         ("postgresql+asyncpg://sketchy:pa55@db:5432/sketchy", "postgresql+asyncpg://sketchy:***@db:5432/sketchy"),
         ("could not send to alice.smith+x@example.co.uk", "could not send to ***@example.co.uk"),
+        # `normalize_email` stores any non-blank local part before the last
+        # `@` and any domain with a dot, so the net has to be as wide as the
+        # column. Each of these survived the tidier pattern that came before.
+        ("refused foo!bar@example.test", "refused ***@example.test"),
+        ('refused "foo"@example.test', "refused ***@example.test"),
+        ("refused o'brien@example.test", "refused ***@example.test"),
+        ("refused foo@a.b", "refused ***@a.b"),
+        ("refused a=b#c{d}@example.test", "refused ***@example.test"),
+        # And the lines it must still leave legible.
+        ("postgresql+asyncpg://sketchy:pa55@db.internal:5432/x", "postgresql+asyncpg://sketchy:***@db.internal:5432/x"),
+        ("array[i]@list is not an address", "array[i]@list is not an address"),
         ("api_key=ABC123&other=1", "api_key=***&other=1"),
         ("nothing to hide here", "nothing to hide here"),
     ],

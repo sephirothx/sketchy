@@ -644,7 +644,7 @@ pinned by [`fixtures/account_data_export_v5_fields.json`](../fixtures/account_da
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
 `state` (`pending \| sent \| failed`) · `attempts` · `last_error` · `next_attempt_at` ·
-`created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`.
+`created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 
@@ -656,7 +656,9 @@ delivered by a sweeper (`EMAIL_SWEEP_SECONDS`, default 30). A suspension is ther
 never undone by an unreachable relay, and a reset message is retried with backoff and
 then recorded as failed rather than disappearing. With no `SMTP_HOST` the messages are
 **logged instead of sent**, which is the only way the confirmation and reset flows can
-be completed on a deployment without mail.
+be completed on a deployment without mail — outside production, where startup refuses a
+missing `SMTP_HOST` outright and the console transport refuses to write a body at all,
+so a live reset link never reaches a log store (#466).
 
 A verification or reset payload carries the **raw link token** only while the row is
 `pending` — a retry has to rebuild the link, and the token is unrecoverable from the

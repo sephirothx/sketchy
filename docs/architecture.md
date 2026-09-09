@@ -349,19 +349,20 @@ revocation applies uniformly without a shared signing secret.
 
 ## 6. Lifecycle
 
-### Startup ([`backend/app/main.py:170`](../backend/app/main.py))
+### Startup ([`backend/app/main.py:459`](../backend/app/main.py))
 
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
 3. `validate_worker_topology()` — refuses a multi-worker configuration
 4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
 5. `validate_public_base_url()` — with `SKETCHY_ENV=production`, refuses a `PUBLIC_BASE_URL` that is not an `https` origin, or names a loopback address, or carries a path: every mailed link is built on it and every plain-HTTP request is redirected to it (#467)
-6. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
-7. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-8. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
-9. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
-10. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
-11. `mark_ready()` — `GET /api/ready` starts answering 200
+6. `validate_mail_configuration()` — with `SKETCHY_ENV=production`, refuses a missing or blank `SMTP_HOST`. The zero-config fallback logs each message instead of sending it, which in production writes live confirmation and reset links into the log store *and* sends nothing to the player waiting for one; `ConsoleTransport.send` refuses in production as the second lock, on the one statement that would write a body (#466)
+7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
+8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
+9. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
+10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
+11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
+12. `mark_ready()` — `GET /api/ready` starts answering 200
 
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
 
