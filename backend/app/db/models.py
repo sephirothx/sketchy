@@ -1800,6 +1800,19 @@ class Friendship(Base):
         ),
         Index("ix_friendships_user_high_id", "user_high_id"),
         Index("ix_friendships_requested_by_id", "requested_by_id"),
+        # The asker's question on every read - "anything of mine accepted that
+        # I have not been told about?" - over exactly the rows that can still
+        # answer yes.
+        Index(
+            "ix_friendships_acceptance_unannounced",
+            "requested_by_id",
+            postgresql_where=text(
+                "status = 'accepted' AND acceptance_announced_at IS NULL"
+            ),
+            sqlite_where=text(
+                "status = 'accepted' AND acceptance_announced_at IS NULL"
+            ),
+        ),
     )
 
     user_low_id: Mapped[uuid.UUID] = mapped_column(
@@ -1826,6 +1839,14 @@ class Friendship(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
     responded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When the asker was told their request had been accepted. Null while they
+    # still owe it, which is a state the server holds rather than one the
+    # client derives from watching the lists move: a reader who was not
+    # present for the move cannot see it, and being accepted is not something
+    # anybody should have to be looking at the right moment to learn (#724).
+    acceptance_announced_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
 
 class IdentityAlias(Base):

@@ -40,7 +40,7 @@ from enum import StrEnum
 import logging
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -253,7 +253,60 @@ class FriendService:
                 outgoing.append((row, person))
             else:
                 incoming.append((row, person))
-        return {"friends": friends, "incoming": incoming, "outgoing": outgoing}
+        # What this account asked for, has had accepted, and has not been
+        # told about. Held on the row rather than derived from the lists
+        # moving, so a reader who was not present for the move still learns
+        # it - a reload, another device, or simply being offline when the
+        # answer came (R-FRIEND-13).
+        announce = [
+            (row, person)
+            for row, person in friends
+            if row.requested_by_id == user_id
+            and row.acceptance_announced_at is None
+        ]
+        return {
+            "friends": friends,
+            "incoming": incoming,
+            "outgoing": outgoing,
+            "announce": announce,
+        }
+
+    async def announced(self, user_id: UUID, others: list[UUID]) -> int:
+        """Record that the asker was told, for exactly the ones they were told
+        about.
+
+        Named rather than "everything outstanding": the message is shown
+        first and says which friendships it was about, so an acceptance that
+        landed between the read and this call keeps its turn. Every condition
+        is re-checked here - their own request, accepted, still unannounced -
+        because the list is a client's account of what it displayed.
+        """
+        if not others:
+            return 0
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session:
+            async with session.begin():
+                stamped = await session.execute(
+                    update(Friendship)
+                    .where(
+                        Friendship.requested_by_id == user_id,
+                        Friendship.status == FriendshipState.ACCEPTED.value,
+                        Friendship.acceptance_announced_at.is_(None),
+                        or_(
+                            *[
+                                and_(
+                                    Friendship.user_low_id == low,
+                                    Friendship.user_high_id == high,
+                                )
+                                for low, high in (
+                                    friendship_key(user_id, other) for other in others
+                                )
+                            ]
+                        ),
+                    )
+                    .values(acceptance_announced_at=now)
+                )
+        return stamped.rowcount or 0
 
     # --- writes -----------------------------------------------------------
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import { announcedFriendships } from "../lib/friendsApi";
 import { useFriendsStore } from "../store/friendsStore";
 import { useToast } from "../lib/toast";
 import { useOpenOverlay } from "./useOverlayRoute";
@@ -72,6 +73,17 @@ export function useFriendArrivalNotices(): void {
       notify(`${accepted[0].displayName} accepted your friend request.`);
     } else if (accepted.length > 1) {
       notify(`${accepted.length} people accepted your friend requests.`);
+    }
+    // Told, so it is not told again - and only the ones this message named,
+    // so an acceptance that landed since the read keeps its turn. After the
+    // notify, because a record of telling that outlives the telling is the
+    // bug this whole thing exists to fix (R-FRIEND-13).
+    if (accepted.length > 0) {
+      void announcedFriendships(accepted.map((entry) => entry.userId)).catch(
+        () => {
+          // Being thanked twice is the failure worth having here.
+        },
+      );
     }
   }, [notices, notify, accept, openOverlay]);
 }

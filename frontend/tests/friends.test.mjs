@@ -237,6 +237,9 @@ test("a request arriving and one being answered are told apart", () => {
     friends: [entry("asked-them")],
     incoming: [entry("new-asker")],
     outgoing: [],
+    // The acceptance is what the server says is owed, not what the lists
+    // moving imply (R-FRIEND-13).
+    announce: [entry("asked-them")],
   };
   const changes = friendListChanges(before, after);
   assert.deepEqual(changes.arrived.map((row) => row.userId), ["new-asker"]);
@@ -251,6 +254,17 @@ test("a request that stopped being pending is never reported", () => {
     NO_FRIENDS,
   );
   assert.deepEqual(changes, { arrived: [], accepted: [] });
+});
+
+test("a payload with no announce list is read as nothing owed", () => {
+  // An older server, or a shape that predates the field. Told late beats
+  // throwing on every read.
+  const changes = friendListChanges(NO_FRIENDS, {
+    friends: [entry("them")],
+    incoming: [],
+    outgoing: [],
+  });
+  assert.deepEqual(changes.accepted, []);
 });
 
 test("answering a request yourself is not news", () => {
@@ -356,20 +370,36 @@ test("a lobby row says nothing about a request in either direction", () => {
 
 // ------------------------------------- an acceptance that lands during a load
 
-test("an acceptance is only noticed when the request was seen first", () => {
+test("an acceptance is told from the row, not from watching the lists move", () => {
   const them = { userId: "them", displayName: "Them" };
 
-  // The ordinary path: this client watched the request go out, so the move
-  // from outgoing to friends is a transition it can see.
-  const watched = friendListChanges(
+  // The page reloaded while the answer was in flight, so the first lists this
+  // client ever saw already contain the friendship: there is no transition to
+  // notice. It is told anyway, because the server says it is owed (#724).
+  const reloaded = friendListChanges(NO_FRIENDS, {
+    ...NO_FRIENDS,
+    friends: [them],
+    announce: [them],
+  });
+  assert.deepEqual(reloaded.accepted, [them]);
+
+  // And once it has been told, the same lists say nothing more - the row
+  // carries that it was announced, so a later read does not repeat it.
+  const already = friendListChanges(
     { ...NO_FRIENDS, outgoing: [them] },
     { ...NO_FRIENDS, friends: [them] },
   );
-  assert.deepEqual(watched.accepted, [them]);
+  assert.deepEqual(already.accepted, []);
+});
 
-  // The page reloaded while the answer was in flight, so the first lists this
-  // client ever saw already contain the friendship. There is no transition
-  // left to notice, and nothing tells the asker they were accepted (#724).
-  const missed = friendListChanges(NO_FRIENDS, { ...NO_FRIENDS, friends: [them] });
-  assert.deepEqual(missed.accepted, []);
+test("an arrival is still a diff, because an unannounced one leaves a trace", () => {
+  const them = { userId: "them", displayName: "Them" };
+  const arrived = friendListChanges(NO_FRIENDS, {
+    ...NO_FRIENDS,
+    incoming: [them],
+  });
+  // Skipped on a first read by `absorb`, and that is fine: the request is
+  // still sitting in the list with a badge over it. An acceptance leaves
+  // nothing behind, which is why that one is durable and this is not.
+  assert.deepEqual(arrived.arrived, [them]);
 });

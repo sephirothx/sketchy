@@ -123,7 +123,24 @@ function absorb(
 ) {
   const previous = get();
   if (!previous.loaded) {
-    set({ lists: next, loaded: true });
+    // No baseline to diff against, so nothing *arrived* as far as this tab
+    // can tell - a fresh tab is not the moment to announce a week of
+    // requests. What the server says is owed is a different thing: it is a
+    // fact rather than a difference, and this is exactly the read that used
+    // to swallow it (R-FRIEND-13).
+    set({
+      lists: next,
+      loaded: true,
+      ...(next.announce.length > 0
+        ? {
+            notices: {
+              arrived: [],
+              accepted: next.announce,
+              seq: previous.notices.seq + 1,
+            },
+          }
+        : {}),
+    });
     return;
   }
   const changes = friendListChanges(previous.lists, next);
