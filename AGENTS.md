@@ -45,9 +45,11 @@ what you touched and work out which of these it makes wrong:
   module docstrings, so a new module means a new row.
 - **docs/requirements.md** — observable behaviour, a limit, a guarantee, a deliberate
   refusal, or a non-goal. Retire a requirement ID by marking it withdrawn; never reuse
-  one — `backend/tests/test_requirements_ids.py` fails on an ID that names two rows.
+  one — `backend/tests/test_doc_invariants.py` fails on an ID that names two rows,
+  and on a citation of an ID no row declares.
 - **GLOSSARY.md** — a player-visible concept with no name yet gets its entry in the
-  same change. Renaming something means updating its entry and the Known drift list.
+  same change, and only one: the same test fails on a term defined twice. Renaming
+  something means updating its entry and the Known drift list.
 - **README → Features, Game flow, Scoring, Spectating, Reconnection & disconnection** —
   these describe how the game behaves. Any rule, timing, or new setting lands here.
 - **README → Project structure** — a new module or directory.
