@@ -196,7 +196,27 @@ async def test_reports_friendships_exports_mail_sessions_and_avatars_hold_their_
         report = dict(reporter_user_id=a, reported_user_id=b, reason="spam", details="", context_snapshot={})
         await _accepts(factory, PlayerReport(id=generate_uuid(), status="pending", **report))
         await _rejects(factory, PlayerReport(id=generate_uuid(), status="resolved", **report))
-        await _accepts(factory, PlayerReport(id=generate_uuid(), status="resolved", reviewed_at=NOW, **report))
+        # A decided report carries when it was decided and which decision
+        # covered it; neither on its own is enough (#620).
+        await _rejects(
+            factory, PlayerReport(id=generate_uuid(), status="resolved", reviewed_at=NOW, **report)
+        )
+        await _rejects(
+            factory,
+            PlayerReport(
+                id=generate_uuid(), status="resolved", decision_group_id=generate_uuid(), **report
+            ),
+        )
+        await _accepts(
+            factory,
+            PlayerReport(
+                id=generate_uuid(),
+                status="resolved",
+                reviewed_at=NOW,
+                decision_group_id=generate_uuid(),
+                **report,
+            ),
+        )
 
         await _accepts(factory, Friendship(user_low_id=low, user_high_id=high, requested_by_id=a, status="pending"))
         async with factory() as session:

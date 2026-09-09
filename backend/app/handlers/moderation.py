@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import PlayerReport
-from app.domain_values import ReportStatus
+from app.domain_values import ReportScope, ReportStatus
 from app.rooms import majority_of
 from app.services.player_reports import (
     context_around,
@@ -211,6 +211,11 @@ async def report_player(ctx: HandlerContext, sid, data):
                 # once the evidence itself names them.
                 game_id=None,
                 turn_id=None,
+                # The room this seat is sitting in, which is the incident
+                # (#620). Taken from the live room rather than from anything
+                # the client said, like the evidence above it.
+                scope=ReportScope.ROOM,
+                room_instance_id=UUID(room.retention_scope_id),
                 reason=payload.reason,
                 details=payload.details,
                 messages=messages,

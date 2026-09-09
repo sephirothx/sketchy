@@ -65,6 +65,7 @@ from app.domain_values import (
     PromptContentReportReason,
     PromptListVisibility,
     ReportReason,
+    ReportScope,
     ReportStatus,
     UserRole,
 )
@@ -936,6 +937,18 @@ def create_moderation_router(
                             else retained_messages[0].room_instance_id
                         ),
                     )
+                # Where the complaint happened, and so which incident it
+                # belongs to (#620). Read off the evidence the checks above
+                # already proved comes from one place: all-lobby or one room
+                # instance, never mixed. A report that cited nothing names no
+                # place to look and stands on its own.
+                if not retained_messages:
+                    scope, room_instance_id = ReportScope.UNSCOPED, None
+                elif retained_messages[0].audience == "lobby":
+                    scope, room_instance_id = ReportScope.LOBBY, None
+                else:
+                    scope = ReportScope.ROOM
+                    room_instance_id = retained_messages[0].room_instance_id
                 # Everything above this line is the router proving what a
                 # client told it. The writing is shared with the socket path,
                 # which has nothing to prove because it resolved the target and
@@ -946,6 +959,8 @@ def create_moderation_router(
                     reported_user_id=target.id,
                     game_id=game_id,
                     turn_id=turn.id if turn else None,
+                    scope=scope,
+                    room_instance_id=room_instance_id,
                     reason=body.reason.value,
                     details=body.details,
                     messages=list(retained_messages),
@@ -1209,6 +1224,9 @@ def create_moderation_router(
                 report.reviewed_by_user_id = reviewer.id
                 report.resolution_note = body.note
                 report.reviewed_at = now
+                # One decision, so one group id, even though this decision
+                # covers one report (#620).
+                report.decision_group_id = generate_uuid()
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
@@ -1322,6 +1340,7 @@ def create_moderation_router(
                     else None
                 )
                 report.reviewed_at = now
+                report.decision_group_id = generate_uuid()
                 content_target_type, content_target_id = _content_target(
                     report.prompt_list_id, report.prompt_version_id
                 )
@@ -1394,6 +1413,7 @@ def create_moderation_router(
         report.reviewed_by_user_id = reviewer.id
         report.resolution_note = note
         report.reviewed_at = now
+        report.decision_group_id = generate_uuid()
         session.add(
             AuditEvent(
                 id=generate_uuid(),
