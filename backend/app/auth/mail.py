@@ -490,7 +490,16 @@ async def deliver_pending(
             except Exception as error:  # noqa: BLE001 - recorded, not swallowed
                 # Rendering is inside the try on purpose: a row whose template
                 # no longer exists is one bad message, not a dead sweep.
-                return claim, str(error)[:256]
+                #
+                # Redacted before it is truncated, and here rather than at the
+                # two places it is used. `SMTPRecipientsRefused` stringifies
+                # with the address it refused inside it, so redacting the
+                # recipient beside this string would leave the same address
+                # in the same line; and this is what `last_error` stores, a
+                # column kept 30 days and read back by an operator command.
+                # Truncating afterwards would let a 256-character cut land
+                # mid-address and leave the local part standing.
+                return claim, redact(str(error))[:256]
             return claim, None
 
     outcomes = await asyncio.gather(*(attempt(claim) for claim in claimed))
@@ -505,9 +514,9 @@ async def deliver_pending(
             failed += 1
             # The domain says which relay or provider was involved, which
             # is what a delivery failure is diagnosed from; the local part
-            # only names the person. Redacted here rather than left to the
-            # JSON formatter, so the line is safe under `LOG_FORMAT=text`
-            # too.
+            # only names the person. Redacted at the call site rather than
+            # left to the JSON formatter, so the line is safe under
+            # `LOG_FORMAT=text` too. `error` arrives redacted already.
             logger.warning(
                 "giving up on %s to %s after %d attempts: %s",
                 claim.template,

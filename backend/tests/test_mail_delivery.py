@@ -486,3 +486,70 @@ async def test_giving_up_on_a_message_names_the_domain_and_not_the_person(tmp_pa
         assert "relay refused" in caplog.text
     finally:
         await engine.dispose()
+
+
+async def test_a_relay_that_names_the_recipient_in_its_refusal_is_redacted_too(
+    tmp_path, caplog
+):
+    """`SMTPRecipientsRefused` stringifies with the address inside it, so the
+    error a relay hands back carries the recipient whether or not the line
+    reporting it redacts the one on the outbox row. Redacted where the string
+    is made, so the log line and `last_error` - a column kept 30 days - are
+    both safe under `LOG_FORMAT=text`, which switches the JSON formatter's
+    redaction off."""
+    import logging
+    import smtplib
+
+    engine, factory = await outbox(tmp_path)
+
+    class RefusingTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise smtplib.SMTPRecipientsRefused(
+                {message.to_address: (550, b"5.1.1 no such mailbox")}
+            )
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+            at = datetime.now(timezone.utc)
+            for _ in range(MAX_ATTEMPTS):
+                await deliver_pending(factory, transport=RefusingTransport(), now=at)
+                at += timedelta(hours=3)
+        assert "player0@example.test" not in caplog.text
+        assert "***@example.test" in caplog.text
+        # And the same string as it was stored, not only as it was logged.
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "player0@example.test" not in entry.last_error
+        # Still the relay's own answer, which is what diagnoses this.
+        assert "5.1.1" in entry.last_error
+    finally:
+        await engine.dispose()
+
+
+async def test_a_long_relay_error_cannot_be_cut_into_a_visible_address(tmp_path):
+    """`last_error` is a 256-character column. Redacting after that cut would
+    let it land inside the address - past the `@`, before enough of the domain
+    for the pattern to recognise one - and leave the local part standing.
+    Redacting first spends the budget on text that is already safe.
+
+    The padding is the length that tells the two orders apart; a relay that
+    answers at length before naming who it refused is the real shape of it.
+    """
+    engine, factory = await outbox(tmp_path)
+
+    class VerboseTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError("x" * 239 + message.to_address)
+
+    try:
+        at = datetime.now(timezone.utc)
+        for _ in range(MAX_ATTEMPTS):
+            await deliver_pending(factory, transport=VerboseTransport(), now=at)
+            at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "player0@" not in entry.last_error
+    finally:
+        await engine.dispose()
