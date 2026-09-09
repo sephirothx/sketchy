@@ -480,9 +480,24 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_text("1", timeout=SETTLE_MS)
 
+            # Declining is deliberately not on it: a refusal is kept, so it
+            # belongs behind the confirmation the friends surface gives it.
+            await expect(
+                toast.get_by_role("button", name="Decline")
+            ).to_have_count(0)
+
             # Answered from the toast itself - without opening the menu, the
             # surface, or leaving the room.
             await toast.get_by_role("button", name="Accept").click()
+
+            # The asker is told, and this is checked first because it is the
+            # only assertion here with a deadline: an acceptance is read
+            # rather than acted on, so its toast keeps the ordinary five
+            # seconds. Everything below is a settled state that waits.
+            await expect(asker.locator(".app-toast").filter(
+                has_text=target_name
+            ).first).to_be_visible(timeout=SETTLE_MS)
+
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_count(0, timeout=SETTLE_MS)
@@ -490,17 +505,6 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
             # nothing is worse than no button.
             await expect(toast).to_have_count(0, timeout=SETTLE_MS)
             await expect(target.locator('[data-testid="waiting-room"]')).to_be_visible()
-
-            # Declining is deliberately not on it: a refusal is kept, so it
-            # belongs behind the confirmation the friends surface gives it.
-            await expect(
-                target.locator(".app-toast").get_by_role("button", name="Decline")
-            ).to_have_count(0)
-
-            # And the asker is told their request was answered - silent before.
-            await expect(asker.locator(".app-toast").filter(
-                has_text=target_name
-            ).first).to_be_visible(timeout=SETTLE_MS)
         finally:
             await asker_context.close()
             await target_context.close()
