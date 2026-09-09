@@ -2963,3 +2963,92 @@ async def test_a_repeat_elsewhere_is_not_reported_as_the_same_incident(env):
     assert pending["priorDecision"] is None
     # The account's standing is where "they have come up before" is said.
     assert pending["reportedPlayer"]["priorReports"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_an_incident_shows_what_was_done_whichever_report_it_was_done_from(env):
+    """A warning or a suspension names the one report a moderator was looking
+    at, but the decision covered the whole incident. Read from a single
+    report, the outcome would depend on which complaint happened to be first
+    in the queue - so the case would read `resolved` while the player it is
+    about is suspended (#620, R-MOD-15)."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    target_http = new_client()
+    moderator = await register(moderator_http, "WhichMod")
+    target = await register(target_http, "WhichTgt")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    now = datetime.now(timezone.utc)
+    instance = generate_uuid()
+
+    async def report_from(name):
+        reporter_http = new_client()
+        reporter = await register(reporter_http, name)
+        message_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RoomMessage(
+                        id=message_id,
+                        room_instance_id=instance,
+                        sender_player_id=generate_uuid(),
+                        sender_user_id=UUID(target["id"]),
+                        sender_display_name_snapshot="WhichTgt",
+                        sender_is_anonymous_snapshot=False,
+                        is_spectator=False,
+                        message_kind="chat",
+                        near_miss_kind=None,
+                        audience="room",
+                        audience_user_ids=[reporter["id"], target["id"]],
+                        text=f"something {name} saw",
+                        created_at=now,
+                        expires_at=now + timedelta(days=30),
+                    )
+                )
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": f"{name} objects.",
+                "messageIds": [str(message_id)],
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        return sent.json()["id"]
+
+    first = await report_from("WhichA")
+    second = await report_from("WhichB")
+
+    listed = await moderator_http.get("/api/moderation/reports")
+    incident = next(
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"]
+    )
+    assert incident["reporterCount"] == 2
+    # The incident is named by its oldest report, so the consequence below is
+    # deliberately raised from the *other* one.
+    assert incident["id"] == first
+    assert second in [report["id"] for report in incident["reports"]]
+
+    suspended = await moderator_http.post(
+        "/api/moderation/bans",
+        json={
+            "userId": target["id"],
+            "reason": "Enough of that.",
+            "reportId": second,
+        },
+    )
+    assert suspended.status_code == 201, suspended.text
+
+    closed = await moderator_http.get(
+        "/api/moderation/closed-cases", params={"limit": 50}
+    )
+    case = next(
+        item
+        for item in closed.json()["players"]
+        if item["reportedUserId"] == target["id"]
+    )
+    # What was done, not merely that something was.
+    assert case["outcome"] == "suspended"

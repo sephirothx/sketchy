@@ -24,6 +24,7 @@ import {
   type IncidentEvidence,
   type PlayerReportDrawing,
   composeRepeatNote,
+  scopeWords,
   type IncidentPicture,
   type ModerationIncident,
   type PriorDecision,
@@ -54,21 +55,6 @@ type QueueEntry = {
   /** How many people complained, when more than one did. Shown, and
       deliberately not sorted on. */
   reporterCount?: number;
-};
-
-/** Where the incident happened, said the way a moderator would say it.
-
-`repeat` is the same fact in the grammar a second decision needs: what makes
-this complaint the same one as the last, said as a phrase rather than a
-label. */
-const SCOPES: Record<
-  ModerationIncident["scope"],
-  { label: string; repeat: string }
-> = {
-  room: { label: "In a room", repeat: "in the same room" },
-  lobby: { label: "In the lobby", repeat: "in the lobby" },
-  profile: { label: "Their picture", repeat: "about their picture" },
-  unscoped: { label: "No room named", repeat: "with nothing cited" },
 };
 
 /** One chip per outcome: what was done, in the colour of how serious it was.
@@ -775,7 +761,7 @@ export function ModerationPage() {
                     {playerCase.reporterCount === 1
                       ? "1 reporter"
                       : `${playerCase.reporterCount} reporters`}
-                    {` · ${SCOPES[playerCase.scope].label}`}
+                    {` · ${scopeWords(playerCase).label}`}
                     {` · opened ${formatWhen(playerCase.openedAt, dateTime)}`}
                     {playerCase.reporterCount > 1 &&
                       ` · latest ${formatWhen(playerCase.latestReportedAt, dateTime)}`}
@@ -798,7 +784,7 @@ export function ModerationPage() {
 
               <PriorDecisionBanner
                 prior={playerCase.priorDecision}
-                repeat={SCOPES[playerCase.scope].repeat}
+                repeat={scopeWords(playerCase).repeat}
                 dateTime={dateTime}
                 busy={busy === playerCase.id}
                 onRepeat={(composed) =>

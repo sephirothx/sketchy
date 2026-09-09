@@ -781,12 +781,28 @@ def _incident_decision(
 ) -> dict:
     """What was done about the incident, once it has been decided.
 
-    Read from the first report, because one decision covers every report it
-    grouped and they therefore agree: same outcome, same reviewer, same note,
-    same moment.
+    Reviewer, note and moment are read from the first report, because one
+    decision writes all three onto every report it covered and they therefore
+    agree.
+
+    The **outcome** does not, and cannot be read the same way. A warning or a
+    suspension names the single report the moderator was looking at
+    (`source_report_id`), so only that report knows what was done; every other
+    one of the incident carries a bare `resolved`. Read from the first alone,
+    an incident decided from any other complaint would report itself resolved
+    while the player it is about is suspended. So the outcome is whatever a
+    consequence said about any report in the group, the rest having nothing to
+    say.
     """
     first = incident.reports[0]
-    decision = (decisions or {}).get(first.id) or _Decision(first.status, None)
+    by_id = decisions or {}
+    named = [
+        found
+        for report in incident.reports
+        if (found := by_id.get(report.id)) is not None
+        and found.outcome not in (first.status, ReportStatus.RESOLVED.value)
+    ]
+    decision = named[0] if named else (by_id.get(first.id) or _Decision(first.status, None))
     return {
         "outcome": decision.outcome,
         "reviewedByUserId": (
