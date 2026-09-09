@@ -35,8 +35,15 @@ export function ReportsReviewedNotice() {
 
     void (async () => {
       try {
-        const { count } = await countReportsReviewed();
+        // The cheap question first, so the usual answer - nothing to say -
+        // costs no write.
+        const { count, reportIds } = await countReportsReviewed();
         if (cancelled || count < 1) return;
+        // Shown *before* it is recorded as shown. Recording first loses the
+        // message whenever the render does not happen - signing out while
+        // the request is in flight, the effect torn down - and a report
+        // marked as told that nobody was told about is never announced
+        // again. This way the worst case is being thanked twice.
         notify(
           count === 1
             ? "A report you sent has been reviewed. Thank you."
@@ -44,9 +51,9 @@ export function ReportsReviewedNotice() {
           "info",
           12000,
         );
-        // Said, so it is not said again. Failing here is not worth telling
-        // anybody about: the worst of it is hearing the same thanks twice.
-        await acknowledgeReportsReviewed();
+        // Exactly the ones that message was about. A report decided since the
+        // read is not in the list, so it keeps its turn.
+        await acknowledgeReportsReviewed(reportIds);
       } catch {
         // A report that was reviewed is not news worth an error for. It will
         // be said on the next visit instead.

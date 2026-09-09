@@ -266,11 +266,17 @@ async def remove_avatar(
                 # and until when is said in the words themselves - there is no
                 # moderator sentence to carry it, this being one button rather
                 # than a decision with a note.
-                blocked_until = user.avatar_upload_blocked_until
+                # Only when there is actually a wait. A first removal costs
+                # none, and `avatar_upload_blocked_until` is then simply now -
+                # a date a caller would otherwise report as a block.
+                blocked_until = (
+                    user.avatar_upload_blocked_until if wait > timedelta(0) else None
+                )
                 warning_id = generate_uuid()
                 session.add(
                     UserWarning(
                         id=warning_id,
+                        kind="avatar_removal",
                         user_id=db_user_id,
                         issued_by_user_id=UUID(str(actor_id)) if actor_id else None,
                         reason=_removal_notice(wait, blocked_until),

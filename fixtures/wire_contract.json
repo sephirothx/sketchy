@@ -1451,7 +1451,8 @@
   "api.moderation:_incident_picture": [
    "removedAt",
    "removedByModerator",
-   "removedFromThisIncident"
+   "removedFromThisIncident",
+   "uploadBlockedUntil"
   ],
   "api.moderation:_prior_decisions": [
    "decidedAt",
@@ -1471,10 +1472,12 @@
    "expiresAt"
   ],
   "api.moderation:create_moderation_router": [
+   "blockedUntil",
    "createdAt",
    "displayName",
    "expiresAt",
    "hasMore",
+   "reportIds",
    "userId"
   ],
   "api.moderation:create_warning": [
@@ -1489,6 +1492,12 @@
   ],
   "api.moderation:list_reports": [
    "hasMore"
+  ],
+  "api.moderation:remove_reported_avatar": [
+   "blockedUntil"
+  ],
+  "api.moderation:reports_reviewed": [
+   "reportIds"
   ],
   "api.moderation:review_prompt_content_report": [
    "displayName"

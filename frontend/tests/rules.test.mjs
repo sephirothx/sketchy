@@ -52,6 +52,7 @@ test("every locale is a complete document", () => {
     assert.equal(document.locale, locale);
     assert.ok(document.title.length > 0, `${locale} has no title`);
     assert.ok(document.intro.length > 0, `${locale} has no introduction`);
+    assert.ok(document.introHeading.length > 0, `${locale} has no introduction heading`);
     assert.ok(document.enforcement.body.length > 0, `${locale} says no consequence`);
     for (const section of document.sections) {
       assert.ok(section.heading.length > 0, `${locale}/${section.id} has no heading`);

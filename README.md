@@ -1167,7 +1167,9 @@ anything by it, and being told is already the correction; the ladder stops
 rather than becoming permanent, because a fourth removed picture is no longer
 an avatar problem and the answer to it is a suspension somebody decides on.
 Only a moderator's removals count - taking your own picture down is not a
-punishment and sets no block. The export carries the bytes; deletion removes
+punishment and sets no block. The notice is marked as a removal rather than a
+warning, so it never carries a warning's line about nothing being restricted -
+which of a removal would be the opposite of what was done. The export carries the bytes; deletion removes
 them.
 
 A registered player's **name color** is one of thirteen palette swatches. The

@@ -542,6 +542,10 @@ BUG_REPORT_SCREENSHOT_STATUSES = tuple(
 )
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
 REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
+# What a `user_warnings` row is. A formal warning restricts nothing and says
+# so; a picture's removal restricts uploads and says for how long. They share
+# the machinery - shown once, acknowledged - and nothing else (R-AVA-08).
+WARNING_KINDS = ("warning", "avatar_removal")
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
 GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)

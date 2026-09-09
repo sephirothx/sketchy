@@ -272,7 +272,7 @@ async def test_a_moderator_removes_a_reported_picture(env):
     ).status_code == 403
     removed = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
     assert removed.status_code == 200
-    assert removed.json() == {"ok": True, "removed": True}
+    assert removed.json() == {"ok": True, "removed": True, "blockedUntil": None}
     assert (await target_http.get("/api/auth/me")).json()["avatarUrl"] is None
     assert (await target_http.get(f"/api/avatars/{key}")).status_code == 404
     new_client.changed.assert_awaited_with(target["id"], None)
@@ -734,3 +734,80 @@ async def test_a_second_removal_says_when_the_picture_may_come_back(env):
     assert len(warnings) == 2
     assert "upload another one now" in warnings[0].reason
     assert "upload another one on" in warnings[1].reason
+
+
+@pytest.mark.asyncio
+async def test_a_removal_notice_is_not_a_formal_warning(env):
+    """A removal rides the warning machinery and is not a warning: a formal
+    one restricts nothing and says so, while a removal restricts uploading -
+    by more each time. The row says which it is, so the two cannot share
+    words that are false of one of them (R-AVA-08)."""
+    new_client, factory = env
+    target_http = new_client()
+    target = await register(target_http, "KindTgt")
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=31)))
+    await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
+
+    shown = (await target_http.get("/api/warnings/pending")).json()["warning"]
+    assert shown["kind"] == "avatar_removal"
+
+    async with factory() as session:
+        row = await session.scalar(
+            select(UserWarning).where(UserWarning.user_id == UUID(target["id"]))
+        )
+    assert row.kind == "avatar_removal"
+
+
+@pytest.mark.asyncio
+async def test_a_moderator_is_told_when_the_block_actually_lifts(env):
+    """The wait is no longer one length, so the queue states the date rather
+    than a duration - and states none at all when the removal cost no wait."""
+    new_client, factory = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "BlockTgt")
+    moderator = await register(moderator_http, "BlockMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+
+    async def report_and_remove(seed, reporter_name):
+        # A fresh reporter each time: a removal does not decide the report it
+        # was made through, so the first one is still open (R-MOD-05).
+        reporter_http = new_client()
+        await register(reporter_http, reporter_name)
+        await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=seed)))
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "inappropriate_avatar",
+                "details": "Please look.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        removed = await moderator_http.post(
+            f"/api/moderation/reports/{sent.json()['id']}/remove-avatar"
+        )
+        assert removed.status_code == 200, removed.text
+        return removed.json()
+
+    # The first costs no wait, so the route reports none rather than a date
+    # that has already passed.
+    first = await report_and_remove(41, "BlockRepA")
+    assert first["blockedUntil"] is None
+
+    listed = await moderator_http.get("/api/moderation/reports")
+    incident = next(
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"]
+    )
+    assert incident["picture"]["status"] == "removed"
+    assert incident["picture"]["uploadBlockedUntil"] is None
+
+    # The second starts one, and it is a date.
+    second = await report_and_remove(42, "BlockRepB")
+    assert second["blockedUntil"] is not None

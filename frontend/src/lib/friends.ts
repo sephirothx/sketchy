@@ -31,12 +31,19 @@ export interface FriendLists {
   friends: FriendEntry[];
   incoming: FriendEntry[];
   outgoing: FriendEntry[];
+  /** Requests this account sent that were accepted and that nobody has told
+      them about yet. Read off the row rather than derived from the lists
+      moving: a client that was reloading when the answer came has no earlier
+      read to compare against, and being accepted is not something anybody
+      should have to be looking at the right moment to learn (R-FRIEND-13). */
+  announce: FriendEntry[];
 }
 
 export const NO_FRIENDS: FriendLists = {
   friends: [],
   incoming: [],
   outgoing: [],
+  announce: [],
 };
 
 function parseEntry(value: unknown): FriendEntry | null {
@@ -70,6 +77,7 @@ export function parseFriendLists(payload: unknown): FriendLists {
     friends: parseList(body.friends),
     incoming: parseList(body.incoming),
     outgoing: parseList(body.outgoing),
+    announce: parseList(body.announce),
   };
 }
 
@@ -311,18 +319,23 @@ function idsOf(entries: FriendEntry[]): Set<string> {
   return new Set(entries.map((entry) => entry.userId));
 }
 
+/** What is owed telling, and what the diff can still add.
+
+`accepted` comes from the server: it is a fact on the friendship rather than
+a difference between two reads, so a reader who was not present for the move
+still gets it. `arrived` stays a diff - an incoming request that goes
+unannounced is still sitting in the list with a badge over it, while an
+acceptance leaves no trace at all (R-FRIEND-13). */
 export function friendListChanges(
   before: FriendLists,
   after: FriendLists,
 ): FriendListChanges {
   const knewIncoming = idsOf(before.incoming);
-  const knewFriends = idsOf(before.friends);
-  const hadAsked = idsOf(before.outgoing);
   return {
     arrived: after.incoming.filter((entry) => !knewIncoming.has(entry.userId)),
-    accepted: after.friends.filter(
-      (entry) => !knewFriends.has(entry.userId) && hadAsked.has(entry.userId),
-    ),
+    // Defensive: a payload without the field at all is an older server, and
+    // an acceptance told late beats one that throws.
+    accepted: after.announce ?? [],
   };
 }
 

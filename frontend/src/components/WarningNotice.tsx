@@ -26,6 +26,7 @@ function warningFromPayload(payload: unknown): PendingWarning | null {
   }
   return {
     id: warning.id,
+    kind: warning.kind === "avatar_removal" ? "avatar_removal" : "warning",
     reason: warning.reason,
     category: asReportReason(warning.category),
     createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
@@ -91,6 +92,10 @@ export function WarningNotice() {
 
   if (!warning) return null;
 
+  // A removal restricts something; a formal warning restricts nothing. They
+  // share this surface and must not share its words.
+  const isRemoval = warning.kind === "avatar_removal";
+
   async function dismiss() {
     if (busy || !warning) return;
     setBusy(true);
@@ -114,7 +119,7 @@ export function WarningNotice() {
         aria-labelledby="warning-title"
       >
         <h3 className="modal-title" id="warning-title">
-          A moderator warning
+          {isRemoval ? "Your picture was removed" : "A moderator warning"}
         </h3>
         {warning.category && (
           <p className="modal-body notice-category" data-testid="warning-category">
@@ -128,13 +133,24 @@ export function WarningNotice() {
           </p>
         )}
         <p className="modal-body suspension-reason">{warning.reason}</p>
+        {/* A removal shares this surface and nothing else. Saying "nothing is
+            restricted" of one would be false - it restricts uploading, and by
+            more each time (R-AVA-08) - so a removal says what it restricts,
+            which its own words above already carry, and stops there. */}
         <p className="modal-body">
-          A report about your behaviour was reviewed, and this is the outcome.
-          {/* What a warning is *for* - the step between nothing and a
-              suspension - said in general terms. Naming a ladder would
-              promise one nobody is bound to and nothing enforces. */}{" "}
-          Nothing is restricted, but a further report may lead to your account
-          being suspended.
+          {isRemoval ? (
+            "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected."
+          ) : (
+            <>
+              A report about your behaviour was reviewed, and this is the
+              outcome.
+              {/* What a warning is *for* - the step between nothing and a
+                  suspension - said in general terms. Naming a ladder would
+                  promise one nobody is bound to and nothing enforces. */}{" "}
+              Nothing is restricted, but a further report may lead to your
+              account being suspended.
+            </>
+          )}
         </p>
         {warning.messages.length > 0 && (
           <>

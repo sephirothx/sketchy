@@ -74,6 +74,12 @@ async def _current_account(
     return user
 
 
+# How many acceptances one message names at once. More than this and the rest
+# wait for the next read; the message is a line per friendship, so a screenful
+# is already past the point of being read.
+MAX_ANNOUNCED_AT_ONCE = 50
+
+
 class FriendBody(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -100,6 +106,14 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
     }
 
 
+class AnnouncedBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    user_ids: list[UUID] = Field(
+        default_factory=list, alias="userIds", max_length=MAX_ANNOUNCED_AT_ONCE
+    )
+
+
 def create_friends_router(
     session_factory: async_sessionmaker[AsyncSession],
     friend_service: FriendService,
@@ -111,12 +125,34 @@ def create_friends_router(
 
     @router.get("")
     async def list_friends(request: Request):
+        """The lists, and what this account is still owed the news of.
+
+        `announce` is the durable half of R-FRIEND-12: the requests this
+        account sent that were accepted and that nobody has told them about
+        yet. It rides the read the client already makes rather than needing
+        one of its own, and it is a fact on the row rather than a difference
+        between two reads - a client that was reloading when the answer came
+        has no earlier read to compare against (R-FRIEND-13).
+        """
         me = await current_account(request)
         listing = await friend_service.listing(me.id)
         return {
             key: [_person_payload(row, person, me.id) for row, person in rows]
             for key, rows in listing.items()
         }
+
+    @router.post("/announced")
+    async def acknowledge_announced(body: AnnouncedBody, request: Request):
+        """Record that the asker was told, for the friendships named.
+
+        Sent after the message is shown, and naming exactly what it was
+        about: recording first loses the news whenever the render does not
+        happen, and recording *everything outstanding* swallows an acceptance
+        that landed in between. The failure left is being told twice.
+        """
+        me = await current_account(request)
+        told = await friend_service.announced(me.id, body.user_ids)
+        return {"ok": True, "announced": told}
 
     @router.post("")
     async def request_friend(body: FriendBody, request: Request, response: Response):

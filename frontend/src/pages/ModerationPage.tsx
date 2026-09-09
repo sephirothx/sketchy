@@ -252,9 +252,11 @@ function PictureBanner({
               : "The player took this picture down themselves"}
           </strong>
           {when ? ` — ${when}.` : "."}{" "}
-          {picture.removedByModerator
-            ? "The account has no picture, and cannot upload one for a week."
-            : "The account has no picture. Taking your own down is not a punishment and sets no block."}
+          {!picture.removedByModerator
+            ? "The account has no picture. Taking your own down is not a punishment and sets no block."
+            : picture.uploadBlockedUntil
+              ? `The account has no picture, and cannot upload another until ${formatWhen(picture.uploadBlockedUntil, dateTime)}.`
+              : "The account has no picture. They may upload another one now."}
         </p>
       ) : (
         <p>
@@ -561,7 +563,9 @@ export function ModerationPage() {
   async function act(
     id: string,
     run: () => Promise<unknown>,
-    done: string,
+    // A string, or what to say once the answer is in - for an action whose
+    // outcome is not fixed in advance.
+    done: string | ((outcome: unknown) => string),
     // The note `run` will send, when the caller composed one rather than
     // taking it from the box - the required-note rule is about what reaches
     // the ledger, not about which field it was typed into.
@@ -581,7 +585,7 @@ export function ModerationPage() {
       // dismissed: nothing happened, so nothing is announced or cleared.
       const outcome = await guard(run);
       if (outcome === STEP_UP_ABANDONED) return;
-      setMessage(done);
+      setMessage(typeof done === "string" ? done : done(outcome));
       setNote((current) => ({ ...current, [id]: "" }));
       load();
     } catch (problem) {
@@ -1008,7 +1012,17 @@ export function ModerationPage() {
                           act(
                             playerCase.id,
                             () => removeReportedAvatar(playerCase.id),
-                            "Picture removed. They cannot upload another for a week.",
+                            // The wait is no longer one length, so what it
+                            // cost them is read from the answer rather than
+                            // asserted here (R-AVA-08).
+                            (outcome) => {
+                              const until = (
+                                outcome as { blockedUntil?: string | null } | null
+                              )?.blockedUntil;
+                              return until
+                                ? `Picture removed. They cannot upload another until ${formatWhen(until, dateTime)}.`
+                                : "Picture removed. They can upload another one straight away.";
+                            },
                           )
                         }
                       >

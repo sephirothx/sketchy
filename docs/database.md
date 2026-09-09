@@ -467,6 +467,13 @@ been replaced would be the hole this closes.
 `ck_friendships_ordered` (`user_low_id < user_high_id`) and
 `ck_friendships_requester_is_a_member`.
 
+`acceptance_announced_at` is when the **asker** was told their request had been accepted, null while they are still owed it. A fact on the row rather than
+a difference between two client reads: a reader that was not present for the
+move — reloading, on another device, offline — has no earlier state to compare
+against, and would never learn it (R-FRIEND-13). The partial index
+`ix_friendships_acceptance_unannounced` answers the asker's question on every
+read, over only the rows that can still answer yes.
+
 **One row per pair, in a canonical order** rather than one row per direction.
 Two directional rows can disagree — one accepted, one not — and no constraint
 could forbid it; here the pair is the identity, the way it is for

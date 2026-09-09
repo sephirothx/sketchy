@@ -89,6 +89,11 @@ MAX_REPORT_CONTEXT_BYTES = 32_768
 MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
+# How many decided reports one message names at once. A reporter with more
+# than this waiting hears about the rest on the next visit; the message is a
+# count, so the number is what matters and the list is only there to say which
+# ones it counted.
+MAX_REVIEWED_ANNOUNCED = 100
 # A backstop on the open queue's whole read, not a page: grouping needs every
 # report of an incident in hand at once, and a queue this long means something
 # is wrong upstream rather than that a moderator wants page two.
@@ -298,6 +303,10 @@ async def _reported_player_context(
             # one, and a reviewer has to be told when it is no longer that
             # picture (R-AVA-04).
             "_avatarKey": user.avatar_key,
+            # Not shown either: read into the picture block below, where it
+            # is stated as a date rather than as a guess about how long a
+            # block lasts - which is no longer one length (R-AVA-08).
+            "_avatarBlockedUntil": user.avatar_upload_blocked_until,
             "registered": user.state == AccountState.REGISTERED.value,
             "createdAt": user.created_at.isoformat(),
             # This report itself is not "prior".
@@ -629,6 +638,14 @@ async def _avatar_removals(
     }
 
 
+def _aware_utc(value: datetime | None) -> datetime | None:
+    """A stored timestamp as an aware one. SQLite hands back naive datetimes,
+    and comparing one to `now()` raises rather than answering."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
 def _picture_status(report: PlayerReport, live_avatar_key: str | None) -> str | None:
     """What became of the picture one complaint was about.
 
@@ -645,7 +662,10 @@ def _picture_status(report: PlayerReport, live_avatar_key: str | None) -> str | 
 
 
 def _incident_picture(
-    incident: Incident, live_avatar_key: str | None, removal: dict | None
+    incident: Incident,
+    live_avatar_key: str | None,
+    removal: dict | None,
+    blocked_until: datetime | None = None,
 ) -> dict | None:
     """What became of the picture this incident is about, said once.
 
@@ -668,12 +688,19 @@ def _incident_picture(
     if live_avatar_key is None:
         detail = removal or {}
         report_id = detail.get("report_id")
+        # The date, not a duration: the wait grows with how many pictures a
+        # moderator has taken down from this account (R-AVA-08), so there is
+        # no single length a reader could be told instead. Null once it has
+        # passed, which is the same as never having been blocked.
+        blocked = _aware_utc(blocked_until)
+        still_blocked = blocked is not None and blocked > datetime.now(timezone.utc)
         return {
             "status": "removed",
             "removedByModerator": detail.get("by_moderator", False),
             "removedAt": detail.get("at"),
             "removedFromThisIncident": report_id is not None
             and report_id in {str(report.id) for report in incident.reports},
+            "uploadBlockedUntil": blocked.isoformat() if still_blocked else None,
         }
     # Several reporters can name several pictures - one is swapped while the
     # complaints are still arriving - so the incident is only unchanged when
@@ -683,6 +710,7 @@ def _incident_picture(
         "removedByModerator": False,
         "removedAt": None,
         "removedFromThisIncident": False,
+        "uploadBlockedUntil": None,
     }
 
 
@@ -709,8 +737,13 @@ def _incident_payload(
         else None
     )
     live_avatar_key = (context or {}).get("_avatarKey")
+    blocked_until = (context or {}).get("_avatarBlockedUntil")
     shown_context = (
-        {key: value for key, value in context.items() if key != "_avatarKey"}
+        {
+            key: value
+            for key, value in context.items()
+            if key not in ("_avatarKey", "_avatarBlockedUntil")
+        }
         if context
         else None
     )
@@ -729,6 +762,7 @@ def _incident_payload(
             (removals or {}).get(first.reported_user_id)
             if first.reported_user_id
             else None,
+            blocked_until,
         ),
         "reportedUserId": (
             str(first.reported_user_id) if first.reported_user_id else None
@@ -877,6 +911,14 @@ def _content_incident_payload(
             str(first.decision_group_id) if first.decision_group_id else None
         ),
     }
+
+
+class ReviewedAcknowledgeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    report_ids: list[UUID] = Field(
+        default_factory=list, alias="reportIds", max_length=MAX_REVIEWED_ANNOUNCED
+    )
 
 
 class WarningBody(BaseModel):
@@ -1481,7 +1523,17 @@ def create_moderation_router(
         # above follows for the same reason.
         if outcome.warning_id is not None and on_user_warned is not None:
             await on_user_warned(str(report.reported_user_id))
-        return {"ok": True, "removed": outcome.had_one}
+        return {
+            "ok": True,
+            "removed": outcome.had_one,
+            # When they may upload again, which is not a fixed length any
+            # more (R-AVA-08). Null when this one cost no wait at all.
+            "blockedUntil": (
+                outcome.blocked_until.isoformat()
+                if outcome.blocked_until is not None
+                else None
+            ),
+        }
 
     @router.get("/moderation/reports/{report_id}/drawing")
     async def report_drawing(report_id: UUID, request: Request):
@@ -2321,6 +2373,7 @@ def create_moderation_router(
                 payload = {
                     "id": str(warning.id),
                     "userId": str(target.id),
+                    "kind": warning.kind,
                     "reason": warning.reason,
                     "category": warning.category,
                     "createdAt": warning.created_at.isoformat(),
@@ -2333,43 +2386,74 @@ def create_moderation_router(
 
     @router.get("/reports/reviewed")
     async def reports_reviewed(request: Request):
-        """How many of the caller's own reports have been decided since they
-        were last told.
+        """Whether any of the caller's own reports have been decided since
+        they were last told.
 
         A count and nothing else. What was decided is the reported player's
         business, and an outcome handed back to whoever asked about them would
         make a report a way of learning things about somebody (R-MOD-20). A
         number about your own reports discloses nothing about anyone else.
+
+        Read-only, and asked on every page load, so the usual answer - nothing
+        to say - costs no write.
+
+        It names the reports it counted. The acknowledgement takes that list
+        back and stamps exactly those, which is what keeps the two halves
+        honest: a report decided in between is not swept up by an
+        acknowledgement of a message that never mentioned it, and a message
+        that was never shown stamps nothing at all. They are the caller's own
+        reports, so naming them discloses nothing they did not already know.
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
         async with session_factory() as session:
-            count = await session.scalar(
-                select(func.count(PlayerReport.id)).where(
-                    PlayerReport.reporter_user_id == UUID(user_id),
-                    PlayerReport.status != ReportStatus.PENDING.value,
-                    PlayerReport.reporter_notified_at.is_(None),
+            waiting = (
+                await session.scalars(
+                    select(PlayerReport.id)
+                    .where(
+                        PlayerReport.reporter_user_id == UUID(user_id),
+                        PlayerReport.status != ReportStatus.PENDING.value,
+                        PlayerReport.reporter_notified_at.is_(None),
+                    )
+                    .order_by(PlayerReport.id)
+                    .limit(MAX_REVIEWED_ANNOUNCED)
                 )
-            )
-        return {"count": int(count or 0)}
+            ).all()
+        return {"count": len(waiting), "reportIds": [str(row) for row in waiting]}
 
     @router.post("/reports/reviewed/acknowledge")
-    async def acknowledge_reports_reviewed(request: Request):
-        """Stamp the caller's decided reports as told, so it is said once.
+    async def acknowledge_reports_reviewed(
+        request: Request, body: ReviewedAcknowledgeBody
+    ):
+        """Stamp the reports a message actually named, and only those.
 
-        All of them together: the message is a count rather than a list, so
-        there is nothing to acknowledge one at a time.
+        The client shows the message and then says which reports it was
+        about, rather than claiming them first and hoping the message gets
+        rendered. Claiming first loses one whenever the render does not
+        happen - the account signs out mid-request, the effect is torn down -
+        and a report stamped as told that nobody was told about is never
+        announced again.
+
+        Bounded to the list it is given, so a report decided between the read
+        and this call keeps its turn. The failure that is left is being
+        thanked twice, which is the right one to be left with.
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
+        if not body.report_ids:
+            return {"ok": True, "acknowledged": 0}
         now = datetime.now(timezone.utc)
         async with session_factory() as session:
             async with session.begin():
                 stamped = await session.execute(
                     update(PlayerReport)
                     .where(
+                        PlayerReport.id.in_(body.report_ids),
+                        # Still the caller's own, still decided, still
+                        # unannounced: the list is a client's claim about
+                        # what it showed, not authority over any row.
                         PlayerReport.reporter_user_id == UUID(user_id),
                         PlayerReport.status != ReportStatus.PENDING.value,
                         PlayerReport.reporter_notified_at.is_(None),

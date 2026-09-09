@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ToastContext, type ToastAction, type ToastTone } from "../lib/toast";
+import {
+  ToastContext,
+  keepRecentToasts,
+  type ToastAction,
+  type ToastTone,
+} from "../lib/toast";
 import { XIcon } from "./icons";
 
 interface Toast {
@@ -28,7 +33,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     action?: ToastAction,
   ) => {
     const id = nextIdRef.current++;
-    setToasts((current) => [...current.slice(-2), { id, message, tone, action }]);
+    setToasts((current) => {
+      const { kept, evicted } = keepRecentToasts(current, {
+        id,
+        message,
+        tone,
+        action,
+      });
+      // A toast that fell off the stack still has a timer running against it.
+      for (const gone of evicted) {
+        const timer = timersRef.current.get(gone.id);
+        if (timer) clearTimeout(timer);
+        timersRef.current.delete(gone.id);
+      }
+      return kept;
+    });
     timersRef.current.set(id, setTimeout(() => dismiss(id), durationMs));
   }, [dismiss]);
 
