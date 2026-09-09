@@ -445,7 +445,14 @@ async def test_an_account_with_more_games_than_a_statement_can_bind_still_rebuil
 
     from app.db.models import GameParticipant, GameRecord, TurnRecord
 
-    factory, engine = await create_test_db()
+    # The maintenance budget, because that is the engine production rebuilds
+    # on: `_run_cli` opens `maintenance_engine()`, whose statement timeout is
+    # minutes rather than the seconds a player's request gets. Streaming an
+    # account's whole 33,000-game history is the work this test exists to
+    # exercise, and holding it to the web budget only ever measured how busy
+    # the runner was - it failed on CI five times across four pull requests,
+    # none of which touched this code.
+    factory, engine = await create_test_db(role="maintenance")
     users = SqlAlchemyUserRepository(factory)
     try:
         player = await users.create_anonymous("Veteran")
