@@ -1,6 +1,13 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    open_room_settings,
+    open_settings_section,
+    room_code,
+    save_room_settings,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -50,6 +57,19 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
                 await use_guest_name(page, nickname)
                 await join_by_code(page, code)
                 await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            # Timed hints off, so nothing but this test touches the gameplay
+            # region once drawing starts. A checkpoint reveal changes every
+            # guesser's masked prompt, which re-renders gameplay and the canvas
+            # under it - both regions asserted below to be unchanged. Left on,
+            # the room fires two or three of those across a 90s turn, and
+            # whether one lands inside a measurement window is decided by how
+            # wide the window is, which on a loaded runner is not a constant.
+            # That is what made this test fail on CI and pass on re-run (#724).
+            await open_room_settings(host)
+            await open_settings_section(host, "Scoring and hints")
+            await host.locator('[aria-label="Hints"] button:has-text("No hints")').click()
+            await save_room_settings(host)
 
             await host.get_by_role("button", name="Start game", exact=True).click()
             for page in pages:
