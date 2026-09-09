@@ -6,6 +6,7 @@ import {
   friendListChanges,
   friendsSurface,
   friendsSurfaceIsEmpty,
+  isNoFriendListRefusal,
   isFriend,
   addableRecentPlayers,
   parseFriendInvite,
@@ -277,4 +278,28 @@ test("the badge counts only what is waiting for an answer", () => {
     }),
     1,
   );
+});
+
+// ------------------------------------------- a refusal against a failure
+
+test("only the guest refusal counts as an empty friend list", () => {
+  // The one failure that is an answer: no account, so no list.
+  assert.equal(isNoFriendListRefusal({ status: 403 }), true);
+});
+
+test("a fault is not an answer about who somebody is friends with", () => {
+  // Each of these would otherwise empty the lists and mark them loaded -
+  // which makes a profile offer "Add friend" for a request it should have
+  // shown, and makes the next good read announce it as newly arrived.
+  for (const error of [
+    { status: 500 },
+    { status: 502 },
+    { status: 401 },
+    new Error("network"),
+    undefined,
+    null,
+    "timeout",
+  ]) {
+    assert.equal(isNoFriendListRefusal(error), false, String(error));
+  }
 });

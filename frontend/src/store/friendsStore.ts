@@ -4,6 +4,7 @@ import {
   NO_FRIENDS,
   NO_FRIEND_CHANGES,
   friendListChanges,
+  isNoFriendListRefusal,
   type FriendLists,
   type FriendListChanges,
 } from "../lib/friends";
@@ -56,16 +57,46 @@ The server decides what a request became — a new pending row, an acceptance of
 one that was already waiting, or deliberately nothing at all — and it answers
 the last two identically on purpose. A local patch would have to guess, and
 would guess wrong exactly where the guess matters. The lists are small and the
-call is a button press. */
+call is a button press.
+
+Through `refresh` rather than reading the lists here, so this read is ordered
+and owned like every other one. It used to call `listFriends` directly, which
+meant a mutation begun before signing out could land its answer on the next
+account's lists, and could overwrite a newer refresh because nothing recorded
+it. `pending` is cleared only if this is still the same person acting, for the
+same reason. */
 async function afterMutating(
-  set: (partial: Partial<FriendsStore>) => void,
   get: () => FriendsStore,
+  set: (partial: Partial<FriendsStore>) => void,
+  owner: string | null,
 ) {
   try {
-    absorb(set, get, await listFriends());
+    await get().refresh();
   } finally {
-    set({ pending: null });
+    if (get().ownerId === owner) set({ pending: null });
   }
+}
+
+/** Run one mutation, then re-read — refusing if somebody else is mid-action.
+
+The owner is captured before the call so the refetch and the busy flag both
+belong to the identity that started it. */
+async function mutate(
+  get: () => FriendsStore,
+  set: (partial: Partial<FriendsStore>) => void,
+  userId: string,
+  call: (userId: string) => Promise<unknown>,
+) {
+  if (get().pending) return;
+  const owner = get().ownerId;
+  set({ pending: userId });
+  try {
+    await call(userId);
+  } catch {
+    // The refetch below is what corrects the row either way — including when
+    // the server refused, which it does for reasons it will not name.
+  }
+  await afterMutating(get, set, owner);
 }
 
 /** Replace the lists, and say what moved.
@@ -137,46 +168,29 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
       if (overtaken()) return;
       appliedSeq = seq;
       absorb(set, get, lists);
-    } catch {
-      // A guest gets a 403 here, which is the ordinary case rather than a
-      // fault: they simply have no friends list, and every control that would
-      // use one is hidden anyway. Still an answer about this owner, so it
-      // still counts as loaded.
+    } catch (error) {
       if (overtaken()) return;
       appliedSeq = seq;
-      set({ lists: NO_FRIENDS, loaded: true });
+      // A guest is refused, and that refusal *is* their answer: they have no
+      // friends list, and every control that would use one is hidden anyway.
+      //
+      // Nothing else is. A timeout, a dropped connection or a 500 says
+      // nothing about who this account is friends with, and treating it as
+      // "no friends, and we know it" is worse than saying nothing: the lists
+      // empty on screen, the profile starts deriving `Add friend` from a
+      // state that is not true — and pressing that accepts a request it
+      // should have shown — and the next successful read diffs against the
+      // false empty list and announces every existing request as new. So a
+      // failure keeps the last good answer, and an unanswered first read
+      // stays unanswered.
+      if (isNoFriendListRefusal(error)) {
+        set({ lists: NO_FRIENDS, loaded: true });
+      }
     }
   },
-  add: async (userId) => {
-    if (get().pending) return;
-    set({ pending: userId });
-    try {
-      await requestFriend(userId);
-    } catch {
-      // Refetching below is what corrects the row either way.
-    }
-    await afterMutating(set, get);
-  },
-  accept: async (userId) => {
-    if (get().pending) return;
-    set({ pending: userId });
-    try {
-      await acceptFriend(userId);
-    } catch {
-      /* as above */
-    }
-    await afterMutating(set, get);
-  },
-  remove: async (userId) => {
-    if (get().pending) return;
-    set({ pending: userId });
-    try {
-      await removeFriend(userId);
-    } catch {
-      /* as above */
-    }
-    await afterMutating(set, get);
-  },
+  add: (userId) => mutate(get, set, userId, requestFriend),
+  accept: (userId) => mutate(get, set, userId, acceptFriend),
+  remove: (userId) => mutate(get, set, userId, removeFriend),
   // The notice counter is not reset: it only ever has to keep moving for a
   // consumer to notice, and restarting it at zero after a read that was
   // already at zero would hide the next change. Bumping `readSeq` is what
