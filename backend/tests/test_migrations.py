@@ -11,7 +11,7 @@ from alembic import command as alembic_command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, text
+from sqlalchemy import DateTime, bindparam, inspect, text
 from sqlalchemy.exc import DBAPIError, IntegrityError, SAWarning
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -126,6 +126,12 @@ async def _assert_hand_written_indexes(engine: AsyncEngine) -> None:
         assert "where" in normalized
 
 
+# Bound with its type, not as a bare `datetime`: an untyped parameter reaches
+# the driver as a Python object, and sqlite3's default datetime adapter - which
+# would then convert it - is deprecated since 3.12 and going away.
+OFFERED_AT = datetime(2026, 9, 8, tzinfo=timezone.utc)
+
+
 async def _assert_pending_role_is_checked(engine: AsyncEngine) -> None:
     """A migrated database refuses an offer the models would refuse.
 
@@ -146,11 +152,11 @@ async def _assert_pending_role_is_checked(engine: AsyncEngine) -> None:
                         "INSERT INTO users "
                         "(id, display_name, state, role, pending_role, pending_role_at) "
                         "VALUES (:id, 'Offeree', 'anonymous', 'user', :role, :at)"
-                    ),
+                    ).bindparams(bindparam("at", type_=DateTime(timezone=True))),
                     {
                         "id": str(uuid.uuid4()),
                         "role": refused,
-                        "at": datetime(2026, 9, 8, tzinfo=timezone.utc),
+                        "at": OFFERED_AT,
                     },
                 )
             await connection.rollback()
@@ -163,8 +169,8 @@ async def _assert_pending_role_is_checked(engine: AsyncEngine) -> None:
                 "INSERT INTO users "
                 "(id, display_name, state, role, pending_role, pending_role_at) "
                 "VALUES (:id, 'Offeree', 'anonymous', 'user', 'moderator', :at)"
-            ),
-            {"id": str(uuid.uuid4()), "at": datetime(2026, 9, 8, tzinfo=timezone.utc)},
+            ).bindparams(bindparam("at", type_=DateTime(timezone=True))),
+            {"id": str(uuid.uuid4()), "at": OFFERED_AT},
         )
         await connection.rollback()
 

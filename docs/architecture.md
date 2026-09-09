@@ -968,7 +968,10 @@ byte that crosses `EXPORT_MAX_BYTES`, failing the job as `too_large` with nothin
 (R-PRIV-13). The bytes are exactly the compact `json.dumps` of the same document, so
 nothing that reads a stored export can tell it was paged. Encoding and gzip run on the
 event loop in page-sized slices with a database `await` between them — the accepted
-cost, and the loop-lag sampler is where it would show.
+cost, and the loop-lag sampler is where it would show. However a build ends it releases
+its compressor, in a `finally` around the whole build rather than at each way out: the
+bound above is on what one build holds, and a build cancelled part-written by a planned
+shutdown is the case that holds the most.
 
 **Woken or swept.** The request's wake is cleared *before* a sweep rather than after, so
 a row written between the sweep's query and its return is built next rather than after
