@@ -73,32 +73,6 @@ export function parseFriendLists(payload: unknown): FriendLists {
   };
 }
 
-/** Where a friendship with one online player has got to.
-
-Named for the state rather than for a control: the row acts on `add` and only
-*reports* `accept` and `sent`, because a request is answered on the friends
-surface (R-FRIEND-10).
-
-Kept as a derivation over the lists rather than as flags on the row, because
-the presence channel and the friend lists arrive independently and neither is
-the other's source of truth. */
-export type FriendAction = "add" | "accept" | "sent" | "friends" | "none";
-
-export function friendActionFor(
-  player: OnlinePlayer,
-  lists: FriendLists,
-  myUserId: string | null,
-): FriendAction {
-  // Guests have no durable identity to be friends with, and the server
-  // refuses one anyway — so the row does not offer something that cannot work.
-  if (player.isAnonymous) return "none";
-  if (!myUserId || player.userId === myUserId) return "none";
-  if (lists.friends.some((entry) => entry.userId === player.userId)) return "none";
-  if (lists.incoming.some((entry) => entry.userId === player.userId)) return "accept";
-  if (lists.outgoing.some((entry) => entry.userId === player.userId)) return "sent";
-  return "add";
-}
-
 export function isFriend(lists: FriendLists, userId: string): boolean {
   return lists.friends.some((entry) => entry.userId === userId);
 }
@@ -196,14 +170,20 @@ export function friendsSurfaceIsEmpty(surface: FriendsSurface): boolean {
   );
 }
 
+/** Where a friendship between the viewer and one other account has got to.
+
+Four states, of which only `add` and `accept` are things to press. Derived
+from the lists rather than carried as a flag on a row, because the lists and
+whatever is being drawn beside them arrive independently and neither is the
+other's source of truth. */
+export type FriendAction = "add" | "accept" | "sent" | "friends" | "none";
+
 /** What a profile page may offer the viewer about its subject.
 
-The same four answers `friendActionFor` gives a lobby row, decided from the
-same lists — but from a profile there is no presence to consult, and the
-subject may be the viewer themselves, a guest, or somebody not signed in at
-all. Kept beside the lobby's version rather than shared with it, because the
-inputs genuinely differ: one has an `OnlinePlayer`, the other has whatever the
-profile endpoint returned.
+The only place a friendship is asked for or reported now. The lobby's presence
+list carried a version of this until it became clear that a row which comes
+and goes with presence is the wrong home for either (R-FRIEND-11); this one
+sits on a page about one person, which is where the question belongs.
 
 `sent` is deliberately still offered as a state rather than hidden. A request
 you sent is a thing you may want to withdraw, and a profile is where somebody

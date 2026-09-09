@@ -1281,43 +1281,9 @@ a.online-player-name:focus-visible {
   margin-left: 0;
 }
 
-/* The add control is quiet until the row is under the cursor: it is an
-   offer, not the reason the list exists. It stays visible on a touch screen,
-   where there is no hover to reveal it with. */
-.online-add-friend {
-  min-height: 30px;
-  padding: 0 8px;
-  color: var(--muted);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .online-add-friend {
-    opacity: 0;
-  }
-
-  .online-player-row:hover .online-add-friend,
-  .online-add-friend:focus-visible {
-    opacity: 1;
-  }
-}
-
-.online-add-friend:hover {
-  color: var(--primary);
-}
-
 /* A friend's row carries a little more weight than the rest of the list. */
 .online-player-row.is-friend .online-player-name {
   font-weight: 700;
-}
-
-.online-requests {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1.5px solid var(--line);
-}
-
-.online-player-row.is-request {
-  background: var(--well);
 }
 
 /* An invitation asks a question, so it sits where a banner does rather than

@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   NO_FRIENDS,
-  friendActionFor,
   friendListChanges,
   friendsSurface,
   friendsSurfaceIsEmpty,
@@ -55,36 +54,6 @@ test("a listing from nothing is empty rather than broken", () => {
   for (const bad of [null, undefined, 7, "nope"]) {
     assert.deepEqual(parseFriendLists(bad), NO_FRIENDS);
   }
-});
-
-test("the row offers what the relationship actually allows", () => {
-  const state = lists({
-    friends: [entry("ada")],
-    incoming: [entry("bob", { status: "pending" })],
-    outgoing: [entry("cleo", { status: "pending", requestedByMe: true })],
-  });
-  const me = "me";
-
-  // Already friends: nothing to offer.
-  assert.equal(friendActionFor(player("ada"), state, me), "none");
-  // They asked first, so the button says yes rather than asking again.
-  assert.equal(friendActionFor(player("bob"), state, me), "accept");
-  assert.equal(friendActionFor(player("cleo"), state, me), "sent");
-  assert.equal(friendActionFor(player("dan"), state, me), "add");
-});
-
-test("nothing is offered where it could not work", () => {
-  const state = lists();
-  // A guest has no durable identity to be friends with, and the server
-  // refuses one - so the row does not offer a control that always fails.
-  assert.equal(
-    friendActionFor(player("guest", { isAnonymous: true }), state, "me"),
-    "none",
-  );
-  // Yourself.
-  assert.equal(friendActionFor(player("me"), state, "me"), "none");
-  // Signed out.
-  assert.equal(friendActionFor(player("ada"), state, null), "none");
 });
 
 test("friends come first, and the rest keep the order the server sent", () => {

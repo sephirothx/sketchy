@@ -42,19 +42,28 @@ async def open_friends(page) -> None:
     await page.wait_for_selector('[data-testid="friends"]')
 
 
-async def make_friends(asker, accepter, asker_name: str, accepter_name: str) -> None:
-    """Ask from one lobby, and answer it where requests are answered.
+async def ask_from_profile(asker, target_name: str) -> None:
+    """Send a request the only way there is: from the person's profile.
 
-    Which is the friends surface, not the lobby row: the online panel says a
-    request is waiting and stops there (R-FRIEND-10).
+    The lobby list carries no friendship state at all now - it says who is
+    around and stops (R-FRIEND-11). The name is the way through to the page
+    that does offer it.
     """
-    row = row_for(asker, accepter_name)
+    row = row_for(asker, target_name)
     await expect(row).to_be_visible(timeout=SETTLE_MS)
-    await row.locator(".online-add-friend").click()
-
-    await expect(row_for(accepter, asker_name)).to_contain_text(
-        "Wants to be friends", timeout=SETTLE_MS
+    await row.locator("a.online-player-name").click()
+    await asker.wait_for_selector(".profile-identity")
+    await asker.get_by_role("button", name="Add friend").click()
+    await expect(asker.locator(".friend-button-status")).to_have_text(
+        "Request sent", timeout=SETTLE_MS
     )
+    await asker.goto(BASE_URL)
+
+
+async def make_friends(asker, accepter, asker_name: str, accepter_name: str) -> None:
+    """Ask from a profile, and answer it where requests are answered."""
+    await ask_from_profile(asker, accepter_name)
+
     await open_friends(accepter)
     incoming = accepter.locator('[data-testid="friends-incoming"]').get_by_role(
         "button", name="Accept"
@@ -62,10 +71,9 @@ async def make_friends(asker, accepter, asker_name: str, accepter_name: str) -> 
     await expect(incoming).to_be_visible(timeout=SETTLE_MS)
     await incoming.click()
     await accepter.get_by_role("button", name="Close friends").click()
-    # Both sides settle on a friendship: the asker's row stops offering to ask.
-    await expect(row.locator(".online-add-friend")).to_have_count(
-        0, timeout=SETTLE_MS
-    )
+    # Both sides settle on a friendship: the lobby row offers a way into their
+    # game, which only a friend gets.
+    await expect(row_for(asker, accepter_name)).to_be_visible(timeout=SETTLE_MS)
 
 
 @pytest.mark.asyncio
@@ -168,18 +176,24 @@ async def test_a_guest_is_not_offered_a_friendship_it_cannot_have():
             await use_guest_name(as_guest, guest_name)
             await sign_up(as_member, member_name)
 
-            # The member sees the guest, and is offered nothing for them.
+            # A guest has no profile worth opening, so their name is not even
+            # a link - the way through to asking starts there.
             guest_row = row_for(as_member, guest_name)
             await expect(guest_row).to_be_visible(timeout=SETTLE_MS)
-            await expect(guest_row.locator(".online-add-friend")).to_have_count(0)
-
-            # And the guest is offered nothing for the member either.
-            member_row = row_for(as_guest, member_name)
-            await expect(member_row).to_be_visible(timeout=SETTLE_MS)
-            await expect(member_row.locator(".online-add-friend")).to_have_count(0)
-            await expect(member_row.locator(".online-player-status")).to_have_text(
+            await expect(guest_row.locator("a.online-player-name")).to_have_count(0)
+            await expect(guest_row.locator(".online-player-status")).to_have_text(
                 re.compile("In the lobby")
             )
+
+            # And the guest reaches the member's profile, which offers them
+            # nothing: a friendship needs an account on *both* sides.
+            member_row = row_for(as_guest, member_name)
+            await expect(member_row).to_be_visible(timeout=SETTLE_MS)
+            await member_row.locator("a.online-player-name").click()
+            await as_guest.wait_for_selector(".profile-identity")
+            await expect(
+                as_guest.get_by_role("button", name="Add friend")
+            ).to_have_count(0)
         finally:
             await guest_context.close()
             await member_context.close()
@@ -208,14 +222,9 @@ async def test_the_friends_surface_shows_a_request_from_somebody_offline():
             await sign_up(asker, asker_name)
             await sign_up(target, target_name)
 
-            row = row_for(asker, target_name)
-            await expect(row).to_be_visible(timeout=SETTLE_MS)
-            await row.locator(".online-add-friend").click()
-            # The lobby row settles before the asker's browser is the only one
-            # left, so what follows is about the surface rather than a race.
-            # Asserted over the row: it carries two statuses, the friendship's
-            # and the presence one, and this is about the first.
-            await expect(row).to_contain_text("Request sent", timeout=SETTLE_MS)
+            # Settles before the target's browser stops mattering, so what
+            # follows is about the surface rather than a race.
+            await ask_from_profile(asker, target_name)
 
             # The target's own surface holds the request with the asker gone.
             await open_friends(target)
@@ -277,12 +286,14 @@ async def test_the_friends_surface_draws_over_a_live_room():
 
 
 @pytest.mark.asyncio
-async def test_the_online_panel_reports_a_request_without_answering_it():
-    """Who is online says who is around; Friends is where a request is answered.
+async def test_the_online_panel_carries_no_friendship_state_at_all():
+    """Who is online says who is around, and stops (R-FRIEND-11).
 
-    A pair of answer buttons on a row that comes and goes with presence is a
-    decision taken in the wrong place - and a decline in particular is kept
-    (R-FRIEND-05), so it belongs behind the confirmation the surface gives it.
+    Asking is on the profile every name links to; answering is on the friends
+    surface. A row here comes and goes as people open and close tabs, which
+    makes it the wrong home for either - an offer to ask was there one second
+    and gone the next, and a request it reported could only be answered while
+    its sender happened to still be standing there.
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -296,28 +307,30 @@ async def test_the_online_panel_reports_a_request_without_answering_it():
             await sign_up(asker, asker_name)
             await sign_up(target, target_name)
 
-            row = row_for(asker, target_name)
-            await expect(row).to_be_visible(timeout=SETTLE_MS)
-            await row.locator(".online-add-friend").click()
-
-            await expect(row_for(target, asker_name)).to_contain_text(
-                "Wants to be friends", timeout=SETTLE_MS
-            )
-            # Stated, not offered - anywhere on the panel, for anyone.
             panel = target.locator('[data-testid="online-players-list"]')
+            await expect(row_for(target, asker_name)).to_be_visible(timeout=SETTLE_MS)
+            await expect(panel.locator(".online-add-friend")).to_have_count(0)
+
+            await ask_from_profile(asker, target_name)
+
+            # A request in flight changes nothing about either panel: no
+            # answer offered on the recipient's, no "sent" on the sender's.
+            await expect(
+                target.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1", timeout=SETTLE_MS)
             await expect(panel.get_by_role("button", name="Accept")).to_have_count(0)
             await expect(panel.get_by_role("button", name="Decline")).to_have_count(0)
-            # And the block that used to carry requests from offline senders is
-            # gone with it: the surface holds those now.
-            await expect(
-                target.locator('[data-testid="friend-requests"]')
-            ).to_have_count(0)
+            await expect(panel).not_to_contain_text("Request sent")
+            await expect(panel).not_to_contain_text("Wants to be friends")
 
-            # The mirror of it on the sender's side.
-            await expect(row).to_contain_text("Request sent", timeout=SETTLE_MS)
+            senders_panel = asker.locator('[data-testid="online-players-list"]')
+            await expect(row_for(asker, target_name)).to_be_visible(timeout=SETTLE_MS)
+            await expect(senders_panel).not_to_contain_text("Request sent")
+            await expect(senders_panel.locator(".online-add-friend")).to_have_count(0)
         finally:
             await asker_context.close()
             await target_context.close()
+            await browser.close()
 
 
 @pytest.mark.asyncio
@@ -449,35 +462,38 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
             await sign_up(asker, asker_name)
             await sign_up(target, target_name)
 
-            # The target goes into a room, where the lobby's panel cannot be
-            # seen at all.
+            # The target goes into a room, where the lobby cannot be seen
+            # at all - which is the whole point of the toast and the badge.
             await target.click('button:has-text("Create room")')
             await target.click('button:has-text("Create room")')
             await target.wait_for_selector('[data-testid="waiting-room"]')
 
-            row = row_for(asker, target_name)
-            await expect(row).to_be_visible(timeout=SETTLE_MS)
-            await row.locator(".online-add-friend").click()
+            await ask_from_profile(asker, target_name)
 
             # Said, by name, over the game.
-            await expect(target.locator(".app-toast").filter(
-                has_text=asker_name
-            ).first).to_be_visible(timeout=SETTLE_MS)
-            # And counted, on the one control that opens the way to answer it.
+            toast = target.locator(".app-toast").filter(has_text=asker_name).first
+            await expect(toast).to_be_visible(timeout=SETTLE_MS)
+            # And counted, on the control that opens the way to answer it.
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_text("1", timeout=SETTLE_MS)
 
-            # Answering it clears the count without leaving the room.
-            await open_friends(target)
-            await target.locator('[data-testid="friends-incoming"]').get_by_role(
-                "button", name="Accept"
-            ).click()
+            # Answered from the toast itself - without opening the menu, the
+            # surface, or leaving the room.
+            await toast.get_by_role("button", name="Accept").click()
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_count(0, timeout=SETTLE_MS)
-            await target.get_by_role("button", name="Close friends").click()
+            # The toast goes with the answer: a button that would now do
+            # nothing is worse than no button.
+            await expect(toast).to_have_count(0, timeout=SETTLE_MS)
             await expect(target.locator('[data-testid="waiting-room"]')).to_be_visible()
+
+            # Declining is deliberately not on it: a refusal is kept, so it
+            # belongs behind the confirmation the friends surface gives it.
+            await expect(
+                target.locator(".app-toast").get_by_role("button", name="Decline")
+            ).to_have_count(0)
 
             # And the asker is told their request was answered - silent before.
             await expect(asker.locator(".app-toast").filter(

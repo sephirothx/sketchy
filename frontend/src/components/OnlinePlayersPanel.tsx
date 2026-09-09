@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { sessionFrom } from "../lib/roomEntryState";
 import { emitWithAck } from "../lib/socket";
-import { friendActionFor, isFriend, withFriendsFirst } from "../lib/friends";
+import { isFriend, withFriendsFirst } from "../lib/friends";
 import { presenceSummary } from "../lib/lobbyPresence";
 import type { OnlinePlayer } from "../lib/lobbyPresence";
 import { useAuthStore } from "../store/authStore";
@@ -13,7 +13,6 @@ import { usePresenceStore } from "../store/presenceStore";
 import { useToast } from "../lib/toast";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { PlusIcon } from "./icons";
 import type { AckResponse } from "../types";
 
 /** Who else is here, beside the room list.
@@ -21,18 +20,26 @@ import type { AckResponse } from "../types";
 A plain list rather than something to open: at the lobby's scale it fits on
 screen, and the whole value of it is being readable without a click.
 
+**Presence only.** It says who is around and what they are doing, and carries
+no friendship state at all — no way to ask, and no report of a request in
+either direction. Those lived here when there was nowhere else for them, and
+a row in this list is the wrong home for either: it comes and goes as people
+open and close tabs, so an offer to ask was available one second and gone the
+next, and a request it reported was answerable only while its sender happened
+to still be standing there. Asking is on the profile every name links to;
+answering is on the friends surface, whether or not the other person is online
+(R-FRIEND-10, R-FRIEND-11). What survives is *Join*, which is about a friend's
+game rather than about the friendship.
+
 There is deliberately no filter. The list is capped, so a filter over it would
 answer "no such player" about somebody who is online — and nobody scans a list
 this size by typing anyway. Finding a specific person is a different feature
-from seeing who is around, and it needs a server-side lookup rather than a text
-box over the rows that happened to fit. */
+from seeing who is around: it is the profile, reached from a name here or from
+a game's participant list. */
 export function OnlinePlayersPanel() {
   const presence = usePresenceStore((state) => state.presence);
   const myUserId = useAuthStore((state) => state.user?.id ?? null);
-  const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
   const lists = useFriendsStore((state) => state.lists);
-  const pending = useFriendsStore((state) => state.pending);
-  const addFriend = useFriendsStore((state) => state.add);
   const { notify } = useToast();
   const navigate = useNavigate();
   const setSession = useGameStore((state) => state.setSession);
@@ -76,11 +83,7 @@ export function OnlinePlayersPanel() {
       ) : (
         <ul className="online-players-list" data-testid="online-players-list">
           {players.map((player) => {
-            const action = iAmAGuest
-              ? "none"
-              : friendActionFor(player, lists, myUserId);
             const theyAreAFriend = isFriend(lists, player.userId);
-            const busy = pending === player.userId;
             return (
               <li
                 key={player.userId}
@@ -113,31 +116,6 @@ export function OnlinePlayersPanel() {
                 )}
 
                 <span className="online-player-actions">
-                  {action === "add" && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-compact online-add-friend"
-                      disabled={busy}
-                      title={`Add ${player.displayName} as a friend`}
-                      aria-label={`Add ${player.displayName} as a friend`}
-                      onClick={() => void addFriend(player.userId)}
-                    >
-                      <PlusIcon size={14} />
-                    </button>
-                  )}
-                  {/* Said, not offered. Answering a request belongs on the
-                      friends surface, which holds every request whether or
-                      not its sender is online and confirms a decline before
-                      it happens (R-FRIEND-10). This panel is about who is
-                      around; a pair of answer buttons on a row that comes and
-                      goes with presence is a decision taken in the wrong
-                      place. The mirror of "Request sent" on the other side. */}
-                  {action === "accept" && (
-                    <span className="online-player-status">Wants to be friends</span>
-                  )}
-                  {action === "sent" && (
-                    <span className="online-player-status">Request sent</span>
-                  )}
                   {/* Only a friend gets a way in, and only when there is
                       something to join. Everyone else's row says where they
                       are and stops there. */}
