@@ -289,6 +289,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
 | Runtime observations (30 days) and permanent daily roll-ups | Database | Yes |
 | Who is connected, and whether they are seated | `PresenceRegistry` (memory) | No |
+| When each socket last did something a person did, and which have an open **AFK check** | `ActivityLedger` and `AfkWatch` (memory) | No |
 | The public room list a watching lobby holds | `LobbyBroadcaster` (memory, derived from `RoomManager`) | No |
 | The last 50 lobby chat lines, for an arrival | `LobbyChatLog` (memory, re-seeded from the retained rows at startup) | Effectively — a restart reads the most recent fifty back from `room_messages` |
 | Live counts of rooms/players/games | In-process counters | No, deliberately |
@@ -1094,6 +1095,16 @@ expiry, and the per-player reconnect grace. Application-owned rather than scatte
 `create_task` calls, so teardown is a single `close()` and a room removal cannot leak
 a task that fires into a room that no longer exists.
 
+The AFK check is deliberately **not** one of them. It is a supervised sweep
+([`services/afk.py`](../backend/app/services/afk.py)) on the shape the presence
+loop uses, not a task per seat: at a five-minute window the granularity of a
+few seconds is not observable, the client answers before the deadline in the
+ordinary case so almost no seat reaches it, and four hundred timer tasks
+rearmed on every command would cost more than the pass they replace. The sweep
+interval is derived from the check window rather than fixed, so tuning the
+windows down — as the E2E suite does — cannot leave a check open for a whole
+extra interval.
+
 ### Naming and the wire contract
 
 Nothing in either language checks that the two sides agree on a name — a payload key
@@ -1574,6 +1585,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
+| [`app/services/afk.py`](../backend/app/services/afk.py) | When a person stopped answering, and what the room does about it. |
 | [`app/services/avatars.py`](../backend/app/services/avatars.py) | Uploading, serving and removing a player's picture (#573). |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |

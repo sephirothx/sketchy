@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.handlers.budgets import Budget
 
-CLIENT_CONFIG_CONTRACT_VERSION = 3
+CLIENT_CONFIG_CONTRACT_VERSION = 4
 
 
 def _compiled_drawing_budget() -> Budget:
@@ -59,6 +59,15 @@ class ClientConfig:
     # moves (`announce_client_config`), so the value read must be the live one.
     drawing_budget: Callable[[], Budget] = field(default=_compiled_drawing_budget)
 
+    # How recently a client must have seen a pointer or a key to answer an
+    # AFK check on the player's behalf (#677). Version 4, and it belongs here
+    # for the reason the module exists: it changes something the *client*
+    # does, and it is the one number in the feature that can only be settled
+    # by watching somebody play. Too short and a person who is reading the
+    # canvas gets a dialog; too long and a client answers for somebody who
+    # left a minute ago. Shipped, so it can be moved while somebody watches.
+    afk_input_window_ms: int = 60_000
+
     def payload(self) -> dict:
         """The `client_config` notice, in the names the client reads."""
         budget = self.drawing_budget()
@@ -67,6 +76,7 @@ class ClientConfig:
             "flushIntervalMs": self.flush_interval_ms,
             "drawingFramesPerWindow": budget.limit,
             "drawingWindowSeconds": budget.window_seconds,
+            "afkInputWindowMs": self.afk_input_window_ms,
         }
 
 

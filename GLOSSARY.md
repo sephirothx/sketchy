@@ -78,7 +78,7 @@ the rotation itself are counted in *rounds*.
 | **Historical presentation** | The display name, name color, and guest/registered state frozen onto a finished-game seat. Profile edits do not rewrite it; deletion replaces identifying fields with the **Deleted player** tombstone. | current profile, username, avatar |
 | **Daily user-stat projection** | A disposable per-canonical-account, per-UTC-day summary of immutable finished-game facts used for bounded-cost profile statistics. Game saves update it transactionally; identity merges and the maintenance command rebuild it. It is never the source of truth. | user stats cache, lifetime counter, analytics tracking |
 | **Competitive projection** | A future, versioned, rebuildable interpretation of finished-game facts for a declared rating, season, achievement, or leaderboard policy. It is not a v1 feature and must never replace or rewrite the underlying game, seat, outcome, prompt-provenance, or score-event facts. | rating counter, permanent rank, source data |
-| **AFK** | A status a player sets on themselves, or the room votes onto them. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
+| **AFK** | A status a player sets on themselves, the room votes onto them, or the server raises after an unanswered **AFK check**. AFK players are skipped for turns and not waited for. Always the initialism, uppercase. | away, idle, inactive, afk |
 
 ## Names
 
@@ -238,6 +238,7 @@ Three different things, never used for one another:
 | **Restart vote** | A proposal to restart the current game, carried by a strict majority of active players. | vote restart, game restart, reset vote |
 | **Kick vote** | A proposal to remove a player from the room. | vote kick, vote-kick, boot |
 | **AFK vote** | A proposal to mark a player AFK. | vote AFK, idle vote |
+| **AFK check** | The room asking one seat whether anybody is still there, after it has sent nothing a person sent for the inactivity window. A countdown the player answers by doing anything at all; unanswered, the seat is marked **AFK**. Their client answers it silently when it has seen a pointer or a key recently, so only somebody who has touched nothing ever sees it. It is not a check for a hidden tab: hiding is neither grounds for AFK nor protection from it. | idle timeout, away check, are you there |
 | **Majority** | Strictly more than half of the eligible voters. Spectators never vote and are never targets. | quorum, consensus |
 
 ## Connection

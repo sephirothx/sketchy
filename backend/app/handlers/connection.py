@@ -49,6 +49,11 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     # ceiling with sockets that were never open, and the process would refuse
     # everybody. The same is true of any other failure in here.
     ctx.room_capacity.note_socket_opened(sid)
+    # Every socket starts its inactivity clock at the handshake, so a
+    # connection that has never sent a command has an age rather than no
+    # answer at all - and the seat it is about to take is measured from when
+    # it arrived rather than from the first thing it happened to say (#677).
+    ctx.activity.note(sid)
     accepted = False
     # Anything that leaves early without saying otherwise was refused: a
     # suspension raises out, and so would any failure in the lookups below.
@@ -186,6 +191,11 @@ async def disconnect(ctx: HandlerContext, sid):
     if ctx.presence.note_socket_closed(sid):
         _record_last_seen(ctx, went_offline_user_id)
     ctx.clear_command_budget(sid)
+    # The activity stamp and any open AFK check belong to this connection and
+    # nothing else: a seat that reconnects holds a new sid and starts a fresh
+    # clock, which is right, because reconnecting is something a person did.
+    ctx.activity.forget(sid)
+    ctx.afk_watch.forget(sid)
     ctx.release_stale(sid)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition

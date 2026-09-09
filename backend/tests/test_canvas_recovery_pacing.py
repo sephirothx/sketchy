@@ -27,10 +27,11 @@ def test_the_client_config_carries_the_live_drawing_allowance():
     policy = CommandBudgetPolicy()
     config = ClientConfig(drawing_budget=lambda: policy.for_command("draw"))
     assert config.payload() == {
-        "contractVersion": 3,
+        "contractVersion": 4,
         "flushIntervalMs": 80,
         "drawingFramesPerWindow": DRAWING.default.limit,
         "drawingWindowSeconds": DRAWING.default.window_seconds,
+        "afkInputWindowMs": ClientConfig.afk_input_window_ms,
     }
     policy.set_limit(DRAWING.name, 200)
     assert config.payload()["drawingFramesPerWindow"] == 200, "read live, not copied"

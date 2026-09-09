@@ -7,6 +7,7 @@ import { loadRecapDrawing } from "../lib/recapDrawings";
 import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AccountMenu } from "../components/AccountMenu";
+import { AfkCheckDialog } from "../components/AfkCheckDialog";
 import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
@@ -20,6 +21,7 @@ import {
   ConnectedWaitingRoomPanel,
   GameplayRegion,
 } from "../components/GameRoomRegions";
+import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
@@ -68,6 +70,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // One roster scan, not one per field.
   const isConnected = useGameStore((s) => selectMe(s)?.connected ?? false);
   const isAfk = useGameStore((s) => selectMe(s)?.isAfk ?? false);
+  // Armed for the whole time a seat is held, waiting room included: an absent
+  // host holding a room nobody can start is half of what the check is for.
+  // Not while already AFK - the flag is the answer the check was after.
+  const afkCheck = useAfkCheck(!isAfk);
   const isSpectator = useGameStore((s) => selectMe(s)?.isSpectator ?? false);
   const isHost = useGameStore((s) => selectMe(s)?.isHost ?? false);
 
@@ -289,6 +295,12 @@ export function ActiveGameRoom({ code }: { code: string }) {
     <div
       className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}`}
     >
+      {afkCheck.secondsLeft !== null && (
+        <AfkCheckDialog
+          secondsLeft={afkCheck.secondsLeft}
+          onAnswer={afkCheck.answer}
+        />
+      )}
       {leaveConfirmationOpen && (
         <ConfirmationDialog
           title={amDrawer ? "Leave during your turn?" : "Leave active game?"}
