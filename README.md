@@ -54,23 +54,25 @@ keyboard that takes half the screen, and one thumb.
   total to the profile. They are never scored. The four faces are bundled artwork
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
-- Friends — registered players add each other from the lobby's online list or from a
+- Friends — registered players add each other from a player's profile or from a
   seat in the same room, and a friendship lets either of them take a seat in a game they
   cannot name: uninvited only where the **host** is a friend, or on a short-lived
   single-use invitation that carries a token rather than a room code. **Friends**, in the
   account menu, holds every friendship and every request in either direction whether or
   not the other person is online, and opens over whatever page you are on, so a request
   that arrives while you are drawing can be answered without leaving the game. The
-  lobby's online list says a request is waiting and stops there — answering one
-  happens on **Friends**, whether or not the sender is still there. Declining
+  lobby's online list is presence and nothing else — it carries no way to ask and
+  no report of a request, because a row there comes and goes as people open and
+  close tabs. A request that arrives offers **Accept** on the notice itself, and
+  lingers long enough to reach mid-turn. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
   leaves nothing behind. Guests are not offered friendships, since a guest name belongs
   to a browser and is purged after a month of not playing. Somebody you are not
   sharing a lobby with is still reachable: every registered name in the online list
-  links to that player's profile, and a profile carries the same **Add friend**
-  control — and says plainly when you already are friends — so the person you
-  finished a game with yesterday can be added today.
+  links to that player's profile, which carries the **Add friend** control — and
+  says plainly when you already are friends — so the person you finished a game
+  with yesterday can be added today.
   **Friends** also suggests registered accounts you finished a game with in the last
   30 days. That list is built only from games you sat in yourself — there is still
   no way to search for, or reach, somebody you have never played with.
