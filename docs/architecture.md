@@ -346,6 +346,17 @@ revocable session record as HTTP requests
 ([`backend/app/handlers/connection.py:22`](../backend/app/handlers/connection.py)), so
 revocation applies uniformly without a shared signing secret.
 
+How long an idle connection is held before the server closes it is decided rather
+than inherited ([`server.py`](../backend/app/server.py), `KEEP_ALIVE_SECONDS`).
+Whichever side closes an idle pooled connection is the side that absorbs the race:
+a connection the server closes at the instant the client writes its next request
+into it fails as a hang up with **no status at all**, which no caller can tell from
+a refusal, because it is not an answer. The window exists at every value — what
+moves is how often a client's idle gap lands on it, and Uvicorn's default of five
+seconds sits inside the gaps a browser leaves between one page's requests. Held far
+past that, the client is normally the side that closes first, which it can do with
+no request in flight.
+
 ---
 
 ## 6. Lifecycle
@@ -1680,7 +1691,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/bug_report_retention.py`](../backend/app/services/bug_report_retention.py) | A ceiling on how long an undecided bug report keeps its screenshot. |
 | [`app/services/shutdown.py`](../backend/app/services/shutdown.py) | Bounded planned-shutdown drain for process-owned live rooms. |
 | [`app/services/timers.py`](../backend/app/services/timers.py) | Own asyncio task lifecycle for game phases, hints, and disconnects. |
-| [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental and full rebuild paths for bounded-cost profile statistics. |
+| [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental, merge-scoped and full rebuild paths for bounded-cost profile statistics. |
 | [`app/state.py`](../backend/app/state.py) | Process-wide singletons shared between the REST routes and Socket.IO handlers. |
 | [`app/wire_contract.py`](../backend/app/wire_contract.py) | The socket contract as one document, so a change to it is a diff, not a guess. |
 | [`app/ws_transport.py`](../backend/app/ws_transport.py) | The WebSocket transport, chosen on purpose: wsproto, with a deflate window this module sets rather than one the client happens to ask for. |

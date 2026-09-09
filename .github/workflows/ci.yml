@@ -421,12 +421,16 @@ jobs:
       - name: Run E2E tests
         run: bash scripts/test-e2e.sh --e2e-shard=${{ matrix.shard }}/3
 
+      # The whole directory, so a failed run's server log travels with the JUnit
+      # report: the report carries the client's side of a failure, and for one
+      # below the application - a connection closed with no status - that is all
+      # anybody has ever had to go on (#735, R-ENG-17).
       - name: Save E2E test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: e2e-test-results-${{ matrix.shard }}
-          path: backend/test-results/e2e.xml
+          path: backend/test-results/
           retention-days: 7
 
   # Preserve the existing required check name. A failed, cancelled, or skipped

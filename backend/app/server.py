@@ -19,6 +19,18 @@ from app.ws_transport import WS_PROTOCOL
 # of them means "stop waiting", not "start again".
 _TERMINATION_SIGNALS = frozenset({signal.SIGINT, signal.SIGTERM})
 
+# How long an idle keep-alive connection is held open before the server closes
+# it. Decided here rather than inherited, because whoever closes an idle pooled
+# connection decides who absorbs the race: a connection the server closes at the
+# instant the client writes its next request into it fails as a hang up with no
+# status, and a caller cannot tell that apart from a refusal - it is not an
+# answer, so there is nothing in it to retry on or report. The window exists at
+# any value; what moves is how often a client's idle gap lands on it, and
+# Uvicorn's default of 5 seconds sits squarely inside the gaps a browser leaves
+# between one page's requests. At 75 seconds the client is normally the side
+# that closes first, which it can do without a request in flight (#735).
+KEEP_ALIVE_SECONDS = 75
+
 
 class DrainingServer(uvicorn.Server):
     """Stop listeners, drain existing games, then run normal Uvicorn shutdown."""
@@ -93,6 +105,7 @@ def run() -> None:
         # Named, not "auto": which library answers a WebSocket decides the
         # deflate window, and auto decided it by what happened to be installed.
         ws=WS_PROTOCOL,
+        timeout_keep_alive=KEEP_ALIVE_SECONDS,
         # This bound begins after the application drain. Leave enough time for
         # the ordinary 10-second atomic finished-history write to settle.
         timeout_graceful_shutdown=15,

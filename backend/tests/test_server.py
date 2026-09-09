@@ -126,3 +126,22 @@ def test_an_ordinary_return_from_serve_is_not_turned_into_an_error():
         server.run()
 
     asyncio_module.run.assert_called_once()
+
+
+def test_the_keep_alive_timeout_is_decided_rather_than_inherited():
+    """#735: whoever closes an idle pooled connection decides who loses a request.
+
+    Uvicorn's default of 5 seconds sits inside the gaps a browser leaves between
+    one page's requests, and a connection closed as the next request is written
+    into it fails with no status at all. The value is pinned here because it is
+    otherwise invisible: dropping the argument reverts to the default silently.
+    """
+    with (
+        patch.object(server, "DrainingServer") as draining,
+        patch.object(server, "asyncio"),
+    ):
+        server.run()
+
+    config = draining.call_args.args[0]
+    assert config.timeout_keep_alive == server.KEEP_ALIVE_SECONDS
+    assert config.timeout_keep_alive > uvicorn.Config("app.main:app").timeout_keep_alive

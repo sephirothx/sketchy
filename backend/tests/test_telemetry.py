@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 
 import pytest
@@ -289,6 +290,52 @@ async def test_the_sampler_measures_a_blocked_loop():
     assert max(
         value for value in telemetry.lag_samples.points_max(time.time()) if value is not None
     ) >= 0.05
+
+
+@pytest.mark.asyncio
+async def test_a_blocked_loop_says_so_in_the_log(caplog):
+    """#735: a histogram nobody is scraping records a stall for nobody.
+
+    The runs that most need to answer "was the loop stuck?" - a CI shard, a
+    report from an operator with no Prometheus - are the ones where the metric
+    goes nowhere. The line is what survives them.
+    """
+    telemetry = Telemetry()
+    task = asyncio.create_task(
+        run_lag_sampler(telemetry, interval_seconds=0.01, warn_after_seconds=0.05)
+    )
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.services.telemetry"):
+            await asyncio.sleep(0.03)
+            time.sleep(0.08)  # noqa: ASYNC251 - blocking the loop is the point
+            await asyncio.sleep(0.03)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    blocked = [record for record in caplog.records if "Event loop blocked" in record.message]
+    assert blocked, "a loop blocked for 80 ms past a 50 ms threshold wrote nothing"
+    assert float(blocked[0].args[0]) >= 0.05
+
+
+@pytest.mark.asyncio
+async def test_an_unblocked_loop_stays_quiet(caplog):
+    """Or the line means nothing: every run of every suite would carry it."""
+    telemetry = Telemetry()
+    task = asyncio.create_task(
+        run_lag_sampler(telemetry, interval_seconds=0.01, warn_after_seconds=5.0)
+    )
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.services.telemetry"):
+            await asyncio.sleep(0.05)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert telemetry.loop_lag.count() >= 2, "the sampler did run"
+    assert not [record for record in caplog.records if "Event loop blocked" in record.message]
 
 
 # --- bytes over the socket -------------------------------------------------------
