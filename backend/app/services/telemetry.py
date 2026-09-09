@@ -442,10 +442,33 @@ def gauge_lines(name: str, help: str, value: float | int | None) -> list[str]:
 def labelled_gauge_lines(
     name: str, help: str, label_names: Sequence[str], rows: Iterable[tuple[Sequence[str], float | int]]
 ) -> list[str]:
+    return _labelled_lines(name, help, "gauge", label_names, rows)
+
+
+def labelled_counter_lines(
+    name: str, help: str, label_names: Sequence[str], rows: Iterable[tuple[Sequence[str], float | int]]
+) -> list[str]:
+    """The same, for a family that only ever climbs.
+
+    Worth the second function rather than a `gauge` with a `_total` name:
+    `rate()` and `increase()` are the only sensible things to ask of one of
+    these, and both read the declared type to decide whether a drop is a
+    counter reset or a real fall.
+    """
+    return _labelled_lines(name, help, "counter", label_names, rows)
+
+
+def _labelled_lines(
+    name: str,
+    help: str,
+    kind: str,
+    label_names: Sequence[str],
+    rows: Iterable[tuple[Sequence[str], float | int]],
+) -> list[str]:
     body = [f"{name}{_labels(label_names, key)} {_format(value)}" for key, value in rows]
     if not body:
         return []
-    return [f"# HELP {name} {help}", f"# TYPE {name} gauge", *body]
+    return [f"# HELP {name} {help}", f"# TYPE {name} {kind}", *body]
 
 
 # --- process -----------------------------------------------------------------

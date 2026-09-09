@@ -371,7 +371,7 @@ no request in flight.
 6. `validate_mail_configuration()` — with `SKETCHY_ENV=production`, refuses a missing or blank `SMTP_HOST`. The zero-config fallback logs each message instead of sending it, which in production writes live confirmation and reset links into the log store *and* sends nothing to the player waiting for one; `ConsoleTransport.send` refuses in production as the second lock, on the one statement that would write a body (#466)
 7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
 8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-9. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
+9. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
 10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
 11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 12. `mark_ready()` — `GET /api/ready` starts answering 200
@@ -1542,6 +1542,7 @@ the synthetic repositories still prove each refusal independently.
 | Identity-based prompt seeding | Text is not identity; a reword must not orphan statistics | Redeploying different content under a seen ID fails startup |
 | Facts, not counters | Ratings/seasons/achievements are a later product decision | Derived rows (the daily projection) are disposable and rebuildable |
 | Deferred work runs in the one worker | Mail, exports, retention and metrics are loops the process supervises; a table is the queue | No broker and no second process to deploy or health-check; an export build is serialised by construction (N-12) |
+| One loop owns every retention window | Each retained table is a registered sweep of the hourly retention loop, holding its own deletion SLA and reporting what it left | Fault isolation, budget reporting and backlog measurement are the same for every table, and a compliance question has one place to be answered (R-PRIV-17, #478) |
 
 ---
 
@@ -1687,6 +1688,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/telemetry.py`](../backend/app/services/telemetry.py) | Process signals — request, command, query and loop-lag RED/USE — kept in memory for `/metrics` and the operations page. |
 | [`app/services/queue_depths.py`](../backend/app/services/queue_depths.py) | Depth and oldest age of the mail outbox and pending exports, cached. |
 | [`app/services/sweeps.py`](../backend/app/services/sweeps.py) | Bounded, batched deletion for every retention sweep. |
+| [`app/services/bug_report_retention.py`](../backend/app/services/bug_report_retention.py) | A ceiling on how long an undecided bug report keeps its screenshot. |
 | [`app/services/shutdown.py`](../backend/app/services/shutdown.py) | Bounded planned-shutdown drain for process-owned live rooms. |
 | [`app/services/timers.py`](../backend/app/services/timers.py) | Own asyncio task lifecycle for game phases, hints, and disconnects. |
 | [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental, merge-scoped and full rebuild paths for bounded-cost profile statistics. |

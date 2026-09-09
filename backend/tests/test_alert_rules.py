@@ -20,6 +20,7 @@ from app.api.operations import (
     _loop_lines,
     _prometheus_lines,
     _queue_lines,
+    _retention_lines,
 )
 from app.services.drawing_storage import DrawingStoreSize
 from app.probe import PROBE_METRIC_NAMES
@@ -60,6 +61,24 @@ def exposed_names() -> set[str]:
         *_queue_lines(QueueSnapshot(QueueDepth(1, 5.0), QueueDepth(1, 5.0), HandoffDepth(1, 5.0, 0))),
         # A store with something in it, so both size gauges appear.
         *_drawing_store_lines(DrawingStoreSize(4096, 1)),
+        # One table's worth of retention compliance, with every optional
+        # field present, so each family in it is checked against the rules.
+        *_retention_lines(
+            {
+                "room_messages": {
+                    "rows": 3,
+                    "batches": 1,
+                    "seconds": 0.2,
+                    "exhausted": False,
+                    "failed": False,
+                    "oldest_overdue_seconds": 0.0,
+                    "backlog": 0,
+                    "sla_seconds": 21600.0,
+                    "removed_total": 3,
+                    "failures_total": 0,
+                }
+            }
+        ),
         *gauge_lines("sketchy_db_ready", "x", 1),
     ]
     names: set[str] = set()

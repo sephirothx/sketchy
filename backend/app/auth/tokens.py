@@ -22,6 +22,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 
@@ -193,4 +194,6 @@ async def purge_expired_tokens(
             AuthToken.token_hash.in_(hashes)
         ),
         budget=budget or sweep_budget_from_env(),
+        probe=overdue_probe(AuthToken.expires_at, AuthToken.expires_at <= checked_at),
+        now=checked_at,
     )

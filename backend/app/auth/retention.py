@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -30,6 +31,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 
@@ -116,6 +118,15 @@ async def purge_expired_auth_sessions(
         budget=SweepBudget(
             rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
         ),
+        # The suspended accounts' rows are exempt, not late: they are excluded
+        # from the backlog by the same subquery that excludes them from the
+        # candidates, so a long suspension cannot read as retention failing.
+        probe=overdue_probe(
+            AuthSession.expires_at,
+            AuthSession.expires_at <= cutoff,
+            AuthSession.user_id.not_in(protected),
+        ),
+        now=cutoff,
     )
 
 
@@ -147,6 +158,8 @@ async def purge_expired_data_exports(
         budget=SweepBudget(
             rows=resolved.rows, batch=min(batch_size, resolved.batch), seconds=resolved.seconds
         ),
+        probe=overdue_probe(DataExport.expires_at, DataExport.expires_at <= checked_at),
+        now=checked_at,
     )
 
 
@@ -324,12 +337,42 @@ def sweep_interval_seconds(environ: dict[str, str] | None = None) -> float:
 CATCH_UP_SECONDS = 5.0
 
 
+# --- the policy retention is measured against ----------------------------
+#
+# A **deletion SLA** is how long a row may still be here *after* it became
+# eligible for removal. It is a lag allowance on top of the retention window,
+# never the window itself: "thirty days" says when a message stops being
+# wanted, and the SLA says how long the machinery may take to act on that.
+# What is measured against it is `oldest_overdue_seconds` - the age of the
+# oldest row a sweep should already have removed - counted only over rows the
+# policy does not exempt, so a permanently kept row is never lateness.
+#
+# Six scheduled passes for the ordinary tables: an hourly sweep with a
+# five-second catch-up has to miss its window six times over before this is
+# breached, which is a real fault rather than a busy hour.
+STANDARD_SLA_SECONDS = 6 * 3600.0
+# A day for the two whose per-run ceiling is deliberately small - guests
+# cascade across a dozen tables, retired lists walk revisions, versions and
+# concepts - so a backlog is worked off over several passes by design.
+HEAVY_SLA_SECONDS = 24 * 3600.0
+
+
 @dataclass(frozen=True)
 class Sweep:
-    """One retention mechanism the loop runs: a name and a coroutine factory."""
+    """One retention mechanism the loop runs, and what it is held to.
+
+    `sla_seconds` is this table's deletion SLA, exported beside its measured
+    lateness so a single alert rule covers every table without restating the
+    policy. `exempt` names, in words, what this sweep deliberately never
+    removes; the sentence belongs next to the number because an SLA with
+    unstated exceptions is unauditable, and because the exemption has to be
+    absent from the overdue probe as well as from the candidates.
+    """
 
     name: str
     run: Callable[..., Awaitable[object]]
+    sla_seconds: float = STANDARD_SLA_SECONDS
+    exempt: str = ""
 
 
 def retention_sweeps() -> tuple[Sweep, ...]:
@@ -342,43 +385,174 @@ def retention_sweeps() -> tuple[Sweep, ...]:
     from app.auth.mail import purge_expired_outbox_entries
     from app.auth.rate_limit import cleanup_expired_rate_limit_buckets
     from app.auth.tokens import purge_expired_tokens
+    from app.services.bug_report_retention import expire_stale_bug_report_screenshots
     from app.services.message_retention import purge_expired_room_messages
     from app.services.room_codes import purge_retired_room_codes
+    from app.services.runtime_metrics import purge_expired_events
     from app.services.shutdown import purge_expired_shutdown_abandonments
 
     return (
-        Sweep("room_messages", purge_expired_room_messages),
-        Sweep("email_outbox", purge_expired_outbox_entries),
+        Sweep(
+            "room_messages",
+            purge_expired_room_messages,
+            exempt="lines copied as report evidence, which are their own rows",
+        ),
+        Sweep(
+            "email_outbox",
+            purge_expired_outbox_entries,
+            exempt="pending mail, which is still owed an attempt at any age",
+        ),
         Sweep("auth_tokens", purge_expired_tokens),
-        Sweep("auth_sessions", purge_expired_auth_sessions),
+        Sweep(
+            "auth_sessions",
+            purge_expired_auth_sessions,
+            exempt="sessions of a suspended account, their only route to export and deletion",
+        ),
         Sweep("data_exports", purge_expired_data_exports),
         Sweep("shutdown_abandonments", purge_expired_shutdown_abandonments),
         Sweep("auth_rate_limit_buckets", cleanup_expired_rate_limit_buckets),
-        Sweep("room_code_reservations", purge_retired_room_codes),
-        Sweep("retired_prompt_lists", reclaim_retired_prompt_lists),
-        Sweep("anonymous_accounts", _purge_guests),
+        Sweep(
+            "room_code_reservations",
+            purge_retired_room_codes,
+            exempt="codes of the removed persistent-room feature, which never re-enter the pool",
+        ),
+        Sweep("runtime_events", purge_expired_events),
+        Sweep(
+            "bug_report_screenshots",
+            expire_stale_bug_report_screenshots,
+            exempt="the report itself and every byte of its metadata; only the pixels go",
+        ),
+        Sweep(
+            "retired_prompt_lists",
+            reclaim_retired_prompt_lists,
+            sla_seconds=HEAVY_SLA_SECONDS,
+            exempt="revisions a finished game pins, and the tombstones holding them, for ever",
+        ),
+        Sweep(
+            "anonymous_accounts",
+            _purge_guests,
+            sla_seconds=HEAVY_SLA_SECONDS,
+            exempt="a guest another write holds this instant, left for the next pass",
+        ),
     )
 
 
-async def _purge_guests(session_factory, *, budget: SweepBudget) -> AnonymousRetentionResult:
-    return await purge_stale_anonymous_accounts(
-        session_factory, batch_size=min(DEFAULT_BATCH_SIZE, budget.rows), apply=True
+async def _guest_lateness(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    unused_cutoff: datetime,
+    player_cutoff: datetime,
+) -> dict[str, object]:
+    """How far behind each guest tier is, measured separately.
+
+    One number for both tiers would hide the starvation the halved batch
+    exists to prevent: a flood of never-played guests keeps the table's
+    overall backlog enormous and its oldest row young, while the tier with
+    history quietly ages. So each tier is probed against its own cutoff and
+    the worse age is the table's, with both kept in the detail.
+    """
+    lateness: dict[str, float] = {}
+    backlog = 0
+    async with session_factory() as session:
+        for label, cutoff, with_history in (
+            ("unused", unused_cutoff, False),
+            ("player", player_cutoff, True),
+        ):
+            probe = overdue_probe(
+                User.last_active_at, *_tier_predicates(cutoff, with_history=with_history)
+            )
+            earliest = await session.scalar(probe.oldest)
+            backlog += int(await session.scalar(probe.backlog) or 0)
+            if earliest is not None and earliest.tzinfo is None:
+                earliest = earliest.replace(tzinfo=timezone.utc)
+            # Against the tier's cutoff, not the clock: a guest is late by how
+            # long it has been past its own window, not by how old it is. A
+            # tier with nothing eligible is zero, never absent.
+            lateness[f"{label}_overdue_seconds"] = (
+                0.0
+                if earliest is None
+                else max(0.0, (cutoff - earliest).total_seconds())
+            )
+    return {
+        "oldest_overdue_seconds": max(lateness.values()),
+        "backlog": backlog,
+        **{key: round(value, 1) for key, value in lateness.items()},
+    }
+
+
+async def _purge_guests(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    budget: SweepBudget,
+    now: datetime | None = None,
+) -> SweepReport:
+    """The guest purge, in the shape every other sweep reports in."""
+    started = time.monotonic()
+    checked_at = now or datetime.now(timezone.utc)
+    batch_size = min(DEFAULT_BATCH_SIZE, budget.rows)
+    result = await purge_stale_anonymous_accounts(
+        session_factory, now=checked_at, batch_size=batch_size, apply=True
+    )
+    measured = await _guest_lateness(
+        session_factory,
+        unused_cutoff=checked_at - timedelta(days=DEFAULT_UNUSED_RETENTION_DAYS),
+        player_cutoff=checked_at - timedelta(days=DEFAULT_PLAYER_RETENTION_DAYS),
+    )
+    return SweepReport(
+        result.total,
+        name="anonymous_accounts",
+        batches=1 if result.total else 0,
+        seconds=time.monotonic() - started,
+        exhausted=result.total >= batch_size,
+        oldest_overdue_seconds=measured["oldest_overdue_seconds"],  # type: ignore[arg-type]
+        backlog=measured["backlog"],  # type: ignore[arg-type]
+        detail={
+            "unused_accounts": result.unused_accounts,
+            "player_accounts": result.player_accounts,
+            "unused_overdue_seconds": measured["unused_overdue_seconds"],
+            "player_overdue_seconds": measured["player_overdue_seconds"],
+        },
     )
 
 
 def _describe(report: object) -> dict[str, object]:
     if isinstance(report, SweepReport):
         return report.as_dict()
-    if isinstance(report, AnonymousRetentionResult):
-        return {
-            "rows": report.total,
-            "unused_accounts": report.unused_accounts,
-            "player_accounts": report.player_accounts,
-            "exhausted": report.total >= DEFAULT_BATCH_SIZE,
-        }
     if hasattr(report, "lists_examined"):
-        return {"rows": report.lists_deleted, "revisions": report.revisions_deleted}
+        # The reclaim keeps its own shape - it removes revisions, lists,
+        # versions and concepts rather than rows of one table - but it owes
+        # the same account of what it left. Its backlog is over the lists it
+        # could still collect: a tombstone every remaining revision is pinned
+        # to is exempt for ever, and counting one would climb with nothing
+        # wrong, but the lists waiting *behind* it are late like any other.
+        return {
+            "rows": report.lists_deleted,
+            "revisions": report.revisions_deleted,
+            "examined": report.lists_examined,
+            "oldest_overdue_seconds": round(report.oldest_overdue_seconds, 1),
+            "backlog": report.backlog,
+        }
     return {"rows": int(report) if isinstance(report, int) else None}
+
+
+@dataclass
+class SweepTotals:
+    """What a table has done and suffered since the process started.
+
+    Kept here rather than derived from the last iteration because a counter
+    that resets every hour cannot answer "how often has this failed" - which
+    is the question separating a table that hiccupped from one that has been
+    failing all night behind the fault isolation that keeps the rest running.
+    """
+
+    removed: int = 0
+    failures: int = 0
+
+
+def _breached(described: dict[str, object], sla_seconds: float) -> bool:
+    """Whether this table is past the SLA it is held to."""
+    overdue = described.get("oldest_overdue_seconds")
+    return isinstance(overdue, (int, float)) and overdue > sla_seconds
 
 
 async def run_retention_sweeps(
@@ -387,29 +561,69 @@ async def run_retention_sweeps(
     sweeps: tuple[Sweep, ...] | None = None,
     budget: SweepBudget | None = None,
     health: LoopHealth | None = None,
+    totals: dict[str, SweepTotals] | None = None,
 ) -> dict[str, dict[str, object]]:
     """Run every sweep once, each within the budget, none able to stop the rest.
 
     Returns each sweep's account of itself, which the loop keeps on its
-    health record for the operations page. A sweep that raised is recorded
-    as failed there and counted on the health, and the iteration as a whole
-    is a failure; the sweeps after it still run.
+    health record for the operations page and the scrape. A sweep that raised
+    is recorded as failed there and counted on the health, and the iteration
+    as a whole is a failure; the sweeps after it still run.
+
+    Every entry carries the table's SLA beside its measured lateness, so the
+    compliance question is answerable from the record alone - by an alert
+    rule that need not restate the policy, and by an operator reading the
+    page who should not have to look one up.
     """
     resolved = budget or sweep_budget_from_env()
+    running = totals if totals is not None else {}
     reports: dict[str, dict[str, object]] = {}
     failed = False
     for sweep in sweeps or retention_sweeps():
+        counters = running.setdefault(sweep.name, SweepTotals())
         try:
             report = await sweep.run(session_factory, budget=resolved)
         except asyncio.CancelledError:
             raise
         except Exception:
             failed = True
+            counters.failures += 1
             logger.exception("retention sweep %s failed", sweep.name)
-            reports[sweep.name] = {"failed": True}
+            reports[sweep.name] = {
+                "failed": True,
+                "breached": False,
+                "sla_seconds": sweep.sla_seconds,
+                "removed_total": counters.removed,
+                "failures_total": counters.failures,
+            }
             continue
         described = _describe(report)
+        counters.removed += int(described.get("rows") or 0)
+        described = {
+            **described,
+            "failed": False,
+            # Decided here and carried, rather than worked out again by each
+            # reader: whether a table is past its SLA is a policy question
+            # with one answer, and two surfaces deciding it separately is how
+            # they come to disagree.
+            "breached": _breached(described, sweep.sla_seconds),
+            "sla_seconds": sweep.sla_seconds,
+            "removed_total": counters.removed,
+            "failures_total": counters.failures,
+        }
         reports[sweep.name] = described
+        if described["breached"]:
+            # A warning rather than a failure: the sweep did what it was
+            # asked and the table is still behind, which is a capacity or a
+            # policy problem, not an error this iteration can recover from.
+            logger.warning(
+                "retention sweep %s is past its SLA: oldest overdue row is %.0fs "
+                "old against an allowance of %.0fs, %s rows still eligible",
+                sweep.name,
+                described["oldest_overdue_seconds"],
+                sweep.sla_seconds,
+                described.get("backlog"),
+            )
         if described.get("rows"):
             logger.info(
                 "retention sweep %s: %s",
@@ -442,9 +656,12 @@ async def run_retention_loop(
     left comes back after `catch_up_seconds` rather than a whole interval.
     """
     interval = interval_seconds or sweep_interval_seconds()
+    totals: dict[str, SweepTotals] = {}
     while True:
         try:
-            reports = await run_retention_sweeps(session_factory, health=health)
+            reports = await run_retention_sweeps(
+                session_factory, health=health, totals=totals
+            )
             behind = any(report.get("exhausted") for report in reports.values())
         except asyncio.CancelledError:
             raise

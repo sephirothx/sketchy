@@ -16,6 +16,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 
@@ -177,4 +178,14 @@ async def purge_retired_room_codes(
             RoomCodeReservation.code.in_(codes)
         ),
         budget=budget or sweep_budget_from_env(),
+        # Persistent codes are exempt by policy - they never re-enter the pool
+        # - so they are outside the predicate here as well as the candidates,
+        # and a deployment full of them never reads as a sweep falling behind.
+        probe=overdue_probe(
+            RoomCodeReservation.retired_until,
+            RoomCodeReservation.kind == "ephemeral",
+            RoomCodeReservation.retired_until.is_not(None),
+            RoomCodeReservation.retired_until <= checked_at,
+        ),
+        now=checked_at,
     )

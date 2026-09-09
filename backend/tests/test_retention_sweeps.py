@@ -177,10 +177,16 @@ async def test_one_failing_sweep_skips_nothing_after_it_and_is_counted():
         )
 
         assert ran == ["messages"]
-        assert reports["broken"] == {"failed": True}
+        assert reports["broken"]["failed"] is True
+        # A failing table still reports the policy it is held to and how often
+        # it has failed: the alert names the table, and the operator reading
+        # the page should not have to look the allowance up elsewhere.
+        assert reports["broken"]["failures_total"] == 1
+        assert reports["broken"]["sla_seconds"] == retention.STANDARD_SLA_SECONDS
         assert reports["room_messages"]["rows"] == 3
+        assert reports["room_messages"]["failed"] is False
         assert health.consecutive_failures == 1 and health.last_success is None
-        assert health.snapshot()["detail"]["sweeps"]["broken"] == {"failed": True}
+        assert health.snapshot()["detail"]["sweeps"]["broken"]["failed"] is True
         assert await _count(factory, RoomMessage.id) == 0
     finally:
         await engine.dispose()
@@ -358,6 +364,8 @@ def test_every_scheduled_sweep_is_registered_once():
         "shutdown_abandonments",
         "auth_rate_limit_buckets",
         "room_code_reservations",
+        "runtime_events",
+        "bug_report_screenshots",
         "retired_prompt_lists",
         "anonymous_accounts",
     }

@@ -36,7 +36,7 @@ from email.utils import parseaddr
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, func, literal, select, update
+from sqlalchemy import delete, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import is_production, public_base_url
@@ -45,6 +45,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 from app.db.models import EmailOutboxEntry, generate_uuid
@@ -633,7 +634,8 @@ async def purge_expired_outbox_entries(
         .order_by(EmailOutboxEntry.sent_at, EmailOutboxEntry.id),
         delete_for=lambda ids: delete(EmailOutboxEntry).where(EmailOutboxEntry.id.in_(ids)),
         budget=branch_budget,
-        overdue=select(func.min(EmailOutboxEntry.sent_at)).where(
+        probe=overdue_probe(
+            EmailOutboxEntry.sent_at,
             EmailOutboxEntry.state == literal(EmailOutboxState.SENT.value, literal_execute=True),
             EmailOutboxEntry.sent_at <= cutoff,
         ),
@@ -654,7 +656,8 @@ async def purge_expired_outbox_entries(
             batch=branch_budget.batch,
             seconds=max(0.001, resolved.seconds - sent.seconds),
         ),
-        overdue=select(func.min(EmailOutboxEntry.created_at)).where(
+        probe=overdue_probe(
+            EmailOutboxEntry.created_at,
             EmailOutboxEntry.state == literal(EmailOutboxState.FAILED.value, literal_execute=True),
             EmailOutboxEntry.created_at <= cutoff,
         ),
@@ -669,6 +672,12 @@ async def purge_expired_outbox_entries(
         oldest_overdue_seconds=max(
             (value for value in (sent.oldest_overdue_seconds, failed.oldest_overdue_seconds) if value is not None),
             default=None,
+        ),
+        # Two branches over one table, so the table's backlog is their sum.
+        backlog=(
+            None
+            if sent.backlog is None and failed.backlog is None
+            else (sent.backlog or 0) + (failed.backlog or 0)
         ),
     )
 

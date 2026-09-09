@@ -16,7 +16,13 @@ from sqlalchemy import delete, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.sweeps import DEFAULT_SECONDS_BUDGET, SweepBudget, SweepReport, delete_in_batches
+from app.services.sweeps import (
+    DEFAULT_SECONDS_BUDGET,
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    overdue_probe,
+)
 from app.db.models import AppConfig, AuthRateLimitBucket
 
 
@@ -195,6 +201,11 @@ async def cleanup_expired_rate_limit_buckets(
         .order_by(AuthRateLimitBucket.window_expires_at, AuthRateLimitBucket.key_hash),
         delete_for=lambda keys: delete(AuthRateLimitBucket).where(key.in_(keys)),
         budget=resolved,
+        probe=overdue_probe(
+            AuthRateLimitBucket.window_expires_at,
+            AuthRateLimitBucket.window_expires_at <= cutoff,
+        ),
+        now=cutoff,
     )
 
 

@@ -1517,6 +1517,14 @@
    "secondsSinceSuccess",
    "totalFailures"
   ],
+  "api.operations:_retention_json": [
+   "backlogRows",
+   "failuresTotal",
+   "overdueSeconds",
+   "removedTotal",
+   "slaSeconds",
+   "sweepSeconds"
+  ],
   "api.operations:audit_ledger": [
    "actorName",
    "actorUserId",

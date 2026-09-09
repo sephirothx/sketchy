@@ -296,13 +296,23 @@ async def _one_iteration(coroutine) -> None:
 
 
 def _only_the_worker(monkeypatch, module, worker: str) -> None:
-    """Narrow the retention loop's registry to the sweep that wraps `worker`."""
+    """Narrow the retention loop's registry to the sweep that wraps `worker`.
+
+    Straight to the patched worker rather than through `_purge_guests`, which
+    also measures how far behind each guest tier is and so wants a database
+    this test deliberately does not have. What is under test here is the
+    health recording, not the sweep.
+    """
     if not hasattr(module, "retention_sweeps"):
         return
+
+    async def run(session_factory, *, budget):
+        return await getattr(module, worker)(session_factory)
+
     monkeypatch.setattr(
         module,
         "retention_sweeps",
-        lambda: (module.Sweep("anonymous_accounts", module._purge_guests),),
+        lambda: (module.Sweep("anonymous_accounts", run),),
     )
 
 
@@ -373,31 +383,43 @@ async def test_a_sweep_that_raises_is_counted_rather_than_only_logged(
     assert health.last_success is None
 
 
-async def test_a_purge_failure_does_not_also_report_the_flush_as_a_success(monkeypatch):
+async def test_the_metrics_loop_flushes_and_leaves_retention_to_the_retention_loop(
+    monkeypatch,
+):
     """`last_success` is what an alert trusts, so it must not pass a failure.
 
-    The metrics loop purges on some iterations and not others. Recording the
-    success right after the flush marked those iterations successful before
-    the purge had a chance to fail, so one iteration reported both.
+    The metrics loop used to do both: flush, then purge `runtime_events` on
+    every twelfth iteration or so, on one health record that could only say
+    "an iteration failed". A purge failing every hour was indistinguishable
+    from a flush failing every hour, and the table had no budget report, no
+    backlog measurement and no fault isolation of its own. It is a registered
+    sweep now (#478), and this loop does one thing - so the only way an
+    iteration here fails is a flush that failed.
     """
     metrics = importlib.import_module("app.services.runtime_metrics")
+    retention = importlib.import_module("app.auth.retention")
     health = LoopHealth("runtime_metrics")
+    purged = False
 
     async def flushed(*_args, **_kwargs):
         return None
 
-    async def purge_fails(*_args, **_kwargs):
-        raise RuntimeError("the purge broke")
+    async def purge(*_args, **_kwargs):
+        nonlocal purged
+        purged = True
+        raise AssertionError("the metrics loop must not purge")
 
     monkeypatch.setattr(metrics, "flush_events", flushed)
-    monkeypatch.setattr(metrics, "purge_expired_events", purge_fails)
-    # An interval this long makes the first iteration a purge iteration.
+    monkeypatch.setattr(metrics, "purge_expired_events", purge)
+    # Long enough that the old arrangement would have made this a purge
+    # iteration on its first pass.
     await _one_iteration(
         metrics.run_metrics_loop(None, interval_seconds=3600, health=health)
     )
 
-    assert health.last_success is None
-    assert health.consecutive_failures == 1
+    assert not purged
+    assert health.last_success is not None and health.consecutive_failures == 0
+    assert "runtime_events" in [sweep.name for sweep in retention.retention_sweeps()]
 
 
 async def test_the_last_probe_result_is_readable_without_probing_again():

@@ -17,6 +17,7 @@ from app.services.sweeps import (
     SweepBudget,
     SweepReport,
     delete_in_batches,
+    overdue_probe,
     sweep_budget_from_env,
 )
 
@@ -410,4 +411,9 @@ async def purge_expired_shutdown_abandonments(
             PlannedShutdownAbandonment.id.in_(ids)
         ),
         budget=budget or sweep_budget_from_env(),
+        probe=overdue_probe(
+            PlannedShutdownAbandonment.observed_at,
+            PlannedShutdownAbandonment.observed_at <= cutoff,
+        ),
+        now=cutoff,
     )

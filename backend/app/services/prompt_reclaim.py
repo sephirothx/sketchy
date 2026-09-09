@@ -27,7 +27,7 @@ referenced. A day is far longer than a game.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from app.services.sweeps import SweepBudget
+from app.services.sweeps import SweepBudget, overdue_probe
 from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
@@ -91,6 +91,10 @@ class ReclaimResult:
     lists_deleted: int
     versions_deleted: int
     concepts_deleted: int
+    # What the run left behind, over reclaimable lists only: the age of the
+    # oldest one still past its grace, and how many there are (#478).
+    oldest_overdue_seconds: float = 0.0
+    backlog: int = 0
 
 
 def _revision_is_pinned(revision_id):
@@ -98,6 +102,38 @@ def _revision_is_pinned(revision_id):
         exists().where(GamePromptSource.prompt_list_revision_id == revision_id)
         | exists().where(TurnPromptOfferSource.prompt_list_revision_id == revision_id)
         | exists().where(PromptUsageFact.prompt_list_revision_id == revision_id)
+    )
+
+
+def _has_reclaimable_work(list_id):
+    """Whether this retired list still has anything for the reclaim to do.
+
+    A revision a finished game pins is permanent - the pin is that game's
+    provenance and never lapses - so a tombstone whose every remaining
+    revision is pinned has no work left, ever. Without this predicate such a
+    list is still selected: the batch takes the oldest retired lists, the
+    permanent ones are the oldest by construction, and once there are `limit`
+    of them they are the whole batch for every future run. Every list retired
+    afterwards then waits behind them indefinitely, while the sweep runs
+    hourly and reports success (#478).
+
+    Evaluated fresh each run rather than recorded, so a list becomes a
+    candidate again by itself if a pin ever does go away.
+    """
+    revisions = select(PromptListRevision.id).where(
+        PromptListRevision.prompt_list_id == list_id
+    )
+    return ~revisions.exists() | revisions.where(
+        ~_revision_is_pinned(PromptListRevision.id)
+    ).exists()
+
+
+def _reclaimable(cutoff: datetime):
+    """A retired list past its grace that the sweep can still act on."""
+    return (
+        PromptList.deleted_at.is_not(None),
+        PromptList.deleted_at <= cutoff,
+        _has_reclaimable_work(PromptList.id),
     )
 
 
@@ -110,6 +146,27 @@ def _version_is_referenced(version_id):
         | exists().where(PromptUsageFact.prompt_version_id == version_id)
         | exists().where(PromptContentReport.prompt_version_id == version_id)
     )
+
+
+async def _remaining(
+    session_factory: async_sessionmaker[AsyncSession], cutoff: datetime
+) -> tuple[float, int]:
+    """How far behind the reclaim is, over the lists it could still collect.
+
+    Measured against `cutoff` rather than the clock, so the age is time spent
+    past the grace and not the tombstone's own age. Zero rather than absent
+    when there is nothing waiting: a series that appears only while a sweep
+    is behind cannot be alerted on.
+    """
+    probe = overdue_probe(PromptList.deleted_at, *_reclaimable(cutoff))
+    async with session_factory() as session:
+        earliest = await session.scalar(probe.oldest)
+        backlog = int(await session.scalar(probe.backlog) or 0)
+    if earliest is None:
+        return 0.0, backlog
+    if earliest.tzinfo is None:
+        earliest = earliest.replace(tzinfo=timezone.utc)
+    return max(0.0, (cutoff - earliest).total_seconds()), backlog
 
 
 async def reclaim_retired_prompt_lists(
@@ -126,11 +183,18 @@ async def reclaim_retired_prompt_lists(
     run under one takes no more lists than the budget has rows.
 
     One transaction per run, over at most `limit` lists retired before
-    `now - grace`, oldest first. Each list's unpinned revisions go, then the
-    list row if no revision is left, then the versions and concepts those
-    revisions were the last to reference. A list that is still pinned stays
-    as a non-discoverable tombstone and is examined again next run, which
-    costs one indexed select.
+    `now - grace` **that still have something to collect**, oldest first.
+    Each list's unpinned revisions go, then the list row if no revision is
+    left, then the versions and concepts those revisions were the last to
+    reference.
+
+    A list whose every remaining revision is pinned stays as a
+    non-discoverable tombstone for ever, and is not selected at all: it is
+    exempt rather than pending, and selecting it would let a handful of
+    permanent tombstones fill the batch and starve every list retired after
+    them (`_has_reclaimable_work`). What the run leaves is measured over the
+    lists it could still collect, so the one sweep whose starvation would
+    otherwise be unbounded is held to its SLA like the rest (#478).
     """
     if budget is not None:
         limit = max(1, min(limit, budget.rows))
@@ -141,10 +205,7 @@ async def reclaim_retired_prompt_lists(
             retired = (
                 await session.scalars(
                     select(PromptList)
-                    .where(
-                        PromptList.deleted_at.is_not(None),
-                        PromptList.deleted_at <= cutoff,
-                    )
+                    .where(*_reclaimable(cutoff))
                     .order_by(PromptList.deleted_at, PromptList.id)
                     .limit(limit)
                 )
@@ -219,12 +280,15 @@ async def reclaim_retired_prompt_lists(
                     concepts_deleted = int(
                         (await session.execute(orphan_concepts)).rowcount or 0
                     )
+    overdue_seconds, backlog = await _remaining(session_factory, cutoff)
     result = ReclaimResult(
         lists_examined=len(retired),
         revisions_deleted=revisions_deleted,
         lists_deleted=lists_deleted,
         versions_deleted=versions_deleted,
         concepts_deleted=concepts_deleted,
+        oldest_overdue_seconds=overdue_seconds,
+        backlog=backlog,
     )
     if revisions_deleted or lists_deleted or versions_deleted or concepts_deleted:
         logger.info(

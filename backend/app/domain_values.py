@@ -322,11 +322,18 @@ class BugReportScreenshotStatus(StrEnum):
     `ERASED` is not the same as `NONE`: a decided report should say that a
     screenshot existed and was dropped, rather than reading as one that never
     had a picture at all.
+
+    `EXPIRED` is not the same as `ERASED` either, and the difference is the
+    one a reviewer needs. `ERASED` means a decision was made and the picture
+    went with it; `EXPIRED` means nobody decided anything and the retention
+    ceiling (R-BUG-13) came first. A pending report reading `erased` would
+    claim a decision that never happened.
     """
 
     NONE = "none"
     READY = "ready"
     ERASED = "erased"
+    EXPIRED = "expired"
 
 
 class RuntimeEventType(StrEnum):

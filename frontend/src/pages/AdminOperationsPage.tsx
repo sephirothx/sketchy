@@ -21,7 +21,7 @@ import { useAuthStore } from "../store/authStore";
 import { ControlsPanel } from "./ops/ControlsPanel";
 import { OpsTabPanel, OpsTabs, type OpsTab } from "./ops/OpsTabs";
 import { TuningPanel } from "./ops/TuningPanel";
-import { DatabaseCard, ProcessCard, QueuesCard, TrafficCard } from "./ops/OverviewSignals";
+import { DatabaseCard, ProcessCard, QueuesCard, RetentionCard, TrafficCard } from "./ops/OverviewSignals";
 import {
   abandonmentRate,
   attentionReasons,
@@ -388,6 +388,7 @@ export function AdminOperationsPage() {
             <ProcessCard live={live} reasons={reasons} />
             <DatabaseCard live={live} reasons={reasons} />
             <QueuesCard live={live} reasons={reasons} />
+            <RetentionCard live={live} reasons={reasons} />
           </div>
 
           <div className="ops-columns">

@@ -1439,6 +1439,13 @@ class BugReport(Base):
             "screenshot_status <> 'erased' OR screenshot_payload IS NULL",
             name="ck_bug_reports_screenshot_erased",
         ),
+        # And so is expiry, which is the same guarantee for the report nobody
+        # ever decided (R-BUG-13). Two statuses rather than one because the
+        # reasons differ and a reviewer is owed the true one.
+        CheckConstraint(
+            "screenshot_status <> 'expired' OR screenshot_payload IS NULL",
+            name="ck_bug_reports_screenshot_expired",
+        ),
         CheckConstraint(
             "screenshot_status <> 'none' OR screenshot_payload IS NULL",
             name="ck_bug_reports_screenshot_absent",
@@ -1454,6 +1461,15 @@ class BugReport(Base):
             name="ck_bug_reports_reviewed_identity",
         ),
         Index("ix_bug_reports_status_created_at", "status", "created_at"),
+        # The screenshot-expiry sweep's whole question, over only the rows
+        # that can answer it: an undecided report still holding pixels. Both
+        # the batch of candidates and the hourly overdue probe read it.
+        Index(
+            "ix_bug_reports_screenshot_expiry",
+            "created_at",
+            postgresql_where=text("status = 'pending' AND screenshot_status = 'ready'"),
+            sqlite_where=text("status = 'pending' AND screenshot_status = 'ready'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

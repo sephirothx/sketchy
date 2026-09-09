@@ -204,6 +204,7 @@ export function BugReportsPage() {
                       {humanizeBugValue(report.area)} · {humanizeBugValue(report.severity).toLowerCase()}
                       {report.reporter ? ` · ${report.reporter.displayName}` : ""}
                       {report.screenshot.status === "ready" ? " · has a screenshot" : ""}
+                      {report.screenshot.status === "expired" ? " · screenshot expired" : ""}
                     </span>
                   </span>
                   <time dateTime={report.createdAt}>{age(report.createdAt)}</time>
@@ -285,10 +286,16 @@ export function BugReportsPage() {
                           />
                         </a>
                         <p className="mod-note-hint">
-                          Erased when this report is decided — the row stays, the
-                          pixels do not.
+                          Erased when this report is decided, and after 90 days
+                          either way — the row stays, the pixels do not.
                         </p>
                       </>
+                    ) : active.screenshot.status === "expired" ? (
+                      <p className="ops-empty">
+                        Expired unreviewed: this report waited 90 days for a
+                        decision, so the picture went without one. Everything
+                        else about it is still here.
+                      </p>
                     ) : (
                       <p className="ops-empty">Erased when this report was decided.</p>
                     )}
