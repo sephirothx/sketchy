@@ -176,6 +176,12 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         if not accepted:
             ctx.room_capacity.note_socket_closed(sid)
             ctx.presence.note_socket_closed(sid)
+            # The stamp written on the way in, released on the same terms as
+            # the two above: a refused handshake never reaches `disconnect`,
+            # and a refusal is the cheapest thing for a caller to generate -
+            # a suspended account, a full ceiling, a stale protocol - so a
+            # stamp left behind here grows for the life of the process (#677).
+            ctx.activity.forget(sid)
 
 
 async def disconnect(ctx: HandlerContext, sid):

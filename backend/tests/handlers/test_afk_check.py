@@ -7,6 +7,7 @@ whose stamp outlives it.
 """
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,7 @@ import socketio
 
 from app.flow_timing import FlowTiming
 from app.handlers import register_all_handlers as register_handlers
+from app.protocol import PROTOCOL_VERSION
 from app.rooms import RoomManager
 from app.services.afk import AfkWatch
 
@@ -146,6 +148,31 @@ async def test_a_disconnect_takes_the_stamp_and_the_open_check_with_it():
 
     assert ctx.activity.idle_seconds(ann.sid) == 0.0, "forgotten, not ancient"
     assert watch.open_checks == 0
+
+
+@pytest.mark.asyncio
+async def test_refused_handshakes_do_not_pile_up_in_the_ledger(monkeypatch):
+    """A refusal is the cheapest thing for a caller to generate.
+
+    The stamp is written before the handshake can be refused, and a refused
+    handshake never reaches `disconnect` - Socket.IO answers it with
+    CONNECT_ERROR and tears the session down itself. Anything left in the
+    ledger there is kept for the life of the process, and a caller who cannot
+    connect at all can still ask a thousand times.
+    """
+    from socketio.exceptions import ConnectionRefusedError
+
+    _, ctx, _, _, _ = build()
+    ctx.room_capacity.sockets = 0  # the ceiling refuses everybody
+
+    for attempt in range(50):
+        with contextlib.suppress(ConnectionRefusedError, Exception):
+            await ctx.sio.handlers["/"]["connect"](
+                f"refused-{attempt}", {}, {"protocol": PROTOCOL_VERSION}
+            )
+
+    assert len(ctx.activity) == 0, "a refused handshake leaves no stamp"
+    assert ctx.room_capacity.open_sockets == 0
 
 
 # --------------------------------------------------------------------------

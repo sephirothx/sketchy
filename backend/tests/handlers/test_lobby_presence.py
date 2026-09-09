@@ -73,8 +73,16 @@ async def connect_as(ctx, sio, sid, token):
 
 
 def assert_balanced(ctx):
-    """Presence may never claim more sockets than the process holds open."""
+    """Every ledger a handshake writes must be released when it fails.
+
+    Presence may never claim more sockets than the process holds open, and
+    the activity ledger may not hold a socket the process has already let go
+    (#677): a refused handshake never reaches `disconnect`, so anything
+    stamped on the way in and not released here is kept for the life of the
+    process, and refusals are the cheapest thing for a caller to generate.
+    """
     assert ctx.presence.tracked_sockets() <= ctx.room_capacity.open_sockets
+    assert len(ctx.activity) <= ctx.room_capacity.open_sockets
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,7 @@ import {
   respondToCheck,
   secondsLeft,
 } from "../lib/afkCheck";
-import { socket } from "../lib/socket";
+import { emitTransient, socket } from "../lib/socket";
 import { useClientConfig } from "./useClientConfig";
 
 /** The room asking whether anybody is still there, and this client answering.
@@ -23,9 +23,12 @@ hundred times a minute to hold a number nothing renders. The listeners are
 passive and attached once, for the same reason.
 
 The answer is `toggle_afk {afk: false}` — the command that already means "I am
-not AFK", so the check adds no inbound name to the wire. Sent transiently: an
-answer nobody is waiting on is not worth a retry, and the next tick will ask
-again if it never landed. */
+not AFK", so the check adds no inbound name to the wire. Sent **transiently**,
+which R-CONN-06 requires of toggling AFK by name: an ordinary emit is buffered
+while the socket is down and delivered on reconnect, so an answer racing a
+disconnect would arrive into a seat that had since been marked AFK — by the
+deadline it outlived, or by the player themselves — and silently undo it. A
+dropped answer costs nothing: the next sweep asks again. */
 export interface AfkCheckState {
   /** Seconds left, or `null` when nothing is being asked. */
   secondsLeft: number | null;
@@ -50,7 +53,7 @@ export function useAfkCheck(active: boolean): AfkCheckState {
   const answer = useCallback(() => {
     setDeadline(null);
     setRemaining(null);
-    socket.emit("toggle_afk", { afk: false });
+    emitTransient("toggle_afk", { afk: false });
   }, []);
 
   // Every pointer or key, whether or not a check is open: the answer depends
@@ -83,7 +86,7 @@ export function useAfkCheck(active: boolean): AfkCheckState {
         // Somebody is here. Answered without a word to them, which is the
         // whole point: the cost of the check must not land on the people it
         // is not for.
-        socket.emit("toggle_afk", { afk: false });
+        emitTransient("toggle_afk", { afk: false });
         return;
       }
       setDeadline(response.deadline);
