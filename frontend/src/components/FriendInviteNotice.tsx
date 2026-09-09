@@ -45,11 +45,19 @@ export function FriendInviteNotice() {
     // happened is worked out from the lists before and after this refetch,
     // and `useFriendArrivalNotices` above says it.
     const onRequest = () => void refreshFriends();
+    // And once more whenever the socket comes back. `friends_changed` is a
+    // live event with no backlog, so a request that arrived - or one that was
+    // accepted - while the connection was down reaches nobody, and the badge
+    // and the lists stay wrong until something else happens to move them.
+    // Re-reading on connect turns that silence into the ordinary diff, so the
+    // notice for it fires late rather than never.
     socket.on("friend_invite_received", onInvite);
     socket.on("friends_changed", onRequest);
+    socket.on("connect", onRequest);
     return () => {
       socket.off("friend_invite_received", onInvite);
       socket.off("friends_changed", onRequest);
+      socket.off("connect", onRequest);
     };
   }, [refreshFriends]);
 

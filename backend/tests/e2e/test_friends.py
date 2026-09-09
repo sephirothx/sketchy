@@ -570,3 +570,52 @@ async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
             for context in contexts:
                 await context.close()
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_signing_in_does_not_announce_requests_that_were_already_there():
+    """A change of identity is a new baseline, not a list of changes.
+
+    The notice is a diff across two reads, so signing in compares "no friends"
+    against a whole account's worth of them and would announce every waiting
+    request as having just arrived. The badge is the right way to learn about
+    a backlog; a burst of toasts on login is not.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        asker_context = await browser.new_context()
+        owner_context = await browser.new_context()
+        fresh_context = await browser.new_context()
+        asker = await asker_context.new_page()
+        owner = await owner_context.new_page()
+        fresh = await fresh_context.new_page()
+        asker_name, owner_name = unique("Asker"), unique("Owner")
+        password = "a-good-password"
+
+        try:
+            await sign_up(asker, asker_name)
+            await sign_up(owner, owner_name)
+            await ask_from_profile(asker, owner_name)
+            # The request is waiting before the fresh browser ever signs in.
+            await expect(
+                owner.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1", timeout=SETTLE_MS)
+
+            await fresh.goto(BASE_URL)
+            await fresh.click(".first-run-login")
+            login = fresh.get_by_role("dialog", name="Log in")
+            await login.get_by_label("Username").fill(owner_name)
+            await login.get_by_label("Password").fill(password)
+            await login.get_by_role("button", name="Log in", exact=True).click()
+            await login.wait_for(state="hidden")
+
+            # The backlog is counted, which is how it should be learned about.
+            await expect(
+                fresh.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1", timeout=SETTLE_MS)
+            # And not announced: nothing here is new, it was waiting.
+            await expect(fresh.locator(".app-toast")).to_have_count(0)
+        finally:
+            for context in (asker_context, owner_context, fresh_context):
+                await context.close()
+            await browser.close()
