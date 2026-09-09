@@ -17,6 +17,11 @@ PORT="${PORT:-8000}"
 cpu_count="$( (sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null) || echo 2)"
 E2E_WORKERS="${E2E_WORKERS:-$(( cpu_count > 8 ? 8 : cpu_count ))}"
 SERVER_LOG=""
+# Where a failed run leaves the server's log, beside the JUnit report CI already
+# uploads. The report is the *client's* account of a failure, which for anything
+# below the application - a connection closed with no status, a request that
+# never reached a handler - says only that it happened (#735).
+KEPT_SERVER_LOG="$BACKEND_DIR/test-results/e2e-server.log"
 E2E_DB=""
 SERVER_PID=""
 STARTUP_FAILED=false
@@ -80,6 +85,10 @@ if [[ -n "$(port_listeners)" ]]; then
   }
 fi
 
+# Before anything can fail: a log left by an earlier run would otherwise be
+# uploaded as if it belonged to this one, which is worse than having none.
+rm -f "$KEPT_SERVER_LOG"
+
 # The frontend talks to /api and /socket.io relative to whatever origin served
 # it, and that origin is this same server, so the build needs no server URL.
 log "Building frontend for E2E tests"
@@ -104,6 +113,9 @@ log "Starting background server on http://127.0.0.1:$PORT"
 SERVER_PID=$!
 
 cleanup() {
+  # First, before anything here overwrites it: whether this run failed decides
+  # whether the log is evidence or litter.
+  local status=$?
   if [[ -n "$SERVER_PID" ]]; then
     if [[ "$STARTUP_FAILED" == false ]]; then
       log "Stopping background server (PID: $SERVER_PID)"
@@ -114,6 +126,15 @@ cleanup() {
     # what makes the *next* run mysterious rather than this one.
     release_port || printf 'Warning: port %s is still held by PID %s\n' \
       "$PORT" "$(port_listeners | tr '\n' ' ')" >&2
+  fi
+  # Kept only when the run failed, and kept even when empty: a server that said
+  # nothing while the suite fell over is itself a finding, and its absence would
+  # otherwise be indistinguishable from a log nobody saved.
+  if [[ -n "$SERVER_LOG" && "$status" -ne 0 ]]; then
+    if mkdir -p "$(dirname "$KEPT_SERVER_LOG")" 2>/dev/null &&
+      cp "$SERVER_LOG" "$KEPT_SERVER_LOG" 2>/dev/null; then
+      printf 'E2E server log kept at %s\n' "$KEPT_SERVER_LOG" >&2
+    fi
   fi
   rm -f "$SERVER_LOG"
   [[ -n "${E2E_DB:-}" ]] && rm -f "$E2E_DB"

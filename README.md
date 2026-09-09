@@ -1810,6 +1810,15 @@ runner prints the 30 slowest test phases and writes `backend/test-results/e2e.xm
 CI retains each shard's report
 for seven days. Other pytest arguments can also be passed to the script.
 
+A run that **fails** also keeps the server's own log, at
+`backend/test-results/e2e-server.log`, which CI uploads with the report (R-ENG-17).
+The JUnit report is the client's account of a failure, and for one below the
+application — a connection closed with no status, a request that never reached a
+handler — that account is only that it happened. A passing run deletes the log, and
+so does the start of the next run, so a file that is there belongs to the run being
+looked at. The E2E server runs at `LOG_LEVEL=warning`, which is where a stalled event
+loop (R-OBS-15) and any traceback land.
+
 Several of the environment variables below now supply a **boot value** rather than
 a fixed one: an administrator can change them at runtime from the operations page,
 and a value changed there survives a restart and takes precedence over the variable
@@ -2194,6 +2203,12 @@ status, time) under its `X-Request-ID`, which every response carries in both mod
 quote it when reporting a problem and the log lines and the audit entry for that
 request are one search away. Client commands are logged under the socket id and
 command name the same way.
+
+A loop blocked for more than a second writes a warning of its own, in both modes,
+carrying the length of the stall. The lag histogram already measures it, but a
+histogram answers only where something is scraping it — and a CI shard, a benchmark
+run, or a report from an operator with no Prometheus are exactly the places nothing
+is, while being the places the question "was the loop stuck?" is asked (R-OBS-15).
 
 A scrape configuration for the token-protected endpoint:
 
