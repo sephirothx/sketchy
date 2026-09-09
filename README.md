@@ -385,9 +385,11 @@ turn, and guess history. A finished-game transaction atomically adds one UTC
 day's games, wins, score, turns in participated games, correct guesses, and
 drawings for each canonical account. Multiple same-day saves use database
 upserts, so concurrent games cannot overwrite one another; idempotent game
-retries do not increment twice. Guest-to-account merges rebuild the target and
-deduplicate games shared by its factual identities. Ratios and averages remain
-derived on read rather than stored.
+retries do not increment twice. Guest-to-account merges rebuild the target's
+rows for the days the guest played on — a merge cannot change any other day's
+total, and this one runs inside the sign-in — and deduplicate games shared by
+its factual identities. Ratios and averages remain derived on read rather than
+stored.
 
 The projection is disposable: migration backfill and the maintenance command
 derive it entirely from immutable game facts. A missing or deliberately erased
