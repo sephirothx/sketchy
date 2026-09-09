@@ -111,14 +111,16 @@ export function RulesPage() {
         </aside>
 
         <div className="rules-document">
-          {/* In the column, not above it: a full-width paragraph over a
-              two-column layout leaves the grid starting halfway down the
-              page and reads as a different document. */}
-          <div className="rules-intro">
+          {/* A section like the others, in the column rather than across the
+              top: a full-width paragraph over a two-column layout left the
+              grid starting halfway down the page, and an unlabelled block
+              above three labelled ones reads as a different document. */}
+          <Card className="rules-section rules-intro">
+            <SectionLabel>{rules.introHeading}</SectionLabel>
             {rules.intro.map((paragraph) => (
               <p key={paragraph}>{paragraph}</p>
             ))}
-          </div>
+          </Card>
 
           {rules.sections.map((section) => (
             <Card key={section.id} id={section.id} className="rules-section">

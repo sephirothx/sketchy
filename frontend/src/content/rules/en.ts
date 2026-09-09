@@ -13,14 +13,21 @@ and the reason next to the rule wherever there is one worth giving. */
 export const RULES_EN: RulesDocument = {
   locale: "en",
   title: "Rules",
+  introHeading: "Introduction",
   intro: [
     "Sketchy is a game you play with strangers, and nearly all of it works " +
       "because most people are decent without being asked. These rules are " +
       "for the times that doesn't hold — and so that if a moderator ever " +
       "steps in, it isn't a surprise.",
-    "We go on what happened, not on who you are. A moderator reads what was " +
-      "actually said or drawn, in the order it happened, and decides from " +
-      "there.",
+    "Most of what goes wrong here isn't malice. A bad day can happen to " +
+      "anyone, a joke can land badly, and you never really know what somebody " +
+      "on the other side of a drawing is dealing with. Assume that first, and " +
+      "most of it stops being worth a report at all.",
+    "So none of this is here as a stick. It's here so the rooms stay " +
+      "somewhere people can turn up, draw something ridiculous, and relax. " +
+      "When we do have to decide something, we go on what happened rather " +
+      "than on who you are: a moderator reads what was actually said or " +
+      "drawn, in the order it happened, and decides from there.",
   ],
   sections: [
     {
@@ -38,8 +45,14 @@ export const RULES_EN: RulesDocument = {
               "someone down — and that includes slurs and hate of any kind, " +
               "sexual harassment, and following someone from room to room to " +
               "keep at it.",
-            "Losing a round badly isn't a reason to take it out on whoever " +
-              "won, and neither is somebody drawing something you don't like.",
+            "Banter is half the fun and there's nothing wrong with it — as " +
+              "long as everyone's actually in on it and it doesn't go too " +
+              "far. The line is where it stops being shared: when somebody's " +
+              "had enough, or it's pointed at one person who isn't laughing. " +
+              "If you can't tell, ease off. It costs you nothing.",
+            "And losing a round badly isn't a reason to take it out on " +
+              "whoever won, any more than somebody drawing something you " +
+              "don't like is.",
           ],
           examples: [
             "Piling on about someone's drawing until it's really about them",
@@ -154,7 +167,8 @@ export const RULES_EN: RulesDocument = {
         "suspension can last a day, a week, a month, or have no end date, and " +
         "you'll be told which.",
       "Whatever happens, you'll be told what it was about and shown your own " +
-        "words, or your own drawing, behind it.",
+        "words, or your own drawing, behind it. Nobody is trying to catch you " +
+        "out.",
     ],
   },
 };

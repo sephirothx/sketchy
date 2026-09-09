@@ -46,6 +46,9 @@ export interface RulesDocument {
   /** The locale this document is written in, as the app names languages. */
   locale: string;
   title: string;
+  /** What the introduction is called, so it reads as a section like the
+      others rather than as loose text above them. */
+  introHeading: string;
   /** Read before the rules themselves: what they are for and how they are
       applied, which is the part that stops a list of prohibitions reading as
       a threat. */

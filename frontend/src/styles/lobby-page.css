@@ -1414,11 +1414,17 @@ a.online-player-name:focus-visible {
   font-size: 16px;
   line-height: 1.65;
   margin: 0 0 10px;
-  max-width: 62ch;
 }
 
 .rules-intro p:last-child {
   margin-bottom: 0;
+}
+
+/* Narrower than `.ops-page`: with the rail taken out, what is left is the
+   reading column, and it should be a reading width rather than whatever the
+   page has spare. */
+.rules-page {
+  max-width: 960px;
 }
 
 .rules-layout {
@@ -1522,7 +1528,6 @@ a.online-player-name:focus-visible {
 .rules-blurb {
   color: var(--muted);
   margin: 6px 0 0;
-  max-width: 62ch;
 }
 
 /* Scrolled to from a notice, so each rule needs room above it: an anchor that
@@ -1543,7 +1548,6 @@ a.online-player-name:focus-visible {
 .rules-rule p {
   line-height: 1.65;
   margin: 0 0 8px;
-  max-width: 62ch;
 }
 
 /* Set apart from the rule's own words: these are illustrations of it, and a
@@ -1551,9 +1555,6 @@ a.online-player-name:focus-visible {
 .rules-examples {
   background: var(--well);
   border: 1.5px solid var(--line);
-  /* The same measure the rule's own paragraphs keep: a panel running wider
-     than the text it illustrates reads as a different column. */
-  max-width: 62ch;
   border-radius: var(--radius-sm);
   margin-top: 10px;
   padding: 10px 14px;
@@ -1586,5 +1587,4 @@ a.online-player-name:focus-visible {
 .rules-enforcement p {
   line-height: 1.65;
   margin: 8px 0 0;
-  max-width: 62ch;
 }
