@@ -32,6 +32,7 @@ import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import {
   BugIcon,
   BulbIcon,
+  InfoIcon,
   ChevronDownIcon,
   GearIcon,
   KeyIcon,
@@ -329,6 +330,18 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 }}
               >
                 My prompt lists
+              </MenuItem>
+              {/* A permanent home for the rules, so they are reachable
+                  without having been reported or having reported anybody
+                  (R-RULES-01). */}
+              <MenuItem
+                icon={<InfoIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/rules");
+                }}
+              >
+                Rules
               </MenuItem>
               {/* Shown, not enforced: each of these endpoints checks the role
                   again for itself and answers 404 to anyone else. Hiding them
@@ -640,6 +653,19 @@ export function AuthDialog({
           <button type="submit" className="modal-button" disabled={busy}>
             {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
           </button>
+          {/* Only when creating one: this is the moment an account starts,
+              and the expectation is worth setting before anybody plays
+              rather than after they are reported (R-RULES-01). Not on the
+              log-in form, where it would be noise. */}
+          {isClaim && (
+            <p className="auth-hint auth-rules-note">
+              By creating an account you agree to follow the{" "}
+              <a href="/rules" target="_blank" rel="noreferrer">
+                rules
+              </a>
+              .
+            </p>
+          )}
         </form>
         )}
 

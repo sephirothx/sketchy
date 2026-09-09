@@ -9,6 +9,7 @@ import {
   type PendingWarning,
 } from "../lib/moderation";
 import { asReportReason, humanizeCategory } from "../lib/moderation";
+import { ruleAnchorFor } from "../content/rules";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";
@@ -117,7 +118,13 @@ export function WarningNotice() {
         </h3>
         {warning.category && (
           <p className="modal-body notice-category" data-testid="warning-category">
-            Recorded as {humanizeCategory(warning.category)}
+            {/* The rule itself, not just its name: a decision you can read
+                the rule behind is one you can check rather than only be
+                told (R-RULES-02). */}
+            Recorded as{" "}
+            <a href={ruleAnchorFor(warning.category)}>
+              {humanizeCategory(warning.category)}
+            </a>
           </p>
         )}
         <p className="modal-body suspension-reason">{warning.reason}</p>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
+import { ruleAnchorFor } from "../content/rules";
 import { socket } from "../lib/socket";
 import { ReportedDrawing } from "./ReportedDrawing";
 import {
@@ -80,7 +81,13 @@ export function SuspensionNotice() {
         </h3>
         {suspension.category && (
           <p className="modal-body notice-category" data-testid="suspension-category">
-            Recorded as {humanizeCategory(suspension.category)}
+            {/* The rule itself, not just its name: a decision you can read
+                the rule behind is one you can check rather than only be
+                told (R-RULES-02). */}
+            Recorded as{" "}
+            <a href={ruleAnchorFor(suspension.category)}>
+              {humanizeCategory(suspension.category)}
+            </a>
           </p>
         )}
         {suspension.reason && (

@@ -30,6 +30,7 @@ import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
 import { ReportsReviewedNotice } from "./components/ReportsReviewedNotice";
+import { RulesPage } from "./pages/RulesPage";
 import { WarningNotice } from "./components/WarningNotice";
 import { XIcon } from "./components/icons";
 import { CrashProbe } from "./lib/crashTestSeam";
@@ -86,6 +87,7 @@ function AppRoutes() {
         <Route path="/" element={<LobbyBrowserPage />} />
         <Route path="/create" element={<CreateRoomPage />} />
         <Route path="/room/:code" element={<GameRoomPage />} />
+        <Route path="/rules" element={<RulesPage />} />
         <Route path="/prompt-lists" element={<PromptStatsPage />} />
         <Route path="/prompt-lists/:slug" element={<PromptStatsPage />} />
         <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
