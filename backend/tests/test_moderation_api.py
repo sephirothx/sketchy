@@ -3168,3 +3168,58 @@ async def test_the_reviewed_count_needs_an_identity_of_its_own(env):
     assert (
         await anonymous.post("/api/reports/reviewed/acknowledge")
     ).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_a_report_decided_mid_notice_is_counted_rather_than_swallowed(env):
+    """The claim counts and stamps in one statement. Counting first and
+    stamping second would mark whatever is decided by the time the second
+    request lands - so a report decided in between would be recorded as told
+    without anybody having been told, and would never be announced (R-MOD-20).
+    """
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "RaceRep")
+    moderator = await register(moderator_http, "RaceMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    async def report(name):
+        target_http = new_client()
+        target = await register(target_http, name)
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": "Please look.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        return sent.json()["id"]
+
+    async def decide(report_id):
+        answered = await moderator_http.patch(
+            f"/api/moderation/reports/{report_id}",
+            json={"status": "dismissed", "note": "Looked at."},
+        )
+        assert answered.status_code == 200, answered.text
+
+    first, second = await report("RaceA"), await report("RaceB")
+    await decide(first)
+
+    # What the reader saw when the page loaded.
+    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 1}
+    # And then the second is decided, before the claim lands.
+    await decide(second)
+
+    # The claim reports what it actually took, which is both - rather than
+    # taking both and reporting the one the reader had seen.
+    claimed = await reporter_http.post("/api/reports/reviewed/acknowledge")
+    assert claimed.json() == {"ok": True, "acknowledged": 2}
+    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 0}
+
+    # A second claim takes nothing, which is how a second tab learns there is
+    # nothing left to say.
+    again = await reporter_http.post("/api/reports/reviewed/acknowledge")
+    assert again.json() == {"ok": True, "acknowledged": 0}

@@ -48,6 +48,7 @@ async def pending_warning_payload(
         return {
             "warning": {
                 "id": str(warning.id),
+                "kind": warning.kind,
                 "reason": warning.reason,
                 "category": warning.category,
                 "createdAt": warning.created_at.isoformat(),

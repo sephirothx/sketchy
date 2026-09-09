@@ -35,18 +35,23 @@ export function ReportsReviewedNotice() {
 
     void (async () => {
       try {
+        // The cheap question first, so the usual answer - nothing to say -
+        // costs no write.
         const { count } = await countReportsReviewed();
         if (cancelled || count < 1) return;
+        // The claim counts and stamps in one statement, and *its* number is
+        // the one shown: anything decided between the two requests is
+        // included rather than silently marked as told. Zero means another
+        // tab claimed them first, and then there is nothing to say.
+        const { acknowledged } = await acknowledgeReportsReviewed();
+        if (cancelled || acknowledged < 1) return;
         notify(
-          count === 1
+          acknowledged === 1
             ? "A report you sent has been reviewed. Thank you."
-            : `${count} reports you sent have been reviewed. Thank you.`,
+            : `${acknowledged} reports you sent have been reviewed. Thank you.`,
           "info",
           12000,
         );
-        // Said, so it is not said again. Failing here is not worth telling
-        // anybody about: the worst of it is hearing the same thanks twice.
-        await acknowledgeReportsReviewed();
       } catch {
         // A report that was reviewed is not news worth an error for. It will
         // be said on the next visit instead.

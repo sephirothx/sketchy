@@ -71,6 +71,7 @@ from app.domain_values import (
     REPORT_EVIDENCE_ROLES,
     REPORT_REASONS,
     REPORT_SCOPES,
+    WARNING_KINDS,
     REPORT_STATUSES,
     RETAINED_MESSAGE_AUDIENCES,
     RETAINED_MESSAGE_KINDS,
@@ -1632,6 +1633,7 @@ class UserWarning(Base):
             " 'cheating', 'spam', 'inappropriate_avatar')",
             name="ck_user_warnings_category",
         ),
+        _values_check("kind", WARNING_KINDS, "ck_user_warnings_kind"),
         _actor_index("ix_user_warnings_issued_by", "issued_by_user_id"),
         Index("ix_user_warnings_user_pending", "user_id", "acknowledged_at"),
     )
@@ -1657,6 +1659,14 @@ class UserWarning(Base):
     # back would tell them how people they cannot see characterised them
     # (R-MOD-12).
     category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Which notice this row is. A picture's removal is delivered through the
+    # warning machinery because that is the shown-once, acknowledged surface a
+    # player already meets - but it is not a formal warning, and the copy
+    # those carry says nothing is restricted, which of a removal is false
+    # (R-AVA-08).
+    kind: Mapped[str] = mapped_column(
+        String(24), default="warning", server_default="warning", nullable=False
+    )
     # The report this warning was decided from. It is what lets the warned
     # player be shown the messages the complaint was about; SET NULL because
     # the warning outlives the report if the report is ever removed.

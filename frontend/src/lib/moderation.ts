@@ -131,6 +131,10 @@ export interface IncidentPicture {
   removedAt: string | null;
   /** Removed through one of this incident's own reports. */
   removedFromThisIncident: boolean;
+  /** When they may upload again, when a wait is actually in force. Null when
+      none is: the wait grows with how many pictures have been taken down
+      (R-AVA-08), so there is no single length to state instead. */
+  uploadBlockedUntil: string | null;
 }
 
 /** What was last decided about this same incident, when there has been one.
@@ -427,7 +431,12 @@ export function reviewModerationReport(
  * Take down the picture a report is about and block re-uploads for a while.
  * Reached through the report rather than the account (R-MOD-02).
  */
-export function removeReportedAvatar(reportId: string): Promise<{ ok: boolean; removed: boolean }> {
+export function removeReportedAvatar(reportId: string): Promise<{
+  ok: boolean;
+  removed: boolean;
+  /** When they may upload again, or null when this removal cost no wait. */
+  blockedUntil: string | null;
+}> {
   return apiRequest(`/api/moderation/reports/${reportId}/remove-avatar`, { method: "POST" });
 }
 
@@ -446,6 +455,11 @@ export function createUserBan(input: {
 /** A moderator warning waiting to be shown to its player. */
 export interface PendingWarning {
   id: string;
+  /** Which notice this is. A picture's removal comes through the warning
+      machinery because that is the shown-once surface a player already meets
+      - and it restricts uploading, so it must not carry a formal warning's
+      words about restricting nothing (R-AVA-08). */
+  kind: "warning" | "avatar_removal";
   reason: string;
   /** What the moderator recorded this as, when they recorded anything. Their
       finding, never the reporters' claim. Null on a decision taken without
