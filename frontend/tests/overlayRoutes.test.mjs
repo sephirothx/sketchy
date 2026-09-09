@@ -25,6 +25,23 @@ test("an ordinary page is not an overlay", () => {
   }
 });
 
+// Friends declares no child route, so the server answers 404 below it. A
+// client that drew the overlay there would show a working screen on a URL
+// that does not exist - the exact disagreement `client_routes.py` exists to
+// prevent, in the one direction a browser never reveals.
+test("nothing below /friends is the friends overlay", () => {
+  for (const path of ["/friends/unknown", "/friends/1/2", "/friendsy"]) {
+    assert.equal(isFriendsPath(path), false, path);
+    assert.equal(isOverlayPath(path), false, path);
+  }
+});
+
+// Settings is deliberately the other way: `/settings/:section` is a declared
+// route, and an unknown section opens the first one rather than a 404.
+test("a mistyped settings section still opens settings", () => {
+  assert.equal(isSettingsPath("/settings/nonsense"), true);
+});
+
 // react-router matches case-insensitively unless a route sets caseSensitive,
 // and none of ours do - so /Friends draws the overlay and has to be treated
 // as one here too.

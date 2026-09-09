@@ -17,8 +17,22 @@ run on bare `node:test` with no bundler, so a module that pulls in
 `hooks/useOverlayRoute.ts`. */
 
 /** Case-insensitive, because react-router matches routes that way. */
+
+/** `/settings`, and `/settings/<anything>`.
+
+Deliberately open-ended: `/settings/:section` is a declared route, and
+`sectionFromPath` answers a section that does not exist with the first one, so
+a mistyped link opens Settings rather than the not-found page. */
 const SETTINGS_PATH = /^\/settings(\/|$)/i;
-const FRIENDS_PATH_PATTERN = /^\/friends(\/|$)/i;
+
+/** `/friends` exactly, with an optional trailing slash — and nothing below it.
+
+Not the open-ended shape Settings uses, because Friends declares no child
+route: `/friends/anything` is in neither the route table nor
+`client_routes.py`, so the server answers 404 for it and the client has to
+agree. Matching it here drew the working Friends screen over a lobby on a URL
+the server had just called non-existent. */
+const FRIENDS_PATH_PATTERN = /^\/friends\/?$/i;
 
 export const FRIENDS_PATH = "/friends";
 
