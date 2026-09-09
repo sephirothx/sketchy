@@ -1,11 +1,9 @@
-import pytest
 from playwright.async_api import async_playwright
 
 
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_create_room_uses_progressive_disclosure_and_validates_custom_prompts(
     assert_input_contract,
 ):

@@ -85,7 +85,6 @@ def assert_balanced(ctx):
     assert len(ctx.activity) <= ctx.room_capacity.open_sockets
 
 
-@pytest.mark.asyncio
 async def test_a_handshake_registers_the_account_and_a_disconnect_releases_it(
     monkeypatch,
 ):
@@ -110,7 +109,6 @@ class _SeenRecorder:
         self.stamped.append(user_id)
 
 
-@pytest.mark.asyncio
 async def test_coming_online_and_going_offline_are_stamped_on_the_account(monkeypatch):
     """`last_seen_at` is what a profile shows when the player is not here
     (#469): written when the first socket opens and when the last one closes,
@@ -136,7 +134,6 @@ async def test_coming_online_and_going_offline_are_stamped_on_the_account(monkey
     assert ctx.user_repo.stamped == ["user-ada", "user-ada"]
 
 
-@pytest.mark.asyncio
 async def test_a_visitor_who_has_not_chosen_a_name_is_not_in_the_list(monkeypatch):
     """R-ACCT-02: a socket alone never makes an account, so this is ordinary."""
     room_manager = RoomManager()
@@ -148,7 +145,6 @@ async def test_a_visitor_who_has_not_chosen_a_name_is_not_in_the_list(monkeypatc
     assert_balanced(ctx)
 
 
-@pytest.mark.asyncio
 async def test_a_socket_refused_for_capacity_leaves_nothing_behind(monkeypatch):
     """It is told and then closed, and never reaches the disconnect handler."""
     room_manager = RoomManager()
@@ -163,7 +159,6 @@ async def test_a_socket_refused_for_capacity_leaves_nothing_behind(monkeypatch):
     assert_balanced(ctx)
 
 
-@pytest.mark.asyncio
 async def test_a_suspended_account_is_refused_and_never_appears_online(monkeypatch):
     """`ConnectionRefusedError` is answered with CONNECT_ERROR, not a disconnect."""
     room_manager = RoomManager()
@@ -178,7 +173,6 @@ async def test_a_suspended_account_is_refused_and_never_appears_online(monkeypat
     assert_balanced(ctx)
 
 
-@pytest.mark.asyncio
 async def test_a_handshake_that_explodes_leaves_nothing_behind(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -195,7 +189,6 @@ async def test_a_handshake_that_explodes_leaves_nothing_behind(monkeypatch):
     assert_balanced(ctx)
 
 
-@pytest.mark.asyncio
 async def test_a_handshake_that_fails_after_registering_still_balances(monkeypatch):
     """The `finally` earns its place here, and nowhere else.
 
@@ -225,7 +218,6 @@ async def test_a_handshake_that_fails_after_registering_still_balances(monkeypat
     assert_balanced(ctx)
 
 
-@pytest.mark.asyncio
 async def test_a_socket_this_server_closes_still_drains(monkeypatch):
     """The `is_closing` branch returns early; the drain sits above it.
 
@@ -246,7 +238,6 @@ async def test_a_socket_this_server_closes_still_drains(monkeypatch):
     assert ctx.presence.tracked_sockets() == 0
 
 
-@pytest.mark.asyncio
 async def test_two_tabs_of_one_account_survive_one_of_them_closing(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -262,7 +253,6 @@ async def test_two_tabs_of_one_account_survive_one_of_them_closing(monkeypatch):
     assert not ctx.presence.is_online("user-ada")
 
 
-@pytest.mark.asyncio
 async def test_a_mid_game_drop_leaves_the_seat_but_not_the_presence(monkeypatch):
     """The R-CONN-01 grace protects a seat, not a claim to be reachable.
 
@@ -291,7 +281,6 @@ async def test_a_mid_game_drop_leaves_the_seat_but_not_the_presence(monkeypatch)
 # --- the channel ----------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_watching_the_lobby_answers_with_a_baseline_to_apply_to(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -312,7 +301,6 @@ async def test_watching_the_lobby_answers_with_a_baseline_to_apply_to(monkeypatc
     sio.enter_room.assert_awaited_with("sid-a", LOBBY_CHANNEL)
 
 
-@pytest.mark.asyncio
 async def test_one_acknowledgement_carries_both_baselines(monkeypatch):
     """One subscription, two feeds, and no window between them.
 
@@ -339,7 +327,6 @@ async def test_one_acknowledgement_carries_both_baselines(monkeypatch):
     assert "revision" in answer and "players" in answer
 
 
-@pytest.mark.asyncio
 async def test_the_acknowledged_room_list_never_carries_a_private_room(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -352,7 +339,6 @@ async def test_the_acknowledged_room_list_never_carries_a_private_room(monkeypat
     assert hidden.code not in repr(answer)
 
 
-@pytest.mark.asyncio
 async def test_a_room_change_reaches_the_channel_and_nowhere_else(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -372,7 +358,6 @@ async def test_a_room_change_reaches_the_channel_and_nowhere_else(monkeypatch):
     assert [entry["id"] for entry in frames[0].args[1]["opened"]] == [room.id]
 
 
-@pytest.mark.asyncio
 async def test_leaving_the_lobby_leaves_the_channel(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -383,7 +368,6 @@ async def test_leaving_the_lobby_leaves_the_channel(monkeypatch):
     sio.leave_room.assert_awaited_with("sid-a", LOBBY_CHANNEL)
 
 
-@pytest.mark.asyncio
 async def test_a_change_is_broadcast_to_the_channel_and_nowhere_else(monkeypatch):
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -403,7 +387,6 @@ async def test_a_change_is_broadcast_to_the_channel_and_nowhere_else(monkeypatch
     assert [row["userId"] for row in broadcasts[0].args[1]["joined"]] == ["user-ada"]
 
 
-@pytest.mark.asyncio
 async def test_a_seated_account_reads_playing_and_a_second_tab_does_not_change_it(
     monkeypatch,
 ):
@@ -424,7 +407,6 @@ async def test_a_seated_account_reads_playing_and_a_second_tab_does_not_change_i
     assert [row["status"] for row in answer["players"]] == [STATUS_PLAYING]
 
 
-@pytest.mark.asyncio
 async def test_no_presence_payload_names_the_room_anybody_is_in(monkeypatch):
     """A private room must not become discoverable by watching the lobby."""
     room_manager = RoomManager()
@@ -451,7 +433,6 @@ async def test_no_presence_payload_names_the_room_anybody_is_in(monkeypatch):
     assert room.name not in timeline
 
 
-@pytest.mark.asyncio
 async def test_watching_the_lobby_answers_to_a_budget():
     """`ctx.on` is the only way in, so this is really a check that it was used."""
     room_manager = RoomManager()
@@ -475,7 +456,6 @@ def _identity(user_id, name):
     )
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["watch_lobby", "unwatch_lobby"])
 async def test_a_payload_where_none_belongs_is_refused(command):
     """Neither command takes arguments, and unknown fields are never ignored."""
@@ -490,7 +470,6 @@ async def test_a_payload_where_none_belongs_is_refused(command):
     assert ctx is not None
 
 
-@pytest.mark.asyncio
 async def test_a_merged_guest_is_one_person_in_the_list(monkeypatch):
     """Signing in must not leave the guest behind as a second online player."""
     from app.services.presence import PresenceIdentity
@@ -524,7 +503,6 @@ async def test_a_merged_guest_is_one_person_in_the_list(monkeypatch):
     assert_balanced(ctx)
 
 
-@pytest.mark.asyncio
 async def test_an_in_room_colour_change_reaches_the_lobby(monkeypatch):
     """The fifth writer of an account's identity, and the easiest to miss.
 
@@ -564,7 +542,6 @@ async def test_an_in_room_colour_change_reaches_the_lobby(monkeypatch):
     assert ctx.presence_identities.cached(["user-ada"]) == {}
 
 
-@pytest.mark.asyncio
 async def test_a_handshake_warms_who_has_muted_the_account(monkeypatch):
     """A lobby line has no seat to warm the block filter at, so the handshake
     is where a sender's entry is read - and only for a socket with an
@@ -581,7 +558,6 @@ async def test_a_handshake_warms_who_has_muted_the_account(monkeypatch):
     ctx.block_service.warm.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_a_change_during_the_subscription_s_lookups_is_in_the_baseline_not_lost(monkeypatch):
     """#600: the handler joined the channel and captured the room list, then
     awaited the block lookup. A room that opened and was flushed during that

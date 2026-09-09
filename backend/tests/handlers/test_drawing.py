@@ -2,7 +2,6 @@ import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
@@ -21,7 +20,6 @@ from app.live_drawing import encode_live_drawing
 from app.rooms import DrawingRecapEntry, RoomManager
 
 
-@pytest.mark.asyncio
 async def test_draw_handler_rejects_events_outside_drawing_phase():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -55,7 +53,6 @@ async def test_draw_handler_rejects_events_outside_drawing_phase():
         PathAction(points=[(0.2, 0.3)], color=0, width=4.0)
     ]
 
-@pytest.mark.asyncio
 async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -162,7 +159,6 @@ async def test_draw_handler_records_and_rebroadcasts_every_binary_action():
     await draw("drawer-sid", b"\x11")
     assert len(room.game.canvas.history) == 3
 
-@pytest.mark.asyncio
 async def test_draw_handler_requests_gaps_and_accepts_retransmission():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -208,7 +204,6 @@ async def test_draw_handler_requests_gaps_and_accepts_retransmission():
     ]
     assert commits[-2:] == [1, 2]
 
-@pytest.mark.asyncio
 async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -243,7 +238,6 @@ async def test_draw_handler_rejects_actions_from_a_previous_canvas_generation():
         for call in sio.emit.await_args_list
     )
 
-@pytest.mark.asyncio
 async def test_retransmitted_committed_path_is_idempotent():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -289,7 +283,6 @@ async def test_retransmitted_committed_path_is_idempotent():
     assert room.game.canvas.sync_payload() == committed_history
 
 
-@pytest.mark.asyncio
 async def test_retransmission_older_than_commit_window_gets_authoritative_sync(
     monkeypatch,
 ):
@@ -331,7 +324,6 @@ async def test_retransmission_older_than_commit_window_gets_authoritative_sync(
     )
 
 
-@pytest.mark.asyncio
 async def test_draw_retransmission_for_undo_commit_gets_authoritative_sync():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -380,7 +372,6 @@ async def test_draw_retransmission_for_undo_commit_gets_authoritative_sync():
     )
 
 
-@pytest.mark.asyncio
 async def test_retransmitted_incomplete_path_restarts_the_semantic_action():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -418,7 +409,6 @@ async def test_retransmitted_incomplete_path_restarts_the_semantic_action():
         (0.3, 0.4),
     ]
 
-@pytest.mark.asyncio
 async def test_undo_hash_mismatch_sends_authoritative_sync():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -461,7 +451,6 @@ async def test_undo_hash_mismatch_sends_authoritative_sync():
     # budgeted transaction, so no history rides along (#562).
     assert not any(call.args[0] == "sync_strokes" for call in sio.emit.await_args_list)
 
-@pytest.mark.asyncio
 async def test_finished_drawing_turn_is_captured_for_recap():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -518,7 +507,6 @@ async def test_finished_drawing_turn_is_captured_for_recap():
     with suppress(asyncio.CancelledError):
         await timer
 
-@pytest.mark.asyncio
 async def test_recap_drawing_can_be_fetched_without_mutating_history():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -576,7 +564,6 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
         "error": "Drawing not found",
     }
 
-@pytest.mark.asyncio
 async def test_undo_stroke_and_clear_canvas_handlers():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -686,7 +673,6 @@ async def test_undo_stroke_and_clear_canvas_handlers():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_draw_fill_handler_validation():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -730,7 +716,6 @@ async def test_draw_fill_handler_validation():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -778,7 +763,6 @@ async def test_request_sync_strokes_returns_drawing_so_far_for_joining_player():
     assert (path.color, path.width) == (0, 4)
     assert [(round(x, 3), round(y, 3)) for x, y in path.points] == [(0.1, 0.2), (0.3, 0.4)]
 
-@pytest.mark.asyncio
 async def test_request_sync_strokes_seeds_empty_history_revision():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -835,7 +819,6 @@ def _emitted_events(sio):
     return [call.args[0] for call in sio.emit.await_args_list]
 
 
-@pytest.mark.asyncio
 async def test_a_tool_the_room_disallows_is_never_recorded_or_rebroadcast():
     room, sio = _drawing_room(allowed_tools=["brush"])
     draw = sio.handlers["/"]["draw"]
@@ -853,7 +836,6 @@ async def test_a_tool_the_room_disallows_is_never_recorded_or_rebroadcast():
     assert "sync_strokes" not in _emitted_events(sio), "a notice, never a dump (#562)"
 
 
-@pytest.mark.asyncio
 async def test_a_color_the_mode_disallows_is_never_recorded():
     room, sio = _drawing_room(color_mode="black_and_white")
     draw = sio.handlers["/"]["draw"]
@@ -868,7 +850,6 @@ async def test_a_color_the_mode_disallows_is_never_recorded():
     assert "draw" not in _emitted_events(sio)
 
 
-@pytest.mark.asyncio
 async def test_erasing_survives_a_mode_that_allows_no_other_color():
     """White is how the eraser reaches the server, so every mode admits it."""
     room, sio = _drawing_room(color_mode="black_and_white")
@@ -883,7 +864,6 @@ async def test_erasing_survives_a_mode_that_allows_no_other_color():
     assert len(room.game.canvas.history) == 1
 
 
-@pytest.mark.asyncio
 async def test_turning_off_the_brush_takes_the_eraser_with_it():
     room, sio = _drawing_room(allowed_tools=["shapes", "fill"])
     draw = sio.handlers["/"]["draw"]
@@ -897,7 +877,6 @@ async def test_turning_off_the_brush_takes_the_eraser_with_it():
     assert room.game.canvas.history == []
 
 
-@pytest.mark.asyncio
 async def test_the_points_trailing_a_refused_path_are_dropped_in_silence():
     """One refusal is one resync, however many frames the client keeps sending."""
     room, sio = _drawing_room(color_mode="black_and_white")
@@ -917,7 +896,6 @@ async def test_the_points_trailing_a_refused_path_are_dropped_in_silence():
     assert "sync_strokes" not in _emitted_events(sio)
 
 
-@pytest.mark.asyncio
 async def test_a_drawer_keeps_the_tools_the_room_left_them():
     room, sio = _drawing_room(allowed_tools=["shapes"], color_mode="palette")
     draw = sio.handlers["/"]["draw"]
@@ -941,7 +919,6 @@ async def test_a_drawer_keeps_the_tools_the_room_left_them():
     assert "draw" in _emitted_events(sio)
 
 
-@pytest.mark.asyncio
 async def test_a_refused_path_does_not_wedge_the_tools_that_remain():
     """The discard flag a refused path leaves behind governs path frames only,
     so a room without the brush can still draw everything it does allow."""
@@ -971,7 +948,6 @@ async def test_a_refused_path_does_not_wedge_the_tools_that_remain():
     assert len(room.game.canvas.history) == 1
 
 
-@pytest.mark.asyncio
 async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -1029,7 +1005,6 @@ async def test_a_verified_prefix_claim_is_answered_with_only_the_missing_tail():
         assert sio.emit.await_args.args[0] == "sync_strokes", bad
 
 
-@pytest.mark.asyncio
 async def test_a_sync_request_is_acknowledged_and_refused_with_a_retry_when_there_is_no_canvas():
     """#598: a request the server cannot answer says so, and when to ask again,
     instead of being dropped in silence on a quiet canvas."""
@@ -1088,7 +1063,6 @@ def _emitted(sio, event):
     return [call for call in sio.emit.await_args_list if call.args and call.args[0] == event]
 
 
-@pytest.mark.asyncio
 async def test_relative_frames_extend_the_open_path_and_are_rebroadcast_verbatim():
     """#559: the server resolves the offsets against the path it holds, and
     the room is sent the drawer's bytes, not the server's idea of them."""
@@ -1110,7 +1084,6 @@ async def test_relative_frames_extend_the_open_path_and_are_rebroadcast_verbatim
     assert _emitted(sio, "canvas_stale") == []
 
 
-@pytest.mark.asyncio
 async def test_a_relative_frame_with_no_open_path_is_dropped_like_an_absolute_one():
     ctx, sio, room = _relative_room()
     draw = sio.handlers["/"]["draw"]
@@ -1119,7 +1092,6 @@ async def test_a_relative_frame_with_no_open_path_is_dropped_like_an_absolute_on
     assert _emitted(sio, "draw") == []
 
 
-@pytest.mark.asyncio
 async def test_a_dropped_frame_closes_the_path_for_everyone_and_tells_the_drawer():
     """#559: a `draw` frame throttled at the door is dropped in silence, and a
     later relative frame would otherwise be resolved against a point the
@@ -1158,7 +1130,6 @@ async def test_a_dropped_frame_closes_the_path_for_everyone_and_tells_the_drawer
     assert room.game.canvas.active_draw_sequence == 2
 
 
-@pytest.mark.asyncio
 async def test_a_throttled_draw_frame_is_remembered_at_the_door():
     ctx, sio, _room = _relative_room()
     draw = sio.handlers["/"]["draw"]
@@ -1176,7 +1147,6 @@ def _start(room, sio, sequence, x=0.5, y=0.5):
     )
 
 
-@pytest.mark.asyncio
 async def test_a_final_batch_extends_and_closes_the_path_in_one_committed_frame():
     """#603: the points buffered when the pen lifted and the end travel as
     one frame, which carries the commit the way `draw_end` did; the history
@@ -1209,7 +1179,6 @@ async def test_a_final_batch_extends_and_closes_the_path_in_one_committed_frame(
     assert room2.game.canvas.history.binary_payload() == room.game.canvas.history.binary_payload()
 
 
-@pytest.mark.asyncio
 async def test_a_refused_final_batch_commits_nothing_and_leaves_the_path_open(monkeypatch):
     """A final batch past the point budget is refused whole: no points, no
     end, no commit - never a committed prefix the drawer did not draw."""
@@ -1230,7 +1199,6 @@ async def test_a_refused_final_batch_commits_nothing_and_leaves_the_path_open(mo
     assert room.game.canvas.sequence == 1
 
 
-@pytest.mark.asyncio
 async def test_a_final_batch_with_no_open_path_is_dropped():
     ctx, sio, room = _relative_room()
     draw = sio.handlers["/"]["draw"]

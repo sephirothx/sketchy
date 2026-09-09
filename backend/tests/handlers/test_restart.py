@@ -63,7 +63,6 @@ def test_restart_vote_requires_a_strict_majority(
     assert vote.required_votes == required_votes
 
 
-@pytest.mark.asyncio
 async def test_restart_vote_cannot_start_before_the_first_turn_is_initialized():
     room_manager, room, players = active_room(2)
     room.game = Game(turn_order=[player.id for player in players], rounds_total=2)
@@ -80,7 +79,6 @@ async def test_restart_vote_cannot_start_before_the_first_turn_is_initialized():
     await context.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_restart_vote_snapshots_eligible_players_and_requires_strict_majority():
     room_manager, room, players = active_room(4)
     proposer, voter, third_voter, afk_player = players
@@ -152,7 +150,6 @@ async def test_restart_vote_snapshots_eligible_players_and_requires_strict_major
     await context.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_restart_vote_expiry_enforces_cooldown():
     room_manager, room, players = active_room(2)
     sio, context, _ = registered_server(room_manager, room, players)
@@ -177,7 +174,6 @@ async def test_restart_vote_expiry_enforces_cooldown():
     await context.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_restart_vote_rejection_closes_immediately_and_enforces_cooldown():
     room_manager, room, players = active_room(2)
     sio, context, _ = registered_server(room_manager, room, players)
@@ -202,7 +198,6 @@ async def test_restart_vote_rejection_closes_immediately_and_enforces_cooldown()
     await context.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canvas():
     room_manager, room, players = active_room(2)
     proposer, voter = players
@@ -305,7 +300,6 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     await context.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_disconnected_snapshot_voter_can_vote_after_reconnect_only():
     room_manager, room, players = active_room(3)
     proposer, reconnecting, third = players
@@ -338,7 +332,6 @@ async def test_disconnected_snapshot_voter_can_vote_after_reconnect_only():
     await context.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_approved_restart_is_cancelled_if_too_few_players_remain():
     room_manager, room, players = active_room(2)
     proposer, voter = players

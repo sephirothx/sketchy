@@ -9,13 +9,10 @@ import json
 import subprocess
 import sys
 
-import pytest
 
 from app.probe import STEPS, run_probe
 
 BASE_URL = "http://localhost:8000"
-
-pytestmark = pytest.mark.asyncio
 
 
 async def test_a_stranger_can_open_a_room_be_joined_and_draw(tmp_path):

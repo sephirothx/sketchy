@@ -3,7 +3,6 @@ from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
@@ -13,7 +12,6 @@ from app.rooms import RoomManager
 from tests.dbfixtures import create_test_db
 
 
-@pytest.mark.asyncio
 async def test_toggle_afk_socket_handler_and_not_waited_for():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -56,7 +54,6 @@ async def test_toggle_afk_socket_handler_and_not_waited_for():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_vote_kick_and_vote_afk_socket_handlers():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -105,7 +102,6 @@ async def test_vote_kick_and_vote_afk_socket_handlers():
     kicked_calls = [call for call in sio.emit.await_args_list if call.args[0] == "kicked" and call.kwargs.get("to") == "p2-sid"]
     assert len(kicked_calls) == 1
 
-@pytest.mark.asyncio
 async def test_direct_socket_moderation_rejects_spectator_voters_and_targets():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -160,7 +156,6 @@ async def test_direct_socket_moderation_rejects_spectator_voters_and_targets():
     assert second_vote == {"ok": True, "action": "afk", "executed": True}
     assert target.is_afk is True
 
-@pytest.mark.asyncio
 async def test_votes_removed_when_player_leaves_or_disconnects():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -234,7 +229,6 @@ def _emitted(sio, event: str) -> bool:
     return any(call.args[0] == event for call in sio.emit.await_args_list)
 
 
-@pytest.mark.asyncio
 async def test_afk_toggle_by_final_drawer_ends_the_game_instead_of_overrunning():
     """Going AFK while choosing the last prompt must not buy the room a bonus turn."""
     _, room, (_, _, p3), sio, ctx = _afk_room_on_its_final_turn()
@@ -253,7 +247,6 @@ async def test_afk_toggle_by_final_drawer_ends_the_game_instead_of_overrunning()
     assert room.id not in ctx.timers.phase_timers
 
 
-@pytest.mark.asyncio
 async def test_vote_afk_on_final_drawer_ends_the_game_instead_of_overrunning():
     """The voted-AFK path has to end the game on the last turn as well."""
     _, room, (_, _, p3), sio, ctx = _afk_room_on_its_final_turn()
@@ -272,7 +265,6 @@ async def test_vote_afk_on_final_drawer_ends_the_game_instead_of_overrunning():
     assert room.id not in ctx.timers.phase_timers
 
 
-@pytest.mark.asyncio
 async def test_afk_toggle_mid_game_still_advances_to_the_next_turn():
     """The fix must not end games early: only the final turn ends the game."""
     room_manager = RoomManager()
@@ -308,7 +300,6 @@ async def test_afk_toggle_mid_game_still_advances_to_the_next_turn():
     await _drain_phase_timer(ctx.timers, room.id)
 
 
-@pytest.mark.asyncio
 async def test_reporting_names_a_seat_and_never_an_account():
     """The room tells nobody another player's account id. A complaint is not a
     reason to start, so the seat is resolved server-side."""
@@ -465,7 +456,6 @@ async def test_reporting_names_a_seat_and_never_an_account():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
     """Saying it again adds no evidence and buries the queue. Once a moderator
     has decided, the same reporter may raise a new one - that is a new
@@ -545,7 +535,6 @@ async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_a_report_cannot_be_used_to_discover_who_is_in_a_room():
     """An unknown seat and your own seat answer identically."""
     room_manager = RoomManager()
@@ -574,7 +563,6 @@ async def test_a_report_cannot_be_used_to_discover_who_is_in_a_room():
     assert unknown["ok"] is False
 
 
-@pytest.mark.asyncio
 async def test_a_guest_is_told_to_claim_an_account_first():
     """There would be nobody for a moderator to follow up with."""
     room_manager = RoomManager()
@@ -645,7 +633,6 @@ async def _users_for(factory, *players):
             )
 
 
-@pytest.mark.asyncio
 async def test_a_report_about_the_drawer_can_carry_the_canvas():
     """Asked for by the reporter, taken by the server: the frame is the one
     on the canvas at the moment of the report, and it is the drawer's by
@@ -710,7 +697,6 @@ async def test_a_report_about_the_drawer_can_carry_the_canvas():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_the_canvas_is_copied_only_for_the_seat_that_is_drawing():
     """A guesser has nothing on the canvas that is theirs, and once the next
     drawer is choosing a prompt the canvas no longer shows the turn. Both
@@ -776,7 +762,6 @@ async def test_the_canvas_is_copied_only_for_the_seat_that_is_drawing():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_a_room_report_needs_no_words_of_its_own():
     """The server attaches the evidence, so the reporter's text is optional;
     blank is stored as empty rather than refused or padded."""

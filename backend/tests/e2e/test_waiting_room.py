@@ -1,4 +1,3 @@
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     close_room_settings,
@@ -13,7 +12,6 @@ from tests.e2e.lobby_helpers import (
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
     assert_input_contract,
 ):

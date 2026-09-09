@@ -3,7 +3,6 @@
 import time
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.flow_timing import timing
@@ -45,7 +44,6 @@ class DrainingShutdown:
         }
 
 
-@pytest.mark.asyncio
 async def test_create_room_and_game_start_are_rejected_without_mutation():
     rooms = RoomManager()
     room = rooms.create_room(name="Existing", is_public=True)
@@ -71,7 +69,6 @@ async def test_create_room_and_game_start_are_rejected_without_mutation():
     assert room.state == "waiting"
 
 
-@pytest.mark.asyncio
 async def test_new_connection_receives_current_versioned_shutdown_notice():
     rooms = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -91,7 +88,6 @@ async def test_new_connection_receives_current_versioned_shutdown_notice():
     )
 
 
-@pytest.mark.asyncio
 async def test_an_approved_restart_is_cancelled_once_the_drain_starts(monkeypatch):
     """The vote passed before the drain, so the room is told, not restarted."""
 

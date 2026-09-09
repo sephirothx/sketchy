@@ -20,7 +20,6 @@ from app.services.runtime_metrics import (
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 EVENT_TYPES = [RuntimeEventType.ROOM_CREATED, RuntimeEventType.GAME_FINISHED]
 

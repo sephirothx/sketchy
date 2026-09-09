@@ -333,13 +333,11 @@ def test_a_stored_row_for_a_setting_that_no_longer_exists_is_ignored(caplog):
 # --------------------------------------------------------------- the store
 
 
-
 async def _database():
     factory, engine = await create_test_db()
     return engine, factory
 
 
-@pytest.mark.asyncio
 async def test_stored_values_survive_a_restart():
     """The whole point of persisting: the next process starts where this one left off."""
     engine, factory = await _database()
@@ -356,7 +354,6 @@ async def test_stored_values_survive_a_restart():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_writing_the_same_key_twice_replaces_rather_than_duplicates():
     engine, factory = await _database()
     try:
@@ -369,7 +366,6 @@ async def test_writing_the_same_key_twice_replaces_rather_than_duplicates():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_the_prefix_read_leaves_the_tables_other_rows_alone():
     """`app_config` also holds the auto-generated IP hashing secret."""
     engine, factory = await _database()
@@ -383,7 +379,6 @@ async def test_the_prefix_read_leaves_the_tables_other_rows_alone():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_dropping_a_key_forgets_it():
     engine, factory = await _database()
     try:

@@ -47,7 +47,6 @@ from app.repositories.sqlalchemy import (
 from app.services.user_stats_projection import rebuild_user_stats_projection
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 FINISHED_AT = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
 

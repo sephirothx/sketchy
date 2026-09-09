@@ -1,4 +1,3 @@
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
@@ -6,7 +5,6 @@ from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_public_room_cards_explain_status_settings_and_actions(
     assert_input_contract,
 ):
@@ -119,7 +117,6 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_typed_name_is_enough_to_join_without_pressing_play_as_guest():
     """Typing a name and pressing Join means what pressing the block's own
     button means. The name is what provisions the account, so a visitor who

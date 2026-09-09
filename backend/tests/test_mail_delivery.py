@@ -35,9 +35,6 @@ from app.db.models import Base, EmailOutboxEntry, generate_uuid
 from app.domain_values import EmailOutboxState
 
 
-pytestmark = pytest.mark.asyncio
-
-
 class TrackingFactory:
     """A session factory that knows how many sessions are open right now."""
 

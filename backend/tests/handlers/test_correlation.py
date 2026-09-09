@@ -5,15 +5,11 @@ import asyncio
 from unittest.mock import AsyncMock
 from uuid import UUID
 
-import pytest
 import socketio
 
 from app import correlation
 from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
-
-
-pytestmark = pytest.mark.asyncio
 
 
 async def test_a_handler_runs_inside_its_own_correlation_context():

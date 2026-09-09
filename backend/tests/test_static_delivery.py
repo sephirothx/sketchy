@@ -77,7 +77,6 @@ def static_app(tmp_path: Path):
     return app, index, asset
 
 
-@pytest.mark.asyncio
 async def test_fingerprinted_assets_are_compressed_and_cached_immutably(static_app):
     app, _, asset = static_app
 
@@ -94,7 +93,6 @@ async def test_fingerprinted_assets_are_compressed_and_cached_immutably(static_a
     assert gzip.decompress(body) == asset
 
 
-@pytest.mark.asyncio
 async def test_assets_remain_available_without_compression(static_app):
     app, _, asset = static_app
 
@@ -106,7 +104,6 @@ async def test_assets_remain_available_without_compression(static_app):
     assert body == asset
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/", "/room/ABC123"])
 async def test_spa_html_revalidates_for_root_and_client_routes(static_app, path):
     app, index, _ = static_app
@@ -119,7 +116,6 @@ async def test_spa_html_revalidates_for_root_and_client_routes(static_app, path)
     assert body == index
 
 
-@pytest.mark.asyncio
 async def test_non_fingerprinted_files_revalidate(static_app):
     app, _, _ = static_app
 
@@ -130,7 +126,6 @@ async def test_non_fingerprinted_files_revalidate(static_app):
     assert body == b"<svg></svg>"
 
 
-@pytest.mark.asyncio
 async def test_missing_file_with_extension_remains_a_404(static_app):
     app, _, _ = static_app
 
@@ -139,7 +134,6 @@ async def test_missing_file_with_extension_remains_a_404(static_app):
     assert status == 404
 
 
-@pytest.mark.asyncio
 async def test_head_and_conditional_asset_requests_preserve_cache_headers(static_app):
     app, _, asset = static_app
 
@@ -167,7 +161,6 @@ async def test_head_and_conditional_asset_requests_preserve_cache_headers(static
     )
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/nope", "/room/ABC123/extra", "/admin"])
 async def test_an_unknown_client_route_gets_the_shell_with_a_404(static_app, path):
     """The page a browser can draw, and the status everything else reads.
@@ -185,7 +178,6 @@ async def test_an_unknown_client_route_gets_the_shell_with_a_404(static_app, pat
     assert headers["cache-control"] == "no-cache"
 
 
-@pytest.mark.asyncio
 async def test_an_unknown_api_path_is_a_plain_404(static_app):
     """Never the SPA: an API client asking for a route that does not exist
     must get a 404 it can act on, not an HTML page it has to parse."""

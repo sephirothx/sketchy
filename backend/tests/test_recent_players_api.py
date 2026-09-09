@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -27,7 +26,6 @@ from app.repositories.sqlalchemy import (
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 NOW = datetime.now(timezone.utc)
 

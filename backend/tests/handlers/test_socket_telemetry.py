@@ -15,9 +15,6 @@ from app.services.telemetry import Telemetry
 from tests.handlers.helpers import SessionStore
 
 
-pytestmark = pytest.mark.asyncio
-
-
 @pytest.fixture
 def env(monkeypatch):
     store = Telemetry()

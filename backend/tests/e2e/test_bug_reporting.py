@@ -38,7 +38,6 @@ async def open_bug_dialog(page) -> None:
     await page.wait_for_selector(".bug-report-dialog")
 
 
-@pytest.mark.asyncio
 async def test_a_guest_files_a_bug_and_an_admin_reads_it():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -128,7 +127,6 @@ async def test_a_guest_files_a_bug_and_an_admin_reads_it():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
     """The compact chip used to skip its menu entirely and open the claim dialog.
 
@@ -184,7 +182,6 @@ async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_report_carries_what_triage_needs_without_the_prompt():
     """A guesser filing a bug is still a guesser."""
     async with async_playwright() as p:

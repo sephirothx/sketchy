@@ -1,10 +1,8 @@
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
-@pytest.mark.asyncio
 async def test_player_afk_and_disconnect_scenario():
     """
     Scenario 3: Player AFK & Disconnect/Reconnect Sync E2E Test

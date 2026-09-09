@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import contextlib
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -64,7 +63,6 @@ async def site(monkeypatch):
         yield opened
 
 
-@pytest.mark.asyncio
 async def test_looking_at_the_site_writes_nothing_down(site):
     client, factory = site
 
@@ -77,7 +75,6 @@ async def test_looking_at_the_site_writes_nothing_down(site):
     assert await count(factory, AuthSession) == 0
 
 
-@pytest.mark.asyncio
 async def test_choosing_a_name_is_what_creates_the_account(site):
     client, factory = site
 
@@ -92,7 +89,6 @@ async def test_choosing_a_name_is_what_creates_the_account(site):
     assert (await client.get("/api/auth/me")).json()["id"] == body["id"]
 
 
-@pytest.mark.asyncio
 async def test_provisioning_is_capped_per_caller(monkeypatch):
     async with build_site(monkeypatch, GUEST_PROVISION_LIMIT=2) as (client, factory):
         codes = []
@@ -110,7 +106,6 @@ async def test_provisioning_is_capped_per_caller(monkeypatch):
         assert await count(factory, User) == 2
 
 
-@pytest.mark.asyncio
 async def test_the_day_has_a_ceiling_of_its_own(monkeypatch):
     """The per-address key is worth little behind a proxy and nothing at all
     against a botnet. This is the number that still holds then."""
@@ -127,7 +122,6 @@ async def test_the_day_has_a_ceiling_of_its_own(monkeypatch):
         assert await count(factory, User) == 1
 
 
-@pytest.mark.asyncio
 async def test_renaming_an_existing_guest_is_not_provisioning(monkeypatch):
     """The allowance is spent by accounts being created, not by names being
     changed: a guest who renames themselves four times is still one row."""
@@ -143,7 +137,6 @@ async def test_renaming_an_existing_guest_is_not_provisioning(monkeypatch):
         assert await count(factory, User) == 1
 
 
-@pytest.mark.asyncio
 async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypatch):
     """An unrun retention policy is not a policy, and the rows it would have
     removed are exactly the ones provisioning creates."""
@@ -190,7 +183,6 @@ async def test_the_application_sweeps_stale_guests_without_being_asked(monkeypat
         assert await count(factory, User) == 0, "the sweep left the stale guest behind"
 
 
-@pytest.mark.asyncio
 async def test_a_first_name_cannot_be_a_registered_players_username(monkeypatch):
     """The rename path has always refused this; provisioning skipped it."""
     async with build_site(monkeypatch) as (client, factory):
@@ -213,7 +205,6 @@ async def test_a_first_name_cannot_be_a_registered_players_username(monkeypatch)
         assert await count(factory, User) == 1
 
 
-@pytest.mark.asyncio
 async def test_the_daily_ceiling_does_not_spend_the_hourly_allowance(monkeypatch):
     """A refusal buys nothing, so it must not cost the caller their turn: the
     day rolls over and they would still be blocked by an hour they never used."""

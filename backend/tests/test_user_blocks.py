@@ -26,7 +26,6 @@ from app.rooms import RoomManager
 from tests.dbfixtures import create_test_db
 
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 

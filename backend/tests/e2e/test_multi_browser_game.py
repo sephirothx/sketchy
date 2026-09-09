@@ -1,4 +1,3 @@
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
@@ -68,7 +67,6 @@ async def turn_results_screen(page):
     await page.wait_for_function("() => window.__turnResults")
     return await page.evaluate("() => window.__turnResults")
 
-@pytest.mark.asyncio
 async def test_multi_browser_gameplay_scenario(assert_input_contract):
     """
     Multi-browser test scenario:

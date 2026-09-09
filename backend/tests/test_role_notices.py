@@ -31,7 +31,6 @@ from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from tests.dbfixtures import create_test_db
 
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 

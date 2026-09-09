@@ -1,6 +1,5 @@
 """Saved room-setting presets work through the real creation flow."""
 
-import pytest
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import open_room_settings, register_account, use_guest_name
@@ -9,7 +8,6 @@ from tests.e2e.lobby_helpers import open_room_settings, register_account, use_gu
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_registered_player_saves_applies_and_uses_room_preset():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

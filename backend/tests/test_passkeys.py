@@ -34,7 +34,6 @@ from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from tests.dbfixtures import create_test_db
 from tests.softauthenticator import SoftAuthenticator
 
-pytestmark = pytest.mark.asyncio
 
 PASSWORD = "a-good-password"
 ORIGIN = "http://localhost:8000"

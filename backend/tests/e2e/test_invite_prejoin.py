@@ -1,4 +1,3 @@
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
@@ -6,7 +5,6 @@ from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_invite_preview_join_spectate_full_room_and_reconnect():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -116,7 +114,6 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_typed_name_is_enough_to_join_from_an_invite():
     """The invite screen has no nickname field of its own: the name goes into
     the first-run block, and pressing Join must mean what pressing that

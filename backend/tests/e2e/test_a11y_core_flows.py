@@ -85,7 +85,6 @@ async def _start_drawing_round(host_page: Page, guest_page: Page):
     return drawer_page, guesser_page
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("color_scheme,theme", [("light", "light"), ("dark", "dark")])
 async def test_lobby_and_settings_axe_and_keyboard(color_scheme, theme):
     playwright, browser, context, page = await _open_chromium(color_scheme, theme)
@@ -125,7 +124,6 @@ async def test_lobby_and_settings_axe_and_keyboard(color_scheme, theme):
         await _close(playwright, browser, context)
 
 
-@pytest.mark.asyncio
 async def test_create_room_and_invite_axe():
     playwright, browser, context, page = await _open_chromium()
     try:
@@ -152,7 +150,6 @@ async def test_create_room_and_invite_axe():
         await _close(playwright, browser, context)
 
 
-@pytest.mark.asyncio
 async def test_settings_confirmation_drawer_and_moderation_keyboard():
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -249,7 +246,6 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         await playwright.stop()
 
 
-@pytest.mark.asyncio
 async def test_guest_waiting_room_axe():
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -268,7 +264,6 @@ async def test_guest_waiting_room_axe():
         await playwright.stop()
 
 
-@pytest.mark.asyncio
 async def test_the_operations_workspace_is_accessible_on_every_tab():
     """The operator pages were outside this suite until #446 put controls on them.
 

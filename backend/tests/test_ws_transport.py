@@ -13,7 +13,6 @@ import re
 import socket
 from pathlib import Path
 
-import pytest
 import uvicorn
 import wsproto
 from wsproto.connection import ConnectionType
@@ -151,7 +150,6 @@ def _handshake(port: int, offer: list) -> tuple[list, str]:
     return accepted.extensions, header.group(1).decode() if header else ""
 
 
-@pytest.mark.asyncio
 async def test_uvicorn_loads_the_named_protocol_and_negotiates_it_live(monkeypatch):
     store = Telemetry()
     monkeypatch.setattr(ws_transport, "telemetry", store)

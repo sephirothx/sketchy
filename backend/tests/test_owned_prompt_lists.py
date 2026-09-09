@@ -23,8 +23,6 @@ from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
 
 async def _database():
     factory, engine = await create_test_db()

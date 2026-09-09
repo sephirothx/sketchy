@@ -13,7 +13,6 @@ one that would fail if the dialogs broke.
 """
 import time
 
-import pytest
 from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
@@ -35,7 +34,6 @@ async def _open_two_factor(page):
     return page.get_by_role("dialog", name="Two-factor authentication")
 
 
-@pytest.mark.asyncio
 async def test_two_factor_is_set_up_once_and_then_asked_for_again():
     """Enrolment, the codes, and the step-up prompt, in one browser.
 

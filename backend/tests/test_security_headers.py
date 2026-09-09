@@ -5,7 +5,6 @@ import base64
 import hashlib
 from pathlib import Path
 
-import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -77,7 +76,6 @@ def test_strict_transport_security_is_production_only_and_resource_policy_follow
     assert dict(HeaderPolicy(cross_origin_resources=True).headers(host=None))[b"cross-origin-resource-policy"] == b"cross-origin"
 
 
-@pytest.mark.asyncio
 async def test_every_response_carries_the_headers_and_a_route_may_override_one():
     api = FastAPI()
 
@@ -111,7 +109,6 @@ async def test_every_response_carries_the_headers_and_a_route_may_override_one()
         assert overridden.headers["x-content-type-options"] == "nosniff"
 
 
-@pytest.mark.asyncio
 async def test_the_real_application_sends_the_headers_and_no_hsts_outside_production():
     from app.main import app
 
@@ -153,7 +150,6 @@ def test_the_redirect_goes_to_the_canonical_origin_keeping_path_and_query():
     assert public_origin("https://sketchy.example:8443") == "https://sketchy.example:8443"
 
 
-@pytest.mark.asyncio
 async def test_a_plain_request_is_sent_to_https_with_its_method_kept_and_a_probe_is_answered():
     api = FastAPI()
     seen: list[str] = []
@@ -178,7 +174,6 @@ async def test_a_plain_request_is_sent_to_https_with_its_method_kept_and_a_probe
     assert seen == ["made"], "the plain POST never reached the route"
 
 
-@pytest.mark.asyncio
 async def test_a_plain_websocket_handshake_is_closed_before_it_is_accepted():
     accepted: list[str] = []
 

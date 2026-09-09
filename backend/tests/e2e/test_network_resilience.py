@@ -1,6 +1,5 @@
 import asyncio
 
-import pytest
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
@@ -9,7 +8,6 @@ from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_going_offline_banners_and_refuses_a_join():
     """The lobby's failure mode, now that the room list is not fetched.
 
@@ -46,7 +44,6 @@ async def test_going_offline_banners_and_refuses_a_join():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_page_load_and_reload_never_show_the_connection_banner():
     """The socket connects after the identity lookup - that gap is not an outage."""
     async with async_playwright() as p:
@@ -96,7 +93,6 @@ async def test_page_load_and_reload_never_show_the_connection_banner():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_mid_session_socket_reconnects_to_room():
     """Transport reconnect must rebind the active room session without a reload."""
     async with async_playwright() as p:
@@ -172,7 +168,6 @@ async def test_mid_session_socket_reconnects_to_room():
             await browser2.close()
 
 
-@pytest.mark.asyncio
 async def test_a_dropped_socket_keeps_the_rooms_it_last_knew():
     """Losing the server must not blank the lobby.
 

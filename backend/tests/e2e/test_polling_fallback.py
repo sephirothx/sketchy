@@ -9,7 +9,6 @@ canvas history over the binary sync path, then live frames), and guesses.
 """
 from __future__ import annotations
 
-import pytest
 from playwright.async_api import async_playwright
 
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
@@ -31,7 +30,6 @@ async def _pixel_is_dark(page, x: int, y: int) -> bool:
     )
 
 
-@pytest.mark.asyncio
 async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

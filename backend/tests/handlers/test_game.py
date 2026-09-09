@@ -2,7 +2,6 @@ import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
@@ -12,7 +11,6 @@ from app.game import Game
 from app.rooms import DrawingRecapEntry, RoomManager
 
 
-@pytest.mark.asyncio
 async def test_explicit_drawer_leave_starts_next_survivor_turn():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True, rounds=2)
@@ -44,7 +42,6 @@ async def test_explicit_drawer_leave_starts_next_survivor_turn():
     with suppress(asyncio.CancelledError):
         await timer
 
-@pytest.mark.asyncio
 async def test_starting_new_game_clears_previous_drawing_recap():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -87,7 +84,6 @@ async def test_starting_new_game_clears_previous_drawing_recap():
     with suppress(asyncio.CancelledError):
         await timer
 
-@pytest.mark.asyncio
 async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)

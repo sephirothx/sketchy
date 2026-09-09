@@ -146,7 +146,6 @@ def rooms_frames(caster) -> list:
     return [frame for frame in caster._sio.emitted if frame[0] == "lobby_rooms_changed"]
 
 
-@pytest.mark.asyncio
 async def test_a_tick_with_no_room_news_says_nothing():
     caster = broadcaster_for(RoomManager())
     await caster.flush()
@@ -154,7 +153,6 @@ async def test_a_tick_with_no_room_news_says_nothing():
     assert caster.rooms_revision == 0
 
 
-@pytest.mark.asyncio
 async def test_a_new_room_is_broadcast_once():
     manager = RoomManager()
     caster = broadcaster_for(manager)
@@ -174,7 +172,6 @@ async def test_a_new_room_is_broadcast_once():
     assert caster.rooms_revision == 1
 
 
-@pytest.mark.asyncio
 async def test_the_two_feeds_do_not_move_each_other():
     """Separate revisions on purpose: a room filling up must not re-send who is
     online, and somebody signing in must not re-send the rooms."""
@@ -190,7 +187,6 @@ async def test_the_two_feeds_do_not_move_each_other():
     assert len(rooms_frames(caster)) == 1
 
 
-@pytest.mark.asyncio
 async def test_a_watcher_is_handed_the_revision_already_broadcast():
     """The acknowledgement is fresh, but stamped with what the channel is at.
 
@@ -210,7 +206,6 @@ async def test_a_watcher_is_handed_the_revision_already_broadcast():
     assert later.id in {room["id"] for room in handed.rooms}
 
 
-@pytest.mark.asyncio
 async def test_a_room_going_private_leaves_the_feed_as_a_close():
     manager = RoomManager()
     caster = broadcaster_for(manager)
@@ -238,7 +233,6 @@ class FailingSio:
         self.emitted.append((event, payload, room))
 
 
-@pytest.mark.asyncio
 async def test_a_broadcast_that_failed_is_sent_again_rather_than_skipped():
     """`run` swallows a bad tick, so the revision must not be spent on it.
 
@@ -266,7 +260,6 @@ async def test_a_broadcast_that_failed_is_sent_again_rather_than_skipped():
     assert frames[0][1]["revision"] == 1 == caster.rooms_revision
 
 
-@pytest.mark.asyncio
 async def test_a_failed_presence_broadcast_does_not_spend_its_revision_either():
     """The same rule on the other feed, which shares the tick."""
     caster = broadcaster_for(RoomManager())

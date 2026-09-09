@@ -11,7 +11,6 @@ which is where they differ.
 """
 from __future__ import annotations
 
-import pytest
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import register_account, use_guest_name
@@ -47,7 +46,6 @@ async def _virtual_authenticator(page):
     return session, result["authenticatorId"]
 
 
-@pytest.mark.asyncio
 async def test_a_passkey_is_set_up_once_and_then_signs_in_on_its_own():
     """The whole of what a moderator does: take up the offer, then come back.
 

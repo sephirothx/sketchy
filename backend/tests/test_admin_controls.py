@@ -49,7 +49,6 @@ from tests.softauthenticator import SoftAuthenticator
 from tests.staffauth import enrol_second_factor, step_up
 
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 

@@ -105,7 +105,6 @@ def field_for(name: str) -> str:
     return "#tunable-" + name.replace(".", "\\.")
 
 
-@pytest.mark.asyncio
 async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -200,7 +199,6 @@ async def test_a_tuned_cadence_reaches_a_browser_that_never_reloaded():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_pair_that_cannot_hold_together_is_refused_with_its_reason():
     """20ms is inside its own bounds and outside what the drawing budget admits.
 
@@ -230,7 +228,6 @@ async def test_a_pair_that_cannot_hold_together_is_refused_with_its_reason():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_an_ordinary_player_is_not_shown_the_operations_page():
     """R-ROLE-01: the route answers the same way to anyone who types it in."""
     async with async_playwright() as p:

@@ -8,7 +8,6 @@ the timed close, the reload-once rule, and the banner when the reload did not
 help. Here the claim survives the reload, which is exactly the stuck case - a
 proxy ignoring `no-cache`, a service worker serving the old shell.
 """
-import pytest
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import room_code, use_guest_name
@@ -24,7 +23,6 @@ if (!sessionStorage.getItem('sketchy:e2e-stale-done')) {
 """
 
 
-@pytest.mark.asyncio
 async def test_a_stale_tab_reloads_once_then_says_it_is_out_of_date_and_recovers_by_hand():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

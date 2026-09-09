@@ -22,9 +22,6 @@ from app.rooms import RoomManager
 from app.services.telemetry import Telemetry
 
 
-pytestmark = pytest.mark.asyncio
-
-
 class FakeEngineSocket:
     """The writer end of one Engine.IO connection: keeps what it was handed."""
 

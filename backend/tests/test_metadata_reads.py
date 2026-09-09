@@ -32,8 +32,6 @@ from tests.dbfixtures import create_test_db
 from tests.test_account_data import record_private_game
 from tests.test_bug_reports import PASSWORD
 
-pytestmark = pytest.mark.asyncio
-
 
 def _capture(engine) -> list[str]:
     statements: list[str] = []

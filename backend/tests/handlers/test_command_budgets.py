@@ -76,7 +76,6 @@ def test_a_new_command_counts_as_activity_until_somebody_says_otherwise():
         assert command not in INACTIVITY_EXEMPT_COMMANDS
 
 
-@pytest.mark.asyncio
 async def test_a_flood_of_guesses_is_refused_without_doing_the_work():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
@@ -93,7 +92,6 @@ async def test_a_flood_of_guesses_is_refused_without_doing_the_work():
     assert all("too quickly" in answer["error"] for answer in refused)
 
 
-@pytest.mark.asyncio
 async def test_a_drawer_at_full_speed_is_never_refused():
     """The flush timer fires every 40ms, so a second of drawing is 25 frames."""
     budgets = CommandBudgets()
@@ -104,7 +102,6 @@ async def test_a_drawer_at_full_speed_is_never_refused():
     assert all(allowed), "a legitimate drawer was refused"
 
 
-@pytest.mark.asyncio
 async def test_canvas_replays_have_a_floor_between_them():
     """The cheap request with the expensive answer."""
     budgets = CommandBudgets()
@@ -119,7 +116,6 @@ async def test_canvas_replays_have_a_floor_between_them():
     assert verdicts == [True, False, False, False, False]
 
 
-@pytest.mark.asyncio
 async def test_a_window_that_has_passed_is_forgotten():
     now = [1000.0]
     budgets = CommandBudgets(clock=lambda: now[0])
@@ -133,7 +129,6 @@ async def test_a_window_that_has_passed_is_forgotten():
     assert budgets.check("sid:guess", budget) is True
 
 
-@pytest.mark.asyncio
 async def test_a_socket_that_leaves_takes_its_windows_with_it():
     """Keyed by socket and command, so the map would otherwise keep a deque per
     command per connection for the life of a process that also holds every
@@ -150,7 +145,6 @@ async def test_a_socket_that_leaves_takes_its_windows_with_it():
     await ctx.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_being_throttled_is_recorded_once_a_window_not_once_a_refusal():
     """A caller being refused is being refused repeatedly, so an observation
     per refusal would be the write amplification these budgets exist to stop -
@@ -178,7 +172,6 @@ async def test_being_throttled_is_recorded_once_a_window_not_once_a_refusal():
     assert windows.should_report("sid:guess", budget) is True
 
 
-@pytest.mark.asyncio
 async def test_a_refused_frame_answers_nothing_and_a_refused_action_explains():
     """Nobody is waiting on an answer to a drawing frame at twenty-five a
     second, and an error surfacing mid-stroke is worse than the dropped frame
@@ -222,7 +215,6 @@ def test_a_budget_cannot_be_tuned_to_something_the_client_cannot_live_with():
         policy.set_limit("nonexistent", 10)
 
 
-@pytest.mark.asyncio
 async def test_one_window_per_kind_not_one_per_command():
     """The budget is a property of a kind of traffic, so two commands of the
     same kind share it. Keyed per command, `guess` and `send_chat` would each
@@ -244,7 +236,6 @@ async def test_one_window_per_kind_not_one_per_command():
     )
 
 
-@pytest.mark.asyncio
 async def test_undo_is_refused_out_loud_even_though_it_shares_the_drawing_budget():
     """Undo is a control somebody pressed, sent with `emitWithAck`. Silence
     leaves the client waiting for an acknowledgement that never comes, and it
@@ -276,7 +267,6 @@ def test_lobby_chat_is_a_kind_of_its_own():
     ).limit
 
 
-@pytest.mark.asyncio
 async def test_a_flood_of_reactions_is_refused_by_the_action_budget():
     """Reactions have no budget of their own (#520): a control somebody presses
     at a human's pace answers to `action`, and a flood is refused before the

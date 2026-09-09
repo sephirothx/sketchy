@@ -10,7 +10,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
@@ -35,7 +34,6 @@ async def seat(sessions: SessionStore, sid: str, user_id: str | None) -> None:
     await sessions.save(sid, {"user_id": user_id})
 
 
-@pytest.mark.asyncio
 async def test_a_socket_with_no_account_cannot_open_a_room_but_can_still_play():
     """R-HIST-10 keeps its accountless seat; only creation is withheld."""
     room_manager = RoomManager()
@@ -56,7 +54,6 @@ async def test_a_socket_with_no_account_cannot_open_a_room_but_can_still_play():
     assert joined["ok"] is True, "a cookie-less player must still be able to play"
 
 
-@pytest.mark.asyncio
 async def test_an_account_cannot_hold_more_live_rooms_than_its_ceiling():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager, user_id="user-1")
@@ -79,7 +76,6 @@ async def test_an_account_cannot_hold_more_live_rooms_than_its_ceiling():
     assert again["ok"] is True
 
 
-@pytest.mark.asyncio
 async def test_another_account_is_unaffected_by_a_neighbours_ceiling():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager, user_id="user-1")
@@ -95,7 +91,6 @@ async def test_another_account_is_unaffected_by_a_neighbours_ceiling():
     assert neighbour["ok"] is True
 
 
-@pytest.mark.asyncio
 async def test_the_server_refuses_to_open_more_rooms_than_it_will_hold():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager, user_id="user-1")
@@ -111,7 +106,6 @@ async def test_the_server_refuses_to_open_more_rooms_than_it_will_hold():
     assert len(room_manager.rooms) == 1
 
 
-@pytest.mark.asyncio
 async def test_quick_prompts_are_capped_across_every_live_room():
     """The per-room limit bounds one room; this bounds the process."""
     room_manager = RoomManager()
@@ -134,7 +128,6 @@ async def test_quick_prompts_are_capped_across_every_live_room():
     assert len(room_manager.rooms) == 1
 
 
-@pytest.mark.asyncio
 async def test_editing_settings_cannot_walk_past_the_retained_prompt_ceiling():
     """Otherwise the cap is bypassed by opening a small room and growing it."""
     room_manager = RoomManager()
@@ -155,7 +148,6 @@ async def test_editing_settings_cannot_walk_past_the_retained_prompt_ceiling():
     assert room.custom_prompts == []
 
 
-@pytest.mark.asyncio
 async def test_the_retained_prompt_count_never_drifts_from_the_rooms():
     """The total is kept incrementally, so it has to be checked against truth."""
     room_manager = RoomManager()
@@ -197,7 +189,6 @@ async def test_the_retained_prompt_count_never_drifts_from_the_rooms():
     assert room_manager.retained_prompt_characters() == recount()
 
 
-@pytest.mark.asyncio
 async def test_an_account_cannot_open_rooms_faster_than_its_hourly_allowance():
     """Persistent, so a restart is not a way to get a fresh allowance."""
     from app.services.room_quotas import RoomQuotaService
@@ -236,7 +227,6 @@ async def test_an_account_cannot_open_rooms_faster_than_its_hourly_allowance():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_a_refused_room_gives_back_the_code_it_had_already_claimed():
     """The ceiling can only be reached after the reservation is made."""
     room_manager = RoomManager()
@@ -274,7 +264,6 @@ async def test_a_refused_room_gives_back_the_code_it_had_already_claimed():
     assert released == ["FIRST1"], "the refused room kept its reservation"
 
 
-@pytest.mark.asyncio
 async def test_an_attempt_that_opens_no_room_does_not_spend_the_allowance():
     from app.services.room_quotas import RoomQuotaService
     from tests.dbfixtures import create_test_db

@@ -27,7 +27,6 @@ def test_parallel_databases_require_postgresql():
         WorkerDatabases("sqlite+aiosqlite:///test.db")
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="requires PostgreSQL")
 async def test_worker_clones_keep_migrations_and_isolate_rows_and_cleanup():
     # Empty the source with the usual fixture, then release it for cloning.

@@ -33,7 +33,6 @@ from tests.dbfixtures import create_test_db
 from tests.staffauth import mark_staff_ready
 
 PASSWORD = "a-good-password"
-pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
@@ -370,7 +369,6 @@ async def test_a_key_that_is_not_a_content_address_is_not_looked_up(env):
     assert (await http.get("/api/avatars/" + "0" * 64 + ".png")).status_code == 404
 
 
-@pytest.mark.asyncio
 async def test_reports_about_one_picture_are_one_incident(env):
     """A picture belongs to the account, not to a room or a line of chat, so
     several people objecting to one are objecting to one thing - whichever
@@ -427,7 +425,6 @@ async def test_reports_about_one_picture_are_one_incident(env):
     assert all(row.reported_avatar_key is not None for row in rows)
 
 
-@pytest.mark.asyncio
 async def test_a_reviewer_is_told_the_picture_is_no_longer_the_reported_one(env):
     """An upload deletes the picture it replaces, so the old one cannot be
     shown and is not pretended at. What a reviewer gets instead is the fact
@@ -488,7 +485,6 @@ async def test_a_reviewer_is_told_the_picture_is_no_longer_the_reported_one(env)
     assert "_avatarKey" not in after["reportedPlayer"]
 
 
-@pytest.mark.asyncio
 async def test_a_picture_that_is_not_there_cannot_be_reported(env):
     """A complaint about something that does not exist is a dead end for
     whoever has to read it, so it is refused rather than queued."""
@@ -519,7 +515,6 @@ async def test_a_picture_that_is_not_there_cannot_be_reported(env):
         ) == 0
 
 
-@pytest.mark.asyncio
 async def test_a_picture_a_moderator_removed_does_not_read_as_a_different_one(env):
     """`Remove picture` leaves the account with none, and "no picture" is a
     different thing from "a different picture" - it reads as the opposite of
@@ -575,7 +570,6 @@ async def test_a_picture_a_moderator_removed_does_not_read_as_a_different_one(en
     assert after["status"] == "pending"
 
 
-@pytest.mark.asyncio
 async def test_a_player_taking_their_own_picture_down_is_not_read_as_a_removal(env):
     """Taking your own picture down is not a punishment and sets no block
     (R-AVA-04), so it must not be reported to a moderator as though somebody
@@ -619,7 +613,6 @@ async def test_a_player_taking_their_own_picture_down_is_not_read_as_a_removal(e
     assert picture["removedFromThisIncident"] is False
 
 
-@pytest.mark.asyncio
 async def test_a_name_is_reported_against_the_account_like_a_picture(env):
     """A name belongs to the account, not to anything it said, so complaints
     about one meet where complaints about a picture do (R-AVA-06). Unlike a
@@ -657,7 +650,6 @@ async def test_a_name_is_reported_against_the_account_like_a_picture(env):
     assert all(row.reported_avatar_key is None for row in rows)
 
 
-@pytest.mark.asyncio
 async def test_a_removed_picture_is_something_its_owner_is_told_about(env):
     """A picture that disappears with no word reads as a fault rather than a
     decision, and with no wait on the first removal there would be nothing
@@ -711,7 +703,6 @@ async def test_a_removed_picture_is_something_its_owner_is_told_about(env):
     assert (await target_http.get("/api/warnings/pending")).json()["warning"] is None
 
 
-@pytest.mark.asyncio
 async def test_a_second_removal_says_when_the_picture_may_come_back(env):
     """The wait is the part a player can act on, so it is what the notice
     ends with once there is one."""
@@ -736,7 +727,6 @@ async def test_a_second_removal_says_when_the_picture_may_come_back(env):
     assert "upload another one on" in warnings[1].reason
 
 
-@pytest.mark.asyncio
 async def test_a_removal_notice_is_not_a_formal_warning(env):
     """A removal rides the warning machinery and is not a warning: a formal
     one restricts nothing and says so, while a removal restricts uploading -
@@ -758,7 +748,6 @@ async def test_a_removal_notice_is_not_a_formal_warning(env):
     assert row.kind == "avatar_removal"
 
 
-@pytest.mark.asyncio
 async def test_a_moderator_is_told_when_the_block_actually_lifts(env):
     """The wait is no longer one length, so the queue states the date rather
     than a duration - and states none at all when the removal cost no wait."""

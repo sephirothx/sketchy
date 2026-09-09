@@ -7,7 +7,6 @@ planted for the page.
 """
 import asyncio
 
-import pytest
 from playwright.async_api import async_playwright
 
 from app.domain_values import UserRole
@@ -31,8 +30,6 @@ BASE_URL = "http://localhost:8000"
 DETAILS = "Not what the prompt asked for."
 
 
-
-
 async def _choose_prompt(pages):
     for _ in range(120):
         for page in pages:
@@ -47,7 +44,6 @@ async def _choose_prompt(pages):
     raise AssertionError("No drawer received prompt choices within 12 seconds")
 
 
-@pytest.mark.asyncio
 async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -161,7 +157,6 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_two_players_reporting_one_thing_are_one_case_decided_once():
     """The whole point of grouping, played out (#620).
 

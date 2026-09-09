@@ -20,7 +20,6 @@ from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 ON_POSTGRESQL = PG_URL.startswith("postgresql")

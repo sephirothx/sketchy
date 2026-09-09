@@ -78,7 +78,6 @@ from app.repositories.sqlalchemy import (
 )
 
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 STARTED = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent

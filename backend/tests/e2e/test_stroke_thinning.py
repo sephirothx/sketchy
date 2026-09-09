@@ -9,7 +9,6 @@ screen and half a pixel away on a viewer's would let a fill leak on one and
 not the other - and it is what this checks, with a wavy stroke of many
 samples so that the thinner has something to drop.
 """
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
@@ -41,7 +40,6 @@ PREVIEW_IS_CLEAR = """
 """
 
 
-@pytest.mark.asyncio
 async def test_the_drawer_and_a_viewer_rasterize_the_same_thinned_stroke():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

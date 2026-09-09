@@ -1,4 +1,3 @@
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, use_guest_name
 
@@ -6,7 +5,6 @@ from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, us
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_invite_feedback_and_active_game_leave_confirmation():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -99,7 +97,6 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_waiting_room_leave_remains_immediate():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

@@ -75,7 +75,6 @@ def test_exact_version_aliases_are_accepted_and_drive_near_miss_hints():
     assert other_version.submit_guess("guesser", "aeroplane")[0] is False
 
 
-@pytest.mark.asyncio
 async def test_prompt_concepts_do_not_merge_by_equal_text_and_links_are_explicit():
     factory, engine = await create_test_db()
     try:

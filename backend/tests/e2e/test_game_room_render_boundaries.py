@@ -34,7 +34,6 @@ async def assert_regions_unchanged(page, regions=ISOLATED_REGIONS):
     return counts
 
 
-@pytest.mark.asyncio
 async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -147,7 +146,6 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_timed_hint_reveal_stops_at_the_prompt_it_changes():
     """A revealed letter re-renders the prompt, not the canvas beneath it (R-ENG-16).
 

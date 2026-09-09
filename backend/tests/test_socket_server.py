@@ -26,8 +26,6 @@ from app.socket_server import (
     BoundedSocketServer,
 )
 
-pytestmark = pytest.mark.asyncio
-
 
 class FakeEngineSocket:
     closed = False

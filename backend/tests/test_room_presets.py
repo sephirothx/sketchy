@@ -24,7 +24,6 @@ from app.services.room_presets import RoomPresetError, RoomPresetService
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 

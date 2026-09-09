@@ -11,7 +11,6 @@ text each test says carries something unique.
 """
 import uuid
 
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import register_account, use_guest_name
 
@@ -26,7 +25,6 @@ def line_saying(page, text: str):
     return page.locator(".lobby-chat-line", has_text=text)
 
 
-@pytest.mark.asyncio
 async def test_a_registered_player_reports_a_lobby_line_by_its_author():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

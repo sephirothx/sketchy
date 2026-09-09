@@ -12,9 +12,6 @@ from app.request_limits import (
 )
 
 
-pytestmark = pytest.mark.asyncio
-
-
 @pytest.fixture
 def env():
     """An app that records whether the handler was reached, and with what."""

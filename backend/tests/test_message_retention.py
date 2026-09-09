@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
-import pytest
 import socketio
 from sqlalchemy import select
 
@@ -30,9 +29,6 @@ from app.services.message_retention import (
 )
 
 from tests.dbfixtures import create_test_db
-
-
-pytestmark = pytest.mark.asyncio
 
 
 async def test_wrong_guess_is_retained_with_runtime_ids_and_actual_audience():

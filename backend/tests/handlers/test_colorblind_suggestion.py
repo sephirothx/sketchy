@@ -63,7 +63,6 @@ def _live_room():
     return manager, room, host, player, sio, ctx
 
 
-@pytest.mark.asyncio
 async def test_private_preference_is_absent_from_every_shared_room_payload():
     manager, room, host, player, _, _ = _live_room()
     room.colorblind_suggestion_dismissed = True
@@ -84,7 +83,6 @@ async def test_private_preference_is_absent_from_every_shared_room_payload():
     assert player.colorblind_safe_colors is True
 
 
-@pytest.mark.asyncio
 async def test_suggestion_is_unattributed_host_only_and_spectators_do_not_count():
     _, room, host, player, sio, ctx = _live_room()
 
@@ -104,7 +102,6 @@ async def test_suggestion_is_unattributed_host_only_and_spectators_do_not_count(
     assert _suggestion_calls(sio)[-1].args[1] == {"active": False}
 
 
-@pytest.mark.asyncio
 async def test_suggestion_disappears_on_last_departure_and_dismissal_lasts_room():
     manager, room, _, player, sio, ctx = _live_room()
 
@@ -132,7 +129,6 @@ async def test_suggestion_disappears_on_last_departure_and_dismissal_lasts_room(
     assert _suggestion_calls(sio)[-1].args[1]["active"] is False
 
 
-@pytest.mark.asyncio
 async def test_only_waiting_host_can_accept_and_acceptance_switches_color_mode():
     _, room, _, _, sio, _ = _live_room()
     accept = sio.handlers["/"]["accept_colorblind_suggestion"]
@@ -169,7 +165,6 @@ def test_colorblind_preference_boundary_requires_a_real_boolean(model, payload):
         parse_payload(model, payload)
 
 
-@pytest.mark.asyncio
 async def test_registered_preference_is_server_authoritative_and_can_be_unset():
     user_id = uuid4()
     factory, engine = await create_test_db()
@@ -240,7 +235,6 @@ async def test_registered_preference_is_server_authoritative_and_can_be_unset():
     await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_guest_preference_follows_the_local_value_on_join_and_reload():
     manager = RoomManager()
     room = manager.create_room(name="Studio")
@@ -281,7 +275,6 @@ async def test_guest_preference_follows_the_local_value_on_join_and_reload():
     assert seat.colorblind_safe_colors is False
 
 
-@pytest.mark.asyncio
 async def test_an_unanswered_suggestion_clears_when_the_game_starts():
     """Left alone, it belongs to the waiting room and not over the game."""
 
@@ -303,7 +296,6 @@ async def test_an_unanswered_suggestion_clears_when_the_game_starts():
     assert _suggestion_calls(sio)[-1].args[1] == {"active": True}
 
 
-@pytest.mark.asyncio
 async def test_a_dismissed_suggestion_stays_gone_across_a_game():
     _, room, host, _, sio, ctx = _live_room()
 

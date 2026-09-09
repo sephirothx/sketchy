@@ -19,9 +19,6 @@ from app.main import app, readiness_probe, shutdown_coordinator
 from app.services.readiness import LoopHealth, ReadinessProbe
 
 
-pytestmark = pytest.mark.asyncio
-
-
 @pytest.fixture(autouse=True)
 def _a_ready_process():
     """A started process with no supervised loops and a working database."""

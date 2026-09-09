@@ -174,7 +174,6 @@ def _watch(manager, clock, *, game_flow=None):
     return sio, watch, activity
 
 
-@pytest.mark.asyncio
 async def test_a_quiet_seat_is_asked_then_marked():
     clock = FakeClock()
     manager, room, player = _room_with()
@@ -196,7 +195,6 @@ async def test_a_quiet_seat_is_asked_then_marked():
     assert player.is_afk
 
 
-@pytest.mark.asyncio
 async def test_answering_the_check_closes_it_and_marks_nobody():
     """The answer is an ordinary command, so it lands in the ledger."""
     clock = FakeClock()
@@ -218,7 +216,6 @@ async def test_answering_the_check_closes_it_and_marks_nobody():
     assert not player.is_afk
 
 
-@pytest.mark.asyncio
 async def test_the_check_is_asked_once_however_long_the_silence_runs():
     clock = FakeClock()
     manager, room, player = _room_with()
@@ -235,7 +232,6 @@ async def test_the_check_is_asked_once_however_long_the_silence_runs():
     assert sio.emit.await_count == 1, "one question, not one per tick"
 
 
-@pytest.mark.asyncio
 async def test_a_marked_seat_is_not_asked_again():
     clock = FakeClock()
     manager, room, player = _room_with()
@@ -252,7 +248,6 @@ async def test_a_marked_seat_is_not_asked_again():
     assert events.count("afk_check") == 1
 
 
-@pytest.mark.asyncio
 async def test_marking_a_drawer_forfeits_the_turn_wherever_it_lands():
     """`apply_afk_consequences` already does this; the sweep must call it."""
     clock = FakeClock()
@@ -279,7 +274,6 @@ async def test_marking_a_drawer_forfeits_the_turn_wherever_it_lands():
     assert player.id in marked
 
 
-@pytest.mark.asyncio
 async def test_a_seat_that_goes_while_the_pass_is_out_is_not_marked():
     """Asking one seat awaits, and the next seat can leave inside that await.
 
@@ -313,7 +307,6 @@ async def test_a_seat_that_goes_while_the_pass_is_out_is_not_marked():
     assert not second.is_afk, "Bob had already gone"
 
 
-@pytest.mark.asyncio
 async def test_a_check_open_on_a_departed_socket_is_dropped():
     """The map must not grow across a long-lived process."""
     clock = FakeClock()
