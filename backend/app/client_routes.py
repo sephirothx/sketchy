@@ -31,6 +31,7 @@ CLIENT_ROUTES: tuple[str, ...] = (
     "/profile/:userId",
     "/settings",
     "/settings/:section",
+    "/friends",
     "/forgot-password",
     "/reset-password",
     "/verify-email",

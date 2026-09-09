@@ -54,6 +54,17 @@ keyboard that takes half the screen, and one thumb.
   total to the profile. They are never scored. The four faces are bundled artwork
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
+- Friends — registered players add each other from the lobby's online list or from a
+  seat in the same room, and a friendship lets either of them take a seat in a game they
+  cannot name: uninvited only where the **host** is a friend, or on a short-lived
+  single-use invitation that carries a token rather than a room code. **Friends**, in the
+  account menu, holds every friendship and every request in either direction whether or
+  not the other person is online, and opens over whatever page you are on, so a request
+  that arrives while you are drawing can be answered without leaving the game. Declining
+  and removing are confirmed first: a decline is kept, so the person refused cannot ask
+  again, though the one who declined may still ask them. Cancelling a request you sent
+  leaves nothing behind. Guests are not offered friendships, since a guest name belongs
+  to a browser and is purged after a month of not playing.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -1340,7 +1351,8 @@ backend/
     test_*.py     Domain, protocol, payload, wire-contract, timer, DB, repository, and performance unit tests
 frontend/
   src/
-    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
+    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
+                  SettingsOverlay, FriendsOverlay
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, BugReportsPage (admin triage)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once

@@ -164,15 +164,31 @@ export function OnlinePlayersPanel() {
                       <PlusIcon size={14} />
                     </button>
                   )}
+                  {/* Decline sits beside Accept here, the same way it does
+                      for a request from somebody offline. A row that offers
+                      only one of the two answers is a row that answers for
+                      you: leaving it alone is not the same as saying no, and
+                      until this there was no way to say no to somebody who
+                      happened to be online. */}
                   {action === "accept" && (
-                    <Button
-                      variant="primary"
-                      compact
-                      disabled={busy}
-                      onClick={() => void acceptRequest(player.userId)}
-                    >
-                      Accept
-                    </Button>
+                    <>
+                      <Button
+                        variant="primary"
+                        compact
+                        disabled={busy}
+                        onClick={() => void acceptRequest(player.userId)}
+                      >
+                        Accept
+                      </Button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-compact"
+                        disabled={busy}
+                        onClick={() => void declineRequest(player.userId)}
+                      >
+                        Decline
+                      </button>
+                    </>
                   )}
                   {action === "sent" && (
                     <span className="online-player-status">Request sent</span>

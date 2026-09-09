@@ -10,6 +10,8 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useOpenOverlay } from "../hooks/useOverlayRoute";
+import { FRIENDS_PATH } from "../lib/overlayRoutes";
 import { useAuthStore } from "../store/authStore";
 import { authSubmitter, type AuthCredentials, type AuthMode } from "../lib/authSubmit";
 import { avatarInitial, identityColor } from "../lib/avatar";
@@ -35,6 +37,7 @@ import {
   PlusIcon,
   ShieldIcon,
   UserIcon,
+  UsersIcon,
   ZapIcon,
 } from "./icons";
 
@@ -82,6 +85,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useOpenSettings();
+  const openOverlay = useOpenOverlay();
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -285,6 +289,20 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
             </>
           ) : (
             <>
+              {/* Not in the `!seatBound` group above, and not because a
+                  guest can never see it: Friends is an overlay, so opening it
+                  draws over the room rather than leaving it. Answering a
+                  request that arrived mid-game must not cost a seat
+                  (R-FRIEND-10). */}
+              <MenuItem
+                icon={<UsersIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  openOverlay(FRIENDS_PATH);
+                }}
+              >
+                Friends
+              </MenuItem>
               <MenuItem
                 icon={<BulbIcon size={16} />}
                 onClick={() => {

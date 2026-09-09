@@ -98,15 +98,17 @@ export function PlayerList({
         notify(answer?.error ?? "That request could not be sent.");
         return;
       }
-      // Three outcomes worth telling apart, and one that deliberately is not:
-      // anything else - already friends, already asked, or a block - reads as
-      // "nothing to do", so the answer never becomes a way to test for one.
+      // Two outcomes worth telling apart, and a third that deliberately is
+      // not: already friends, already asked, an earlier refusal, or a block
+      // all answer the same, so the reply never becomes a way to test for
+      // one. Which means the wording must not name any of them - saying "you
+      // have already asked" asserts the one fact it happens not to know.
       if (answer.status === "accepted") {
         notify(`You and ${nickname} are now friends.`);
       } else if (answer.status === "created") {
         notify(`Friend request sent to ${nickname}.`);
       } else {
-        notify(`Nothing to do - you have already asked ${nickname}.`);
+        notify(`Nothing to do about ${nickname} right now.`);
       }
     } catch {
       notify("That request could not be sent.");
