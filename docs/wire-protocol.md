@@ -552,6 +552,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `friends_in_room` | `EmptyPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 
@@ -737,6 +738,17 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
 ### Key payload shapes
+
+`friends_in_room` answers `{playerIds}` — the **seats** in this socket's room
+that belong to accepted friends of the caller, so the roster can mark them
+(R-FRIEND-13). It is `add_friend` in reverse: that one takes a seat and finds
+the account, this takes the account and finds the seats, and neither puts an
+account id on the wire (R-ROOM-07). Asked for rather than broadcast, because
+every reader's answer is different — which is also why it is not room state.
+R-BLOCK-03 forbids a **block** creating a different game per player; this
+changes no gameplay fact, exactly as the viewer's own avatar ring does not. A
+caller with no account, or one in a room with no friends in it, gets an empty
+list rather than a refusal, so the two cannot be told apart (R-FRIEND-04).
 
 **Friend payloads** never carry a room. `friend_invite_received` holds a token
 the server resolves against the sender's live seat, so an invitation is a

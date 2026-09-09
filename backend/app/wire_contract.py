@@ -67,6 +67,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "create_room": payloads.CreateRoomPayload,
     "dismiss_colorblind_suggestion": payloads.EmptyPayload,
     "draw": "parse_draw_payload",
+    "friends_in_room": payloads.EmptyPayload,
     "get_custom_prompts": payloads.EmptyPayload,
     "get_recap_drawing": payloads.RecapDrawingPayload,
     "get_room_preview": payloads.RoomPreviewPayload,
