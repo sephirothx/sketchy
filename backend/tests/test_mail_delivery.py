@@ -8,6 +8,7 @@ locks, and either way a second sweep could take the same row.
 from __future__ import annotations
 
 import asyncio
+import smtplib
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -498,7 +499,6 @@ async def test_a_relay_that_names_the_recipient_in_its_refusal_is_redacted_too(
     both safe under `LOG_FORMAT=text`, which switches the JSON formatter's
     redaction off."""
     import logging
-    import smtplib
 
     engine, factory = await outbox(tmp_path)
 
@@ -551,5 +551,104 @@ async def test_a_long_relay_error_cannot_be_cut_into_a_visible_address(tmp_path)
             entry = await session.scalar(select(EmailOutboxEntry))
         assert entry.state == EmailOutboxState.FAILED.value
         assert "player0@" not in entry.last_error
+    finally:
+        await engine.dispose()
+
+
+# The local parts are a sentinel rather than a name, so the assertion can be
+# "no fragment of it survives" rather than "the whole of it does not" - the
+# pattern this replaces masked `foo!bar@x` as `foo!***@x`, which passes the
+# weaker check while leaking the half that identifies somebody.
+@pytest.mark.parametrize(
+    "address",
+    [
+        "zqx!zqx@example.test",
+        '"zqx"@example.test',
+        "zqx'zqx@example.test",
+        "zqx@a.b",
+        "a=zqx#{zqx}@example.test",
+    ],
+)
+async def test_any_address_the_account_layer_stores_is_masked_on_the_way_out(
+    tmp_path, caplog, address
+):
+    """`normalize_email` asks only for a non-blank local part, an `@`, and a
+    domain with a dot in it. The recipient is masked by splitting the address
+    this row already holds, not by finding one in text, so the shapes that
+    slip past a pattern - a local part with atext specials in it, a quoted
+    one, a single-character final label - are masked here the same as any
+    other, in the log line and in `last_error` alike."""
+    import logging
+
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'shapes.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        async with session.begin():
+            queue_email(
+                session,
+                to_address=address,
+                template=EmailTemplate.VERIFY_EMAIL,
+                payload={"displayName": "Player", "token": "t"},
+            )
+
+    _, _, domain = address.rpartition("@")
+
+    class RefusingTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise smtplib.SMTPRecipientsRefused(
+                {message.to_address: (550, b"5.1.1 no such mailbox")}
+            )
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+            at = datetime.now(timezone.utc)
+            for _ in range(MAX_ATTEMPTS):
+                await deliver_pending(factory, transport=RefusingTransport(), now=at)
+                at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        for written in (caplog.text, entry.last_error):
+            assert "zqx" not in written
+            # The domain stays: it is what says which relay was involved.
+            assert f"***@{domain}" in written
+        assert "5.1.1" in entry.last_error
+    finally:
+        await engine.dispose()
+
+
+async def test_a_recipient_whose_domain_could_be_read_as_a_backreference(tmp_path):
+    """The mask carries a domain this process did not choose. Substituted by
+    a function rather than a replacement string, so a backslash in it is a
+    character and not a group reference."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'odd.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all, checkfirst=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    address = "player@ex\\1ample.test"
+    async with factory() as session:
+        async with session.begin():
+            queue_email(
+                session,
+                to_address=address,
+                template=EmailTemplate.VERIFY_EMAIL,
+                payload={"displayName": "Player", "token": "t"},
+            )
+
+    class RefusingTransport:
+        async def send(self, message: OutgoingMessage) -> None:
+            raise RuntimeError(f"550 no mailbox {message.to_address}")
+
+    try:
+        at = datetime.now(timezone.utc)
+        for _ in range(MAX_ATTEMPTS):
+            await deliver_pending(factory, transport=RefusingTransport(), now=at)
+            at += timedelta(hours=3)
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "player@" not in entry.last_error
     finally:
         await engine.dispose()

@@ -29,6 +29,7 @@ from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
 import os
+import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import parseaddr
@@ -380,6 +381,42 @@ async def _claim_due(
     return claims
 
 
+def _masked_recipient(address: str) -> str:
+    """`***@domain` for a stored address, whatever shape it has.
+
+    Split, not matched. `auth.email.normalize_email` accepts any non-blank
+    local part before the last `@` and any domain with a dot in it, so the
+    stored set includes `foo!bar@example.test`, `"foo"@example.test` and
+    `foo@a.b` - none of which a pattern hunting an address inside arbitrary
+    prose recognises without becoming wide enough to eat the prose. Here
+    there is nothing to recognise: the address is known, and this is the
+    same `rpartition` split `normalize_email` made when it accepted it.
+
+    The domain survives because that is what says which relay or provider
+    was involved, which is what a delivery failure is diagnosed from.
+    """
+    local, at, domain = address.rpartition("@")
+    return f"***@{domain}" if at and local else "***"
+
+
+def _without_recipient(text: str, address: str) -> str:
+    """Take one known address out of arbitrary text, then the general pass.
+
+    A relay's own answer carries the address it refused - `SMTPRecipientsRefused`
+    stringifies the dict it was built with - and it is echoed back in whatever
+    case it was typed, hence the fold. The general pass still runs, for a
+    second address the relay mentioned and for anything else `redact` knows.
+
+    The replacement is a function rather than a string because the mask
+    carries a domain this process did not choose: a backslash in it would
+    otherwise be read as a group reference.
+    """
+    if address:
+        mask = _masked_recipient(address)
+        text = re.sub(re.escape(address), lambda _: mask, text, flags=re.IGNORECASE)
+    return redact(text)
+
+
 def _scrubbed(payload: Mapping[str, object]) -> dict:
     """The payload minus its secret, for a row no sweep will render again.
 
@@ -491,15 +528,16 @@ async def deliver_pending(
                 # Rendering is inside the try on purpose: a row whose template
                 # no longer exists is one bad message, not a dead sweep.
                 #
-                # Redacted before it is truncated, and here rather than at the
-                # two places it is used. `SMTPRecipientsRefused` stringifies
-                # with the address it refused inside it, so redacting the
-                # recipient beside this string would leave the same address
-                # in the same line; and this is what `last_error` stores, a
-                # column kept 30 days and read back by an operator command.
-                # Truncating afterwards would let a 256-character cut land
-                # mid-address and leave the local part standing.
-                return claim, redact(str(error))[:256]
+                # Scrubbed before it is truncated, and here rather than at
+                # the two places it is used. `SMTPRecipientsRefused`
+                # stringifies with the address it refused inside it, so
+                # masking the recipient beside this string would leave the
+                # same address in the same line; and this is what
+                # `last_error` stores, a column kept 30 days and read back by
+                # an operator command. Truncating afterwards would let a
+                # 256-character cut land mid-address and leave the local part
+                # standing.
+                return claim, _without_recipient(str(error), claim.to_address)[:256]
             return claim, None
 
     outcomes = await asyncio.gather(*(attempt(claim) for claim in claimed))
@@ -512,15 +550,13 @@ async def deliver_pending(
             continue
         if await _record_failure(session_factory, claim, error, checked_at=checked_at):
             failed += 1
-            # The domain says which relay or provider was involved, which
-            # is what a delivery failure is diagnosed from; the local part
-            # only names the person. Redacted at the call site rather than
-            # left to the JSON formatter, so the line is safe under
-            # `LOG_FORMAT=text` too. `error` arrives redacted already.
+            # Masked at the call site rather than left to the JSON
+            # formatter, so the line is safe under `LOG_FORMAT=text` too.
+            # `error` arrives scrubbed already.
             logger.warning(
                 "giving up on %s to %s after %d attempts: %s",
                 claim.template,
-                redact(claim.to_address),
+                _masked_recipient(claim.to_address),
                 claim.attempts,
                 error,
             )
