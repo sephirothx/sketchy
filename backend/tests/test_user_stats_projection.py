@@ -7,7 +7,7 @@ import os
 from uuid import UUID
 
 import pytest
-from sqlalchemy import delete, event, select
+from sqlalchemy import delete, event, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db import create_db_engine
@@ -389,16 +389,16 @@ async def test_a_game_saved_during_a_guest_merge_waits_and_lands_on_the_account(
         day = datetime(2026, 8, 20, 12, tzinfo=timezone.utc)
         await _save_game(history, finished_at=day, first=guest.id, second=other.id, first_wins=True)
 
-        real_rebuild = repository.rebuild_user_stats_in_session
+        real_fold = repository.fold_identity_into_account
         merge_holds_the_rows = asyncio.Event()
         let_the_merge_commit = asyncio.Event()
 
         async def paused_rebuild(session, **kwargs):
             merge_holds_the_rows.set()
             await let_the_merge_commit.wait()
-            return await real_rebuild(session, **kwargs)
+            return await real_fold(session, **kwargs)
 
-        monkeypatch.setattr(repository, "rebuild_user_stats_in_session", paused_rebuild)
+        monkeypatch.setattr(repository, "fold_identity_into_account", paused_rebuild)
         merge = asyncio.create_task(users.merge_guest_into_account(guest.id, account.id))
         await merge_holds_the_rows.wait()
         save = asyncio.create_task(
@@ -525,5 +525,136 @@ async def test_an_account_with_more_games_than_a_statement_can_bind_still_rebuil
         assert rows == 23, "one row per UTC day of a minute-apart history"
         stats = await users.get_stats(player.id)
         assert stats.games_played == 33_000 and stats.turns_played == 33_000
+    finally:
+        await engine.dispose()
+
+
+async def _daily_rows(factory, user_id: str) -> dict:
+    """Every projection row of one identity, by day."""
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(UserStatsDaily).where(UserStatsDaily.user_id == UUID(user_id))
+            )
+        ).all()
+    return {
+        row.stat_date: (
+            row.games_played,
+            row.games_won,
+            row.total_score,
+            row.turns_played,
+            row.drawings_made,
+        )
+        for row in rows
+    }
+
+
+async def test_a_merge_replaces_only_the_days_the_guest_has_facts_on():
+    """The work a sign-in pays for is the guest's history, not the account's.
+
+    A merge cannot change the account's total for a day the guest was not
+    playing on, so those days are not read and not rewritten (#709). The
+    account's row on an untouched day is left deliberately wrong here: a
+    rebuild that reached it would repair it, and the point is that it does
+    not reach it. Drift is the full rebuild's job, not a login's.
+    """
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    history = SqlAlchemyGameHistoryRepository(factory)
+    try:
+        holder = await users.create_anonymous("Account")
+        account = await users.claim_account(holder.id, "account", "hash")
+        guest = await users.create_anonymous("Guest")
+        other = await users.create_anonymous("Other")
+        long_ago = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        shared_day = datetime(2026, 8, 20, 12, tzinfo=timezone.utc)
+        guest_only_day = datetime(2026, 8, 21, 12, tzinfo=timezone.utc)
+        await _save_game(history, finished_at=long_ago, first=account.id, second=other.id, first_wins=True)
+        await _save_game(history, finished_at=shared_day, first=account.id, second=other.id, first_wins=True)
+        await _save_game(history, finished_at=shared_day + timedelta(hours=2), first=guest.id, second=other.id, first_wins=False)
+        await _save_game(history, finished_at=guest_only_day, first=guest.id, second=other.id, first_wins=True)
+
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(UserStatsDaily)
+                    .where(
+                        UserStatsDaily.user_id == UUID(account.id),
+                        UserStatsDaily.stat_date == long_ago.date(),
+                    )
+                    .values(games_played=99, total_score=9_999)
+                )
+
+        await users.merge_guest_into_account(guest.id, account.id)
+
+        merged = await _daily_rows(factory, account.id)
+        assert merged[long_ago.date()][0] == 99, "an untouched day is not read or rewritten"
+        assert merged[shared_day.date()] == (2, 1, 150, 4, 2)
+        assert merged[guest_only_day.date()] == (1, 1, 100, 2, 1)
+        assert await _daily_rows(factory, guest.id) == {}
+
+        # The days it did replace hold exactly what a full rebuild computes;
+        # the day it left alone is the only one that changes.
+        await rebuild_user_stats_projection(factory)
+        repaired = await _daily_rows(factory, account.id)
+        assert repaired[shared_day.date()] == merged[shared_day.date()]
+        assert repaired[guest_only_day.date()] == merged[guest_only_day.date()]
+        assert repaired[long_ago.date()] == (1, 1, 100, 2, 1)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_merge_takes_a_guest_row_whose_facts_are_gone_with_it():
+    """A guest's days come from its rows as well as its games.
+
+    A projection row outliving the facts behind it - a game erased under
+    retention, a hand-run repair - would otherwise be left keyed by an
+    identity nothing resolves to any more, counted by nobody and cleared by
+    nothing short of a full rebuild.
+    """
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    try:
+        holder = await users.create_anonymous("Account")
+        account = await users.claim_account(holder.id, "account", "hash")
+        guest = await users.create_anonymous("Guest")
+        orphaned = datetime(2026, 8, 20, tzinfo=timezone.utc).date()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    UserStatsDaily(
+                        user_id=UUID(guest.id),
+                        stat_date=orphaned,
+                        games_played=3,
+                        games_won=1,
+                        total_score=120,
+                    )
+                )
+
+        await users.merge_guest_into_account(guest.id, account.id)
+
+        assert await _daily_rows(factory, guest.id) == {}
+        assert await _daily_rows(factory, account.id) == {}
+    finally:
+        await engine.dispose()
+
+
+async def test_a_merge_of_a_guest_that_never_played_leaves_the_account_alone():
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    history = SqlAlchemyGameHistoryRepository(factory)
+    try:
+        holder = await users.create_anonymous("Account")
+        account = await users.claim_account(holder.id, "account", "hash")
+        guest = await users.create_anonymous("Guest")
+        other = await users.create_anonymous("Other")
+        day = datetime(2026, 8, 20, 12, tzinfo=timezone.utc)
+        await _save_game(history, finished_at=day, first=account.id, second=other.id, first_wins=True)
+        before = await _daily_rows(factory, account.id)
+
+        await users.merge_guest_into_account(guest.id, account.id)
+
+        assert await _daily_rows(factory, account.id) == before
+        assert (await users.get_by_id(guest.id)).id == account.id
     finally:
         await engine.dispose()

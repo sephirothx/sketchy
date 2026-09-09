@@ -1678,7 +1678,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/sweeps.py`](../backend/app/services/sweeps.py) | Bounded, batched deletion for every retention sweep. |
 | [`app/services/shutdown.py`](../backend/app/services/shutdown.py) | Bounded planned-shutdown drain for process-owned live rooms. |
 | [`app/services/timers.py`](../backend/app/services/timers.py) | Own asyncio task lifecycle for game phases, hints, and disconnects. |
-| [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental and full rebuild paths for bounded-cost profile statistics. |
+| [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental, merge-scoped and full rebuild paths for bounded-cost profile statistics. |
 | [`app/state.py`](../backend/app/state.py) | Process-wide singletons shared between the REST routes and Socket.IO handlers. |
 | [`app/wire_contract.py`](../backend/app/wire_contract.py) | The socket contract as one document, so a change to it is a diff, not a guess. |
 | [`app/ws_transport.py`](../backend/app/ws_transport.py) | The WebSocket transport, chosen on purpose: wsproto, with a deflate window this module sets rather than one the client happens to ask for. |
