@@ -22,12 +22,14 @@ from app.handlers.refusals import ErrorCode, refuse
 from app.protocol import PROTOCOL_VERSION
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
+from app.services.afk import INACTIVITY_EXEMPT_COMMANDS, ActivityLedger
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import payload_bytes, telemetry
 from app.services.timers import TimerManager
 
 if TYPE_CHECKING:
     from app.auth.blocks import BlockService
+    from app.services.afk import AfkWatch
     from app.services.game_flow import GameFlowService
     from app.services.game_handoff import FinishedGameHandoffWorker
     from app.services.friend_invites import FriendInviteBook
@@ -134,6 +136,14 @@ class HandlerContext:
     # in (#559), so that nothing is ever resolved against a point the server
     # never recorded.
     dropped_draw_frames: set[str] = field(default_factory=set, init=False, repr=False)
+    # When each socket last did something a person did, and the sweep that
+    # asks the quiet ones whether anybody is there (#677). The ledger is
+    # written below, at the one door every command passes through; the watch
+    # reads it on its own tick.
+    activity: ActivityLedger = field(
+        default_factory=ActivityLedger, init=False, repr=False
+    )
+    afk_watch: AfkWatch = field(init=False, repr=False)
 
     def on(self, command: str, handler) -> None:
         """Register a client command, with the budget it answers to.
@@ -177,6 +187,13 @@ class HandlerContext:
                     expected=PROTOCOL_VERSION,
                     received=stale[0],
                 )
+            # A person did something. Stamped before the budget check on
+            # purpose: a command refused for arriving too fast still came from
+            # somebody at the keyboard, and throttling them is not a reason to
+            # start calling them absent. Exempt commands are the ones the
+            # client sends on its own (#677).
+            if command not in INACTIVITY_EXEMPT_COMMANDS:
+                self.activity.note(sid)
             # Before parsing, before authorization, before any mutation: a
             # refused command must cost nothing but the check itself.
             budget = self.command_budgets.for_command(command)

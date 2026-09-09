@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.domain_values import ReportReason, ReportStatus, UserRole
 from app.handlers.connection import connect as socket_connect
+from app.services.afk import ActivityLedger
 from app.services.presence import PresenceRegistry
 from app.services.room_quotas import RoomCapacityService
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
@@ -371,6 +372,7 @@ async def test_ban_revokes_sessions_and_rejects_http_login_and_socket(env):
         session_factory=factory,
         room_capacity=RoomCapacityService(),
         presence=PresenceRegistry(),
+        activity=ActivityLedger(),
     )
     with pytest.raises(ConnectionRefusedError, match="suspended"):
         await socket_connect(

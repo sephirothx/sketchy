@@ -40,6 +40,17 @@ class FlowTiming:
     # The pause between a passed vote and the restart, so the room can read
     # what happened before the board clears.
     restart_delay_seconds: float = 3
+    # How long a seat may send nothing a person sent before the room asks
+    # whether anybody is still there. Five minutes is not a guess about
+    # attention span: a client that has seen a pointer or a key inside its own
+    # window answers the check without troubling the player (`client_config`),
+    # so this number is only ever reached by somebody who has touched nothing
+    # at all. It is long enough that reaching it means something.
+    afk_inactivity_seconds: float = 300
+    # How long that question stays open. Short, because the answer is
+    # automatic for anybody present: the only person who spends it is one who
+    # is not there to answer.
+    afk_check_seconds: float = 25
 
 
 # One process, one set of phase lengths. Handlers, the flow service and the

@@ -36,6 +36,16 @@ keyboard that takes half the screen, and one thumb.
   color mode permits white.
 - Spectator mode — join any room as a spectator (even when full), with optional room creation setting to reveal the prompt, and private spectator chat restricted to the drawer, spectators, and correct guessers.
 - AFK mode — toggle AFK status anytime so you are skipped for drawing turns and not waited for during rounds.
+- AFK check — a seat that has sent nothing a person sent for five minutes is asked
+  whether anybody is still there, and marked AFK if it does not answer, so a room
+  stops spending a turn a rotation on somebody who left and stops holding every turn
+  open to its full length waiting for them. Almost nobody sees it: your browser
+  answers for you the moment it has seen a mouse or a key, so watching a drawing
+  without typing keeps your seat. Only a page nobody has touched at all raises the
+  countdown, and anything you do dismisses it. Hiding the tab is neither a reason to
+  be marked nor a way to avoid it — the only clock is what you have done. If the
+  host is the one who went, the room passes to somebody who is still playing, since
+  only the host can start a game.
 - Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
@@ -616,6 +626,8 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MIGRATION_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `60` | The same three for `python -m app.db.migrate` (`sketchy-migration`); the lock budget covers the deploy advisory lock |
 | `DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `120` | The same three for every operator command (`sketchy-maintenance`): retention, projection rebuilds, drawing verification, exports, mail, metrics, the admin bootstrap and the operator reset |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
+| `AFK_INACTIVITY_SECONDS` | `300` | How long a seat may send nothing a person sent before the room asks whether anybody is there. Only somebody who has touched nothing at all reaches it: a browser that has seen input answers the check by itself |
+| `AFK_CHECK_SECONDS` | `25` | How long that question stays open before the seat is marked AFK |
 | `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent — which production refuses to start without, since that would put live reset links in the log and send nothing (#466) |
 | `SMTP_PORT` | `587` | Relay port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
@@ -1481,6 +1493,7 @@ backend/
       drawing_reactions.py Who may react to which drawing, and the room broadcast
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
+      afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
     presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model
@@ -1961,7 +1974,7 @@ drawing rather than a limit, and is the fixture to set a latency budget
 against. `fill-bounded` and `realistic` are replayed whole rather than
 sampled, so neither of their numbers is a projection.
 
-`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. `tests/test_wire_contract.py` pins the names the two sides share - the events each direction sends, the camelCase keys the server puts in its payloads, and the aliases its command parsers accept - by reading both trees as text. It also rejects wire names built from vocabulary the glossary retired, because agreement alone cannot tell a current name from an old one both sides kept, and pins the exact retired phrases that previously drifted back into player-facing copy and this README. Nothing else checks those: a payload key is a plain string here and a plain property there, so renaming one side alone compiles, lints, and passes every other test while the feature silently stops working. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox.
+`game.py` and `rooms.py` are pure logic (no sockets), covered by direct unit tests. Top-level Socket.IO handlers are grouped by domain under `app/handlers` and covered by focused asyncio integration suites in `backend/tests/handlers`. Cross-domain turn, round, timer, and player-removal workflows live in `services/game_flow.py`, while pure outgoing payload construction lives in `presenters.py`. Client JSON commands are validated as strict object payloads in `handlers/payloads.py`; values are not coerced, booleans are never accepted as integers, and bounded validation completes before authorization or mutation. The compact binary drawing and fixed-array undo commands have dedicated parsers for their documented wire formats. `tests/test_wire_contract.py` pins the names the two sides share - the events each direction sends, the camelCase keys the server puts in its payloads, and the aliases its command parsers accept - by reading both trees as text. It also rejects wire names built from vocabulary the glossary retired, because agreement alone cannot tell a current name from an old one both sides kept, and pins the exact retired phrases that previously drifted back into player-facing copy and this README. Nothing else checks those: a payload key is a plain string here and a plain property there, so renaming one side alone compiles, lints, and passes every other test while the feature silently stops working. Playwright E2E tests in `backend/tests/e2e` cover real-time multi-browser room sessions, settings persistence, AFK status, and disconnection sync across Chromium and Firefox. The **AFK check** is deliberately not among them, for the reason `tests/e2e/test_admin_tuning.py` gives about the maintenance pause: its windows are process-wide tunables and the suite shares one server, so shortening them to make the check fire would mark the seats of every test running beside it, and R-CONF-08 refuses a tunable reached for to make a test faster. Both halves are covered where they can be isolated instead - the rule, the ledger, the sweep and the host handover in `tests/test_afk.py` and `tests/handlers/test_afk_check.py`, and the client's answer, its countdown and its bounds in `frontend/tests/afkCheck.test.mjs`.
 
 ### Production build
 
@@ -2025,6 +2038,15 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    stay open on the drawing, then the next player's turn begins.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings.
+
+At any point, a seat that has sent nothing a person sent for five minutes is asked
+whether anybody is still there, and marked AFK 25 seconds later if it does not
+answer — which takes it out of the rotation and stops the room waiting on it.
+Your browser answers on your behalf as soon as it has seen a mouse or a key, so
+following a drawing without typing keeps your seat and you never see the
+question; only a page nobody has touched raises the countdown. If the seat that
+goes quiet is the host's, the room passes to somebody still playing, because
+otherwise nobody could start the next game.
 
 Room codes are random six-character invite capabilities reserved in the
 database before they are shown to a player. The reservation primary key makes
@@ -2254,6 +2276,11 @@ A seated client checks with the server every five seconds that it still holds th
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
   the rotation.
 - If everyone disconnects, the room is cleaned up.
+- The AFK check runs off what a seat has *done*, never off whether its tab is visible.
+  Hiding a tab is not a reason to be marked and not a way to avoid it; a hidden tab is
+  marked in the end only because it cannot answer the question. A seat's activity and
+  its open check belong to one connection, so reconnecting starts a fresh clock —
+  reconnecting is itself something a person did.
 - An action that expects an answer - creating a room, joining, starting, voting to restart -
   is never handed to a socket that is not connected. It waits for the connection and is sent
   once, or it times out having been sent at all, so a request reported as failed cannot arrive

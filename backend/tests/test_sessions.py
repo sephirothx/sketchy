@@ -9,6 +9,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
+from app.services.afk import ActivityLedger
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.services.room_quotas import RoomCapacityService
 from app.auth.sessions import (
@@ -140,6 +141,7 @@ async def test_socket_handshake_uses_the_same_revocation_record(database):
         room_capacity=RoomCapacityService(),
         presence=PresenceRegistry(),
         presence_identities=PresenceIdentityCache(None),
+        activity=ActivityLedger(),
     )
     environ = {"HTTP_COOKIE": f"sketchy_session={issued.token}"}
 

@@ -411,3 +411,40 @@
   font-weight: 600;
   margin-top: 2px;
 }
+
+/* The AFK check (#677). Above the room's own overlays: it is the room asking
+   a question, and an answer is what keeps the seat. Nothing else on screen
+   can be reached while it is open, which is honest — the room really is about
+   to carry on without them. */
+.modal-overlay.afk-check-overlay {
+  z-index: 1300;
+}
+
+.afk-check-countdown {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 18px 0 20px;
+}
+
+.afk-check-seconds {
+  color: var(--ink);
+  font-size: 44px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.afk-check-unit {
+  color: var(--faint);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.afk-check-answer {
+  font-size: 15px;
+  font-weight: 800;
+  padding: 12px 28px;
+  width: 100%;
+}
