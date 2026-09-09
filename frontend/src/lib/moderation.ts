@@ -198,6 +198,41 @@ export interface ModerationIncident {
   priorDecision: PriorDecision | null;
 }
 
+/** The ledger cap a resolution note has to fit inside. */
+export const MAX_RESOLUTION_NOTE = 2000;
+
+/** The note a "decide it the same way again" carries.
+
+Whoever reads this case next gets what the moderator was looking at when they
+pressed the button, rather than a bare "dismissed" that sends them hunting for
+the decision it was deferring to. Composed rather than typed, because the whole
+point of the shortcut is that there is nothing left to say; the earlier note is
+quoted, because it is somebody else's words.
+
+The outcome's label and the formatted time are passed in rather than derived:
+how a decision is named and how a moment is written are the page's business,
+and both belong to the reader's own settings. */
+export function composeRepeatNote(
+  prior: PriorDecision,
+  outcomeLabel: string,
+  when: string | null,
+): string {
+  const head =
+    `Already ${outcomeLabel.toLowerCase()}` +
+    (when ? ` on ${when}` : "") +
+    (prior.decidedBy ? ` by ${prior.decidedBy}` : "") +
+    (prior.priorDecisions > 1 ? `, and ${prior.priorDecisions} times in all` : "") +
+    ".";
+  if (!prior.note) return head;
+  // The quote is what gives, so the head - which says what was decided and by
+  // whom - always survives the cap intact.
+  const room = MAX_RESOLUTION_NOTE - head.length - " Their note: “”".length;
+  if (room <= 1) return head;
+  const quoted =
+    prior.note.length <= room ? prior.note : `${prior.note.slice(0, room - 1)}…`;
+  return `${head} Their note: “${quoted}”`;
+}
+
 export interface UserBan {
   id: string;
   userId: string | null;

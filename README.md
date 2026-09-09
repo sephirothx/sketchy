@@ -1020,7 +1020,12 @@ which is required of every decision precisely because it is written for whoever
 reads the case next. It is keyed on the incident and not the account - the
 standing beside every case already says how often this player has come up, and
 the thing worth saying here is narrower: *this, in this room, was already
-settled*.
+settled*. The ending a repeat usually has is offered from that notice - one
+press dismisses it, carrying the decision above as its note, so nobody retypes
+what is on the screen in front of them and the ledger gets more than a bare
+word. Only dismissal is offered that way: it restricts nobody, which is what
+makes it safe a press from a notice, and a warning or suspension is not
+something to repeat by shortcut.
 
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a

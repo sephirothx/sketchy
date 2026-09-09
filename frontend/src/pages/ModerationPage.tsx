@@ -23,6 +23,7 @@ import {
   type ContentIncident,
   type IncidentEvidence,
   type PlayerReportDrawing,
+  composeRepeatNote,
   type IncidentPicture,
   type ModerationIncident,
   type PriorDecision,
@@ -289,10 +290,15 @@ function PriorDecisionBanner({
   prior,
   repeat,
   dateTime,
+  onRepeat,
+  busy,
 }: {
   prior: PriorDecision | null;
   repeat: string;
   dateTime: (date: Date) => string;
+  /** Dismiss this incident on the strength of the one above it. */
+  onRepeat: (note: string) => void;
+  busy: boolean;
 }) {
   if (!prior) return null;
   const again = prior.priorDecisions > 1;
@@ -312,6 +318,33 @@ function PriorDecisionBanner({
         </span>
       </p>
       {prior.note && <p className="mod-prior-note">“{prior.note}”</p>}
+      {/* The common ending for a repeat: nothing new happened, and the case
+          above already says what was made of it. Only a dismissal is offered
+          from here - it restricts nobody, so it is the one outcome that can
+          safely be one press away from a moderator who has read this. A
+          warning or a suspension is not repeated by shortcut. */}
+      <div className="mod-prior-actions">
+        <button
+          type="button"
+          className="btn btn-secondary btn-compact"
+          disabled={busy}
+          data-testid="mod-prior-dismiss"
+          onClick={() =>
+            onRepeat(
+              composeRepeatNote(
+                prior,
+                OUTCOMES[prior.outcome]?.label ?? humanize(prior.outcome),
+                prior.decidedAt ? formatWhen(prior.decidedAt, dateTime) : null,
+              ),
+            )
+          }
+        >
+          Dismiss as already decided
+        </button>
+        <span className="mod-prior-hint">
+          Closes this one with the decision above as its note.
+        </span>
+      </div>
     </aside>
   );
 }
@@ -533,9 +566,17 @@ export function ModerationPage() {
     return <NotFoundPage />;
   }
 
-  async function act(id: string, run: () => Promise<unknown>, done: string) {
+  async function act(
+    id: string,
+    run: () => Promise<unknown>,
+    done: string,
+    // The note `run` will send, when the caller composed one rather than
+    // taking it from the box - the required-note rule is about what reaches
+    // the ledger, not about which field it was typed into.
+    composed?: string,
+  ) {
     if (busy) return;
-    if (!note[id]?.trim()) {
+    if (!(composed ?? note[id] ?? "").trim()) {
       setError("A note is required, so the decision is not anonymous.");
       return;
     }
@@ -759,6 +800,20 @@ export function ModerationPage() {
                 prior={playerCase.priorDecision}
                 repeat={SCOPES[playerCase.scope].repeat}
                 dateTime={dateTime}
+                busy={busy === playerCase.id}
+                onRepeat={(composed) =>
+                  act(
+                    playerCase.id,
+                    () =>
+                      reviewModerationReport(
+                        playerCase.id,
+                        "dismissed",
+                        composed,
+                      ),
+                    "Dismissed, as already decided.",
+                    composed,
+                  )
+                }
               />
 
               <div className="mod-case-columns">

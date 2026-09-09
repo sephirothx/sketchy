@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   canCastModerationVote,
+  composeRepeatNote,
   eligibleModerationVotes,
+  MAX_RESOLUTION_NOTE,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
 } from "../src/lib/moderation.ts";
@@ -72,4 +74,52 @@ test("the drawing is not offered while a prompt is being chosen or the game is o
   assert.equal(canAttachDrawing("choosing_prompt", "drawer", "drawer"), false);
   assert.equal(canAttachDrawing("game_end", "drawer", "drawer"), false);
   assert.equal(canAttachDrawing("idle", "drawer", "drawer"), false);
+});
+
+const priorDismissal = {
+  outcome: "dismissed",
+  decidedAt: "2026-09-09T11:53:00Z",
+  decidedBy: "Sephiroth",
+  note: "Heated, but within bounds.",
+  priorDecisions: 1,
+};
+
+test("a repeat's note carries the decision it defers to", () => {
+  const composed = composeRepeatNote(priorDismissal, "Dismissed", "Sep 9, 2026, 11:53");
+  assert.equal(
+    composed,
+    "Already dismissed on Sep 9, 2026, 11:53 by Sephiroth. " +
+      "Their note: “Heated, but within bounds.”",
+  );
+});
+
+test("a repeat's note says how many times, once there has been more than one", () => {
+  const composed = composeRepeatNote(
+    { ...priorDismissal, priorDecisions: 3 },
+    "Dismissed",
+    "Sep 9, 2026, 11:53",
+  );
+  assert.match(composed, /and 3 times in all\./);
+});
+
+test("a repeat's note stands without a previous note, a time, or a named reviewer", () => {
+  assert.equal(
+    composeRepeatNote(
+      { outcome: "warned", decidedAt: null, decidedBy: null, note: null, priorDecisions: 1 },
+      "Warned",
+      null,
+    ),
+    "Already warned.",
+  );
+});
+
+test("an overlong previous note is cut, and what was decided always survives", () => {
+  const composed = composeRepeatNote(
+    { ...priorDismissal, note: "x".repeat(MAX_RESOLUTION_NOTE * 2) },
+    "Dismissed",
+    "Sep 9, 2026, 11:53",
+  );
+  assert.ok(composed.length <= MAX_RESOLUTION_NOTE);
+  assert.ok(composed.startsWith("Already dismissed on Sep 9, 2026, 11:53 by Sephiroth."));
+  assert.ok(composed.endsWith("…”"));
 });

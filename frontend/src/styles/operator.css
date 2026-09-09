@@ -1654,3 +1654,19 @@
   font-size: 13px;
   margin: 0;
 }
+
+/* The shortcut out of a repeat. Secondary rather than primary: it is the
+   likely ending, not the assumed one, and a moderator who has read the case
+   above may still decide it differently. */
+.mod-prior-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 2px;
+}
+
+.mod-prior-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
