@@ -204,7 +204,7 @@ class AfkWatch:
         game_flow,
         *,
         timing: FlowTiming | None = None,
-        interval_seconds: float = DEFAULT_SWEEP_INTERVAL_SECONDS,
+        interval_seconds: float | None = None,
         clock=time.monotonic,
     ) -> None:
         self._sio = sio
@@ -212,9 +212,24 @@ class AfkWatch:
         self._activity = activity
         self._game_flow = game_flow
         self._timing = timing if timing is not None else default_timing
-        self.interval_seconds = interval_seconds
+        # An override for tests that want a fixed cadence. Left `None` in the
+        # application, so the interval is *asked for* on every tick rather
+        # than copied once - which is the whole reason `flow_timing.py` holds
+        # these on an object (#446). Copying it here would have been the same
+        # mistake in a new place, and a quiet one: handlers are registered
+        # before the stored tunables are applied, so a deployment that
+        # shortened the check window would keep sweeping at the compiled
+        # interval and leave the check open past it.
+        self._interval_override = interval_seconds
         self._clock = clock
         self._checks: dict[str, float] = {}
+
+    @property
+    def interval_seconds(self) -> float:
+        """How long until the next pass, at the windows in force right now."""
+        if self._interval_override is not None:
+            return self._interval_override
+        return sweep_interval_from(self._timing)
 
     @property
     def open_checks(self) -> int:

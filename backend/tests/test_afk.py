@@ -75,6 +75,22 @@ def test_the_sweep_never_ticks_coarser_than_the_check_it_measures():
     assert sweep_interval_from(FlowTiming(afk_check_seconds=0.2)) == 0.1
 
 
+def test_the_sweep_asks_for_its_interval_rather_than_copying_it():
+    """A tunable copied at construction is a tunable that cannot be tuned.
+
+    Handlers are registered before the stored settings are applied
+    (`main.py`), so a watch that read the interval once would sweep at the
+    compiled cadence for the life of the process — and a deployment that
+    shortened the check window would find checks staying open past it.
+    """
+    timing = FlowTiming(afk_check_seconds=25)
+    watch = AfkWatch(AsyncMock(), RoomManager(), ActivityLedger(), AsyncMock(), timing=timing)
+    assert watch.interval_seconds == 5.0
+
+    timing.afk_check_seconds = 2  # what the admin panel does at runtime
+    assert watch.interval_seconds == 1.0, "asked for, not copied"
+
+
 # --------------------------------------------------------------------------
 # The ledger
 # --------------------------------------------------------------------------

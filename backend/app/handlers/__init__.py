@@ -24,9 +24,8 @@ from app.repositories.interfaces import (
     UserRepository,
     PromptListRepository,
 )
-from app.flow_timing import timing as flow_timing
 from app.rooms import RoomManager
-from app.services.afk import AfkWatch, sweep_interval_from
+from app.services.afk import AfkWatch
 from app.services.game_flow import GameFlowService
 from app.services.game_handoff import FinishedGameHandoffWorker
 from app.services.friend_invites import FriendInviteBook
@@ -117,13 +116,7 @@ def register_all_handlers(
     # Reads the ledger the command door writes, and drives the room through
     # `game_flow` when a check goes unanswered. Built here rather than in the
     # context's defaults because it needs both of those (#677).
-    ctx.afk_watch = AfkWatch(
-        sio,
-        room_manager,
-        ctx.activity,
-        ctx.game_flow,
-        interval_seconds=sweep_interval_from(flow_timing),
-    )
+    ctx.afk_watch = AfkWatch(sio, room_manager, ctx.activity, ctx.game_flow)
     ctx.friend_invites = FriendInviteBook()
     ctx.lobby_chat = LobbyChatLog()
 
