@@ -132,9 +132,28 @@ def render(template: str, payload: Mapping[str, object], base_url: str) -> tuple
         )
     if template == EmailTemplate.ACCOUNT_BANNED.value:
         reason = payload.get("reason") or "a breach of the rules"
+        # The one thing a suspended account most needs, and the only message
+        # that reaches it once it cannot sign in: whether this ends. Without
+        # it, "suspended for spam" reads as permanent when it is usually a day.
+        expires_at = payload.get("expiresAt")
+        when = (
+            f"It lifts on {_readable_date(expires_at)}."
+            if expires_at
+            else "This suspension does not expire on its own."
+        )
+        category = payload.get("category")
+        about = (
+            f" It was recorded as {str(category).replace('_', ' ')}."
+            if category
+            else ""
+        )
+        # No evidence in the mail. Their own words stay behind the sign-in,
+        # where the notice shows them, rather than in an inbox we do not
+        # control and an outbox row that keeps them for thirty days.
         return (
             "Your Sketchy account has been suspended",
-            f"Hi {name},\n\nYour account has been suspended for {reason}.\n",
+            f"Hi {name},\n\nYour account has been suspended for {reason}.{about}\n"
+            f"{when}\n\nSigning in will show you what it was about.\n",
         )
     if template == EmailTemplate.CONTENT_HIDDEN.value:
         what = payload.get("what") or "some content you shared"
@@ -415,6 +434,15 @@ def _without_recipient(text: str, address: str) -> str:
         mask = _masked_recipient(address)
         text = re.sub(re.escape(address), lambda _: mask, text, flags=re.IGNORECASE)
     return redact(text)
+
+
+def _readable_date(value: object) -> str:
+    """An ISO timestamp as a date somebody can read, or as itself when it is
+    not one - a mail that renders the raw string beats one that fails."""
+    try:
+        return datetime.fromisoformat(str(value)).strftime("%d %b %Y")
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _scrubbed(payload: Mapping[str, object]) -> dict:

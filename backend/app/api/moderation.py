@@ -196,6 +196,8 @@ class BanBody(BaseModel):
 
     user_id: UUID = Field(alias="userId")
     reason: str = Field(min_length=1, max_length=255)
+    # Optional: a decision is never blocked on it (R-MOD-19).
+    category: ReportReason | None = Field(default=None)
     expires_at: datetime | None = Field(default=None, alias="expiresAt")
     # Optional: a suspension can be issued directly. When it comes from a
     # report, recording which one is what lets the suspended player be shown
@@ -882,6 +884,8 @@ class WarningBody(BaseModel):
 
     user_id: UUID = Field(alias="userId")
     reason: str = Field(min_length=1, max_length=255)
+    # Optional: a decision is never blocked on it (R-MOD-19).
+    category: ReportReason | None = Field(default=None)
     # The report this warning decides. Recording it is what lets the warned
     # player be shown the messages the complaint was about.
     report_id: UUID | None = Field(default=None, alias="reportId")
@@ -2088,6 +2092,7 @@ def create_moderation_router(
                     user_id=target.id,
                     banned_by_user_id=reviewer.id,
                     reason=body.reason,
+                    category=body.category.value if body.category else None,
                     expires_at=body.expires_at,
                     created_at=now,
                     source_report_id=source_report.id if source_report else None,
@@ -2104,6 +2109,17 @@ def create_moderation_router(
                         payload={
                             "displayName": target.display_name,
                             "reason": body.reason,
+                            "category": body.category.value if body.category else None,
+                            # The one thing a suspended account most needs,
+                            # and the only message that reaches it once it
+                            # cannot sign in. No evidence: their own words
+                            # stay behind the sign-in rather than sitting in
+                            # an inbox (R-MOD-19).
+                            "expiresAt": (
+                                body.expires_at.isoformat()
+                                if body.expires_at is not None
+                                else None
+                            ),
                         },
                         user_id=target.id,
                         now=now,
@@ -2280,6 +2296,7 @@ def create_moderation_router(
                     user_id=target.id,
                     issued_by_user_id=reviewer.id,
                     reason=body.reason,
+                    category=body.category.value if body.category else None,
                     source_report_id=source_report.id if source_report else None,
                     created_at=datetime.now(timezone.utc),
                 )
@@ -2305,6 +2322,7 @@ def create_moderation_router(
                     "id": str(warning.id),
                     "userId": str(target.id),
                     "reason": warning.reason,
+                    "category": warning.category,
                     "createdAt": warning.created_at.isoformat(),
                 }
         # After the commit, so a socket can never announce a warning a

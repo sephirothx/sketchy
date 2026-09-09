@@ -1516,6 +1516,12 @@ class UserBan(Base):
 
     __tablename__ = "user_bans"
     __table_args__ = (
+        CheckConstraint(
+            "category IS NULL OR category IN "
+            "('harassment', 'offensive_drawing', 'inappropriate_name',"
+            " 'cheating', 'spam', 'inappropriate_avatar')",
+            name="ck_user_bans_category",
+        ),
         _actor_index("ix_user_bans_revoked_by", "revoked_by_user_id"),
         # "Active" is one predicate everywhere: not revoked, and not past its
         # expiry. `is_active` used to record only the first half, so an
@@ -1558,6 +1564,13 @@ class UserBan(Base):
         index=True,
     )
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The moderator's own finding about what rule this was, when they chose
+    # to record one. Optional, so a decision is never blocked on it, which
+    # means every notice has to read correctly without it. Never the
+    # reporters' reason: that is their claim about the player, and showing it
+    # back would tell them how people they cannot see characterised them
+    # (R-MOD-12).
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # The report this suspension was decided from, when it came from one. It is
     # what lets the suspended player be shown the messages the complaint was
     # about, rather than a reason with nothing behind it. Nullable because a
@@ -1593,6 +1606,12 @@ class UserWarning(Base):
 
     __tablename__ = "user_warnings"
     __table_args__ = (
+        CheckConstraint(
+            "category IS NULL OR category IN "
+            "('harassment', 'offensive_drawing', 'inappropriate_name',"
+            " 'cheating', 'spam', 'inappropriate_avatar')",
+            name="ck_user_warnings_category",
+        ),
         _actor_index("ix_user_warnings_issued_by", "issued_by_user_id"),
         Index("ix_user_warnings_user_pending", "user_id", "acknowledged_at"),
     )
@@ -1611,6 +1630,13 @@ class UserWarning(Base):
         nullable=True,
     )
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The moderator's own finding about what rule this was, when they chose
+    # to record one. Optional, so a decision is never blocked on it, which
+    # means every notice has to read correctly without it. Never the
+    # reporters' reason: that is their claim about the player, and showing it
+    # back would tell them how people they cannot see characterised them
+    # (R-MOD-12).
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # The report this warning was decided from. It is what lets the warned
     # player be shown the messages the complaint was about; SET NULL because
     # the warning outlives the report if the report is ever removed.

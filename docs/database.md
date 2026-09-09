@@ -974,7 +974,7 @@ audit event naming the report; the ledger never records what the report said.
 
 ### `user_bans`
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
-`source_report_id` (FK → `player_reports`, `SET NULL`) · `expires_at` · `is_active` ·
+`source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `expires_at` · `is_active` ·
 `created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason`.
 
 **Active is one predicate everywhere** (#553): `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`, from `auth/bans.py` `active_ban_filter`. The `is_active` flag it replaced recorded only the first half, so an expired-but-unrevoked ban was active in one reader and not in another; such a ban now stays as history and counts as nothing. `ck_user_bans_revocation_identity` ties the revoking actor and reason to a revocation (the actor may still become NULL when that moderator's account is deleted). `ix_user_bans_user_expires` serves the account lookup and the foreign-key walk on deletion; `ix_user_bans_unrevoked_newest`, a partial `(created_at) WHERE revoked_at IS NULL`, serves the moderation queue's newest active bans (#554).
@@ -995,7 +995,12 @@ already decided refuses the ban - one complaint, one consequence.
 
 ### `user_warnings`
 `id` · `user_id` (`SET NULL`) · `issued_by_user_id` (`SET NULL`) · `reason` ·
-`source_report_id` (FK → `player_reports`, `SET NULL`) · `created_at` · `acknowledged_at`.
+`source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `created_at` · `acknowledged_at`.
+
+`category` is the moderator's own finding about what rule a decision was about,
+checked against the six report reasons and **nullable**: it is optional, so every
+notice has to read correctly without it (R-MOD-19). It is never the reporters'
+reason, which is their claim rather than a finding.
 
 **Flow.** The step between dismissing a report and suspending the account: nothing is
 restricted. A connected player is told immediately over the socket (`moderator_warning`);

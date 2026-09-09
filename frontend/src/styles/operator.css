@@ -1670,3 +1670,26 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+/* What a decision was recorded as, above the moderator's own sentence. An
+   eyebrow rather than a heading: it categorises what follows and should not
+   compete with it. */
+.notice-category {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* The category sits above the note and reads as part of the same block. */
+.mod-category select {
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  padding: 7px 9px;
+  width: 100%;
+}

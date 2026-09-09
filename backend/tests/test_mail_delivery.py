@@ -25,6 +25,7 @@ from app.auth.mail import (
     EmailTemplate,
     OutgoingMessage,
     deliver_pending,
+    render,
     OUTBOX_RETENTION,
     purge_expired_outbox_entries,
     message_id_for,
@@ -652,3 +653,47 @@ async def test_a_recipient_whose_domain_could_be_read_as_a_backreference(tmp_pat
         assert "player@" not in entry.last_error
     finally:
         await engine.dispose()
+
+
+def test_a_suspension_mail_says_what_it_was_and_when_it_lifts():
+    """The only message that reaches an account once it cannot sign in. It
+    carries no evidence: their own words stay behind the sign-in rather than
+    in an inbox we do not control and an outbox row that keeps them for
+    thirty days (R-MOD-19)."""
+    subject, body = render(
+        EmailTemplate.ACCOUNT_BANNED.value,
+        {
+            "displayName": "Ada",
+            "reason": "Repeated abuse in chat.",
+            "category": "harassment",
+            "expiresAt": "2026-09-16T12:00:00+00:00",
+        },
+        "https://example.test",
+    )
+    assert "suspended" in subject.lower()
+    assert "Repeated abuse in chat." in body
+    assert "harassment" in body
+    # The thing a suspended player most needs.
+    assert "16 Sep 2026" in body
+    assert "Signing in will show you what it was about." in body
+
+
+def test_a_suspension_mail_without_an_end_date_says_so():
+    _, body = render(
+        EmailTemplate.ACCOUNT_BANNED.value,
+        {"displayName": "Ada", "reason": "Enough.", "expiresAt": None},
+        "https://example.test",
+    )
+    assert "does not expire on its own" in body
+    # No category recorded, so none is claimed.
+    assert "recorded as" not in body.lower()
+
+
+def test_a_suspension_mail_survives_a_timestamp_it_cannot_read():
+    """A mail that renders the raw string beats one that raises on send."""
+    _, body = render(
+        EmailTemplate.ACCOUNT_BANNED.value,
+        {"displayName": "Ada", "reason": "Enough.", "expiresAt": "not a date"},
+        "https://example.test",
+    )
+    assert "not a date" in body

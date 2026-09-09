@@ -8,6 +8,7 @@ import {
   reportedDrawing,
   type PendingWarning,
 } from "../lib/moderation";
+import { asReportReason, humanizeCategory } from "../lib/moderation";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";
@@ -25,6 +26,7 @@ function warningFromPayload(payload: unknown): PendingWarning | null {
   return {
     id: warning.id,
     reason: warning.reason,
+    category: asReportReason(warning.category),
     createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
     messages: Array.isArray(warning.messages)
       ? warning.messages.filter(
@@ -113,10 +115,19 @@ export function WarningNotice() {
         <h3 className="modal-title" id="warning-title">
           A moderator warning
         </h3>
+        {warning.category && (
+          <p className="modal-body notice-category" data-testid="warning-category">
+            Recorded as {humanizeCategory(warning.category)}
+          </p>
+        )}
         <p className="modal-body suspension-reason">{warning.reason}</p>
         <p className="modal-body">
-          Nothing on your account is restricted. A report about your behaviour
-          was reviewed, and this is the outcome.
+          A report about your behaviour was reviewed, and this is the outcome.
+          {/* What a warning is *for* - the step between nothing and a
+              suspension - said in general terms. Naming a ladder would
+              promise one nobody is bound to and nothing enforces. */}{" "}
+          Nothing is restricted, but a further report may lead to your account
+          being suspended.
         </p>
         {warning.messages.length > 0 && (
           <>

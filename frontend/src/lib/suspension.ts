@@ -19,6 +19,8 @@ export type ReportedMessage = {
 
 export type Suspension = {
   reason: string | null;
+  /** The moderator's finding, when they recorded one. */
+  category: string | null;
   /** ISO instant, or null for a suspension with no end date. */
   expiresAt: string | null;
   /** The messages the report behind this was about - their own words, which
@@ -57,6 +59,7 @@ export function suspensionFromPayload(payload: unknown): Suspension | null {
   if (body.suspended !== true) return null;
   return {
     reason: typeof body.reason === "string" ? body.reason : null,
+    category: typeof body.category === "string" ? body.category : null,
     expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
     messages: reportedMessages(body.messages),
     drawings: reportedDrawings(body.drawings),
