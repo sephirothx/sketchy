@@ -40,17 +40,29 @@ export const TOOL_GROUP_OPTIONS: {
   { value: "shapes", label: "Shapes", description: "Rectangle, ellipse, and triangle." },
 ];
 
-/** Each pair is [light shade, dark shade] for the same color family. */
+/**
+ * Each pair is [light shade, dark shade] for the same color family.
+ *
+ * Descended from the MS Paint set, and deliberately still recognisable as it:
+ * a room full of people who have drawn before should find the colour they are
+ * reaching for where they expect it. Three swatches have since been chosen
+ * rather than inherited (#702) - the avocado green, because Paint's lime
+ * #b5e61d and its green #22b14c left the whole muted-green half of the range
+ * unreachable; and the water blue, which took the slot under pale sky from the
+ * steel #2e5090 that had nothing to do with the sky above it. #1234de replaced
+ * Paint's #3f48cc in the same pass so that the blue column reads as a blue
+ * rather than an indigo, now that the column beside it is cyan.
+ */
 export const COLOR_PAIRS: readonly (readonly [string, string])[] = [
   ["#ffffff", "#000000"],
   ["#c1c1c1", "#4c4c4c"],
   ["#ed1c24", "#7f0000"],
   ["#ff7f27", "#a0522d"],
   ["#fff200", "#c9a227"],
-  ["#b5e61d", "#2d5b1e"],
+  ["#94ad3a", "#2d5b1e"],
   ["#22b14c", "#1c6b5a"],
-  ["#7ac9e8", "#2e5090"],
-  ["#3f48cc", "#1b1b6e"],
+  ["#7ac9e8", "#0292b2"],
+  ["#1234de", "#1b1b6e"],
   ["#a349a4", "#5c2d91"],
   ["#ec6ea8", "#7b3f61"],
   ["#ffae85", "#a9714b"],
