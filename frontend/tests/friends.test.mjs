@@ -282,19 +282,29 @@ test("the badge counts only what is waiting for an answer", () => {
 
 // ------------------------------------------- a refusal against a failure
 
-test("only the guest refusal counts as an empty friend list", () => {
-  // The one failure that is an answer: no account, so no list.
-  assert.equal(isNoFriendListRefusal({ status: 403 }), true);
+test("only the refusal the server named counts as an empty friend list", () => {
+  // The one failure that is an answer: no account, so no list. Recognised by
+  // the name `AccountRequiredError` carries, which the server's own header
+  // put there.
+  assert.equal(
+    isNoFriendListRefusal({ name: "AccountRequiredError", status: 403 }),
+    true,
+  );
+});
+
+test("another 403 is not that refusal, whatever its status says", () => {
+  // A suspended account is refused with a 403 by the middleware, before the
+  // friends endpoint runs at all. Read as "no friends", it wipes a real
+  // account's lists off the screen - and the next good read then diffs
+  // against that empty list and announces everything on it as newly arrived.
+  assert.equal(isNoFriendListRefusal({ name: "ApiError", status: 403 }), false);
 });
 
 test("a fault is not an answer about who somebody is friends with", () => {
-  // Each of these would otherwise empty the lists and mark them loaded -
-  // which makes a profile offer "Add friend" for a request it should have
-  // shown, and makes the next good read announce it as newly arrived.
   for (const error of [
-    { status: 500 },
-    { status: 502 },
-    { status: 401 },
+    { name: "ApiError", status: 500 },
+    { name: "ApiError", status: 502 },
+    { name: "ApiError", status: 401 },
     new Error("network"),
     undefined,
     null,

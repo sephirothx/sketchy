@@ -63,24 +63,35 @@ Through `refresh` rather than reading the lists here, so this read is ordered
 and owned like every other one. It used to call `listFriends` directly, which
 meant a mutation begun before signing out could land its answer on the next
 account's lists, and could overwrite a newer refresh because nothing recorded
-it. `pending` is cleared only if this is still the same person acting, for the
-same reason. */
+it.
+
+The busy row is cleared only by the operation that set it. Anything that
+abandons an operation — a change of identity, a reset — clears the row itself
+and bumps the token, so an answer arriving afterwards neither clears somebody
+else's row nor leaves its own set for good. Leaving it set is the worse
+failure of the two: every later mutation returns at the `pending` guard, and
+friendships silently stop working until the page is reloaded. */
 async function afterMutating(
   get: () => FriendsStore,
   set: (partial: Partial<FriendsStore>) => void,
-  owner: string | null,
+  token: number,
 ) {
   try {
     await get().refresh();
   } finally {
-    if (get().ownerId === owner) set({ pending: null });
+    if (mutationToken === token) set({ pending: null });
   }
 }
 
-/** Run one mutation, then re-read — refusing if somebody else is mid-action.
+/** The mutation whose busy row is currently shown, if any.
 
-The owner is captured before the call so the refetch and the busy flag both
-belong to the identity that started it. */
+A token rather than the owner id, because an owner can change away and back —
+sign out, sign in again — and an operation from the first visit would then
+look current. It is bumped by anything that abandons an operation, so the only
+thing that can clear a busy row is the operation that set it. */
+let mutationToken = 0;
+
+/** Run one mutation, then re-read — refusing if somebody else is mid-action. */
 async function mutate(
   get: () => FriendsStore,
   set: (partial: Partial<FriendsStore>) => void,
@@ -88,7 +99,7 @@ async function mutate(
   call: (userId: string) => Promise<unknown>,
 ) {
   if (get().pending) return;
-  const owner = get().ownerId;
+  const token = ++mutationToken;
   set({ pending: userId });
   try {
     await call(userId);
@@ -96,7 +107,7 @@ async function mutate(
     // The refetch below is what corrects the row either way — including when
     // the server refused, which it does for reasons it will not name.
   }
-  await afterMutating(get, set, owner);
+  await afterMutating(get, set, token);
 }
 
 /** Replace the lists, and say what moved.
@@ -156,8 +167,11 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
     const owner = accountId === undefined ? get().ownerId : accountId;
     if (owner !== get().ownerId) {
       // A different person is reading. Their first answer is a baseline, not
-      // a change, so nothing of the previous identity's survives to diff it.
-      set({ ownerId: owner, lists: NO_FRIENDS, loaded: false });
+      // a change, so nothing of the previous identity's survives to diff it —
+      // including a half-finished action, whose busy row would otherwise
+      // block every mutation this account tried to make.
+      mutationToken += 1;
+      set({ ownerId: owner, lists: NO_FRIENDS, loaded: false, pending: null });
     }
     const seq = ++readSeq;
     // Superseded by an answer that was issued later and already landed, or
@@ -170,7 +184,6 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
       absorb(set, get, lists);
     } catch (error) {
       if (overtaken()) return;
-      appliedSeq = seq;
       // A guest is refused, and that refusal *is* their answer: they have no
       // friends list, and every control that would use one is hidden anyway.
       //
@@ -183,7 +196,13 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
       // false empty list and announces every existing request as new. So a
       // failure keeps the last good answer, and an unanswered first read
       // stays unanswered.
+      //
+      // Which is also why this claims the slot only when it has something to
+      // put in it. Marking a failure as applied would discard an earlier read
+      // that was about to succeed, and on a first load that leaves the lists
+      // unanswered for good even though a good answer arrived.
       if (isNoFriendListRefusal(error)) {
+        appliedSeq = seq;
         set({ lists: NO_FRIENDS, loaded: true });
       }
     }
@@ -196,9 +215,11 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
   // already at zero would hide the next change. Bumping `readSeq` is what
   // stops a read that is already in flight from landing afterwards.
   reset: () => {
-    // Everything in flight is now older than the reset, so none of it lands.
+    // Everything in flight is now older than the reset, so none of it lands,
+    // and no operation still owns the busy row.
     readSeq += 1;
     appliedSeq = readSeq;
+    mutationToken += 1;
     set({ lists: NO_FRIENDS, loaded: false, ownerId: null, pending: null });
   },
 }));

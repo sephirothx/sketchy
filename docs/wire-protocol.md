@@ -1640,7 +1640,7 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | --- | --- | --- |
 | `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers |
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
-| `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing}`. Refusals are in none of them |
+| `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing}`. Refusals are in none of them. A guest is refused **403 with `X-Sketchy-Account-Required`** — the header names the reason, because a status cannot: the middleware answers 403 for a suspended account before this route runs, and a client that reads any 403 as *this caller is a guest* shows an empty friends list for a real account. Same pattern as `X-Sketchy-Step-Up` |
 | `POST` | `/api/users/me/friends` | `{userId}`. **Answers the same whether it landed, hit a block, hit an earlier refusal, or named nobody** (R-FRIEND-04); 409 only for a ceiling the caller reached (`FRIEND_REQUEST_LIMIT`) |
 | `POST` | `/api/users/me/friends/{user_id}/accept` | Re-checks blocks: one placed since the request has to win. Answers `accepted`, `declined` or `unchanged` — the caller is answering a request on their own list, so unlike `POST /` there is no third party to be vague about |
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
