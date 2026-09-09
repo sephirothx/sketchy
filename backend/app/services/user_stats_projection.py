@@ -1,18 +1,19 @@
-"""Incremental and full rebuild paths for bounded-cost profile statistics."""
+"""Incremental, merge-scoped and full rebuild paths for bounded-cost profile statistics."""
 from __future__ import annotations
 
 import argparse
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 
 from app.domain_values import AccountState, GameOutcome
 from app.db.models import (
@@ -244,6 +245,39 @@ def _is_transient(error: BaseException) -> bool:
     return getattr(origin, "sqlstate", None) in _TRANSIENT_SQLSTATES
 
 
+# How many days one merge may rebuild by naming them. A guest carries the
+# handful of days its browser played on, so the predicate below is a short
+# list; a guest that played on more days than this is not the case the
+# scoping exists for, and rebuilding the account whole - what every merge did
+# before #709 - stays correct rather than sending an OR of a hundred ranges
+# no planner will thank us for.
+MERGE_REBUILD_DAY_LIMIT = 92
+
+
+def _finished_on(days: set[date], games=GameRecord):
+    """`games.finished_at` falls on one of these UTC days.
+
+    A half-open range per day rather than a cast to a date: the cast that
+    yields the *UTC* day differs by dialect - PostgreSQL's `::date` reads the
+    session's time zone, SQLite has no timestamp type to cast - while a
+    comparison against two aware datetimes means the same thing on both, and
+    stays a predicate over a stored column rather than an expression the
+    planner has no statistics for.
+    """
+    return or_(
+        *(
+            and_(
+                games.finished_at >= start,
+                games.finished_at < start + timedelta(days=1),
+            )
+            for start in (
+                datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+                for day in sorted(days)
+            )
+        )
+    )
+
+
 # Rows per fetch when a rebuild streams facts: the reads below are keyed by
 # a batch of accounts but an account may have played for years, and the
 # totals need one pass, not the rows.
@@ -274,8 +308,19 @@ async def _identity_sets(
     return sets
 
 
-async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> int:
+async def _rebuild_accounts(
+    session: AsyncSession,
+    account_ids: list[UUID],
+    *,
+    days: set[date] | None = None,
+) -> int:
     """Replace the rows of one bounded batch of canonical accounts, locked.
+
+    `days` narrows both the facts read and the rows replaced to those UTC
+    days, which is what a merge needs (`fold_identity_into_account`): every
+    other day's row already holds the same total it would be rewritten with.
+    Whole days, never a single identity's share of one, because a day's row
+    counts games rather than seats and a shared game must be counted once.
 
     The identities' `users` rows are locked `FOR UPDATE` in ascending id
     order first - the same order the finished-game write locks them in - so
@@ -304,6 +349,7 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
         .with_for_update()
     )
 
+    on_days = _finished_on(days) if days is not None else None
     totals: dict[tuple[UUID, date], _DailyTotals] = defaultdict(_DailyTotals)
     game_users: dict[UUID, set[UUID]] = defaultdict(set)
     participant_statement = (
@@ -318,6 +364,8 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
         .join(GameRecord, GameRecord.id == GameParticipant.game_id)
         .where(GameParticipant.user_id.in_(identity_ids))
     )
+    if on_days is not None:
+        participant_statement = participant_statement.where(on_days)
     async for source_id, game_id, rank, score, finished_at, outcome in _stream(
         session, participant_statement
     ):
@@ -339,11 +387,25 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
         batch_games = select(GameParticipant.game_id).where(
             GameParticipant.user_id.in_(identity_ids)
         )
+        if days is not None:
+            # The turn read below walks the games this subquery names, so a
+            # scoped rebuild narrows it here as well as on the outer
+            # statement: the list to walk is then the day's games rather
+            # than the account's. Its own alias of `game_records`, because
+            # the enclosing statement names that table too and a subquery
+            # sharing it is one SQLAlchemy may correlate to the outer row
+            # instead of joining here.
+            scoped = aliased(GameRecord)
+            batch_games = batch_games.join(
+                scoped, scoped.id == GameParticipant.game_id
+            ).where(_finished_on(days, scoped))
         turn_statement = (
             select(TurnRecord.game_id, TurnRecord.drawer_user_id, GameRecord.finished_at)
             .join(GameRecord, GameRecord.id == TurnRecord.game_id)
             .where(TurnRecord.game_id.in_(batch_games))
         )
+        if on_days is not None:
+            turn_statement = turn_statement.where(on_days)
         async for game_id, drawer_id, finished_at in _stream(session, turn_statement):
             day = _utc_date(finished_at)
             for canonical_id in game_users[game_id]:
@@ -366,6 +428,8 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
                 GameParticipant.user_id.in_(identity_ids),
             )
         )
+        if on_days is not None:
+            guess_statement = guess_statement.where(on_days)
         async for guesser_id, game_id, finished_at in _stream(session, guess_statement):
             canonical_guesser = canonical_of[guesser_id]
             if canonical_guesser in game_users[game_id]:
@@ -378,6 +442,8 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
             .join(GameRecord, GameRecord.id == TurnRecord.game_id)
             .where(TurnRecord.drawer_user_id.in_(identity_ids))
         )
+        if on_days is not None:
+            reaction_statement = reaction_statement.where(on_days)
         async for drawer_id, game_id, finished_at in _stream(
             session, reaction_statement
         ):
@@ -385,9 +451,13 @@ async def _rebuild_accounts(session: AsyncSession, account_ids: list[UUID]) -> i
             if canonical_drawer in game_users[game_id]:
                 totals[(canonical_drawer, _utc_date(finished_at))].reactions_received += 1
 
-    await session.execute(
-        delete(UserStatsDaily).where(UserStatsDaily.user_id.in_(identity_ids))
-    )
+    # Deleted by day as well when scoped, so a day whose facts are all gone
+    # loses its stale row: the rows written below are only the days that
+    # still have facts.
+    replaced = delete(UserStatsDaily).where(UserStatsDaily.user_id.in_(identity_ids))
+    if days is not None:
+        replaced = replaced.where(UserStatsDaily.stat_date.in_(sorted(days)))
+    await session.execute(replaced)
     session.add_all(
         UserStatsDaily(
             user_id=canonical_id,
@@ -417,6 +487,36 @@ async def _canonical_account(session: AsyncSession, user_id: UUID) -> UUID:
     return target or user_id
 
 
+async def _days_with_facts(session: AsyncSession, user_id: UUID) -> set[date]:
+    """Every UTC day one identity has a finished game or a projection row on.
+
+    The days come back as timestamps to be reduced here rather than as a
+    `GROUP BY` over a date expression, because that expression is the one
+    thing about a day that PostgreSQL and SQLite do not spell the same way,
+    and the rows are one identity's games - a guest's - not an account's.
+    """
+    days = {
+        _utc_date(finished_at)
+        async for (finished_at,) in _stream(
+            session,
+            select(GameRecord.finished_at)
+            .join(GameParticipant, GameParticipant.game_id == GameRecord.id)
+            .where(GameParticipant.user_id == user_id)
+            .distinct(),
+        )
+    }
+    days.update(
+        (
+            await session.scalars(
+                select(UserStatsDaily.stat_date).where(
+                    UserStatsDaily.user_id == user_id
+                )
+            )
+        ).all()
+    )
+    return days
+
+
 async def _account_batches(session: AsyncSession, batch_size: int):
     """Canonical accounts in ascending id order, `batch_size` at a time, by keyset."""
     last: UUID | None = None
@@ -444,9 +544,9 @@ async def rebuild_user_stats_in_session(
 ) -> int:
     """Replace one canonical account's rows, or every account's, in the caller's transaction.
 
-    A merge calls this for its target with the source and target rows
-    already locked, so the rebuild joins the merge's own transaction and the
-    merged identity's games are counted exactly once with it.
+    Every day of every identity that resolves to the account, which is what
+    an operator repairing drift asks for. A merge wants a narrower thing and
+    has `fold_identity_into_account` for it.
     """
     if user_id is not None:
         return await _rebuild_accounts(session, [await _canonical_account(session, user_id)])
@@ -454,6 +554,42 @@ async def rebuild_user_stats_in_session(
     async for batch in _account_batches(session, batch_size):
         rows += await _rebuild_accounts(session, batch)
     return rows
+
+
+async def fold_identity_into_account(
+    session: AsyncSession,
+    *,
+    source_user_id: UUID,
+    target_user_id: UUID,
+) -> int:
+    """Fold a merged identity's days into its account, in the caller's transaction.
+
+    Called by a guest merge with the source and target `users` rows already
+    locked, so the rebuild joins the merge's own transaction and the merged
+    identity's games are counted exactly once with it.
+
+    A merge cannot change a day the guest has nothing on: the account's row
+    for every other day already counts exactly the games it will count
+    afterwards. So only the guest's days are read and replaced, and the work
+    is bounded by the guest's history rather than by the account's. That
+    distinction is the whole point of doing it here - this runs inside the
+    sign-in request, on the web role's seconds rather than the maintenance
+    role's minutes (#709), and a rebuild of a long-lived account's entire
+    finished-game history does not belong on a player's login.
+
+    The guest's own rows are part of the scope: `stat_date` is taken from
+    them as well as from its games, so a projection row left on a day whose
+    facts are gone is replaced rather than orphaned under a merged id.
+    """
+    days = await _days_with_facts(session, source_user_id)
+    if not days:
+        return 0
+    account = await _canonical_account(session, target_user_id)
+    return await _rebuild_accounts(
+        session,
+        [account],
+        days=days if len(days) <= MERGE_REBUILD_DAY_LIMIT else None,
+    )
 
 
 async def rebuild_user_stats_projection(

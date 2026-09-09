@@ -79,8 +79,8 @@ from app.auth.erasure import (
 )
 from app.services.user_stats_projection import (
     adjust_reactions_received,
+    fold_identity_into_account,
     increment_user_stats_projection,
-    rebuild_user_stats_in_session,
 )
 from app.services.friends import friendship_key, other_of
 from app.repositories.interfaces import (
@@ -789,8 +789,13 @@ class SqlAlchemyUserRepository(UserRepository):
                         block.blocked_user_id = blocked_id
                 await _merge_friendships(session, source.id, target.id)
                 await session.flush()
-                await rebuild_user_stats_in_session(
-                    session, user_id=target.id
+                # Only the guest's own days: this runs inside a sign-in, on
+                # the web role's statement budget, and no other day's total
+                # can have changed (#709).
+                await fold_identity_into_account(
+                    session,
+                    source_user_id=source.id,
+                    target_user_id=target.id,
                 )
             return _to_user_data(target)
 
