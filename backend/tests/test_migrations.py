@@ -454,7 +454,10 @@ async def test_a_report_decided_before_incidents_keeps_its_decision(tmp_path):
     the ones written after it. So the decision-group rule cannot simply be
     added to a table holding reports decided before incidents existed: each
     one is backfilled as its own group, which is what it was, because every
-    decision before that migration covered exactly one report (#620)."""
+    decision before that migration covered exactly one report (#620).
+
+    The group is *minted*, not copied from the report: see the ordering test
+    below for why the two are not interchangeable."""
     engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'decided-before.db'}")
     try:
         await _migrate(engine, alembic_command.upgrade, "d0e1f2a3b4c5")
@@ -494,9 +497,72 @@ async def test_a_report_decided_before_incidents_keeps_its_decision(tmp_path):
         assert status == "dismissed"
         # It recorded no place, so it may be grouped by none.
         assert scope == "unscoped"
-        # Its own decision, named by its own id.
+        # A decision of its own, and not the report's own id - which names
+        # when it was filed rather than when it was decided.
         assert group is not None
-        assert uuid.UUID(str(group)) == report
+        assert uuid.UUID(str(group)) != report
+    finally:
+        await engine.dispose()
+
+
+async def test_reports_decided_before_incidents_keep_their_decision_order(tmp_path):
+    """The closed-case stream reads *newest decision first* from the group id,
+    which is time-ordered because it is minted when the decision is taken.
+    A report's own id is minted when the report is *filed*, so backfilling one
+    into the other would sort migrated cases by when they were complained
+    about - putting a case decided last week ahead of one decided today
+    whenever the older complaint was reviewed later (#620)."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'decided-order.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "d0e1f2a3b4c5")
+        account = uuid.uuid4()
+        # Filed first, decided last: the two orders disagree, which is the
+        # whole point. The ids are UUIDv7 minted in filing order, as the
+        # application mints them - with random ids the two orders would differ
+        # only by luck and this would prove nothing.
+        older_report, newer_report = uuid.uuid7(), uuid.uuid7()
+        assert older_report.hex < newer_report.hex
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, display_name, state,"
+                    " created_at, updated_at) VALUES (:id, 'ordered', 'Ordered',"
+                    " 'anonymous', datetime('now'), datetime('now'))"
+                ),
+                {"id": account.hex},
+            )
+            for report, filed, reviewed in (
+                (older_report, "2026-01-01 00:00:00", "2026-03-01 00:00:00"),
+                (newer_report, "2026-02-01 00:00:00", "2026-02-02 00:00:00"),
+            ):
+                await connection.execute(
+                    text(
+                        "INSERT INTO player_reports (id, reported_user_id, reason,"
+                        " details, context_snapshot, status, reviewed_at, created_at,"
+                        " updated_at) VALUES (:id, :account, 'spam', '', '{}',"
+                        " 'dismissed', :reviewed, :filed, :reviewed)"
+                    ),
+                    {
+                        "id": report.hex,
+                        "account": account.hex,
+                        "filed": filed,
+                        "reviewed": reviewed,
+                    },
+                )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+
+        async with engine.begin() as connection:
+            ordered = (
+                await connection.execute(
+                    text(
+                        "SELECT id FROM player_reports WHERE status <> 'pending'"
+                        " ORDER BY decision_group_id DESC"
+                    )
+                )
+            ).scalars().all()
+        # Newest decision first, which is the one filed *second* last.
+        assert [uuid.UUID(str(row)) for row in ordered] == [older_report, newer_report]
     finally:
         await engine.dispose()
 

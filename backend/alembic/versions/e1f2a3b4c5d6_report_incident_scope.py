@@ -23,12 +23,18 @@ where the complaint happened, so none of them may be grouped by it.
 
 A report already decided is backfilled to be its own decision group, because
 that is what it was - every decision before this migration covered exactly one
-report. Its own id is used, which is a UUIDv7 like the ids this mints, so the
-closed-case stream's ordered walk holds over the backfilled rows too. Without
-it the decision-group check would refuse the table: a CHECK is validated
-against every row present, not only the ones written after it.
+report. Without it the decision-group check would refuse the table: a CHECK is
+validated against every row present, not only the ones written after it.
+
+The group ids are minted **in decision order**, not copied from the reports.
+Both are UUIDv7, so either would satisfy the column - but the closed-case
+stream reads *newest decision first* straight off this id, and a report's own
+id is time-ordered by when it was **filed**. Copying it would sort migrated
+cases by when they were complained about, putting one decided months ago ahead
+of one decided yesterday whenever the older complaint was reviewed later.
 """
 from collections.abc import Sequence
+import uuid
 
 import sqlalchemy as sa
 from alembic import op
@@ -38,6 +44,49 @@ revision: str = "e1f2a3b4c5d6"
 down_revision: str | Sequence[str] | None = "d0e1f2a3b4c5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+
+def _backfill_decision_groups(table_name: str) -> None:
+    """Give every already-decided report a group of its own, in decision order.
+
+    Each was decided on its own, so each is its own group. The id is minted
+    here rather than copied from the report because the closed-case stream
+    reads *newest decision first* straight off it: a report's own id is
+    time-ordered by when it was filed, which is not the same order and is not
+    the one that stream means.
+
+    One statement per row, which is what ordering demands and what a one-time
+    walk of an old table can afford; the ids are handed out in a single
+    ordered pass, so the relative order of the decisions is exact even where
+    their timestamps tie.
+    """
+    table = sa.table(
+        table_name,
+        sa.column("id", sa.Uuid()),
+        sa.column("status", sa.String()),
+        sa.column("decision_group_id", sa.Uuid()),
+        sa.column("reviewed_at", sa.DateTime(timezone=True)),
+        sa.column("updated_at", sa.DateTime(timezone=True)),
+    )
+    connection = op.get_bind()
+    decided = (
+        connection.execute(
+            sa.select(table.c.id)
+            .where(table.c.status != "pending", table.c.decision_group_id.is_(None))
+            .order_by(
+                sa.func.coalesce(table.c.reviewed_at, table.c.updated_at).asc(),
+                table.c.id.asc(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for report_id in decided:
+        connection.execute(
+            table.update()
+            .where(table.c.id == report_id)
+            .values(decision_group_id=uuid.uuid7())
+        )
 
 
 def upgrade() -> None:
@@ -53,12 +102,8 @@ def upgrade() -> None:
         batch.add_column(sa.Column("room_instance_id", sa.Uuid(), nullable=True))
         batch.add_column(sa.Column("decision_group_id", sa.Uuid(), nullable=True))
     # Before the check, not after: it is validated against every row already
-    # in the table. Each report decided before this migration was decided on
-    # its own, so each becomes its own group, named by its own id.
-    op.execute(
-        "UPDATE player_reports SET decision_group_id = id "
-        "WHERE status <> 'pending' AND decision_group_id IS NULL"
-    )
+    # in the table.
+    _backfill_decision_groups("player_reports")
     with op.batch_alter_table("player_reports") as batch:
         batch.create_check_constraint(
             "ck_player_reports_scope",
@@ -83,10 +128,7 @@ def upgrade() -> None:
 
     with op.batch_alter_table("prompt_content_reports") as batch:
         batch.add_column(sa.Column("decision_group_id", sa.Uuid(), nullable=True))
-    op.execute(
-        "UPDATE prompt_content_reports SET decision_group_id = id "
-        "WHERE status <> 'pending' AND decision_group_id IS NULL"
-    )
+    _backfill_decision_groups("prompt_content_reports")
     with op.batch_alter_table("prompt_content_reports") as batch:
         batch.create_check_constraint(
             "ck_prompt_content_reports_decision_group",
