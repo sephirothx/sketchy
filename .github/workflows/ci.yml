@@ -149,18 +149,30 @@ jobs:
 
       - name: Set up Python
         uses: actions/setup-python@v7
+        id: python
         with:
           python-version: "3.14"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+      # The whole virtualenv, keyed and restored exactly as the E2E shards do
+      # it - so whichever job runs first populates it and the other four read
+      # it. With the wheels already cached, installing into a fresh environment
+      # still cost ~18 s here and ~11 s on the PostgreSQL job, against a few
+      # seconds to restore the finished directory.
+      - name: Cache the backend virtualenv
+        id: venv
+        uses: actions/cache@v6
+        with:
+          path: backend/.venv
+          key: venv-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('backend/requirements.txt', 'backend/requirements-dev.txt') }}
+
+      - name: Create backend virtualenv and install dependencies
+        if: steps.venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check app tests ../scripts/check_tracked_artifacts.py
+        run: .venv/bin/ruff check app tests ../scripts/check_tracked_artifacts.py
 
       # --cov-branch, because "unexecuted branches" is the finding: a statement
       # measure marks an `if` covered the moment it is reached, whatever the
@@ -168,20 +180,20 @@ jobs:
       # loadgroup shares the immutable repository-history scan between its
       # two tests; every other test is distributed normally (R-ENG-12/15).
       - name: Run the backend suite with coverage
-        run: pytest -q -n 4 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
+        run: .venv/bin/pytest -q -n 4 --dist=loadgroup --durations=50 --junitxml=test-results/backend.xml --cov=app --cov-branch --cov-report=term:skip-covered --cov-report=json:coverage.json
 
       # A whole-suite percentage moves too little to catch one module losing
       # its tests, which is the shape the audit called out. The floors are per
       # module, on the ones where an unexecuted branch is a way in or a way to
       # lose data.
       - name: Check coverage floors
-        run: python3 ../scripts/check-coverage.py coverage.json
+        run: .venv/bin/python ../scripts/check-coverage.py coverage.json
 
       # The socket contract as a document, compared with the base branch's.
       # A stale fixture fails; a change under the same PROTOCOL_VERSION is a
       # warning until launch (docs/wire-protocol.md §11) - add --enforce then.
       - name: Check the wire contract against the base revision
-        run: python ../scripts/check-wire-contract.py --base "origin/${{ github.base_ref || 'main' }}"
+        run: .venv/bin/python ../scripts/check-wire-contract.py --base "origin/${{ github.base_ref || 'main' }}"
 
       - name: Save backend test results
         if: ${{ !cancelled() }}
@@ -228,14 +240,22 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
+        id: python
         with:
           python-version: "3.14"
-          cache: pip
-          cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
 
-      - run: pip install -r requirements-dev.txt
+      - name: Cache the backend virtualenv
+        id: venv
+        uses: actions/cache@v6
+        with:
+          path: backend/.venv
+          key: venv-${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('backend/requirements.txt', 'backend/requirements-dev.txt') }}
+
+      - name: Create backend virtualenv and install dependencies
+        if: steps.venv.outputs.cache-hit != 'true'
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements-dev.txt
 
       # A service container takes no server arguments, so the settings a
       # throwaway database can do without are switched off once it is up.
@@ -243,7 +263,7 @@ jobs:
       # buy, and this database is dropped with the runner.
       - name: Turn off durability on the throwaway database
         run: |
-          python - <<'EOF'
+          .venv/bin/python - <<'EOF'
           import asyncio, asyncpg
           async def main():
               conn = await asyncpg.connect("postgresql://sketchy:sketchy@localhost:5432/sketchy_test")
@@ -255,20 +275,26 @@ jobs:
           EOF
 
       - name: Upgrade a fresh PostgreSQL database
-        run: python -m app.db.migrate
+        run: .venv/bin/python -m app.db.migrate
         env:
           DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
 
       - name: Replay migrations in both directions and check schema drift
-        run: pytest -q tests/test_migrations.py --durations=50 --junitxml=test-results/migrations.xml
+        run: .venv/bin/pytest -q tests/test_migrations.py --durations=50 --junitxml=test-results/migrations.xml
 
-      # Everything else runs here too. The shared persistence fixture in
+      # Every database-backed test runs here. The shared persistence fixture in
       # tests/dbfixtures.py follows the worker's TEST_DATABASE_URL, so this is the one
       # run in which constraints are proven on PostgreSQL's native types, the
       # export builder's server-side cursors are real, row locks lock, and
       # READ COMMITTED interleavings are the ones production will see. A
       # SQLite pass (the backend job) proves integrity - foreign keys are
       # enforced there too since #612 - but never concurrency.
+      # --database-backed-only leaves out the rest, three fifths of the suite
+      # and a third of this step: a test that never opens a database, or
+      # that opens a SQLite file by name as the concurrency suites deliberately
+      # do, runs here byte for byte as it ran on the backend job. The selection
+      # is the import graph rather than a list, so a new suite is included by
+      # importing the fixture (backend/tests/database_backed.py, R-ENG-12).
       # Four workers on the runner's four vCPUs, shared with the PostgreSQL
       # container. With commits waiting on the disk (#658) four workers made
       # every database-bound test two to four times slower than two did and
@@ -276,7 +302,7 @@ jobs:
       # durability off above, the container is CPU-bound like the workers
       # and four is faster again (#660).
       - name: Run the backend suite against PostgreSQL
-        run: pytest -q -n 4 --dist=loadgroup --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
+        run: .venv/bin/pytest -q -n 4 --dist=loadgroup --database-backed-only --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
 
       - name: Save PostgreSQL test results
         if: ${{ !cancelled() }}
