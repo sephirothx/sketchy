@@ -20,6 +20,12 @@ the moment a new one is uploaded, so this key can name something already gone.
 That is the point - a reviewer is told the picture has changed since the
 report instead of silently judging a different one, and then acts on the one
 the account actually carries now.
+
+Going back, a `profile` report becomes `unscoped`: the scope it named stops
+existing, and unscoped is what a report that groups with nothing already
+means. The rows are kept rather than refused - a rollback that loses
+moderation evidence would be worse than one that loses the grouping - and
+without the conversion the restored check would reject every one of them.
 """
 from collections.abc import Sequence
 
@@ -56,6 +62,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Before the checks are restored, because they are validated against every
+    # row present. A picture report stops being groupable rather than being
+    # thrown away.
+    op.execute("UPDATE player_reports SET scope = 'unscoped' WHERE scope = 'profile'")
     with op.batch_alter_table("player_reports") as batch:
         batch.drop_constraint("ck_player_reports_scope_instance", type_="check")
         batch.create_check_constraint(

@@ -447,3 +447,98 @@ async def test_a_migrated_database_keeps_score_events_immutable(tmp_path):
                 )
     finally:
         await engine.dispose()
+
+
+async def test_a_report_decided_before_incidents_keeps_its_decision(tmp_path):
+    """A CHECK is validated against every row already in the table, not only
+    the ones written after it. So the decision-group rule cannot simply be
+    added to a table holding reports decided before incidents existed: each
+    one is backfilled as its own group, which is what it was, because every
+    decision before that migration covered exactly one report (#620)."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'decided-before.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "d0e1f2a3b4c5")
+        account, report = uuid.uuid4(), uuid.uuid4()
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, display_name, state,"
+                    " created_at, updated_at) VALUES (:id, 'before', 'Before',"
+                    " 'anonymous', datetime('now'), datetime('now'))"
+                ),
+                {"id": account.hex},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO player_reports (id, reported_user_id, reason,"
+                    " details, context_snapshot, status, reviewed_at, created_at,"
+                    " updated_at) VALUES (:id, :account, 'spam', '', '{}',"
+                    " 'dismissed', datetime('now'), datetime('now'), datetime('now'))"
+                ),
+                {"id": report.hex, "account": account.hex},
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+
+        async with engine.begin() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "SELECT status, scope, decision_group_id FROM player_reports"
+                        " WHERE id = :id"
+                    ),
+                    {"id": report.hex},
+                )
+            ).one()
+        status, scope, group = row
+        assert status == "dismissed"
+        # It recorded no place, so it may be grouped by none.
+        assert scope == "unscoped"
+        # Its own decision, named by its own id.
+        assert group is not None
+        assert uuid.UUID(str(group)) == report
+    finally:
+        await engine.dispose()
+
+
+async def test_a_picture_report_survives_going_back(tmp_path):
+    """Going back takes the `profile` scope away, and the restored check is
+    validated against every row present. A report filed under it becomes
+    `unscoped` rather than blocking the rollback: losing the grouping is a
+    great deal better than losing moderation evidence (#620)."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'profile-back.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        account, report = uuid.uuid4(), uuid.uuid4()
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, display_name, state,"
+                    " created_at, updated_at) VALUES (:id, 'pictured', 'Pictured',"
+                    " 'anonymous', datetime('now'), datetime('now'))"
+                ),
+                {"id": account.hex},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO player_reports (id, reported_user_id, reason,"
+                    " details, context_snapshot, scope, reported_avatar_key, status,"
+                    " created_at, updated_at) VALUES (:id, :account,"
+                    " 'inappropriate_avatar', '', '{}', 'profile', 'akey', 'pending',"
+                    " datetime('now'), datetime('now'))"
+                ),
+                {"id": report.hex, "account": account.hex},
+            )
+
+        await _migrate(engine, alembic_command.downgrade, "e1f2a3b4c5d6")
+
+        async with engine.begin() as connection:
+            row = (
+                await connection.execute(
+                    text("SELECT scope FROM player_reports WHERE id = :id"),
+                    {"id": report.hex},
+                )
+            ).one()
+        assert row[0] == "unscoped"
+    finally:
+        await engine.dispose()

@@ -198,6 +198,41 @@ export interface ModerationIncident {
   priorDecision: PriorDecision | null;
 }
 
+/** Where the incident happened, said the way a moderator would say it.
+
+`repeat` is the same fact in the grammar a second decision needs: what makes
+this complaint the same one as the last, said as a phrase rather than a
+label. */
+export const SCOPES: Record<
+  ReportScope,
+  { label: string; repeat: string }
+> = {
+  room: { label: "In a room", repeat: "in the same room" },
+  lobby: { label: "In the lobby", repeat: "in the lobby" },
+  profile: { label: "On their profile", repeat: "about their profile" },
+  unscoped: { label: "No room named", repeat: "with nothing cited" },
+};
+
+/** What a `profile` incident is actually about.
+
+The scope says where a complaint was made, and for the account's own name and
+picture that is one place — so on its own it cannot say which of the two was
+complained about, and naming either would be wrong half the time. The reasons
+can: an incident whose complaints all name one of them says so, and a mixed
+one falls back to the scope's neutral wording rather than picking a side. */
+export function scopeWords(incident: ModerationIncident): { label: string; repeat: string } {
+  const words = SCOPES[incident.scope];
+  if (incident.scope !== "profile") return words;
+  const reasons = new Set(incident.reasons);
+  if (reasons.size === 1 && reasons.has("inappropriate_name")) {
+    return { label: "Their name", repeat: "about their name" };
+  }
+  if (reasons.size === 1 && reasons.has("inappropriate_avatar")) {
+    return { label: "Their picture", repeat: "about their picture" };
+  }
+  return words;
+}
+
 /** The ledger cap a resolution note has to fit inside. */
 export const MAX_RESOLUTION_NOTE = 2000;
 

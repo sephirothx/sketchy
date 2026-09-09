@@ -6,6 +6,8 @@ import {
   composeRepeatNote,
   eligibleModerationVotes,
   MAX_RESOLUTION_NOTE,
+  SCOPES,
+  scopeWords,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
 } from "../src/lib/moderation.ts";
@@ -122,4 +124,40 @@ test("an overlong previous note is cut, and what was decided always survives", (
   assert.ok(composed.length <= MAX_RESOLUTION_NOTE);
   assert.ok(composed.startsWith("Already dismissed on Sep 9, 2026, 11:53 by Sephiroth."));
   assert.ok(composed.endsWith("…”"));
+});
+
+const profileIncident = (reasons) => ({ scope: "profile", reasons });
+
+test("a profile case says which of the two things it is about", () => {
+  assert.equal(scopeWords(profileIncident(["inappropriate_name"])).label, "Their name");
+  assert.equal(
+    scopeWords(profileIncident(["inappropriate_avatar"])).label,
+    "Their picture",
+  );
+  // Both complained about at once: neither may be named, because naming one
+  // would be wrong about the other.
+  assert.equal(
+    scopeWords(profileIncident(["inappropriate_name", "inappropriate_avatar"])).label,
+    "On their profile",
+  );
+});
+
+test("a repeat of a profile case names the same thing the label does", () => {
+  assert.equal(
+    scopeWords(profileIncident(["inappropriate_name"])).repeat,
+    "about their name",
+  );
+  assert.equal(
+    scopeWords(profileIncident(["inappropriate_avatar", "inappropriate_avatar"])).repeat,
+    "about their picture",
+  );
+});
+
+test("every other scope is unaffected by what was complained about", () => {
+  for (const scope of ["room", "lobby", "unscoped"]) {
+    assert.deepEqual(
+      scopeWords({ scope, reasons: ["inappropriate_name"] }),
+      SCOPES[scope],
+    );
+  }
 });

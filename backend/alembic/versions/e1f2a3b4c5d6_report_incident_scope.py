@@ -18,9 +18,15 @@ moderator action rather than once per report, so a decision over an incident
 leaves every report it covered pointing at the same value. Time-ordered, so
 the closed-case stream can page decisions from an ordered index scan.
 
-Nothing is backfilled. Existing rows are `unscoped` and, if already decided,
-would violate the decision-group check, so the check is added only for rows
-written from here on - which, before launch, is all of them.
+Existing rows take `unscoped`, which is what they are: none of them recorded
+where the complaint happened, so none of them may be grouped by it.
+
+A report already decided is backfilled to be its own decision group, because
+that is what it was - every decision before this migration covered exactly one
+report. Its own id is used, which is a UUIDv7 like the ids this mints, so the
+closed-case stream's ordered walk holds over the backfilled rows too. Without
+it the decision-group check would refuse the table: a CHECK is validated
+against every row present, not only the ones written after it.
 """
 from collections.abc import Sequence
 
@@ -46,6 +52,14 @@ def upgrade() -> None:
         )
         batch.add_column(sa.Column("room_instance_id", sa.Uuid(), nullable=True))
         batch.add_column(sa.Column("decision_group_id", sa.Uuid(), nullable=True))
+    # Before the check, not after: it is validated against every row already
+    # in the table. Each report decided before this migration was decided on
+    # its own, so each becomes its own group, named by its own id.
+    op.execute(
+        "UPDATE player_reports SET decision_group_id = id "
+        "WHERE status <> 'pending' AND decision_group_id IS NULL"
+    )
+    with op.batch_alter_table("player_reports") as batch:
         batch.create_check_constraint(
             "ck_player_reports_scope",
             "scope IN ('room', 'lobby', 'unscoped')",
@@ -69,6 +83,11 @@ def upgrade() -> None:
 
     with op.batch_alter_table("prompt_content_reports") as batch:
         batch.add_column(sa.Column("decision_group_id", sa.Uuid(), nullable=True))
+    op.execute(
+        "UPDATE prompt_content_reports SET decision_group_id = id "
+        "WHERE status <> 'pending' AND decision_group_id IS NULL"
+    )
+    with op.batch_alter_table("prompt_content_reports") as batch:
         batch.create_check_constraint(
             "ck_prompt_content_reports_decision_group",
             "status = 'pending' OR decision_group_id IS NOT NULL",
