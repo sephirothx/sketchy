@@ -405,7 +405,8 @@ async def test_a_profile_says_whether_you_are_already_friends():
 
     Blank reads the same whether these two are friends, whether the viewer is
     signed out, or whether the page has not finished loading - and a profile
-    is the natural place to ask "are we friends?".
+    is the natural place to ask "are we friends?". The answer is the mark on
+    the disc, which is the same shape the lobby uses.
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -420,20 +421,21 @@ async def test_a_profile_says_whether_you_are_already_friends():
 
             await row_for(ada, bob_name).locator("a.online-player-name").click()
             await ada.wait_for_selector(".profile-identity")
-            # Not friends yet: an offer, and no claim either way.
+            # Not friends yet: an offer, and no mark on the disc.
             await expect(ada.get_by_role("button", name="Add friend")).to_be_visible(
                 timeout=SETTLE_MS
             )
-            await expect(ada.locator(".friend-button-badge")).to_have_count(0)
+            await expect(ada.locator(".profile-identity .avatar-friend")).to_have_count(0)
 
             await ada.goto(BASE_URL)
             await make_friends(ada, bob, ada_name, bob_name)
 
             await row_for(ada, bob_name).locator("a.online-player-name").click()
             await ada.wait_for_selector(".profile-identity")
-            await expect(ada.locator(".friend-button-badge")).to_have_text(
-                "Friends", timeout=SETTLE_MS
-            )
+            # The disc says it, in the shape that says it everywhere else.
+            await expect(
+                ada.locator(".profile-identity .avatar-friend")
+            ).to_have_count(1, timeout=SETTLE_MS)
             # Said, not offered: ending one is confirmed on the surface.
             await expect(ada.get_by_role("button", name="Remove")).to_have_count(0)
             await expect(ada.get_by_role("button", name="Add friend")).to_have_count(0)

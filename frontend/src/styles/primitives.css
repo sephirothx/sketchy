@@ -225,3 +225,32 @@
   stroke: #292520;
   stroke-width: 2.5;
 }
+
+/* A friend of whoever is reading, on the disc's bottom-right — the one corner
+   the ring and the crown leave free. Built exactly like the crown, for the
+   same reason: filled silhouettes with a dark contour painted underneath, so
+   two small heads separate from an arbitrary player colour or an uploaded
+   picture instead of dissolving into it.
+
+   A pale mint in both themes, and fixed rather than tokenised. Every hue the
+   palette already spends is spoken for on or beside this disc — primary is
+   the self ring, gold is the crown, amber is the unclaimed-guest dot, and the
+   fill underneath is the player's own colour — so the mark needs one of its
+   own that is nobody else's. Pale enough to read against the dark contour in
+   the light theme and against the slate ground in the dark one. */
+.avatar-friend {
+  color: #5fddc4;
+  display: inline-flex;
+  line-height: 0;
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+}
+
+.avatar-friend svg {
+  fill: currentColor;
+  paint-order: stroke;
+  stroke: #292520;
+  stroke-width: 2.6;
+  stroke-linejoin: round;
+}

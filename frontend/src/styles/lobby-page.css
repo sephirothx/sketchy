@@ -1281,11 +1281,6 @@ a.online-player-name:focus-visible {
   margin-left: 0;
 }
 
-/* A friend's row carries a little more weight than the rest of the list. */
-.online-player-row.is-friend .online-player-name {
-  font-weight: 700;
-}
-
 /* An invitation asks a question, so it sits where a banner does rather than
    passing by like a toast. */
 .friend-invite-notice {
