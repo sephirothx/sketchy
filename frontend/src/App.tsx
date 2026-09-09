@@ -29,6 +29,7 @@ import { FriendInviteNotice } from "./components/FriendInviteNotice";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
+import { ReportsReviewedNotice } from "./components/ReportsReviewedNotice";
 import { WarningNotice } from "./components/WarningNotice";
 import { XIcon } from "./components/icons";
 import { CrashProbe } from "./lib/crashTestSeam";
@@ -273,6 +274,7 @@ function App() {
       <EmailRecoveryReminder />
       <SuspensionNotice />
       <WarningNotice />
+      <ReportsReviewedNotice />
       <RoleChangeNotice />
       <BrowserRouter>
         <ScrollToTop />

@@ -497,6 +497,21 @@ export function createUserWarning(input: {
   return apiRequest("/api/moderation/warnings", { method: "POST", body: input });
 }
 
+/** How many of your own reports have been decided since you were last told.
+
+A count and nothing else: what was decided belongs to the reported player
+(R-MOD-20). */
+export function countReportsReviewed(): Promise<{ count: number }> {
+  return apiRequest("/api/reports/reviewed");
+}
+
+export function acknowledgeReportsReviewed(): Promise<{
+  ok: boolean;
+  acknowledged: number;
+}> {
+  return apiRequest("/api/reports/reviewed/acknowledge", { method: "POST" });
+}
+
 export function fetchPendingWarning(): Promise<{ warning: PendingWarning | null }> {
   return apiRequest("/api/warnings/pending");
 }

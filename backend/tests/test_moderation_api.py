@@ -3102,3 +3102,69 @@ async def test_a_decision_may_record_what_it_was_about_and_reads_without_it(env)
         },
     )
     assert refused.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
+    """Reporting into silence teaches people not to bother, so a decided
+    report is told back to whoever made it - as a count, and nothing else.
+    What was decided belongs to the reported player, and an outcome handed
+    back to whoever asked about them would make a report a way of finding
+    things out about somebody (R-MOD-20)."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "LoopRep")
+    moderator = await register(moderator_http, "LoopMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    async def report(name):
+        target_http = new_client()
+        target = await register(target_http, name)
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": "Please look.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        return sent.json()["id"]
+
+    first, second = await report("LoopA"), await report("LoopB")
+
+    # Nothing decided yet, so nothing to say.
+    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 0}
+
+    for report_id, status in ((first, "dismissed"), (second, "resolved")):
+        decided = await moderator_http.patch(
+            f"/api/moderation/reports/{report_id}",
+            json={"status": status, "note": "Looked at."},
+        )
+        assert decided.status_code == 200, decided.text
+
+    # Both, counted - and the count is the whole of it: no outcome, no target.
+    reviewed = await reporter_http.get("/api/reports/reviewed")
+    assert reviewed.json() == {"count": 2}
+
+    acked = await reporter_http.post("/api/reports/reviewed/acknowledge")
+    assert acked.json() == {"ok": True, "acknowledged": 2}
+    # Said once.
+    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 0}
+
+    # Somebody else's decided reports are not theirs to hear about.
+    other_http = new_client()
+    await register(other_http, "LoopOther")
+    assert (await other_http.get("/api/reports/reviewed")).json() == {"count": 0}
+
+
+@pytest.mark.asyncio
+async def test_the_reviewed_count_needs_an_identity_of_its_own(env):
+    """It is about the caller's own reports, so there has to be a caller."""
+    new_client, _, _ = env
+    anonymous = new_client()
+    assert (await anonymous.get("/api/reports/reviewed")).status_code == 401
+    assert (
+        await anonymous.post("/api/reports/reviewed/acknowledge")
+    ).status_code == 401

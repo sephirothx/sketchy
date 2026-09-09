@@ -824,6 +824,19 @@ class PlayerReport(Base):
             name="ck_player_reports_reviewed_identity",
         ),
         Index("ix_player_reports_status_created_at", "status", "created_at"),
+        # One question, asked on every page load by every signed-in reporter:
+        # "any of mine decided and not yet said?" Answered from an index over
+        # exactly that, holding only the rows that can still answer yes.
+        Index(
+            "ix_player_reports_reporter_unannounced",
+            "reporter_user_id",
+            postgresql_where=text(
+                "reporter_notified_at IS NULL AND status <> 'pending'"
+            ),
+            sqlite_where=text(
+                "reporter_notified_at IS NULL AND status <> 'pending'"
+            ),
+        ),
         # Decided rows only, one entry per report that has a decision. The
         # closed-case stream reads its page as distinct decision groups newest
         # first; because the id is time-ordered, that is an ordered scan of
@@ -946,6 +959,13 @@ class PlayerReport(Base):
         UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When the reporter was told their report had been looked at. Null until
+    # then, which is what stops it being said twice. It records only that the
+    # telling happened - never what was decided, which is the reported
+    # player's business (R-MOD-20).
+    reporter_notified_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
     message_evidence: Mapped[list[PlayerReportMessageEvidence]] = relationship(
         back_populates="report",
