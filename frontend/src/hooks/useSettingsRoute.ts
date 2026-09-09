@@ -1,5 +1,8 @@
 import { useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+
+import { isSettingsPath } from "../lib/overlayRoutes";
+import { useOpenOverlay } from "./useOverlayRoute";
 
 /**
  * Settings as a URL (R-SET-06).
@@ -7,19 +10,16 @@ import { useLocation, useNavigate } from "react-router-dom";
  * It opens over whatever page you were on - changing the volume mid-turn must
  * not unmount a live room - but it is still a route, so it can be linked,
  * bookmarked and pointed at from an answer to a support question. The page
- * underneath is the one recorded in `settingsBackground` when it was opened;
+ * underneath is the one recorded in `overlayBackground` when it was opened;
  * somebody who arrives on the URL itself gets the lobby behind it.
+ *
+ * The drawn-over-the-page half of that is in `useOverlayRoute.ts`, which
+ * Friends shares (R-FRIEND-10). What stays here is what only Settings has:
+ * sections, and the URL that names one.
  */
 export const SETTINGS_SECTIONS = ["account", "appearance", "sound", "shortcuts"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = "account";
-
-/** Case-insensitive, because react-router matches routes that way. */
-const SETTINGS_PATH = /^\/settings(\/|$)/i;
-
-export function isSettingsPath(pathname: string): boolean {
-  return SETTINGS_PATH.test(pathname);
-}
 
 export function settingsPath(section: SettingsSection): string {
   return `/settings/${section}`;
@@ -39,25 +39,17 @@ export function sectionFromPath(pathname: string): SettingsSection {
   return SETTINGS_SECTIONS.find((section) => section === value) ?? DEFAULT_SETTINGS_SECTION;
 }
 
-export interface SettingsLocationState {
-  /** The path Settings was opened from, drawn underneath it until it closes. */
-  settingsBackground?: string;
-}
-
 export function useOpenSettings(): (section?: SettingsSection) => void {
-  const navigate = useNavigate();
+  const openOverlay = useOpenOverlay();
   const location = useLocation();
-  const from = `${location.pathname}${location.search}`;
+  const onSettings = isSettingsPath(location.pathname);
   return useCallback(
     (section: SettingsSection = DEFAULT_SETTINGS_SECTION) => {
-      if (isSettingsPath(location.pathname)) {
-        // Already open: switch section without stacking a second history
-        // entry, and keep the page it was opened over.
-        navigate(settingsPath(section), { replace: true, state: location.state });
-        return;
-      }
-      navigate(settingsPath(section), { state: { settingsBackground: from } });
+      // Already open: switching section replaces, so Back leaves Settings
+      // rather than walking through the sections visited. `useOpenOverlay`
+      // replaces for any overlay-to-overlay move, which is the same thing.
+      openOverlay(settingsPath(section), { replace: onSettings });
     },
-    [navigate, from, location.pathname, location.state],
+    [openOverlay, onSettings],
   );
 }

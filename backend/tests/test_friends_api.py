@@ -14,7 +14,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.friends import create_friends_router
+from app.api.friends import ACCOUNT_REQUIRED_HEADER, create_friends_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
@@ -461,3 +461,27 @@ async def test_a_request_is_still_answered_vaguely(env):
     blocked = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
     assert blocked.status_code == 200
     assert blocked.json()["status"] == FriendshipState.PENDING.value
+
+
+async def test_the_guest_refusal_names_itself_so_a_403_is_not_guessed_at(env):
+    """A status is not a reason, and this one is acted on hard.
+
+    The client shows an empty friends list on the strength of it. A suspended
+    account is refused with a 403 too, by the middleware and before any of
+    this runs - so reading "403" as "this caller is a guest" would wipe a real
+    account's lists off the screen.
+    """
+    new_client, _, _ = env
+    guest_http = new_client()
+    await name_a_guest(guest_http, "Guesty")
+
+    refused = await guest_http.get("/api/users/me/friends")
+    assert refused.status_code == 403
+    assert refused.headers.get(ACCOUNT_REQUIRED_HEADER)
+
+    # And a refusal that is *not* about having an account does not carry it,
+    # which is the half that makes the header worth reading.
+    signed_out = new_client()
+    anonymous = await signed_out.get("/api/users/me/friends")
+    assert anonymous.status_code == 401
+    assert ACCOUNT_REQUIRED_HEADER not in anonymous.headers

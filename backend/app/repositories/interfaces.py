@@ -261,6 +261,22 @@ class GameParticipantSummary:
 
 
 @dataclass(frozen=True)
+class RecentCoPlayer:
+    """A registered account the caller finished a game with, lately.
+
+    The live profile fields rather than the seat's snapshot: this is offered
+    as somebody to befriend *now*, so it must carry the name and picture they
+    wear now, not the ones they wore in a game last week.
+    """
+
+    user_id: str
+    display_name: str
+    name_color: str | None
+    avatar_key: str | None
+    last_played_at: datetime
+
+
+@dataclass(frozen=True)
 class GameSummary:
     """Summary view of a past game."""
 
@@ -714,6 +730,27 @@ class GameHistoryRepository(ABC):
         drawing, the drawing was erased, the code is unknown - answers
         ``None``, so a caller can turn all of them into the same 404
         (R-HIST-16) without learning which applied.
+        """
+        ...
+
+    @abstractmethod
+    async def get_recent_co_players(
+        self,
+        user_id: str,
+        *,
+        since: datetime,
+        limit: int = 20,
+    ) -> list[RecentCoPlayer]:
+        """Registered accounts this one finished a game with since *since*.
+
+        Most recently played with first, one row per account. Guests are left
+        out because a friendship with one is refused anyway (R-FRIEND-03), and
+        so are the caller's own identities.
+
+        Deliberately says nothing about friendships or blocks: filtering by
+        either would make an absence readable, and an absence is exactly what
+        a decline looks like (R-FRIEND-04). The caller filters what it can
+        already see for itself.
         """
         ...
 

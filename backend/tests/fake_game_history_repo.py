@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.repositories.interfaces import (
     DrawingReactionResult,
@@ -11,6 +12,7 @@ from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
     GameSummary,
+    RecentCoPlayer,
     ScoreEventInput,
     TurnDrawingDetail,
     TurnDrawingInput,
@@ -147,6 +149,15 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         requesting_user_id: str,
     ) -> str | None:
         return None
+
+    async def get_recent_co_players(
+        self,
+        user_id: str,
+        *,
+        since: datetime,
+        limit: int = 20,
+    ) -> list[RecentCoPlayer]:
+        return []
 
     async def get_user_games(
         self,

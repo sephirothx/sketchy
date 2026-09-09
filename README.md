@@ -54,6 +54,37 @@ keyboard that takes half the screen, and one thumb.
   total to the profile. They are never scored. The four faces are bundled artwork
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
+- Friends — registered players add each other from a player's profile or from a
+  seat in the same room, and a friendship lets either of them take a seat in a game they
+  cannot name: uninvited only where the **host** is a friend, or on a short-lived
+  single-use invitation that carries a token rather than a room code. **Friends**, in the
+  account menu, holds every friendship and every request in either direction whether or
+  not the other person is online, and opens over whatever page you are on, so a request
+  that arrives while you are drawing can be answered without leaving the game. The
+  lobby's online list is presence and nothing else — it carries no way to ask and
+  no report of a request, because a row there comes and goes as people open and
+  close tabs. A request that arrives offers **Accept** on the notice itself, and
+  lingers long enough to reach mid-turn. Declining
+  and removing are confirmed first: a decline is kept, so the person refused cannot ask
+  again, though the one who declined may still ask them. Cancelling a request you sent
+  leaves nothing behind. Guests are not offered friendships, since a guest name belongs
+  to a browser and is purged after a month of not playing. Somebody you are not
+  sharing a lobby with is still reachable: every registered name in the online list
+  links to that player's profile, which carries the **Add friend** control — and
+  says plainly when you already are friends — so the person you finished a game
+  with yesterday can be added today.
+  **Friends** also suggests registered accounts you finished a game with in the last
+  30 days. That list is built only from games you sat in yourself — there is still
+  no way to search for, or reach, somebody you have never played with.
+  A friend's avatar wears a small two-person mark on its bottom-right corner, so you
+  can pick out who you know at a glance — in the lobby, on a profile, and on the seats
+  around you in a game. It is the same disc that shows a ring for you and a gold crown
+  for the room's host, and like those it is drawn for whoever is reading: two players
+  looking at the same roster see different marks.
+  A request arriving, and one you sent being accepted, are both announced wherever
+  you are — a live game included — and the number waiting for an answer sits on your
+  account chip. A request that was declined is not announced: your list simply stops
+  showing it.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -1348,7 +1379,8 @@ backend/
     test_*.py     Domain, protocol, payload, wire-contract, timer, DB, repository, and performance unit tests
 frontend/
   src/
-    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
+    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
+                  SettingsOverlay, FriendsOverlay
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, BugReportsPage (admin triage)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once

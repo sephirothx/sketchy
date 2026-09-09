@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
-import { isSettingsPath, type SettingsLocationState } from "./hooks/useSettingsRoute";
+import {
+  isFriendsPath,
+  isOverlayPath,
+  isSettingsPath,
+  overlayBackgroundOf,
+} from "./lib/overlayRoutes";
 import "./App.css";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
@@ -16,6 +21,7 @@ import { BugReportsPage } from "./pages/BugReportsPage";
 import { ModerationPage } from "./pages/ModerationPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SettingsOverlay } from "./components/SettingsOverlay";
+import { FriendsOverlay } from "./components/FriendsOverlay";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
@@ -40,34 +46,37 @@ import { onUpdateRequired } from "./lib/updateRequired";
 import type { ServerShutdownNotice } from "./types";
 
 /* The router keeps the window scroll across navigations, so submitting a form
-   at the bottom of one page would open the next one part-way down. Settings is
-   the exception: it opens *over* the page, which stays where it was. */
+   at the bottom of one page would open the next one part-way down. The overlay
+   routes are the exception: they open *over* the page, which stays where it
+   was - scrolling it to the top would move something the reader is not even
+   looking at, and leave it there once the overlay closes. */
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
-    if (isSettingsPath(pathname)) return;
+    if (isOverlayPath(pathname)) return;
     window.scrollTo(0, 0);
   }, [pathname]);
   return null;
 }
 
 /**
- * The page table, with Settings over the top of it (R-SET-06).
+ * The page table, with the overlay routes over the top of it (R-SET-06,
+ * R-FRIEND-10).
  *
- * Settings is a route so it can be linked and bookmarked, and an overlay so
- * opening it never unmounts a live room. The two are reconciled by rendering
- * `<Routes>` against the location Settings was opened *from*; somebody who
- * arrives on the URL itself gets the lobby behind it.
+ * Settings and Friends are routes so they can be linked and bookmarked, and
+ * overlays so opening one never unmounts a live room. The two are reconciled
+ * by rendering `<Routes>` against the location the overlay was opened *from*;
+ * somebody who arrives on the URL itself gets the lobby behind it.
  */
 function AppRoutes() {
   const location = useLocation();
-  const onSettings = isSettingsPath(location.pathname);
+  const onOverlay = isOverlayPath(location.pathname);
   // Always a value, never undefined: `useRoutes` wraps its result in an extra
   // location context *only* when it is handed one, so letting this flip
   // between a value and nothing would change the element tree and remount
   // every page behind the overlay - the live room included.
-  const behind = onSettings
-    ? ((location.state as SettingsLocationState | null)?.settingsBackground ?? "/")
+  const behind = onOverlay
+    ? (overlayBackgroundOf(location.state) ?? "/")
     : location;
 
   return (
@@ -83,10 +92,11 @@ function AppRoutes() {
         <Route path="/profile/:userId" element={<ProfilePage />} />
         {/* Declared so backend/app/client_routes.py has something to mirror
             and an unknown URL still answers 404. They never render: the table
-            is drawing the page underneath, and the overlay below draws
-            Settings itself. */}
+            is drawing the page underneath, and the overlays below draw
+            themselves. */}
         <Route path="/settings" element={null} />
         <Route path="/settings/:section" element={null} />
+        <Route path="/friends" element={null} />
         <Route path="/forgot-password" element={<AccountRecoveryPage mode="forgot" />} />
         <Route path="/reset-password" element={<AccountRecoveryPage mode="reset" />} />
         <Route path="/verify-email" element={<AccountRecoveryPage mode="verify" />} />
@@ -99,7 +109,8 @@ function AppRoutes() {
             exactly the URLs that land here. */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      {onSettings && <SettingsOverlay />}
+      {isSettingsPath(location.pathname) && <SettingsOverlay />}
+      {isFriendsPath(location.pathname) && <FriendsOverlay />}
     </>
   );
 }
@@ -115,7 +126,10 @@ function App() {
   const refreshFriends = useFriendsStore((state) => state.refresh);
   const myAccountId = useAuthStore((state) => state.user?.id ?? null);
   useEffect(() => {
-    void refreshFriends();
+    // The account is handed over rather than looked up: the store clears its
+    // baseline when the owner changes, so signing in never announces the new
+    // account's waiting requests as if they had just arrived.
+    void refreshFriends(myAccountId);
   }, [refreshFriends, myAccountId]);
   const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
   const [serverFull, setServerFull] = useState<string | null>(null);

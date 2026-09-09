@@ -1126,6 +1126,16 @@ contributes those turns but **not** a game played, a game won, or a score.
   total and keeps every factual turn and correct guess.
 - Foreign keys are `ON DELETE SET NULL`, so even a physical user-row removal cannot
   cascade away turns, guesses, or another player's game.
+- **Read as a social graph, once.** `GET /api/users/me/recent-players` (R-FRIEND-11)
+  self-joins this table on `game_id` to find who somebody has been playing with:
+  the caller's seats give the games, the other seats give the accounts. Bounded by
+  `game_records.finished_at` over a 30-day window rather than by a page of history,
+  so the scan rides `ix_game_records_outcome_finished_at` and a returning player
+  gets nothing rather than something a year old. The **live `users` row** supplies
+  the name and picture, not the snapshot above: a snapshot is what somebody was
+  called in that game, and this list offers a friendship with who they are now.
+  That also means a deleted account drops out for free, since `user_id` is set
+  null when it goes.
 
 ### `turn_records`
 `id` · `game_id` (CASCADE) · `round_number` · `turn_number` · `drawer_user_id` /

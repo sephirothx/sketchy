@@ -20,6 +20,7 @@
 @import "./styles/dialogs.css" layer(components);
 @import "./styles/canvas.css" layer(components);
 @import "./styles/settings.css" layer(components);
+@import "./styles/friends.css" layer(components);
 @import "./styles/account.css" layer(components);
 @import "./styles/operator.css" layer(components);
 @import "./styles/profile.css" layer(components);

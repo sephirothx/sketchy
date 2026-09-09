@@ -3,10 +3,17 @@ import test from "node:test";
 
 import {
   NO_FRIENDS,
-  friendActionFor,
+  friendListChanges,
+  friendsSurface,
+  friendsSurfaceIsEmpty,
+  isNoFriendListRefusal,
   isFriend,
+  addableRecentPlayers,
   parseFriendInvite,
   parseFriendLists,
+  parseRecentPlayers,
+  profileFriendActionFor,
+  waitingRequestCount,
   withFriendsFirst,
 } from "../src/lib/friends.ts";
 
@@ -48,36 +55,6 @@ test("a listing from nothing is empty rather than broken", () => {
   for (const bad of [null, undefined, 7, "nope"]) {
     assert.deepEqual(parseFriendLists(bad), NO_FRIENDS);
   }
-});
-
-test("the row offers what the relationship actually allows", () => {
-  const state = lists({
-    friends: [entry("ada")],
-    incoming: [entry("bob", { status: "pending" })],
-    outgoing: [entry("cleo", { status: "pending", requestedByMe: true })],
-  });
-  const me = "me";
-
-  // Already friends: nothing to offer.
-  assert.equal(friendActionFor(player("ada"), state, me), "none");
-  // They asked first, so the button says yes rather than asking again.
-  assert.equal(friendActionFor(player("bob"), state, me), "accept");
-  assert.equal(friendActionFor(player("cleo"), state, me), "sent");
-  assert.equal(friendActionFor(player("dan"), state, me), "add");
-});
-
-test("nothing is offered where it could not work", () => {
-  const state = lists();
-  // A guest has no durable identity to be friends with, and the server
-  // refuses one - so the row does not offer a control that always fails.
-  assert.equal(
-    friendActionFor(player("guest", { isAnonymous: true }), state, "me"),
-    "none",
-  );
-  // Yourself.
-  assert.equal(friendActionFor(player("me"), state, "me"), "none");
-  // Signed out.
-  assert.equal(friendActionFor(player("ada"), state, null), "none");
 });
 
 test("friends come first, and the rest keep the order the server sent", () => {
@@ -131,4 +108,208 @@ test("an invitation with no name still says somebody sent it", () => {
     expiresIn: 60,
   });
   assert.equal(parsed.displayName, "A friend");
+});
+
+// --------------------------------------------------- the friends surface
+
+const surfaceEntry = (userId, extra = {}) => entry(userId, extra);
+
+test("the surface orders requests newest first and friends by name", () => {
+  const { incoming, outgoing, friends } = friendsSurface({
+    friends: [
+      surfaceEntry("zoe", { displayName: "Zoe" }),
+      surfaceEntry("ana", { displayName: "ana" }),
+      surfaceEntry("bob", { displayName: "Bob" }),
+    ],
+    incoming: [
+      surfaceEntry("old", { createdAt: "2026-01-01T00:00:00Z" }),
+      surfaceEntry("new", { createdAt: "2026-09-01T00:00:00Z" }),
+    ],
+    outgoing: [
+      surfaceEntry("sent-old", { createdAt: "2026-02-01T00:00:00Z" }),
+      surfaceEntry("sent-new", { createdAt: "2026-08-01T00:00:00Z" }),
+    ],
+  });
+  assert.deepEqual(incoming.map((row) => row.userId), ["new", "old"]);
+  assert.deepEqual(outgoing.map((row) => row.userId), ["sent-new", "sent-old"]);
+  // Case-insensitively, so "ana" is not exiled after "Zoe".
+  assert.deepEqual(friends.map((row) => row.userId), ["ana", "bob", "zoe"]);
+});
+
+test("the surface does not reorder the lists it was handed", () => {
+  const lists = {
+    ...NO_FRIENDS,
+    incoming: [
+      surfaceEntry("old", { createdAt: "2026-01-01T00:00:00Z" }),
+      surfaceEntry("new", { createdAt: "2026-09-01T00:00:00Z" }),
+    ],
+  };
+  friendsSurface(lists);
+  assert.deepEqual(lists.incoming.map((row) => row.userId), ["old", "new"]);
+});
+
+test("a surface is empty only when all three groups are", () => {
+  assert.equal(friendsSurfaceIsEmpty(friendsSurface(NO_FRIENDS)), true);
+  // One waiting request is not an empty screen, even with no friends at all.
+  assert.equal(
+    friendsSurfaceIsEmpty(
+      friendsSurface({ ...NO_FRIENDS, incoming: [surfaceEntry("asker")] }),
+    ),
+    false,
+  );
+  assert.equal(
+    friendsSurfaceIsEmpty(
+      friendsSurface({ ...NO_FRIENDS, outgoing: [surfaceEntry("asked")] }),
+    ),
+    false,
+  );
+});
+
+// --------------------------------------------- reaching one specific person
+
+test("a profile offers a friendship only where one can exist", () => {
+  const me = { userId: "me", isAnonymous: false };
+  const them = { userId: "them", isAnonymous: false };
+  assert.equal(profileFriendActionFor(them, NO_FRIENDS, me), "add");
+  // Nobody is their own friend, and a guest on either side cannot hold one.
+  assert.equal(profileFriendActionFor(me, NO_FRIENDS, me), "none");
+  assert.equal(
+    profileFriendActionFor({ userId: "them", isAnonymous: true }, NO_FRIENDS, me),
+    "none",
+  );
+  assert.equal(
+    profileFriendActionFor(them, NO_FRIENDS, { userId: "me", isAnonymous: true }),
+    "none",
+  );
+  // Signed out, and a profile that has not loaded yet.
+  assert.equal(profileFriendActionFor(them, NO_FRIENDS, null), "none");
+  assert.equal(profileFriendActionFor(null, NO_FRIENDS, me), "none");
+});
+
+test("a profile reflects which way an existing request points", () => {
+  const me = { userId: "me", isAnonymous: false };
+  const them = { userId: "them", isAnonymous: false };
+  const of = (key) => profileFriendActionFor(them, { ...NO_FRIENDS, [key]: [entry("them")] }, me);
+  assert.equal(of("friends"), "friends");
+  assert.equal(of("incoming"), "accept");
+  assert.equal(of("outgoing"), "sent");
+});
+
+test("recent players are parsed and a malformed row is dropped, not faked", () => {
+  const parsed = parseRecentPlayers({
+    players: [
+      { userId: "a", displayName: "Ada", nameColor: "#4f9", avatarUrl: null, lastPlayedAt: "2026-09-01T00:00:00Z" },
+      { userId: "", displayName: "Nameless" },
+      { displayName: "No id" },
+      "not an object",
+    ],
+  });
+  assert.deepEqual(parsed.map((row) => row.userId), ["a"]);
+  assert.equal(parsed[0].nameColor, "#4f9");
+  assert.deepEqual(parseRecentPlayers(null), []);
+  assert.deepEqual(parseRecentPlayers({ players: "nope" }), []);
+});
+
+test("a suggestion is dropped once it is on one of the lists, but a refusal is not", () => {
+  const players = [
+    { userId: "friend", displayName: "F", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+    { userId: "asked-me", displayName: "I", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+    { userId: "i-asked", displayName: "O", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+    { userId: "declined-me", displayName: "D", nameColor: null, avatarUrl: null, lastPlayedAt: "" },
+  ];
+  const left = addableRecentPlayers(players, {
+    friends: [entry("friend")],
+    incoming: [entry("asked-me")],
+    outgoing: [entry("i-asked")],
+  });
+  // The refusal stays: dropping it would make the absence readable, which is
+  // exactly what R-FRIEND-04 refuses to disclose. Its button quietly does
+  // nothing, which is what a decline is meant to feel like.
+  assert.deepEqual(left.map((row) => row.userId), ["declined-me"]);
+});
+
+// ------------------------------------------------ what moved since last time
+
+test("a request arriving and one being answered are told apart", () => {
+  const before = { ...NO_FRIENDS, outgoing: [entry("asked-them")] };
+  const after = {
+    friends: [entry("asked-them")],
+    incoming: [entry("new-asker")],
+    outgoing: [],
+  };
+  const changes = friendListChanges(before, after);
+  assert.deepEqual(changes.arrived.map((row) => row.userId), ["new-asker"]);
+  assert.deepEqual(changes.accepted.map((row) => row.userId), ["asked-them"]);
+});
+
+test("a request that stopped being pending is never reported", () => {
+  // What a decline looks like from the sender's side. The row going away is
+  // legible; naming it would go further than R-FRIEND-05 allows.
+  const changes = friendListChanges(
+    { ...NO_FRIENDS, outgoing: [entry("they-said-no")] },
+    NO_FRIENDS,
+  );
+  assert.deepEqual(changes, { arrived: [], accepted: [] });
+});
+
+test("answering a request yourself is not news", () => {
+  // Accepting somebody who asked you puts them in `friends` for the first
+  // time too, and being told what you just did is noise.
+  const changes = friendListChanges(
+    { ...NO_FRIENDS, incoming: [entry("asked-me")] },
+    { ...NO_FRIENDS, friends: [entry("asked-me")] },
+  );
+  assert.deepEqual(changes.accepted, []);
+  assert.deepEqual(changes.arrived, []);
+});
+
+test("a request still waiting is not re-announced", () => {
+  const lists = { ...NO_FRIENDS, incoming: [entry("patient")] };
+  assert.deepEqual(friendListChanges(lists, lists), { arrived: [], accepted: [] });
+});
+
+test("the badge counts only what is waiting for an answer", () => {
+  assert.equal(waitingRequestCount(NO_FRIENDS), 0);
+  assert.equal(
+    waitingRequestCount({
+      friends: [entry("a"), entry("b")],
+      incoming: [entry("c")],
+      outgoing: [entry("d"), entry("e")],
+    }),
+    1,
+  );
+});
+
+// ------------------------------------------- a refusal against a failure
+
+test("only the refusal the server named counts as an empty friend list", () => {
+  // The one failure that is an answer: no account, so no list. Recognised by
+  // the name `AccountRequiredError` carries, which the server's own header
+  // put there.
+  assert.equal(
+    isNoFriendListRefusal({ name: "AccountRequiredError", status: 403 }),
+    true,
+  );
+});
+
+test("another 403 is not that refusal, whatever its status says", () => {
+  // A suspended account is refused with a 403 by the middleware, before the
+  // friends endpoint runs at all. Read as "no friends", it wipes a real
+  // account's lists off the screen - and the next good read then diffs
+  // against that empty list and announces everything on it as newly arrived.
+  assert.equal(isNoFriendListRefusal({ name: "ApiError", status: 403 }), false);
+});
+
+test("a fault is not an answer about who somebody is friends with", () => {
+  for (const error of [
+    { name: "ApiError", status: 500 },
+    { name: "ApiError", status: 502 },
+    { name: "ApiError", status: 401 },
+    new Error("network"),
+    undefined,
+    null,
+    "timeout",
+  ]) {
+    assert.equal(isNoFriendListRefusal(error), false, String(error));
+  }
 });

@@ -6,6 +6,7 @@ import { sessionFrom } from "../lib/roomEntryState";
 import { emitWithAck, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
+import { useFriendArrivalNotices } from "../hooks/useFriendArrivalNotices";
 import { useGameStore } from "../store/gameStore";
 import { useToast } from "../lib/toast";
 import { XIcon } from "./icons";
@@ -29,20 +30,34 @@ export function FriendInviteNotice() {
   const myUserId = useAuthStore((state) => state.user?.id ?? null);
   const setSession = useGameStore((state) => state.setSession);
 
+  // Sits here because this is the one component mounted app-wide that already
+  // owns the friends socket events: the refetch below is what produces the
+  // change this speaks about, so the two belong next to each other.
+  useFriendArrivalNotices();
+
   useEffect(() => {
     const onInvite = (payload: unknown) => {
       const parsed = parseFriendInvite(payload);
       if (parsed) setInvite(parsed);
     };
-    // Nothing to show for a list that moved — the lobby is where it is read
-    // — but it does have to be re-read. One event covers a request arriving
-    // and one being answered, because the endpoint is the truth either way.
+    // The event stays contentless: one shape covers a request arriving and
+    // one being answered, and the endpoint is the truth either way. What
+    // happened is worked out from the lists before and after this refetch,
+    // and `useFriendArrivalNotices` above says it.
     const onRequest = () => void refreshFriends();
+    // And once more whenever the socket comes back. `friends_changed` is a
+    // live event with no backlog, so a request that arrived - or one that was
+    // accepted - while the connection was down reaches nobody, and the badge
+    // and the lists stay wrong until something else happens to move them.
+    // Re-reading on connect turns that silence into the ordinary diff, so the
+    // notice for it fires late rather than never.
     socket.on("friend_invite_received", onInvite);
     socket.on("friends_changed", onRequest);
+    socket.on("connect", onRequest);
     return () => {
       socket.off("friend_invite_received", onInvite);
       socket.off("friends_changed", onRequest);
+      socket.off("connect", onRequest);
     };
   }, [refreshFriends]);
 

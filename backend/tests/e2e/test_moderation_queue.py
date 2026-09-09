@@ -19,6 +19,17 @@ from tests.e2e.staff_helpers import set_role
 
 BASE_URL = "http://localhost:8000"
 
+#: The details this test's own report carries, and how its case is found.
+#:
+#: Not the reason: the moderation queue is server-wide, so every report any
+#: test in the suite files lands in the same list, and several of them use the
+#: reason "Offensive drawing". Filtering on that matched two cases and failed
+#: the whole test on a strict-mode violation - a failure that depends on which
+#: tests happen to be running beside it, which is the worst kind to debug.
+#: The details are this test's own sentence, so they name its case and nobody
+#: else's.
+DETAILS = "Not what the prompt asked for."
+
 
 
 
@@ -84,7 +95,7 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             dialog = guesser.locator(".modal-card").filter(has_text="Report")
             await dialog.wait_for(state="visible")
             assert await dialog.get_by_label("Include their drawing").is_checked()
-            await dialog.locator("textarea").fill("Not what the prompt asked for.")
+            await dialog.locator("textarea").fill(DETAILS)
             await dialog.get_by_role("button", name="Send report").click()
             await guesser.wait_for_selector('.modal-card:has-text("with their drawing")')
 
@@ -96,7 +107,7 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await set_role("QueueModerator", UserRole.MODERATOR.value)
             await moderator_page.goto(f"{BASE_URL}/moderation")
 
-            case = moderator_page.locator(".mod-queue-item", has_text="Offensive drawing")
+            case = moderator_page.locator(".mod-queue-item", has_text=DETAILS)
             await case.wait_for()
             await case.click()
             figure = moderator_page.locator('[data-testid="mod-drawing"]')
@@ -121,7 +132,7 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await case.wait_for(state="detached")
 
             await moderator_page.get_by_role("button", name="Closed").click()
-            closed = moderator_page.locator(".mod-queue-item", has_text="Offensive drawing")
+            closed = moderator_page.locator(".mod-queue-item", has_text=DETAILS)
             await closed.wait_for()
             await closed.click()
             await moderator_page.locator('[data-testid="mod-drawing"] canvas').wait_for()

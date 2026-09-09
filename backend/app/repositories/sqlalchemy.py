@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.db.models import (
     AuditEvent,
@@ -98,6 +98,7 @@ from app.repositories.interfaces import (
     GameParticipantSummary,
     GameRecordInput,
     GameSummary,
+    RecentCoPlayer,
     ScoreEventDetail,
     ScoreEventInput,
     InvalidProfileDataError,
@@ -1970,6 +1971,80 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         for row in rows
                     ),
                 )
+
+    async def get_recent_co_players(
+        self,
+        user_id: str,
+        *,
+        since: datetime,
+        limit: int = 20,
+    ) -> list[RecentCoPlayer]:
+        """Registered accounts this one finished a game with since *since*.
+
+        A self-join over `game_participants`: the caller's seats give the game
+        ids, and the other seats in those games give the accounts. Bounded by
+        time rather than by a page of history, because the question is "who
+        have I been playing with", and a returning player's answer should be
+        empty rather than a year old.
+
+        The live `users` row supplies the name and picture, not the seat's
+        snapshot: a snapshot is what somebody was called in that game, and
+        this list exists to offer a friendship with who they are now. It also
+        means a deleted account drops out for free, since the seat's `user_id`
+        is set null when it goes.
+
+        Finished games only. An abandoned one is not a claim that these people
+        played together, and R-HIST-06 already refuses to treat it as one.
+        """
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return []
+        clamped_limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
+
+        async with self._session_factory() as session:
+            identity_ids = await _identity_ids(session, db_user_id)
+            mine = aliased(GameParticipant)
+            theirs = aliased(GameParticipant)
+            stmt = (
+                select(
+                    User.id,
+                    User.display_name,
+                    User.name_color,
+                    User.avatar_key,
+                    func.max(GameRecord.finished_at).label("last_played_at"),
+                )
+                .select_from(mine)
+                .join(GameRecord, GameRecord.id == mine.game_id)
+                .join(theirs, theirs.game_id == mine.game_id)
+                .join(User, User.id == theirs.user_id)
+                .where(
+                    mine.user_id.in_(identity_ids),
+                    theirs.user_id.notin_(identity_ids),
+                    GameRecord.outcome == GameOutcome.FINISHED.value,
+                    GameRecord.finished_at >= since,
+                    # Registered, which is one filter for three refusals:
+                    # a guest cannot hold a friendship (R-FRIEND-03), a
+                    # merged identity is somebody else's account now, and a
+                    # deleted one is nobody. `is_anonymous` is a property
+                    # over this column rather than a column, so the state is
+                    # what a query can ask about.
+                    User.state == AccountState.REGISTERED.value,
+                )
+                .group_by(User.id, User.display_name, User.name_color, User.avatar_key)
+                .order_by(func.max(GameRecord.finished_at).desc())
+                .limit(clamped_limit)
+            )
+            rows = (await session.execute(stmt)).all()
+            return [
+                RecentCoPlayer(
+                    user_id=_public_id(row.id),
+                    display_name=row.display_name,
+                    name_color=row.name_color,
+                    avatar_key=row.avatar_key,
+                    last_played_at=row.last_played_at,
+                )
+                for row in rows
+            ]
 
     async def get_user_games(
         self,

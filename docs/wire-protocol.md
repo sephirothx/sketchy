@@ -552,6 +552,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `friends_in_room` | `EmptyPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 
@@ -730,13 +731,24 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
-| `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
+| `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it. The client still says **which** of those happened, by comparing the lists across the refetch this triggers (R-FRIEND-12) — so naming it costs no wire surface, and the event does not have to grow a second shape | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
 | `client_config` | `ClientConfig` — cadences the client runs at, and since version 3 the drawing allowance its frames spend (`drawingFramesPerWindow`, `drawingWindowSeconds`), so a replay can pace itself under it (§7) | one socket at handshake; every socket when a cadence or the drawing budget changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
 ### Key payload shapes
+
+`friends_in_room` answers `{playerIds}` — the **seats** in this socket's room
+that belong to accepted friends of the caller, so the roster can mark them
+(R-FRIEND-13). It is `add_friend` in reverse: that one takes a seat and finds
+the account, this takes the account and finds the seats, and neither puts an
+account id on the wire (R-ROOM-07). Asked for rather than broadcast, because
+every reader's answer is different — which is also why it is not room state.
+R-BLOCK-03 forbids a **block** creating a different game per player; this
+changes no gameplay fact, exactly as the viewer's own avatar ring does not. A
+caller with no account, or one in a room with no friends in it, gets an empty
+list rather than a refusal, so the two cannot be told apart (R-FRIEND-04).
 
 **Friend payloads** never carry a room. `friend_invite_received` holds a token
 the server resolves against the sender's live seat, so an invitation is a
@@ -1628,10 +1640,11 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | --- | --- | --- |
 | `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers |
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
-| `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing}`. Refusals are in none of them |
+| `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing}`. Refusals are in none of them. A guest is refused **403 with `X-Sketchy-Account-Required`** — the header names the reason, because a status cannot: the middleware answers 403 for a suspended account before this route runs, and a client that reads any 403 as *this caller is a guest* shows an empty friends list for a real account. Same pattern as `X-Sketchy-Step-Up` |
 | `POST` | `/api/users/me/friends` | `{userId}`. **Answers the same whether it landed, hit a block, hit an earlier refusal, or named nobody** (R-FRIEND-04); 409 only for a ceiling the caller reached (`FRIEND_REQUEST_LIMIT`) |
 | `POST` | `/api/users/me/friends/{user_id}/accept` | Re-checks blocks: one placed since the request has to win. Answers `accepted`, `declined` or `unchanged` — the caller is answering a request on their own list, so unlike `POST /` there is no third party to be vague about |
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
+| `GET` | `/api/users/me/recent-players` | `{players}` — registered accounts the caller **finished a game with** in the last 30 days, most recent first, capped at 20. Not a search and not a directory (N-06): it answers only about games the caller sat in, so it can never name a stranger. Deliberately **unfiltered by friendship or block** — an absence from it would be readable, and "absent because they declined you" is the fact R-FRIEND-04 refuses to disclose, so the client drops the rows it can already see for itself and leaves a refusal in place |
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
 | `GET`/`POST` | `/api/room-presets` | ≤ 20 per account |
 | `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check |

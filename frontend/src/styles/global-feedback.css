@@ -114,3 +114,15 @@
   padding: 3px 4px;
 }
 .app-toast button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
+
+/* The one thing a toast may offer to do. Reads as a control rather than as
+   the dismiss cross beside it, because it is the reason the toast lingers. */
+.app-toast-action {
+  font-weight: 700;
+  font-size: 13px;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  background: var(--primary) !important;
+  color: var(--primary-ink) !important;
+  white-space: nowrap;
+}
