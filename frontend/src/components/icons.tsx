@@ -56,6 +56,25 @@ export function CrownIcon(p: IconProps) { return <IconBase {...p}><path d="M3 17
 /** The crown alone, without its base line: the avatar mark (#574), where a
     filled silhouette is all there is room for. */
 export function CrownMarkIcon(p: IconProps) { return <IconBase {...p}><path d="M3 18h18l-1-10-4.5 3.5L12 6l-3.5 5.5L4 8l-1 10Z" /></IconBase>; }
+/** The friend mark: two heads and shoulders, filled rather than stroked.
+
+Not `UsersIcon` at a smaller size. That one is a 24px stroke drawing, and the
+same trade the crown makes applies harder here - a stroked two-person glyph at
+12px is a scribble, and this shape has twice as much in it. So it is authored
+as solid silhouettes, sized and spaced to survive the disc corner, and painted
+with a contour underneath (see `.avatar-friend`) so it separates from any
+player colour or uploaded picture. */
+export function FriendMarkIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="16.2" cy="8.4" r="3.1" />
+      <path d="M16.2 12.6c3.2 0 5.8 2.1 5.8 4.8V19H10.4v-1.6c0-2.7 2.6-4.8 5.8-4.8Z" />
+      <circle cx="8.6" cy="8" r="4" />
+      <path d="M8.6 13.4c3.6 0 6.5 2.4 6.5 5.3v1.5H2.1v-1.5c0-2.9 2.9-5.3 6.5-5.3Z" />
+    </svg>
+  );
+}
+
 export function CheckIcon(p: IconProps) { return <IconBase {...p}><path d="M4 12.5 9.5 18 20 6.5" /></IconBase>; }
 export function ClockIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></IconBase>; }
 export function UserIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></IconBase>; }

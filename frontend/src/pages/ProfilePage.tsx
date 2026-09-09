@@ -31,9 +31,10 @@ import {
 } from "../lib/profile";
 import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
-import { profileFriendActionFor } from "../lib/friends";
+import { isFriend, profileFriendActionFor } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { FriendButton } from "../components/FriendButton";
+import { FriendMarkIcon } from "../components/icons";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -450,6 +451,7 @@ function ProfileView({ userId }: { userId: string }) {
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
   const friendLists = useFriendsStore((s) => s.lists);
+  const viewerIsFriend = isFriend(friendLists, userId);
 
   // Which list is current. Bumped when a reload starts and again when it
   // replaces the list, so a page fetched for the previous one - a "load
@@ -519,7 +521,12 @@ function ProfileView({ userId }: { userId: string }) {
       {subject && stats && (
         <>
           <header className="profile-identity">
-            {/* The avatar wears the same color as the name it belongs to. */}
+            {/* The avatar wears the same color as the name it belongs to, and
+                the friend mark if this is one — the same shape the lobby and
+                the roster use, so "we are friends" looks identical wherever
+                it is read. Its own markup rather than `<Avatar>`: this disc
+                is 56px with the page's own type scale on it. */}
+            <span className="avatar-frame" aria-hidden="true">
             <span
               className={`profile-avatar avatar avatar-player${
                 !subject.isAnonymous && subject.avatarUrl ? " has-picture" : ""
@@ -539,8 +546,17 @@ function ProfileView({ userId }: { userId: string }) {
                 avatarInitial(shownName)
               )}
             </span>
+            {viewerIsFriend && (
+              <span className="avatar-friend">
+                <FriendMarkIcon size={22} />
+              </span>
+            )}
+            </span>
             <div>
               <h1>
+                {/* The disc's mark is decorative, so the heading carries the
+                    word for a screen reader. */}
+                {viewerIsFriend && <span className="visually-hidden">Friend. </span>}
                 <PlayerName
                   name={shownName}
                   nameColor={subject.nameColor}

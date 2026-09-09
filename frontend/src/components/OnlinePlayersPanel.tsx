@@ -94,6 +94,7 @@ export function OnlinePlayersPanel() {
                   nameColor={player.nameColor ?? undefined}
                   avatarUrl={player.avatarUrl}
                   isAnonymous={player.isAnonymous}
+                  isFriend={theyAreAFriend}
                   size={28}
                 />
                 {/* The name is a link, because presence already carries the
@@ -101,6 +102,10 @@ export function OnlinePlayersPanel() {
                     precisely because a friend request needs a stable target.
                     A guest has no profile worth opening: their identity is a
                     browser, so the name stays plain text for them. */}
+                {/* The disc's mark is decorative, so the name carries the
+                    word - beside it rather than inside the link text, which
+                    is the player's name and nothing else. */}
+                {theyAreAFriend && <span className="visually-hidden">Friend</span>}
                 {player.isAnonymous ? (
                   <span className="online-player-name is-guest">
                     {player.displayName}

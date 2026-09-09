@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { CrownMarkIcon } from "../icons";
+import { CrownMarkIcon, FriendMarkIcon } from "../icons";
 
 interface AvatarProps {
   name: string;
@@ -14,6 +14,8 @@ interface AvatarProps {
   isHost?: boolean;
   /** The viewer's own disc: a ring in the primary colour (#574). */
   isSelf?: boolean;
+  /** An accepted friend of the viewer: a mark on the disc's bottom-right. */
+  isFriend?: boolean;
   size?: number;
 }
 
@@ -24,12 +26,18 @@ interface AvatarProps {
  * dark initial, so arbitrary account colors stay legible on the slate ground.
  * Guests use the fixed guest fill per theme.
  *
- * The disc also carries the two facts every roster used to spell out beside
- * the name (#574): the host's crown perches on its top-right edge, and the
- * viewer's own disc wears a ring, so "host" and "you" read at a glance without
- * spending name-line width and look the same on every surface. Both marks are
- * decorative here; the roster that draws the name says "Host" and "you" for
- * screen readers, where they read in the right order.
+ * The disc also carries the facts every roster used to spell out beside the
+ * name (#574): the host's crown perches on its top-right edge, the viewer's
+ * own disc wears a ring, and a friend of the viewer's carries a mark on the
+ * one free corner — so "host", "you" and "friend" read at a glance without
+ * spending name-line width and look the same on every surface.
+ *
+ * All three are per-*viewer* rather than per-player, which is the point: the
+ * ring and the mark both say something about the relationship between whoever
+ * is reading and whoever is drawn, and neither is a fact about the game.
+ *
+ * Every mark is decorative here; the roster that draws the name says "Host",
+ * "you" and "Friend" for screen readers, where they read in the right order.
  */
 export function Avatar({
   name,
@@ -38,6 +46,7 @@ export function Avatar({
   isAnonymous = false,
   isHost = false,
   isSelf = false,
+  isFriend = false,
   size = 28,
 }: AvatarProps) {
   const initial = name.trim().charAt(0) || "?";
@@ -58,15 +67,26 @@ export function Avatar({
       {picture ? <img src={picture} alt="" width={size} height={size} /> : initial}
     </span>
   );
-  if (!isHost) return disc;
-  // The crown scales with the disc but never below a size it survives.
+  if (!isHost && !isFriend) return disc;
+  // Both marks scale with the disc but never below a size they survive.
   const crown = Math.max(12, Math.round(size * 0.52));
+  const mark = Math.max(12, Math.round(size * 0.46));
   return (
     <span className="avatar-frame" aria-hidden="true">
       {disc}
-      <span className="avatar-crown">
-        <CrownMarkIcon size={crown} strokeWidth={2} />
-      </span>
+      {isHost && (
+        <span className="avatar-crown">
+          <CrownMarkIcon size={crown} strokeWidth={2} />
+        </span>
+      )}
+      {/* The bottom-right corner, because the ring already owns the whole
+          edge and the crown owns the top. The two can appear together: a
+          friend who is also hosting wears both, on opposite corners. */}
+      {isFriend && (
+        <span className="avatar-friend">
+          <FriendMarkIcon size={mark} />
+        </span>
+      )}
     </span>
   );
 }

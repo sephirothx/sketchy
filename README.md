@@ -76,6 +76,9 @@ keyboard that takes half the screen, and one thumb.
   **Friends** also suggests registered accounts you finished a game with in the last
   30 days. That list is built only from games you sat in yourself — there is still
   no way to search for, or reach, somebody you have never played with.
+  A friend's avatar wears a small two-person mark on its bottom-right corner, so you
+  can pick out who you know at a glance — the same disc that shows a ring for you and
+  a gold crown for the room's host.
   A request arriving, and one you sent being accepted, are both announced wherever
   you are — a live game included — and the number waiting for an answer sits on your
   account chip. A request that was declined is not announced: your list simply stops
