@@ -1312,3 +1312,80 @@ a.online-player-name:focus-visible {
   min-height: 32px;
   color: var(--muted);
 }
+
+/* The row's name is what opens its menu, so it has to look like the name it
+   replaced rather than like a button: no chrome until it is under the cursor,
+   and the colour the player chose carried through by the span inside it. */
+.online-player-menu-root {
+  min-width: 0;
+  position: relative;
+}
+
+.online-player-trigger {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  margin: 0;
+  max-width: 100%;
+  padding: 1px 3px;
+  text-align: left;
+}
+
+.online-player-trigger:hover .online-player-name,
+.online-player-trigger[aria-expanded="true"] .online-player-name {
+  text-decoration: underline;
+}
+
+.online-player-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* The room's seat menu, restated for this list: two lists of people should
+   not look like two different mechanisms. */
+.online-player-menu {
+  background: var(--menu);
+  border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
+  border-radius: 8px;
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  left: 0;
+  min-width: 176px;
+  padding: 0.35rem;
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 100;
+}
+
+.online-player-menu-item {
+  background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
+  border: 0;
+  border-radius: 6px;
+  color: var(--menu-ink);
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-size: 13px;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.online-player-menu-item:hover,
+.online-player-menu-item:focus-visible {
+  background: color-mix(in srgb, var(--menu-ink) 12%, transparent);
+}
+
+/* Last and in the warning colour: it is the item nobody is reaching for, and
+   the one worst to hit by accident. */
+.online-player-menu-item.is-report {
+  color: var(--danger);
+  margin-top: 0.15rem;
+}

@@ -61,9 +61,11 @@ keyboard that takes half the screen, and one thumb.
   account menu, holds every friendship and every request in either direction whether or
   not the other person is online, and opens over whatever page you are on, so a request
   that arrives while you are drawing can be answered without leaving the game. The
-  lobby's online list is presence and nothing else — it carries no way to ask and
-  no report of a request, because a row there comes and goes as people open and
-  close tabs. A request that arrives offers **Accept** on the notice itself, and
+  lobby's online list carries no *report* of a request in either direction,
+  because a row there comes and goes as people open and close tabs and a request
+  reported on one could be answered only while its sender happened to still be
+  standing there; a row's menu does offer the ask, alongside opening the profile,
+  since an action taken once and finished is not state to be read. A request that arrives offers **Accept** on the notice itself, and
   lingers long enough to reach mid-turn. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
@@ -946,6 +948,27 @@ line retention did not keep cannot be cited, so its author's name is plain text
 and nothing explains why; a player's own lines, and every line seen by a guest,
 are plain for the same reasons the room gives.
 
+What an account *carries* - its **name** and its **picture** - is reported from
+where it is actually seen. A row in the lobby's online list opens a menu, the
+way a seat in a room already does: **Open player profile**, **Add as friend**,
+and **Report**. On a profile the same report sits beside the name. Until now
+both could only be reported from inside a room, which is the one place either is
+least likely to be met - they are on every lobby row and on every profile, and
+the people who object are usually not sitting at a table with their owner.
+Nothing is cited, there being nothing said to cite. The dialog offers the
+picture as a reason only when there is one, since a complaint about a picture
+that does not exist is refused; the name is always there, and where it is the
+only reason the dialog says so instead of offering a choice of one. Every
+complaint about one account's name or picture is one incident, whichever screen
+it came from. If the picture changes before a moderator looks, the queue says so and
+shows the one on the account now - the old one is gone, an upload deleting what
+it replaces, so it is never quietly shown in its place. A picture that has been
+*taken down* says that instead, and says who did it: a removal a moderator
+carried out - naming this case, when it was this case - reads as already
+removed rather than as a different picture, which is the opposite of what
+happened to it, and a player quietly taking their own down reads as neither,
+because that is not a punishment and sets no block.
+
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
 or none - and one with an end date lifts itself, because the list reports what
@@ -992,6 +1015,22 @@ one closed case rather than five, and a page holds a page's worth of decisions
 rather than being swallowed by a pile-on. The open queues are small enough to show
 whole, but closed cases accumulate for as long as the server runs, and the newest
 are the ones worth finding.
+
+Deciding an incident closes it for good, so somebody complained about again in
+the same place opens a *new* one rather than reopening the old. That is right,
+and on its own it would put an identical case in front of a moderator with
+nothing to show it had ever been dealt with. So a repeat carries what was last
+decided about that same incident: what was done, when, by whom, and the note,
+which is required of every decision precisely because it is written for whoever
+reads the case next. It is keyed on the incident and not the account - the
+standing beside every case already says how often this player has come up, and
+the thing worth saying here is narrower: *this, in this room, was already
+settled*. The ending a repeat usually has is offered from that notice - one
+press dismisses it, carrying the decision above as its note, so nobody retypes
+what is on the screen in front of them and the ledger gets more than a bare
+word. Only dismissal is offered that way: it restricts nobody, which is what
+makes it safe a press from a notice, and a warning or suspension is not
+something to repeat by shortcut.
 
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
@@ -1082,8 +1121,9 @@ sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial. A picture can be
-reported, a moderator can remove it through the report, and removal blocks
-uploads for a week. The export carries the bytes; deletion removes them.
+reported - from the lobby's row menu, from a profile, or from a room - a moderator can
+remove it through the report, and removal blocks uploads for a week. The export
+carries the bytes; deletion removes them.
 
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the

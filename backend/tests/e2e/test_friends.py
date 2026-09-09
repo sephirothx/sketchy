@@ -42,17 +42,34 @@ async def open_friends(page) -> None:
     await page.wait_for_selector('[data-testid="friends"]')
 
 
-async def ask_from_profile(asker, target_name: str) -> None:
-    """Send a request the only way there is: from the person's profile.
+async def open_row_menu(page, name: str):
+    """Open what a lobby row offers about the person on it.
 
-    The lobby list carries no friendship state at all now - it says who is
-    around and stops (R-FRIEND-11). The name is the way through to the page
-    that does offer it.
+    The row's name is its trigger, the way a seat's is in a room. A guest's
+    row has no menu at all, and neither does your own.
     """
-    row = row_for(asker, target_name)
+    row = row_for(page, name)
     await expect(row).to_be_visible(timeout=SETTLE_MS)
-    await row.locator("a.online-player-name").click()
-    await asker.wait_for_selector(".profile-identity")
+    await row.locator(".online-player-trigger").click()
+    menu = page.locator('[data-testid="online-player-menu"]')
+    await expect(menu).to_be_visible(timeout=SETTLE_MS)
+    return menu
+
+
+async def open_profile_from_lobby(page, name: str) -> None:
+    menu = await open_row_menu(page, name)
+    await menu.get_by_role("menuitem", name="Open player profile").click()
+    await page.wait_for_selector(".profile-identity")
+
+
+async def ask_from_profile(asker, target_name: str) -> None:
+    """Send a request from the person's profile, reached from their row.
+
+    The row offers the ask directly too (R-FRIEND-11); this goes the long way
+    on purpose, because the profile is where a request can also be withdrawn
+    and the tests below read that state.
+    """
+    await open_profile_from_lobby(asker, target_name)
     await asker.get_by_role("button", name="Add friend").click()
     await expect(asker.locator(".friend-button-status")).to_have_text(
         "Request sent", timeout=SETTLE_MS
@@ -176,21 +193,18 @@ async def test_a_guest_is_not_offered_a_friendship_it_cannot_have():
             await use_guest_name(as_guest, guest_name)
             await sign_up(as_member, member_name)
 
-            # A guest has no profile worth opening, so their name is not even
-            # a link - the way through to asking starts there.
+            # A guest has no profile worth opening, nothing to befriend and no
+            # account to report, so their row offers no menu at all.
             guest_row = row_for(as_member, guest_name)
             await expect(guest_row).to_be_visible(timeout=SETTLE_MS)
-            await expect(guest_row.locator("a.online-player-name")).to_have_count(0)
+            await expect(guest_row.locator(".online-player-trigger")).to_have_count(0)
             await expect(guest_row.locator(".online-player-status")).to_have_text(
                 re.compile("In the lobby")
             )
 
             # And the guest reaches the member's profile, which offers them
             # nothing: a friendship needs an account on *both* sides.
-            member_row = row_for(as_guest, member_name)
-            await expect(member_row).to_be_visible(timeout=SETTLE_MS)
-            await member_row.locator("a.online-player-name").click()
-            await as_guest.wait_for_selector(".profile-identity")
+            await open_profile_from_lobby(as_guest, member_name)
             await expect(
                 as_guest.get_by_role("button", name="Add friend")
             ).to_have_count(0)
@@ -309,7 +323,6 @@ async def test_the_online_panel_carries_no_friendship_state_at_all():
 
             panel = target.locator('[data-testid="online-players-list"]')
             await expect(row_for(target, asker_name)).to_be_visible(timeout=SETTLE_MS)
-            await expect(panel.locator(".online-add-friend")).to_have_count(0)
 
             await ask_from_profile(asker, target_name)
 
@@ -326,7 +339,12 @@ async def test_the_online_panel_carries_no_friendship_state_at_all():
             senders_panel = asker.locator('[data-testid="online-players-list"]')
             await expect(row_for(asker, target_name)).to_be_visible(timeout=SETTLE_MS)
             await expect(senders_panel).not_to_contain_text("Request sent")
-            await expect(senders_panel.locator(".online-add-friend")).to_have_count(0)
+            # The offer stands whether or not a request is outstanding: the row
+            # must not reveal one by withdrawing it (R-FRIEND-11).
+            sent_menu = await open_row_menu(asker, target_name)
+            await expect(
+                sent_menu.get_by_role("menuitem", name="Add as friend")
+            ).to_be_visible()
         finally:
             await asker_context.close()
             await target_context.close()
@@ -353,12 +371,9 @@ async def test_a_profile_is_reachable_from_the_lobby_and_offers_a_friendship():
             await sign_up(ada, ada_name)
             await sign_up(bob, bob_name)
 
-            row = row_for(ada, bob_name)
-            await expect(row).to_be_visible(timeout=SETTLE_MS)
-            # The name is the way in. A guest's is not a link, which the
+            # The row's menu is the way in. A guest's row has none, which the
             # existing guest test already pins from the other direction.
-            await row.locator("a.online-player-name").click()
-            await ada.wait_for_selector(".profile-identity")
+            await open_profile_from_lobby(ada, bob_name)
             assert "/profile/" in ada.url
 
             add = ada.get_by_role("button", name="Add friend")
@@ -419,8 +434,7 @@ async def test_a_profile_says_whether_you_are_already_friends():
             await sign_up(ada, ada_name)
             await sign_up(bob, bob_name)
 
-            await row_for(ada, bob_name).locator("a.online-player-name").click()
-            await ada.wait_for_selector(".profile-identity")
+            await open_profile_from_lobby(ada, bob_name)
             # Not friends yet: an offer, and no mark on the disc.
             await expect(ada.get_by_role("button", name="Add friend")).to_be_visible(
                 timeout=SETTLE_MS
@@ -430,8 +444,7 @@ async def test_a_profile_says_whether_you_are_already_friends():
             await ada.goto(BASE_URL)
             await make_friends(ada, bob, ada_name, bob_name)
 
-            await row_for(ada, bob_name).locator("a.online-player-name").click()
-            await ada.wait_for_selector(".profile-identity")
+            await open_profile_from_lobby(ada, bob_name)
             # The disc says it, in the shape that says it everywhere else.
             await expect(
                 ada.locator(".profile-identity .avatar-friend")

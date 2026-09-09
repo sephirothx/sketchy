@@ -273,10 +273,18 @@ class ReportScope(StrEnum):
     shares the one bucket. `UNSCOPED` is a report that cited nothing and so
     names no place to look; it stands alone rather than joining a bucket it
     only resembles.
+
+    `PROFILE` is a complaint about the account itself rather than about
+    anything it said - today, its picture, which is reportable from the lobby
+    and from the profile page and belongs to no room and no line of chat. It
+    has no instance either, so every such report about one account shares one
+    bucket: several people objecting to one picture are objecting to one
+    thing, whichever screen each of them was looking at.
     """
 
     ROOM = "room"
     LOBBY = "lobby"
+    PROFILE = "profile"
     UNSCOPED = "unscoped"
 
 

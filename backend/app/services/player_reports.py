@@ -276,6 +276,7 @@ def record_player_report(
     reason: str,
     details: str,
     messages: list[RoomMessage],
+    reported_avatar_key: str | None = None,
     context_messages: list[RoomMessage] | None = None,
     context_snapshot: dict | None = None,
     drawing: CapturedDrawing | None = None,
@@ -301,6 +302,11 @@ def record_player_report(
     live room it holds, or the one room instance every cited line came from -
     and never from a client's claim about where it was.
 
+    `reported_avatar_key` is the picture a complaint about a picture was
+    about, read off the account here rather than accepted from a reporter. It
+    is never used to fetch that picture back - a replaced avatar is deleted -
+    only to tell a reviewer the picture has changed since (R-AVA-04).
+
     Returns the unflushed row. Its `created_at` comes from the database, so a
     caller that needs the timestamp has to flush before reading it - returning
     a snapshot from here would hand back a null.
@@ -313,6 +319,7 @@ def record_player_report(
         turn_id=turn_id,
         scope=scope.value,
         room_instance_id=room_instance_id,
+        reported_avatar_key=reported_avatar_key,
         reason=reason,
         details=details,
         context_snapshot={

@@ -180,10 +180,10 @@ export type FriendAction = "add" | "accept" | "sent" | "friends" | "none";
 
 /** What a profile page may offer the viewer about its subject.
 
-The only place a friendship is asked for or reported now. The lobby's presence
-list carried a version of this until it became clear that a row which comes
-and goes with presence is the wrong home for either (R-FRIEND-11); this one
-sits on a page about one person, which is where the question belongs.
+What a page about one person may offer about them, in full: the ask, an
+incoming request to accept, and one already sent. A lobby row offers only the
+first of those (`lobbyRowMayOfferFriendship`), because a row that comes and
+goes with presence is the wrong place to read a request from (R-FRIEND-11).
 
 `sent` is deliberately still offered as a state rather than hidden. A request
 you sent is a thing you may want to withdraw, and a profile is where somebody
@@ -202,6 +202,35 @@ export function profileFriendActionFor(
   if (lists.incoming.some((entry) => entry.userId === subject.userId)) return "accept";
   if (lists.outgoing.some((entry) => entry.userId === subject.userId)) return "sent";
   return "add";
+}
+
+/** Whether a lobby row may offer to ask for a friendship.
+
+Deliberately narrower than `profileFriendActionFor`, and deliberately blind to
+requests. R-FRIEND-11 keeps friendship *state* off the presence list - a row
+comes and goes as tabs open and close, so a request reported there could be
+answered only while its sender happened to still be standing in the lobby - and
+that reasoning is untouched by a menu. What a menu does change is the offer: an
+action taken once and finished is not state to be read, and a row that already
+knows whether somebody is a friend (it offers *Join* on the strength of it) can
+offer to become one.
+
+So this consults `friends` and nothing else. An outgoing request already sent,
+or an incoming one waiting, leaves the offer exactly where it was: pressing it
+is what the server resolves - a duplicate changes nothing, and asking somebody
+who has asked you accepts them. Neither outcome needs the row to have said
+anything about a request first. */
+export function lobbyRowMayOfferFriendship(
+  subject: { userId: string; isAnonymous: boolean } | null,
+  lists: FriendLists,
+  viewer: { userId: string; isAnonymous: boolean } | null,
+): boolean {
+  if (!subject || !viewer) return false;
+  // Both sides must be registered accounts (R-FRIEND-03), and nobody is their
+  // own friend.
+  if (viewer.isAnonymous || subject.isAnonymous) return false;
+  if (subject.userId === viewer.userId) return false;
+  return !lists.friends.some((entry) => entry.userId === subject.userId);
 }
 
 /** Somebody the viewer finished a game with lately, offered as a friend.

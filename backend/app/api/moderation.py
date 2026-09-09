@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -62,6 +62,7 @@ from app.db.models import (
 from app.services.incidents import (
     ContentIncident,
     Incident,
+    IncidentKey,
     content_incident_key,
     group_by_decision,
     group_into_content_incidents,
@@ -291,6 +292,10 @@ async def _reported_player_context(
             "displayName": user.display_name,
             # So a report about a picture can be judged from the queue.
             "avatarUrl": avatar_url(user.avatar_key),
+            # Not shown; compared. A report about a picture recorded which
+            # one, and a reviewer has to be told when it is no longer that
+            # picture (R-AVA-04).
+            "_avatarKey": user.avatar_key,
             "registered": user.state == AccountState.REGISTERED.value,
             "createdAt": user.created_at.isoformat(),
             # This report itself is not "prior".
@@ -308,6 +313,86 @@ class _Decision:
 
     outcome: str
     reviewed_by: str | None
+
+
+async def _prior_decisions(
+    session: AsyncSession, incidents: list[Incident]
+) -> dict[UUID, dict]:
+    """The last decision taken about each incident's own key, if there was one.
+
+    A decided incident is closed for good (R-MOD-07), so a fresh complaint
+    about the same person in the same place is a new incident and not a
+    reopening - that is R-MOD-05 working as intended. What it must not be is
+    a case that arrives looking untouched: without this, a moderator who
+    dismissed something ten minutes ago reads the identical complaint back
+    with nothing to say so, and either decides it twice or works out the
+    repetition from the account's prior counts.
+
+    So each pending incident carries what was last decided about its exact
+    key - the outcome, when, by whom, and the note, which is written for
+    other moderators and is the whole reason one is required. Keyed rather
+    than account-wide on purpose: the standing counts beside it already say
+    "this account has come up before", and the distinct thing worth saying
+    here is "this, in this room, was already dealt with".
+    """
+    pending = [
+        incident
+        for incident in incidents
+        if incident.reports[0].status == ReportStatus.PENDING.value
+        and incident.reports[0].reported_user_id is not None
+        and incident.reports[0].scope != ReportScope.UNSCOPED.value
+    ]
+    if not pending:
+        return {}
+    keys = {incident_key(incident.reports[0]) for incident in pending}
+    clauses = [
+        and_(
+            PlayerReport.reported_user_id == key.reported_user_id,
+            PlayerReport.scope == key.scope,
+            PlayerReport.room_instance_id.is_(None)
+            if key.room_instance_id is None
+            else PlayerReport.room_instance_id == key.room_instance_id,
+        )
+        for key in keys
+    ]
+    decided = (
+        await session.scalars(
+            select(PlayerReport)
+            .where(
+                PlayerReport.status != ReportStatus.PENDING.value,
+                PlayerReport.decision_group_id.is_not(None),
+                or_(*clauses),
+            )
+            # Time-ordered ids, so the newest decision is the last group seen.
+            .order_by(PlayerReport.decision_group_id.asc())
+        )
+    ).all()
+    if not decided:
+        return {}
+    outcomes = await _decisions(session, list(decided))
+    # One representative row per decision group - they agree by construction -
+    # and then the newest group per key, plus how many there have been.
+    newest: dict[IncidentKey, PlayerReport] = {}
+    counts: dict[IncidentKey, set[UUID]] = {}
+    for report in decided:
+        key = incident_key(report)
+        newest[key] = report
+        counts.setdefault(key, set()).add(report.decision_group_id)
+    answer: dict[UUID, dict] = {}
+    for incident in pending:
+        key = incident_key(incident.reports[0])
+        last = newest.get(key)
+        if last is None:
+            continue
+        decision = outcomes.get(last.id) or _Decision(last.status, None)
+        answer[incident.id] = {
+            "outcome": decision.outcome,
+            "decidedAt": last.reviewed_at.isoformat() if last.reviewed_at else None,
+            "decidedBy": decision.reviewed_by,
+            "note": last.resolution_note,
+            "priorDecisions": len(counts.get(key, ())),
+        }
+    return answer
 
 
 async def _decisions(
@@ -481,10 +566,130 @@ def _evidence_line_payload(
     }
 
 
+def _accounts_with_no_picture(
+    reports: list[PlayerReport], player_context: dict[UUID, dict]
+) -> set[UUID]:
+    """Accounts on this page complained about over a picture that is now gone.
+
+    Narrow on purpose: the ledger is only read for the accounts where "gone"
+    is actually ambiguous, so a queue of ordinary reports asks nothing extra
+    of it.
+    """
+    return {
+        report.reported_user_id
+        for report in reports
+        if report.reported_avatar_key is not None
+        and report.reported_user_id is not None
+        and player_context.get(report.reported_user_id, {}).get("_avatarKey") is None
+    }
+
+
+async def _avatar_removals(
+    session: AsyncSession, user_ids: set[UUID]
+) -> dict[UUID, dict]:
+    """The last time each account's picture was taken down, and by whom.
+
+    Read from the ledger rather than guessed from the account: a null
+    `avatar_key` says the picture is gone and nothing else, and "gone" covers
+    two different things a moderator must not have to tell apart by eye - a
+    removal somebody carried out, very possibly their own a minute ago, and a
+    player quietly taking their own picture down, which is not a punishment
+    and sets no block (R-AVA-04).
+
+    `avatar_upload_blocked_until` is not used for this even though a
+    moderator's removal sets it, because the block is applied even when there
+    was nothing to remove; it says a removal happened, not that this picture
+    was what it removed.
+    """
+    if not user_ids:
+        return {}
+    events = (
+        await session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.event_type == "avatar.removed",
+                AuditEvent.target_user_id.in_(user_ids),
+            )
+            .order_by(AuditEvent.created_at.asc())
+        )
+    ).all()
+    # Assigned in order, so the newest removal per account is the one left.
+    return {
+        event.target_user_id: {
+            # Snake_case deliberately: this dict is internal, and a camelCase
+            # key here would read as a wire name to the contract check.
+            "by_moderator": bool((event.details or {}).get("by_moderator")),
+            "at": event.created_at.isoformat() if event.created_at else None,
+            "report_id": (event.details or {}).get("report_id"),
+        }
+        for event in events
+        if event.target_user_id is not None
+    }
+
+
+def _picture_status(report: PlayerReport, live_avatar_key: str | None) -> str | None:
+    """What became of the picture one complaint was about.
+
+    `None` for a report that named no picture: it has none to have changed,
+    and would otherwise read as changed the moment the account uploaded one.
+    """
+    if report.reported_avatar_key is None:
+        return None
+    if live_avatar_key is None:
+        return "removed"
+    if report.reported_avatar_key == live_avatar_key:
+        return "same"
+    return "replaced"
+
+
+def _incident_picture(
+    incident: Incident, live_avatar_key: str | None, removal: dict | None
+) -> dict | None:
+    """What became of the picture this incident is about, said once.
+
+    Null when no complaint here named a picture. `removed` is the state that
+    needed telling apart: a picture that is simply gone read as "a different
+    picture now", which is the opposite of what a moderator had just done to
+    it. So the removal says whether somebody carried it out, when, and
+    whether it was from this case - which is the one they are most likely to
+    be looking at when they wonder.
+    """
+    named = [
+        status
+        for status in (
+            _picture_status(report, live_avatar_key) for report in incident.reports
+        )
+        if status is not None
+    ]
+    if not named:
+        return None
+    if live_avatar_key is None:
+        detail = removal or {}
+        report_id = detail.get("report_id")
+        return {
+            "status": "removed",
+            "removedByModerator": detail.get("by_moderator", False),
+            "removedAt": detail.get("at"),
+            "removedFromThisIncident": report_id is not None
+            and report_id in {str(report.id) for report in incident.reports},
+        }
+    # Several reporters can name several pictures - one is swapped while the
+    # complaints are still arriving - so the incident is only unchanged when
+    # every complaint that named one named the one still there.
+    return {
+        "status": "same" if all(status == "same" for status in named) else "replaced",
+        "removedByModerator": False,
+        "removedAt": None,
+        "removedFromThisIncident": False,
+    }
+
+
 def _incident_payload(
     incident: Incident,
     player_context: dict[UUID, dict] | None = None,
     decisions: dict[UUID, _Decision] | None = None,
+    prior: dict[UUID, dict] | None = None,
+    removals: dict[UUID, dict] | None = None,
 ) -> dict:
     """One incident as a queue entry: who it is about, who complained, and
     the whole of what they complained about, read once.
@@ -496,12 +701,32 @@ def _incident_payload(
     merged above them.
     """
     first = incident.reports[0]
+    context = (
+        (player_context or {}).get(first.reported_user_id)
+        if first.reported_user_id
+        else None
+    )
+    live_avatar_key = (context or {}).get("_avatarKey")
+    shown_context = (
+        {key: value for key, value in context.items() if key != "_avatarKey"}
+        if context
+        else None
+    )
     return {
         "id": str(incident.id),
-        "reportedPlayer": (
-            (player_context or {}).get(first.reported_user_id)
+        "reportedPlayer": shown_context,
+        # What became of the picture this incident is about, when it is about
+        # one. The decision is still about the picture the account carries
+        # now, which is what Remove picture acts on - this exists so that is
+        # a choice rather than a substitution nobody mentioned, and so a
+        # picture a moderator has already taken down does not read as merely
+        # a different one.
+        "picture": _incident_picture(
+            incident,
+            live_avatar_key,
+            (removals or {}).get(first.reported_user_id)
             if first.reported_user_id
-            else None
+            else None,
         ),
         "reportedUserId": (
             str(first.reported_user_id) if first.reported_user_id else None
@@ -525,6 +750,11 @@ def _incident_payload(
                 "turnId": str(report.turn_id) if report.turn_id else None,
                 "createdAt": report.created_at.isoformat(),
                 "drawing": drawing_evidence_payload(report.drawing_evidence),
+                # True when this complaint was about a picture the account no
+                # longer carries. The old one is gone - an upload deletes the
+                # one it replaces - so this says the moderator is looking at a
+                # different picture, and never pretends to show the old one.
+                "pictureStatus": _picture_status(report, live_avatar_key),
             }
             for report in incident.reports
         ],
@@ -539,6 +769,9 @@ def _incident_payload(
             }
             for report in incident.drawings
         ],
+        # What was last decided about this same incident, when there has been
+        # one. Null on a first complaint, which is most of them.
+        "priorDecision": (prior or {}).get(incident.id),
         **_incident_decision(incident, decisions),
     }
 
@@ -1027,18 +1260,48 @@ def create_moderation_router(
                             else retained_messages[0].room_instance_id
                         ),
                     )
+                # A complaint about the account's picture, which is what the
+                # lobby row and the profile page offer (R-AVA-04). Recorded
+                # here from the account rather than taken from the reporter,
+                # and refused outright when there is no picture: a report
+                # about something that does not exist is a dead end for
+                # whoever has to read it.
+                about_picture = body.reason == ReportReason.INAPPROPRIATE_AVATAR
+                # What the account itself carries, rather than anything it
+                # said: its name and its picture, which are what the lobby row
+                # and the profile page show and so what they offer to report
+                # (R-AVA-06). Both belong to the account, so both are scoped
+                # to it.
+                about_account = about_picture or (
+                    body.reason == ReportReason.INAPPROPRIATE_NAME
+                )
+                if about_picture and target.avatar_key is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="That player has no picture to report.",
+                    )
+                # Only a complaint about the picture names one. A name report
+                # has no picture to have changed.
+                reported_avatar_key = target.avatar_key if about_picture else None
                 # Where the complaint happened, and so which incident it
                 # belongs to (#620). Read off the evidence the checks above
                 # already proved comes from one place: all-lobby or one room
-                # instance, never mixed. A report that cited nothing names no
-                # place to look and stands on its own.
-                if not retained_messages:
-                    scope, room_instance_id = ReportScope.UNSCOPED, None
-                elif retained_messages[0].audience == "lobby":
-                    scope, room_instance_id = ReportScope.LOBBY, None
+                # instance, never mixed.
+                if retained_messages:
+                    if retained_messages[0].audience == "lobby":
+                        scope, room_instance_id = ReportScope.LOBBY, None
+                    else:
+                        scope = ReportScope.ROOM
+                        room_instance_id = retained_messages[0].room_instance_id
+                elif about_account:
+                    # A name and a picture belong to the account, not to a
+                    # room or a line of chat, so every complaint about one
+                    # meets in the same bucket whichever screen it came from.
+                    scope, room_instance_id = ReportScope.PROFILE, None
                 else:
-                    scope = ReportScope.ROOM
-                    room_instance_id = retained_messages[0].room_instance_id
+                    # Cited nothing and named nothing: no place to look, so it
+                    # stands on its own.
+                    scope, room_instance_id = ReportScope.UNSCOPED, None
                 # Everything above this line is the router proving what a
                 # client told it. The writing is shared with the socket path,
                 # which has nothing to prove because it resolved the target and
@@ -1051,6 +1314,7 @@ def create_moderation_router(
                     turn_id=turn.id if turn else None,
                     scope=scope,
                     room_instance_id=room_instance_id,
+                    reported_avatar_key=reported_avatar_key,
                     reason=body.reason.value,
                     details=body.details,
                     messages=list(retained_messages),
@@ -1148,9 +1412,15 @@ def create_moderation_router(
             on_page = list(reports)
             player_context = await _reported_player_context(session, on_page)
             decisions = await _decisions(session, on_page)
+            prior = await _prior_decisions(session, page)
+            removals = await _avatar_removals(
+                session, _accounts_with_no_picture(on_page, player_context)
+            )
             return {
                 "incidents": [
-                    _incident_payload(incident, player_context, decisions)
+                    _incident_payload(
+                        incident, player_context, decisions, prior, removals
+                    )
                     for incident in page
                 ],
                 "total": len(planned),
@@ -1287,6 +1557,9 @@ def create_moderation_router(
             )
             player_context = await _reported_player_context(session, list(players))
             decisions = await _decisions(session, list(players), list(content))
+            removals = await _avatar_removals(
+                session, _accounts_with_no_picture(list(players), player_context)
+            )
             by_player_group = group_by_decision(list(players))
             by_content_group = group_by_decision(list(content))
             # Back into the page's order: `IN` returns rows in whatever order
@@ -1300,6 +1573,7 @@ def create_moderation_router(
                         ),
                         player_context,
                         decisions,
+                        removals=removals,
                     )
                     for kind, group in page
                     if kind == "player"

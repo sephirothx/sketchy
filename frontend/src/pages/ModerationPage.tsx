@@ -23,7 +23,10 @@ import {
   type ContentIncident,
   type IncidentEvidence,
   type PlayerReportDrawing,
+  composeRepeatNote,
+  type IncidentPicture,
   type ModerationIncident,
+  type PriorDecision,
   type ReportOutcome,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
@@ -53,11 +56,19 @@ type QueueEntry = {
   reporterCount?: number;
 };
 
-/** Where the incident happened, said the way a moderator would say it. */
-const SCOPES: Record<ModerationIncident["scope"], string> = {
-  room: "In a room",
-  lobby: "In the lobby",
-  unscoped: "No room named",
+/** Where the incident happened, said the way a moderator would say it.
+
+`repeat` is the same fact in the grammar a second decision needs: what makes
+this complaint the same one as the last, said as a phrase rather than a
+label. */
+const SCOPES: Record<
+  ModerationIncident["scope"],
+  { label: string; repeat: string }
+> = {
+  room: { label: "In a room", repeat: "in the same room" },
+  lobby: { label: "In the lobby", repeat: "in the lobby" },
+  profile: { label: "Their picture", repeat: "about their picture" },
+  unscoped: { label: "No room named", repeat: "with nothing cited" },
 };
 
 /** One chip per outcome: what was done, in the colour of how serious it was.
@@ -204,6 +215,12 @@ function ReportersPanel({
               <time dateTime={report.createdAt}>
                 {formatWhen(report.createdAt, dateTime)}
               </time>
+              {report.pictureStatus === "replaced" && (
+                <Chip kind="warning">Different picture now</Chip>
+              )}
+              {report.pictureStatus === "removed" && (
+                <Chip kind="neutral">Picture gone</Chip>
+              )}
             </div>
             <p className="mod-case-details">
               {report.details ||
@@ -213,6 +230,122 @@ function ReportersPanel({
         ))}
       </ol>
     </>
+  );
+}
+
+/** What became of the picture the case is about, when it is about one.
+
+Only says anything when the picture is no longer the one complained about,
+because "still the reported picture" is what a moderator assumes and does not
+need telling. The removal case is the one this exists for: a picture already
+taken down read as merely "a different picture now", which is the opposite of
+what happened to it - and most often the moderator reading it is the one who
+removed it, from this very case, a minute earlier. */
+function PictureBanner({
+  picture,
+  dateTime,
+}: {
+  picture: IncidentPicture | null;
+  dateTime: (date: Date) => string;
+}) {
+  if (!picture || picture.status === "same") return null;
+  const when = picture.removedAt
+    ? formatWhen(picture.removedAt, dateTime)
+    : null;
+  return (
+    <aside className="mod-picture-note" data-testid="mod-picture-note">
+      {picture.status === "removed" ? (
+        <p>
+          <strong>
+            {picture.removedByModerator
+              ? picture.removedFromThisIncident
+                ? "Already removed from this case"
+                : "Already removed by a moderator"
+              : "The player took this picture down themselves"}
+          </strong>
+          {when ? ` — ${when}.` : "."}{" "}
+          {picture.removedByModerator
+            ? "The account has no picture, and cannot upload one for a week."
+            : "The account has no picture. Taking your own down is not a punishment and sets no block."}
+        </p>
+      ) : (
+        <p>
+          <strong>This is a different picture.</strong> The one complained
+          about is gone — an upload deletes what it replaces — so what is shown
+          is the one on the account now, and the one a removal would act on.
+        </p>
+      )}
+    </aside>
+  );
+}
+
+/** What was already decided about this same incident.
+
+A decided incident cannot be reopened, so a fresh complaint about the same
+person in the same place opens a new one - which is right, and which would
+otherwise arrive looking like nothing had ever been done about it. The note
+is shown because it was written for whoever reads the case next, and this is
+that reader. */
+function PriorDecisionBanner({
+  prior,
+  repeat,
+  dateTime,
+  onRepeat,
+  busy,
+}: {
+  prior: PriorDecision | null;
+  repeat: string;
+  dateTime: (date: Date) => string;
+  /** Dismiss this incident on the strength of the one above it. */
+  onRepeat: (note: string) => void;
+  busy: boolean;
+}) {
+  if (!prior) return null;
+  const again = prior.priorDecisions > 1;
+  return (
+    <aside className="mod-prior" data-testid="mod-prior-decision">
+      <p className="mod-prior-head">
+        <Chip kind={OUTCOMES[prior.outcome]?.kind ?? "neutral"}>
+          {OUTCOMES[prior.outcome]?.label ?? humanize(prior.outcome)}
+        </Chip>
+        <span>
+          {again
+            ? `Decided ${prior.priorDecisions} times before — most recently`
+            : "This was decided before —"}{" "}
+          {prior.decidedAt ? formatWhen(prior.decidedAt, dateTime) : "at an unknown time"}
+          {prior.decidedBy ? ` by ${prior.decidedBy}` : ""}, about the same player{" "}
+          {repeat}.
+        </span>
+      </p>
+      {prior.note && <p className="mod-prior-note">“{prior.note}”</p>}
+      {/* The common ending for a repeat: nothing new happened, and the case
+          above already says what was made of it. Only a dismissal is offered
+          from here - it restricts nobody, so it is the one outcome that can
+          safely be one press away from a moderator who has read this. A
+          warning or a suspension is not repeated by shortcut. */}
+      <div className="mod-prior-actions">
+        <button
+          type="button"
+          className="btn btn-secondary btn-compact"
+          disabled={busy}
+          data-testid="mod-prior-dismiss"
+          onClick={() =>
+            onRepeat(
+              composeRepeatNote(
+                prior,
+                OUTCOMES[prior.outcome]?.label ?? humanize(prior.outcome),
+                prior.decidedAt ? formatWhen(prior.decidedAt, dateTime) : null,
+              ),
+            )
+          }
+        >
+          Dismiss as already decided
+        </button>
+        <span className="mod-prior-hint">
+          Closes this one with the decision above as its note.
+        </span>
+      </div>
+    </aside>
   );
 }
 
@@ -433,9 +566,17 @@ export function ModerationPage() {
     return <NotFoundPage />;
   }
 
-  async function act(id: string, run: () => Promise<unknown>, done: string) {
+  async function act(
+    id: string,
+    run: () => Promise<unknown>,
+    done: string,
+    // The note `run` will send, when the caller composed one rather than
+    // taking it from the box - the required-note rule is about what reaches
+    // the ledger, not about which field it was typed into.
+    composed?: string,
+  ) {
     if (busy) return;
-    if (!note[id]?.trim()) {
+    if (!(composed ?? note[id] ?? "").trim()) {
       setError("A note is required, so the decision is not anonymous.");
       return;
     }
@@ -634,7 +775,7 @@ export function ModerationPage() {
                     {playerCase.reporterCount === 1
                       ? "1 reporter"
                       : `${playerCase.reporterCount} reporters`}
-                    {` · ${SCOPES[playerCase.scope]}`}
+                    {` · ${SCOPES[playerCase.scope].label}`}
                     {` · opened ${formatWhen(playerCase.openedAt, dateTime)}`}
                     {playerCase.reporterCount > 1 &&
                       ` · latest ${formatWhen(playerCase.latestReportedAt, dateTime)}`}
@@ -649,6 +790,31 @@ export function ModerationPage() {
                   ))}
                 </div>
               </div>
+
+              <PictureBanner
+                picture={playerCase.picture}
+                dateTime={dateTime}
+              />
+
+              <PriorDecisionBanner
+                prior={playerCase.priorDecision}
+                repeat={SCOPES[playerCase.scope].repeat}
+                dateTime={dateTime}
+                busy={busy === playerCase.id}
+                onRepeat={(composed) =>
+                  act(
+                    playerCase.id,
+                    () =>
+                      reviewModerationReport(
+                        playerCase.id,
+                        "dismissed",
+                        composed,
+                      ),
+                    "Dismissed, as already decided.",
+                    composed,
+                  )
+                }
+              />
 
               <div className="mod-case-columns">
                 <section className="ops-card" aria-label="Reported evidence">

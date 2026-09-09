@@ -1439,12 +1439,24 @@
    "gameId",
    "latestReportedAt",
    "openedAt",
+   "pictureStatus",
+   "priorDecision",
    "reportId",
    "reportedPlayer",
    "reportedUserId",
    "reporterCount",
    "reporterUserId",
    "turnId"
+  ],
+  "api.moderation:_incident_picture": [
+   "removedAt",
+   "removedByModerator",
+   "removedFromThisIncident"
+  ],
+  "api.moderation:_prior_decisions": [
+   "decidedAt",
+   "decidedBy",
+   "priorDecisions"
   ],
   "api.moderation:_reported_player_context": [
    "activeSuspension",

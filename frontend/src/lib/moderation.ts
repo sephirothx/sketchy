@@ -86,7 +86,7 @@ export interface ReportedPlayerContext {
 `room` groups by the room instance it was filed in; `lobby` shares one bucket
 per reported account, the lobby having no instance to name; `unscoped` cited
 nothing, names no place to look, and stands alone. */
-export type ReportScope = "room" | "lobby" | "unscoped";
+export type ReportScope = "room" | "lobby" | "profile" | "unscoped";
 
 /** One complaint inside an incident: who made it, in what words, and why.
 
@@ -104,6 +104,51 @@ export interface IncidentReport {
   createdAt: string;
   /** The canvas as this reporter saw it, if they attached one. */
   drawing: PlayerReportDrawing | null;
+  /** What became of the picture this complaint was about; null when it was
+      not about one. The reported picture is never recoverable - an upload
+      deletes the one it replaces - so this says what is there instead,
+      never that the old one can be shown. */
+  pictureStatus: PictureStatus | null;
+}
+
+/** `same` - still the picture that was complained about. `replaced` - a
+different one is there now. `removed` - there is none, which is a different
+thing from a different one and reads as the opposite of it if they are
+conflated. */
+export type PictureStatus = "same" | "replaced" | "removed";
+
+/** What became of the picture an incident is about, said once for the case.
+
+`removed` is the state worth separating: a picture a moderator has already
+taken down would otherwise read as "a different picture now", which is the
+opposite of what was done to it - and the moderator reading that is often the
+one who did it, moments earlier, from this very case. */
+export interface IncidentPicture {
+  status: PictureStatus;
+  /** Whether somebody carried the removal out, rather than the player taking
+      their own picture down - which is not a punishment and sets no block. */
+  removedByModerator: boolean;
+  removedAt: string | null;
+  /** Removed through one of this incident's own reports. */
+  removedFromThisIncident: boolean;
+}
+
+/** What was last decided about this same incident, when there has been one.
+
+A decided incident is closed for good, so a fresh complaint about the same
+person in the same place is a new incident rather than a reopening. This is
+what stops it arriving looking untouched. */
+export interface PriorDecision {
+  outcome: ReportOutcome;
+  decidedAt: string | null;
+  /** Resolved when read, never stored beside the case. Null if that account
+      is gone. */
+  decidedBy: string | null;
+  /** The note that decision was required to carry. Written for other
+      moderators, which is what makes it worth showing here. */
+  note: string | null;
+  /** How many times this same incident has been decided before. */
+  priorDecisions: number;
 }
 
 /** A line of an incident's merged thread, and who complained about it. */
@@ -145,6 +190,47 @@ export interface ModerationIncident {
   reviewedAt: string | null;
   /** Which moderator action decided it; null while it waits. */
   decisionGroupId: string | null;
+  /** What became of the picture this incident is about; null when it is not
+      about one. The decision is still about the picture the account carries
+      now, which is the one Remove picture acts on. */
+  picture: IncidentPicture | null;
+  /** Null on a first complaint, which is most of them. */
+  priorDecision: PriorDecision | null;
+}
+
+/** The ledger cap a resolution note has to fit inside. */
+export const MAX_RESOLUTION_NOTE = 2000;
+
+/** The note a "decide it the same way again" carries.
+
+Whoever reads this case next gets what the moderator was looking at when they
+pressed the button, rather than a bare "dismissed" that sends them hunting for
+the decision it was deferring to. Composed rather than typed, because the whole
+point of the shortcut is that there is nothing left to say; the earlier note is
+quoted, because it is somebody else's words.
+
+The outcome's label and the formatted time are passed in rather than derived:
+how a decision is named and how a moment is written are the page's business,
+and both belong to the reader's own settings. */
+export function composeRepeatNote(
+  prior: PriorDecision,
+  outcomeLabel: string,
+  when: string | null,
+): string {
+  const head =
+    `Already ${outcomeLabel.toLowerCase()}` +
+    (when ? ` on ${when}` : "") +
+    (prior.decidedBy ? ` by ${prior.decidedBy}` : "") +
+    (prior.priorDecisions > 1 ? `, and ${prior.priorDecisions} times in all` : "") +
+    ".";
+  if (!prior.note) return head;
+  // The quote is what gives, so the head - which says what was decided and by
+  // whom - always survives the cap intact.
+  const room = MAX_RESOLUTION_NOTE - head.length - " Their note: “”".length;
+  if (room <= 1) return head;
+  const quoted =
+    prior.note.length <= room ? prior.note : `${prior.note.slice(0, room - 1)}…`;
+  return `${head} Their note: “${quoted}”`;
 }
 
 export interface UserBan {

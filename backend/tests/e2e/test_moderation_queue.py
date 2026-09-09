@@ -275,6 +275,67 @@ async def test_two_players_reporting_one_thing_are_one_case_decided_once():
             # One decision took both complaints with it: nothing about this
             # player is left waiting.
             assert await case.count() == 0
+
+            # The same room, the same player, complained about again. R-MOD-05
+            # lets a reporter raise a new one once the first is decided, and
+            # R-MOD-07 keeps the decided case closed - so this opens a *new*
+            # incident, which must not arrive looking untouched (R-MOD-18).
+            repeat_reporter = reporters[0]
+            # Their first report's acknowledgement is still up, and it sits
+            # over the player list the next one is opened from.
+            await repeat_reporter.locator(
+                ".modal-card .modal-dismiss"
+            ).click()
+            await repeat_reporter.locator(".modal-card").wait_for(state="detached")
+            row = repeat_reporter.locator(".player-list li", has_text=names[drawer])
+            await row.locator(".player-moderation-trigger").click()
+            await repeat_reporter.locator(".player-vote-menu").get_by_role(
+                "menuitem", name="Report"
+            ).click()
+            dialog = repeat_reporter.locator(".modal-card").filter(has_text="Report")
+            await dialog.wait_for(state="visible")
+            await dialog.locator("textarea").fill("They are at it again.")
+            await dialog.get_by_role("button", name="Send report").click()
+            await repeat_reporter.wait_for_selector('.modal-card:has-text("Sent,")')
+
+            await moderator_page.reload()
+            repeat_case = moderator_page.locator(
+                ".mod-queue-item", has_text=names[drawer]
+            )
+            await repeat_case.wait_for()
+            await repeat_case.click()
+
+            banner = moderator_page.locator('[data-testid="mod-prior-decision"]')
+            await banner.wait_for()
+            banner_text = await banner.inner_text()
+            assert "decided before" in banner_text
+            assert "PileMod" in banner_text
+            # The note the earlier decision was required to carry, shown to
+            # the reader it was written for.
+            assert "Spoke to them; nothing further." in banner_text
+
+            # And the ending a repeat usually has, one press away - with no
+            # note to type, because the case above is the note.
+            await moderator_page.locator(
+                '[data-testid="mod-prior-dismiss"]'
+            ).click()
+            await moderator_page.wait_for_selector(
+                '[role="status"]:has-text("Dismissed, as already decided.")'
+            )
+            await repeat_case.wait_for(state="detached")
+
+            # Closed, carrying what it deferred to rather than a bare word.
+            await moderator_page.locator(
+                ".mod-filter-pill", has_text="Closed"
+            ).click()
+            closed = moderator_page.locator(
+                ".mod-queue-item", has_text=names[drawer]
+            ).first
+            await closed.wait_for()
+            await closed.click()
+            resolution = moderator_page.locator(".mod-resolution").first
+            await resolution.wait_for()
+            assert "Already dismissed" in await resolution.inner_text()
         finally:
             for context in contexts:
                 await context.close()
