@@ -878,3 +878,101 @@ async def test_a_socket_in_no_room_has_no_seats_to_mark():
     )
     answer = await sio.handlers["/"]["friends_in_room"]("sid-nobody", {})
     assert answer["ok"] is False
+
+
+async def test_a_malformed_marking_request_is_refused_like_any_other():
+    """It takes no arguments, which is a contract rather than an absence.
+
+    A command that accepts anything is a command whose payload nothing checks,
+    and `EmptyPayload` is how every other argument-free command here says so.
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(
+        room_manager, friend_service=StubFriendService()
+    )
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["friends_in_room"](
+        "sid-ada", {"playerId": "smuggled"}
+    )
+    assert answer["ok"] is False
+
+
+async def test_marking_is_answered_emptily_when_friends_are_unavailable():
+    """A roster with no marks on it, rather than a roster that fails to draw.
+
+    Nothing on this path is load-bearing: the room reads exactly as it did
+    before friendships were drawn on it, which is the right failure for
+    decoration.
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["friends_in_room"]("sid-ada", {})
+    assert answer == {"ok": True, "playerIds": []}
+
+
+async def test_a_seat_whose_account_will_not_parse_is_simply_not_marked():
+    """Belt and braces around the one field the room copies from an account."""
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    broken = room_manager.add_player(
+        room, "Bob", user_id="not-a-uuid", is_anonymous=False
+    )
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["friends_in_room"]("sid-ada", {})
+    assert answer == {"ok": True, "playerIds": []}
+    assert broken.id not in answer["playerIds"]
+
+
+async def test_a_reader_whose_own_account_will_not_parse_marks_nothing():
+    room_manager = RoomManager()
+    friends = StubFriendService(friends=[(ADA, BOB)])
+    ctx, sio, sessions = build_stack(room_manager, friend_service=friends)
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, "not-a-uuid", "Ada")
+    me.sid = "sid-ada"
+    room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    answer = await sio.handlers["/"]["friends_in_room"]("sid-ada", {})
+    assert answer == {"ok": True, "playerIds": []}
+
+
+async def test_a_marking_read_that_runs_long_answers_busy():
+    """The same acknowledgement every other bounded read here answers with."""
+    import asyncio
+
+    class SlowFriends(StubFriendService):
+        async def accepted_ids(self, user_id):
+            await asyncio.sleep(3600)
+
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager, friend_service=SlowFriends())
+    room = room_manager.create_room(name="Studio", is_public=True)
+    me = await seat_host(room_manager, room, ADA, "Ada")
+    me.sid = "sid-ada"
+    await sessions.save("sid-ada", {"room_id": room.id, "player_id": me.id})
+
+    from app.handlers import rooms as rooms_handlers
+
+    original = rooms_handlers.ENTRY_DB_TIMEOUT_SECONDS
+    rooms_handlers.ENTRY_DB_TIMEOUT_SECONDS = 0.01
+    try:
+        answer = await sio.handlers["/"]["friends_in_room"]("sid-ada", {})
+    finally:
+        rooms_handlers.ENTRY_DB_TIMEOUT_SECONDS = original
+    assert answer["ok"] is False
