@@ -1598,3 +1598,40 @@
   position: relative;
   z-index: 2;
 }
+
+/* What was already decided about this same incident. Sits between the case's
+   heading and its evidence because that is where it changes what happens
+   next: a moderator who reads it after deciding has read it too late. Amber
+   rather than the decision panel's red — it is context to weigh, not a
+   consequence about to be applied. */
+.mod-prior {
+  background: color-mix(in srgb, var(--warning) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 11px 13px;
+}
+
+.mod-prior-head {
+  align-items: baseline;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px;
+  margin: 0;
+}
+
+/* The note the earlier decision was required to carry. Quoted, because it is
+   somebody's words rather than the app's. */
+.mod-prior-note {
+  border-left: 2px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--ink-soft, var(--ink));
+  font-size: 13px;
+  font-style: italic;
+  margin: 0;
+  padding-left: 10px;
+}

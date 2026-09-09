@@ -86,7 +86,7 @@ export interface ReportedPlayerContext {
 `room` groups by the room instance it was filed in; `lobby` shares one bucket
 per reported account, the lobby having no instance to name; `unscoped` cited
 nothing, names no place to look, and stands alone. */
-export type ReportScope = "room" | "lobby" | "unscoped";
+export type ReportScope = "room" | "lobby" | "profile" | "unscoped";
 
 /** One complaint inside an incident: who made it, in what words, and why.
 
@@ -104,6 +104,29 @@ export interface IncidentReport {
   createdAt: string;
   /** The canvas as this reporter saw it, if they attached one. */
   drawing: PlayerReportDrawing | null;
+  /** This complaint was about a picture the account no longer carries. The
+      old one is gone - an upload deletes the one it replaces - so this says
+      the moderator is looking at a different picture, never that the old one
+      can be shown. */
+  pictureChangedSince: boolean;
+}
+
+/** What was last decided about this same incident, when there has been one.
+
+A decided incident is closed for good, so a fresh complaint about the same
+person in the same place is a new incident rather than a reopening. This is
+what stops it arriving looking untouched. */
+export interface PriorDecision {
+  outcome: ReportOutcome;
+  decidedAt: string | null;
+  /** Resolved when read, never stored beside the case. Null if that account
+      is gone. */
+  decidedBy: string | null;
+  /** The note that decision was required to carry. Written for other
+      moderators, which is what makes it worth showing here. */
+  note: string | null;
+  /** How many times this same incident has been decided before. */
+  priorDecisions: number;
 }
 
 /** A line of an incident's merged thread, and who complained about it. */
@@ -145,6 +168,12 @@ export interface ModerationIncident {
   reviewedAt: string | null;
   /** Which moderator action decided it; null while it waits. */
   decisionGroupId: string | null;
+  /** Any complaint here was about a picture that has since been replaced or
+      taken down. The decision is still about the picture the account carries
+      now, which is the one Remove picture acts on. */
+  pictureChangedSince: boolean;
+  /** Null on a first complaint, which is most of them. */
+  priorDecision: PriorDecision | null;
 }
 
 export interface UserBan {

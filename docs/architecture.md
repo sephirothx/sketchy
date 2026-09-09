@@ -1011,11 +1011,24 @@ and what a decision covers (#620).
 
 The key is derived, not matched: `(reported_user_id, scope, room_instance_id)` over
 pending reports, from columns both report routes already knew and used to discard. A
-report that cited nothing groups with nothing and stands on its own.
+report that cited nothing groups with nothing and stands on its own. A complaint about
+the account's *picture* is scoped `profile` rather than left ungrouped: it belongs to no
+room and no line, so it takes the lobby's shape — no instance, one bucket per account —
+and several people objecting to one picture are one incident whichever screen each of
+them was on (R-AVA-06).
 [`services/incidents.py`](../backend/app/services/incidents.py) does the grouping and
 the evidence merge and touches no database — it is handed rows and returns a shape —
 so the ordering rule (oldest first, never by how many complained) and the merge rule
 (one line once, carrying which reports cited it) are readable in one place.
+
+Two things a moderator needs *before* deciding are read at the same time as the queue.
+A report about a picture recorded which picture, and an upload deletes the one it
+replaces, so the queue compares that key against the live one and says the picture has
+changed rather than showing a different one in its place (R-AVA-07). And because a
+decided incident is closed for good, a repeat complaint opens a new one — correct, and
+on its own indistinguishable from a first — so a pending incident carries the last
+decision taken about its own key, note included (R-MOD-18). Keyed on the incident, not
+the account: the standing counts beside it already say how often this player has come up.
 
 Deciding is where the concurrency is.
 [`api/moderation.py`](../backend/app/api/moderation.py)'s `_lock_pending_incident`

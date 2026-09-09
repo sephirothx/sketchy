@@ -24,6 +24,7 @@ import {
   type IncidentEvidence,
   type PlayerReportDrawing,
   type ModerationIncident,
+  type PriorDecision,
   type ReportOutcome,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
@@ -53,11 +54,19 @@ type QueueEntry = {
   reporterCount?: number;
 };
 
-/** Where the incident happened, said the way a moderator would say it. */
-const SCOPES: Record<ModerationIncident["scope"], string> = {
-  room: "In a room",
-  lobby: "In the lobby",
-  unscoped: "No room named",
+/** Where the incident happened, said the way a moderator would say it.
+
+`repeat` is the same fact in the grammar a second decision needs: what makes
+this complaint the same one as the last, said as a phrase rather than a
+label. */
+const SCOPES: Record<
+  ModerationIncident["scope"],
+  { label: string; repeat: string }
+> = {
+  room: { label: "In a room", repeat: "in the same room" },
+  lobby: { label: "In the lobby", repeat: "in the lobby" },
+  profile: { label: "Their picture", repeat: "about their picture" },
+  unscoped: { label: "No room named", repeat: "with nothing cited" },
 };
 
 /** One chip per outcome: what was done, in the colour of how serious it was.
@@ -204,6 +213,9 @@ function ReportersPanel({
               <time dateTime={report.createdAt}>
                 {formatWhen(report.createdAt, dateTime)}
               </time>
+              {report.pictureChangedSince && (
+                <Chip kind="warning">Different picture now</Chip>
+              )}
             </div>
             <p className="mod-case-details">
               {report.details ||
@@ -213,6 +225,44 @@ function ReportersPanel({
         ))}
       </ol>
     </>
+  );
+}
+
+/** What was already decided about this same incident.
+
+A decided incident cannot be reopened, so a fresh complaint about the same
+person in the same place opens a new one - which is right, and which would
+otherwise arrive looking like nothing had ever been done about it. The note
+is shown because it was written for whoever reads the case next, and this is
+that reader. */
+function PriorDecisionBanner({
+  prior,
+  repeat,
+  dateTime,
+}: {
+  prior: PriorDecision | null;
+  repeat: string;
+  dateTime: (date: Date) => string;
+}) {
+  if (!prior) return null;
+  const again = prior.priorDecisions > 1;
+  return (
+    <aside className="mod-prior" data-testid="mod-prior-decision">
+      <p className="mod-prior-head">
+        <Chip kind={OUTCOMES[prior.outcome]?.kind ?? "neutral"}>
+          {OUTCOMES[prior.outcome]?.label ?? humanize(prior.outcome)}
+        </Chip>
+        <span>
+          {again
+            ? `Decided ${prior.priorDecisions} times before — most recently`
+            : "This was decided before —"}{" "}
+          {prior.decidedAt ? formatWhen(prior.decidedAt, dateTime) : "at an unknown time"}
+          {prior.decidedBy ? ` by ${prior.decidedBy}` : ""}, about the same player{" "}
+          {repeat}.
+        </span>
+      </p>
+      {prior.note && <p className="mod-prior-note">“{prior.note}”</p>}
+    </aside>
   );
 }
 
@@ -634,7 +684,7 @@ export function ModerationPage() {
                     {playerCase.reporterCount === 1
                       ? "1 reporter"
                       : `${playerCase.reporterCount} reporters`}
-                    {` · ${SCOPES[playerCase.scope]}`}
+                    {` · ${SCOPES[playerCase.scope].label}`}
                     {` · opened ${formatWhen(playerCase.openedAt, dateTime)}`}
                     {playerCase.reporterCount > 1 &&
                       ` · latest ${formatWhen(playerCase.latestReportedAt, dateTime)}`}
@@ -649,6 +699,12 @@ export function ModerationPage() {
                   ))}
                 </div>
               </div>
+
+              <PriorDecisionBanner
+                prior={playerCase.priorDecision}
+                repeat={SCOPES[playerCase.scope].repeat}
+                dateTime={dateTime}
+              />
 
               <div className="mod-case-columns">
                 <section className="ops-card" aria-label="Reported evidence">

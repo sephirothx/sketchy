@@ -4,7 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { AuthDialog } from "../components/AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AppHeader } from "../components/AppHeader";
-import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
+import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons";
+import { ReportPictureDialog } from "../components/ReportPictureDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
@@ -447,6 +448,7 @@ function ProfileView({ userId }: { userId: string }) {
   // falling apart should still be findable.
   const [includeAbandoned, setIncludeAbandoned] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportingPicture, setReportingPicture] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
@@ -599,7 +601,35 @@ function ProfileView({ userId }: { userId: string }) {
               userId={userId}
               displayName={shownName}
             />
+            {/* The other place a picture is actually looked at, and so the
+                other place it has to be reportable from (R-AVA-04). Offered
+                on the same terms as the lobby's: somebody else's account,
+                holding an identity of your own, and a picture there to
+                complain about. */}
+            {!isOwnProfile &&
+              !currentUser?.isAnonymous &&
+              !subject.isAnonymous &&
+              subject.avatarUrl && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact profile-report-picture"
+                  title={`Report ${shownName}'s picture`}
+                  aria-label={`Report ${shownName}'s picture`}
+                  onClick={() => setReportingPicture(true)}
+                >
+                  <FlagIcon size={14} />
+                </button>
+              )}
           </header>
+
+          {reportingPicture && subject.avatarUrl && (
+            <ReportPictureDialog
+              userId={userId}
+              displayName={shownName}
+              avatarUrl={subject.avatarUrl}
+              onClose={() => setReportingPicture(false)}
+            />
+          )}
 
           {isOwnProfile && subject.isAnonymous && (
             <section className="panel profile-claim">

@@ -10,14 +10,14 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.avatars import create_avatar_router
 from app.api.moderation import create_moderation_router
 from app.auth.avatars import AVATAR_REUPLOAD_BLOCK, MAX_AVATAR_BYTES, avatar_key_for
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, UploadedAvatarAsset, User
+from app.db.models import AuditEvent, PlayerReport, UploadedAvatarAsset, User
 from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import AvatarBlocked, remove_avatar, set_avatar
@@ -333,3 +333,150 @@ async def test_a_key_that_is_not_a_content_address_is_not_looked_up(env):
     assert (await http.get("/api/avatars/../etc/passwd")).status_code in (404, 422)
     assert (await http.get("/api/avatars/initial")).status_code == 404
     assert (await http.get("/api/avatars/" + "0" * 64 + ".png")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reports_about_one_picture_are_one_incident(env):
+    """A picture belongs to the account, not to a room or a line of chat, so
+    several people objecting to one are objecting to one thing - whichever
+    screen each of them was looking at when they did (#620, R-AVA-04)."""
+    new_client, factory = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "Pictured")
+    moderator = await register(moderator_http, "PicMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=5)))
+
+    for name in ("PicRepA", "PicRepB", "PicRepC"):
+        reporter_http = new_client()
+        await register(reporter_http, name)
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "inappropriate_avatar",
+                "details": f"{name} objects.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+
+    listed = await moderator_http.get("/api/moderation/reports")
+    incidents = [
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    assert len(incidents) == 1
+    [incident] = incidents
+    assert incident["reporterCount"] == 3
+    # Its own scope: no room instance, and not the catch-all a report that
+    # cited nothing would otherwise land in.
+    assert incident["scope"] == "profile"
+    assert incident["pictureChangedSince"] is False
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PlayerReport).where(
+                    PlayerReport.reported_user_id == UUID(target["id"])
+                )
+            )
+        ).all()
+    assert {row.scope for row in rows} == {"profile"}
+    assert all(row.room_instance_id is None for row in rows)
+    assert all(row.reported_avatar_key is not None for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_a_reviewer_is_told_the_picture_is_no_longer_the_reported_one(env):
+    """An upload deletes the picture it replaces, so the old one cannot be
+    shown and is not pretended at. What a reviewer gets instead is the fact
+    that it changed, beside the picture the account carries now - which is
+    the one Remove picture would act on (R-AVA-04)."""
+    new_client, factory = env
+    target_http = new_client()
+    reporter_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "Swapper")
+    await register(reporter_http, "SwapRep")
+    moderator = await register(moderator_http, "SwapMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+
+    first_key = (
+        await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=7)))
+    ).json()["avatarKey"]
+    sent = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "Not that.",
+        },
+    )
+    assert sent.status_code == 201
+
+    async def incident():
+        listed = await moderator_http.get("/api/moderation/reports")
+        return next(
+            item
+            for item in listed.json()["incidents"]
+            if item["reportedUserId"] == target["id"]
+        )
+
+    before = await incident()
+    assert before["pictureChangedSince"] is False
+    assert before["reports"][0]["pictureChangedSince"] is False
+    assert before["reportedPlayer"]["avatarUrl"] == f"/api/avatars/{first_key}"
+
+    second_key = (
+        await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=9)))
+    ).json()["avatarKey"]
+    assert second_key != first_key
+
+    after = await incident()
+    assert after["pictureChangedSince"] is True
+    assert after["reports"][0]["pictureChangedSince"] is True
+    # The one on the account now, which is what a decision is about.
+    assert after["reportedPlayer"]["avatarUrl"] == f"/api/avatars/{second_key}"
+    # The key itself never goes over the wire; it is compared, not shown.
+    assert "_avatarKey" not in after["reportedPlayer"]
+
+
+@pytest.mark.asyncio
+async def test_a_picture_that_is_not_there_cannot_be_reported(env):
+    """A complaint about something that does not exist is a dead end for
+    whoever has to read it, so it is refused rather than queued."""
+    new_client, factory = env
+    target_http = new_client()
+    reporter_http = new_client()
+    target = await register(target_http, "NoPicture")
+    await register(reporter_http, "NoPicRep")
+
+    refused = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "There is nothing there.",
+        },
+    )
+    assert refused.status_code == 422
+    assert "no picture" in refused.json()["detail"]
+
+    async with factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count(PlayerReport.id)).where(
+                    PlayerReport.reported_user_id == UUID(target["id"])
+                )
+            )
+        ) == 0

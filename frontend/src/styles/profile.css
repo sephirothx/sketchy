@@ -480,3 +480,34 @@
   text-transform: none;
   letter-spacing: normal;
 }
+
+/* Pushed to the far end of the identity row, away from the name and the
+   picture it is about: an action that asks a moderator to look at somebody
+   should not sit where a visitor's eye lands first. */
+.profile-report-picture {
+  align-self: start;
+  color: var(--muted);
+  margin-left: auto;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
+.profile-report-picture:hover {
+  color: var(--danger);
+}
+
+/* The picture the report is about, shown at the size the complaint is about
+   rather than the row size it was clicked from. */
+.report-quoted-picture {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 4px;
+}
+
+.report-quoted-picture img {
+  border: 1px solid var(--rule, rgb(0 0 0 / 12%));
+  border-radius: var(--radius-sm);
+  height: 128px;
+  object-fit: cover;
+  width: 128px;
+}

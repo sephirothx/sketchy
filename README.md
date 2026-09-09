@@ -946,6 +946,19 @@ line retention did not keep cannot be cited, so its author's name is plain text
 and nothing explains why; a player's own lines, and every line seen by a guest,
 are plain for the same reasons the room gives.
 
+A **picture** is reported from where it is actually seen: the flag on a row of
+the lobby's online list, and the one beside the name on a profile. Until now it
+could only be reported from inside a room, which is the one place it is least
+likely to be met - it is on every lobby row and on every profile, and the people
+who object to one are usually not sitting at a table with its owner. There is
+no reason to pick, the control saying what it is for, and nothing to cite: the
+server reads which picture is on the account and records it. Every complaint
+about one account's picture is one incident, whichever screen it was sent from,
+and an account with no picture offers no control and is refused if asked
+anyway. If the picture changes before a moderator looks, the queue says so and
+shows the one on the account now - the old one is gone, an upload deleting what
+it replaces, so it is never quietly shown in its place.
+
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
 or none - and one with an end date lifts itself, because the list reports what
@@ -992,6 +1005,17 @@ one closed case rather than five, and a page holds a page's worth of decisions
 rather than being swallowed by a pile-on. The open queues are small enough to show
 whole, but closed cases accumulate for as long as the server runs, and the newest
 are the ones worth finding.
+
+Deciding an incident closes it for good, so somebody complained about again in
+the same place opens a *new* one rather than reopening the old. That is right,
+and on its own it would put an identical case in front of a moderator with
+nothing to show it had ever been dealt with. So a repeat carries what was last
+decided about that same incident: what was done, when, by whom, and the note,
+which is required of every decision precisely because it is written for whoever
+reads the case next. It is keyed on the incident and not the account - the
+standing beside every case already says how often this player has come up, and
+the thing worth saying here is narrower: *this, in this room, was already
+settled*.
 
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
@@ -1082,8 +1106,9 @@ sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial. A picture can be
-reported, a moderator can remove it through the report, and removal blocks
-uploads for a week. The export carries the bytes; deletion removes them.
+reported - from the lobby, from a profile, or from a room - a moderator can
+remove it through the report, and removal blocks uploads for a week. The export
+carries the bytes; deletion removes them.
 
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the

@@ -724,8 +724,8 @@ account and the entry reads *Deleted player* while standing exactly as it was.
 ### `player_reports`
 `id` · `reporter_user_id` / `reported_user_id` (`SET NULL`) · `game_id` / `turn_id`
 (`SET NULL`) · `reason` · `details` TEXT · `context_snapshot` (JSON) ·
-`scope` (`room \| lobby \| unscoped`) · `room_instance_id` ·
-`decision_group_id` ·
+`scope` (`room \| lobby \| profile \| unscoped`) · `room_instance_id` ·
+`reported_avatar_key` · `decision_group_id` ·
 `status` (`pending \| resolved \| dismissed`) · `reviewed_by_user_id` ·
 `resolution_note` · timestamps.
 
@@ -743,9 +743,25 @@ it from a client. `room_instance_id` carries **no foreign key**, exactly as
 `room_messages.room_instance_id` does not: rooms live in the process, have no row to
 point at, and a report has to outlive the room it was filed in.
 
-`unscoped` is a REST report that cited nothing. It names no place to look, so it stands
-alone rather than joining a bucket it merely resembles. Every lobby report about one
-account shares the one bucket, because the lobby has no instance to name.
+`unscoped` is a REST report that cited nothing and named nothing. It names no place to
+look, so it stands alone rather than joining a bucket it merely resembles. Every lobby
+report about one account shares the one bucket, because the lobby has no instance to
+name.
+
+`profile` is a complaint about the account itself rather than about anything it said —
+today, its picture, which is reportable from the lobby's online list and from the profile
+page (R-AVA-06). It belongs to no room and no line, so like the lobby it takes no
+instance and every such report about one account meets in one bucket, whichever screen it
+came from.
+
+`reported_avatar_key` records **which** picture a complaint about a picture was about.
+It is deliberately not a way to fetch that picture back: `uploaded_avatar_assets` deletes
+the old row the moment a new one is uploaded, so this key can name something already
+gone. That is what it is for — the queue compares it against the account's live
+`avatar_key` and tells a reviewer the picture has **changed** since the report, rather
+than showing a different one in its place and having a moderator judge, and remove,
+something nobody reported (R-AVA-07). The key is never serialised to a client; it is
+compared, not shown. Null on every report not about a picture.
 
 **Which decision covered the report.** `decision_group_id` is minted once per moderator
 action rather than once per report, so a decision over an incident leaves every report it

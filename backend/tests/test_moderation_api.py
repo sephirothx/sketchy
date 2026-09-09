@@ -2795,3 +2795,171 @@ async def test_closed_pages_count_decisions_not_reports(env):
         seen.append(page["players"][0]["resolutionNote"])
         assert page["hasMore"] is (offset < 2)
     assert seen == list(reversed(notes)), "newest decision first"
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_of_a_decided_incident_says_what_was_decided(env):
+    """A decided incident cannot be reopened (R-MOD-07), so a fresh complaint
+    about the same person in the same place opens a new one - which is right,
+    and which would otherwise arrive looking as though nothing had ever been
+    done about it (#620).
+
+    The note comes with it, because it was written for whoever reads the case
+    next and this is that reader."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    target_http = new_client()
+    moderator = await register(moderator_http, "RepeatMod")
+    target = await register(target_http, "RepeatTgt")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    now = datetime.now(timezone.utc)
+    instance = generate_uuid()
+
+    async def line_by_target(text):
+        message_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RoomMessage(
+                        id=message_id,
+                        room_instance_id=instance,
+                        sender_player_id=generate_uuid(),
+                        sender_user_id=UUID(target["id"]),
+                        sender_display_name_snapshot="RepeatTgt",
+                        sender_is_anonymous_snapshot=False,
+                        is_spectator=False,
+                        message_kind="chat",
+                        near_miss_kind=None,
+                        audience="room",
+                        audience_user_ids=[],
+                        text=text,
+                        created_at=now,
+                        expires_at=now + timedelta(days=30),
+                    )
+                )
+        return message_id
+
+    async def report_from(name, message_id):
+        reporter_http = new_client()
+        reporter = await register(reporter_http, name)
+        async with factory() as session:
+            async with session.begin():
+                row = await session.get(RoomMessage, message_id)
+                row.audience_user_ids = [reporter["id"], target["id"]]
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": f"{name} objects.",
+                "messageIds": [str(message_id)],
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        return sent.json()["id"]
+
+    async def incident():
+        listed = await moderator_http.get(
+            "/api/moderation/reports", params={"status": "pending"}
+        )
+        return next(
+            item
+            for item in listed.json()["incidents"]
+            if item["reportedUserId"] == target["id"]
+        )
+
+    first_line = await line_by_target("the first thing")
+    first = await report_from("RepeatA", first_line)
+    # Nothing has been decided yet, so nothing is claimed.
+    assert (await incident())["priorDecision"] is None
+
+    decided = await moderator_http.patch(
+        f"/api/moderation/reports/{first}",
+        json={"status": "dismissed", "note": "Heated, but within bounds."},
+    )
+    assert decided.status_code == 200, decided.text
+
+    # The same person, in the same room, complained about again.
+    second_line = await line_by_target("the second thing")
+    await report_from("RepeatB", second_line)
+    repeat = await incident()
+    assert repeat["status"] == "pending"
+    prior = repeat["priorDecision"]
+    assert prior is not None
+    assert prior["outcome"] == "dismissed"
+    assert prior["decidedBy"] == "RepeatMod"
+    assert prior["note"] == "Heated, but within bounds."
+    assert prior["priorDecisions"] == 1
+    assert prior["decidedAt"] is not None
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_elsewhere_is_not_reported_as_the_same_incident(env):
+    """Keyed on the incident, not on the account. The standing counts beside
+    a case already say this person has come up before; the distinct thing
+    worth saying here is that *this*, in this place, was already dealt
+    with."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    target_http = new_client()
+    moderator = await register(moderator_http, "ElseMod")
+    target = await register(target_http, "ElseTgt")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    now = datetime.now(timezone.utc)
+
+    async def report_in(instance, reporter_name):
+        reporter_http = new_client()
+        reporter = await register(reporter_http, reporter_name)
+        message_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RoomMessage(
+                        id=message_id,
+                        room_instance_id=instance,
+                        sender_player_id=generate_uuid(),
+                        sender_user_id=UUID(target["id"]),
+                        sender_display_name_snapshot="ElseTgt",
+                        sender_is_anonymous_snapshot=False,
+                        is_spectator=False,
+                        message_kind="chat",
+                        near_miss_kind=None,
+                        audience="room",
+                        audience_user_ids=[reporter["id"], target["id"]],
+                        text="something",
+                        created_at=now,
+                        expires_at=now + timedelta(days=30),
+                    )
+                )
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "harassment",
+                "details": "Look at this.",
+                "messageIds": [str(message_id)],
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        return sent.json()["id"]
+
+    room_a, room_b = generate_uuid(), generate_uuid()
+    first = await report_in(room_a, "ElseA")
+    decided = await moderator_http.patch(
+        f"/api/moderation/reports/{first}",
+        json={"status": "dismissed", "note": "Nothing in it."},
+    )
+    assert decided.status_code == 200
+
+    await report_in(room_b, "ElseB")
+    listed = await moderator_http.get("/api/moderation/reports")
+    [pending] = [
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"] and item["status"] == "pending"
+    ]
+    # A different room is a different incident, and nothing was decided about
+    # this one.
+    assert pending["priorDecision"] is None
+    # The account's standing is where "they have come up before" is said.
+    assert pending["reportedPlayer"]["priorReports"] >= 1

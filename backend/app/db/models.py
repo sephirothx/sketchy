@@ -908,6 +908,16 @@ class PlayerReport(Base):
     room_instance_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
+    # Which picture a report about a picture was about. Not a way to fetch it
+    # back: an uploaded avatar is deleted the moment it is replaced, so this
+    # key names something that may already be gone. It is here so a reviewer
+    # is told the picture has *changed* since the complaint, rather than
+    # silently judging a different one - and then acts on the one that is
+    # actually on the account now (R-AVA-04). Null on every report that is
+    # not about a picture.
+    reported_avatar_key: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
     # Which decision covered this report. Minted per decision rather than per
     # report, so one moderator action over an incident leaves every report it
     # decided pointing at the same value. Time-ordered (UUIDv7), which is what
