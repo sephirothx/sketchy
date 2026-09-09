@@ -25,6 +25,7 @@ import app.auth.retention as retention
 from app.api.operations import _retention_json, _retention_lines, retention_sweeps_from
 from app.auth.retention import (
     Sweep,
+    _describe,
     purge_expired_auth_sessions,
     run_retention_sweeps,
 )
@@ -32,6 +33,10 @@ from app.db.models import (
     AuditEvent,
     AuthSession,
     BugReport,
+    GamePromptSource,
+    GameRecord,
+    PromptList,
+    PromptListRevision,
     RoomCodeReservation,
     User,
     UserBan,
@@ -43,6 +48,7 @@ from app.services.bug_report_retention import (
     SCREENSHOT_MAX_AGE_DAYS,
     expire_stale_bug_report_screenshots,
 )
+from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.services.readiness import LoopHealth
 from app.services.room_codes import purge_retired_room_codes
 from app.services.sweeps import SweepBudget
@@ -380,14 +386,16 @@ async def test_each_table_reports_its_own_run_its_own_sla_and_its_own_totals():
             assert reports[name]["failed"] is False
             assert reports[name]["removed_total"] == 0
             assert reports[name]["failures_total"] == 0
-        # Every table that can be behind says how far, so the compliance
-        # question is answerable for it rather than only for the loop.
+        # Every table says how far behind it is - all of them, including the
+        # reclaim, whose own shape is different but whose backlog is real.
+        # The compliance question is answerable per table rather than only
+        # for the loop as a whole.
         measured = [
             name
             for name, report in reports.items()
             if report.get("oldest_overdue_seconds") is not None
         ]
-        assert set(measured) == set(reports) - {"retired_prompt_lists"}
+        assert set(measured) == set(reports)
         assert health.consecutive_failures == 0
     finally:
         await engine.dispose()
@@ -497,6 +505,137 @@ async def test_the_scrape_reads_the_sweeps_off_whichever_loop_reported_them():
     # A loop with no sweeps on its record contributes nothing rather than
     # inventing an empty table.
     assert retention_sweeps_from({"mail_delivery": {"running": True}}) == {}
+
+
+# --- the reclaim's own starvation -----------------------------------------
+
+
+async def _retired_list(factory, *, retired_at: datetime, pinned: bool, name: str):
+    """A retired list with one revision, optionally pinned by a finished game."""
+    list_id, revision_id = generate_uuid(), generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PromptList(
+                    id=list_id,
+                    slug=f"slug-{name}",
+                    name=name,
+                    language="en",
+                    visibility="private",
+                    deleted_at=retired_at,
+                )
+            )
+            await session.flush()
+            session.add(
+                PromptListRevision(
+                    id=revision_id,
+                    prompt_list_id=list_id,
+                    version=1,
+                    language="en",
+                    content_hash=f"hash-{name}",
+                )
+            )
+            if pinned:
+                game_id = generate_uuid()
+                session.add(
+                    GameRecord(
+                        id=game_id,
+                        room_name="Played it",
+                        scoring_mode="default",
+                        hint_mode="none",
+                        drawing_seconds=60,
+                        total_rounds=1,
+                        player_count=1,
+                        started_at=retired_at,
+                        finished_at=retired_at,
+                    )
+                )
+                await session.flush()
+                session.add(
+                    GamePromptSource(
+                        game_id=game_id, prompt_list_revision_id=revision_id
+                    )
+                )
+    return list_id
+
+
+async def test_pinned_tombstones_cannot_monopolise_the_reclaim_batch():
+    """A pin is a finished game's provenance, so it never lapses: the
+    tombstone holding it is permanent. Selecting the oldest retired lists
+    without excluding them means that once there are `limit` of them they are
+    the oldest `limit` for ever, and no list retired afterwards is ever
+    reached - the reclaim runs every hour, reports success, and collects
+    nothing again."""
+    factory, engine = await create_test_db()
+    try:
+        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        limit = 3
+        for index in range(limit):
+            await _retired_list(
+                factory,
+                retired_at=now - timedelta(days=100 + index),
+                pinned=True,
+                name=f"pinned-{index}",
+            )
+        newer = await _retired_list(
+            factory, retired_at=now - timedelta(days=10), pinned=False, name="collectable"
+        )
+
+        result = await reclaim_retired_prompt_lists(factory, now=now, limit=limit)
+
+        assert result.lists_deleted == 1, "the reclaimable list behind them is reached"
+        async with factory() as session:
+            assert await session.get(PromptList, newer) is None
+            # The pinned tombstones are untouched: exempt, not collected.
+            assert (
+                await session.scalar(select(func.count(PromptList.id)))
+                == limit
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_the_reclaim_measures_the_lists_it_could_still_collect():
+    """Its backlog is over reclaimable lists only. Counting permanent
+    tombstones would climb for ever with nothing wrong, and counting nothing
+    at all leaves the one sweep whose starvation is unbounded unwatched."""
+    factory, engine = await create_test_db()
+    try:
+        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        await _retired_list(
+            factory, retired_at=now - timedelta(days=400), pinned=True, name="forever"
+        )
+        await _retired_list(
+            factory, retired_at=now - timedelta(days=9), pinned=False, name="waiting"
+        )
+
+        result = await reclaim_retired_prompt_lists(
+            factory, now=now, budget=SweepBudget(rows=1, batch=1, seconds=30)
+        )
+        described = _describe(result)
+        assert described["backlog"] == 0, "what it collected is no longer a backlog"
+        assert described["oldest_overdue_seconds"] == 0.0
+
+        # With the reclaimable one still waiting, the age is measured past the
+        # grace it is already over - and the permanent tombstone is in neither
+        # number.
+        await _retired_list(
+            factory, retired_at=now - timedelta(days=9), pinned=False, name="waiting-2"
+        )
+        await _retired_list(
+            factory, retired_at=now - timedelta(days=3), pinned=False, name="waiting-3"
+        )
+        starved = await reclaim_retired_prompt_lists(
+            factory, now=now, limit=1, budget=SweepBudget(rows=1, batch=1, seconds=30)
+        )
+        described = _describe(starved)
+        assert described["backlog"] == 1
+        # Retired three days ago, collectable after a day's grace: two late.
+        assert described["oldest_overdue_seconds"] == pytest.approx(
+            timedelta(days=2).total_seconds(), abs=1
+        )
+    finally:
+        await engine.dispose()
 
 
 async def test_each_guest_tier_reports_its_own_lateness():

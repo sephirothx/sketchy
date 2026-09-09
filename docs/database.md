@@ -1548,9 +1548,22 @@ revision before the deletion to finish and write its game (R-LIST-07): the unpin
 revisions and their items, then the list row itself once no revision is left, then the
 prompt versions and concepts that no revision, list, turn, offer, usage fact or content
 report names any more, aliases cascading with them. A list a game pinned stays as a
-non-discoverable tombstone (`deleted_at` set, no share code) and is examined again next
-sweep. Account erasure retires the account's lists the same way, with the name and
-description erased as authored copy.
+non-discoverable tombstone (`deleted_at` set, no share code).
+
+That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
+game's provenance and never lapses, so a list whose every remaining revision is pinned
+has no work left for ever — while the batch takes the oldest retired lists first, which
+is exactly what a permanent tombstone always is. Once `RECLAIM_BATCH_LISTS` (50) of them
+existed they were the whole batch on every future run, and every list retired afterwards
+waited behind them indefinitely while the sweep ran hourly and reported success (#478).
+The candidate predicate now requires a list to have at least one unpinned revision, or
+none at all, and the sweep's backlog is measured over that same set — so a permanent
+tombstone is exempt rather than overdue, and the lists behind one are late like any
+other row. It is re-evaluated on every run rather than recorded, so a list would become a
+candidate again by itself if a pin ever did go away.
+
+Account erasure retires the account's lists the same way, with the name and description
+erased as authored copy.
 
 `ck_prompt_lists_bundled_owner` forbids an owner on a bundled list;
 `ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list.
@@ -1772,7 +1785,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly |
 | Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
-| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; not backlog-measured, because a pinned tombstone is exempt for ever and its age would climb with nothing wrong |
+| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep

@@ -519,14 +519,18 @@ def _describe(report: object) -> dict[str, object]:
     if isinstance(report, SweepReport):
         return report.as_dict()
     if hasattr(report, "lists_examined"):
-        # The reclaim's leftovers are pinned tombstones, which are exempt for
-        # ever rather than overdue, so it reports work done and no backlog:
-        # an age over rows nothing may ever remove would climb without
-        # anything being wrong, which is worse than no number at all.
+        # The reclaim keeps its own shape - it removes revisions, lists,
+        # versions and concepts rather than rows of one table - but it owes
+        # the same account of what it left. Its backlog is over the lists it
+        # could still collect: a tombstone every remaining revision is pinned
+        # to is exempt for ever, and counting one would climb with nothing
+        # wrong, but the lists waiting *behind* it are late like any other.
         return {
             "rows": report.lists_deleted,
             "revisions": report.revisions_deleted,
             "examined": report.lists_examined,
+            "oldest_overdue_seconds": round(report.oldest_overdue_seconds, 1),
+            "backlog": report.backlog,
         }
     return {"rows": int(report) if isinstance(report, int) else None}
 

@@ -570,10 +570,15 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_st
 
         # The sweep, well after the grace: the pinned revision and its content
         # stay, the tombstone row stays with them, the display rows are gone.
+        # It is not even examined - a list whose every remaining revision is
+        # pinned has no work left for ever, and selecting it would let a
+        # handful of these fill the batch and starve the lists retired after
+        # them (#478).
         later = datetime.now(timezone.utc) + timedelta(days=2)
         result = await reclaim_retired_prompt_lists(factory, now=later)
-        assert result.lists_examined == 1
+        assert result.lists_examined == 0
         assert result.revisions_deleted == 0 and result.lists_deleted == 0
+        assert result.backlog == 0, "a permanent tombstone is exempt, not overdue"
         async with factory() as session:
             tombstone = await session.get(PromptList, UUID(created.id))
             assert tombstone is not None and tombstone.share_code is None
