@@ -131,25 +131,12 @@ export function Toolbar({
   const mobileToolbarRef = useRef<HTMLDivElement | null>(null);
   const keyBindings = useSettingsStore((s) => s.keyBindings);
 
-  const prevColorRef = useRef<string>("#ffffff");
-  const [recentColors, setRecentColors] = useState<string[]>(["#000000", "#ffffff"]);
-  // Kept rather than pruned: a host who turns a restriction back off should
-  // find the recent colors where they left them.
-  const shownRecentColors = useMemo(
-    () => recentColors.filter((c) => isColorAllowed(c, colorMode)),
-    [recentColors, colorMode],
-  );
-
   const handleSelectColor = useCallback(
     (newColor: string) => {
-      if (newColor !== color) {
-        prevColorRef.current = color;
-        setRecentColors((prev) => [newColor, ...prev.filter((c) => c !== newColor)].slice(0, 6));
-      }
       onColorChange(newColor);
       if (tool === "eraser") onToolChange("brush");
     },
-    [color, onColorChange, tool, onToolChange],
+    [onColorChange, tool, onToolChange],
   );
 
   function getToolBadge(toolValue: DrawTool): string {
@@ -226,15 +213,6 @@ export function Toolbar({
 
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      if (key === "x") {
-        const targetColor = prevColorRef.current;
-        if (!isColorAllowed(targetColor, colorMode)) return;
-        prevColorRef.current = color;
-        onColorChange(targetColor);
-        if (tool === "eraser") onToolChange("brush");
-        return;
-      }
-
       const boundTool = tools.find((entry) => toolKeys(kb, entry.value).includes(key));
       if (boundTool) {
         onToolChange(boundTool.value);
@@ -256,7 +234,7 @@ export function Toolbar({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [brushWidth, color, colorMode, defaultIdx, handleWidthChange, onColorChange, onToolChange, tool, tools]);
+  }, [brushWidth, defaultIdx, handleWidthChange, onToolChange, tools]);
 
   // The host can tighten the rules while the toolbar is on screen, and a
   // drawer arriving mid-turn brings whatever they last held. Either way the
@@ -438,23 +416,6 @@ export function Toolbar({
                   </label>
                 )}
               </div>
-              {shownRecentColors.length > 0 && (
-                <div className="toolbar-mobile-recent" aria-label="Recent colors">
-                  {shownRecentColors.map((c) => (
-                    <ColorSwatch
-                      key={c}
-                      color={c}
-                      selected={isSelectedColor(c)}
-                      variant="toolbar-mobile-swatch-btn"
-                      label={`Recent color ${c}`}
-                      onSelect={() => {
-                        handleSelectColor(c);
-                        setMobilePanel(null);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
@@ -539,26 +500,6 @@ export function Toolbar({
               </label>
             )}
           </div>
-
-          {shownRecentColors.length > 0 && (
-            <>
-              <div className="toolbar-divider" />
-              <div className="toolbar-group recent-colors-group" aria-label="Recent colors" title="Recent colors (Press X to swap color)">
-                <span className="recent-colors-label">Recent:</span>
-                {shownRecentColors.map((c) => (
-                  <ColorSwatch
-                    key={c}
-                    color={c}
-                    selected={isSelectedColor(c)}
-                    variant="recent-swatch"
-                    label={`Recent color ${c}`}
-                    title={`Recent color ${c} (Press X to swap)`}
-                    onSelect={() => handleSelectColor(c)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
 
           <div className="toolbar-divider" />
 
