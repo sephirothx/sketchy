@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   NO_FRIENDS,
   friendActionFor,
+  friendListChanges,
   friendsSurface,
   friendsSurfaceIsEmpty,
   isFriend,
@@ -12,6 +13,7 @@ import {
   parseFriendLists,
   parseRecentPlayers,
   profileFriendActionFor,
+  waitingRequestCount,
   withFriendsFirst,
 } from "../src/lib/friends.ts";
 
@@ -254,4 +256,56 @@ test("a suggestion is dropped once it is on one of the lists, but a refusal is n
   // exactly what R-FRIEND-04 refuses to disclose. Its button quietly does
   // nothing, which is what a decline is meant to feel like.
   assert.deepEqual(left.map((row) => row.userId), ["declined-me"]);
+});
+
+// ------------------------------------------------ what moved since last time
+
+test("a request arriving and one being answered are told apart", () => {
+  const before = { ...NO_FRIENDS, outgoing: [entry("asked-them")] };
+  const after = {
+    friends: [entry("asked-them")],
+    incoming: [entry("new-asker")],
+    outgoing: [],
+  };
+  const changes = friendListChanges(before, after);
+  assert.deepEqual(changes.arrived.map((row) => row.userId), ["new-asker"]);
+  assert.deepEqual(changes.accepted.map((row) => row.userId), ["asked-them"]);
+});
+
+test("a request that stopped being pending is never reported", () => {
+  // What a decline looks like from the sender's side. The row going away is
+  // legible; naming it would go further than R-FRIEND-05 allows.
+  const changes = friendListChanges(
+    { ...NO_FRIENDS, outgoing: [entry("they-said-no")] },
+    NO_FRIENDS,
+  );
+  assert.deepEqual(changes, { arrived: [], accepted: [] });
+});
+
+test("answering a request yourself is not news", () => {
+  // Accepting somebody who asked you puts them in `friends` for the first
+  // time too, and being told what you just did is noise.
+  const changes = friendListChanges(
+    { ...NO_FRIENDS, incoming: [entry("asked-me")] },
+    { ...NO_FRIENDS, friends: [entry("asked-me")] },
+  );
+  assert.deepEqual(changes.accepted, []);
+  assert.deepEqual(changes.arrived, []);
+});
+
+test("a request still waiting is not re-announced", () => {
+  const lists = { ...NO_FRIENDS, incoming: [entry("patient")] };
+  assert.deepEqual(friendListChanges(lists, lists), { arrived: [], accepted: [] });
+});
+
+test("the badge counts only what is waiting for an answer", () => {
+  assert.equal(waitingRequestCount(NO_FRIENDS), 0);
+  assert.equal(
+    waitingRequestCount({
+      friends: [entry("a"), entry("b")],
+      incoming: [entry("c")],
+      outgoing: [entry("d"), entry("e")],
+    }),
+    1,
+  );
 });

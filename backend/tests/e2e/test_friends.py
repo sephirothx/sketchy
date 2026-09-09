@@ -427,4 +427,63 @@ async def test_a_profile_says_whether_you_are_already_friends():
         finally:
             await ada_context.close()
             await bob_context.close()
+
+
+@pytest.mark.asyncio
+async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
+    """Both halves of R-FRIEND-12, in the place they exist for.
+
+    A request arriving used to be silent unless the recipient happened to be
+    looking at the lobby's online panel. Here the recipient is in a room, and
+    is told anyway - and the badge points at the surface that answers it.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        asker_context = await browser.new_context()
+        target_context = await browser.new_context()
+        asker = await asker_context.new_page()
+        target = await target_context.new_page()
+        asker_name, target_name = unique("Asker"), unique("Busy")
+
+        try:
+            await sign_up(asker, asker_name)
+            await sign_up(target, target_name)
+
+            # The target goes into a room, where the lobby's panel cannot be
+            # seen at all.
+            await target.click('button:has-text("Create room")')
+            await target.click('button:has-text("Create room")')
+            await target.wait_for_selector('[data-testid="waiting-room"]')
+
+            row = row_for(asker, target_name)
+            await expect(row).to_be_visible(timeout=SETTLE_MS)
+            await row.locator(".online-add-friend").click()
+
+            # Said, by name, over the game.
+            await expect(target.locator(".app-toast").filter(
+                has_text=asker_name
+            ).first).to_be_visible(timeout=SETTLE_MS)
+            # And counted, on the one control that opens the way to answer it.
+            await expect(
+                target.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1", timeout=SETTLE_MS)
+
+            # Answering it clears the count without leaving the room.
+            await open_friends(target)
+            await target.locator('[data-testid="friends-incoming"]').get_by_role(
+                "button", name="Accept"
+            ).click()
+            await expect(
+                target.locator('[data-testid="friend-request-badge"]')
+            ).to_have_count(0, timeout=SETTLE_MS)
+            await target.get_by_role("button", name="Close friends").click()
+            await expect(target.locator('[data-testid="waiting-room"]')).to_be_visible()
+
+            # And the asker is told their request was answered - silent before.
+            await expect(asker.locator(".app-toast").filter(
+                has_text=target_name
+            ).first).to_be_visible(timeout=SETTLE_MS)
+        finally:
+            await asker_context.close()
+            await target_context.close()
             await browser.close()
