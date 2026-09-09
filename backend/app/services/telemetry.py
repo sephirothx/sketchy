@@ -82,6 +82,13 @@ SOCKET_OUTCOMES = ("ok", "refused", "error", "throttled")
 CONNECTION_OUTCOMES = ("accepted", "refused", "full")
 
 DEFAULT_SAMPLE_INTERVAL_SECONDS = 1.0
+# A single sample this late is a loop that was *blocked*, not one that was busy:
+# every timer, hint and turn end in the process fired that much late, and any
+# connection waiting to be accepted waited that long to be. Logged as well as
+# measured, because a histogram is only visible where something is scraping it,
+# and the runs that most need to answer "was the loop stuck?" - a CI shard, a
+# one-off report - are exactly the ones where nothing is (#735, R-OBS-15).
+LAG_WARNING_SECONDS = 1.0
 # Resident size and disk are read once a minute: they move slowly, and the
 # ring they feed has one slot per minute anyway.
 SLOW_SAMPLE_EVERY_TICKS = 60
@@ -1044,21 +1051,29 @@ async def run_lag_sampler(
     store: Telemetry = telemetry,
     *,
     interval_seconds: float = DEFAULT_SAMPLE_INTERVAL_SECONDS,
+    warn_after_seconds: float = LAG_WARNING_SECONDS,
     health: LoopHealth | None = None,
 ) -> None:
-    """Measure how late a timer fires, for ever.
+    """Measure how late a timer fires, for ever, and say so when it is far late.
 
     The loop asks to be woken in `interval_seconds` and notes how much later
     than that it actually was. Everything that blocked the loop meanwhile - a
     synchronous write, a large JSON dump, a garbage-collection pause - shows
     up as that lateness, which is what makes it the one number that separates
     "the server is busy" from "the server is stuck".
+
+    Past `warn_after_seconds` it also writes a line, one per sample, so a stall
+    leaves its length and its duration in the log rather than only in a
+    histogram somebody has to be scraping to see.
     """
     while True:
         due = store._monotonic() + interval_seconds
         await asyncio.sleep(interval_seconds)
         try:
-            store.record_loop_lag(store._monotonic() - due)
+            lag = store._monotonic() - due
+            store.record_loop_lag(lag)
+            if lag >= warn_after_seconds:
+                logger.warning("Event loop blocked for %.3f seconds", lag)
             store.sample_process()
             if health is not None:
                 health.record_success()

@@ -346,6 +346,17 @@ revocable session record as HTTP requests
 ([`backend/app/handlers/connection.py:22`](../backend/app/handlers/connection.py)), so
 revocation applies uniformly without a shared signing secret.
 
+How long an idle connection is held before the server closes it is decided rather
+than inherited ([`server.py`](../backend/app/server.py), `KEEP_ALIVE_SECONDS`).
+Whichever side closes an idle pooled connection is the side that absorbs the race:
+a connection the server closes at the instant the client writes its next request
+into it fails as a hang up with **no status at all**, which no caller can tell from
+a refusal, because it is not an answer. The window exists at every value — what
+moves is how often a client's idle gap lands on it, and Uvicorn's default of five
+seconds sits inside the gaps a browser leaves between one page's requests. Held far
+past that, the client is normally the side that closes first, which it can do with
+no request in flight.
+
 ---
 
 ## 6. Lifecycle
