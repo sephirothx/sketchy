@@ -77,7 +77,7 @@ export function useFriendArrivalNotices(): void {
     // Told, so it is not told again - and only the ones this message named,
     // so an acceptance that landed since the read keeps its turn. After the
     // notify, because a record of telling that outlives the telling is the
-    // bug this whole thing exists to fix (R-FRIEND-13).
+    // bug this whole thing exists to fix (R-FRIEND-14).
     if (accepted.length > 0) {
       void announcedFriendships(accepted.map((entry) => entry.userId)).catch(
         () => {

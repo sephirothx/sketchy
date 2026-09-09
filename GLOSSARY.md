@@ -82,16 +82,16 @@ the rotation itself are counted in *rounds*.
 
 ## Names
 
-Three different things, never used for one another:
+The three names are different things, never used for one another. The rest of
+the section is what is drawn with a name wherever a player appears.
 
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Nickname** | The name a player is playing under in a room — what appears in the player list, chat, and scores. | handle, alias, screen name |
 | **Username** | The account login name, chosen when an account is claimed. A registered player's nickname is always their username. | user ID, login |
 | **Display name** | The name saved on an account and used as the default nickname. | profile name, real name |
-| **Time format** | The **Player setting** deciding how every clock and date-time reads to that player: **System** (the device's own convention, the default), **12-hour**, or **24-hour**. One formatter serves chat timestamps, sign-in dates, notices and operator pages alike. | clock format, hour format, AM/PM setting |
 | **Picture** | A registered player's uploaded avatar, shown in the disc beside their name wherever it appears. Framed by the player (drag and zoom), then shrunk by the browser to 256×256 WebP (PNG where it cannot), checked and served by the server only as an image, content-addressed so it caches for ever. Guests keep the grey initial. Reportable as **Inappropriate picture**; a moderator removes it through the report and the account cannot upload again for a week. | avatar (in UI copy), profile photo, image |
-| **Name color** | The color a player's name renders in. Guests have no name color. | name colour, player color |
+| **Name color** | The one of thirteen palette colors a registered player's name and avatar wear everywhere. Chosen from swatches in **Player settings**; the server accepts only a color that reads on both themes' player list. Guests have none: their grey is what marks a name as unclaimed. | name colour (in UI copy), player color, username color, avatar color |
 
 ## The prompt
 
@@ -217,8 +217,8 @@ Three different things, never used for one another:
 | **Room code** | The random six-character invite capability that identifies a room to join. Allocation is globally unique. A code is retired for 30 days after its room ends. Codes claimed by the removed persistent-room feature stay claimed for good. The shareable URL carrying it is the **invite link**. | friend code, game code, PIN, room ID |
 | **Room rules** | The host-controlled configuration of one room: rounds, drawing time, max players, prompt lists, hint mode, scoring mode, spectator rules. Edited from the waiting room with a draft-and-save model, so a half-made decision never reaches the room. Renamed from *room settings* so that "settings" means one thing — a player's own — and never appears inside **Player settings**; the wire (`update_room_settings`, the `settings` payload) and the code keep the old word, which is recorded drift, not a second concept. | room settings, options, config, preferences |
 | **Player settings** | A player's own preferences, which travel with them between rooms. Reached at `/settings/<section>`, drawn over whatever page they were on, in four sections: **Account**, **Appearance**, **Sound & effects**, **Shortcuts**. Every row applies as it changes; only the rows a server can refuse keep a button. Not to be confused with **Room rules**, which belong to a room and are the host's. | user settings, profile settings, room settings |
+| **Time format** | The **Player setting** deciding how every clock and date-time reads to that player: **System** (the device's own convention, the default), **12-hour**, or **24-hour**. One formatter serves chat timestamps, sign-in dates, notices and operator pages alike. | clock format, hour format, AM/PM setting |
 | **Colorblind-safe preference** | A private **Player setting** asking hosts to prefer **Colorblind-safe** room colors. Only an anonymous aggregate suggestion may reach a host; never expose who enabled it. | disability flag, accessibility request |
-| **Name color** | The one of thirteen palette colors a registered player's name and avatar wear everywhere. Chosen from swatches in **Player settings**; the server accepts only a color that reads on both themes' player list. Guests have none: their grey is what marks a name as unclaimed. | name colour (in UI copy), username color, avatar color |
 | **Colorblind-safe suggestion** | The unattributed, host-only notice that at least one seated player enabled the **Colorblind-safe preference**. It never names or counts players, never changes the room automatically, ignores spectators, and may be dismissed for the live room. | accessibility alert, player flag |
 
 ## Votes and moderation

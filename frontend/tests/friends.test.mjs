@@ -238,7 +238,7 @@ test("a request arriving and one being answered are told apart", () => {
     incoming: [entry("new-asker")],
     outgoing: [],
     // The acceptance is what the server says is owed, not what the lists
-    // moving imply (R-FRIEND-13).
+    // moving imply (R-FRIEND-14).
     announce: [entry("asked-them")],
   };
   const changes = friendListChanges(before, after);

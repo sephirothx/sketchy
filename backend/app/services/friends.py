@@ -257,7 +257,7 @@ class FriendService:
         # told about. Held on the row rather than derived from the lists
         # moving, so a reader who was not present for the move still learns
         # it - a reload, another device, or simply being offline when the
-        # answer came (R-FRIEND-13).
+        # answer came (R-FRIEND-14).
         announce = [
             (row, person)
             for row, person in friends

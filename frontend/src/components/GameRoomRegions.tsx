@@ -228,6 +228,53 @@ export function ConnectedWaitingRoomPanel({
   );
 }
 
+/**
+ * What sits on top of the drawing surface: who is choosing, and the reaction
+ * control for what is being drawn.
+ *
+ * Its own component, subscribed to the store, so that `GameplayRegion` can hand
+ * `Canvas` the same element every time. Built inline it was a new object on
+ * every gameplay render, which is the one prop `Canvas`'s `memo` cannot see
+ * through - and gameplay renders for things the canvas has no interest in. A
+ * timed hint reveal changes the masked prompt, which gameplay owns, and used to
+ * re-render the canvas under it two or three times a turn for every guesser.
+ */
+function CanvasOverlay() {
+  const phase = useGameStore((state) => state.phase);
+  const drawerId = useGameStore((state) => state.drawerId);
+  const currentTurnId = useGameStore((state) => state.currentTurnId);
+  const amDrawer = useGameStore(selectAmDrawer);
+  const drawerNickname = useGameStore((state) =>
+    state.players.find((player) => player.playerId === state.drawerId)?.nickname,
+  );
+  const drawerNameColor = useGameStore((state) =>
+    state.players.find((player) => player.playerId === state.drawerId)?.nameColor,
+  );
+
+  return (
+    <>
+      {phase === "choosing_prompt" && !amDrawer ? (
+        <ChoosingPromptOverlay
+          drawerNickname={drawerNickname || "The next player"}
+          drawerNameColor={drawerNameColor}
+        />
+      ) : null}
+      {phase === "drawing" && (
+        <ConnectedDrawingReactionControl
+          turnId={currentTurnId}
+          drawerId={drawerId}
+          placement="canvas"
+        />
+      )}
+    </>
+  );
+}
+
+// One element for the life of the module. `CanvasOverlay` subscribes to what it
+// draws, so there is nothing for a caller to pass it and nothing gained by
+// building it again - and building it again is exactly what defeated the memo.
+const CANVAS_OVERLAY = <CanvasOverlay />;
+
 interface GameplayRegionProps {
   canvasRef: RefObject<CanvasRef | null>;
   /** Phone only: the pip row doubles as the way into players and scores. */
@@ -260,9 +307,6 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
   const me = useGameStore(selectMe);
   const drawerNickname = useGameStore((state) =>
     state.players.find((player) => player.playerId === state.drawerId)?.nickname,
-  );
-  const drawerNameColor = useGameStore((state) =>
-    state.players.find((player) => player.playerId === state.drawerId)?.nameColor,
   );
 
   const amDrawer = useGameStore(selectAmDrawer);
@@ -359,23 +403,7 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
         tool={tool}
         downloadPrompt={downloadPrompt}
         label={canvasLabel}
-        overlay={
-          <>
-            {phase === "choosing_prompt" && !amDrawer ? (
-              <ChoosingPromptOverlay
-                drawerNickname={drawerNickname || "The next player"}
-                drawerNameColor={drawerNameColor}
-              />
-            ) : null}
-            {phase === "drawing" && (
-              <ConnectedDrawingReactionControl
-                turnId={currentTurnId}
-                drawerId={drawerId}
-                placement="canvas"
-              />
-            )}
-          </>
-        }
+        overlay={CANVAS_OVERLAY}
       />
       {phase === "turn_results" && lastTurnResult && (
         <TurnResultsOverlay
