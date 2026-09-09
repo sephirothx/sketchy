@@ -1461,7 +1461,7 @@ def create_moderation_router(
         if report is None or report.reported_user_id is None:
             raise HTTPException(status_code=404, detail="No such report.")
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        removed = await remove_avatar(
+        outcome = await remove_avatar(
             session_factory,
             user_id=report.reported_user_id,
             actor_id=actor.id,
@@ -1472,7 +1472,12 @@ def create_moderation_router(
         )
         if on_avatar_changed is not None:
             await on_avatar_changed(str(report.reported_user_id), None)
-        return {"ok": True, "removed": removed}
+        # After the commit, so a socket can never announce a notice a
+        # rolled-back transaction never wrote - the rule the warning route
+        # above follows for the same reason.
+        if outcome.warning_id is not None and on_user_warned is not None:
+            await on_user_warned(str(report.reported_user_id))
+        return {"ok": True, "removed": outcome.had_one}
 
     @router.get("/moderation/reports/{report_id}/drawing")
     async def report_drawing(report_id: UUID, request: Request):
