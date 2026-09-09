@@ -37,21 +37,23 @@ export function ReportsReviewedNotice() {
       try {
         // The cheap question first, so the usual answer - nothing to say -
         // costs no write.
-        const { count } = await countReportsReviewed();
+        const { count, reportIds } = await countReportsReviewed();
         if (cancelled || count < 1) return;
-        // The claim counts and stamps in one statement, and *its* number is
-        // the one shown: anything decided between the two requests is
-        // included rather than silently marked as told. Zero means another
-        // tab claimed them first, and then there is nothing to say.
-        const { acknowledged } = await acknowledgeReportsReviewed();
-        if (cancelled || acknowledged < 1) return;
+        // Shown *before* it is recorded as shown. Recording first loses the
+        // message whenever the render does not happen - signing out while
+        // the request is in flight, the effect torn down - and a report
+        // marked as told that nobody was told about is never announced
+        // again. This way the worst case is being thanked twice.
         notify(
-          acknowledged === 1
+          count === 1
             ? "A report you sent has been reviewed. Thank you."
-            : `${acknowledged} reports you sent have been reviewed. Thank you.`,
+            : `${count} reports you sent have been reviewed. Thank you.`,
           "info",
           12000,
         );
+        // Exactly the ones that message was about. A report decided since the
+        // read is not in the list, so it keeps its turn.
+        await acknowledgeReportsReviewed(reportIds);
       } catch {
         // A report that was reviewed is not news worth an error for. It will
         // be said on the next visit instead.

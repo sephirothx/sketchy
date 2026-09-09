@@ -89,6 +89,11 @@ MAX_REPORT_CONTEXT_BYTES = 32_768
 MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
+# How many decided reports one message names at once. A reporter with more
+# than this waiting hears about the rest on the next visit; the message is a
+# count, so the number is what matters and the list is only there to say which
+# ones it counted.
+MAX_REVIEWED_ANNOUNCED = 100
 # A backstop on the open queue's whole read, not a page: grouping needs every
 # report of an incident in hand at once, and a queue this long means something
 # is wrong upstream rather than that a moderator wants page two.
@@ -906,6 +911,14 @@ def _content_incident_payload(
             str(first.decision_group_id) if first.decision_group_id else None
         ),
     }
+
+
+class ReviewedAcknowledgeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    report_ids: list[UUID] = Field(
+        default_factory=list, alias="reportIds", max_length=MAX_REVIEWED_ANNOUNCED
+    )
 
 
 class WarningBody(BaseModel):
@@ -2381,47 +2394,66 @@ def create_moderation_router(
         make a report a way of learning things about somebody (R-MOD-20). A
         number about your own reports discloses nothing about anyone else.
 
-        This is the cheap question - is there anything to say at all - asked
-        on every page load so that the usual answer costs no write. The
-        number actually shown comes from the claim, which is where counting
-        and stamping happen together.
+        Read-only, and asked on every page load, so the usual answer - nothing
+        to say - costs no write.
+
+        It names the reports it counted. The acknowledgement takes that list
+        back and stamps exactly those, which is what keeps the two halves
+        honest: a report decided in between is not swept up by an
+        acknowledgement of a message that never mentioned it, and a message
+        that was never shown stamps nothing at all. They are the caller's own
+        reports, so naming them discloses nothing they did not already know.
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
         async with session_factory() as session:
-            count = await session.scalar(
-                select(func.count(PlayerReport.id)).where(
-                    PlayerReport.reporter_user_id == UUID(user_id),
-                    PlayerReport.status != ReportStatus.PENDING.value,
-                    PlayerReport.reporter_notified_at.is_(None),
+            waiting = (
+                await session.scalars(
+                    select(PlayerReport.id)
+                    .where(
+                        PlayerReport.reporter_user_id == UUID(user_id),
+                        PlayerReport.status != ReportStatus.PENDING.value,
+                        PlayerReport.reporter_notified_at.is_(None),
+                    )
+                    .order_by(PlayerReport.id)
+                    .limit(MAX_REVIEWED_ANNOUNCED)
                 )
-            )
-        return {"count": int(count or 0)}
+            ).all()
+        return {"count": len(waiting), "reportIds": [str(row) for row in waiting]}
 
     @router.post("/reports/reviewed/acknowledge")
-    async def acknowledge_reports_reviewed(request: Request):
-        """Claim the caller's decided reports and say how many there were.
+    async def acknowledge_reports_reviewed(
+        request: Request, body: ReviewedAcknowledgeBody
+    ):
+        """Stamp the reports a message actually named, and only those.
 
-        The claim and the count are one statement, and the number this
-        returns - not the one the reader above gave - is what the player is
-        shown. Counting first and stamping second would stamp whatever is
-        decided by the time the second request lands: a report decided in
-        between would be marked as told without anybody having been told,
-        and would then never be announced at all.
+        The client shows the message and then says which reports it was
+        about, rather than claiming them first and hoping the message gets
+        rendered. Claiming first loses one whenever the render does not
+        happen - the account signs out mid-request, the effect is torn down -
+        and a report stamped as told that nobody was told about is never
+        announced again.
 
-        All of them together, because the message is a count rather than a
-        list and there is nothing to acknowledge one at a time.
+        Bounded to the list it is given, so a report decided between the read
+        and this call keeps its turn. The failure that is left is being
+        thanked twice, which is the right one to be left with.
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
+        if not body.report_ids:
+            return {"ok": True, "acknowledged": 0}
         now = datetime.now(timezone.utc)
         async with session_factory() as session:
             async with session.begin():
                 stamped = await session.execute(
                     update(PlayerReport)
                     .where(
+                        PlayerReport.id.in_(body.report_ids),
+                        # Still the caller's own, still decided, still
+                        # unannounced: the list is a client's claim about
+                        # what it showed, not authority over any row.
                         PlayerReport.reporter_user_id == UUID(user_id),
                         PlayerReport.status != ReportStatus.PENDING.value,
                         PlayerReport.reporter_notified_at.is_(None),

@@ -1477,6 +1477,7 @@
    "displayName",
    "expiresAt",
    "hasMore",
+   "reportIds",
    "userId"
   ],
   "api.moderation:create_warning": [
@@ -1494,6 +1495,9 @@
   ],
   "api.moderation:remove_reported_avatar": [
    "blockedUntil"
+  ],
+  "api.moderation:reports_reviewed": [
+   "reportIds"
   ],
   "api.moderation:review_prompt_content_report": [
    "displayName"

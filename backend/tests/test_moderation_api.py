@@ -3135,7 +3135,7 @@ async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
     first, second = await report("LoopA"), await report("LoopB")
 
     # Nothing decided yet, so nothing to say.
-    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 0}
+    assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 0
 
     for report_id, status in ((first, "dismissed"), (second, "resolved")):
         decided = await moderator_http.patch(
@@ -3145,18 +3145,21 @@ async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
         assert decided.status_code == 200, decided.text
 
     # Both, counted - and the count is the whole of it: no outcome, no target.
-    reviewed = await reporter_http.get("/api/reports/reviewed")
-    assert reviewed.json() == {"count": 2}
+    reviewed = (await reporter_http.get("/api/reports/reviewed")).json()
+    assert reviewed["count"] == 2
+    assert set(reviewed["reportIds"]) == {first, second}
 
-    acked = await reporter_http.post("/api/reports/reviewed/acknowledge")
+    acked = await reporter_http.post(
+        "/api/reports/reviewed/acknowledge", json={"reportIds": reviewed["reportIds"]}
+    )
     assert acked.json() == {"ok": True, "acknowledged": 2}
     # Said once.
-    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 0}
+    assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 0
 
     # Somebody else's decided reports are not theirs to hear about.
     other_http = new_client()
     await register(other_http, "LoopOther")
-    assert (await other_http.get("/api/reports/reviewed")).json() == {"count": 0}
+    assert (await other_http.get("/api/reports/reviewed")).json()["count"] == 0
 
 
 @pytest.mark.asyncio
@@ -3166,7 +3169,9 @@ async def test_the_reviewed_count_needs_an_identity_of_its_own(env):
     anonymous = new_client()
     assert (await anonymous.get("/api/reports/reviewed")).status_code == 401
     assert (
-        await anonymous.post("/api/reports/reviewed/acknowledge")
+        await anonymous.post(
+            "/api/reports/reviewed/acknowledge", json={"reportIds": []}
+        )
     ).status_code == 401
 
 
@@ -3208,18 +3213,113 @@ async def test_a_report_decided_mid_notice_is_counted_rather_than_swallowed(env)
     first, second = await report("RaceA"), await report("RaceB")
     await decide(first)
 
-    # What the reader saw when the page loaded.
-    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 1}
-    # And then the second is decided, before the claim lands.
+    # What the reader saw when the page loaded, and which reports it was of.
+    seen = (await reporter_http.get("/api/reports/reviewed")).json()
+    assert seen["count"] == 1
+    assert seen["reportIds"] == [first]
+
+    # And then the second is decided, before the acknowledgement lands.
     await decide(second)
 
-    # The claim reports what it actually took, which is both - rather than
-    # taking both and reporting the one the reader had seen.
-    claimed = await reporter_http.post("/api/reports/reviewed/acknowledge")
-    assert claimed.json() == {"ok": True, "acknowledged": 2}
-    assert (await reporter_http.get("/api/reports/reviewed")).json() == {"count": 0}
+    # The acknowledgement takes only what the message named. The second was
+    # never mentioned, so it keeps its turn rather than being marked as told
+    # by a message that said nothing about it.
+    acked = await reporter_http.post(
+        "/api/reports/reviewed/acknowledge", json={"reportIds": seen["reportIds"]}
+    )
+    assert acked.json() == {"ok": True, "acknowledged": 1}
 
-    # A second claim takes nothing, which is how a second tab learns there is
-    # nothing left to say.
-    again = await reporter_http.post("/api/reports/reviewed/acknowledge")
+    still = (await reporter_http.get("/api/reports/reviewed")).json()
+    assert still["count"] == 1
+    assert still["reportIds"] == [second]
+
+    # Acknowledging the same list twice takes nothing the second time, which
+    # is how a second tab learns there is nothing left to say.
+    again = await reporter_http.post(
+        "/api/reports/reviewed/acknowledge", json={"reportIds": seen["reportIds"]}
+    )
     assert again.json() == {"ok": True, "acknowledged": 0}
+
+
+@pytest.mark.asyncio
+async def test_a_message_that_was_never_shown_marks_nothing_as_told(env):
+    """The reader is read-only, so a page that asks and then never renders -
+    the account signs out mid-request, the effect is torn down - leaves the
+    reports exactly where they were. A report marked as told that nobody was
+    told about is never announced again, which is the one outcome worth
+    ruling out (R-MOD-20)."""
+    new_client, factory, _ = env
+    reporter_http = new_client()
+    moderator_http = new_client()
+    await register(reporter_http, "ShownRep")
+    moderator = await register(moderator_http, "ShownMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    target_http = new_client()
+    target = await register(target_http, "ShownTgt")
+    sent = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Please look.",
+        },
+    )
+    report_id = sent.json()["id"]
+    decided = await moderator_http.patch(
+        f"/api/moderation/reports/{report_id}",
+        json={"status": "dismissed", "note": "Looked at."},
+    )
+    assert decided.status_code == 200, decided.text
+
+    # Asked twice and never acknowledged: reading is not being told.
+    for _ in range(2):
+        answer = (await reporter_http.get("/api/reports/reviewed")).json()
+        assert answer["count"] == 1
+        assert answer["reportIds"] == [report_id]
+
+    # And an acknowledgement naming nothing takes nothing, which is what a
+    # torn-down render sends if it sends anything at all.
+    empty = await reporter_http.post(
+        "/api/reports/reviewed/acknowledge", json={"reportIds": []}
+    )
+    assert empty.json() == {"ok": True, "acknowledged": 0}
+    assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_an_acknowledgement_cannot_name_somebody_elses_report(env):
+    """The list is a client's account of what it showed, never authority over
+    a row: every condition is checked again on the write."""
+    new_client, factory, _ = env
+    mine_http = new_client()
+    theirs_http = new_client()
+    moderator_http = new_client()
+    await register(mine_http, "MineRep")
+    await register(theirs_http, "TheirsRep")
+    moderator = await register(moderator_http, "MineMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    target_http = new_client()
+    target = await register(target_http, "MineTgt")
+    sent = await theirs_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "harassment",
+            "details": "Theirs.",
+        },
+    )
+    theirs = sent.json()["id"]
+    await moderator_http.patch(
+        f"/api/moderation/reports/{theirs}",
+        json={"status": "dismissed", "note": "Looked at."},
+    )
+
+    # Naming a report that is not mine stamps nothing...
+    taken = await mine_http.post(
+        "/api/reports/reviewed/acknowledge", json={"reportIds": [theirs]}
+    )
+    assert taken.json() == {"ok": True, "acknowledged": 0}
+    # ...and its own reporter still has it waiting.
+    assert (await theirs_http.get("/api/reports/reviewed")).json()["count"] == 1

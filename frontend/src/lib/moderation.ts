@@ -515,15 +515,23 @@ export function createUserWarning(input: {
 
 A count and nothing else: what was decided belongs to the reported player
 (R-MOD-20). */
-export function countReportsReviewed(): Promise<{ count: number }> {
+export function countReportsReviewed(): Promise<{
+  count: number;
+  /** Which reports the count was of, so the acknowledgement can name exactly
+      the ones a message was actually about. */
+  reportIds: string[];
+}> {
   return apiRequest("/api/reports/reviewed");
 }
 
-export function acknowledgeReportsReviewed(): Promise<{
+export function acknowledgeReportsReviewed(reportIds: string[]): Promise<{
   ok: boolean;
   acknowledged: number;
 }> {
-  return apiRequest("/api/reports/reviewed/acknowledge", { method: "POST" });
+  return apiRequest("/api/reports/reviewed/acknowledge", {
+    method: "POST",
+    body: { reportIds },
+  });
 }
 
 export function fetchPendingWarning(): Promise<{ warning: PendingWarning | null }> {
