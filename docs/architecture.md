@@ -1454,6 +1454,7 @@ older build is still found and still becomes disconnected.
 | Payload/protocol | `test_payloads.py`, `test_canvas_history.py`, `test_live_drawing.py` | The exact wire shapes and their refusals |
 | Wire contract | `test_wire_contract.py` | Both sides still agree on every name |
 | Database | `test_db_models.py`, `test_migrations.py`, `test_repositories.py`, and every suite on `tests/dbfixtures.py` | Schema, the baseline revision down and up on both engines, drift, and the repositories and lifecycle suites against PostgreSQL |
+| Job selection | `backend/tests/database_backed.py`, `test_database_backed.py` | Which modules the PostgreSQL job runs, read off the import graph, and that none reaching the shared fixture is left out |
 | E2E | `backend/tests/e2e/` | Real multi-browser Playwright sessions across Chromium and Firefox |
 | Benchmarks | `benchmarks/`, `frontend/benchmarks/` | Diagnostic baselines, deliberately **not** CI thresholds |
 | Repository hygiene | `backend/tests/test_repo_artifacts.py` | No database, env file, or private key is tracked - by name or by bytes |
@@ -1475,11 +1476,23 @@ passed deletion tests against constraints the database never applied. A SQLite p
 proves integrity; only the PostgreSQL job proves row locks and
 READ COMMITTED interleavings.
 
-Both backend suites run under pytest-xdist - four workers on SQLite, two on PostgreSQL,
-whose container shares the runner's cores. With `TEST_DATABASE_URL`, the controller
+Both backend suites run under pytest-xdist on four workers, the PostgreSQL one sharing
+the runner's cores with its container. With `TEST_DATABASE_URL`, the controller
 in [`tests/conftest.py`](../backend/tests/conftest.py) owns the migrated database clones
 managed by [`tests/parallel_databases.py`](../backend/tests/parallel_databases.py),
 assigns URLs before collection, and removes its own clones after worker shutdown.
+
+The two jobs do not run the same set. The PostgreSQL one passes
+`--database-backed-only`, and
+[`tests/database_backed.py`](../backend/tests/database_backed.py) answers it by walking
+a module's imports: reaching `tests.dbfixtures`, or reading `TEST_DATABASE_URL` to build
+an engine of its own, is what makes a module worth a second run. Everything else ran
+identically on the SQLite job - three fifths of the suite, and a third of the
+PostgreSQL step. The graph rather than a list, so that a new suite is included by importing the
+fixture every database test already imports; under-selection is the only way this can
+go wrong quietly, so
+[`tests/test_database_backed.py`](../backend/tests/test_database_backed.py) asserts
+against the real tree that every module calling the fixture is selected (R-ENG-12).
 This keeps fixtures from clearing another test's rows without substituting shared
 transactions for real commits. Migration replay stays in a separate serial step.
 These are isolated test processes, not a multi-worker application deployment.
@@ -1487,9 +1500,10 @@ Coverage is combined before applying the existing statement and branch floors;
 JUnit reports and slow-phase timings make future regressions visible (R-ENG-12/15).
 
 CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs six check groups: the
-repository artifact scan, backend lint and tests, PostgreSQL migrations and the whole
-backend suite again on PostgreSQL, frontend test/lint/build, and the multi-browser E2E
-suite, plus dependency advisories.
+repository artifact scan, backend lint and tests, PostgreSQL migrations and every
+database-backed test again on PostgreSQL, frontend test/lint/build, and the
+multi-browser E2E suite, plus dependency advisories. Five of them want the same
+virtualenv, so it is cached as a directory under one key rather than installed per job.
 
 E2E uses three independent runners, each starting one application worker with a fresh
 database. [`tests/e2e_sharding.py`](../backend/tests/e2e_sharding.py) partitions sorted,

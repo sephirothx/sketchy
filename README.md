@@ -661,9 +661,9 @@ process. These deployment settings can be tuned without code changes:
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, removes the baseline
 revision and rebuilds it on PostgreSQL and SQLite, checks schema drift and the
-hand-written expression indexes, then runs the whole backend suite against the
-migrated schema. To reproduce the PostgreSQL checks locally, point both
-variables at a disposable test database:
+hand-written expression indexes, then runs every database-backed test against the
+migrated schema (`--database-backed-only`, R-ENG-12). To reproduce the PostgreSQL
+checks locally, point both variables at a disposable test database:
 
 ```bash
 cd backend
@@ -1679,10 +1679,17 @@ multiple players.
 
 ### Running tests
 
-Both backend CI jobs run the full suite under pytest-xdist (R-ENG-12): four workers on
-SQLite, two on PostgreSQL, whose container shares the runner's four cores.
+Both backend CI jobs run under pytest-xdist on four workers (R-ENG-12), the
+PostgreSQL one sharing the runner's four cores with its container.
 `loadgroup` keeps the two history-floor tests together so they share one scan;
-other tests are distributed normally. Backend coverage is combined across workers
+other tests are distributed normally. The SQLite job runs the whole suite; the
+PostgreSQL job adds `--database-backed-only`, which keeps the tests whose modules
+reach `tests/dbfixtures.py` or read `TEST_DATABASE_URL` and leaves out the rest —
+they ran identically on the SQLite job, and it is a third of that step. The
+selection is the import graph, not a list, so importing the fixture is all a new
+suite has to do; `backend/tests/database_backed.py` says why, and
+`test_database_backed.py` asserts against the real tree that nothing is left out.
+Backend coverage is combined across workers
 before the unchanged statement and branch floors are checked (R-ENG-15).
 CI prints the slowest 50 test phases and saves JUnit reports for seven days in the
 `backend-test-results` and `postgresql-test-results` artifacts; the former also

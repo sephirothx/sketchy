@@ -2011,8 +2011,14 @@ For the full suite with CI's parallel scheduling, keep migration replay separate
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   .venv/bin/pytest -q tests/test_migrations.py
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
-  .venv/bin/pytest -q -n 2 --dist=loadgroup --deselect tests/test_migrations.py --durations=50
+  .venv/bin/pytest -q -n 4 --dist=loadgroup --database-backed-only \
+    --deselect tests/test_migrations.py --durations=50
 ```
+
+`--database-backed-only` is what CI passes, and leaves out the tests that would run
+here exactly as they ran on SQLite. Drop it to run the whole suite against PostgreSQL -
+which is the same thing, more slowly, and is worth doing when the selection itself is
+what is in question.
 
 [`tests/conftest.py`](../backend/tests/conftest.py) provisions an isolated migrated
 database for each worker through
@@ -2029,8 +2035,11 @@ change what these tests prove.
 
 CI upgrades a fresh PostgreSQL 17 database with Alembic, removes the baseline and
 rebuilds it **down and up** on both PostgreSQL and SQLite, checks schema drift and the
-hand-written expression indexes, then runs the whole backend suite against the migrated
-schema. A SQLite pass proves integrity, not concurrency: READ COMMITTED interleavings
+hand-written expression indexes, then runs every database-backed test against the
+migrated schema - `--database-backed-only`, which selects the modules whose imports
+reach this fixture or which read `TEST_DATABASE_URL` themselves
+([`tests/database_backed.py`](../backend/tests/database_backed.py), R-ENG-12). A SQLite
+pass proves integrity, not concurrency: READ COMMITTED interleavings
 and row locks are only ever exercised on that job.
 
 ### Budgets a PostgreSQL deployment enforces
