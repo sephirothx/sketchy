@@ -214,7 +214,18 @@ class ContentIncidentKey:
     target_id: str
 
 
-def content_incident_key(report: PromptContentReport) -> ContentIncidentKey:
+class ContentGroupable(Protocol):
+    """The columns a content incident is grouped by. `Groupable`'s twin, so
+    the content queue can plan its page from light rows too."""
+
+    id: UUID
+    target_type: str
+    prompt_list_id: UUID | None
+    prompt_version_id: UUID | None
+    created_at: datetime
+
+
+def content_incident_key(report: ContentGroupable) -> ContentIncidentKey:
     target = report.prompt_version_id or report.prompt_list_id
     return ContentIncidentKey(report.target_type, str(target))
 
@@ -250,11 +261,10 @@ class ContentIncident:
         return tuple(seen)
 
 
-def group_into_content_incidents(
-    reports: list[PromptContentReport],
-) -> list[ContentIncident]:
+def group_into_content_incidents(reports: list) -> list[ContentIncident]:
     """Content reports as incidents, oldest first. `group_into_incidents`'
-    rule, on the key content reports already carry."""
+    rule, on the key content reports already carry - and, like it, taking
+    light rows so a page can be planned before anything is loaded for it."""
     grouped: dict[ContentIncidentKey, list[PromptContentReport]] = {}
     for report in reports:
         grouped.setdefault(content_incident_key(report), []).append(report)

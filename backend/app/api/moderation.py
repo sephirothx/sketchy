@@ -1339,29 +1339,57 @@ def create_moderation_router(
         """
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PromptContentReport)
+            plan = select(
+                PromptContentReport.id,
+                PromptContentReport.target_type,
+                PromptContentReport.prompt_list_id,
+                PromptContentReport.prompt_version_id,
+                PromptContentReport.created_at,
+            )
             if status is not None:
-                statement = statement.where(PromptContentReport.status == status.value)
-            reports = (
-                await session.scalars(
-                    statement.order_by(
+                plan = plan.where(PromptContentReport.status == status.value)
+            keys = (
+                await session.execute(
+                    plan.order_by(
                         PromptContentReport.created_at.asc(),
                         PromptContentReport.id.asc(),
                     ).limit(MAX_OPEN_QUEUE_REPORTS)
                 )
             ).all()
-            incidents = group_into_content_incidents(list(reports))
-            page = incidents[offset : offset + limit]
-            decisions = await _decisions(
-                session, [], [report for row in page for report in row.reports]
+            planned = group_into_content_incidents(list(keys))
+            page_plan = planned[offset : offset + limit]
+            wanted = [
+                report_id
+                for incident in page_plan
+                for report_id in incident.report_ids
+            ]
+            reports = (
+                (
+                    await session.scalars(
+                        select(PromptContentReport).where(
+                            PromptContentReport.id.in_(wanted)
+                        )
+                    )
+                ).all()
+                if wanted
+                else []
             )
+            by_id = {report.id: report for report in reports}
+            page = [
+                ContentIncident(
+                    incident.key,
+                    tuple(by_id[report_id] for report_id in incident.report_ids),
+                )
+                for incident in page_plan
+            ]
+            decisions = await _decisions(session, [], list(reports))
             return {
                 "incidents": [
                     _content_incident_payload(incident, decisions)
                     for incident in page
                 ],
-                "total": len(incidents),
-                "hasMore": len(incidents) > offset + limit,
+                "total": len(planned),
+                "hasMore": len(planned) > offset + limit,
             }
 
     async def _lock_pending_content_incident(
