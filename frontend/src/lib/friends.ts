@@ -73,7 +73,11 @@ export function parseFriendLists(payload: unknown): FriendLists {
   };
 }
 
-/** What the lobby offers on one online player's row.
+/** Where a friendship with one online player has got to.
+
+Named for the state rather than for a control: the row acts on `add` and only
+*reports* `accept` and `sent`, because a request is answered on the friends
+surface (R-FRIEND-10).
 
 Kept as a derivation over the lists rather than as flags on the row, because
 the presence channel and the friend lists arrive independently and neither is

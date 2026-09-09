@@ -21,6 +21,10 @@
   max-height: calc(100dvh - 32px);
   padding: 14px 22px 18px;
   border-radius: 16px;
+  /* `.modal-card` centres its text for the confirmation dialogs it was
+     built for. This is a list of names beside their avatars, which reads
+     down a left edge. */
+  text-align: left;
 }
 
 .friends-modal-header {

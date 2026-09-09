@@ -33,8 +33,6 @@ export function OnlinePlayersPanel() {
   const lists = useFriendsStore((state) => state.lists);
   const pending = useFriendsStore((state) => state.pending);
   const addFriend = useFriendsStore((state) => state.add);
-  const acceptRequest = useFriendsStore((state) => state.accept);
-  const declineRequest = useFriendsStore((state) => state.remove);
   const { notify } = useToast();
   const navigate = useNavigate();
   const setSession = useGameStore((state) => state.setSession);
@@ -43,16 +41,6 @@ export function OnlinePlayersPanel() {
   const players = useMemo(
     () => withFriendsFirst(presence.players, lists),
     [presence.players, lists],
-  );
-
-  // Somebody who has asked to be friends but is not online has nowhere else to
-  // appear, so the requests ride above the list rather than inside it.
-  const offlineRequests = useMemo(
-    () =>
-      lists.incoming.filter(
-        (entry) => !presence.players.some((p) => p.userId === entry.userId),
-      ),
-    [lists.incoming, presence.players],
   );
 
   async function joinFriend(player: OnlinePlayer) {
@@ -83,42 +71,7 @@ export function OnlinePlayersPanel() {
         <span className="lobby-rooms-count">{presenceSummary(presence)}</span>
       </div>
 
-      {offlineRequests.length > 0 && (
-        <ul className="online-players-list online-requests" data-testid="friend-requests">
-          {offlineRequests.map((entry) => (
-            <li key={entry.userId} className="online-player-row is-request">
-              <Avatar
-                name={entry.displayName}
-                nameColor={entry.nameColor ?? undefined}
-                avatarUrl={entry.avatarUrl}
-                isAnonymous={entry.isAnonymous}
-                size={28}
-              />
-              <span className="online-player-name">{entry.displayName}</span>
-              <span className="online-player-actions">
-                <Button
-                  variant="primary"
-                  compact
-                  disabled={pending === entry.userId}
-                  onClick={() => void acceptRequest(entry.userId)}
-                >
-                  Accept
-                </Button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-compact"
-                  disabled={pending === entry.userId}
-                  onClick={() => void declineRequest(entry.userId)}
-                >
-                  Decline
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {players.length === 0 && offlineRequests.length === 0 ? (
+      {players.length === 0 ? (
         <p className="online-players-empty">Nobody else is here right now.</p>
       ) : (
         <ul className="online-players-list" data-testid="online-players-list">
@@ -164,31 +117,15 @@ export function OnlinePlayersPanel() {
                       <PlusIcon size={14} />
                     </button>
                   )}
-                  {/* Decline sits beside Accept here, the same way it does
-                      for a request from somebody offline. A row that offers
-                      only one of the two answers is a row that answers for
-                      you: leaving it alone is not the same as saying no, and
-                      until this there was no way to say no to somebody who
-                      happened to be online. */}
+                  {/* Said, not offered. Answering a request belongs on the
+                      friends surface, which holds every request whether or
+                      not its sender is online and confirms a decline before
+                      it happens (R-FRIEND-10). This panel is about who is
+                      around; a pair of answer buttons on a row that comes and
+                      goes with presence is a decision taken in the wrong
+                      place. The mirror of "Request sent" on the other side. */}
                   {action === "accept" && (
-                    <>
-                      <Button
-                        variant="primary"
-                        compact
-                        disabled={busy}
-                        onClick={() => void acceptRequest(player.userId)}
-                      >
-                        Accept
-                      </Button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-compact"
-                        disabled={busy}
-                        onClick={() => void declineRequest(player.userId)}
-                      >
-                        Decline
-                      </button>
-                    </>
+                    <span className="online-player-status">Wants to be friends</span>
                   )}
                   {action === "sent" && (
                     <span className="online-player-status">Request sent</span>
