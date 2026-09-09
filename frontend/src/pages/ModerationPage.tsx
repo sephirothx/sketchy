@@ -24,6 +24,8 @@ import {
   type IncidentEvidence,
   type PlayerReportDrawing,
   composeRepeatNote,
+  REPORT_REASONS,
+  type ReportReason,
   scopeWords,
   type IncidentPicture,
   type ModerationIncident,
@@ -415,6 +417,10 @@ export function ModerationPage() {
   const [openCount, setOpenCount] = useState(0);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
+  // Optional, so nothing here refuses to proceed without it: what it buys is
+  // a notice with structure when the sentence is terse, not another gate on
+  // a decision that already has a step-up in front of it.
+  const [category, setCategory] = useState<Record<string, ReportReason>>({});
   const [duration, setDuration] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const { guard, dialog: stepUpDialog } = useStepUp();
@@ -597,6 +603,37 @@ export function ModerationPage() {
     active?.kind === "ban"
       ? bans.find((ban) => ban.id === active.id)
       : undefined;
+
+  const categoryField = (id: string) => (
+    <label className="mod-note mod-category">
+      What was it (optional)
+      <select
+        value={category[id] ?? ""}
+        onChange={(change) =>
+          setCategory((current) => {
+            const next = { ...current };
+            if (change.target.value) {
+              next[id] = change.target.value as ReportReason;
+            } else {
+              delete next[id];
+            }
+            return next;
+          })
+        }
+      >
+        <option value="">Not recorded</option>
+        {REPORT_REASONS.map((reason) => (
+          <option key={reason} value={reason}>
+            {humanize(reason)}
+          </option>
+        ))}
+      </select>
+      <span className="mod-note-hint">
+        Your finding, shown to the player with the decision. Never the
+        reporters&rsquo; words.
+      </span>
+    </label>
+  );
 
   const noteField = (id: string) => (
     <label className="mod-note">
@@ -916,6 +953,7 @@ export function ModerationPage() {
                     playerCase,
                     playerCase.reportedPlayer?.displayName ?? "this player",
                   )}
+                  {categoryField(playerCase.id)}
                   {noteField(playerCase.id)}
                   <div className="mod-actions">
                     <button
@@ -992,6 +1030,9 @@ export function ModerationPage() {
                                 createUserWarning({
                                   userId: playerCase.reportedUserId as string,
                                   reason: note[playerCase.id],
+                                  ...(category[playerCase.id]
+                                    ? { category: category[playerCase.id] }
+                                    : {}),
                                   // So the warned player can be shown what
                                   // the complaint was actually about.
                                   reportId: playerCase.id,
@@ -1018,6 +1059,9 @@ export function ModerationPage() {
                                 return createUserBan({
                                   userId: playerCase.reportedUserId as string,
                                   reason: note[playerCase.id],
+                                  ...(category[playerCase.id]
+                                    ? { category: category[playerCase.id] }
+                                    : {}),
                                   // So the suspended player can be shown what
                                   // the complaint was actually about.
                                   reportId: playerCase.id,

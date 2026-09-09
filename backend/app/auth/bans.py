@@ -61,6 +61,7 @@ async def suspension_payload(
         "detail": "This account is suspended.",
         "suspended": True,
         "reason": None,
+        "category": None,
         "expiresAt": None,
     }
     try:
@@ -72,6 +73,7 @@ async def suspension_payload(
     if ban is None:
         return body
     body["reason"] = ban.reason
+    body["category"] = ban.category
     body["expiresAt"] = ban.expires_at.isoformat() if ban.expires_at else None
     async with session_factory() as session:
         # Their own words, and their own work: every cited line and every

@@ -233,6 +233,43 @@ export function scopeWords(incident: ModerationIncident): { label: string; repea
   return words;
 }
 
+/** A decision's recorded category, in the words a player reads.
+
+Written out rather than machine-shaped: this is the one place a moderation
+vocabulary is shown to the person it was applied to, and "inappropriate_name"
+is not a sentence anybody says. */
+/** The six a decision may be recorded as - the same words a report uses, so
+there is one moderation vocabulary rather than two to keep in step. */
+export const REPORT_REASONS: ReportReason[] = [
+  "harassment",
+  "offensive_drawing",
+  "inappropriate_name",
+  "cheating",
+  "spam",
+  "inappropriate_avatar",
+];
+
+const CATEGORY_WORDS: Record<string, string> = {
+  harassment: "harassment",
+  offensive_drawing: "an offensive drawing",
+  inappropriate_name: "an inappropriate name",
+  cheating: "cheating",
+  spam: "spam",
+  inappropriate_avatar: "an inappropriate picture",
+};
+
+/** A category as it arrived, or null. Unchecked by both compilers, so a value
+that is not one of the six is dropped rather than rendered as itself. */
+export function asReportReason(value: unknown): ReportReason | null {
+  return typeof value === "string" && (REPORT_REASONS as string[]).includes(value)
+    ? (value as ReportReason)
+    : null;
+}
+
+export function humanizeCategory(value: string): string {
+  return CATEGORY_WORDS[value] ?? value.replace(/_/g, " ");
+}
+
 /** The ledger cap a resolution note has to fit inside. */
 export const MAX_RESOLUTION_NOTE = 2000;
 
@@ -397,6 +434,8 @@ export function removeReportedAvatar(reportId: string): Promise<{ ok: boolean; r
 export function createUserBan(input: {
   userId: string;
   reason: string;
+  /** The moderator's finding, when they chose to record one. */
+  category?: ReportReason;
   /** The report this was decided from, when it came from one. */
   reportId?: string;
   expiresAt?: string;
@@ -408,6 +447,10 @@ export function createUserBan(input: {
 export interface PendingWarning {
   id: string;
   reason: string;
+  /** What the moderator recorded this as, when they recorded anything. Their
+      finding, never the reporters' claim. Null on a decision taken without
+      one, which every notice has to read correctly without. */
+  category: ReportReason | null;
   createdAt: string;
   /** The reported messages behind it - the player's own words, from every
       report the decision covered. */
@@ -447,6 +490,7 @@ export function reportedDrawing(value: unknown): PlayerReportDrawing | null {
 export function createUserWarning(input: {
   userId: string;
   reason: string;
+  category?: ReportReason;
   /** The report this was decided from, when it came from one. */
   reportId?: string;
 }): Promise<{ id: string; userId: string; reason: string; createdAt: string }> {

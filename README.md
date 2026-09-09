@@ -1032,6 +1032,19 @@ word. Only dismissal is offered that way: it restricts nobody, which is what
 makes it safe a press from a notice, and a warning or suspension is not
 something to repeat by shortcut.
 
+A decision may record **what rule it was about** — the moderator's own
+finding, from the same six words a report uses, never the reporters' reason,
+which is their claim rather than a finding and would tell the player how people
+they cannot see described them. It is optional: a decision already sits behind
+a step-up and a required note, so the category buys structure where the note is
+terse rather than being one more thing to get past. Every notice reads
+correctly without it.
+
+A warning also says, in general terms, that a further report may lead to a
+suspension. That is what a warning is *for* — the step between nothing and a
+suspension — and a notice that does not say so informs without deterring. It
+names no ladder, because nothing enforces one.
+
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
 game that stops and a page that starts refusing things. A player mid-game hears

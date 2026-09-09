@@ -2497,7 +2497,13 @@ async def test_a_suspension_notice_for_no_suspension_says_only_that(env):
     from app.auth.bans import is_user_banned, suspension_payload
 
     _, factory, _ = env
-    bare = {"detail": "This account is suspended.", "suspended": True, "reason": None, "expiresAt": None}
+    bare = {
+        "detail": "This account is suspended.",
+        "suspended": True,
+        "reason": None,
+        "category": None,
+        "expiresAt": None,
+    }
 
     # Never suspended: the notice says it is suspended and knows nothing else,
     # rather than inventing an empty evidence list to go with it.
@@ -3052,3 +3058,47 @@ async def test_an_incident_shows_what_was_done_whichever_report_it_was_done_from
     )
     # What was done, not merely that something was.
     assert case["outcome"] == "suspended"
+
+
+@pytest.mark.asyncio
+async def test_a_decision_may_record_what_it_was_about_and_reads_without_it(env):
+    """The category is the moderator's finding, shown to the player with the
+    decision. Optional, so a notice has to read correctly with it absent -
+    which is most of the surface it touches (R-MOD-19)."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "CatMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    async def warn(name, category):
+        target_http = new_client()
+        target = await register(target_http, name)
+        body = {"userId": target["id"], "reason": "Watch your language."}
+        if category is not None:
+            body["category"] = category
+        issued = await moderator_http.post("/api/moderation/warnings", json=body)
+        assert issued.status_code == 201, issued.text
+        return target_http, issued.json()
+
+    with_category, payload = await warn("CatTold", "harassment")
+    assert payload["category"] == "harassment"
+    shown = (await with_category.get("/api/warnings/pending")).json()["warning"]
+    assert shown["category"] == "harassment"
+
+    without, payload = await warn("CatQuiet", None)
+    assert payload["category"] is None
+    shown = (await without.get("/api/warnings/pending")).json()["warning"]
+    assert shown["category"] is None
+
+    # Not any word a caller likes: the six a report may name, and nothing else.
+    target_http = new_client()
+    target = await register(target_http, "CatBad")
+    refused = await moderator_http.post(
+        "/api/moderation/warnings",
+        json={
+            "userId": target["id"],
+            "reason": "Because I say so.",
+            "category": "being annoying",
+        },
+    )
+    assert refused.status_code == 422

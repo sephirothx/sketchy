@@ -1467,11 +1467,13 @@
    "priorWarnings"
   ],
   "api.moderation:create_ban": [
-   "displayName"
+   "displayName",
+   "expiresAt"
   ],
   "api.moderation:create_moderation_router": [
    "createdAt",
    "displayName",
+   "expiresAt",
    "hasMore",
    "userId"
   ],

@@ -2,7 +2,7 @@ import { useClock } from "../hooks/useClock";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api";
-import { fetchSuspensionDrawing } from "../lib/moderation";
+import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
 import { socket } from "../lib/socket";
 import { ReportedDrawing } from "./ReportedDrawing";
 import {
@@ -35,6 +35,7 @@ export function SuspensionNotice() {
       const body = (payload ?? {}) as Record<string, unknown>;
       reportSuspended({
         reason: typeof body.reason === "string" ? body.reason : null,
+        category: typeof body.category === "string" ? body.category : null,
         expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
         messages: reportedMessages(body.messages),
         drawings: reportedDrawings(body.drawings),
@@ -77,6 +78,11 @@ export function SuspensionNotice() {
         <h3 className="modal-title" id="suspension-title">
           Your account is suspended
         </h3>
+        {suspension.category && (
+          <p className="modal-body notice-category" data-testid="suspension-category">
+            Recorded as {humanizeCategory(suspension.category)}
+          </p>
+        )}
         {suspension.reason && (
           <p className="modal-body suspension-reason">{suspension.reason}</p>
         )}

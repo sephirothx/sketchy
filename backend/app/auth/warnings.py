@@ -49,6 +49,7 @@ async def pending_warning_payload(
             "warning": {
                 "id": str(warning.id),
                 "reason": warning.reason,
+                "category": warning.category,
                 "createdAt": warning.created_at.isoformat(),
                 # Every cited line and every canvas the decision behind this
                 # warning covered, not only the one report it names (#620).

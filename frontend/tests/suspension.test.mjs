@@ -13,11 +13,13 @@ test("the refusal for a suspended account is recognised, and nothing else is", (
       detail: "This account is suspended.",
       suspended: true,
       reason: "Harassment",
+      category: "harassment",
       expiresAt: "2026-08-25T12:00:00.000Z",
       messages: [{ text: "the thing they said", at: "2026-08-24T11:00:00.000Z" }],
     }),
     {
       reason: "Harassment",
+      category: "harassment",
       expiresAt: "2026-08-25T12:00:00.000Z",
       messages: [{ text: "the thing they said", at: "2026-08-24T11:00:00.000Z" }],
       drawings: [],
@@ -35,6 +37,7 @@ test("a suspension with no reason recorded is still a suspension", () => {
   // better than saying nothing.
   assert.deepEqual(suspensionFromPayload({ suspended: true }), {
     reason: null,
+    category: null,
     expiresAt: null,
     messages: [],
     drawings: [],
