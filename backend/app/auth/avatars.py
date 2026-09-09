@@ -29,8 +29,34 @@ MAX_AVATAR_BYTES = 128 * 1024
 # Content type → the extension its key carries. Both are read from a fixed
 # header below; nothing else is an avatar.
 AVATAR_FORMATS = {"image/webp": "webp", "image/png": "png"}
-# How long an account waits after a moderator removed its picture.
-AVATAR_REUPLOAD_BLOCK = timedelta(days=7)
+# How long an account waits before it may upload again, by how many pictures
+# a moderator has taken down from it. The first costs nothing: a picture can
+# be wrong without its owner meaning anything by it, and a removal they are
+# told about is already the correction. Doing it again is a pattern rather
+# than a misjudgement, so the wait starts and then grows.
+#
+# It stops at ninety days rather than becoming permanent. A fourth removal is
+# no longer really an avatar problem, and the remedy that fits it is a
+# suspension a moderator decides on - not a block that quietly never lifts and
+# that nothing in the app can lift for them.
+AVATAR_REUPLOAD_BLOCKS = (
+    timedelta(0),
+    timedelta(days=7),
+    timedelta(days=30),
+    timedelta(days=90),
+)
+
+
+def avatar_reupload_block(prior_removals: int) -> timedelta:
+    """The wait after a moderator removes a picture, given how many they have
+    removed from this account before this one.
+
+    `prior_removals` counts only removals a moderator carried out. Taking your
+    own picture down is not a punishment (R-AVA-04) and must never move an
+    account up this ladder.
+    """
+    index = min(max(prior_removals, 0), len(AVATAR_REUPLOAD_BLOCKS) - 1)
+    return AVATAR_REUPLOAD_BLOCKS[index]
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _NOT_A_PICTURE = "That is not a WebP or PNG picture."

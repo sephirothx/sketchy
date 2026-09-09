@@ -1121,9 +1121,21 @@ sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial. A picture can be
-reported - from the lobby's row menu, from a profile, or from a room - a moderator can
-remove it through the report, and removal blocks uploads for a week. The export
-carries the bytes; deletion removes them.
+reported - from the lobby's row menu, from a profile, or from a room - and a
+moderator can remove it through the report.
+
+A removal is **told to its owner**, written in the same transaction that
+carries it out, because a picture that vanishes with no word reads as a fault
+rather than a decision. The wait before another may go up grows with how many
+of that account's pictures a moderator has taken down: none for the first,
+then a week, a month, three months, and three months from there on. The first
+costs nothing because a picture can be wrong without its owner meaning
+anything by it, and being told is already the correction; the ladder stops
+rather than becoming permanent, because a fourth removed picture is no longer
+an avatar problem and the answer to it is a suspension somebody decides on.
+Only a moderator's removals count - taking your own picture down is not a
+punishment and sets no block. The export carries the bytes; deletion removes
+them.
 
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the
