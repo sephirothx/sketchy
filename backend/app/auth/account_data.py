@@ -448,13 +448,23 @@ class _ExportWriter:
         self._after_key = False
         self.written = 0
 
+    def close(self) -> None:
+        """Release the compressor. Safe to call after `finish`, and twice.
+
+        Every way out of a build ends here. The two that keep nothing say so
+        themselves - the ceiling refusal below, and `process_data_export`
+        around the whole build, for the planned shutdown that cancels one
+        part-written and used to leave its compressor to the collector.
+        """
+        self._gzip.close()
+
     def _emit(self, text: str) -> None:
         data = text.encode("utf-8")
         self.written += len(data)
         if self.written > self._max_bytes:
-            # Nothing of this build is kept, so the compressor is released
-            # here rather than by whoever catches the refusal.
-            self._gzip.close()
+            # Nothing of this build is kept, and a writer built on its own has
+            # nobody holding it, so the compressor goes back here too.
+            self.close()
             raise ExportTooLarge(self._max_bytes)
         self._gzip.write(data)
 
@@ -499,7 +509,7 @@ class _ExportWriter:
         self.value(item)
 
     def finish(self) -> bytes:
-        self._gzip.close()
+        self.close()
         return self._buffer.getvalue()
 
 
@@ -1199,10 +1209,16 @@ async def process_data_export(
     try:
         async with session_factory() as session:
             writer = _ExportWriter(max_bytes=export_max_bytes())
-            await _write_export_artifact(
-                session, writer, user_id=owner_id, generated_at=processed_at
-            )
-            artifact = writer.finish()
+            try:
+                await _write_export_artifact(
+                    session, writer, user_id=owner_id, generated_at=processed_at
+                )
+                artifact = writer.finish()
+            finally:
+                # A refusal, a failure, or the cancellation below: the
+                # compressor goes back here rather than at whichever of them
+                # happened.
+                writer.close()
         async with session_factory() as session:
             async with session.begin():
                 job = await session.scalar(

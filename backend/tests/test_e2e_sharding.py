@@ -8,6 +8,8 @@ from tests.e2e_sharding import shard_spec
 
 pytest_plugins = ["pytester"]
 
+ASYNCIO_LOOP_SCOPE = "[pytest]\nasyncio_default_fixture_loop_scope = function\n"
+
 
 @pytest.mark.parametrize("value", ["", "1", "a/2", "1/2/3", "0/2", "3/2", "1/0", "-1/2"])
 def test_invalid_shard_is_an_error(value):
@@ -17,6 +19,9 @@ def test_invalid_shard_is_an_error(value):
 
 def test_shards_cover_parametrizations_and_new_files_once(pytester):
     plugin = Path(__file__).with_name("e2e_sharding.py").read_text()
+    # The sub-run reads none of this suite's configuration, so it is given the
+    # one setting whose absence pytest-asyncio warns about on every run.
+    pytester.makefile(".ini", pytest=ASYNCIO_LOOP_SCOPE)
     pytester.makeconftest(plugin)
     pytester.makepyfile(
         test_first="""

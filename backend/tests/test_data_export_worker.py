@@ -183,6 +183,51 @@ async def test_a_failing_sweep_is_counted_and_the_loop_carries_on(env, monkeypat
         await stop_export_worker(task)
 
 
+async def test_a_build_cut_short_hands_its_compressor_back_too(env):
+    """The job goes back to `pending`, and so does the memory behind it.
+
+    `_ExportWriter` released its compressor when the document finished and
+    when the ceiling refused it, and not when a shutdown cancelled the build
+    part-written - the one path that leaves a compressor with bytes in it.
+    A `ResourceWarning: unclosed GzipFile` was all it said.
+    """
+    factory, users = env
+    player = await users.create_anonymous("Interrupted")
+    job = await create_data_export(factory, user_id=player.id)
+    writers = []
+    building = asyncio.Event()
+    original_writer = account_data_module._ExportWriter
+    original_write = account_data_module._write_export_artifact
+
+    class RecordedWriter(original_writer):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            writers.append(self)
+
+    async def never_finishes(session, writer, **kwargs):
+        writer.field("cut", "short")
+        building.set()
+        await asyncio.sleep(3600)
+
+    account_data_module._ExportWriter = RecordedWriter
+    account_data_module._write_export_artifact = never_finishes
+    try:
+        build = asyncio.create_task(
+            account_data_module.process_data_export(factory, export_id=job.id)
+        )
+        await building.wait()
+        build.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await build
+    finally:
+        account_data_module._ExportWriter = original_writer
+        account_data_module._write_export_artifact = original_write
+
+    assert len(writers) == 1
+    assert writers[0]._gzip.closed
+    assert (await status_of(factory, job.id)).status == DataExportStatus.PENDING.value
+
+
 async def test_a_planned_shutdown_hands_the_job_back(env):
     """Cancelled mid-build, the worker returns the row to `pending` so the
     next process builds it at once rather than after the stale window."""
