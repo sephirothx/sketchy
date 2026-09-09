@@ -1,6 +1,6 @@
-"""Friends, from inside the game: adding one, inviting one, joining one.
+"""Friends, from inside the game: adding one, marking one, inviting one, joining one.
 
-Three commands, and the interesting thing is that two of them let somebody into
+Four commands, and the interesting thing is that two of them let somebody into
 a room they cannot name - so the rule for *who* may do that is the whole
 design.
 
@@ -32,6 +32,7 @@ from uuid import UUID
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     AddFriendPayload,
+    EmptyPayload,
     FriendUserPayload,
     JoinFriendRoomPayload,
     PayloadError,
@@ -331,7 +332,63 @@ async def _joinable_rooms(ctx: HandlerContext, mine, friend_user_id: str) -> lis
     return joinable
 
 
+async def friends_in_room(ctx: HandlerContext, sid, data):
+    """Which seats in this socket's room are friends of the caller.
+
+    Answers with **seat ids**, never accounts (R-ROOM-07). That is the same
+    move `add_friend` makes in the other direction: the client names a seat it
+    can see, the server resolves who is sitting in it. Here the server does the
+    resolving and hands back only the seats, so a room payload still carries no
+    account id and the client learns nothing it could not already see.
+
+    Addressed to one socket rather than broadcast, because the answer is
+    different for every reader - and that is the point. It is not room state:
+    nothing here changes a gameplay fact, and R-BLOCK-03 forbids a *block*
+    creating a different game per player, not a viewer's own relationships
+    being drawn on their own screen. The seat's own ring already works this
+    way; this is the same kind of annotation.
+
+    A caller with no account, or one whose room has no other registered seats,
+    gets an empty list rather than a refusal: "nobody here is your friend" and
+    "you cannot have friends" look identical from the outside, which is what
+    R-FRIEND-04 wants anyway.
+    """
+    try:
+        parse_payload(EmptyPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    current = await ctx.game_flow.require_current_player(sid)
+    if not current:
+        return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
+    room, me = current
+    if ctx.friend_service is None or me.is_anonymous or not me.user_id:
+        return {"ok": True, "playerIds": []}
+    mine = await _uuid_or_none(me.user_id)
+    if mine is None:
+        return {"ok": True, "playerIds": []}
+
+    # One read, bounded by MAX_FRIENDS_PER_ACCOUNT, rather than a lookup per
+    # seat: a room holds at most a handful of players and an account at most a
+    # few hundred friends, so the set is the cheaper side to fetch whole.
+    try:
+        friends = await _bounded(
+            ctx.friend_service.accepted_ids(mine), "reading friendships"
+        )
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+
+    seats = []
+    for player in room.players.values():
+        if player.id == me.id or player.is_anonymous or not player.user_id:
+            continue
+        theirs = await _uuid_or_none(player.user_id)
+        if theirs is not None and theirs in friends:
+            seats.append(player.id)
+    return {"ok": True, "playerIds": seats}
+
+
 def register(ctx: HandlerContext) -> None:
     ctx.on("add_friend", handler=partial(add_friend, ctx))
+    ctx.on("friends_in_room", handler=partial(friends_in_room, ctx))
     ctx.on("invite_friend", handler=partial(invite_friend, ctx))
     ctx.on("join_friend_room", handler=partial(join_friend_room, ctx))

@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ModerationState, PlayerInfo } from "../types";
 import { emitWithAck, emitTransient } from "../lib/socket";
 import { useToast } from "../lib/toast";
+import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
@@ -81,6 +82,9 @@ export function PlayerList({
   // list - whether a report about the drawer can carry the canvas.
   const phase = useGameStore((state) => state.phase);
   const { notify } = useToast();
+  // Seats the server has resolved as friends of this viewer. Seat ids, never
+  // accounts (R-ROOM-07), and per-viewer the way the self ring already is.
+  const friendSeats = useRoomFriendsStore((state) => state.seatIds);
 
   /** Friend somebody by their seat, so no account id crosses the wire.
 
@@ -226,6 +230,7 @@ export function PlayerList({
               isAnonymous={p.isAnonymous}
               isHost={p.isHost}
               isSelf={isMe}
+              isFriend={friendSeats.has(p.playerId)}
               size={38}
             />
             <span className="player-main">
@@ -235,10 +240,14 @@ export function PlayerList({
                   nameColor={p.nameColor}
                   isAnonymous={p.isAnonymous}
                 />
-                {/* The ring and the crown are on the avatar (#574); these say
-                    the same two things where a screen reader reads the name. */}
+                {/* The ring, the crown and the friend mark are on the
+                    avatar (#574, R-FRIEND-13); these say the same things
+                    where a screen reader reads the name. */}
                 {isMe && <span className="visually-hidden">(you)</span>}
                 {p.isHost && <span className="visually-hidden">Host</span>}
+                {friendSeats.has(p.playerId) && (
+                  <span className="visually-hidden">Friend</span>
+                )}
                 {!p.connected && <span className="visually-hidden">Disconnected</span>}
               </span>
               {status}

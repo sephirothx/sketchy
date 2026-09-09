@@ -9,7 +9,7 @@ import uuid
 
 import pytest
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, register_account, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -504,4 +504,69 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
         finally:
             await asker_context.close()
             await target_context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
+    """The mark in a room, and the thing that makes it safe (R-FRIEND-13).
+
+    Two friends and a stranger sit in one room. Each of the three sees the
+    same game and a different set of marks, because the mark says something
+    about the reader rather than about the game - which is why it is resolved
+    per socket and named by seat, and why no account id enters a room payload
+    to make it work (R-ROOM-07).
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context() for _ in range(3)]
+        ada, bob, cat = [await c.new_page() for c in contexts]
+        ada_name, bob_name, cat_name = unique("Ada"), unique("Bob"), unique("Cat")
+
+        def seat(page, name):
+            return page.locator(
+                f'.player-row:has(.player-name:has-text("{name}"))'
+            )
+
+        try:
+            await sign_up(ada, ada_name)
+            await sign_up(bob, bob_name)
+            await sign_up(cat, cat_name)
+            await make_friends(ada, bob, ada_name, bob_name)
+
+            # Cat hosts, so nobody's friendship decides who may be here.
+            await cat.click('button:has-text("Create room")')
+            await cat.click('button:has-text("Public")')
+            await cat.click('button:has-text("Create room")')
+            await cat.wait_for_selector(".room-copy-button")
+            code = await cat.locator(".room-copy-button").first.get_attribute(
+                "data-room-code"
+            )
+            for page in (ada, bob):
+                await join_by_code(page, code)
+                await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            for page in (ada, bob, cat):
+                await expect(page.locator(".player-row")).to_have_count(
+                    3, timeout=SETTLE_MS
+                )
+
+            # Ada sees Bob marked, and nobody else - not Cat, not herself.
+            await expect(
+                seat(ada, bob_name).locator(".avatar-friend")
+            ).to_have_count(1, timeout=SETTLE_MS)
+            await expect(seat(ada, cat_name).locator(".avatar-friend")).to_have_count(0)
+            await expect(seat(ada, ada_name).locator(".avatar-friend")).to_have_count(0)
+
+            # Bob sees the mirror of that.
+            await expect(
+                seat(bob, ada_name).locator(".avatar-friend")
+            ).to_have_count(1, timeout=SETTLE_MS)
+            await expect(seat(bob, cat_name).locator(".avatar-friend")).to_have_count(0)
+
+            # Cat is friends with neither, and sees an unmarked room.
+            await expect(cat.locator(".player-row .avatar-friend")).to_have_count(0)
+        finally:
+            for context in contexts:
+                await context.close()
             await browser.close()

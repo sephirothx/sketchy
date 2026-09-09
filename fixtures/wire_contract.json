@@ -255,6 +255,15 @@
    "parser": "parse_draw_payload",
    "silent": true
   },
+  "friends_in_room": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
   "get_custom_prompts": {
    "commandClass": "action",
    "payload": {
@@ -2066,6 +2075,10 @@
   ],
   "handlers.friends:add_friend": [
    "errorCode"
+  ],
+  "handlers.friends:friends_in_room": [
+   "errorCode",
+   "playerIds"
   ],
   "handlers.friends:invite_friend": [
    "displayName",
