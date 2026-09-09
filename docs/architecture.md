@@ -1001,6 +1001,38 @@ lobby line is public by construction, so the "did you receive it" check does not
 apply, the author must still be the reported account, and a report never mixes lobby
 and room lines. `evidence_from_live_room` is scoped to a room and never picks them.
 
+### Reports of one incident
+
+Five people watching one person do one thing file five reports, and R-MOD-05 does not
+stop them: it stops one *reporter* saying it twice. Read one at a time that is five
+readings of one story and five decisions, four of them about something already dealt
+with, so an **incident** — one reported account, in one place — is what the queue shows
+and what a decision covers (#620).
+
+The key is derived, not matched: `(reported_user_id, scope, room_instance_id)` over
+pending reports, from columns both report routes already knew and used to discard. A
+report that cited nothing groups with nothing and stands on its own.
+[`services/incidents.py`](../backend/app/services/incidents.py) does the grouping and
+the evidence merge and touches no database — it is handed rows and returns a shape —
+so the ordering rule (oldest first, never by how many complained) and the merge rule
+(one line once, carrying which reports cited it) are readable in one place.
+
+Deciding is where the concurrency is.
+[`api/moderation.py`](../backend/app/api/moderation.py)'s `_lock_pending_incident`
+deliberately does **not** lock the report the request named and then walk outward: two
+moderators reaching one incident from two different member reports would take the same
+rows in opposite orders. It reads the named report unlocked to learn the key, locks
+the whole pending set in id order, and re-checks the named report inside that set —
+so the unlocked read is never what a decision acts on, and the loser of the race gets
+the 409 a slow retry would.
+
+What the *player* is then shown widens with it. A warning or suspension still names
+one report (`source_report_id`), but `cited_notice_messages` reads the cited lines of
+every report sharing that report's `decision_group_id`. Widening cannot leak: cited
+lines are authored by the reported player by construction (R-MOD-12), and the context
+copied around them — which is per-reporter, under their own blocks and audience — is
+a reviewer's and never reaches a notice.
+
 A drawing takes no queue at all. `drawing_from_live_room` in
 [`services/player_reports.py`](../backend/app/services/player_reports.py) is pure: when
 a `report_player` asks for the canvas (`includeDrawing`), the handler reads the room's
@@ -1581,7 +1613,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/handlers/reactions.py`](../backend/app/handlers/reactions.py) | Reactions to drawings: one emoji per registered seat per drawing (#520). |
 | [`app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py) | The loop that empties the email outbox. |
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
-| [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
+| [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled, and reading back what a decision shows the player. |
+| [`app/services/incidents.py`](../backend/app/services/incidents.py) | Grouping reports of one incident, and reading them as one thread (#620). |
 | [`app/services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) | Retiring owned prompt lists without touching the games that played them. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |

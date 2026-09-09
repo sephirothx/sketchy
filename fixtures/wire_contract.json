@@ -1393,6 +1393,41 @@
    "revokedByUserId",
    "userId"
   ],
+  "api.moderation:_evidence_line_payload": [
+   "citedBy",
+   "copiedAt",
+   "gameId",
+   "messageCreatedAt",
+   "messageKind",
+   "nearMissKind",
+   "senderDisplayName",
+   "senderNameColor",
+   "senderUserId",
+   "senderWasAnonymous",
+   "sourceAvailable",
+   "sourceMessageId",
+   "turnId"
+  ],
+  "api.moderation:_incident_decision": [
+   "decisionGroupId",
+   "resolutionNote",
+   "reviewedAt",
+   "reviewedBy",
+   "reviewedByUserId"
+  ],
+  "api.moderation:_incident_payload": [
+   "contextSnapshot",
+   "createdAt",
+   "gameId",
+   "latestReportedAt",
+   "openedAt",
+   "reportId",
+   "reportedPlayer",
+   "reportedUserId",
+   "reporterCount",
+   "reporterUserId",
+   "turnId"
+  ],
   "api.moderation:_prompt_content_report_payload": [
    "createdAt",
    "listName",
@@ -1410,13 +1445,9 @@
   ],
   "api.moderation:_report_payload": [
    "contextSnapshot",
-   "copiedAt",
    "createdAt",
    "gameId",
-   "messageCreatedAt",
    "messageEvidence",
-   "messageKind",
-   "nearMissKind",
    "reportedPlayer",
    "reportedUserId",
    "reporterUserId",
@@ -1424,12 +1455,6 @@
    "reviewedAt",
    "reviewedBy",
    "reviewedByUserId",
-   "senderDisplayName",
-   "senderNameColor",
-   "senderUserId",
-   "senderWasAnonymous",
-   "sourceAvailable",
-   "sourceMessageId",
    "turnId",
    "updatedAt"
   ],
@@ -1455,6 +1480,9 @@
    "userId"
   ],
   "api.moderation:list_closed_cases": [
+   "hasMore"
+  ],
+  "api.moderation:list_reports": [
    "hasMore"
   ],
   "api.moderation:review_prompt_content_report": [
@@ -2372,6 +2400,9 @@
    "roundNumber",
    "turnId"
   ],
+  "services.player_reports:notice_drawings": [
+   "reportId"
+  ],
   "services.player_reports:record_player_report": [
    "schemaVersion"
   ],
@@ -2460,7 +2491,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 17,
+ "protocolVersion": 18,
  "refusal": {
   "codes": [
    "invalid_payload",

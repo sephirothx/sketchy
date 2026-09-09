@@ -107,7 +107,11 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await set_role("QueueModerator", UserRole.MODERATOR.value)
             await moderator_page.goto(f"{BASE_URL}/moderation")
 
-            case = moderator_page.locator(".mod-queue-item", has_text=DETAILS)
+            # The queue shows incidents now: an entry carries the player it
+            # is about and the reasons given, never a report's own words. So
+            # it is found by this test's own player rather than by a reason
+            # several of the suite's tests share.
+            case = moderator_page.locator(".mod-queue-item", has_text=names[drawer])
             await case.wait_for()
             await case.click()
             figure = moderator_page.locator('[data-testid="mod-drawing"]')
@@ -132,7 +136,7 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await case.wait_for(state="detached")
 
             await moderator_page.get_by_role("button", name="Closed").click()
-            closed = moderator_page.locator(".mod-queue-item", has_text=DETAILS)
+            closed = moderator_page.locator(".mod-queue-item", has_text=names[drawer])
             await closed.wait_for()
             await closed.click()
             await moderator_page.locator('[data-testid="mod-drawing"] canvas').wait_for()
@@ -151,6 +155,126 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await pager.wait_for()
             assert await pager.get_by_role("button", name="Newer").is_disabled()
             assert await pager.get_by_role("button", name="Older").is_disabled()
+        finally:
+            for context in contexts:
+                await context.close()
+            await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_two_players_reporting_one_thing_are_one_case_decided_once():
+    """The whole point of grouping, played out (#620).
+
+    Two players in one room report the same person for the same thing. The
+    moderator gets one entry saying two people complained, both complaints in
+    their own words, one merged thread, and one Dismiss that leaves nothing
+    behind - not one entry dealt with and another still waiting.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context() for _ in range(4)]
+        host_page, first_page, second_page, moderator_page = [
+            await context.new_page() for context in contexts
+        ]
+        for page in (host_page, first_page, second_page, moderator_page):
+            page.set_default_timeout(10000)
+
+        try:
+            await host_page.goto(BASE_URL)
+            await use_guest_name(host_page, "PileHost")
+            await register_account(host_page, "PileHost")
+            await host_page.click('button:has-text("Create room")')
+            await host_page.click('button:has-text("Create room")')
+            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            code = await room_code(host_page)
+
+            for page, name in ((first_page, "PileOne"), (second_page, "PileTwo")):
+                await page.goto(BASE_URL)
+                await use_guest_name(page, name)
+                await register_account(page, name)
+                await join_by_code(page, code)
+                await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
+            await host_page.click(".waiting-start-button")
+            for page in (host_page, first_page, second_page):
+                await page.wait_for_selector(".game-layout")
+
+            # Whoever draws is who the other two complain about, so the two
+            # reports are about one seat in one room - one incident.
+            pages = [host_page, first_page, second_page]
+            names = {host_page: "PileHost", first_page: "PileOne", second_page: "PileTwo"}
+            drawer = None
+            for _ in range(120):
+                for page in pages:
+                    if await page.locator(".prompt-choices").count():
+                        drawer = page
+                        break
+                if drawer:
+                    break
+                await asyncio.sleep(0.1)
+            assert drawer is not None, "no drawer received prompt choices"
+            await drawer.locator(".prompt-choices button").first.click()
+            await drawer.locator("canvas.drawing-canvas").wait_for()
+            reporters = [page for page in pages if page is not drawer]
+
+            for index, reporter in enumerate(reporters):
+                row = reporter.locator(".player-list li", has_text=names[drawer])
+                await row.locator(".player-moderation-trigger").click()
+                await reporter.locator(".player-vote-menu").get_by_role(
+                    "menuitem", name="Report"
+                ).click()
+                dialog = reporter.locator(".modal-card").filter(has_text="Report")
+                await dialog.wait_for(state="visible")
+                await dialog.locator("textarea").fill(
+                    f"Complaint number {index + 1}, in my own words."
+                )
+                await dialog.get_by_role("button", name="Send report").click()
+                await reporter.wait_for_selector('.modal-card:has-text("Sent,")')
+
+            await moderator_page.goto(BASE_URL)
+            await use_guest_name(moderator_page, "PileMod")
+            await register_account(moderator_page, "PileMod")
+            await set_role("PileMod", UserRole.MODERATOR.value)
+            await moderator_page.goto(f"{BASE_URL}/moderation")
+
+            # One entry, not two, and it says how many complained.
+            case = moderator_page.locator(".mod-queue-item", has_text=names[drawer])
+            await case.wait_for()
+            # One entry for this drawer, not two: the queue is shared with the
+            # other tests on this server, so it is this player's entries that
+            # are counted.
+            assert await case.count() == 1
+            assert await case.locator(".chip", has_text="2 reporters").count() == 1
+            await case.click()
+
+            # Both complaints, each in its reporter's own words.
+            reporters_panel = moderator_page.locator('[data-testid="mod-reporters"]')
+            await reporters_panel.wait_for()
+            assert await reporters_panel.locator("li").count() == 2
+            panel_text = await reporters_panel.inner_text()
+            assert "Complaint number 1, in my own words." in panel_text
+            assert "Complaint number 2, in my own words." in panel_text
+
+            # And the decision says what it will close before it is taken.
+            scope = moderator_page.locator('[data-testid="mod-decision-scope"]')
+            await scope.wait_for()
+            assert "all 2 complaints" in await scope.inner_text()
+
+            await moderator_page.locator(".mod-note textarea").fill(
+                "Spoke to them; nothing further."
+            )
+            await moderator_page.locator(".mod-actions").get_by_role(
+                "button", name="Dismiss"
+            ).click()
+            await moderator_page.wait_for_selector(
+                '[role="status"]:has-text("Dismissed.")'
+            )
+            await case.wait_for(state="detached")
+
+            # One decision took both complaints with it: nothing about this
+            # player is left waiting.
+            assert await case.count() == 0
         finally:
             for context in contexts:
                 await context.close()

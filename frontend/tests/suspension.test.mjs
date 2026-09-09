@@ -20,7 +20,7 @@ test("the refusal for a suspended account is recognised, and nothing else is", (
       reason: "Harassment",
       expiresAt: "2026-08-25T12:00:00.000Z",
       messages: [{ text: "the thing they said", at: "2026-08-24T11:00:00.000Z" }],
-      drawing: null,
+      drawings: [],
     },
   );
 
@@ -37,7 +37,7 @@ test("a suspension with no reason recorded is still a suspension", () => {
     reason: null,
     expiresAt: null,
     messages: [],
-    drawing: null,
+    drawings: [],
   });
 });
 
@@ -94,19 +94,37 @@ test("a malformed message is dropped rather than rendered", () => {
 });
 
 
-test("a suspension refusal carries the reported drawing by its metadata", () => {
+test("a suspension refusal carries every reported drawing by its metadata", () => {
+  // One per reporter who attached the canvas as it stood when they sent, so
+  // the notice shows the drawing as it changed under them rather than
+  // whichever report the suspension happens to name.
   const suspension = suspensionFromPayload({
     suspended: true,
     reason: "Not a toaster.",
     expiresAt: null,
     messages: [],
-    drawing: { turnId: "t1", roundNumber: 2, prompt: "toaster", actionCount: 3, byteSize: 90, capturedAt: "2026-09-05T18:00:00Z" },
+    drawings: [
+      { reportId: "r1", turnId: "t1", roundNumber: 2, prompt: "toaster", actionCount: 3, byteSize: 90, capturedAt: "2026-09-05T18:00:00Z" },
+      { reportId: "r2", turnId: "t1", roundNumber: 2, prompt: "toaster", actionCount: 9, byteSize: 140, capturedAt: "2026-09-05T18:00:40Z" },
+    ],
   });
-  assert.equal(suspension?.drawing?.prompt, "toaster");
-  assert.equal(suspension?.drawing?.roundNumber, 2);
+  assert.equal(suspension?.drawings.length, 2);
+  assert.equal(suspension?.drawings[0].prompt, "toaster");
+  assert.equal(suspension?.drawings[0].roundNumber, 2);
+  // Each names the report whose bytes may then be fetched.
+  assert.deepEqual(suspension?.drawings.map((entry) => entry.reportId), ["r1", "r2"]);
 });
 
 test("a malformed drawing on a refusal is dropped rather than rendered", () => {
-  const suspension = suspensionFromPayload({ suspended: true, drawing: { prompt: 7 } });
-  assert.equal(suspension?.drawing, null);
+  // A drawing without its report id names nothing to fetch, so it is no more
+  // renderable than one with a broken prompt.
+  const suspension = suspensionFromPayload({
+    suspended: true,
+    drawings: [
+      { reportId: "r1", prompt: 7 },
+      { turnId: "t1", prompt: "toaster" },
+      { reportId: "r3", turnId: "t3", prompt: "kept", roundNumber: 1, actionCount: 1, byteSize: 5, capturedAt: "" },
+    ],
+  });
+  assert.deepEqual(suspension?.drawings.map((entry) => entry.prompt), ["kept"]);
 });

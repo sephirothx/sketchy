@@ -20,6 +20,8 @@ import {
   removeReportedAvatar,
   reviewModerationReport,
   reviewPromptContentReport,
+  type IncidentEvidence,
+  type ModerationIncident,
   type PlayerReport,
   type PromptContentReport,
   type ReportOutcome,
@@ -32,7 +34,7 @@ import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 
 type Filter = "open" | "players" | "content" | "bans" | "closed";
-type CaseKind = "player" | "content" | "ban";
+type CaseKind = "incident" | "content" | "ban";
 type Selection = { kind: CaseKind; id: string };
 
 type QueueEntry = {
@@ -46,6 +48,62 @@ type QueueEntry = {
   dot: "danger" | "warning" | "neutral";
   /** How a closed case ended; absent while it is still open. */
   outcome?: ReportOutcome;
+  /** How many people complained, when more than one did. Shown, and
+      deliberately not sorted on. */
+  reporterCount?: number;
+};
+
+/** A closed player report as an incident of one.
+
+Closed cases still arrive per report; the open queue arrives grouped. Rather
+than render two shapes, one is turned into the other here, which is also what
+a decided report honestly is - an incident that happened to have one
+complaint. */
+function incidentFromReport(report: PlayerReport): ModerationIncident {
+  return {
+    id: report.id,
+    reportedUserId: report.reportedUserId,
+    reportedPlayer: report.reportedPlayer,
+    scope: "unscoped",
+    reporterCount: 1,
+    reasons: [report.reason],
+    openedAt: report.createdAt,
+    latestReportedAt: report.createdAt,
+    status: report.status,
+    reports: [
+      {
+        id: report.id,
+        reporterUserId: report.reporterUserId,
+        reason: report.reason,
+        details: report.details,
+        contextSnapshot: report.contextSnapshot,
+        gameId: report.gameId,
+        turnId: report.turnId,
+        createdAt: report.createdAt,
+        drawing: report.drawing,
+      },
+    ],
+    evidence: report.messageEvidence.map((line) => ({
+      ...line,
+      citedBy: line.role === "cited" ? [report.id] : [],
+    })),
+    drawings: report.drawing
+      ? [{ ...report.drawing, reportId: report.id }]
+      : [],
+    outcome: report.outcome,
+    reviewedByUserId: report.reviewedByUserId,
+    reviewedBy: report.reviewedBy,
+    resolutionNote: report.resolutionNote,
+    reviewedAt: report.reviewedAt,
+    decisionGroupId: null,
+  };
+}
+
+/** Where the incident happened, said the way a moderator would say it. */
+const SCOPES: Record<ModerationIncident["scope"], string> = {
+  room: "In a room",
+  lobby: "In the lobby",
+  unscoped: "No room named",
 };
 
 /** One chip per outcome: what was done, in the colour of how serious it was.
@@ -72,7 +130,7 @@ function DecisionCard({
   report,
   dateTime,
 }: {
-  report: PlayerReport | PromptContentReport;
+  report: ModerationIncident | PromptContentReport;
   dateTime: (date: Date) => string;
 }) {
   return (
@@ -102,8 +160,8 @@ const FILTERS: { name: Filter; label: string }[] = [
 
 /** When a decided case was decided. The review stamps it; the last write
     stands in for a row decided some other way. */
-function decidedAt(report: PlayerReport | PromptContentReport): string {
-  return report.reviewedAt ?? report.updatedAt;
+function decidedAt(report: { reviewedAt: string | null; updatedAt?: string }): string {
+  return report.reviewedAt ?? report.updatedAt ?? "";
 }
 
 function formatWhen(value: string, dateTime: (date: Date) => string): string {
@@ -165,6 +223,76 @@ function ReportDrawing({
   );
 }
 
+/** Who complained, and in whose words.
+
+An incident's reports are the one thing merging must not flatten: five people
+choosing five different words for what happened is evidence in itself, and a
+moderator who only sees the first complaint has read a fifth of the case. The
+evidence below is merged because it is one conversation seen from several
+seats; this is not. */
+function ReportersPanel({
+  incident,
+  dateTime,
+}: {
+  incident: ModerationIncident;
+  dateTime: (date: Date) => string;
+}) {
+  const many = incident.reports.length > 1;
+  return (
+    <>
+      <h2>{many ? `${incident.reports.length} complaints` : "The complaint"}</h2>
+      <ol className="mod-reporters" data-testid="mod-reporters">
+        {incident.reports.map((report, index) => (
+          <li key={report.id} className="mod-reporter">
+            <div className="mod-reporter-head">
+              {many && <span className="mod-reporter-index">{index + 1}</span>}
+              <Chip kind="neutral">{humanize(report.reason)}</Chip>
+              <time dateTime={report.createdAt}>
+                {formatWhen(report.createdAt, dateTime)}
+              </time>
+            </div>
+            <p className="mod-case-details">
+              {report.details ||
+                "No details given; the evidence is the complaint."}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </>
+  );
+}
+
+/** One line of the merged thread.
+
+A cited line says how many of the incident's reporters picked it out. That is
+the one number worth reading off a pile-on: it separates the line everybody
+complained about from the one line only one person did, which is a difference
+the count of reports on its own cannot show. */
+function EvidenceLine({
+  line,
+  reporterCount,
+}: {
+  line: IncidentEvidence;
+  reporterCount: number;
+}) {
+  const cited = line.citedBy?.length ?? 0;
+  return (
+    <span className={`mod-evidence-line is-${line.role}`} data-role={line.role}>
+      <strong>{line.senderDisplayName}:</strong> {line.text}
+      {reporterCount > 1 && cited > 0 && (
+        <span className="mod-evidence-cites" data-testid="mod-evidence-cites">
+          {cited === reporterCount
+            ? `all ${reporterCount} reporters`
+            : `${cited} of ${reporterCount}`}
+        </span>
+      )}
+      {/* The snapshot is the evidence. The live message may have been deleted
+          since, which is the point of keeping one. */}
+      {!line.sourceAvailable && <em> — original no longer in the room</em>}
+    </span>
+  );
+}
+
 export function ModerationPage() {
   const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
@@ -173,7 +301,7 @@ export function ModerationPage() {
   // Which page of closed cases is open, and whether an older one exists.
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [players, setPlayers] = useState<PlayerReport[]>([]);
+  const [incidents, setIncidents] = useState<ModerationIncident[]>([]);
   const [content, setContent] = useState<PromptContentReport[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
   const [openCount, setOpenCount] = useState(0);
@@ -213,7 +341,7 @@ export function ModerationPage() {
           offset: page * CLOSED_CASES_PAGE_SIZE,
         })
       : pending.then(([playerResult, contentResult]) => ({
-          players: playerResult.reports,
+          players: playerResult.incidents,
           content: contentResult.reports,
           hasMore: false,
         }));
@@ -225,12 +353,20 @@ export function ModerationPage() {
       pending,
     ])
       .then(([caseResult, banResult, pendingResult]) => {
-        setPlayers(caseResult.players);
+        // Closed cases still arrive per report; the open queue arrives as
+        // incidents. One shape is rendered, so the other is adapted.
+        setIncidents(
+          caseResult.players.map((row) =>
+            "reporterCount" in row ? row : incidentFromReport(row),
+          ),
+        );
         setContent(caseResult.content);
         setHasMore(caseResult.hasMore);
         setBans(banResult.bans);
+        // Incidents, not reports: the chip counts the work waiting, and
+        // five complaints about one thing are one thing to look at.
         setOpenCount(
-          pendingResult[0].reports.length + pendingResult[1].reports.length,
+          pendingResult[0].incidents.length + pendingResult[1].reports.length,
         );
         setError(null);
       })
@@ -248,15 +384,17 @@ export function ModerationPage() {
   const queue = useMemo<QueueEntry[]>(() => {
     // A closed case is dated by its decision and marked as settled; an open
     // one by its arrival and by what kind of trouble it is.
-    const playerEntries: QueueEntry[] = players.map((report) => ({
-      kind: "player",
-      id: report.id,
-      title: humanize(report.reason),
-      // A room report may say nothing beyond its evidence.
-      snippet: report.details || "No details given.",
-      at: showingClosed ? decidedAt(report) : report.createdAt,
+    // The reported player is what an incident is about; the reasons are how
+    // the people who complained described it, which may be several things.
+    const playerEntries: QueueEntry[] = incidents.map((incident) => ({
+      kind: "incident",
+      id: incident.id,
+      title: incident.reportedPlayer?.displayName ?? "Deleted player",
+      snippet: incident.reasons.map(humanize).join(" · "),
+      at: showingClosed ? decidedAt(incident) : incident.openedAt,
       dot: showingClosed ? "neutral" : "danger",
-      outcome: showingClosed ? report.outcome : undefined,
+      outcome: showingClosed ? incident.outcome : undefined,
+      reporterCount: incident.reporterCount,
     }));
     const contentEntries: QueueEntry[] = content.map((report) => ({
       kind: "content",
@@ -287,7 +425,7 @@ export function ModerationPage() {
             ? banEntries
             : [...playerEntries, ...contentEntries];
     return entries.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [filter, showingClosed, players, content, bans]);
+  }, [filter, showingClosed, incidents, content, bans]);
 
   // Derived rather than synced by an effect: whatever is clicked wins while
   // it is still in the queue, and the newest entry stands in otherwise.
@@ -335,8 +473,8 @@ export function ModerationPage() {
   }
 
   const playerCase =
-    active?.kind === "player"
-      ? players.find((report) => report.id === active.id)
+    active?.kind === "incident"
+      ? incidents.find((incident) => incident.id === active.id)
       : undefined;
   const contentCase =
     active?.kind === "content"
@@ -359,10 +497,24 @@ export function ModerationPage() {
       />
       <span className="mod-note-hint">
         Kept in the append-only audit ledger. A warning or suspension from
-        here also resolves this report.
+        here also resolves the incident.
       </span>
     </label>
   );
+
+  /** What a decision here will close, said before it is taken.
+
+      A moderator pressing Dismiss on an incident of five is deciding five
+      complaints, and should not have to infer that from a chip in the
+      queue. */
+  const decisionScope = (incident: ModerationIncident) =>
+    incident.reporterCount > 1 && (
+      <p className="mod-decision-scope" data-testid="mod-decision-scope">
+        This decides all {incident.reporterCount} complaints about{" "}
+        {incident.reportedPlayer?.displayName ?? "this player"}, under one
+        note.
+      </p>
+    );
 
   return (
     <main className="ops-page">
@@ -439,6 +591,15 @@ export function ModerationPage() {
                   />
                   <span className="mod-queue-item-text">
                     <strong>{entry.title}</strong>
+                    {/* Said, never sorted on: a pile-on is more people, not
+                        more evidence, and letting it jump the queue would
+                        reward arranging one. */}
+                    {entry.reporterCount !== undefined &&
+                      entry.reporterCount > 1 && (
+                        <Chip kind="warm" className="mod-reporter-chip">
+                          {entry.reporterCount} reporters
+                        </Chip>
+                      )}
                     {entry.outcome && <OutcomeChip outcome={entry.outcome} />}
                     <span>{entry.snippet}</span>
                   </span>
@@ -478,73 +639,79 @@ export function ModerationPage() {
                   <SectionLabel>
                     Player report · #{playerCase.id.slice(0, 6)}
                   </SectionLabel>
-                  <h1>{humanize(playerCase.reason)}</h1>
+                  <h1>
+                    {playerCase.reportedPlayer?.displayName ?? "Deleted player"}
+                  </h1>
                   <p className="mod-case-meta">
-                    {playerCase.reportedPlayer
-                      ? `About ${playerCase.reportedPlayer.displayName} · reported ${formatWhen(playerCase.createdAt, dateTime)}`
-                      : `Reported ${formatWhen(playerCase.createdAt, dateTime)}`}
+                    {playerCase.reporterCount === 1
+                      ? "1 reporter"
+                      : `${playerCase.reporterCount} reporters`}
+                    {` · ${SCOPES[playerCase.scope]}`}
+                    {` · opened ${formatWhen(playerCase.openedAt, dateTime)}`}
+                    {playerCase.reporterCount > 1 &&
+                      ` · latest ${formatWhen(playerCase.latestReportedAt, dateTime)}`}
                   </p>
                 </div>
-                <Chip kind="danger">{humanize(playerCase.reason)}</Chip>
+                {/* Every word the reporters reached for, not just the first
+                    one's: five people rarely describe one thing the same way,
+                    and which words they chose is worth reading. */}
+                <div className="mod-reason-chips">
+                  {playerCase.reasons.map((reason) => (
+                    <Chip key={reason} kind="danger">{humanize(reason)}</Chip>
+                  ))}
+                </div>
               </div>
 
               <div className="mod-case-columns">
                 <section className="ops-card" aria-label="Reported evidence">
-                  <h2>Reported evidence</h2>
-                  <p className="mod-case-details">
-                    {playerCase.details || "The reporter gave no details; the evidence is the complaint."}
-                  </p>
-                  {playerCase.messageEvidence.length > 0 && (
+                  <ReportersPanel incident={playerCase} dateTime={dateTime} />
+                  {playerCase.evidence.length > 0 && (
                     <>
-                      {/* One thread, in the order it was said: the cited
-                          lines marked, and around them what everyone else
-                          said, dimmed. A line on its own is often
-                          unreadable; the conversation is what a moderator
-                          judges. */}
+                      <h2>What was said</h2>
+                      {/* One thread, in the order it was said, however many
+                          reports it took to assemble: the cited lines marked,
+                          and around them what everyone else said, dimmed. A
+                          line on its own is often unreadable; the
+                          conversation is what a moderator judges. */}
                       <blockquote className="mod-evidence">
-                        {playerCase.messageEvidence.map((line) => (
-                          <span
+                        {playerCase.evidence.map((line) => (
+                          <EvidenceLine
                             key={line.sourceMessageId}
-                            className={`mod-evidence-line is-${line.role}`}
-                            data-role={line.role}
-                          >
-                            <strong>{line.senderDisplayName}:</strong> {line.text}
-                            {/* The snapshot is the evidence. The live message
-                                may have been deleted since, which is the point
-                                of keeping one. */}
-                            {!line.sourceAvailable && (
-                              <em> — original no longer in the room</em>
-                            )}
-                          </span>
+                            line={line}
+                            reporterCount={playerCase.reporterCount}
+                          />
                         ))}
                       </blockquote>
                       <p className="mod-evidence-caption">
-                        Marked lines are the ones reported — up to 20, pinned
-                        by the server exactly as the reporter received them.
-                        The rest is what was said around them: up to 10 lines
-                        before and 5 after, within 12 hours, as the reporter
-                        saw it.
+                        Marked lines are the ones reported — up to 20 per
+                        report, pinned by the server exactly as each reporter
+                        received them. The rest is what was said around them:
+                        up to 10 lines before and 5 after, within 12 hours.
+                        {playerCase.reporterCount > 1 &&
+                          " Every report's evidence is merged here, each line" +
+                            " once."}
                       </p>
                     </>
                   )}
-                  {playerCase.drawing ? (
-                    <ReportDrawing
-                      key={playerCase.id}
-                      reportId={playerCase.id}
-                      drawing={playerCase.drawing}
-                      drawerName={
-                        playerCase.reportedPlayer?.displayName ?? "The reported player"
-                      }
-                      dateTime={dateTime}
-                    />
-                  ) : (
-                    playerCase.reason === "offensive_drawing" && (
-                      <p className="mod-evidence-caption">
-                        No drawing was attached: the reporter did not include
-                        it, or the reported player was not drawing at the time.
-                      </p>
-                    )
-                  )}
+                  {playerCase.drawings.length > 0
+                    ? playerCase.drawings.map((drawing) => (
+                        <ReportDrawing
+                          key={drawing.reportId}
+                          reportId={drawing.reportId}
+                          drawing={drawing}
+                          drawerName={
+                            playerCase.reportedPlayer?.displayName ??
+                            "The reported player"
+                          }
+                          dateTime={dateTime}
+                        />
+                      ))
+                    : playerCase.reasons.includes("offensive_drawing") && (
+                        <p className="mod-evidence-caption">
+                          No drawing was attached: nobody included one, or the
+                          reported player was not drawing at the time.
+                        </p>
+                      )}
                 </section>
                 <aside className="ops-card" aria-label="Account context">
                   <h2>Account context</h2>
@@ -605,6 +772,7 @@ export function ModerationPage() {
 
               {playerCase.status === "pending" ? (
                 <>
+                  {decisionScope(playerCase)}
                   {noteField(playerCase.id)}
                   <div className="mod-actions">
                     <button

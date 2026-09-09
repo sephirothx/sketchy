@@ -258,7 +258,7 @@ async def test_a_moderator_removes_a_reported_picture_and_blocks_reuploads(env):
     # The queue shows the picture, so the case can be judged from it.
     listed = await moderator_http.get("/api/moderation/reports")
     assert listed.status_code == 200
-    case = next(item for item in listed.json()["reports"] if item["id"] == report_id)
+    case = next(item for item in listed.json()["incidents"] if item["id"] == report_id)
     assert case["reportedPlayer"]["avatarUrl"] == f"/api/avatars/{key}"
 
     # Only a moderator can act on it, and it acts through the report.
