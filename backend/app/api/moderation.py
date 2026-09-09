@@ -60,7 +60,11 @@ from app.db.models import (
     generate_uuid,
 )
 from app.services.incidents import (
+    ContentIncident,
     Incident,
+    content_incident_key,
+    group_by_decision,
+    group_into_content_incidents,
     group_into_incidents,
     incident_key,
 )
@@ -89,10 +93,9 @@ MAX_REPORT_MESSAGES = 20
 # is wrong upstream rather than that a moderator wants page two.
 MAX_OPEN_QUEUE_REPORTS = 5_000
 # How far back the closed queue can be paged. Bounded because each page is
-# answered by merging the two report tables in memory from their newest
-# decided row down to the page asked for; forty pages of twenty-five is
-# further back than a case is looked for, and past that the ledger is the
-# record.
+# answered by merging the two report tables' newest decisions in memory down
+# to the page asked for; forty pages of twenty-five is further back than a
+# case is looked for, and past that the ledger is the record.
 MAX_CLOSED_CASES_OFFSET = 1_000
 OnUserBanned = Callable[[str], Awaitable[None]]
 OnUserWarned = Callable[[str], Awaitable[None]]
@@ -424,62 +427,13 @@ def _drawing_response(evidence: PlayerReportDrawingEvidence | None, *, who: str)
     )
 
 
-# Everything a report payload reads off its row. Any query that ends in
-# `_report_payload` needs both, since a lazy load is an error on an async
+# Everything an incident payload reads off its reports. Any query that ends in
+# `_incident_payload` needs both, since a lazy load is an error on an async
 # session; the drawing's bytes stay deferred behind them.
 _REPORT_PAYLOAD_LOADS = (
     selectinload(PlayerReport.message_evidence),
     selectinload(PlayerReport.drawing_evidence),
 )
-
-
-def _decided_at(report: PlayerReport | PromptContentReport) -> datetime:
-    """When a case was closed: the review, or failing that the last write."""
-    return report.reviewed_at or report.updated_at
-
-
-def _report_payload(
-    report: PlayerReport,
-    player_context: dict[UUID, dict] | None = None,
-    decisions: dict[UUID, _Decision] | None = None,
-) -> dict:
-    decision = (decisions or {}).get(report.id) or _Decision(report.status, None)
-    return {
-        "reportedPlayer": (
-            (player_context or {}).get(report.reported_user_id)
-            if report.reported_user_id
-            else None
-        ),
-        "id": str(report.id),
-        "reporterUserId": (
-            str(report.reporter_user_id) if report.reporter_user_id else None
-        ),
-        "reportedUserId": (
-            str(report.reported_user_id) if report.reported_user_id else None
-        ),
-        "gameId": str(report.game_id) if report.game_id else None,
-        "turnId": str(report.turn_id) if report.turn_id else None,
-        "reason": report.reason,
-        "details": report.details,
-        "contextSnapshot": report.context_snapshot,
-        "messageEvidence": [
-            _evidence_line_payload(evidence)
-            for evidence in report.message_evidence
-        ],
-        "drawing": drawing_evidence_payload(report.drawing_evidence),
-        "status": report.status,
-        # One word for what was done: `dismissed`, `warned`, `suspended`, or a
-        # plain `resolved`; `pending` until then.
-        "outcome": decision.outcome,
-        "reviewedByUserId": (
-            str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
-        ),
-        "reviewedBy": decision.reviewed_by,
-        "resolutionNote": report.resolution_note,
-        "createdAt": report.created_at.isoformat(),
-        "updatedAt": report.updated_at.isoformat(),
-        "reviewedAt": report.reviewed_at.isoformat() if report.reviewed_at else None,
-    }
 
 
 def _evidence_line_payload(
@@ -616,42 +570,61 @@ def _incident_decision(
     }
 
 
-def _prompt_content_report_payload(
-    report: PromptContentReport, decisions: dict[UUID, _Decision] | None = None
+def _content_incident_payload(
+    incident: ContentIncident, decisions: dict[UUID, _Decision] | None = None
 ) -> dict:
-    decision = (decisions or {}).get(report.id) or _Decision(report.status, None)
+    """One piece of reported content, and every complaint about it.
+
+    The target is shared by construction, so it is stated once above the
+    reports rather than repeated in each. What differs - who complained, in
+    what words, calling it what - stays with the report it belongs to.
+    """
+    first = incident.reports[0]
+    decision = (decisions or {}).get(first.id) or _Decision(first.status, None)
     return {
-        "id": str(report.id),
-        "reporterUserId": (
-            str(report.reporter_user_id) if report.reporter_user_id else None
-        ),
+        "id": str(incident.id),
         "reportedOwnerUserId": (
-            str(report.reported_owner_user_id)
-            if report.reported_owner_user_id
+            str(first.reported_owner_user_id)
+            if first.reported_owner_user_id
             else None
         ),
-        "promptListId": str(report.prompt_list_id) if report.prompt_list_id else None,
+        "promptListId": str(first.prompt_list_id) if first.prompt_list_id else None,
         "promptVersionId": (
-            str(report.prompt_version_id) if report.prompt_version_id else None
+            str(first.prompt_version_id) if first.prompt_version_id else None
         ),
-        "targetType": report.target_type,
-        "listName": report.list_name_snapshot,
-        "prompt": report.prompt_snapshot,
-        "reason": report.reason,
-        "details": report.details,
-        "status": report.status,
+        "targetType": first.target_type,
+        "listName": first.list_name_snapshot,
+        "prompt": first.prompt_snapshot,
+        "reporterCount": len(incident.reports),
+        "reasons": list(incident.reasons),
+        "openedAt": incident.opened_at.isoformat(),
+        "latestReportedAt": incident.latest_at.isoformat(),
+        "status": first.status,
+        "reports": [
+            {
+                "id": str(report.id),
+                "reporterUserId": (
+                    str(report.reporter_user_id) if report.reporter_user_id else None
+                ),
+                "reason": report.reason,
+                "details": report.details,
+                "createdAt": report.created_at.isoformat(),
+            }
+            for report in incident.reports
+        ],
         # `dismissed`, `hidden`, `left_up`, or a plain `resolved`; `pending`
         # until then.
         "outcome": decision.outcome,
         "reviewedByUserId": (
-            str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
+            str(first.reviewed_by_user_id) if first.reviewed_by_user_id else None
         ),
         "reviewedBy": decision.reviewed_by,
-        "resolutionNote": report.resolution_note,
-        "moderationState": report.resolution_moderation_state,
-        "createdAt": report.created_at.isoformat(),
-        "updatedAt": report.updated_at.isoformat(),
-        "reviewedAt": report.reviewed_at.isoformat() if report.reviewed_at else None,
+        "resolutionNote": first.resolution_note,
+        "moderationState": first.resolution_moderation_state,
+        "reviewedAt": first.reviewed_at.isoformat() if first.reviewed_at else None,
+        "decisionGroupId": (
+            str(first.decision_group_id) if first.decision_group_id else None
+        ),
     }
 
 
@@ -1236,68 +1209,65 @@ def create_moderation_router(
         limit: int = Query(default=25, ge=1, le=100),
         offset: int = Query(default=0, ge=0, le=MAX_CLOSED_CASES_OFFSET),
     ):
-        """Decided player and content reports as one stream, newest decision first.
+        """Decided incidents, player and content as one stream, newest first.
 
-        The open queues are small and the page merges them itself; closed
-        cases accumulate for as long as the service runs, so the merge has to
-        happen here, under a page, or the newest decisions would be the ones
-        a moderator could never reach. Two light queries pick the page's ids
-        from each table before any evidence is loaded for the rows on it.
+        The page counts **decisions**, not rows: an incident five people
+        reported is one entry here as it was one entry in the queue, and one
+        decision is what closed it. So the key queries walk distinct
+        `decision_group_id`s rather than reports - which is also why grouping
+        the closed stream cannot reuse the open incident key, since two
+        incidents in one room instance decided a week apart are two entries
+        and that key would merge them.
+
+        The group id is a UUIDv7, minted when the decision was taken, so
+        ordering by it *is* ordering by when it was decided and the database
+        can answer each of these from an ordered walk of a partial index that
+        stops as soon as it has enough groups - rather than aggregating every
+        report ever decided to find the newest ones. Two light queries pick
+        the page's groups before any evidence is loaded for the rows on it.
         """
         window = offset + limit + 1
         decided = ReportStatus.PENDING.value
         async with session_factory() as session:
             await _reviewer(session, request)
-            player_keys = (
-                await session.execute(
-                    select(
-                        PlayerReport.id,
-                        func.coalesce(PlayerReport.reviewed_at, PlayerReport.updated_at),
+            player_groups = (
+                await session.scalars(
+                    select(PlayerReport.decision_group_id)
+                    .where(
+                        PlayerReport.status != decided,
+                        PlayerReport.decision_group_id.is_not(None),
                     )
-                    .where(PlayerReport.status != decided)
-                    .order_by(
-                        func.coalesce(
-                            PlayerReport.reviewed_at, PlayerReport.updated_at
-                        ).desc(),
-                        PlayerReport.id.desc(),
-                    )
+                    .distinct()
+                    .order_by(PlayerReport.decision_group_id.desc())
                     .limit(window)
                 )
             ).all()
-            content_keys = (
-                await session.execute(
-                    select(
-                        PromptContentReport.id,
-                        func.coalesce(
-                            PromptContentReport.reviewed_at,
-                            PromptContentReport.updated_at,
-                        ),
+            content_groups = (
+                await session.scalars(
+                    select(PromptContentReport.decision_group_id)
+                    .where(
+                        PromptContentReport.status != decided,
+                        PromptContentReport.decision_group_id.is_not(None),
                     )
-                    .where(PromptContentReport.status != decided)
-                    .order_by(
-                        func.coalesce(
-                            PromptContentReport.reviewed_at,
-                            PromptContentReport.updated_at,
-                        ).desc(),
-                        PromptContentReport.id.desc(),
-                    )
+                    .distinct()
+                    .order_by(PromptContentReport.decision_group_id.desc())
                     .limit(window)
                 )
             ).all()
             merged = sorted(
-                [("player", row_id, at) for row_id, at in player_keys]
-                + [("content", row_id, at) for row_id, at in content_keys],
-                key=lambda entry: (entry[2], entry[1]),
+                [("player", group) for group in player_groups]
+                + [("content", group) for group in content_groups],
+                key=lambda entry: entry[1],
                 reverse=True,
             )
             page = merged[offset : offset + limit]
-            player_ids = [row_id for kind, row_id, _ in page if kind == "player"]
-            content_ids = [row_id for kind, row_id, _ in page if kind == "content"]
+            player_ids = [group for kind, group in page if kind == "player"]
+            content_ids = [group for kind, group in page if kind == "content"]
             players = (
                 (
                     await session.scalars(
                         select(PlayerReport)
-                        .where(PlayerReport.id.in_(player_ids))
+                        .where(PlayerReport.decision_group_id.in_(player_ids))
                         .options(*_REPORT_PAYLOAD_LOADS)
                     )
                 ).all()
@@ -1308,7 +1278,7 @@ def create_moderation_router(
                 (
                     await session.scalars(
                         select(PromptContentReport).where(
-                            PromptContentReport.id.in_(content_ids)
+                            PromptContentReport.decision_group_id.in_(content_ids)
                         )
                     )
                 ).all()
@@ -1317,18 +1287,33 @@ def create_moderation_router(
             )
             player_context = await _reported_player_context(session, list(players))
             decisions = await _decisions(session, list(players), list(content))
+            by_player_group = group_by_decision(list(players))
+            by_content_group = group_by_decision(list(content))
             # Back into the page's order: `IN` returns rows in whatever order
-            # the database likes.
-            players.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
-            content.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
+            # the database likes, and the page is already in decision order.
             return {
                 "players": [
-                    _report_payload(report, player_context, decisions)
-                    for report in players
+                    _incident_payload(
+                        Incident(
+                            incident_key(by_player_group[group][0]),
+                            tuple(by_player_group[group]),
+                        ),
+                        player_context,
+                        decisions,
+                    )
+                    for kind, group in page
+                    if kind == "player"
                 ],
                 "content": [
-                    _prompt_content_report_payload(report, decisions)
-                    for report in content
+                    _content_incident_payload(
+                        ContentIncident(
+                            content_incident_key(by_content_group[group][0]),
+                            tuple(by_content_group[group]),
+                        ),
+                        decisions,
+                    )
+                    for kind, group in page
+                    if kind == "content"
                 ],
                 # False at the cap even when older rows exist: the page says
                 # what can be asked for next, and an Older that answers 422
@@ -1346,25 +1331,106 @@ def create_moderation_router(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
     ):
+        """The content queue as incidents, on the key the target already is.
+
+        `limit` and `offset` page incidents, as the player queue does and for
+        the same reason: reports of one thing are read and decided together
+        (R-MOD-16), so a page taken before grouping would cut one in half.
+        """
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PromptContentReport)
+            plan = select(
+                PromptContentReport.id,
+                PromptContentReport.target_type,
+                PromptContentReport.prompt_list_id,
+                PromptContentReport.prompt_version_id,
+                PromptContentReport.created_at,
+            )
             if status is not None:
-                statement = statement.where(PromptContentReport.status == status.value)
-            reports = (
-                await session.scalars(
-                    statement.order_by(PromptContentReport.created_at.asc())
-                    .limit(limit)
-                    .offset(offset)
+                plan = plan.where(PromptContentReport.status == status.value)
+            keys = (
+                await session.execute(
+                    plan.order_by(
+                        PromptContentReport.created_at.asc(),
+                        PromptContentReport.id.asc(),
+                    ).limit(MAX_OPEN_QUEUE_REPORTS)
                 )
             ).all()
+            planned = group_into_content_incidents(list(keys))
+            page_plan = planned[offset : offset + limit]
+            wanted = [
+                report_id
+                for incident in page_plan
+                for report_id in incident.report_ids
+            ]
+            reports = (
+                (
+                    await session.scalars(
+                        select(PromptContentReport).where(
+                            PromptContentReport.id.in_(wanted)
+                        )
+                    )
+                ).all()
+                if wanted
+                else []
+            )
+            by_id = {report.id: report for report in reports}
+            page = [
+                ContentIncident(
+                    incident.key,
+                    tuple(by_id[report_id] for report_id in incident.report_ids),
+                )
+                for incident in page_plan
+            ]
             decisions = await _decisions(session, [], list(reports))
             return {
-                "reports": [
-                    _prompt_content_report_payload(report, decisions)
-                    for report in reports
-                ]
+                "incidents": [
+                    _content_incident_payload(incident, decisions)
+                    for incident in page
+                ],
+                "total": len(planned),
+                "hasMore": len(planned) > offset + limit,
             }
+
+    async def _lock_pending_content_incident(
+        session: AsyncSession, report_id: UUID
+    ) -> ContentIncident:
+        """Every pending report about the named report's target, locked.
+
+        `_lock_pending_incident`'s rule on the key content reports carry: the
+        set is locked in id order rather than outward from the report the
+        request named, and the named report is re-checked inside the locked
+        set, so the unlocked read that finds the target is never what the
+        decision acts on.
+        """
+        named = await session.get(PromptContentReport, report_id)
+        if named is None:
+            raise HTTPException(status_code=404, detail="No such report.")
+        key = content_incident_key(named)
+        column = (
+            PromptContentReport.prompt_version_id
+            if key.target_type == "prompt"
+            else PromptContentReport.prompt_list_id
+        )
+        reports = (
+            await session.scalars(
+                select(PromptContentReport)
+                .where(
+                    PromptContentReport.status == ReportStatus.PENDING.value,
+                    PromptContentReport.target_type == key.target_type,
+                    column == UUID(key.target_id),
+                )
+                .order_by(PromptContentReport.id.asc())
+                .with_for_update()
+            )
+        ).all()
+        if not any(report.id == report_id for report in reports):
+            raise HTTPException(
+                status_code=409, detail="This report was already reviewed."
+            )
+        return ContentIncident(
+            key, tuple(sorted(reports, key=lambda row: (row.created_at, row.id)))
+        )
 
     async def _lock_pending_incident(
         session: AsyncSession, report_id: UUID
@@ -1501,17 +1567,8 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                report = await session.scalar(
-                    select(PromptContentReport)
-                    .where(PromptContentReport.id == report_id)
-                    .with_for_update()
-                )
-                if report is None:
-                    raise HTTPException(status_code=404, detail="No such report.")
-                if report.status != ReportStatus.PENDING.value:
-                    raise HTTPException(
-                        status_code=409, detail="This report was already reviewed."
-                    )
+                incident = await _lock_pending_content_incident(session, report_id)
+                report = incident.reports[0]
 
                 if body.status == ReportStatus.RESOLVED.value:
                     if report.target_type == "prompt":
@@ -1560,50 +1617,59 @@ def create_moderation_router(
                                 now=now,
                             )
 
-                report.status = body.status
-                report.reviewed_by_user_id = reviewer.id
-                report.resolution_note = body.note
-                report.resolution_moderation_state = (
-                    body.moderation_state
-                    if body.status == ReportStatus.RESOLVED.value
-                    else None
-                )
-                report.reviewed_at = now
-                report.decision_group_id = generate_uuid()
                 content_target_type, content_target_id = _content_target(
                     report.prompt_list_id, report.prompt_version_id
                 )
-                session.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type=f"prompt_content_report.{body.status}",
-                        actor_user_id=reviewer.id,
-                        target_user_id=report.reported_owner_user_id,
-                        target_type=content_target_type,
-                        target_id=content_target_id,
-                        request_id=request_id,
-                        ip_hash=ip_hash,
-                        details={
-                            "report_id": str(report.id),
-                            "target_type": report.target_type,
-                            "prompt_list_id": (
-                                str(report.prompt_list_id)
-                                if report.prompt_list_id
-                                else None
-                            ),
-                            "prompt_version_id": (
-                                str(report.prompt_version_id)
-                                if report.prompt_version_id
-                                else None
-                            ),
-                            "moderation_state": report.resolution_moderation_state,
-                        },
+                # One decision over every complaint about this content, the
+                # rule player reports carry (R-MOD-17). The content itself was
+                # hidden or left up once above; deciding the reports one at a
+                # time would only leave the rest asking about a thing already
+                # settled.
+                decision_group_id = generate_uuid()
+                for row in incident.reports:
+                    row.status = body.status
+                    row.reviewed_by_user_id = reviewer.id
+                    row.resolution_note = body.note
+                    row.resolution_moderation_state = (
+                        body.moderation_state
+                        if body.status == ReportStatus.RESOLVED.value
+                        else None
                     )
-                )
+                    row.reviewed_at = now
+                    row.decision_group_id = decision_group_id
+                    session.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type=f"prompt_content_report.{body.status}",
+                            actor_user_id=reviewer.id,
+                            target_user_id=row.reported_owner_user_id,
+                            target_type=content_target_type,
+                            target_id=content_target_id,
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                            details={
+                                "report_id": str(row.id),
+                                "decision_group_id": str(decision_group_id),
+                                "target_type": row.target_type,
+                                "prompt_list_id": (
+                                    str(row.prompt_list_id)
+                                    if row.prompt_list_id
+                                    else None
+                                ),
+                                "prompt_version_id": (
+                                    str(row.prompt_version_id)
+                                    if row.prompt_version_id
+                                    else None
+                                ),
+                                "moderation_state": row.resolution_moderation_state,
+                            },
+                        )
+                    )
                 await session.flush()
-                await session.refresh(report)
-                decisions = await _decisions(session, [], [report])
-            return _prompt_content_report_payload(report, decisions)
+                for row in incident.reports:
+                    await session.refresh(row)
+                decisions = await _decisions(session, [], list(incident.reports))
+            return _content_incident_payload(incident, decisions)
 
 
     async def _attach_and_resolve_report(

@@ -2619,3 +2619,179 @@ async def test_the_queue_loads_evidence_only_for_the_page_it_renders(env):
         statement.count("?") + statement.count("$") <= 2
         for statement in evidence_reads
     ), evidence_reads
+
+
+@pytest.mark.asyncio
+async def test_the_closed_stream_shows_one_entry_per_decision(env):
+    """Decided history reads like the queue it came from (#620).
+
+    An incident five people reported is one closed entry, because one
+    decision is what closed it. Grouping here keys on that decision and not
+    on the incident key: two incidents about one player in one room instance,
+    decided separately, stay two entries - which the scope key alone would
+    merge into one.
+    """
+    new_client, factory, _ = env
+    target_http, moderator_http = new_client(), new_client()
+    target = await register(target_http, "HistTarget")
+    moderator = await register(moderator_http, "HistMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    now = datetime.now(timezone.utc)
+    room = generate_uuid()
+    reporters = []
+    for index in range(4):
+        client = new_client()
+        reporters.append((client, await register(client, f"HistRep{index}")))
+    everyone = [target["id"], *[person["id"] for _, person in reporters]]
+
+    async def line_at(when):
+        message_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RoomMessage(
+                        id=message_id,
+                        room_instance_id=room,
+                        sender_user_id=UUID(target["id"]),
+                        sender_player_id=generate_uuid(),
+                        sender_display_name_snapshot="HistTarget",
+                        sender_is_anonymous_snapshot=False,
+                        is_spectator=False,
+                        message_kind="chat",
+                        near_miss_kind=None,
+                        audience="room",
+                        audience_user_ids=everyone,
+                        text=f"said at {when.isoformat()}",
+                        created_at=when,
+                        expires_at=when + timedelta(days=30),
+                    )
+                )
+        return message_id
+
+    async def decide(note):
+        pending = (
+            await moderator_http.get(
+                "/api/moderation/reports", params={"status": "pending"}
+            )
+        ).json()["incidents"]
+        assert len(pending) == 1, "one incident open at a time in this test"
+        response = await moderator_http.patch(
+            f"/api/moderation/reports/{pending[0]['id']}",
+            json={"status": "dismissed", "note": note},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    # First incident: three of them, one room instance, decided together.
+    first_line = await line_at(now - timedelta(hours=3))
+    for client, _ in reporters[:3]:
+        assert (
+            await _room_report(client, target["id"], first_line, "The first time.")
+        ).status_code == 201
+    first = await decide("Dealt with once.")
+    assert first["reporterCount"] == 3
+
+    # Second incident: the same player, the same room instance, later - and a
+    # separate decision, so a separate closed entry.
+    second_line = await line_at(now)
+    assert (
+        await _room_report(
+            reporters[3][0], target["id"], second_line, "And again later."
+        )
+    ).status_code == 201
+    second = await decide("Dealt with again.")
+    assert second["reporterCount"] == 1
+
+    page = (await moderator_http.get("/api/moderation/closed-cases")).json()
+    mine = [
+        entry for entry in page["players"] if entry["reportedUserId"] == target["id"]
+    ]
+    assert [entry["reporterCount"] for entry in mine] == [1, 3], (
+        "two decisions, newest first, and the pile is one entry not three"
+    )
+    assert [entry["resolutionNote"] for entry in mine] == [
+        "Dealt with again.",
+        "Dealt with once.",
+    ]
+    assert mine[1]["outcome"] == "dismissed"
+    assert len(mine[1]["reports"]) == 3
+    # The decision each entry is, named.
+    assert len({entry["decisionGroupId"] for entry in mine}) == 2
+
+
+@pytest.mark.asyncio
+async def test_closed_pages_count_decisions_not_reports(env):
+    """`limit` and `offset` page decisions, so a pile-on cannot swallow a page
+    (R-MOD-15, #620). A three-report incident takes one slot, not three, and
+    `hasMore` counts the same way."""
+    new_client, factory, _ = env
+    moderator_http = new_client()
+    moderator = await register(moderator_http, "PageMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    notes = []
+    for index in range(3):
+        target_http = new_client()
+        target = await register(target_http, f"PageTgt{index}")
+        room = generate_uuid()
+        reporters = []
+        for slot in range(index + 1):
+            client = new_client()
+            reporters.append((client, await register(client, f"PgR{index}{slot}")))
+        message_id = generate_uuid()
+        now = datetime.now(timezone.utc)
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    RoomMessage(
+                        id=message_id,
+                        room_instance_id=room,
+                        sender_user_id=UUID(target["id"]),
+                        sender_player_id=generate_uuid(),
+                        sender_display_name_snapshot=f"PageTgt{index}",
+                        sender_is_anonymous_snapshot=False,
+                        is_spectator=False,
+                        message_kind="chat",
+                        near_miss_kind=None,
+                        audience="room",
+                        audience_user_ids=[
+                            target["id"],
+                            *[person["id"] for _, person in reporters],
+                        ],
+                        text="the reported line",
+                        created_at=now,
+                        expires_at=now + timedelta(days=30),
+                    )
+                )
+        for client, _ in reporters:
+            assert (
+                await _room_report(client, target["id"], message_id, "Look at this.")
+            ).status_code == 201
+        pending = (
+            await moderator_http.get(
+                "/api/moderation/reports", params={"status": "pending"}
+            )
+        ).json()["incidents"]
+        note = f"Decision {index}."
+        assert (
+            await moderator_http.patch(
+                f"/api/moderation/reports/{pending[0]['id']}",
+                json={"status": "dismissed", "note": note},
+            )
+        ).status_code == 200
+        notes.append(note)
+
+    # Six reports, three decisions: one per page of one.
+    seen = []
+    for offset in range(3):
+        page = (
+            await moderator_http.get(
+                "/api/moderation/closed-cases",
+                params={"limit": 1, "offset": offset},
+            )
+        ).json()
+        assert len(page["players"]) + len(page["content"]) == 1
+        seen.append(page["players"][0]["resolutionNote"])
+        assert page["hasMore"] is (offset < 2)
+    assert seen == list(reversed(notes)), "newest decision first"

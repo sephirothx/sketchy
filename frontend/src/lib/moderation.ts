@@ -81,33 +81,6 @@ export interface ReportedPlayerContext {
   activeSuspension: boolean;
 }
 
-export interface PlayerReport {
-  id: string;
-  reporterUserId: string | null;
-  reportedUserId: string | null;
-  /** Null when the account is gone. */
-  reportedPlayer: ReportedPlayerContext | null;
-  gameId: string | null;
-  turnId: string | null;
-  reason: ReportReason;
-  details: string;
-  contextSnapshot: Record<string, unknown>;
-  messageEvidence: PlayerReportMessageEvidence[];
-  /** Null unless the reporter asked for the drawing and the reported seat was
-      the one drawing at the time. */
-  drawing: PlayerReportDrawing | null;
-  status: ReportStatus;
-  outcome: ReportOutcome;
-  reviewedByUserId: string | null;
-  /** The reviewer's name, resolved when the case is read; null until decided
-      or once the account is gone. */
-  reviewedBy: string | null;
-  resolutionNote: string | null;
-  createdAt: string;
-  updatedAt: string;
-  reviewedAt: string | null;
-}
-
 /** Where a complaint happened, and so which incident it belongs to.
 
 `room` groups by the room instance it was filed in; `lobby` shares one bucket
@@ -263,13 +236,15 @@ export function fetchReportDrawing(reportId: string): Promise<ArrayBuffer> {
 /** How many closed cases one page of the queue shows. */
 export const CLOSED_CASES_PAGE_SIZE = 25;
 
-/** Decided player and content reports as one stream, newest decision first.
+/** Decided incidents, player and content as one stream, newest decision first.
 
 Paged by the server rather than merged here, because closed cases accumulate
-for as long as the service runs and the newest are the ones worth reaching. */
+for as long as the service runs and the newest are the ones worth reaching. The
+page counts decisions: an incident five people reported is one entry here, as
+it was one entry in the queue. */
 export function listClosedCases(input: { limit?: number; offset?: number } = {}): Promise<{
-  players: PlayerReport[];
-  content: PromptContentReport[];
+  players: ModerationIncident[];
+  content: ContentIncident[];
   hasMore: boolean;
 }> {
   const limit = input.limit ?? CLOSED_CASES_PAGE_SIZE;
@@ -377,33 +352,54 @@ export function revokeUserBan(banId: string, reason: string): Promise<UserBan> {
   });
 }
 
-export interface PromptContentReport {
+/** One complaint about a piece of prompt content. The target it is about is
+    stated once on the incident above it, being shared by construction. */
+export interface ContentIncidentReport {
   id: string;
   reporterUserId: string | null;
+  reason: string;
+  details: string;
+  createdAt: string;
+}
+
+/** One reported list or prompt version, and every complaint about it.
+
+The target already names the incident, so unlike a player report there is no
+place or moment to bound it with - and no scope to record. */
+export interface ContentIncident {
+  /** The oldest report's id, which the review route accepts. */
+  id: string;
   reportedOwnerUserId: string | null;
   promptListId: string | null;
   promptVersionId: string | null;
   targetType: "list" | "prompt";
   listName: string | null;
   prompt: string | null;
-  reason: string;
-  details: string;
+  reporterCount: number;
+  reasons: string[];
+  openedAt: string;
+  latestReportedAt: string;
   status: ReportStatus;
+  reports: ContentIncidentReport[];
   outcome: ReportOutcome;
   reviewedByUserId: string | null;
   reviewedBy: string | null;
   resolutionNote: string | null;
   moderationState: "active" | "hidden" | null;
-  createdAt: string;
-  updatedAt: string;
   reviewedAt: string | null;
+  decisionGroupId: string | null;
 }
 
-export function listPromptContentReports(status?: ReportStatus): Promise<{
-  reports: PromptContentReport[];
-}> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest(`/api/moderation/prompt-content-reports${query}`);
+export function listPromptContentReports(
+  status?: ReportStatus,
+  input: { limit?: number; offset?: number } = {},
+): Promise<{ incidents: ContentIncident[]; total: number; hasMore: boolean }> {
+  const query = new URLSearchParams();
+  if (status) query.set("status", status);
+  if (input.limit !== undefined) query.set("limit", String(input.limit));
+  if (input.offset !== undefined) query.set("offset", String(input.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return apiRequest(`/api/moderation/prompt-content-reports${suffix}`);
 }
 
 /** Resolve or dismiss a content report.
@@ -415,7 +411,7 @@ export function reviewPromptContentReport(
   status: Exclude<ReportStatus, "pending">,
   note: string,
   moderationState?: "active" | "hidden",
-): Promise<PromptContentReport> {
+): Promise<ContentIncident> {
   return apiRequest(`/api/moderation/prompt-content-reports/${reportId}`, {
     method: "PATCH",
     body: { status, note, ...(moderationState ? { moderationState } : {}) },

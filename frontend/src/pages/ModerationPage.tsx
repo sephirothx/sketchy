@@ -20,10 +20,10 @@ import {
   removeReportedAvatar,
   reviewModerationReport,
   reviewPromptContentReport,
+  type ContentIncident,
   type IncidentEvidence,
+  type PlayerReportDrawing,
   type ModerationIncident,
-  type PlayerReport,
-  type PromptContentReport,
   type ReportOutcome,
   suspensionExpiry,
   SUSPENSION_DURATIONS,
@@ -52,52 +52,6 @@ type QueueEntry = {
       deliberately not sorted on. */
   reporterCount?: number;
 };
-
-/** A closed player report as an incident of one.
-
-Closed cases still arrive per report; the open queue arrives grouped. Rather
-than render two shapes, one is turned into the other here, which is also what
-a decided report honestly is - an incident that happened to have one
-complaint. */
-function incidentFromReport(report: PlayerReport): ModerationIncident {
-  return {
-    id: report.id,
-    reportedUserId: report.reportedUserId,
-    reportedPlayer: report.reportedPlayer,
-    scope: "unscoped",
-    reporterCount: 1,
-    reasons: [report.reason],
-    openedAt: report.createdAt,
-    latestReportedAt: report.createdAt,
-    status: report.status,
-    reports: [
-      {
-        id: report.id,
-        reporterUserId: report.reporterUserId,
-        reason: report.reason,
-        details: report.details,
-        contextSnapshot: report.contextSnapshot,
-        gameId: report.gameId,
-        turnId: report.turnId,
-        createdAt: report.createdAt,
-        drawing: report.drawing,
-      },
-    ],
-    evidence: report.messageEvidence.map((line) => ({
-      ...line,
-      citedBy: line.role === "cited" ? [report.id] : [],
-    })),
-    drawings: report.drawing
-      ? [{ ...report.drawing, reportId: report.id }]
-      : [],
-    outcome: report.outcome,
-    reviewedByUserId: report.reviewedByUserId,
-    reviewedBy: report.reviewedBy,
-    resolutionNote: report.resolutionNote,
-    reviewedAt: report.reviewedAt,
-    decisionGroupId: null,
-  };
-}
 
 /** Where the incident happened, said the way a moderator would say it. */
 const SCOPES: Record<ModerationIncident["scope"], string> = {
@@ -130,7 +84,7 @@ function DecisionCard({
   report,
   dateTime,
 }: {
-  report: ModerationIncident | PromptContentReport;
+  report: ModerationIncident | ContentIncident;
   dateTime: (date: Date) => string;
 }) {
   return (
@@ -201,7 +155,7 @@ function ReportDrawing({
   dateTime,
 }: {
   reportId: string;
-  drawing: NonNullable<PlayerReport["drawing"]>;
+  drawing: PlayerReportDrawing;
   drawerName: string;
   dateTime: (date: Date) => string;
 }) {
@@ -262,6 +216,41 @@ function ReportersPanel({
   );
 }
 
+/** Who complained about this content, and in whose words.
+
+The target is one thing and is stated once above; how people described it is
+not, and merging that away would lose the part a moderator reads. */
+function ContentReportersPanel({
+  incident,
+  dateTime,
+}: {
+  incident: ContentIncident;
+  dateTime: (date: Date) => string;
+}) {
+  const many = incident.reports.length > 1;
+  return (
+    <>
+      <h3>{many ? `${incident.reports.length} complaints` : "The complaint"}</h3>
+      <ol className="mod-reporters" data-testid="mod-content-reporters">
+        {incident.reports.map((report, index) => (
+          <li key={report.id} className="mod-reporter">
+            <div className="mod-reporter-head">
+              {many && <span className="mod-reporter-index">{index + 1}</span>}
+              <Chip kind="neutral">{humanize(report.reason)}</Chip>
+              <time dateTime={report.createdAt}>
+                {formatWhen(report.createdAt, dateTime)}
+              </time>
+            </div>
+            <p className="mod-case-details">
+              {report.details || "No details given."}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </>
+  );
+}
+
 /** One line of the merged thread.
 
 A cited line says how many of the incident's reporters picked it out. That is
@@ -302,7 +291,7 @@ export function ModerationPage() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [incidents, setIncidents] = useState<ModerationIncident[]>([]);
-  const [content, setContent] = useState<PromptContentReport[]>([]);
+  const [content, setContent] = useState<ContentIncident[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
   const [openCount, setOpenCount] = useState(0);
   const [selected, setSelected] = useState<Selection | null>(null);
@@ -342,7 +331,7 @@ export function ModerationPage() {
         })
       : pending.then(([playerResult, contentResult]) => ({
           players: playerResult.incidents,
-          content: contentResult.reports,
+          content: contentResult.incidents,
           hasMore: false,
         }));
     void Promise.all([
@@ -353,20 +342,14 @@ export function ModerationPage() {
       pending,
     ])
       .then(([caseResult, banResult, pendingResult]) => {
-        // Closed cases still arrive per report; the open queue arrives as
-        // incidents. One shape is rendered, so the other is adapted.
-        setIncidents(
-          caseResult.players.map((row) =>
-            "reporterCount" in row ? row : incidentFromReport(row),
-          ),
-        );
+        setIncidents(caseResult.players);
         setContent(caseResult.content);
         setHasMore(caseResult.hasMore);
         setBans(banResult.bans);
         // Incidents, not reports: the chip counts the work waiting, and
         // five complaints about one thing are one thing to look at.
         setOpenCount(
-          pendingResult[0].incidents.length + pendingResult[1].reports.length,
+          pendingResult[0].incidents.length + pendingResult[1].incidents.length,
         );
         setError(null);
       })
@@ -396,17 +379,20 @@ export function ModerationPage() {
       outcome: showingClosed ? incident.outcome : undefined,
       reporterCount: incident.reporterCount,
     }));
-    const contentEntries: QueueEntry[] = content.map((report) => ({
+    // The content is what an incident is about; the reasons are how the
+    // people who complained described it.
+    const contentEntries: QueueEntry[] = content.map((incident) => ({
       kind: "content",
-      id: report.id,
-      title: humanize(report.reason),
-      snippet:
-        report.targetType === "prompt"
-          ? `Prompt “${report.prompt}” in ${report.listName ?? "a list"}`
-          : `List “${report.listName}”`,
-      at: showingClosed ? decidedAt(report) : report.createdAt,
+      id: incident.id,
+      title:
+        incident.targetType === "prompt"
+          ? `Prompt “${incident.prompt}”`
+          : `List “${incident.listName}”`,
+      snippet: incident.reasons.map(humanize).join(" · "),
+      at: showingClosed ? decidedAt(incident) : incident.openedAt,
       dot: showingClosed ? "neutral" : "warning",
-      outcome: showingClosed ? report.outcome : undefined,
+      outcome: showingClosed ? incident.outcome : undefined,
+      reporterCount: incident.reporterCount,
     }));
     const banEntries: QueueEntry[] = bans.map((ban) => ({
       kind: "ban",
@@ -507,12 +493,14 @@ export function ModerationPage() {
       A moderator pressing Dismiss on an incident of five is deciding five
       complaints, and should not have to infer that from a chip in the
       queue. */
-  const decisionScope = (incident: ModerationIncident) =>
+  const decisionScope = (
+    incident: ModerationIncident | ContentIncident,
+    about: string,
+  ) =>
     incident.reporterCount > 1 && (
       <p className="mod-decision-scope" data-testid="mod-decision-scope">
-        This decides all {incident.reporterCount} complaints about{" "}
-        {incident.reportedPlayer?.displayName ?? "this player"}, under one
-        note.
+        This decides all {incident.reporterCount} complaints about {about},
+        under one note.
       </p>
     );
 
@@ -772,7 +760,10 @@ export function ModerationPage() {
 
               {playerCase.status === "pending" ? (
                 <>
-                  {decisionScope(playerCase)}
+                  {decisionScope(
+                    playerCase,
+                    playerCase.reportedPlayer?.displayName ?? "this player",
+                  )}
                   {noteField(playerCase.id)}
                   <div className="mod-actions">
                     <button
@@ -921,12 +912,25 @@ export function ModerationPage() {
                   <SectionLabel>
                     Prompt content · #{contentCase.id.slice(0, 6)}
                   </SectionLabel>
-                  <h1>{humanize(contentCase.reason)}</h1>
+                  <h1>
+                    {contentCase.targetType === "prompt"
+                      ? `Prompt “${contentCase.prompt}”`
+                      : `List “${contentCase.listName}”`}
+                  </h1>
                   <p className="mod-case-meta">
-                    Reported {formatWhen(contentCase.createdAt, dateTime)}
+                    {contentCase.reporterCount === 1
+                      ? "1 reporter"
+                      : `${contentCase.reporterCount} reporters`}
+                    {` · opened ${formatWhen(contentCase.openedAt, dateTime)}`}
+                    {contentCase.reporterCount > 1 &&
+                      ` · latest ${formatWhen(contentCase.latestReportedAt, dateTime)}`}
                   </p>
                 </div>
-                <Chip kind="warm">{humanize(contentCase.reason)}</Chip>
+                <div className="mod-reason-chips">
+                  {contentCase.reasons.map((reason) => (
+                    <Chip key={reason} kind="warm">{humanize(reason)}</Chip>
+                  ))}
+                </div>
               </div>
 
               <section className="ops-card" aria-label="Reported content">
@@ -945,13 +949,20 @@ export function ModerationPage() {
                     )}
                   </span>
                 </blockquote>
-                {contentCase.details && (
-                  <p className="mod-evidence-caption">{contentCase.details}</p>
-                )}
+                <ContentReportersPanel
+                  incident={contentCase}
+                  dateTime={dateTime}
+                />
               </section>
 
               {contentCase.status === "pending" ? (
                 <>
+                  {decisionScope(
+                    contentCase,
+                    contentCase.targetType === "prompt"
+                      ? "this prompt"
+                      : "this list",
+                  )}
                   {noteField(contentCase.id)}
                   <div className="mod-actions">
                     <button

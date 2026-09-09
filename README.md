@@ -977,16 +977,21 @@ whole of it under one note - and the warning or suspension shows the player the
 cited lines and drawings from all of it, not from whichever complaint the
 moderator happened to open. Every lobby report about one account shares one bucket,
 the lobby having no room instance to name; a report that cited nothing names no
-place to look and stands on its own. Resolving a content
+place to look and stands on its own. Prompt-content reports group the same way, on
+the list or prompt version they are about: the content is one thing, so one decision
+hides it or leaves it up once and closes every complaint about it. Resolving a content
 report records that it was looked at; hiding the list or prompt is the separate
 decision that acts on it, and the owner is told when it happens if they have a
 confirmed address. Every review takes a note, so no decision is anonymous. A
 **Closed** queue lists every decided case, player and content together, newest
 decision first and a page at a time, each with a chip saying how it ended -
 dismissed, warned, suspended; hidden or left up for content - and, opened, the
-decision itself: what was done, who did it, when, and the note. The open
-queues are small enough to show whole, but closed cases accumulate for as
-long as the server runs, and the newest are the ones worth finding.
+decision itself: what was done, who did it, when, and the note. It reads like the
+queue it came from: one entry per decision, so an incident five people reported is
+one closed case rather than five, and a page holds a page's worth of decisions
+rather than being swallowed by a pile-on. The open queues are small enough to show
+whole, but closed cases accumulate for as long as the server runs, and the newest
+are the ones worth finding.
 
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
