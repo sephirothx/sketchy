@@ -68,15 +68,17 @@ export function Avatar({
     </span>
   );
   if (!isHost && !isFriend) return disc;
-  // Both marks scale with the disc but never below a size they survive.
+  // Both marks scale with the disc but never below a size they survive. The
+  // friend mark's floor is the higher of the two because it is the busier
+  // drawing: two figures in outline (#706) need the room the crown does not.
   const crown = Math.max(12, Math.round(size * 0.52));
-  const mark = Math.max(12, Math.round(size * 0.46));
+  const mark = Math.max(15, Math.round(size * 0.5));
   return (
     <span className="avatar-frame" aria-hidden="true">
       {disc}
       {isHost && (
         <span className="avatar-crown">
-          <CrownMarkIcon size={crown} strokeWidth={2} />
+          <CrownMarkIcon size={crown} />
         </span>
       )}
       {/* The bottom-right corner, because the ring already owns the whole
