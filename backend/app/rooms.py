@@ -946,17 +946,63 @@ class RoomManager:
             )
         self._observe()
 
+    def release_host_if_held(self, room: Room, player: Player) -> bool:
+        """Take the host role off `player` and give it to somebody present.
+
+        Called when a seat is marked AFK by the inactivity check and by
+        nothing else. The role had no way to move except by its holder
+        leaving, so an absent host was a room nobody could start: `start_game`
+        is host-only and needs two active non-AFK players, and neither an AFK
+        vote nor a kick vote passes the role on. Reuses the promotion a
+        departure already does rather than inventing a second rule for who
+        inherits, with the two conditions this path adds: the seat being
+        released cannot be the one promoted, and an *active* player is
+        preferred, because handing the room to another absent seat would
+        change nothing about the room being stuck.
+
+        Returns whether the role actually moved, so a caller can say so.
+        Nothing here puts it back when they return: the room has a host again,
+        and taking it off somebody because the first host came back would be a
+        second surprise for a third person.
+        """
+        if not player.is_host:
+            return False
+        successor = self._next_host(room, exclude=player)
+        if successor is None:
+            # Nobody to hand it to. An absent host is better than none: the
+            # only candidates left are spectators, who can neither start a
+            # game nor be asked to give the role back.
+            return False
+        player.is_host = False
+        successor.is_host = True
+        return True
+
+    def _next_host(self, room: Room, *, exclude: Player | None = None) -> Player | None:
+        """Who inherits the room, in order of preference.
+
+        Insertion order throughout, so "longest seated" is the tiebreak at
+        every level. Active before merely seated: a room whose host went quiet
+        wants one who can answer, and a disconnected seat is inside its
+        reconnect grace rather than available.
+        """
+        candidates = [
+            p for p in room.players.values() if p is not exclude and not p.is_spectator
+        ]
+        for p in candidates:
+            if p.connected and not p.is_afk:
+                return p
+        return candidates[0] if candidates else None
+
     def _promote_new_host_if_needed(self, room: Room) -> None:
         if any(p.is_host for p in room.players.values()):
             return
+        successor = self._next_host(room)
+        if successor is not None:
+            successor.is_host = True
+            return
         for p in room.players.values():
-            if not p.is_spectator:
-                p.is_host = True
-                break
-        else:
-            for p in room.players.values():
-                p.is_host = True
-                break
+            p.is_host = True
+            break
 
     def remove_room_if_empty(self, room_id: str) -> Room | None:
         room = self.rooms.get(room_id)

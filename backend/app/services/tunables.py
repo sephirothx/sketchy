@@ -263,6 +263,28 @@ def flow_tunables(flow: FlowTiming) -> list[Tunable]:
             ),
         ),
         _number(
+            flow, "afk_inactivity_seconds",
+            name="turn.afk_inactivity_seconds", default=300,
+            minimum=30, maximum=3600, unit="seconds", integral=False,
+            env_var="AFK_INACTIVITY_SECONDS",
+            description=(
+                "How long a seat may send nothing a person sent before the "
+                "room asks whether anybody is there. A client that has seen "
+                "input answers that check by itself, so only somebody who has "
+                "touched nothing ever reaches this."
+            ),
+        ),
+        _number(
+            flow, "afk_check_seconds",
+            name="turn.afk_check_seconds", default=25,
+            minimum=5, maximum=120, unit="seconds", integral=False,
+            env_var="AFK_CHECK_SECONDS",
+            description=(
+                "How long the AFK check stays open before the seat is marked. "
+                "Short, because the answer is automatic for anybody present."
+            ),
+        ),
+        _number(
             flow, "restart_vote_seconds",
             name="restart.vote_seconds", default=20,
             minimum=5, maximum=120, unit="seconds",
@@ -334,6 +356,17 @@ def client_tunables(config: ClientConfig) -> list[Tunable]:
                 "feels it, and a viewer plays each batch out smoothly over "
                 "the interval that follows, so it sees ink this far behind "
                 "the drawer's hand."
+            ),
+        ),
+        _number(
+            config, "afk_input_window_ms",
+            name="client.afk_input_window_ms", default=60_000,
+            minimum=5_000, maximum=600_000, unit="ms", audience_=CLIENT,
+            description=(
+                "How recently a client must have seen a pointer or a key to "
+                "answer an AFK check for the player. Too short and somebody "
+                "reading the canvas is asked; too long and a client answers "
+                "for somebody who has left."
             ),
         ),
     ]

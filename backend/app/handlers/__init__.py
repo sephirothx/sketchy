@@ -25,6 +25,7 @@ from app.repositories.interfaces import (
     PromptListRepository,
 )
 from app.rooms import RoomManager
+from app.services.afk import AfkWatch
 from app.services.game_flow import GameFlowService
 from app.services.game_handoff import FinishedGameHandoffWorker
 from app.services.friend_invites import FriendInviteBook
@@ -112,6 +113,10 @@ def register_all_handlers(
     ctx.presence_broadcaster = LobbyBroadcaster(
         sio, ctx.presence, ctx.presence_identities, room_manager
     )
+    # Reads the ledger the command door writes, and drives the room through
+    # `game_flow` when a check goes unanswered. Built here rather than in the
+    # context's defaults because it needs both of those (#677).
+    ctx.afk_watch = AfkWatch(sio, room_manager, ctx.activity, ctx.game_flow)
     ctx.friend_invites = FriendInviteBook()
     ctx.lobby_chat = LobbyChatLog()
 

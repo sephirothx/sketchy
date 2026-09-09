@@ -90,6 +90,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
 )
 from app.client_config import client_config
+from app.services.afk import start_afk_loop, stop_afk_loop
 from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
 from app.flow_timing import timing as flow_timing
@@ -472,6 +473,7 @@ async def lifespan(_app: FastAPI):
     metrics_health = LoopHealth("runtime_metrics")
     retention_health = LoopHealth("retention_sweep")
     presence_health = LoopHealth("presence_broadcast")
+    afk_health = LoopHealth("afk_sweep")
     lag_health = LoopHealth("loop_lag")
     try:
         # Before anything that might have something to say.
@@ -519,6 +521,10 @@ async def lifespan(_app: FastAPI):
         presence_broadcast = start_presence_loop(
             handler_context.presence_broadcaster, health=presence_health
         )
+        # Supervised for the same reason: a sweep that has stopped is a game
+        # that quietly went back to waiting on players who left, which nobody
+        # would report and nothing else would notice.
+        afk_sweep = start_afk_loop(handler_context.afk_watch, health=afk_health)
         # Supervised like the sweeps: a sampler that has stopped leaves the
         # operations page showing a lag figure that is no longer true, which
         # is the one condition readiness exists to surface.
@@ -531,6 +537,7 @@ async def lifespan(_app: FastAPI):
         readiness_probe.supervise(
             "presence_broadcast", presence_broadcast, presence_health
         )
+        readiness_probe.supervise("afk_sweep", afk_sweep, afk_health)
         readiness_probe.supervise("loop_lag", lag_sampler, lag_health)
         shutdown_coordinator.mark_ready()
         yield
@@ -540,6 +547,10 @@ async def lifespan(_app: FastAPI):
         # drain by the time this runs.
         readiness_probe.release()
         await stop_lag_sampler(lag_sampler)
+        # Stopped before the drain, and with nothing to flush: marking
+        # somebody absent in a room that is about to end would cost them a
+        # turn outcome for a restart they did not cause.
+        await stop_afk_loop(afk_sweep)
         # First, and with nothing to flush: it holds no state of its own, and
         # a tick that broadcast into a drain would be describing a lobby that
         # is about to stop existing.

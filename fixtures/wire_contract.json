@@ -1065,6 +1065,9 @@
   "account_suspended": {
    "shape": "object"
   },
+  "afk_check": {
+   "shape": "object"
+  },
   "canvas_commit": {
    "layout": [
     "generation",
@@ -2043,6 +2046,7 @@
    "createdAt"
   ],
   "client_config:payload": [
+   "afkInputWindowMs",
    "contractVersion",
    "drawingFramesPerWindow",
    "drawingWindowSeconds",
@@ -2601,7 +2605,7 @@
  },
  "versions": {
   "CANVAS_HISTORY_VERSION": 1,
-  "CLIENT_CONFIG_CONTRACT_VERSION": 3,
+  "CLIENT_CONFIG_CONTRACT_VERSION": 4,
   "LIVE_DRAWING_VERSION": 1,
   "PAUSE_NOTICE_CONTRACT_VERSION": 1,
   "SHUTDOWN_NOTICE_CONTRACT_VERSION": 1

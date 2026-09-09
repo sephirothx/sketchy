@@ -18,6 +18,7 @@ from app.handlers.budgets import (
     CommandBudgets,
 )
 from app.rooms import RoomManager
+from app.services.afk import INACTIVITY_EXEMPT_COMMANDS
 from tests.handlers.helpers import SessionStore
 
 
@@ -55,6 +56,24 @@ def test_every_registered_command_answers_to_a_budget():
         assert policy.for_command(command) is not None
     # And the table names nothing that is not registered.
     assert set(COMMAND_CLASSES) <= commands
+    # The same drift guard for the other list a command has to be on the right
+    # side of (#677): every exemption must name a command that exists, so one
+    # renamed out from under it stops exempting a stale string and silently
+    # counting the real command as a person.
+    assert INACTIVITY_EXEMPT_COMMANDS <= commands
+
+
+def test_a_new_command_counts_as_activity_until_somebody_says_otherwise():
+    """The safe default is the one that keeps a seat, not the one that marks it.
+
+    Exemption is a decision to make deliberately: an unlisted command counts,
+    so a command added without a thought about the AFK check can only ever
+    fail towards leaving somebody alone.
+    """
+    assert "a_command_nobody_has_written_yet" not in INACTIVITY_EXEMPT_COMMANDS
+    # And the exemptions are only ever things the client sends unprompted.
+    for command in ("guess", "send_chat", "draw", "select_prompt", "buy_hint"):
+        assert command not in INACTIVITY_EXEMPT_COMMANDS
 
 
 @pytest.mark.asyncio
