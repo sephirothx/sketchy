@@ -73,7 +73,29 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"://([^:/@\s]+):([^@\s]+)@"), r"://\1:***@"),
     # The local part of an address is the personal half; the domain says
     # which relay or provider was involved, which is what a failure needs.
-    (re.compile(r"[\w.+-]+@((?:[\w-]+\.)+[\w-]{2,})"), r"***@\1"),
+    #
+    # Wider than a tidy address grammar, because the addresses this service
+    # stores are: `auth.email.normalize_email` asks only for a non-blank
+    # local part, an `@`, and a domain with a dot in it, so `foo!bar@x.test`,
+    # `"foo"@x.test` and `foo@a.b` are all storable and all used to survive a
+    # pattern built around `[\w.+-]` and a two-character final label. The
+    # local part is therefore anything up to the `@` that is not whitespace
+    # or a delimiter, plus a quoted string as its own alternative; `:` and
+    # `/` are excluded so a database URL keeps its scheme and username, both
+    # of which the rule above has already made safe, and `"` because the
+    # quoted alternative is what a quoted local part is for. An apostrophe
+    # is *not* excluded: `o'brien@example.test` is a storable address and a
+    # real name, and eating the opening quote of `'alice@example.test'` in
+    # some other line is the cheaper mistake by far.
+    #
+    # This is the net for an address nobody handed us. Where the address is
+    # known - a delivery failure names the row's own recipient - it is masked
+    # by splitting it rather than by finding it (`auth.mail`), which needs no
+    # grammar at all.
+    (
+        re.compile(r"""(?:"[^"\s]*"|[^\s@,;:/<>()\[\]\\"]+)@((?:[\w-]+\.)+[\w-]+)"""),
+        r"***@\1",
+    ),
 )
 
 

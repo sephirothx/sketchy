@@ -70,6 +70,8 @@ from app.domain_values import (
     REACTION_EMOJI_CODES,
     REPORT_EVIDENCE_ROLES,
     REPORT_REASONS,
+    REPORT_SCOPES,
+    WARNING_KINDS,
     REPORT_STATUSES,
     RETAINED_MESSAGE_AUDIENCES,
     RETAINED_MESSAGE_KINDS,
@@ -94,6 +96,7 @@ from app.domain_values import (
     PromptLanguage,
     PromptListVisibility,
     ReportReason,
+    ReportScope,
     ReportStatus,
     TurnEndReason,
     UserRole,
@@ -795,6 +798,26 @@ class PlayerReport(Base):
     __table_args__ = (
         _values_check("reason", REPORT_REASONS, "ck_player_reports_reason"),
         _values_check("status", REPORT_STATUSES, "ck_player_reports_status"),
+        _values_check("scope", REPORT_SCOPES, "ck_player_reports_scope"),
+        # The scope and the instance are one fact written in two columns, so
+        # neither may stand without the other: a room report names the room it
+        # happened in, and nothing else names one. Said this way rather than
+        # left to convention, because a null instance beside scope 'room'
+        # would be a gap that silently drops the report out of its incident
+        # rather than a statement a reader can check.
+        CheckConstraint(
+            "(scope = 'room' AND room_instance_id IS NOT NULL)"
+            " OR (scope <> 'room' AND room_instance_id IS NULL)",
+            name="ck_player_reports_scope_instance",
+        ),
+        # A decided report belongs to exactly one decision, whether that
+        # decision covered five reports or one; a pending one belongs to none
+        # yet. The same shape as the reviewed-identity check above, and for
+        # the same reason: a decision is a decision, and the row says so.
+        CheckConstraint(
+            "status = 'pending' OR decision_group_id IS NOT NULL",
+            name="ck_player_reports_decision_group",
+        ),
         # A decision is a decision: a reviewed row carries when (#553). Who
         # may become NULL when the moderator's account is deleted.
         CheckConstraint(
@@ -802,6 +825,30 @@ class PlayerReport(Base):
             name="ck_player_reports_reviewed_identity",
         ),
         Index("ix_player_reports_status_created_at", "status", "created_at"),
+        # One question, asked on every page load by every signed-in reporter:
+        # "any of mine decided and not yet said?" Answered from an index over
+        # exactly that, holding only the rows that can still answer yes.
+        Index(
+            "ix_player_reports_reporter_unannounced",
+            "reporter_user_id",
+            postgresql_where=text(
+                "reporter_notified_at IS NULL AND status <> 'pending'"
+            ),
+            sqlite_where=text(
+                "reporter_notified_at IS NULL AND status <> 'pending'"
+            ),
+        ),
+        # Decided rows only, one entry per report that has a decision. The
+        # closed-case stream reads its page as distinct decision groups newest
+        # first; because the id is time-ordered, that is an ordered scan of
+        # this index that stops as soon as it has enough groups, instead of
+        # an aggregate over every report ever decided.
+        Index(
+            "ix_player_reports_decision_group",
+            "decision_group_id",
+            postgresql_where=text("decision_group_id IS NOT NULL"),
+            sqlite_where=text("decision_group_id IS NOT NULL"),
+        ),
         CheckConstraint(
             "reporter_user_id IS NULL OR reported_user_id IS NULL "
             "OR reporter_user_id != reported_user_id",
@@ -858,6 +905,41 @@ class PlayerReport(Base):
     context_snapshot: Mapped[dict] = mapped_column(
         PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
     )
+    # Where the complaint happened, so reports of one incident can be read and
+    # decided together. Both report routes already work this out - the socket
+    # path holds the live room, the REST path proves every cited line came
+    # from one room instance or all from the lobby - and until now both threw
+    # it away.
+    scope: Mapped[str] = mapped_column(
+        String(16),
+        default=ReportScope.UNSCOPED.value,
+        server_default=ReportScope.UNSCOPED.value,
+        nullable=False,
+    )
+    # A runtime correlation id with no foreign key, exactly as RoomMessage
+    # carries it: rooms live in the process and have no row to point at, and a
+    # report has to outlive the room it was filed in.
+    room_instance_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
+    # Which picture a report about a picture was about. Not a way to fetch it
+    # back: an uploaded avatar is deleted the moment it is replaced, so this
+    # key names something that may already be gone. It is here so a reviewer
+    # is told the picture has *changed* since the complaint, rather than
+    # silently judging a different one - and then acts on the one that is
+    # actually on the account now (R-AVA-04). Null on every report that is
+    # not about a picture.
+    reported_avatar_key: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    # Which decision covered this report. Minted per decision rather than per
+    # report, so one moderator action over an incident leaves every report it
+    # decided pointing at the same value. Time-ordered (UUIDv7), which is what
+    # lets the closed-case stream take its page from an ordered index scan
+    # instead of aggregating every decided row to find the newest decisions.
+    decision_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String(16),
         default=ReportStatus.PENDING.value,
@@ -878,6 +960,13 @@ class PlayerReport(Base):
         UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When the reporter was told their report had been looked at. Null until
+    # then, which is what stops it being said twice. It records only that the
+    # telling happened - never what was decided, which is the reported
+    # player's business (R-MOD-20).
+    reporter_notified_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
     message_evidence: Mapped[list[PlayerReportMessageEvidence]] = relationship(
         back_populates="report",
@@ -1172,6 +1261,12 @@ class PromptContentReport(Base):
             "status = 'pending' OR reviewed_at IS NOT NULL",
             name="ck_prompt_content_reports_reviewed_identity",
         ),
+        # A content report belongs to exactly one decision once decided, the
+        # rule player reports carry (`ck_player_reports_decision_group`).
+        CheckConstraint(
+            "status = 'pending' OR decision_group_id IS NOT NULL",
+            name="ck_prompt_content_reports_decision_group",
+        ),
         _values_check(
             "resolution_moderation_state",
             PROMPT_CONTENT_MODERATION_STATES,
@@ -1193,6 +1288,14 @@ class PromptContentReport(Base):
         ),
         Index(
             "ix_prompt_content_reports_status_created_at", "status", "created_at"
+        ),
+        # `ix_player_reports_decision_group`'s twin: the closed-case stream
+        # pages both tables the same way.
+        Index(
+            "ix_prompt_content_reports_decision_group",
+            "decision_group_id",
+            postgresql_where=text("decision_group_id IS NOT NULL"),
+            sqlite_where=text("decision_group_id IS NOT NULL"),
         ),
         # One open report per reporter per target. Reporting the same content
         # again while a moderator has yet to look at it adds no evidence and
@@ -1260,6 +1363,12 @@ class PromptContentReport(Base):
         nullable=False,
     )
     details: Mapped[str] = mapped_column(Text, nullable=False)
+    # Which decision covered this report - `PlayerReport.decision_group_id`,
+    # for the same reason and minted the same way. A content report needs no
+    # scope column beside it: its target already names the incident.
+    decision_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String(16),
         default=ReportStatus.PENDING.value,
@@ -1428,6 +1537,12 @@ class UserBan(Base):
 
     __tablename__ = "user_bans"
     __table_args__ = (
+        CheckConstraint(
+            "category IS NULL OR category IN "
+            "('harassment', 'offensive_drawing', 'inappropriate_name',"
+            " 'cheating', 'spam', 'inappropriate_avatar')",
+            name="ck_user_bans_category",
+        ),
         _actor_index("ix_user_bans_revoked_by", "revoked_by_user_id"),
         # "Active" is one predicate everywhere: not revoked, and not past its
         # expiry. `is_active` used to record only the first half, so an
@@ -1470,6 +1585,13 @@ class UserBan(Base):
         index=True,
     )
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The moderator's own finding about what rule this was, when they chose
+    # to record one. Optional, so a decision is never blocked on it, which
+    # means every notice has to read correctly without it. Never the
+    # reporters' reason: that is their claim about the player, and showing it
+    # back would tell them how people they cannot see characterised them
+    # (R-MOD-12).
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # The report this suspension was decided from, when it came from one. It is
     # what lets the suspended player be shown the messages the complaint was
     # about, rather than a reason with nothing behind it. Nullable because a
@@ -1505,6 +1627,13 @@ class UserWarning(Base):
 
     __tablename__ = "user_warnings"
     __table_args__ = (
+        CheckConstraint(
+            "category IS NULL OR category IN "
+            "('harassment', 'offensive_drawing', 'inappropriate_name',"
+            " 'cheating', 'spam', 'inappropriate_avatar')",
+            name="ck_user_warnings_category",
+        ),
+        _values_check("kind", WARNING_KINDS, "ck_user_warnings_kind"),
         _actor_index("ix_user_warnings_issued_by", "issued_by_user_id"),
         Index("ix_user_warnings_user_pending", "user_id", "acknowledged_at"),
     )
@@ -1523,6 +1652,21 @@ class UserWarning(Base):
         nullable=True,
     )
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The moderator's own finding about what rule this was, when they chose
+    # to record one. Optional, so a decision is never blocked on it, which
+    # means every notice has to read correctly without it. Never the
+    # reporters' reason: that is their claim about the player, and showing it
+    # back would tell them how people they cannot see characterised them
+    # (R-MOD-12).
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Which notice this row is. A picture's removal is delivered through the
+    # warning machinery because that is the shown-once, acknowledged surface a
+    # player already meets - but it is not a formal warning, and the copy
+    # those carry says nothing is restricted, which of a removal is false
+    # (R-AVA-08).
+    kind: Mapped[str] = mapped_column(
+        String(24), default="warning", server_default="warning", nullable=False
+    )
     # The report this warning was decided from. It is what lets the warned
     # player be shown the messages the complaint was about; SET NULL because
     # the warning outlives the report if the report is ever removed.
@@ -1656,6 +1800,19 @@ class Friendship(Base):
         ),
         Index("ix_friendships_user_high_id", "user_high_id"),
         Index("ix_friendships_requested_by_id", "requested_by_id"),
+        # The asker's question on every read - "anything of mine accepted that
+        # I have not been told about?" - over exactly the rows that can still
+        # answer yes.
+        Index(
+            "ix_friendships_acceptance_unannounced",
+            "requested_by_id",
+            postgresql_where=text(
+                "status = 'accepted' AND acceptance_announced_at IS NULL"
+            ),
+            sqlite_where=text(
+                "status = 'accepted' AND acceptance_announced_at IS NULL"
+            ),
+        ),
     )
 
     user_low_id: Mapped[uuid.UUID] = mapped_column(
@@ -1682,6 +1839,14 @@ class Friendship(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
     responded_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When the asker was told their request had been accepted. Null while they
+    # still owe it, which is a state the server holds rather than one the
+    # client derives from watching the lists move: a reader who was not
+    # present for the move cannot see it, and being accepted is not something
+    # anybody should have to be looking at the right moment to learn (#724).
+    acceptance_announced_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
 
 class IdentityAlias(Base):

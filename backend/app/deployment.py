@@ -162,6 +162,43 @@ def validate_public_base_url(environ: Mapping[str, str] | None = None) -> None:
         )
 
 
+def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> None:
+    """Refuse a production deployment with no relay to send through.
+
+    Without ``SMTP_HOST`` the console transport answers a message by logging
+    it (R-AUTH-12), which is what lets somebody confirm an address or follow
+    a reset link on a self-hosted checkout that has no mail at all. In
+    production the same fallback is two failures at once: every confirmation
+    link, reset link and suspension notice is written into a log store kept
+    far longer than the one-hour token it now carries and read by more people
+    than the mailbox would have been, and meanwhile every player who forgets
+    a password waits for a message that is never sent.
+
+    Refusing at startup rather than at the moment somebody needs a reset is
+    the point: a mail misconfiguration that only shows up in the recovery
+    flow shows up to the one person who cannot report it.
+
+    Imported locally for the reason ``validate_database_configuration`` has:
+    this module is imported by the runner before the application is, and
+    ``app.auth.mail`` reaches the ORM. Asking that module rather than reading
+    the variable here keeps one definition of what "configured" means.
+    """
+
+    values = os.environ if environ is None else environ
+    if not is_production(values):
+        return
+
+    from app.auth.mail import mail_is_configured
+
+    if not mail_is_configured(values):
+        raise RuntimeError(
+            f"SMTP_HOST is required when {ENVIRONMENT_VARIABLE}={PRODUCTION}. "
+            "Without a relay the outbox falls back to logging each message, "
+            "which would write confirmation and reset links into the "
+            "application log and send nothing to the player waiting for one."
+        )
+
+
 def validate_python_runtime(version: tuple[int, ...] | None = None) -> None:
     """Refuse to start on a Python older than the one v1 supports.
 

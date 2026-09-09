@@ -467,6 +467,13 @@ been replaced would be the hole this closes.
 `ck_friendships_ordered` (`user_low_id < user_high_id`) and
 `ck_friendships_requester_is_a_member`.
 
+`acceptance_announced_at` is when the **asker** was told their request had been accepted, null while they are still owed it. A fact on the row rather than
+a difference between two client reads: a reader that was not present for the
+move — reloading, on another device, offline — has no earlier state to compare
+against, and would never learn it (R-FRIEND-13). The partial index
+`ix_friendships_acceptance_unannounced` answers the asker's question on every
+read, over only the rows that can still answer yes.
+
 **One row per pair, in a canonical order** rather than one row per direction.
 Two directional rows can disagree — one accepted, one not — and no constraint
 could forbid it; here the pair is the identity, the way it is for
@@ -644,7 +651,7 @@ pinned by [`fixtures/account_data_export_v5_fields.json`](../fixtures/account_da
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
 `state` (`pending \| sent \| failed`) · `attempts` · `last_error` · `next_attempt_at` ·
-`created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`.
+`created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 
@@ -656,7 +663,9 @@ delivered by a sweeper (`EMAIL_SWEEP_SECONDS`, default 30). A suspension is ther
 never undone by an unreachable relay, and a reset message is retried with backoff and
 then recorded as failed rather than disappearing. With no `SMTP_HOST` the messages are
 **logged instead of sent**, which is the only way the confirmation and reset flows can
-be completed on a deployment without mail.
+be completed on a deployment without mail — outside production, where startup refuses a
+missing `SMTP_HOST` outright and the console transport refuses to write a body at all,
+so a live reset link never reaches a log store (#466).
 
 A verification or reset payload carries the **raw link token** only while the row is
 `pending` — a retry has to rebuild the link, and the token is unrecoverable from the
@@ -722,11 +731,59 @@ account and the entry reads *Deleted player* while standing exactly as it was.
 ### `player_reports`
 `id` · `reporter_user_id` / `reported_user_id` (`SET NULL`) · `game_id` / `turn_id`
 (`SET NULL`) · `reason` · `details` TEXT · `context_snapshot` (JSON) ·
+`scope` (`room \| lobby \| profile \| unscoped`) · `room_instance_id` ·
+`reported_avatar_key` · `decision_group_id` ·
 `status` (`pending \| resolved \| dismissed`) · `reviewed_by_user_id` ·
 `resolution_note` · timestamps.
 
 Reasons: `harassment`, `offensive_drawing`, `inappropriate_name`, `cheating`, `spam`.
 `ck_player_reports_not_self` forbids self-reports.
+
+`reporter_notified_at` records that the reporter was told their report had been
+looked at, which is what stops it being said twice. It records only the telling —
+never what was decided, which is the reported player's business (R-MOD-20). The
+partial index `ix_player_reports_reporter_unannounced` answers the one question
+asked on every page load, over only the rows that can still answer yes.
+
+**Where the complaint happened**, so reports of one incident are read and decided
+together (#620). `scope` and `room_instance_id` are one fact in two columns and
+`ck_player_reports_scope_instance` keeps them from disagreeing: a room report names the
+room instance it happened in, and nothing else names one. Both report paths already knew
+this and threw it away — the socket handler holds the live room
+(`Room.retention_scope_id`), and `POST /api/reports` has already proved that every cited
+line came from one room instance or all from the lobby before it writes. Neither reads
+it from a client. `room_instance_id` carries **no foreign key**, exactly as
+`room_messages.room_instance_id` does not: rooms live in the process, have no row to
+point at, and a report has to outlive the room it was filed in.
+
+`unscoped` is a REST report that cited nothing and named nothing. It names no place to
+look, so it stands alone rather than joining a bucket it merely resembles. Every lobby
+report about one account shares the one bucket, because the lobby has no instance to
+name.
+
+`profile` is a complaint about the account itself rather than about anything it said —
+today, its picture, which is reportable from the lobby's online list and from the profile
+page (R-AVA-06). It belongs to no room and no line, so like the lobby it takes no
+instance and every such report about one account meets in one bucket, whichever screen it
+came from.
+
+`reported_avatar_key` records **which** picture a complaint about a picture was about.
+It is deliberately not a way to fetch that picture back: `uploaded_avatar_assets` deletes
+the old row the moment a new one is uploaded, so this key can name something already
+gone. That is what it is for — the queue compares it against the account's live
+`avatar_key` and tells a reviewer the picture has **changed** since the report, rather
+than showing a different one in its place and having a moderator judge, and remove,
+something nobody reported (R-AVA-07). The key is never serialised to a client; it is
+compared, not shown. Null on every report not about a picture.
+
+**Which decision covered the report.** `decision_group_id` is minted once per moderator
+action rather than once per report, so a decision over an incident leaves every report it
+covered pointing at one value; `ck_player_reports_decision_group` says a decided report
+carries one and a pending report does not, the same shape as
+`ck_player_reports_reviewed_identity` beside it and for the same reason. The id is a
+UUIDv7, which is what lets the closed-case stream page decisions from an ordered walk of
+the partial index `ix_player_reports_decision_group` rather than aggregating every report
+ever decided to find the newest ones.
 `uq_player_reports_open_target (reporter_user_id, reported_user_id)` is a **partial
 unique index**: one reporter holds **one open report per player**. Saying it again while
 a moderator has yet to look adds no evidence and buries the queue; once decided, the
@@ -864,8 +921,14 @@ Player-authored prompt content has a separate, target-specific flow.
 `id` · `reporter_user_id` / `reported_owner_user_id` · `prompt_list_id` /
 `prompt_version_id` (both `SET NULL`) · `target_type` (`list \| prompt`) ·
 `list_name_snapshot` · `prompt_snapshot` · `reason` · `details` ·
+`decision_group_id` ·
 `status` · `reviewed_by_user_id` · `resolution_note` ·
 `resolution_moderation_state` · timestamps.
+
+`decision_group_id` and `ck_prompt_content_reports_decision_group` are
+`player_reports`' rule restated, for the same reason and paged from the same kind of
+partial index. A content report needs no `scope` beside it: its target already names the
+incident.
 
 Reasons: `inappropriate`, `hateful_or_abusive`, `sexual_content`, `violence`, `spam`,
 `other`. `ck_prompt_content_reports_target_snapshot` requires a prompt snapshot for a
@@ -924,7 +987,7 @@ audit event naming the report; the ledger never records what the report said.
 
 ### `user_bans`
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
-`source_report_id` (FK → `player_reports`, `SET NULL`) · `expires_at` · `is_active` ·
+`source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `expires_at` · `is_active` ·
 `created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason`.
 
 **Active is one predicate everywhere** (#553): `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`, from `auth/bans.py` `active_ban_filter`. The `is_active` flag it replaced recorded only the first half, so an expired-but-unrevoked ban was active in one reader and not in another; such a ban now stays as history and counts as nothing. `ck_user_bans_revocation_identity` ties the revoking actor and reason to a revocation (the actor may still become NULL when that moderator's account is deleted). `ix_user_bans_user_expires` serves the account lookup and the foreign-key walk on deletion; `ix_user_bans_unrevoked_newest`, a partial `(created_at) WHERE revoked_at IS NULL`, serves the moderation queue's newest active bans (#554).
@@ -945,7 +1008,12 @@ already decided refuses the ban - one complaint, one consequence.
 
 ### `user_warnings`
 `id` · `user_id` (`SET NULL`) · `issued_by_user_id` (`SET NULL`) · `reason` ·
-`source_report_id` (FK → `player_reports`, `SET NULL`) · `created_at` · `acknowledged_at`.
+`source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `created_at` · `acknowledged_at`.
+
+`category` is the moderator's own finding about what rule a decision was about,
+checked against the six report reasons and **nullable**: it is optional, so every
+notice has to read correctly without it (R-MOD-19). It is never the reporters'
+reason, which is their claim rather than a finding.
 
 **Flow.** The step between dismissing a report and suspending the account: nothing is
 restricted. A connected player is told immediately over the socket (`moderator_warning`);
@@ -1124,6 +1192,16 @@ contributes those turns but **not** a game played, a game won, or a score.
   total and keeps every factual turn and correct guess.
 - Foreign keys are `ON DELETE SET NULL`, so even a physical user-row removal cannot
   cascade away turns, guesses, or another player's game.
+- **Read as a social graph, once.** `GET /api/users/me/recent-players` (R-FRIEND-11)
+  self-joins this table on `game_id` to find who somebody has been playing with:
+  the caller's seats give the games, the other seats give the accounts. Bounded by
+  `game_records.finished_at` over a 30-day window rather than by a page of history,
+  so the scan rides `ix_game_records_outcome_finished_at` and a returning player
+  gets nothing rather than something a year old. The **live `users` row** supplies
+  the name and picture, not the snapshot above: a snapshot is what somebody was
+  called in that game, and this list offers a friendship with who they are now.
+  That also means a deleted account drops out for free, since `user_id` is set
+  null when it goes.
 
 ### `turn_records`
 `id` · `game_id` (CASCADE) · `round_number` · `turn_number` · `drawer_user_id` /

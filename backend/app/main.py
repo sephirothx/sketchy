@@ -32,7 +32,7 @@ from app.api.role_notices import (
     pending_role_notice_payload,
 )
 from app.api.user_settings import create_user_settings_router
-from app.api.friends import create_friends_router
+from app.api.friends import create_friends_router, create_recent_players_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.bans import suspension_payload
 from app.auth.warnings import pending_warning_payload
@@ -49,6 +49,7 @@ from app.deployment import (
     public_base_url,
     shutdown_drain_seconds,
     validate_database_configuration,
+    validate_mail_configuration,
     validate_public_base_url,
     validate_python_runtime,
     validate_worker_topology,
@@ -485,6 +486,9 @@ async def lifespan(_app: FastAPI):
         # And before serving: in production every plain request is sent to
         # this origin and every mailed link is built on it (#467).
         validate_public_base_url()
+        # Beside it, because the two describe the same message: production
+        # sends its links to a relay, never to the log (#466).
+        validate_mail_configuration()
         await init_db()
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
@@ -646,6 +650,9 @@ api.include_router(
 )
 api.include_router(
     create_friends_router(async_session_factory, friend_service)
+)
+api.include_router(
+    create_recent_players_router(async_session_factory, game_history_repo)
 )
 api.include_router(create_role_notice_router(async_session_factory))
 async def refresh_avatar_on_live_surfaces(user_id: str, avatar_key: str | None) -> None:

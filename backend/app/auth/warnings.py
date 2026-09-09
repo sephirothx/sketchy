@@ -12,11 +12,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import PlayerReportMessageEvidence, UserWarning
-from app.services.player_reports import (
-    drawing_evidence_for_report,
-    drawing_evidence_payload,
-)
+from app.db.models import UserWarning
+from app.services.player_reports import cited_notice_messages, notice_drawings
 
 
 async def pending_warning_payload(
@@ -28,9 +25,9 @@ async def pending_warning_payload(
     makes the reason something they can weigh rather than just be told. Only
     the snapshot, and only the text and the time: the evidence is authored by
     the warned player by construction, so nothing here can name whoever
-    reported them. The drawing the report carried, if one did, is theirs for
-    the same reason and comes with it - by its metadata here, and its bytes
-    over `GET /api/warnings/{warning_id}/drawing`.
+    reported them. Any drawings the reports carried are theirs for the same
+    reason and come with it - by their metadata here, and their bytes over
+    `GET /api/warnings/{warning_id}/drawings/{report_id}`.
     """
     try:
         target = UUID(user_id)
@@ -48,40 +45,18 @@ async def pending_warning_payload(
         )
         if warning is None:
             return {"warning": None}
-        messages: list[dict] = []
-        drawing = drawing_evidence_payload(
-            await drawing_evidence_for_report(session, warning.source_report_id)
-        )
-        if warning.source_report_id is not None:
-            rows = (
-                await session.scalars(
-                    select(PlayerReportMessageEvidence)
-                    .where(
-                        PlayerReportMessageEvidence.report_id
-                        == warning.source_report_id,
-                        # Their own reported words (R-MOD-12). What others
-                        # said around them is a moderator's context, not
-                        # something to show the player back.
-                        PlayerReportMessageEvidence.role == "cited",
-                    )
-                    .order_by(PlayerReportMessageEvidence.position)
-                )
-            ).all()
-            messages = [
-                {
-                    "text": row.text_snapshot,
-                    "at": row.message_created_at.isoformat()
-                    if row.message_created_at
-                    else None,
-                }
-                for row in rows
-            ]
         return {
             "warning": {
                 "id": str(warning.id),
+                "kind": warning.kind,
                 "reason": warning.reason,
+                "category": warning.category,
                 "createdAt": warning.created_at.isoformat(),
-                "messages": messages,
-                "drawing": drawing,
+                # Every cited line and every canvas the decision behind this
+                # warning covered, not only the one report it names (#620).
+                "messages": await cited_notice_messages(
+                    session, warning.source_report_id
+                ),
+                "drawings": await notice_drawings(session, warning.source_report_id),
             }
         }

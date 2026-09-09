@@ -10,6 +10,10 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { waitingRequestCount } from "../lib/friends";
+import { useFriendsStore } from "../store/friendsStore";
+import { useOpenOverlay } from "../hooks/useOverlayRoute";
+import { FRIENDS_PATH } from "../lib/overlayRoutes";
 import { useAuthStore } from "../store/authStore";
 import { authSubmitter, type AuthCredentials, type AuthMode } from "../lib/authSubmit";
 import { avatarInitial, identityColor } from "../lib/avatar";
@@ -28,6 +32,7 @@ import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import {
   BugIcon,
   BulbIcon,
+  InfoIcon,
   ChevronDownIcon,
   GearIcon,
   KeyIcon,
@@ -35,6 +40,7 @@ import {
   PlusIcon,
   ShieldIcon,
   UserIcon,
+  UsersIcon,
   ZapIcon,
 } from "./icons";
 
@@ -82,6 +88,8 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useOpenSettings();
+  const openOverlay = useOpenOverlay();
+  const waiting = useFriendsStore((state) => waitingRequestCount(state.lists));
   const user = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const register = useAuthStore((s) => s.register);
@@ -173,7 +181,9 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         aria-label={
           isGuest
             ? `${shownName}. Your display name is not saved.`
-            : `Signed in as ${shownName}`
+            : waiting > 0
+              ? `Signed in as ${shownName}. ${waiting} friend request${waiting === 1 ? "" : "s"} waiting.`
+              : `Signed in as ${shownName}`
         }
       >
         <span
@@ -189,6 +199,16 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         </span>
         {!compact && <span className="identity-name">{shownName}</span>}
         {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
+        {/* A dot on the chip, because the menu is the only way to the friends
+            surface and a request that arrived while somebody was drawing has
+            nowhere else to be seen. Silent to a screen reader — the count is
+            in the button's own label above, where it is read as part of the
+            control rather than as a loose number beside it. */}
+        {waiting > 0 && (
+          <span className="identity-badge" aria-hidden="true" data-testid="friend-request-badge">
+            {waiting > 9 ? "9+" : waiting}
+          </span>
+        )}
         {!compact && (
           <span className="identity-chevron" aria-hidden="true">
             <ChevronDownIcon size={14} />
@@ -285,6 +305,23 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
             </>
           ) : (
             <>
+              {/* Not in the `!seatBound` group above, and not because a
+                  guest can never see it: Friends is an overlay, so opening it
+                  draws over the room rather than leaving it. Answering a
+                  request that arrived mid-game must not cost a seat
+                  (R-FRIEND-10). */}
+              <MenuItem
+                icon={<UsersIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  openOverlay(FRIENDS_PATH);
+                }}
+              >
+                Friends
+                {waiting > 0 && (
+                  <span className="menu-item-count">{waiting}</span>
+                )}
+              </MenuItem>
               <MenuItem
                 icon={<BulbIcon size={16} />}
                 onClick={() => {
@@ -293,6 +330,18 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 }}
               >
                 My prompt lists
+              </MenuItem>
+              {/* A permanent home for the rules, so they are reachable
+                  without having been reported or having reported anybody
+                  (R-RULES-01). */}
+              <MenuItem
+                icon={<InfoIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/rules");
+                }}
+              >
+                Rules
               </MenuItem>
               {/* Shown, not enforced: each of these endpoints checks the role
                   again for itself and answers 404 to anyone else. Hiding them
@@ -604,6 +653,19 @@ export function AuthDialog({
           <button type="submit" className="modal-button" disabled={busy}>
             {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
           </button>
+          {/* Only when creating one: this is the moment an account starts,
+              and the expectation is worth setting before anybody plays
+              rather than after they are reported (R-RULES-01). Not on the
+              log-in form, where it would be noise. */}
+          {isClaim && (
+            <p className="auth-hint auth-rules-note">
+              By creating an account you agree to follow the{" "}
+              <a href="/rules" target="_blank" rel="noreferrer">
+                rules
+              </a>
+              .
+            </p>
+          )}
         </form>
         )}
 

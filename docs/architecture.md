@@ -229,6 +229,17 @@ Routes ([`frontend/src/App.tsx:59`](../frontend/src/App.tsx)):
 | `/admin/bug-reports` | [`BugReportsPage`](../frontend/src/pages/BugReportsPage.tsx) |
 | `*` | [`NotFoundPage`](../frontend/src/pages/NotFoundPage.tsx) |
 
+Two more routes render no page of their own. `/settings/:section` (R-SET-06) and
+`/friends` (R-FRIEND-10) are **overlays**: the table above is rendered against the
+location the overlay was opened *from*, and the overlay is drawn beside it, so
+opening one never unmounts a live room. They are still routes, so they can be
+linked and bookmarked, and they are still in the server's list, so a bookmarked
+overlay does not answer 404. The shared half — which paths are overlays, and the
+history state naming the page underneath — is
+[`lib/overlayRoutes.ts`](../frontend/src/lib/overlayRoutes.ts) and
+[`hooks/useOverlayRoute.ts`](../frontend/src/hooks/useOverlayRoute.ts); a third
+overlay adds a pattern there rather than a second copy of the mechanism.
+
 A URL that matches none of the others is served the same shell, so the client can
 draw `NotFoundPage`, but **with a 404 status** — otherwise every typo tells a crawler
 or an uptime probe that a page exists. Deciding that needs the route list on the
@@ -339,19 +350,20 @@ revocation applies uniformly without a shared signing secret.
 
 ## 6. Lifecycle
 
-### Startup ([`backend/app/main.py:170`](../backend/app/main.py))
+### Startup ([`backend/app/main.py:459`](../backend/app/main.py))
 
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
 3. `validate_worker_topology()` — refuses a multi-worker configuration
 4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
 5. `validate_public_base_url()` — with `SKETCHY_ENV=production`, refuses a `PUBLIC_BASE_URL` that is not an `https` origin, or names a loopback address, or carries a path: every mailed link is built on it and every plain-HTTP request is redirected to it (#467)
-6. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
-7. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-8. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
-9. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
-10. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
-11. `mark_ready()` — `GET /api/ready` starts answering 200
+6. `validate_mail_configuration()` — with `SKETCHY_ENV=production`, refuses a missing or blank `SMTP_HOST`. The zero-config fallback logs each message instead of sending it, which in production writes live confirmation and reset links into the log store *and* sends nothing to the player waiting for one; `ConsoleTransport.send` refuses in production as the second lock, on the one statement that would write a body (#466)
+7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
+8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
+9. The retention purges: `purge_expired_room_messages()`, `purge_expired_outbox_entries()`, `purge_expired_auth_sessions()`, `purge_expired_data_exports()`, and `purge_expired_shutdown_abandonments()` — each bounded, and each also swept periodically so a long-lived process does not rely on a restart
+10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
+11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
+12. `mark_ready()` — `GET /api/ready` starts answering 200
 
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
 
@@ -990,6 +1002,67 @@ lobby line is public by construction, so the "did you receive it" check does not
 apply, the author must still be the reported account, and a report never mixes lobby
 and room lines. `evidence_from_live_room` is scoped to a room and never picks them.
 
+### Reports of one incident
+
+Five people watching one person do one thing file five reports, and R-MOD-05 does not
+stop them: it stops one *reporter* saying it twice. Read one at a time that is five
+readings of one story and five decisions, four of them about something already dealt
+with, so an **incident** — one reported account, in one place — is what the queue shows
+and what a decision covers (#620).
+
+The key is derived, not matched: `(reported_user_id, scope, room_instance_id)` over
+pending reports, from columns both report routes already knew and used to discard. A
+report that cited nothing groups with nothing and stands on its own. A complaint about
+the account's *picture* is scoped `profile` rather than left ungrouped: it belongs to no
+room and no line, so it takes the lobby's shape — no instance, one bucket per account —
+and several people objecting to one picture are one incident whichever screen each of
+them was on (R-AVA-06).
+[`services/incidents.py`](../backend/app/services/incidents.py) does the grouping and
+the evidence merge and touches no database — it is handed rows and returns a shape —
+so the ordering rule (oldest first, never by how many complained) and the merge rule
+(one line once, carrying which reports cited it) are readable in one place.
+
+Two things a moderator needs *before* deciding are read at the same time as the queue.
+A report about a picture recorded which picture, and an upload deletes the one it
+replaces, so the queue compares that key against the live one and says the picture has
+changed rather than showing a different one in its place. A picture that is *gone* is
+told apart from a different one, and a removal somebody carried out from a player taking
+their own down — read from the `avatar.removed` ledger entry, which is the only thing
+that knows which — because "a different picture now" said of one a moderator has already
+removed is the opposite of what happened, and the reviewer reading it is usually the one
+who did it (R-AVA-07). And because a
+decided incident is closed for good, a repeat complaint opens a new one — correct, and
+on its own indistinguishable from a first — so a pending incident carries the last
+decision taken about its own key, note included (R-MOD-18). Keyed on the incident, not
+the account: the standing counts beside it already say how often this player has come up.
+
+Deciding is where the concurrency is.
+[`api/moderation.py`](../backend/app/api/moderation.py)'s `_lock_pending_incident`
+deliberately does **not** lock the report the request named and then walk outward: two
+moderators reaching one incident from two different member reports would take the same
+rows in opposite orders. It reads the named report unlocked to learn the key, locks
+the whole pending set in id order, and re-checks the named report inside that set —
+so the unlocked read is never what a decision acts on, and the loser of the race gets
+the 409 a slow retry would.
+
+The closed stream groups on the decision instead. `decision_group_id` is what makes
+that possible and is why the column exists: keying closed history on the open incident
+key would merge two incidents in one room instance decided a week apart, and the
+decision is what actually closed each of them. Because the id is a UUIDv7 minted when
+the decision is taken, ordering by it *is* ordering by when it was decided, so
+`list_closed_cases` takes its page from an ordered walk of
+`ix_player_reports_decision_group` (and its content twin) that stops as soon as it has
+enough groups — rather than aggregating every report ever decided to find the newest.
+The page therefore counts decisions, not rows, which is also what stops a pile-on
+swallowing one.
+
+What the *player* is then shown widens with it. A warning or suspension still names
+one report (`source_report_id`), but `cited_notice_messages` reads the cited lines of
+every report sharing that report's `decision_group_id`. Widening cannot leak: cited
+lines are authored by the reported player by construction (R-MOD-12), and the context
+copied around them — which is per-reporter, under their own blocks and audience — is
+a reviewer's and never reaches a notice.
+
 A drawing takes no queue at all. `drawing_from_live_room` in
 [`services/player_reports.py`](../backend/app/services/player_reports.py) is pure: when
 a `report_player` asks for the canvas (`includeDrawing`), the handler reads the room's
@@ -1580,7 +1653,8 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/handlers/reactions.py`](../backend/app/handlers/reactions.py) | Reactions to drawings: one emoji per registered seat per drawing (#520). |
 | [`app/services/mail_delivery.py`](../backend/app/services/mail_delivery.py) | The loop that empties the email outbox. |
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
-| [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled. |
+| [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled, and reading back what a decision shows the player. |
+| [`app/services/incidents.py`](../backend/app/services/incidents.py) | Grouping reports of one incident, and reading them as one thread (#620). |
 | [`app/services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) | Retiring owned prompt lists without touching the games that played them. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |

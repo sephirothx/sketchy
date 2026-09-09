@@ -438,6 +438,11 @@ async def test_reporting_names_a_seat_and_never_an_account():
             assert report.reporter_user_id == reporter_id
             assert report.reported_user_id == target_id
             assert report.reason == "harassment"
+            # The room this seat is sitting in, so this report meets the
+            # others about the same incident (#620). Taken from the live
+            # room, never from anything the client said.
+            assert report.scope == "room"
+            assert report.room_instance_id == UUID(room.retention_scope_id)
             evidence = (
                 await session.scalars(
                     select(PlayerReportMessageEvidence).order_by(
@@ -469,7 +474,7 @@ async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
 
     from sqlalchemy import func, select
 
-    from app.db.models import PlayerReport, User
+    from app.db.models import PlayerReport, User, generate_uuid
     from app.domain_values import ReportStatus
 
     factory, engine = await create_test_db()
@@ -530,6 +535,7 @@ async def test_the_same_player_cannot_be_reported_twice_while_it_waits():
                 report = await session.scalar(select(PlayerReport))
                 report.status = ReportStatus.DISMISSED.value
                 report.reviewed_at = datetime.now(timezone.utc)
+                report.decision_group_id = generate_uuid()
 
         third = await sio.handlers["/"]["report_player"]("reporter-sid", body)
         assert third["ok"] is True

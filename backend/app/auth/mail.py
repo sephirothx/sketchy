@@ -14,6 +14,12 @@ With no SMTP host configured the console transport logs the message instead.
 That is the zero-configuration default the rest of the deployment story assumes
 - embedded SQLite, generated signing key - and it means a self-hoster who never
 sets up mail still sees what would have been sent.
+
+Outside production only. A reset link in a log store is a credential in a
+place nobody scoped for one, so `SKETCHY_ENV=production` refuses to start
+without a relay (`deployment.validate_mail_configuration`) and the console
+transport refuses to write a body there even if something reaches it anyway
+(#466).
 """
 from __future__ import annotations
 
@@ -23,6 +29,7 @@ from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
 import os
+import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import parseaddr
@@ -32,7 +39,8 @@ from uuid import UUID
 from sqlalchemy import delete, func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.deployment import public_base_url
+from app.deployment import is_production, public_base_url
+from app.logging_config import redact
 from app.services.sweeps import (
     SweepBudget,
     SweepReport,
@@ -124,9 +132,28 @@ def render(template: str, payload: Mapping[str, object], base_url: str) -> tuple
         )
     if template == EmailTemplate.ACCOUNT_BANNED.value:
         reason = payload.get("reason") or "a breach of the rules"
+        # The one thing a suspended account most needs, and the only message
+        # that reaches it once it cannot sign in: whether this ends. Without
+        # it, "suspended for spam" reads as permanent when it is usually a day.
+        expires_at = payload.get("expiresAt")
+        when = (
+            f"It lifts on {_readable_date(expires_at)}."
+            if expires_at
+            else "This suspension does not expire on its own."
+        )
+        category = payload.get("category")
+        about = (
+            f" It was recorded as {str(category).replace('_', ' ')}."
+            if category
+            else ""
+        )
+        # No evidence in the mail. Their own words stay behind the sign-in,
+        # where the notice shows them, rather than in an inbox we do not
+        # control and an outbox row that keeps them for thirty days.
         return (
             "Your Sketchy account has been suspended",
-            f"Hi {name},\n\nYour account has been suspended for {reason}.\n",
+            f"Hi {name},\n\nYour account has been suspended for {reason}.{about}\n"
+            f"{when}\n\nSigning in will show you what it was about.\n",
         )
     if template == EmailTemplate.CONTENT_HIDDEN.value:
         what = payload.get("what") or "some content you shared"
@@ -142,9 +169,31 @@ class EmailTransport(Protocol):
 
 
 class ConsoleTransport:
-    """The zero-configuration default: log what would have been sent."""
+    """The zero-configuration default: log what would have been sent.
+
+    The whole body, unredacted, link token included - that is the point of it
+    on a checkout with no relay, and `LOG_FORMAT=text` leaves it readable so
+    the account flow can actually be completed there.
+
+    Which is precisely why it must not run in production, where the same line
+    puts a live reset link into a log store kept longer than the hour the
+    token lives and readable by everyone with access to it. Startup already
+    refuses a production process with no relay; this is the second lock, on
+    the one statement that writes a body, so the prohibition holds for any
+    caller that builds a console transport by hand. Raising rather than
+    logging a redacted line leaves a failed outbox row with the reason on it,
+    which is a misconfiguration somebody can see.
+    """
+
+    def __init__(self, environ: Mapping[str, str] | None = None) -> None:
+        self._environ = environ
 
     async def send(self, message: OutgoingMessage) -> None:
+        if is_production(self._environ):
+            raise RuntimeError(
+                "the console transport logs the message body and must not run "
+                "in production; configure SMTP_HOST"
+            )
         logger.info(
             "email (not sent, no SMTP configured) to=%s subject=%s\n%s",
             message.to_address,
@@ -214,7 +263,10 @@ def transport_from_environment(
     values = os.environ if environ is None else environ
     host = values.get("SMTP_HOST", "").strip()
     if not host:
-        return ConsoleTransport()
+        # Handed the same mapping, so the transport judges the environment
+        # this selection was made from rather than a live one that may have
+        # been monkeypatched apart from it.
+        return ConsoleTransport(values)
     return SmtpTransport(
         host=host,
         port=int(values.get("SMTP_PORT", "587")),
@@ -348,6 +400,51 @@ async def _claim_due(
     return claims
 
 
+def _masked_recipient(address: str) -> str:
+    """`***@domain` for a stored address, whatever shape it has.
+
+    Split, not matched. `auth.email.normalize_email` accepts any non-blank
+    local part before the last `@` and any domain with a dot in it, so the
+    stored set includes `foo!bar@example.test`, `"foo"@example.test` and
+    `foo@a.b` - none of which a pattern hunting an address inside arbitrary
+    prose recognises without becoming wide enough to eat the prose. Here
+    there is nothing to recognise: the address is known, and this is the
+    same `rpartition` split `normalize_email` made when it accepted it.
+
+    The domain survives because that is what says which relay or provider
+    was involved, which is what a delivery failure is diagnosed from.
+    """
+    local, at, domain = address.rpartition("@")
+    return f"***@{domain}" if at and local else "***"
+
+
+def _without_recipient(text: str, address: str) -> str:
+    """Take one known address out of arbitrary text, then the general pass.
+
+    A relay's own answer carries the address it refused - `SMTPRecipientsRefused`
+    stringifies the dict it was built with - and it is echoed back in whatever
+    case it was typed, hence the fold. The general pass still runs, for a
+    second address the relay mentioned and for anything else `redact` knows.
+
+    The replacement is a function rather than a string because the mask
+    carries a domain this process did not choose: a backslash in it would
+    otherwise be read as a group reference.
+    """
+    if address:
+        mask = _masked_recipient(address)
+        text = re.sub(re.escape(address), lambda _: mask, text, flags=re.IGNORECASE)
+    return redact(text)
+
+
+def _readable_date(value: object) -> str:
+    """An ISO timestamp as a date somebody can read, or as itself when it is
+    not one - a mail that renders the raw string beats one that fails."""
+    try:
+        return datetime.fromisoformat(str(value)).strftime("%d %b %Y")
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _scrubbed(payload: Mapping[str, object]) -> dict:
     """The payload minus its secret, for a row no sweep will render again.
 
@@ -458,7 +555,17 @@ async def deliver_pending(
             except Exception as error:  # noqa: BLE001 - recorded, not swallowed
                 # Rendering is inside the try on purpose: a row whose template
                 # no longer exists is one bad message, not a dead sweep.
-                return claim, str(error)[:256]
+                #
+                # Scrubbed before it is truncated, and here rather than at
+                # the two places it is used. `SMTPRecipientsRefused`
+                # stringifies with the address it refused inside it, so
+                # masking the recipient beside this string would leave the
+                # same address in the same line; and this is what
+                # `last_error` stores, a column kept 30 days and read back by
+                # an operator command. Truncating afterwards would let a
+                # 256-character cut land mid-address and leave the local part
+                # standing.
+                return claim, _without_recipient(str(error), claim.to_address)[:256]
             return claim, None
 
     outcomes = await asyncio.gather(*(attempt(claim) for claim in claimed))
@@ -471,10 +578,13 @@ async def deliver_pending(
             continue
         if await _record_failure(session_factory, claim, error, checked_at=checked_at):
             failed += 1
+            # Masked at the call site rather than left to the JSON
+            # formatter, so the line is safe under `LOG_FORMAT=text` too.
+            # `error` arrives scrubbed already.
             logger.warning(
                 "giving up on %s to %s after %d attempts: %s",
                 claim.template,
-                claim.to_address,
+                _masked_recipient(claim.to_address),
                 claim.attempts,
                 error,
             )

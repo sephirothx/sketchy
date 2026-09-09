@@ -140,11 +140,14 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
         "/api/moderation/prompt-content-reports?status=pending"
     )
     assert listing.status_code == 200
-    evidence = listing.json()["reports"][0]
+    evidence = listing.json()["incidents"][0]
     assert evidence["targetType"] == "prompt"
     assert evidence["listName"] == "Shared trouble"
     assert evidence["prompt"] == "offensive prompt"
-    assert evidence["details"] == "This exact prompt contains abuse."
+    # The target is stated once above the complaints; the words are each
+    # reporter's own (#620).
+    assert evidence["reporterCount"] == 1
+    assert evidence["reports"][0]["details"] == "This exact prompt contains abuse."
 
     resolved = await moderator_http.patch(
         f"/api/moderation/prompt-content-reports/{report_id}",
@@ -371,3 +374,127 @@ async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
     )
     after_review = await reporter_http.post("/api/prompt-content-reports", json=body)
     assert after_review.status_code == 201
+
+
+async def test_content_reports_about_one_target_are_one_incident(env):
+    """Prompt content groups on the target, which already names the incident:
+    a list or an exact prompt version is a durable thing rather than a moment
+    in a room, so there is no place or time to bound it with (#620).
+
+    One decision hides the content once and closes every complaint about it -
+    deciding them one at a time would leave the rest asking about something
+    already settled - and the closed stream shows the one decision it was.
+    """
+    new_client, factory, prompts = env
+    owner_http, moderator_http = new_client(), new_client()
+    owner = await register(owner_http, "IncOwner")
+    moderator = await register(moderator_http, "IncModerator")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            assert reviewer is not None
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+
+    prompt_list = await prompts.create_owned(
+        owner["id"],
+        name="Trouble again",
+        description="",
+        language="en",
+        visibility="unlisted",
+        prompts=(PromptListEntryInput(answer="the reported prompt"),),
+    )
+
+    report_ids = []
+    for index in range(3):
+        reporter = new_client()
+        await register(reporter, f"IncRep{index}")
+        response = await reporter.post(
+            "/api/prompt-content-reports",
+            json={
+                "promptListId": prompt_list.id,
+                "shareCode": prompt_list.share_code,
+                "reason": "inappropriate" if index else "hateful_or_abusive",
+                "details": f"Complaint {index}.",
+            },
+        )
+        assert response.status_code == 201, response.text
+        report_ids.append(response.json()["id"])
+
+    queue = (
+        await moderator_http.get(
+            "/api/moderation/prompt-content-reports?status=pending"
+        )
+    ).json()
+    assert queue["total"] == 1, "one target, one incident"
+    [incident] = queue["incidents"]
+    assert incident["reporterCount"] == 3
+    assert incident["targetType"] == "list"
+    assert incident["listName"] == "Trouble again"
+    # The distinct reasons, in the order first given: three reporters, two
+    # words for it.
+    assert incident["reasons"] == ["hateful_or_abusive", "inappropriate"]
+    # Each complaint keeps its own words.
+    assert [row["details"] for row in incident["reports"]] == [
+        "Complaint 0.",
+        "Complaint 1.",
+        "Complaint 2.",
+    ]
+
+    # Decided from the last complaint, not the one that names the incident.
+    decided = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{report_ids[2]}",
+        json={
+            "status": "resolved",
+            "note": "Confirmed and hidden.",
+            "moderationState": "hidden",
+        },
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["reporterCount"] == 3
+    assert decided.json()["moderationState"] == "hidden"
+
+    assert (
+        await moderator_http.get(
+            "/api/moderation/prompt-content-reports?status=pending"
+        )
+    ).json()["incidents"] == []
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PromptContentReport).where(
+                    PromptContentReport.id.in_([UUID(row) for row in report_ids])
+                )
+            )
+        ).all()
+        assert {row.status for row in rows} == {"resolved"}
+        assert {row.resolution_moderation_state for row in rows} == {"hidden"}
+        # One action, so one group id - and one audit entry each, naming it.
+        assert len({row.decision_group_id for row in rows}) == 1
+        events = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.event_type == "prompt_content_report.resolved"
+                )
+            )
+        ).all()
+        assert len(events) == 3
+        assert {event.details["decision_group_id"] for event in events} == {
+            str(rows[0].decision_group_id)
+        }
+
+    # And one closed entry, not three.
+    closed = (await moderator_http.get("/api/moderation/closed-cases")).json()
+    [entry] = [row for row in closed["content"] if row["promptListId"] == prompt_list.id]
+    assert entry["reporterCount"] == 3
+    assert entry["outcome"] == "hidden"
+    assert len(entry["reports"]) == 3
+
+    # A second decision on any of them refuses: review is one-way per row.
+    assert (
+        await moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{report_ids[0]}",
+            json={"status": "dismissed", "note": "Second thoughts."},
+        )
+    ).status_code == 409

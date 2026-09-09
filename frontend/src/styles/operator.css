@@ -905,9 +905,96 @@
 /* The outcome under a closed case's title, the same chip its decision card
    carries: its own row, hugging its text rather than stretching across the
    grid cell, and exempt from the snippet's line clamp. */
-.mod-queue-item-text .mod-outcome-chip {
+.mod-queue-item-text .mod-outcome-chip,
+.mod-queue-item-text .mod-reporter-chip {
   justify-self: start;
   margin: 2px 0 3px;
+}
+
+/* --------------------------------------------------------- the incident */
+
+/* Every word the reporters reached for. Wraps rather than squeezing the
+   title: an incident described three ways is three chips, and the name it
+   is about is what must stay readable. */
+.mod-reason-chips {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* The complaints, each in its reporter's own words. Numbered when there is
+   more than one, so a moderator can say which one they mean. */
+.mod-reporters {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+.mod-reporter {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 12px;
+}
+
+.mod-reporter-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mod-reporter-head time {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+/* The ordinal, not an identity: who complained is deliberately not shown
+   next to what they said. */
+.mod-reporter-index {
+  align-items: center;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 11.5px;
+  font-weight: 800;
+  height: 20px;
+  justify-content: center;
+  min-width: 20px;
+}
+
+/* How many of the incident's reporters picked this line out. Sits at the
+   end of the line it belongs to rather than in a column of its own, so the
+   thread still reads as a conversation. */
+.mod-evidence-cites {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 8px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* What the buttons below will close. Said in the same red the incident's
+   chips are, because pressing one of them decides all of it. */
+.mod-decision-scope {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  padding: 10px 12px;
 }
 
 .mod-decision-head {
@@ -1510,4 +1597,99 @@
   border-radius: 8px;
   position: relative;
   z-index: 2;
+}
+
+/* What was already decided about this same incident. Sits between the case's
+   heading and its evidence because that is where it changes what happens
+   next: a moderator who reads it after deciding has read it too late. Amber
+   rather than the decision panel's red — it is context to weigh, not a
+   consequence about to be applied. */
+.mod-prior {
+  background: color-mix(in srgb, var(--warning) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 11px 13px;
+}
+
+.mod-prior-head {
+  align-items: baseline;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px;
+  margin: 0;
+}
+
+/* The note the earlier decision was required to carry. Quoted, because it is
+   somebody's words rather than the app's. */
+.mod-prior-note {
+  border-left: 2px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--ink-soft, var(--ink));
+  font-size: 13px;
+  font-style: italic;
+  margin: 0;
+  padding-left: 10px;
+}
+
+/* What became of the picture the case is about. Quieter than the prior
+   decision beside it: that changes whether to decide at all, this changes
+   what "the picture" refers to while deciding. Neutral rather than amber,
+   because a picture already removed is usually the moderator's own work
+   rather than something to be warned about. */
+.mod-picture-note {
+  background: var(--surface-sunk, color-mix(in srgb, var(--ink) 4%, transparent));
+  border: 1px solid var(--rule, color-mix(in srgb, var(--ink) 12%, transparent));
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  padding: 10px 13px;
+}
+
+.mod-picture-note p {
+  color: var(--ink);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* The shortcut out of a repeat. Secondary rather than primary: it is the
+   likely ending, not the assumed one, and a moderator who has read the case
+   above may still decide it differently. */
+.mod-prior-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 2px;
+}
+
+.mod-prior-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* What a decision was recorded as, above the moderator's own sentence. An
+   eyebrow rather than a heading: it categorises what follows and should not
+   compete with it. */
+.notice-category {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+/* The category sits above the note and reads as part of the same block. */
+.mod-category select {
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  padding: 7px 9px;
+  width: 100%;
 }

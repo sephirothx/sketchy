@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ToastContext, type ToastTone } from "../lib/toast";
+import {
+  ToastContext,
+  keepRecentToasts,
+  type ToastAction,
+  type ToastTone,
+} from "../lib/toast";
 import { XIcon } from "./icons";
 
 interface Toast {
   id: number;
   message: string;
   tone: ToastTone;
+  action?: ToastAction;
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -20,9 +26,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const notify = useCallback((message: string, tone: ToastTone = "info", durationMs = 5000) => {
+  const notify = useCallback((
+    message: string,
+    tone: ToastTone = "info",
+    durationMs = 5000,
+    action?: ToastAction,
+  ) => {
     const id = nextIdRef.current++;
-    setToasts((current) => [...current.slice(-2), { id, message, tone }]);
+    setToasts((current) => {
+      const { kept, evicted } = keepRecentToasts(current, {
+        id,
+        message,
+        tone,
+        action,
+      });
+      // A toast that fell off the stack still has a timer running against it.
+      for (const gone of evicted) {
+        const timer = timersRef.current.get(gone.id);
+        if (timer) clearTimeout(timer);
+        timersRef.current.delete(gone.id);
+      }
+      return kept;
+    });
     timersRef.current.set(id, setTimeout(() => dismiss(id), durationMs));
   }, [dismiss]);
 
@@ -42,6 +67,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role={toast.tone === "error" ? "alert" : "status"}
           >
             <span>{toast.message}</span>
+            {/* Dismissed as it fires: the thing it offered has been done, and
+                a toast still sitting there with a button that would now do
+                nothing is worse than no button. */}
+            {toast.action && (
+              <button
+                type="button"
+                className="app-toast-action"
+                onClick={() => {
+                  dismiss(toast.id);
+                  toast.action?.onClick();
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button type="button" onClick={() => dismiss(toast.id)} aria-label="Dismiss notification"><XIcon size={14} /></button>
           </div>
         ))}

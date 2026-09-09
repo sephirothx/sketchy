@@ -1119,6 +1119,19 @@
   white-space: nowrap;
 }
 
+/* A registered name is a link to that profile. Undecorated until it is
+   pointed at, so the row still reads as a list rather than as a paragraph of
+   links; the underline on hover and the focus ring are what say it is one. */
+a.online-player-name {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.online-player-name:hover,
+a.online-player-name:focus-visible {
+  text-decoration: underline;
+}
+
 /* Grey italics is the only cue separating an unclaimed name from a registered
    one, so it is the same treatment the in-room player list uses. */
 .online-player-name.is-guest {
@@ -1268,45 +1281,6 @@
   margin-left: 0;
 }
 
-/* The add control is quiet until the row is under the cursor: it is an
-   offer, not the reason the list exists. It stays visible on a touch screen,
-   where there is no hover to reveal it with. */
-.online-add-friend {
-  min-height: 30px;
-  padding: 0 8px;
-  color: var(--muted);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .online-add-friend {
-    opacity: 0;
-  }
-
-  .online-player-row:hover .online-add-friend,
-  .online-add-friend:focus-visible {
-    opacity: 1;
-  }
-}
-
-.online-add-friend:hover {
-  color: var(--primary);
-}
-
-/* A friend's row carries a little more weight than the rest of the list. */
-.online-player-row.is-friend .online-player-name {
-  font-weight: 700;
-}
-
-.online-requests {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1.5px solid var(--line);
-}
-
-.online-player-row.is-request {
-  background: var(--well);
-}
-
 /* An invitation asks a question, so it sits where a banner does rather than
    passing by like a toast. */
 .friend-invite-notice {
@@ -1337,4 +1311,280 @@
   min-width: 32px;
   min-height: 32px;
   color: var(--muted);
+}
+
+/* The row's name is what opens its menu, so it has to look like the name it
+   replaced rather than like a button: no chrome until it is under the cursor,
+   and the colour the player chose carried through by the span inside it. */
+.online-player-menu-root {
+  min-width: 0;
+  position: relative;
+}
+
+.online-player-trigger {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  margin: 0;
+  max-width: 100%;
+  padding: 1px 3px;
+  text-align: left;
+}
+
+.online-player-trigger:hover .online-player-name,
+.online-player-trigger[aria-expanded="true"] .online-player-name {
+  text-decoration: underline;
+}
+
+.online-player-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* The room's seat menu, restated for this list: two lists of people should
+   not look like two different mechanisms. */
+.online-player-menu {
+  background: var(--menu);
+  border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
+  border-radius: 8px;
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  left: 0;
+  min-width: 176px;
+  padding: 0.35rem;
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 100;
+}
+
+.online-player-menu-item {
+  background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
+  border: 0;
+  border-radius: 6px;
+  color: var(--menu-ink);
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-size: 13px;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.online-player-menu-item:hover,
+.online-player-menu-item:focus-visible {
+  background: color-mix(in srgb, var(--menu-ink) 12%, transparent);
+}
+
+/* Last and in the warning colour: it is the item nobody is reaching for, and
+   the one worst to hit by accident. */
+.online-player-menu-item.is-report {
+  color: var(--danger);
+  margin-top: 0.15rem;
+}
+
+/* ---------------------------------------------------------------- rules
+
+   Laid out like the moderation queue: a rail beside what it indexes,
+   collapsing to one column on a narrow screen. The width and the card come
+   from `.ops-page` and `.surface-card` rather than being invented here, so
+   the page sits on the same grid as everything else. */
+
+.rules-masthead {
+  margin-bottom: 16px;
+}
+
+.rules-masthead h1 {
+  font-size: 30px;
+  margin: 4px 0 0;
+}
+
+/* Sits at the top of the document column rather than across the page: the
+   grid then starts at the top instead of halfway down, and the introduction
+   keeps the same measure as everything it introduces. */
+.rules-intro p {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
+  margin: 0 0 10px;
+}
+
+.rules-intro p:last-child {
+  margin-bottom: 0;
+}
+
+/* Narrower than `.ops-page`: with the rail taken out, what is left is the
+   reading column, and it should be a reading width rather than whatever the
+   page has spare. */
+.rules-page {
+  max-width: 960px;
+}
+
+.rules-layout {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+@media (max-width: 860px) {
+  .rules-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Follows the reader down the page on a screen tall enough to spare it. */
+.rules-rail {
+  position: sticky;
+  top: 16px;
+}
+
+@media (max-width: 860px) {
+  .rules-rail {
+    position: static;
+  }
+}
+
+/* A real table of contents: sections as labels, rules beneath them, one per
+   line. The previous version wrapped every rule name into one paragraph of
+   links, which reads as a sentence rather than a list. */
+.rules-contents ol,
+.rules-contents ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rules-contents ol {
+  margin-top: 10px;
+}
+
+.rules-contents-section + .rules-contents-section {
+  margin-top: 12px;
+}
+
+.rules-contents-heading,
+.rules-contents-heading-link {
+  color: var(--ink);
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.rules-contents-heading-link {
+  text-decoration: none;
+}
+
+.rules-contents-heading-link:hover {
+  text-decoration: underline;
+}
+
+.rules-contents ul a {
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  display: block;
+  font-size: 13.5px;
+  padding: 4px 0 4px 10px;
+  text-decoration: none;
+}
+
+.rules-contents ul a:hover {
+  border-left-color: var(--primary);
+  color: var(--ink);
+}
+
+/* Where the reader actually is, not only where they could go. */
+.rules-contents ul a.is-reading {
+  border-left-color: var(--primary);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rules-document {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* `.surface-card` is the ground and the border; the padding is the caller's,
+   which is what `.ops-card` does too. */
+.rules-section,
+.rules-contents {
+  padding: 16px 18px;
+}
+
+.rules-section {
+  scroll-margin-top: 16px;
+}
+
+.rules-blurb {
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+/* Scrolled to from a notice, so each rule needs room above it: an anchor that
+   lands with its heading against the top of the window reads as the middle of
+   the rule before it. */
+.rules-rule {
+  border-top: 1.5px solid var(--line);
+  margin-top: 16px;
+  padding-top: 14px;
+  scroll-margin-top: 16px;
+}
+
+.rules-rule h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+
+.rules-rule p {
+  line-height: 1.65;
+  margin: 0 0 8px;
+}
+
+/* Set apart from the rule's own words: these are illustrations of it, and a
+   reader skimming for "does this apply to me" looks here first. */
+.rules-examples {
+  background: var(--well);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  padding: 10px 14px;
+}
+
+.rules-examples-label {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.rules-examples ul {
+  color: var(--muted);
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rules-examples li {
+  line-height: 1.55;
+  margin-bottom: 3px;
+}
+
+.rules-examples li:last-child {
+  margin-bottom: 0;
+}
+
+.rules-enforcement p {
+  line-height: 1.65;
+  margin: 8px 0 0;
 }

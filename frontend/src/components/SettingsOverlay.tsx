@@ -25,9 +25,9 @@ import {
   SETTINGS_SECTIONS,
   sectionFromPath,
   settingsPath,
-  type SettingsLocationState,
   type SettingsSection,
 } from "../hooks/useSettingsRoute";
+import { useCloseOverlay } from "../hooks/useOverlayRoute";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AddEmailDialog } from "./AddEmailDialog";
@@ -1200,6 +1200,7 @@ export function SettingsOverlay() {
   const navigate = useNavigate();
   const location = useLocation();
   const section = sectionFromPath(location.pathname);
+  const closeOverlay = useCloseOverlay();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
@@ -1227,12 +1228,9 @@ export function SettingsOverlay() {
 
   function close() {
     void flushSettingsSync();
-    // Back to the page it was opened over, so a room stays the room. Somebody
-    // who typed the URL has nothing to go back to and gets the lobby, which is
-    // what was drawn underneath them anyway.
-    const state = location.state as SettingsLocationState | null;
-    if (state?.settingsBackground) navigate(-1);
-    else navigate("/", { replace: true });
+    // Back to the page it was opened over, so a room stays the room. Shared
+    // with Friends, which needs the same thing for the same reason.
+    closeOverlay();
   }
 
   function showSection(next: SettingsSection) {

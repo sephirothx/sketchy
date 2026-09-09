@@ -81,31 +81,232 @@ export interface ReportedPlayerContext {
   activeSuspension: boolean;
 }
 
-export interface PlayerReport {
+/** Where a complaint happened, and so which incident it belongs to.
+
+`room` groups by the room instance it was filed in; `lobby` shares one bucket
+per reported account, the lobby having no instance to name; `unscoped` cited
+nothing, names no place to look, and stands alone. */
+export type ReportScope = "room" | "lobby" | "profile" | "unscoped";
+
+/** One complaint inside an incident: who made it, in what words, and why.
+
+It carries no evidence of its own - the incident merges that above these,
+because several reporters describing one thing are describing one thread seen
+from several seats. */
+export interface IncidentReport {
   id: string;
   reporterUserId: string | null;
-  reportedUserId: string | null;
-  /** Null when the account is gone. */
-  reportedPlayer: ReportedPlayerContext | null;
-  gameId: string | null;
-  turnId: string | null;
   reason: ReportReason;
   details: string;
   contextSnapshot: Record<string, unknown>;
-  messageEvidence: PlayerReportMessageEvidence[];
-  /** Null unless the reporter asked for the drawing and the reported seat was
-      the one drawing at the time. */
+  gameId: string | null;
+  turnId: string | null;
+  createdAt: string;
+  /** The canvas as this reporter saw it, if they attached one. */
   drawing: PlayerReportDrawing | null;
+  /** What became of the picture this complaint was about; null when it was
+      not about one. The reported picture is never recoverable - an upload
+      deletes the one it replaces - so this says what is there instead,
+      never that the old one can be shown. */
+  pictureStatus: PictureStatus | null;
+}
+
+/** `same` - still the picture that was complained about. `replaced` - a
+different one is there now. `removed` - there is none, which is a different
+thing from a different one and reads as the opposite of it if they are
+conflated. */
+export type PictureStatus = "same" | "replaced" | "removed";
+
+/** What became of the picture an incident is about, said once for the case.
+
+`removed` is the state worth separating: a picture a moderator has already
+taken down would otherwise read as "a different picture now", which is the
+opposite of what was done to it - and the moderator reading that is often the
+one who did it, moments earlier, from this very case. */
+export interface IncidentPicture {
+  status: PictureStatus;
+  /** Whether somebody carried the removal out, rather than the player taking
+      their own picture down - which is not a punishment and sets no block. */
+  removedByModerator: boolean;
+  removedAt: string | null;
+  /** Removed through one of this incident's own reports. */
+  removedFromThisIncident: boolean;
+  /** When they may upload again, when a wait is actually in force. Null when
+      none is: the wait grows with how many pictures have been taken down
+      (R-AVA-08), so there is no single length to state instead. */
+  uploadBlockedUntil: string | null;
+}
+
+/** What was last decided about this same incident, when there has been one.
+
+A decided incident is closed for good, so a fresh complaint about the same
+person in the same place is a new incident rather than a reopening. This is
+what stops it arriving looking untouched. */
+export interface PriorDecision {
+  outcome: ReportOutcome;
+  decidedAt: string | null;
+  /** Resolved when read, never stored beside the case. Null if that account
+      is gone. */
+  decidedBy: string | null;
+  /** The note that decision was required to carry. Written for other
+      moderators, which is what makes it worth showing here. */
+  note: string | null;
+  /** How many times this same incident has been decided before. */
+  priorDecisions: number;
+}
+
+/** A line of an incident's merged thread, and who complained about it. */
+export interface IncidentEvidence extends PlayerReportMessageEvidence {
+  /** The reports that cited this line. Empty for context the server copied
+      around somebody else's citation - `role` says the same thing. */
+  citedBy: string[];
+}
+
+/** One reported account, in one place: the reports about it read as one case.
+
+This is what a moderator reads and decides. `reporterCount` is shown and
+deliberately orders nothing - six reports is six people who chose to complain,
+not six times the evidence, and letting a pile-on jump the queue would reward
+arranging one. */
+export interface ModerationIncident {
+  /** The oldest report's id. Stable as more reporters arrive, and already a
+      row every decision route accepts. */
+  id: string;
+  reportedUserId: string | null;
+  /** Null when the account is gone. */
+  reportedPlayer: ReportedPlayerContext | null;
+  scope: ReportScope;
+  reporterCount: number;
+  /** The distinct reasons given, in the order they were first given. */
+  reasons: ReportReason[];
+  openedAt: string;
+  latestReportedAt: string;
   status: ReportStatus;
+  reports: IncidentReport[];
+  /** Every report's evidence as one thread, each line once, as it was said. */
+  evidence: IncidentEvidence[];
+  /** Every canvas the reports carried - the drawing as it changed under them. */
+  drawings: (PlayerReportDrawing & { reportId: string })[];
   outcome: ReportOutcome;
   reviewedByUserId: string | null;
-  /** The reviewer's name, resolved when the case is read; null until decided
-      or once the account is gone. */
   reviewedBy: string | null;
   resolutionNote: string | null;
-  createdAt: string;
-  updatedAt: string;
   reviewedAt: string | null;
+  /** Which moderator action decided it; null while it waits. */
+  decisionGroupId: string | null;
+  /** What became of the picture this incident is about; null when it is not
+      about one. The decision is still about the picture the account carries
+      now, which is the one Remove picture acts on. */
+  picture: IncidentPicture | null;
+  /** Null on a first complaint, which is most of them. */
+  priorDecision: PriorDecision | null;
+}
+
+/** Where the incident happened, said the way a moderator would say it.
+
+`repeat` is the same fact in the grammar a second decision needs: what makes
+this complaint the same one as the last, said as a phrase rather than a
+label. */
+export const SCOPES: Record<
+  ReportScope,
+  { label: string; repeat: string }
+> = {
+  room: { label: "In a room", repeat: "in the same room" },
+  lobby: { label: "In the lobby", repeat: "in the lobby" },
+  profile: { label: "On their profile", repeat: "about their profile" },
+  unscoped: { label: "No room named", repeat: "with nothing cited" },
+};
+
+/** What a `profile` incident is actually about.
+
+The scope says where a complaint was made, and for the account's own name and
+picture that is one place — so on its own it cannot say which of the two was
+complained about, and naming either would be wrong half the time. The reasons
+can: an incident whose complaints all name one of them says so, and a mixed
+one falls back to the scope's neutral wording rather than picking a side. */
+export function scopeWords(incident: ModerationIncident): { label: string; repeat: string } {
+  const words = SCOPES[incident.scope];
+  if (incident.scope !== "profile") return words;
+  const reasons = new Set(incident.reasons);
+  if (reasons.size === 1 && reasons.has("inappropriate_name")) {
+    return { label: "Their name", repeat: "about their name" };
+  }
+  if (reasons.size === 1 && reasons.has("inappropriate_avatar")) {
+    return { label: "Their picture", repeat: "about their picture" };
+  }
+  return words;
+}
+
+/** A decision's recorded category, in the words a player reads.
+
+Written out rather than machine-shaped: this is the one place a moderation
+vocabulary is shown to the person it was applied to, and "inappropriate_name"
+is not a sentence anybody says. */
+/** The six a decision may be recorded as - the same words a report uses, so
+there is one moderation vocabulary rather than two to keep in step. */
+export const REPORT_REASONS: ReportReason[] = [
+  "harassment",
+  "offensive_drawing",
+  "inappropriate_name",
+  "cheating",
+  "spam",
+  "inappropriate_avatar",
+];
+
+const CATEGORY_WORDS: Record<string, string> = {
+  harassment: "harassment",
+  offensive_drawing: "an offensive drawing",
+  inappropriate_name: "an inappropriate name",
+  cheating: "cheating",
+  spam: "spam",
+  inappropriate_avatar: "an inappropriate picture",
+};
+
+/** A category as it arrived, or null. Unchecked by both compilers, so a value
+that is not one of the six is dropped rather than rendered as itself. */
+export function asReportReason(value: unknown): ReportReason | null {
+  return typeof value === "string" && (REPORT_REASONS as string[]).includes(value)
+    ? (value as ReportReason)
+    : null;
+}
+
+export function humanizeCategory(value: string): string {
+  return CATEGORY_WORDS[value] ?? value.replace(/_/g, " ");
+}
+
+/** The ledger cap a resolution note has to fit inside. */
+export const MAX_RESOLUTION_NOTE = 2000;
+
+/** The note a "decide it the same way again" carries.
+
+Whoever reads this case next gets what the moderator was looking at when they
+pressed the button, rather than a bare "dismissed" that sends them hunting for
+the decision it was deferring to. Composed rather than typed, because the whole
+point of the shortcut is that there is nothing left to say; the earlier note is
+quoted, because it is somebody else's words.
+
+The outcome's label and the formatted time are passed in rather than derived:
+how a decision is named and how a moment is written are the page's business,
+and both belong to the reader's own settings. */
+export function composeRepeatNote(
+  prior: PriorDecision,
+  outcomeLabel: string,
+  when: string | null,
+): string {
+  const head =
+    `Already ${outcomeLabel.toLowerCase()}` +
+    (when ? ` on ${when}` : "") +
+    (prior.decidedBy ? ` by ${prior.decidedBy}` : "") +
+    (prior.priorDecisions > 1 ? `, and ${prior.priorDecisions} times in all` : "") +
+    ".";
+  if (!prior.note) return head;
+  // The quote is what gives, so the head - which says what was decided and by
+  // whom - always survives the cap intact.
+  const room = MAX_RESOLUTION_NOTE - head.length - " Their note: “”".length;
+  if (room <= 1) return head;
+  const quoted =
+    prior.note.length <= room ? prior.note : `${prior.note.slice(0, room - 1)}…`;
+  return `${head} Their note: “${quoted}”`;
 }
 
 export interface UserBan {
@@ -173,11 +374,20 @@ export function submitPlayerReport(input: {
   return apiRequest("/api/reports", { method: "POST", body: input });
 }
 
-export function listModerationReports(status?: ReportStatus): Promise<{
-  reports: PlayerReport[];
-}> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest(`/api/moderation/reports${query}`);
+/** The queue as incidents: reports of one thing, read once.
+
+`limit` and `offset` page incidents rather than reports, because an incident
+is the unit a moderator reads and decides. */
+export function listModerationReports(
+  status?: ReportStatus,
+  input: { limit?: number; offset?: number } = {},
+): Promise<{ incidents: ModerationIncident[]; total: number; hasMore: boolean }> {
+  const query = new URLSearchParams();
+  if (status) query.set("status", status);
+  if (input.limit !== undefined) query.set("limit", String(input.limit));
+  if (input.offset !== undefined) query.set("offset", String(input.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return apiRequest(`/api/moderation/reports${suffix}`);
 }
 
 /** The drawing a report carries, in the wire format a live canvas uses. */
@@ -188,13 +398,15 @@ export function fetchReportDrawing(reportId: string): Promise<ArrayBuffer> {
 /** How many closed cases one page of the queue shows. */
 export const CLOSED_CASES_PAGE_SIZE = 25;
 
-/** Decided player and content reports as one stream, newest decision first.
+/** Decided incidents, player and content as one stream, newest decision first.
 
 Paged by the server rather than merged here, because closed cases accumulate
-for as long as the service runs and the newest are the ones worth reaching. */
+for as long as the service runs and the newest are the ones worth reaching. The
+page counts decisions: an incident five people reported is one entry here, as
+it was one entry in the queue. */
 export function listClosedCases(input: { limit?: number; offset?: number } = {}): Promise<{
-  players: PlayerReport[];
-  content: PromptContentReport[];
+  players: ModerationIncident[];
+  content: ContentIncident[];
   hasMore: boolean;
 }> {
   const limit = input.limit ?? CLOSED_CASES_PAGE_SIZE;
@@ -202,11 +414,13 @@ export function listClosedCases(input: { limit?: number; offset?: number } = {})
   return apiRequest(`/api/moderation/closed-cases?limit=${limit}&offset=${offset}`);
 }
 
+/** Decide an incident. The id names one of its reports; every report of the
+    incident is decided with it, under one note and one step-up. */
 export function reviewModerationReport(
   reportId: string,
   status: Exclude<ReportStatus, "pending">,
   note: string,
-): Promise<PlayerReport> {
+): Promise<ModerationIncident> {
   return apiRequest(`/api/moderation/reports/${reportId}`, {
     method: "PATCH",
     body: { status, note },
@@ -217,13 +431,20 @@ export function reviewModerationReport(
  * Take down the picture a report is about and block re-uploads for a while.
  * Reached through the report rather than the account (R-MOD-02).
  */
-export function removeReportedAvatar(reportId: string): Promise<{ ok: boolean; removed: boolean }> {
+export function removeReportedAvatar(reportId: string): Promise<{
+  ok: boolean;
+  removed: boolean;
+  /** When they may upload again, or null when this removal cost no wait. */
+  blockedUntil: string | null;
+}> {
   return apiRequest(`/api/moderation/reports/${reportId}/remove-avatar`, { method: "POST" });
 }
 
 export function createUserBan(input: {
   userId: string;
   reason: string;
+  /** The moderator's finding, when they chose to record one. */
+  category?: ReportReason;
   /** The report this was decided from, when it came from one. */
   reportId?: string;
   expiresAt?: string;
@@ -234,22 +455,35 @@ export function createUserBan(input: {
 /** A moderator warning waiting to be shown to its player. */
 export interface PendingWarning {
   id: string;
+  /** Which notice this is. A picture's removal comes through the warning
+      machinery because that is the shown-once surface a player already meets
+      - and it restricts uploading, so it must not carry a formal warning's
+      words about restricting nothing (R-AVA-08). */
+  kind: "warning" | "avatar_removal";
   reason: string;
+  /** What the moderator recorded this as, when they recorded anything. Their
+      finding, never the reporters' claim. Null on a decision taken without
+      one, which every notice has to read correctly without. */
+  category: ReportReason | null;
   createdAt: string;
-  /** The reported messages behind it - the player's own words. */
+  /** The reported messages behind it - the player's own words, from every
+      report the decision covered. */
   messages: { text: string; at: string | null }[];
-  /** The drawing the report carried, if one did - the player's own work. */
-  drawing: PlayerReportDrawing | null;
+  /** The canvases those reports carried, if any did - the player's own work. */
+  drawings: (PlayerReportDrawing & { reportId: string })[];
 }
 
-/** The drawing behind the caller's own warning. */
-export function fetchWarningDrawing(warningId: string): Promise<ArrayBuffer> {
-  return apiBinaryRequest(`/api/warnings/${warningId}/drawing`);
+/** One drawing behind the caller's own warning. */
+export function fetchWarningDrawing(
+  warningId: string,
+  reportId: string,
+): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/warnings/${warningId}/drawings/${reportId}`);
 }
 
-/** The drawing behind the caller's own suspension, reachable while suspended. */
-export function fetchSuspensionDrawing(): Promise<ArrayBuffer> {
-  return apiBinaryRequest("/api/suspension/drawing");
+/** One drawing behind the caller's own suspension, reachable while suspended. */
+export function fetchSuspensionDrawing(reportId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/suspension/drawings/${reportId}`);
 }
 
 /** Keep only a payload shaped like a drawing's metadata. */
@@ -270,10 +504,34 @@ export function reportedDrawing(value: unknown): PlayerReportDrawing | null {
 export function createUserWarning(input: {
   userId: string;
   reason: string;
+  category?: ReportReason;
   /** The report this was decided from, when it came from one. */
   reportId?: string;
 }): Promise<{ id: string; userId: string; reason: string; createdAt: string }> {
   return apiRequest("/api/moderation/warnings", { method: "POST", body: input });
+}
+
+/** How many of your own reports have been decided since you were last told.
+
+A count and nothing else: what was decided belongs to the reported player
+(R-MOD-20). */
+export function countReportsReviewed(): Promise<{
+  count: number;
+  /** Which reports the count was of, so the acknowledgement can name exactly
+      the ones a message was actually about. */
+  reportIds: string[];
+}> {
+  return apiRequest("/api/reports/reviewed");
+}
+
+export function acknowledgeReportsReviewed(reportIds: string[]): Promise<{
+  ok: boolean;
+  acknowledged: number;
+}> {
+  return apiRequest("/api/reports/reviewed/acknowledge", {
+    method: "POST",
+    body: { reportIds },
+  });
 }
 
 export function fetchPendingWarning(): Promise<{ warning: PendingWarning | null }> {
@@ -296,33 +554,54 @@ export function revokeUserBan(banId: string, reason: string): Promise<UserBan> {
   });
 }
 
-export interface PromptContentReport {
+/** One complaint about a piece of prompt content. The target it is about is
+    stated once on the incident above it, being shared by construction. */
+export interface ContentIncidentReport {
   id: string;
   reporterUserId: string | null;
+  reason: string;
+  details: string;
+  createdAt: string;
+}
+
+/** One reported list or prompt version, and every complaint about it.
+
+The target already names the incident, so unlike a player report there is no
+place or moment to bound it with - and no scope to record. */
+export interface ContentIncident {
+  /** The oldest report's id, which the review route accepts. */
+  id: string;
   reportedOwnerUserId: string | null;
   promptListId: string | null;
   promptVersionId: string | null;
   targetType: "list" | "prompt";
   listName: string | null;
   prompt: string | null;
-  reason: string;
-  details: string;
+  reporterCount: number;
+  reasons: string[];
+  openedAt: string;
+  latestReportedAt: string;
   status: ReportStatus;
+  reports: ContentIncidentReport[];
   outcome: ReportOutcome;
   reviewedByUserId: string | null;
   reviewedBy: string | null;
   resolutionNote: string | null;
   moderationState: "active" | "hidden" | null;
-  createdAt: string;
-  updatedAt: string;
   reviewedAt: string | null;
+  decisionGroupId: string | null;
 }
 
-export function listPromptContentReports(status?: ReportStatus): Promise<{
-  reports: PromptContentReport[];
-}> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest(`/api/moderation/prompt-content-reports${query}`);
+export function listPromptContentReports(
+  status?: ReportStatus,
+  input: { limit?: number; offset?: number } = {},
+): Promise<{ incidents: ContentIncident[]; total: number; hasMore: boolean }> {
+  const query = new URLSearchParams();
+  if (status) query.set("status", status);
+  if (input.limit !== undefined) query.set("limit", String(input.limit));
+  if (input.offset !== undefined) query.set("offset", String(input.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return apiRequest(`/api/moderation/prompt-content-reports${suffix}`);
 }
 
 /** Resolve or dismiss a content report.
@@ -334,7 +613,7 @@ export function reviewPromptContentReport(
   status: Exclude<ReportStatus, "pending">,
   note: string,
   moderationState?: "active" | "hidden",
-): Promise<PromptContentReport> {
+): Promise<ContentIncident> {
   return apiRequest(`/api/moderation/prompt-content-reports/${reportId}`, {
     method: "PATCH",
     body: { status, note, ...(moderationState ? { moderationState } : {}) },

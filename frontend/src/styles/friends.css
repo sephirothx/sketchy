@@ -1,0 +1,133 @@
+/* The friends surface: three short lists, over whatever page it was opened
+   from (R-FRIEND-10). Narrower than Settings and sized to its content rather
+   than to a fixed height - it has no tabs to keep from jumping, and a reader
+   with one request should not get a sheet mostly full of nothing. */
+
+.friends-overlay {
+  align-items: center;
+  padding: 16px;
+  /* The same layer Settings sits on, and for the same reasons: above the
+     email reminder (1090), below the connection (1100) and deploy (1150)
+     banners. The two are never open at once. */
+  z-index: 1095;
+}
+
+.modal-card.friends-modal-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100dvh - 32px);
+  padding: 14px 22px 18px;
+  border-radius: 16px;
+  /* `.modal-card` centres its text for the confirmation dialogs it was
+     built for. This is a list of names beside their avatars, which reads
+     down a left edge. */
+  text-align: left;
+}
+
+.friends-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1.5px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
+}
+
+.friends-modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  color: var(--ink);
+}
+
+.friends-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 4px;
+}
+
+.friends-empty {
+  margin: 0;
+  padding: 8px 0 4px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.friends-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.friends-section-count {
+  font-variant-numeric: tabular-nums;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--well);
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.friends-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.friends-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+
+.friends-row:hover {
+  background: var(--well);
+}
+
+.friends-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.friends-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* "Request sent" where a button would be, so the row keeps its shape. */
+.friend-button-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}

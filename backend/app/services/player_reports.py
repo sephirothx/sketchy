@@ -34,7 +34,7 @@ from app.db.models import (
     UserBlock,
     generate_uuid,
 )
-from app.domain_values import AuditTargetType
+from app.domain_values import AuditTargetType, ReportScope
 from app.game import Phase
 from app.rooms import Room
 
@@ -146,6 +146,124 @@ async def drawing_evidence_for_report(
     return await session.scalar(statement)
 
 
+async def decided_incident_report_ids(
+    session: AsyncSession, source_report_id: UUID | None
+) -> list[UUID]:
+    """Every report the decision behind this consequence covered.
+
+    A warning or suspension names one report, but the decision that issued it
+    may have covered a whole incident (#620). `decision_group_id` is what
+    records that, so it is what the notice reads against: the reports are
+    the ones one moderator decided in one action, which is also what keeps
+    them all about the same account.
+
+    An empty list for a consequence issued without a report, and a list of
+    one for a report decided on its own.
+    """
+    if source_report_id is None:
+        return []
+    group = await session.scalar(
+        select(PlayerReport.decision_group_id).where(
+            PlayerReport.id == source_report_id
+        )
+    )
+    if group is None:
+        return [source_report_id]
+    return list(
+        (
+            await session.scalars(
+                select(PlayerReport.id)
+                .where(PlayerReport.decision_group_id == group)
+                .order_by(PlayerReport.created_at, PlayerReport.id)
+            )
+        ).all()
+    )
+
+
+async def cited_notice_messages(
+    session: AsyncSession, source_report_id: UUID | None
+) -> list[dict]:
+    """The reported player's own words, as a Warning or Suspension shows them.
+
+    Cited lines only (R-MOD-12): what other people said around them is a
+    moderator's context, not something to show the player back. Every cited
+    line the decision covered, because a consequence decided over five
+    complaints is about all of what they said rather than whichever complaint
+    happened to be named - and because they are all the player's own words,
+    widening this cannot show them somebody else's.
+
+    Deduplicated on the message itself, since two reporters citing one line
+    is one thing said once, and ordered as it was said rather than by which
+    report reached it first. Only the text and the time: the evidence is
+    theirs by construction, so nothing here can name who reported them.
+    """
+    report_ids = await decided_incident_report_ids(session, source_report_id)
+    if not report_ids:
+        return []
+    rows = (
+        await session.scalars(
+            select(PlayerReportMessageEvidence)
+            .where(
+                PlayerReportMessageEvidence.report_id.in_(report_ids),
+                PlayerReportMessageEvidence.role == "cited",
+            )
+            .order_by(
+                PlayerReportMessageEvidence.message_created_at,
+                PlayerReportMessageEvidence.source_message_snapshot_id,
+            )
+        )
+    ).all()
+    seen: set[UUID] = set()
+    messages: list[dict] = []
+    for row in rows:
+        if row.source_message_snapshot_id in seen:
+            continue
+        seen.add(row.source_message_snapshot_id)
+        messages.append(
+            {
+                "text": row.text_snapshot,
+                "at": (
+                    row.message_created_at.isoformat()
+                    if row.message_created_at
+                    else None
+                ),
+            }
+        )
+    return messages
+
+
+async def notice_drawings(
+    session: AsyncSession, source_report_id: UUID | None
+) -> list[dict]:
+    """The canvases the decision's reports carried, oldest report first.
+
+    Their own work, shown back for the reason their own words are (R-BAN-08,
+    R-MOD-14). Several, when several reporters each attached the canvas as it
+    stood when they sent: that is the drawing as it changed under them, and
+    picking one of them would be picking arbitrarily. Metadata only - each
+    entry names the report whose bytes a reviewer or the player may then
+    fetch.
+    """
+    report_ids = await decided_incident_report_ids(session, source_report_id)
+    if not report_ids:
+        return []
+    rows = (
+        await session.scalars(
+            select(PlayerReportDrawingEvidence)
+            .join(
+                PlayerReport,
+                PlayerReport.id == PlayerReportDrawingEvidence.report_id,
+            )
+            .where(PlayerReportDrawingEvidence.report_id.in_(report_ids))
+            .order_by(PlayerReport.created_at, PlayerReport.id)
+        )
+    ).all()
+    return [
+        {"reportId": str(row.report_id), **(drawing_evidence_payload(row) or {})}
+        for row in rows
+    ]
+
+
 def record_player_report(
     session: AsyncSession,
     *,
@@ -153,9 +271,12 @@ def record_player_report(
     reported_user_id: UUID,
     game_id: UUID | None,
     turn_id: UUID | None,
+    scope: ReportScope,
+    room_instance_id: UUID | None,
     reason: str,
     details: str,
     messages: list[RoomMessage],
+    reported_avatar_key: str | None = None,
     context_messages: list[RoomMessage] | None = None,
     context_snapshot: dict | None = None,
     drawing: CapturedDrawing | None = None,
@@ -175,6 +296,17 @@ def record_player_report(
     (`drawing_from_live_room`); it is kept for as long as the report is, for
     the reason the messages are.
 
+    `scope` and `room_instance_id` say where the complaint happened, so this
+    report can be read and decided beside the others about the same incident
+    (#620). The caller works it out from something it has already proved - the
+    live room it holds, or the one room instance every cited line came from -
+    and never from a client's claim about where it was.
+
+    `reported_avatar_key` is the picture a complaint about a picture was
+    about, read off the account here rather than accepted from a reporter. It
+    is never used to fetch that picture back - a replaced avatar is deleted -
+    only to tell a reviewer the picture has changed since (R-AVA-04).
+
     Returns the unflushed row. Its `created_at` comes from the database, so a
     caller that needs the timestamp has to flush before reading it - returning
     a snapshot from here would hand back a null.
@@ -185,6 +317,9 @@ def record_player_report(
         reported_user_id=reported_user_id,
         game_id=game_id,
         turn_id=turn_id,
+        scope=scope.value,
+        room_instance_id=room_instance_id,
+        reported_avatar_key=reported_avatar_key,
         reason=reason,
         details=details,
         context_snapshot={

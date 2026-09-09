@@ -8,6 +8,8 @@ import {
   reportedDrawing,
   type PendingWarning,
 } from "../lib/moderation";
+import { asReportReason, humanizeCategory } from "../lib/moderation";
+import { ruleAnchorFor } from "../content/rules";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";
@@ -24,7 +26,9 @@ function warningFromPayload(payload: unknown): PendingWarning | null {
   }
   return {
     id: warning.id,
+    kind: warning.kind === "avatar_removal" ? "avatar_removal" : "warning",
     reason: warning.reason,
+    category: asReportReason(warning.category),
     createdAt: typeof warning.createdAt === "string" ? warning.createdAt : "",
     messages: Array.isArray(warning.messages)
       ? warning.messages.filter(
@@ -32,7 +36,15 @@ function warningFromPayload(payload: unknown): PendingWarning | null {
             !!line && typeof (line as { text?: unknown }).text === "string",
         )
       : [],
-    drawing: reportedDrawing(warning.drawing),
+    drawings: Array.isArray(warning.drawings)
+      ? warning.drawings.flatMap((entry) => {
+          const drawing = reportedDrawing(entry);
+          const reportId = (entry as { reportId?: unknown })?.reportId;
+          return drawing && typeof reportId === "string"
+            ? [{ ...drawing, reportId }]
+            : [];
+        })
+      : [],
   };
 }
 
@@ -80,6 +92,10 @@ export function WarningNotice() {
 
   if (!warning) return null;
 
+  // A removal restricts something; a formal warning restricts nothing. They
+  // share this surface and must not share its words.
+  const isRemoval = warning.kind === "avatar_removal";
+
   async function dismiss() {
     if (busy || !warning) return;
     setBusy(true);
@@ -103,12 +119,38 @@ export function WarningNotice() {
         aria-labelledby="warning-title"
       >
         <h3 className="modal-title" id="warning-title">
-          A moderator warning
+          {isRemoval ? "Your picture was removed" : "A moderator warning"}
         </h3>
+        {warning.category && (
+          <p className="modal-body notice-category" data-testid="warning-category">
+            {/* The rule itself, not just its name: a decision you can read
+                the rule behind is one you can check rather than only be
+                told (R-RULES-02). */}
+            Recorded as{" "}
+            <a href={ruleAnchorFor(warning.category)}>
+              {humanizeCategory(warning.category)}
+            </a>
+          </p>
+        )}
         <p className="modal-body suspension-reason">{warning.reason}</p>
+        {/* A removal shares this surface and nothing else. Saying "nothing is
+            restricted" of one would be false - it restricts uploading, and by
+            more each time (R-AVA-08) - so a removal says what it restricts,
+            which its own words above already carry, and stops there. */}
         <p className="modal-body">
-          Nothing on your account is restricted. A report about your behaviour
-          was reviewed, and this is the outcome.
+          {isRemoval ? (
+            "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected."
+          ) : (
+            <>
+              A report about your behaviour was reviewed, and this is the
+              outcome.
+              {/* What a warning is *for* - the step between nothing and a
+                  suspension - said in general terms. Naming a ladder would
+                  promise one nobody is bound to and nothing enforces. */}{" "}
+              Nothing is restricted, but a further report may lead to your
+              account being suspended.
+            </>
+          )}
         </p>
         {warning.messages.length > 0 && (
           <>
@@ -133,18 +175,22 @@ export function WarningNotice() {
             </ul>
           </>
         )}
-        {warning.drawing && (
+        {warning.drawings.length > 0 && (
           <>
             <p className="modal-body suspension-evidence-label">
-              The drawing this was about:
+              {warning.drawings.length === 1
+                ? "The drawing this was about:"
+                : "The drawings this was about:"}
             </p>
-            <ReportedDrawing
-              key={warning.id}
-              className="suspension-drawing"
-              load={() => fetchWarningDrawing(warning.id)}
-              label={`Your drawing of ${warning.drawing.prompt}, as it was reported`}
-              caption={<>You were asked to draw <strong>{warning.drawing.prompt}</strong>.</>}
-            />
+            {warning.drawings.map((drawing) => (
+              <ReportedDrawing
+                key={drawing.reportId}
+                className="suspension-drawing"
+                load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
+                label={`Your drawing of ${drawing.prompt}, as it was reported`}
+                caption={<>You were asked to draw <strong>{drawing.prompt}</strong>.</>}
+              />
+            ))}
           </>
         )}
         <button

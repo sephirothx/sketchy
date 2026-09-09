@@ -263,6 +263,31 @@ class ReportStatus(StrEnum):
     DISMISSED = "dismissed"
 
 
+class ReportScope(StrEnum):
+    """Where a report's complaint happened, so reports of one incident meet.
+
+    A room instance is what "the same incident" means in this game: it bounds
+    the complaint in place and, because the instance ends when the room does,
+    in time as well - without a window anybody has to pick a number for. The
+    lobby has no instance to name, so every lobby report about one account
+    shares the one bucket. `UNSCOPED` is a report that cited nothing and so
+    names no place to look; it stands alone rather than joining a bucket it
+    only resembles.
+
+    `PROFILE` is a complaint about the account itself rather than about
+    anything it said - today, its picture, which is reportable from the lobby
+    and from the profile page and belongs to no room and no line of chat. It
+    has no instance either, so every such report about one account shares one
+    bucket: several people objecting to one picture are objecting to one
+    thing, whichever screen each of them was looking at.
+    """
+
+    ROOM = "room"
+    LOBBY = "lobby"
+    PROFILE = "profile"
+    UNSCOPED = "unscoped"
+
+
 class BugReportArea(StrEnum):
     """Where in the product a bug was met.
 
@@ -516,6 +541,11 @@ BUG_REPORT_SCREENSHOT_STATUSES = tuple(
     status.value for status in BugReportScreenshotStatus
 )
 REPORT_STATUSES = tuple(status.value for status in ReportStatus)
+REPORT_SCOPES = tuple(scope.value for scope in ReportScope)
+# What a `user_warnings` row is. A formal warning restricts nothing and says
+# so; a picture's removal restricts uploads and says for how long. They share
+# the machinery - shown once, acknowledged - and nothing else (R-AVA-08).
+WARNING_KINDS = ("warning", "avatar_removal")
 AUDIT_TARGET_TYPES = tuple(target.value for target in AuditTargetType)
 GAME_OUTCOMES = tuple(outcome.value for outcome in GameOutcome)
 GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)

@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -32,6 +32,7 @@ from app.canvas_storage import (
 )
 from app.services.player_reports import (
     context_around,
+    decided_incident_report_ids,
     drawing_evidence_for_report,
     drawing_evidence_payload,
     record_player_report,
@@ -45,6 +46,7 @@ from app.db.models import (
     GameRecord,
     PlayerReport,
     PlayerReportDrawingEvidence,
+    PlayerReportMessageEvidence,
     PromptContentReport,
     PromptList,
     PromptListRevision,
@@ -57,6 +59,16 @@ from app.db.models import (
     UserWarning,
     generate_uuid,
 )
+from app.services.incidents import (
+    ContentIncident,
+    Incident,
+    IncidentKey,
+    content_incident_key,
+    group_by_decision,
+    group_into_content_incidents,
+    group_into_incidents,
+    incident_key,
+)
 from app.domain_values import (
     AccountState,
     AuditTargetType,
@@ -65,6 +77,7 @@ from app.domain_values import (
     PromptContentReportReason,
     PromptListVisibility,
     ReportReason,
+    ReportScope,
     ReportStatus,
     UserRole,
 )
@@ -76,11 +89,19 @@ MAX_REPORT_CONTEXT_BYTES = 32_768
 MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
+# How many decided reports one message names at once. A reporter with more
+# than this waiting hears about the rest on the next visit; the message is a
+# count, so the number is what matters and the list is only there to say which
+# ones it counted.
+MAX_REVIEWED_ANNOUNCED = 100
+# A backstop on the open queue's whole read, not a page: grouping needs every
+# report of an incident in hand at once, and a queue this long means something
+# is wrong upstream rather than that a moderator wants page two.
+MAX_OPEN_QUEUE_REPORTS = 5_000
 # How far back the closed queue can be paged. Bounded because each page is
-# answered by merging the two report tables in memory from their newest
-# decided row down to the page asked for; forty pages of twenty-five is
-# further back than a case is looked for, and past that the ledger is the
-# record.
+# answered by merging the two report tables' newest decisions in memory down
+# to the page asked for; forty pages of twenty-five is further back than a
+# case is looked for, and past that the ledger is the record.
 MAX_CLOSED_CASES_OFFSET = 1_000
 OnUserBanned = Callable[[str], Awaitable[None]]
 OnUserWarned = Callable[[str], Awaitable[None]]
@@ -180,6 +201,8 @@ class BanBody(BaseModel):
 
     user_id: UUID = Field(alias="userId")
     reason: str = Field(min_length=1, max_length=255)
+    # Optional: a decision is never blocked on it (R-MOD-19).
+    category: ReportReason | None = Field(default=None)
     expires_at: datetime | None = Field(default=None, alias="expiresAt")
     # Optional: a suspension can be issued directly. When it comes from a
     # report, recording which one is what lets the suspended player be shown
@@ -276,6 +299,14 @@ async def _reported_player_context(
             "displayName": user.display_name,
             # So a report about a picture can be judged from the queue.
             "avatarUrl": avatar_url(user.avatar_key),
+            # Not shown; compared. A report about a picture recorded which
+            # one, and a reviewer has to be told when it is no longer that
+            # picture (R-AVA-04).
+            "_avatarKey": user.avatar_key,
+            # Not shown either: read into the picture block below, where it
+            # is stated as a date rather than as a guess about how long a
+            # block lasts - which is no longer one length (R-AVA-08).
+            "_avatarBlockedUntil": user.avatar_upload_blocked_until,
             "registered": user.state == AccountState.REGISTERED.value,
             "createdAt": user.created_at.isoformat(),
             # This report itself is not "prior".
@@ -293,6 +324,86 @@ class _Decision:
 
     outcome: str
     reviewed_by: str | None
+
+
+async def _prior_decisions(
+    session: AsyncSession, incidents: list[Incident]
+) -> dict[UUID, dict]:
+    """The last decision taken about each incident's own key, if there was one.
+
+    A decided incident is closed for good (R-MOD-07), so a fresh complaint
+    about the same person in the same place is a new incident and not a
+    reopening - that is R-MOD-05 working as intended. What it must not be is
+    a case that arrives looking untouched: without this, a moderator who
+    dismissed something ten minutes ago reads the identical complaint back
+    with nothing to say so, and either decides it twice or works out the
+    repetition from the account's prior counts.
+
+    So each pending incident carries what was last decided about its exact
+    key - the outcome, when, by whom, and the note, which is written for
+    other moderators and is the whole reason one is required. Keyed rather
+    than account-wide on purpose: the standing counts beside it already say
+    "this account has come up before", and the distinct thing worth saying
+    here is "this, in this room, was already dealt with".
+    """
+    pending = [
+        incident
+        for incident in incidents
+        if incident.reports[0].status == ReportStatus.PENDING.value
+        and incident.reports[0].reported_user_id is not None
+        and incident.reports[0].scope != ReportScope.UNSCOPED.value
+    ]
+    if not pending:
+        return {}
+    keys = {incident_key(incident.reports[0]) for incident in pending}
+    clauses = [
+        and_(
+            PlayerReport.reported_user_id == key.reported_user_id,
+            PlayerReport.scope == key.scope,
+            PlayerReport.room_instance_id.is_(None)
+            if key.room_instance_id is None
+            else PlayerReport.room_instance_id == key.room_instance_id,
+        )
+        for key in keys
+    ]
+    decided = (
+        await session.scalars(
+            select(PlayerReport)
+            .where(
+                PlayerReport.status != ReportStatus.PENDING.value,
+                PlayerReport.decision_group_id.is_not(None),
+                or_(*clauses),
+            )
+            # Time-ordered ids, so the newest decision is the last group seen.
+            .order_by(PlayerReport.decision_group_id.asc())
+        )
+    ).all()
+    if not decided:
+        return {}
+    outcomes = await _decisions(session, list(decided))
+    # One representative row per decision group - they agree by construction -
+    # and then the newest group per key, plus how many there have been.
+    newest: dict[IncidentKey, PlayerReport] = {}
+    counts: dict[IncidentKey, set[UUID]] = {}
+    for report in decided:
+        key = incident_key(report)
+        newest[key] = report
+        counts.setdefault(key, set()).add(report.decision_group_id)
+    answer: dict[UUID, dict] = {}
+    for incident in pending:
+        key = incident_key(incident.reports[0])
+        last = newest.get(key)
+        if last is None:
+            continue
+        decision = outcomes.get(last.id) or _Decision(last.status, None)
+        answer[incident.id] = {
+            "outcome": decision.outcome,
+            "decidedAt": last.reviewed_at.isoformat() if last.reviewed_at else None,
+            "decidedBy": decision.reviewed_by,
+            "note": last.resolution_note,
+            "priorDecisions": len(counts.get(key, ())),
+        }
+    return answer
 
 
 async def _decisions(
@@ -412,8 +523,8 @@ def _drawing_response(evidence: PlayerReportDrawingEvidence | None, *, who: str)
     )
 
 
-# Everything a report payload reads off its row. Any query that ends in
-# `_report_payload` needs both, since a lazy load is an error on an async
+# Everything an incident payload reads off its reports. Any query that ends in
+# `_incident_payload` needs both, since a lazy load is an error on an async
 # session; the drawing's bytes stay deferred behind them.
 _REPORT_PAYLOAD_LOADS = (
     selectinload(PlayerReport.message_evidence),
@@ -421,120 +532,393 @@ _REPORT_PAYLOAD_LOADS = (
 )
 
 
-def _decided_at(report: PlayerReport | PromptContentReport) -> datetime:
-    """When a case was closed: the review, or failing that the last write."""
-    return report.reviewed_at or report.updated_at
-
-
-def _report_payload(
-    report: PlayerReport,
-    player_context: dict[UUID, dict] | None = None,
-    decisions: dict[UUID, _Decision] | None = None,
+def _evidence_line_payload(
+    evidence: PlayerReportMessageEvidence, *, cited_by: tuple[UUID, ...] | None = None
 ) -> dict:
-    decision = (decisions or {}).get(report.id) or _Decision(report.status, None)
+    """One copied line. `citedBy` names the reports that complained about it.
+
+    Present only on an incident's merged thread, where several reports meet
+    and a reader has to be able to tell a line somebody complained about from
+    a line the server copied around it. `role` says which of the two it is:
+    on the merged thread a line cited by any report in the incident is cited
+    for the whole of it.
+    """
     return {
-        "reportedPlayer": (
-            (player_context or {}).get(report.reported_user_id)
-            if report.reported_user_id
-            else None
+        "sourceMessageId": str(evidence.source_message_snapshot_id),
+        "sourceAvailable": evidence.source_message_id is not None,
+        "gameId": (
+            str(evidence.game_id_snapshot) if evidence.game_id_snapshot else None
         ),
-        "id": str(report.id),
-        "reporterUserId": (
-            str(report.reporter_user_id) if report.reporter_user_id else None
+        "turnId": (
+            str(evidence.turn_id_snapshot) if evidence.turn_id_snapshot else None
         ),
-        "reportedUserId": (
-            str(report.reported_user_id) if report.reported_user_id else None
+        "senderUserId": (
+            str(evidence.sender_user_id) if evidence.sender_user_id else None
         ),
-        "gameId": str(report.game_id) if report.game_id else None,
-        "turnId": str(report.turn_id) if report.turn_id else None,
-        "reason": report.reason,
-        "details": report.details,
-        "contextSnapshot": report.context_snapshot,
-        "messageEvidence": [
-            {
-                "sourceMessageId": str(evidence.source_message_snapshot_id),
-                "sourceAvailable": evidence.source_message_id is not None,
-                "gameId": (
-                    str(evidence.game_id_snapshot)
-                    if evidence.game_id_snapshot
-                    else None
-                ),
-                "turnId": (
-                    str(evidence.turn_id_snapshot)
-                    if evidence.turn_id_snapshot
-                    else None
-                ),
-                "senderUserId": (
-                    str(evidence.sender_user_id)
-                    if evidence.sender_user_id
-                    else None
-                ),
-                "senderDisplayName": evidence.sender_display_name_snapshot,
-                "senderNameColor": evidence.sender_name_color_snapshot,
-                "senderWasAnonymous": evidence.sender_is_anonymous_snapshot,
-                "messageKind": evidence.message_kind,
-                "audience": evidence.audience,
-                "nearMissKind": evidence.near_miss_kind,
-                "role": evidence.role,
-                "text": evidence.text_snapshot,
-                "messageCreatedAt": evidence.message_created_at.isoformat(),
-                "copiedAt": evidence.copied_at.isoformat(),
-            }
-            for evidence in report.message_evidence
-        ],
-        "drawing": drawing_evidence_payload(report.drawing_evidence),
-        "status": report.status,
-        # One word for what was done: `dismissed`, `warned`, `suspended`, or a
-        # plain `resolved`; `pending` until then.
-        "outcome": decision.outcome,
-        "reviewedByUserId": (
-            str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
+        "senderDisplayName": evidence.sender_display_name_snapshot,
+        "senderNameColor": evidence.sender_name_color_snapshot,
+        "senderWasAnonymous": evidence.sender_is_anonymous_snapshot,
+        "messageKind": evidence.message_kind,
+        "audience": evidence.audience,
+        "nearMissKind": evidence.near_miss_kind,
+        "role": (
+            evidence.role
+            if cited_by is None
+            else ("cited" if cited_by else "context")
         ),
-        "reviewedBy": decision.reviewed_by,
-        "resolutionNote": report.resolution_note,
-        "createdAt": report.created_at.isoformat(),
-        "updatedAt": report.updated_at.isoformat(),
-        "reviewedAt": report.reviewed_at.isoformat() if report.reviewed_at else None,
+        "text": evidence.text_snapshot,
+        "messageCreatedAt": evidence.message_created_at.isoformat(),
+        "copiedAt": evidence.copied_at.isoformat(),
+        **(
+            {"citedBy": [str(report_id) for report_id in cited_by]}
+            if cited_by is not None
+            else {}
+        ),
     }
 
 
-def _prompt_content_report_payload(
-    report: PromptContentReport, decisions: dict[UUID, _Decision] | None = None
-) -> dict:
-    decision = (decisions or {}).get(report.id) or _Decision(report.status, None)
+def _accounts_with_no_picture(
+    reports: list[PlayerReport], player_context: dict[UUID, dict]
+) -> set[UUID]:
+    """Accounts on this page complained about over a picture that is now gone.
+
+    Narrow on purpose: the ledger is only read for the accounts where "gone"
+    is actually ambiguous, so a queue of ordinary reports asks nothing extra
+    of it.
+    """
     return {
-        "id": str(report.id),
-        "reporterUserId": (
-            str(report.reporter_user_id) if report.reporter_user_id else None
+        report.reported_user_id
+        for report in reports
+        if report.reported_avatar_key is not None
+        and report.reported_user_id is not None
+        and player_context.get(report.reported_user_id, {}).get("_avatarKey") is None
+    }
+
+
+async def _avatar_removals(
+    session: AsyncSession, user_ids: set[UUID]
+) -> dict[UUID, dict]:
+    """The last time each account's picture was taken down, and by whom.
+
+    Read from the ledger rather than guessed from the account: a null
+    `avatar_key` says the picture is gone and nothing else, and "gone" covers
+    two different things a moderator must not have to tell apart by eye - a
+    removal somebody carried out, very possibly their own a minute ago, and a
+    player quietly taking their own picture down, which is not a punishment
+    and sets no block (R-AVA-04).
+
+    `avatar_upload_blocked_until` is not used for this even though a
+    moderator's removal sets it, because the block is applied even when there
+    was nothing to remove; it says a removal happened, not that this picture
+    was what it removed.
+    """
+    if not user_ids:
+        return {}
+    events = (
+        await session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.event_type == "avatar.removed",
+                AuditEvent.target_user_id.in_(user_ids),
+            )
+            .order_by(AuditEvent.created_at.asc())
+        )
+    ).all()
+    # Assigned in order, so the newest removal per account is the one left.
+    return {
+        event.target_user_id: {
+            # Snake_case deliberately: this dict is internal, and a camelCase
+            # key here would read as a wire name to the contract check.
+            "by_moderator": bool((event.details or {}).get("by_moderator")),
+            "at": event.created_at.isoformat() if event.created_at else None,
+            "report_id": (event.details or {}).get("report_id"),
+        }
+        for event in events
+        if event.target_user_id is not None
+    }
+
+
+def _aware_utc(value: datetime | None) -> datetime | None:
+    """A stored timestamp as an aware one. SQLite hands back naive datetimes,
+    and comparing one to `now()` raises rather than answering."""
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
+def _picture_status(report: PlayerReport, live_avatar_key: str | None) -> str | None:
+    """What became of the picture one complaint was about.
+
+    `None` for a report that named no picture: it has none to have changed,
+    and would otherwise read as changed the moment the account uploaded one.
+    """
+    if report.reported_avatar_key is None:
+        return None
+    if live_avatar_key is None:
+        return "removed"
+    if report.reported_avatar_key == live_avatar_key:
+        return "same"
+    return "replaced"
+
+
+def _incident_picture(
+    incident: Incident,
+    live_avatar_key: str | None,
+    removal: dict | None,
+    blocked_until: datetime | None = None,
+) -> dict | None:
+    """What became of the picture this incident is about, said once.
+
+    Null when no complaint here named a picture. `removed` is the state that
+    needed telling apart: a picture that is simply gone read as "a different
+    picture now", which is the opposite of what a moderator had just done to
+    it. So the removal says whether somebody carried it out, when, and
+    whether it was from this case - which is the one they are most likely to
+    be looking at when they wonder.
+    """
+    named = [
+        status
+        for status in (
+            _picture_status(report, live_avatar_key) for report in incident.reports
+        )
+        if status is not None
+    ]
+    if not named:
+        return None
+    if live_avatar_key is None:
+        detail = removal or {}
+        report_id = detail.get("report_id")
+        # The date, not a duration: the wait grows with how many pictures a
+        # moderator has taken down from this account (R-AVA-08), so there is
+        # no single length a reader could be told instead. Null once it has
+        # passed, which is the same as never having been blocked.
+        blocked = _aware_utc(blocked_until)
+        still_blocked = blocked is not None and blocked > datetime.now(timezone.utc)
+        return {
+            "status": "removed",
+            "removedByModerator": detail.get("by_moderator", False),
+            "removedAt": detail.get("at"),
+            "removedFromThisIncident": report_id is not None
+            and report_id in {str(report.id) for report in incident.reports},
+            "uploadBlockedUntil": blocked.isoformat() if still_blocked else None,
+        }
+    # Several reporters can name several pictures - one is swapped while the
+    # complaints are still arriving - so the incident is only unchanged when
+    # every complaint that named one named the one still there.
+    return {
+        "status": "same" if all(status == "same" for status in named) else "replaced",
+        "removedByModerator": False,
+        "removedAt": None,
+        "removedFromThisIncident": False,
+        "uploadBlockedUntil": None,
+    }
+
+
+def _incident_payload(
+    incident: Incident,
+    player_context: dict[UUID, dict] | None = None,
+    decisions: dict[UUID, _Decision] | None = None,
+    prior: dict[UUID, dict] | None = None,
+    removals: dict[UUID, dict] | None = None,
+) -> dict:
+    """One incident as a queue entry: who it is about, who complained, and
+    the whole of what they complained about, read once.
+
+    `reporterCount` is shown and deliberately does not order anything. The
+    reports keep their own reasons, words and reporters, because those differ
+    and a moderator reads them; what they no longer keep is a copy each of
+    the evidence, which is the same thread seen from several seats and is
+    merged above them.
+    """
+    first = incident.reports[0]
+    context = (
+        (player_context or {}).get(first.reported_user_id)
+        if first.reported_user_id
+        else None
+    )
+    live_avatar_key = (context or {}).get("_avatarKey")
+    blocked_until = (context or {}).get("_avatarBlockedUntil")
+    shown_context = (
+        {
+            key: value
+            for key, value in context.items()
+            if key not in ("_avatarKey", "_avatarBlockedUntil")
+        }
+        if context
+        else None
+    )
+    return {
+        "id": str(incident.id),
+        "reportedPlayer": shown_context,
+        # What became of the picture this incident is about, when it is about
+        # one. The decision is still about the picture the account carries
+        # now, which is what Remove picture acts on - this exists so that is
+        # a choice rather than a substitution nobody mentioned, and so a
+        # picture a moderator has already taken down does not read as merely
+        # a different one.
+        "picture": _incident_picture(
+            incident,
+            live_avatar_key,
+            (removals or {}).get(first.reported_user_id)
+            if first.reported_user_id
+            else None,
+            blocked_until,
         ),
+        "reportedUserId": (
+            str(first.reported_user_id) if first.reported_user_id else None
+        ),
+        "scope": first.scope,
+        "reporterCount": len(incident.reports),
+        "reasons": list(incident.reasons),
+        "openedAt": incident.opened_at.isoformat(),
+        "latestReportedAt": incident.latest_at.isoformat(),
+        "status": first.status,
+        "reports": [
+            {
+                "id": str(report.id),
+                "reporterUserId": (
+                    str(report.reporter_user_id) if report.reporter_user_id else None
+                ),
+                "reason": report.reason,
+                "details": report.details,
+                "contextSnapshot": report.context_snapshot,
+                "gameId": str(report.game_id) if report.game_id else None,
+                "turnId": str(report.turn_id) if report.turn_id else None,
+                "createdAt": report.created_at.isoformat(),
+                "drawing": drawing_evidence_payload(report.drawing_evidence),
+                # True when this complaint was about a picture the account no
+                # longer carries. The old one is gone - an upload deletes the
+                # one it replaces - so this says the moderator is looking at a
+                # different picture, and never pretends to show the old one.
+                "pictureStatus": _picture_status(report, live_avatar_key),
+            }
+            for report in incident.reports
+        ],
+        "evidence": [
+            _evidence_line_payload(line.evidence, cited_by=line.cited_by)
+            for line in incident.evidence
+        ],
+        "drawings": [
+            {
+                "reportId": str(report.id),
+                **(drawing_evidence_payload(report.drawing_evidence) or {}),
+            }
+            for report in incident.drawings
+        ],
+        # What was last decided about this same incident, when there has been
+        # one. Null on a first complaint, which is most of them.
+        "priorDecision": (prior or {}).get(incident.id),
+        **_incident_decision(incident, decisions),
+    }
+
+
+def _incident_decision(
+    incident: Incident, decisions: dict[UUID, _Decision] | None
+) -> dict:
+    """What was done about the incident, once it has been decided.
+
+    Reviewer, note and moment are read from the first report, because one
+    decision writes all three onto every report it covered and they therefore
+    agree.
+
+    The **outcome** does not, and cannot be read the same way. A warning or a
+    suspension names the single report the moderator was looking at
+    (`source_report_id`), so only that report knows what was done; every other
+    one of the incident carries a bare `resolved`. Read from the first alone,
+    an incident decided from any other complaint would report itself resolved
+    while the player it is about is suspended. So the outcome is whatever a
+    consequence said about any report in the group, the rest having nothing to
+    say.
+    """
+    first = incident.reports[0]
+    by_id = decisions or {}
+    named = [
+        found
+        for report in incident.reports
+        if (found := by_id.get(report.id)) is not None
+        and found.outcome not in (first.status, ReportStatus.RESOLVED.value)
+    ]
+    decision = named[0] if named else (by_id.get(first.id) or _Decision(first.status, None))
+    return {
+        "outcome": decision.outcome,
+        "reviewedByUserId": (
+            str(first.reviewed_by_user_id) if first.reviewed_by_user_id else None
+        ),
+        "reviewedBy": decision.reviewed_by,
+        "resolutionNote": first.resolution_note,
+        "reviewedAt": (
+            first.reviewed_at.isoformat() if first.reviewed_at else None
+        ),
+        "decisionGroupId": (
+            str(first.decision_group_id) if first.decision_group_id else None
+        ),
+    }
+
+
+def _content_incident_payload(
+    incident: ContentIncident, decisions: dict[UUID, _Decision] | None = None
+) -> dict:
+    """One piece of reported content, and every complaint about it.
+
+    The target is shared by construction, so it is stated once above the
+    reports rather than repeated in each. What differs - who complained, in
+    what words, calling it what - stays with the report it belongs to.
+    """
+    first = incident.reports[0]
+    decision = (decisions or {}).get(first.id) or _Decision(first.status, None)
+    return {
+        "id": str(incident.id),
         "reportedOwnerUserId": (
-            str(report.reported_owner_user_id)
-            if report.reported_owner_user_id
+            str(first.reported_owner_user_id)
+            if first.reported_owner_user_id
             else None
         ),
-        "promptListId": str(report.prompt_list_id) if report.prompt_list_id else None,
+        "promptListId": str(first.prompt_list_id) if first.prompt_list_id else None,
         "promptVersionId": (
-            str(report.prompt_version_id) if report.prompt_version_id else None
+            str(first.prompt_version_id) if first.prompt_version_id else None
         ),
-        "targetType": report.target_type,
-        "listName": report.list_name_snapshot,
-        "prompt": report.prompt_snapshot,
-        "reason": report.reason,
-        "details": report.details,
-        "status": report.status,
+        "targetType": first.target_type,
+        "listName": first.list_name_snapshot,
+        "prompt": first.prompt_snapshot,
+        "reporterCount": len(incident.reports),
+        "reasons": list(incident.reasons),
+        "openedAt": incident.opened_at.isoformat(),
+        "latestReportedAt": incident.latest_at.isoformat(),
+        "status": first.status,
+        "reports": [
+            {
+                "id": str(report.id),
+                "reporterUserId": (
+                    str(report.reporter_user_id) if report.reporter_user_id else None
+                ),
+                "reason": report.reason,
+                "details": report.details,
+                "createdAt": report.created_at.isoformat(),
+            }
+            for report in incident.reports
+        ],
         # `dismissed`, `hidden`, `left_up`, or a plain `resolved`; `pending`
         # until then.
         "outcome": decision.outcome,
         "reviewedByUserId": (
-            str(report.reviewed_by_user_id) if report.reviewed_by_user_id else None
+            str(first.reviewed_by_user_id) if first.reviewed_by_user_id else None
         ),
         "reviewedBy": decision.reviewed_by,
-        "resolutionNote": report.resolution_note,
-        "moderationState": report.resolution_moderation_state,
-        "createdAt": report.created_at.isoformat(),
-        "updatedAt": report.updated_at.isoformat(),
-        "reviewedAt": report.reviewed_at.isoformat() if report.reviewed_at else None,
+        "resolutionNote": first.resolution_note,
+        "moderationState": first.resolution_moderation_state,
+        "reviewedAt": first.reviewed_at.isoformat() if first.reviewed_at else None,
+        "decisionGroupId": (
+            str(first.decision_group_id) if first.decision_group_id else None
+        ),
     }
+
+
+class ReviewedAcknowledgeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    report_ids: list[UUID] = Field(
+        default_factory=list, alias="reportIds", max_length=MAX_REVIEWED_ANNOUNCED
+    )
 
 
 class WarningBody(BaseModel):
@@ -542,6 +926,8 @@ class WarningBody(BaseModel):
 
     user_id: UUID = Field(alias="userId")
     reason: str = Field(min_length=1, max_length=255)
+    # Optional: a decision is never blocked on it (R-MOD-19).
+    category: ReportReason | None = Field(default=None)
     # The report this warning decides. Recording it is what lets the warned
     # player be shown the messages the complaint was about.
     report_id: UUID | None = Field(default=None, alias="reportId")
@@ -936,6 +1322,48 @@ def create_moderation_router(
                             else retained_messages[0].room_instance_id
                         ),
                     )
+                # A complaint about the account's picture, which is what the
+                # lobby row and the profile page offer (R-AVA-04). Recorded
+                # here from the account rather than taken from the reporter,
+                # and refused outright when there is no picture: a report
+                # about something that does not exist is a dead end for
+                # whoever has to read it.
+                about_picture = body.reason == ReportReason.INAPPROPRIATE_AVATAR
+                # What the account itself carries, rather than anything it
+                # said: its name and its picture, which are what the lobby row
+                # and the profile page show and so what they offer to report
+                # (R-AVA-06). Both belong to the account, so both are scoped
+                # to it.
+                about_account = about_picture or (
+                    body.reason == ReportReason.INAPPROPRIATE_NAME
+                )
+                if about_picture and target.avatar_key is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="That player has no picture to report.",
+                    )
+                # Only a complaint about the picture names one. A name report
+                # has no picture to have changed.
+                reported_avatar_key = target.avatar_key if about_picture else None
+                # Where the complaint happened, and so which incident it
+                # belongs to (#620). Read off the evidence the checks above
+                # already proved comes from one place: all-lobby or one room
+                # instance, never mixed.
+                if retained_messages:
+                    if retained_messages[0].audience == "lobby":
+                        scope, room_instance_id = ReportScope.LOBBY, None
+                    else:
+                        scope = ReportScope.ROOM
+                        room_instance_id = retained_messages[0].room_instance_id
+                elif about_account:
+                    # A name and a picture belong to the account, not to a
+                    # room or a line of chat, so every complaint about one
+                    # meets in the same bucket whichever screen it came from.
+                    scope, room_instance_id = ReportScope.PROFILE, None
+                else:
+                    # Cited nothing and named nothing: no place to look, so it
+                    # stands on its own.
+                    scope, room_instance_id = ReportScope.UNSCOPED, None
                 # Everything above this line is the router proving what a
                 # client told it. The writing is shared with the socket path,
                 # which has nothing to prove because it resolved the target and
@@ -946,6 +1374,9 @@ def create_moderation_router(
                     reported_user_id=target.id,
                     game_id=game_id,
                     turn_id=turn.id if turn else None,
+                    scope=scope,
+                    room_instance_id=room_instance_id,
+                    reported_avatar_key=reported_avatar_key,
                     reason=body.reason.value,
                     details=body.details,
                     messages=list(retained_messages),
@@ -980,25 +1411,82 @@ def create_moderation_router(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
     ):
+        """The queue as incidents: reports of one thing, read once (#620).
+
+        `limit` and `offset` page **incidents**, not reports, because an
+        incident is what a moderator now reads and decides. Grouping needs
+        every report in hand at once - a page taken before it would cut an
+        incident in half and show a moderator four of five complaints with no
+        way to tell - so the page is planned from five light columns and only
+        then are the reports on it loaded with their evidence. Reading the
+        whole queue *with* its evidence to render fifty incidents would pull
+        every pinned line of every waiting report to show a fraction of them
+        (R-PLAT-14's rule, on rows rather than blobs).
+
+        `MAX_OPEN_QUEUE_REPORTS` is a backstop rather than a page: if the open
+        queue ever grew past it, the oldest incidents are still the ones this
+        answers with, which is the order the queue is worked in.
+        """
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PlayerReport).options(*_REPORT_PAYLOAD_LOADS)
+            plan = select(
+                PlayerReport.id,
+                PlayerReport.reported_user_id,
+                PlayerReport.scope,
+                PlayerReport.room_instance_id,
+                PlayerReport.created_at,
+            )
             if status is not None:
-                statement = statement.where(PlayerReport.status == status.value)
-            reports = (
-                await session.scalars(
-                    statement.order_by(PlayerReport.created_at.asc())
-                    .limit(limit)
-                    .offset(offset)
+                plan = plan.where(PlayerReport.status == status.value)
+            keys = (
+                await session.execute(
+                    plan.order_by(
+                        PlayerReport.created_at.asc(), PlayerReport.id.asc()
+                    ).limit(MAX_OPEN_QUEUE_REPORTS)
                 )
             ).all()
-            player_context = await _reported_player_context(session, list(reports))
-            decisions = await _decisions(session, list(reports))
+            planned = group_into_incidents(list(keys))
+            page_plan = planned[offset : offset + limit]
+            wanted = [
+                report_id
+                for incident in page_plan
+                for report_id in incident.report_ids
+            ]
+            reports = (
+                (
+                    await session.scalars(
+                        select(PlayerReport)
+                        .where(PlayerReport.id.in_(wanted))
+                        .options(*_REPORT_PAYLOAD_LOADS)
+                    )
+                ).all()
+                if wanted
+                else []
+            )
+            by_id = {report.id: report for report in reports}
+            page = [
+                Incident(
+                    incident.key,
+                    tuple(by_id[report_id] for report_id in incident.report_ids),
+                )
+                for incident in page_plan
+            ]
+            on_page = list(reports)
+            player_context = await _reported_player_context(session, on_page)
+            decisions = await _decisions(session, on_page)
+            prior = await _prior_decisions(session, page)
+            removals = await _avatar_removals(
+                session, _accounts_with_no_picture(on_page, player_context)
+            )
             return {
-                "reports": [
-                    _report_payload(report, player_context, decisions)
-                    for report in reports
-                ]
+                "incidents": [
+                    _incident_payload(
+                        incident, player_context, decisions, prior, removals
+                    )
+                    for incident in page
+                ],
+                "total": len(planned),
+                "hasMore": len(planned) > offset + limit,
             }
 
     @router.post("/moderation/reports/{report_id}/remove-avatar")
@@ -1019,7 +1507,7 @@ def create_moderation_router(
         if report is None or report.reported_user_id is None:
             raise HTTPException(status_code=404, detail="No such report.")
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        removed = await remove_avatar(
+        outcome = await remove_avatar(
             session_factory,
             user_id=report.reported_user_id,
             actor_id=actor.id,
@@ -1030,7 +1518,22 @@ def create_moderation_router(
         )
         if on_avatar_changed is not None:
             await on_avatar_changed(str(report.reported_user_id), None)
-        return {"ok": True, "removed": removed}
+        # After the commit, so a socket can never announce a notice a
+        # rolled-back transaction never wrote - the rule the warning route
+        # above follows for the same reason.
+        if outcome.warning_id is not None and on_user_warned is not None:
+            await on_user_warned(str(report.reported_user_id))
+        return {
+            "ok": True,
+            "removed": outcome.had_one,
+            # When they may upload again, which is not a fixed length any
+            # more (R-AVA-08). Null when this one cost no wait at all.
+            "blockedUntil": (
+                outcome.blocked_until.isoformat()
+                if outcome.blocked_until is not None
+                else None
+            ),
+        }
 
     @router.get("/moderation/reports/{report_id}/drawing")
     async def report_drawing(report_id: UUID, request: Request):
@@ -1053,68 +1556,65 @@ def create_moderation_router(
         limit: int = Query(default=25, ge=1, le=100),
         offset: int = Query(default=0, ge=0, le=MAX_CLOSED_CASES_OFFSET),
     ):
-        """Decided player and content reports as one stream, newest decision first.
+        """Decided incidents, player and content as one stream, newest first.
 
-        The open queues are small and the page merges them itself; closed
-        cases accumulate for as long as the service runs, so the merge has to
-        happen here, under a page, or the newest decisions would be the ones
-        a moderator could never reach. Two light queries pick the page's ids
-        from each table before any evidence is loaded for the rows on it.
+        The page counts **decisions**, not rows: an incident five people
+        reported is one entry here as it was one entry in the queue, and one
+        decision is what closed it. So the key queries walk distinct
+        `decision_group_id`s rather than reports - which is also why grouping
+        the closed stream cannot reuse the open incident key, since two
+        incidents in one room instance decided a week apart are two entries
+        and that key would merge them.
+
+        The group id is a UUIDv7, minted when the decision was taken, so
+        ordering by it *is* ordering by when it was decided and the database
+        can answer each of these from an ordered walk of a partial index that
+        stops as soon as it has enough groups - rather than aggregating every
+        report ever decided to find the newest ones. Two light queries pick
+        the page's groups before any evidence is loaded for the rows on it.
         """
         window = offset + limit + 1
         decided = ReportStatus.PENDING.value
         async with session_factory() as session:
             await _reviewer(session, request)
-            player_keys = (
-                await session.execute(
-                    select(
-                        PlayerReport.id,
-                        func.coalesce(PlayerReport.reviewed_at, PlayerReport.updated_at),
+            player_groups = (
+                await session.scalars(
+                    select(PlayerReport.decision_group_id)
+                    .where(
+                        PlayerReport.status != decided,
+                        PlayerReport.decision_group_id.is_not(None),
                     )
-                    .where(PlayerReport.status != decided)
-                    .order_by(
-                        func.coalesce(
-                            PlayerReport.reviewed_at, PlayerReport.updated_at
-                        ).desc(),
-                        PlayerReport.id.desc(),
-                    )
+                    .distinct()
+                    .order_by(PlayerReport.decision_group_id.desc())
                     .limit(window)
                 )
             ).all()
-            content_keys = (
-                await session.execute(
-                    select(
-                        PromptContentReport.id,
-                        func.coalesce(
-                            PromptContentReport.reviewed_at,
-                            PromptContentReport.updated_at,
-                        ),
+            content_groups = (
+                await session.scalars(
+                    select(PromptContentReport.decision_group_id)
+                    .where(
+                        PromptContentReport.status != decided,
+                        PromptContentReport.decision_group_id.is_not(None),
                     )
-                    .where(PromptContentReport.status != decided)
-                    .order_by(
-                        func.coalesce(
-                            PromptContentReport.reviewed_at,
-                            PromptContentReport.updated_at,
-                        ).desc(),
-                        PromptContentReport.id.desc(),
-                    )
+                    .distinct()
+                    .order_by(PromptContentReport.decision_group_id.desc())
                     .limit(window)
                 )
             ).all()
             merged = sorted(
-                [("player", row_id, at) for row_id, at in player_keys]
-                + [("content", row_id, at) for row_id, at in content_keys],
-                key=lambda entry: (entry[2], entry[1]),
+                [("player", group) for group in player_groups]
+                + [("content", group) for group in content_groups],
+                key=lambda entry: entry[1],
                 reverse=True,
             )
             page = merged[offset : offset + limit]
-            player_ids = [row_id for kind, row_id, _ in page if kind == "player"]
-            content_ids = [row_id for kind, row_id, _ in page if kind == "content"]
+            player_ids = [group for kind, group in page if kind == "player"]
+            content_ids = [group for kind, group in page if kind == "content"]
             players = (
                 (
                     await session.scalars(
                         select(PlayerReport)
-                        .where(PlayerReport.id.in_(player_ids))
+                        .where(PlayerReport.decision_group_id.in_(player_ids))
                         .options(*_REPORT_PAYLOAD_LOADS)
                     )
                 ).all()
@@ -1125,7 +1625,7 @@ def create_moderation_router(
                 (
                     await session.scalars(
                         select(PromptContentReport).where(
-                            PromptContentReport.id.in_(content_ids)
+                            PromptContentReport.decision_group_id.in_(content_ids)
                         )
                     )
                 ).all()
@@ -1134,18 +1634,37 @@ def create_moderation_router(
             )
             player_context = await _reported_player_context(session, list(players))
             decisions = await _decisions(session, list(players), list(content))
+            removals = await _avatar_removals(
+                session, _accounts_with_no_picture(list(players), player_context)
+            )
+            by_player_group = group_by_decision(list(players))
+            by_content_group = group_by_decision(list(content))
             # Back into the page's order: `IN` returns rows in whatever order
-            # the database likes.
-            players.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
-            content.sort(key=lambda report: (_decided_at(report), report.id), reverse=True)
+            # the database likes, and the page is already in decision order.
             return {
                 "players": [
-                    _report_payload(report, player_context, decisions)
-                    for report in players
+                    _incident_payload(
+                        Incident(
+                            incident_key(by_player_group[group][0]),
+                            tuple(by_player_group[group]),
+                        ),
+                        player_context,
+                        decisions,
+                        removals=removals,
+                    )
+                    for kind, group in page
+                    if kind == "player"
                 ],
                 "content": [
-                    _prompt_content_report_payload(report, decisions)
-                    for report in content
+                    _content_incident_payload(
+                        ContentIncident(
+                            content_incident_key(by_content_group[group][0]),
+                            tuple(by_content_group[group]),
+                        ),
+                        decisions,
+                    )
+                    for kind, group in page
+                    if kind == "content"
                 ],
                 # False at the cap even when older rows exist: the page says
                 # what can be asked for next, and an Older that answers 422
@@ -1163,25 +1682,164 @@ def create_moderation_router(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
     ):
+        """The content queue as incidents, on the key the target already is.
+
+        `limit` and `offset` page incidents, as the player queue does and for
+        the same reason: reports of one thing are read and decided together
+        (R-MOD-16), so a page taken before grouping would cut one in half.
+        """
         async with session_factory() as session:
             await _reviewer(session, request)
-            statement = select(PromptContentReport)
+            plan = select(
+                PromptContentReport.id,
+                PromptContentReport.target_type,
+                PromptContentReport.prompt_list_id,
+                PromptContentReport.prompt_version_id,
+                PromptContentReport.created_at,
+            )
             if status is not None:
-                statement = statement.where(PromptContentReport.status == status.value)
-            reports = (
-                await session.scalars(
-                    statement.order_by(PromptContentReport.created_at.asc())
-                    .limit(limit)
-                    .offset(offset)
+                plan = plan.where(PromptContentReport.status == status.value)
+            keys = (
+                await session.execute(
+                    plan.order_by(
+                        PromptContentReport.created_at.asc(),
+                        PromptContentReport.id.asc(),
+                    ).limit(MAX_OPEN_QUEUE_REPORTS)
                 )
             ).all()
+            planned = group_into_content_incidents(list(keys))
+            page_plan = planned[offset : offset + limit]
+            wanted = [
+                report_id
+                for incident in page_plan
+                for report_id in incident.report_ids
+            ]
+            reports = (
+                (
+                    await session.scalars(
+                        select(PromptContentReport).where(
+                            PromptContentReport.id.in_(wanted)
+                        )
+                    )
+                ).all()
+                if wanted
+                else []
+            )
+            by_id = {report.id: report for report in reports}
+            page = [
+                ContentIncident(
+                    incident.key,
+                    tuple(by_id[report_id] for report_id in incident.report_ids),
+                )
+                for incident in page_plan
+            ]
             decisions = await _decisions(session, [], list(reports))
             return {
-                "reports": [
-                    _prompt_content_report_payload(report, decisions)
-                    for report in reports
-                ]
+                "incidents": [
+                    _content_incident_payload(incident, decisions)
+                    for incident in page
+                ],
+                "total": len(planned),
+                "hasMore": len(planned) > offset + limit,
             }
+
+    async def _lock_pending_content_incident(
+        session: AsyncSession, report_id: UUID
+    ) -> ContentIncident:
+        """Every pending report about the named report's target, locked.
+
+        `_lock_pending_incident`'s rule on the key content reports carry: the
+        set is locked in id order rather than outward from the report the
+        request named, and the named report is re-checked inside the locked
+        set, so the unlocked read that finds the target is never what the
+        decision acts on.
+        """
+        named = await session.get(PromptContentReport, report_id)
+        if named is None:
+            raise HTTPException(status_code=404, detail="No such report.")
+        key = content_incident_key(named)
+        column = (
+            PromptContentReport.prompt_version_id
+            if key.target_type == "prompt"
+            else PromptContentReport.prompt_list_id
+        )
+        reports = (
+            await session.scalars(
+                select(PromptContentReport)
+                .where(
+                    PromptContentReport.status == ReportStatus.PENDING.value,
+                    PromptContentReport.target_type == key.target_type,
+                    column == UUID(key.target_id),
+                )
+                .order_by(PromptContentReport.id.asc())
+                .with_for_update()
+            )
+        ).all()
+        if not any(report.id == report_id for report in reports):
+            raise HTTPException(
+                status_code=409, detail="This report was already reviewed."
+            )
+        return ContentIncident(
+            key, tuple(sorted(reports, key=lambda row: (row.created_at, row.id)))
+        )
+
+    async def _lock_pending_incident(
+        session: AsyncSession, report_id: UUID
+    ) -> Incident:
+        """Every pending report of the named report's incident, locked.
+
+        Locked in id order and **not** starting from the named report, which
+        is what makes this deadlock-free: two moderators reaching the same
+        incident from two different member reports would otherwise take the
+        same two rows in opposite orders. The named report is read unlocked
+        only to learn the key; the locked set is what the decision is checked
+        against and written to, so the read below is never what a caller acts
+        on.
+
+        A report already decided by whoever got here first refuses the whole
+        action, which is also what stops a retry deciding an incident twice.
+        """
+        named = await session.get(PlayerReport, report_id)
+        if named is None:
+            raise HTTPException(status_code=404, detail="No such report.")
+        key = incident_key(named)
+        if key.standalone is not None:
+            criteria = [PlayerReport.id == key.standalone]
+        else:
+            criteria = [
+                PlayerReport.reported_user_id == key.reported_user_id,
+                PlayerReport.scope == key.scope,
+                (
+                    PlayerReport.room_instance_id == key.room_instance_id
+                    if key.room_instance_id is not None
+                    else PlayerReport.room_instance_id.is_(None)
+                ),
+            ]
+        reports = (
+            await session.scalars(
+                select(PlayerReport)
+                .where(
+                    PlayerReport.status == ReportStatus.PENDING.value,
+                    *criteria,
+                )
+                .order_by(PlayerReport.id.asc())
+                .with_for_update()
+            )
+        ).all()
+        if not any(report.id == report_id for report in reports):
+            # Either it was never pending or somebody decided it while this
+            # request waited on the lock. Same answer either way.
+            raise HTTPException(
+                status_code=409, detail="This report was already reviewed."
+            )
+        for report in reports:
+            await session.refresh(
+                report, attribute_names=["message_evidence", "drawing_evidence"]
+            )
+        return Incident(
+            key,
+            tuple(sorted(reports, key=lambda row: (row.created_at, row.id))),
+        )
 
     @router.patch("/moderation/reports/{report_id}")
     async def review_report(report_id: UUID, body: ReportReviewBody, request: Request):
@@ -1193,42 +1851,48 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                report = await session.scalar(
-                    select(PlayerReport)
-                    .where(PlayerReport.id == report_id)
-                    .options(*_REPORT_PAYLOAD_LOADS)
-                    .with_for_update()
-                )
-                if report is None:
-                    raise HTTPException(status_code=404, detail="No such report.")
-                if report.status != ReportStatus.PENDING.value:
-                    raise HTTPException(
-                        status_code=409, detail="This report was already reviewed."
+                incident = await _lock_pending_incident(session, report_id)
+                # One decision, one group id, however many reports it covers
+                # (#620). Each report keeps its own reviewer, moment and audit
+                # entry: review stays one-way per row, and what changed is how
+                # many rows one decision reaches.
+                decision_group_id = generate_uuid()
+                for report in incident.reports:
+                    report.status = body.status
+                    report.reviewed_by_user_id = reviewer.id
+                    report.resolution_note = body.note
+                    report.reviewed_at = now
+                    report.decision_group_id = decision_group_id
+                    session.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type=f"report.{body.status}",
+                            actor_user_id=reviewer.id,
+                            target_user_id=report.reported_user_id,
+                            target_type=AuditTargetType.USER.value,
+                            target_id=str(report.reported_user_id),
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                            details={
+                                "report_id": str(report.id),
+                                # So the ledger shows five entries that were
+                                # one decision, not five decisions.
+                                "decision_group_id": str(decision_group_id),
+                            },
+                        )
                     )
-                report.status = body.status
-                report.reviewed_by_user_id = reviewer.id
-                report.resolution_note = body.note
-                report.reviewed_at = now
-                session.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type=f"report.{body.status}",
-                        actor_user_id=reviewer.id,
-                        target_user_id=report.reported_user_id,
-                        target_type=AuditTargetType.USER.value,
-                        target_id=str(report.reported_user_id),
-                        request_id=request_id,
-                        ip_hash=ip_hash,
-                        details={"report_id": str(report.id)},
-                    )
-                )
                 await session.flush()
-                await session.refresh(report)
-                await session.refresh(
-                    report, attribute_names=["message_evidence", "drawing_evidence"]
-                )
-                decisions = await _decisions(session, [report])
-            return _report_payload(report, decisions=decisions)
+                for report in incident.reports:
+                    # The relationships by name as well: a bare refresh
+                    # expires the evidence collections, and the payload is
+                    # built once the session has closed.
+                    await session.refresh(report)
+                    await session.refresh(
+                        report,
+                        attribute_names=["message_evidence", "drawing_evidence"],
+                    )
+                decisions = await _decisions(session, list(incident.reports))
+            return _incident_payload(incident, decisions=decisions)
 
     @router.patch("/moderation/prompt-content-reports/{report_id}")
     async def review_prompt_content_report(
@@ -1254,17 +1918,8 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                report = await session.scalar(
-                    select(PromptContentReport)
-                    .where(PromptContentReport.id == report_id)
-                    .with_for_update()
-                )
-                if report is None:
-                    raise HTTPException(status_code=404, detail="No such report.")
-                if report.status != ReportStatus.PENDING.value:
-                    raise HTTPException(
-                        status_code=409, detail="This report was already reviewed."
-                    )
+                incident = await _lock_pending_content_incident(session, report_id)
+                report = incident.reports[0]
 
                 if body.status == ReportStatus.RESOLVED.value:
                     if report.target_type == "prompt":
@@ -1313,49 +1968,59 @@ def create_moderation_router(
                                 now=now,
                             )
 
-                report.status = body.status
-                report.reviewed_by_user_id = reviewer.id
-                report.resolution_note = body.note
-                report.resolution_moderation_state = (
-                    body.moderation_state
-                    if body.status == ReportStatus.RESOLVED.value
-                    else None
-                )
-                report.reviewed_at = now
                 content_target_type, content_target_id = _content_target(
                     report.prompt_list_id, report.prompt_version_id
                 )
-                session.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type=f"prompt_content_report.{body.status}",
-                        actor_user_id=reviewer.id,
-                        target_user_id=report.reported_owner_user_id,
-                        target_type=content_target_type,
-                        target_id=content_target_id,
-                        request_id=request_id,
-                        ip_hash=ip_hash,
-                        details={
-                            "report_id": str(report.id),
-                            "target_type": report.target_type,
-                            "prompt_list_id": (
-                                str(report.prompt_list_id)
-                                if report.prompt_list_id
-                                else None
-                            ),
-                            "prompt_version_id": (
-                                str(report.prompt_version_id)
-                                if report.prompt_version_id
-                                else None
-                            ),
-                            "moderation_state": report.resolution_moderation_state,
-                        },
+                # One decision over every complaint about this content, the
+                # rule player reports carry (R-MOD-17). The content itself was
+                # hidden or left up once above; deciding the reports one at a
+                # time would only leave the rest asking about a thing already
+                # settled.
+                decision_group_id = generate_uuid()
+                for row in incident.reports:
+                    row.status = body.status
+                    row.reviewed_by_user_id = reviewer.id
+                    row.resolution_note = body.note
+                    row.resolution_moderation_state = (
+                        body.moderation_state
+                        if body.status == ReportStatus.RESOLVED.value
+                        else None
                     )
-                )
+                    row.reviewed_at = now
+                    row.decision_group_id = decision_group_id
+                    session.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type=f"prompt_content_report.{body.status}",
+                            actor_user_id=reviewer.id,
+                            target_user_id=row.reported_owner_user_id,
+                            target_type=content_target_type,
+                            target_id=content_target_id,
+                            request_id=request_id,
+                            ip_hash=ip_hash,
+                            details={
+                                "report_id": str(row.id),
+                                "decision_group_id": str(decision_group_id),
+                                "target_type": row.target_type,
+                                "prompt_list_id": (
+                                    str(row.prompt_list_id)
+                                    if row.prompt_list_id
+                                    else None
+                                ),
+                                "prompt_version_id": (
+                                    str(row.prompt_version_id)
+                                    if row.prompt_version_id
+                                    else None
+                                ),
+                                "moderation_state": row.resolution_moderation_state,
+                            },
+                        )
+                    )
                 await session.flush()
-                await session.refresh(report)
-                decisions = await _decisions(session, [], [report])
-            return _prompt_content_report_payload(report, decisions)
+                for row in incident.reports:
+                    await session.refresh(row)
+                decisions = await _decisions(session, [], list(incident.reports))
+            return _content_incident_payload(incident, decisions)
 
 
     async def _attach_and_resolve_report(
@@ -1369,45 +2034,60 @@ def create_moderation_router(
         request_id,
         ip_hash,
     ) -> PlayerReport:
-        """Lock the source report and decide it in the caller's transaction.
+        """Lock the source report's incident and decide it in the caller's
+        transaction, returning the report the consequence names.
 
-        A warning or suspension issued from a report is one decision, not
-        two requests: if the consequence lands, the report is resolved with
-        it, and a report another moderator already decided refuses the whole
+        A warning or suspension issued from a report is one decision, not two
+        requests: if the consequence lands, the reports are resolved with it,
+        and a report another moderator already decided refuses the whole
         action - which is also what stops a retry from issuing the same
         consequence twice.
+
+        Every report of the incident is decided, because a suspension for
+        what somebody did leaves nothing for the other four complaints about
+        it to still be waiting on. The consequence keeps naming one report -
+        `source_report_id` on the ban or warning - and the notice it shows the
+        player is read from the whole decision group (`cited_notice_messages`),
+        so which report it names decides nothing about what they are shown.
+
+        Refusing before the target is checked would be wrong the other way:
+        every report in the incident is about the same account by
+        construction, which is what keeps R-BAN-08's "a ban naming a report
+        about somebody else must be refused" true of the group as well as the
+        row.
         """
-        report = await session.scalar(
-            select(PlayerReport)
-            .where(PlayerReport.id == report_id)
-            .with_for_update()
+        incident = await _lock_pending_incident(session, report_id)
+        named = next(
+            report for report in incident.reports if report.id == report_id
         )
-        if report is None or report.reported_user_id != target_id:
+        if named.reported_user_id != target_id:
             raise HTTPException(
                 status_code=422, detail="That report is not about this player."
             )
-        if report.status != ReportStatus.PENDING.value:
-            raise HTTPException(
-                status_code=409, detail="This report was already reviewed."
+        decision_group_id = generate_uuid()
+        for report in incident.reports:
+            report.status = ReportStatus.RESOLVED.value
+            report.reviewed_by_user_id = reviewer.id
+            report.resolution_note = note
+            report.reviewed_at = now
+            report.decision_group_id = decision_group_id
+            session.add(
+                AuditEvent(
+                    id=generate_uuid(),
+                    event_type="report.resolved",
+                    actor_user_id=reviewer.id,
+                    target_user_id=report.reported_user_id,
+                    target_type=AuditTargetType.USER.value,
+                    target_id=str(report.reported_user_id),
+                    request_id=request_id,
+                    ip_hash=ip_hash,
+                    details={
+                        "report_id": str(report.id),
+                        "decision_group_id": str(decision_group_id),
+                    },
+                )
             )
-        report.status = ReportStatus.RESOLVED.value
-        report.reviewed_by_user_id = reviewer.id
-        report.resolution_note = note
-        report.reviewed_at = now
-        session.add(
-            AuditEvent(
-                id=generate_uuid(),
-                event_type="report.resolved",
-                actor_user_id=reviewer.id,
-                target_user_id=report.reported_user_id,
-                target_type=AuditTargetType.USER.value,
-                target_id=str(report.reported_user_id),
-                request_id=request_id,
-                ip_hash=ip_hash,
-                details={"report_id": str(report.id)},
-            )
-        )
-        return report
+        return named
 
     @router.post("/moderation/bans", status_code=201)
     async def create_ban(body: BanBody, request: Request):
@@ -1464,6 +2144,7 @@ def create_moderation_router(
                     user_id=target.id,
                     banned_by_user_id=reviewer.id,
                     reason=body.reason,
+                    category=body.category.value if body.category else None,
                     expires_at=body.expires_at,
                     created_at=now,
                     source_report_id=source_report.id if source_report else None,
@@ -1480,6 +2161,17 @@ def create_moderation_router(
                         payload={
                             "displayName": target.display_name,
                             "reason": body.reason,
+                            "category": body.category.value if body.category else None,
+                            # The one thing a suspended account most needs,
+                            # and the only message that reaches it once it
+                            # cannot sign in. No evidence: their own words
+                            # stay behind the sign-in rather than sitting in
+                            # an inbox (R-MOD-19).
+                            "expiresAt": (
+                                body.expires_at.isoformat()
+                                if body.expires_at is not None
+                                else None
+                            ),
                         },
                         user_id=target.id,
                         now=now,
@@ -1656,6 +2348,7 @@ def create_moderation_router(
                     user_id=target.id,
                     issued_by_user_id=reviewer.id,
                     reason=body.reason,
+                    category=body.category.value if body.category else None,
                     source_report_id=source_report.id if source_report else None,
                     created_at=datetime.now(timezone.utc),
                 )
@@ -1680,7 +2373,9 @@ def create_moderation_router(
                 payload = {
                     "id": str(warning.id),
                     "userId": str(target.id),
+                    "kind": warning.kind,
                     "reason": warning.reason,
+                    "category": warning.category,
                     "createdAt": warning.created_at.isoformat(),
                 }
         # After the commit, so a socket can never announce a warning a
@@ -1688,6 +2383,84 @@ def create_moderation_router(
         if on_user_warned is not None:
             await on_user_warned(str(body.user_id))
         return payload
+
+    @router.get("/reports/reviewed")
+    async def reports_reviewed(request: Request):
+        """Whether any of the caller's own reports have been decided since
+        they were last told.
+
+        A count and nothing else. What was decided is the reported player's
+        business, and an outcome handed back to whoever asked about them would
+        make a report a way of learning things about somebody (R-MOD-20). A
+        number about your own reports discloses nothing about anyone else.
+
+        Read-only, and asked on every page load, so the usual answer - nothing
+        to say - costs no write.
+
+        It names the reports it counted. The acknowledgement takes that list
+        back and stamps exactly those, which is what keeps the two halves
+        honest: a report decided in between is not swept up by an
+        acknowledgement of a message that never mentioned it, and a message
+        that was never shown stamps nothing at all. They are the caller's own
+        reports, so naming them discloses nothing they did not already know.
+        """
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        async with session_factory() as session:
+            waiting = (
+                await session.scalars(
+                    select(PlayerReport.id)
+                    .where(
+                        PlayerReport.reporter_user_id == UUID(user_id),
+                        PlayerReport.status != ReportStatus.PENDING.value,
+                        PlayerReport.reporter_notified_at.is_(None),
+                    )
+                    .order_by(PlayerReport.id)
+                    .limit(MAX_REVIEWED_ANNOUNCED)
+                )
+            ).all()
+        return {"count": len(waiting), "reportIds": [str(row) for row in waiting]}
+
+    @router.post("/reports/reviewed/acknowledge")
+    async def acknowledge_reports_reviewed(
+        request: Request, body: ReviewedAcknowledgeBody
+    ):
+        """Stamp the reports a message actually named, and only those.
+
+        The client shows the message and then says which reports it was
+        about, rather than claiming them first and hoping the message gets
+        rendered. Claiming first loses one whenever the render does not
+        happen - the account signs out mid-request, the effect is torn down -
+        and a report stamped as told that nobody was told about is never
+        announced again.
+
+        Bounded to the list it is given, so a report decided between the read
+        and this call keeps its turn. The failure that is left is being
+        thanked twice, which is the right one to be left with.
+        """
+        user_id = getattr(request.state, "user_id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Sign in first.")
+        if not body.report_ids:
+            return {"ok": True, "acknowledged": 0}
+        now = datetime.now(timezone.utc)
+        async with session_factory() as session:
+            async with session.begin():
+                stamped = await session.execute(
+                    update(PlayerReport)
+                    .where(
+                        PlayerReport.id.in_(body.report_ids),
+                        # Still the caller's own, still decided, still
+                        # unannounced: the list is a client's claim about
+                        # what it showed, not authority over any row.
+                        PlayerReport.reporter_user_id == UUID(user_id),
+                        PlayerReport.status != ReportStatus.PENDING.value,
+                        PlayerReport.reporter_notified_at.is_(None),
+                    )
+                    .values(reporter_notified_at=now)
+                )
+        return {"ok": True, "acknowledged": stamped.rowcount or 0}
 
     @router.get("/warnings/pending")
     async def pending_warning(request: Request):
@@ -1699,11 +2472,29 @@ def create_moderation_router(
             raise HTTPException(status_code=401, detail="Sign in first.")
         return await pending_warning_payload(session_factory, user_id)
 
-    @router.get("/warnings/{warning_id}/drawing")
-    async def warning_drawing(warning_id: UUID, request: Request):
-        """The drawing behind the caller's own warning - their own work,
-        shown back for the reason their words are. Somebody else's warning
-        answers 404, as acknowledging one does."""
+    async def _notice_drawing(
+        session: AsyncSession, source_report_id: UUID | None, report_id: UUID
+    ) -> PlayerReportDrawingEvidence | None:
+        """One canvas from the decision behind a notice, if it named that one.
+
+        The notice may carry several - one per reporter who attached the
+        canvas as it stood when they sent (#620) - so the caller names which.
+        Checked against the decision group rather than against the notice's
+        own `source_report_id`: those are exactly the reports one moderator
+        decided together, every one of them about this account, so a report
+        id from anywhere else answers nothing.
+        """
+        if report_id not in await decided_incident_report_ids(
+            session, source_report_id
+        ):
+            return None
+        return await drawing_evidence_for_report(session, report_id, with_bytes=True)
+
+    @router.get("/warnings/{warning_id}/drawings/{report_id}")
+    async def warning_drawing(warning_id: UUID, report_id: UUID, request: Request):
+        """A drawing behind the caller's own warning - their own work, shown
+        back for the reason their words are. Somebody else's warning answers
+        404, as acknowledging one does."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
             raise HTTPException(status_code=401, detail="Sign in first.")
@@ -1711,14 +2502,14 @@ def create_moderation_router(
             warning = await session.get(UserWarning, warning_id)
             if warning is None or warning.user_id != UUID(user_id):
                 raise HTTPException(status_code=404, detail="No such warning.")
-            evidence = await drawing_evidence_for_report(
-                session, warning.source_report_id, with_bytes=True
+            evidence = await _notice_drawing(
+                session, warning.source_report_id, report_id
             )
         return _drawing_response(evidence, who="warned player")
 
-    @router.get("/suspension/drawing")
-    async def suspension_drawing(request: Request):
-        """The drawing behind the caller's own active suspension.
+    @router.get("/suspension/drawings/{report_id}")
+    async def suspension_drawing(report_id: UUID, request: Request):
+        """A drawing behind the caller's own active suspension.
 
         Reached through the ban-time credential: the middleware lets this one
         path past the refusal (R-BAN-04's rule, for the notice's sake), and
@@ -1731,9 +2522,7 @@ def create_moderation_router(
         async with session_factory() as session:
             ban = await active_ban_for_user(session, UUID(str(banned_user_id)))
             evidence = (
-                await drawing_evidence_for_report(
-                    session, ban.source_report_id, with_bytes=True
-                )
+                await _notice_drawing(session, ban.source_report_id, report_id)
                 if ban is not None
                 else None
             )

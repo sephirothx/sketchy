@@ -64,6 +64,39 @@ keyboard that takes half the screen, and one thumb.
   total to the profile. They are never scored. The four faces are bundled artwork
   (Fluent Emoji, MIT) rather than the platform's emoji font, so they look the same in
   every browser.
+- Friends — registered players add each other from a player's profile or from a
+  seat in the same room, and a friendship lets either of them take a seat in a game they
+  cannot name: uninvited only where the **host** is a friend, or on a short-lived
+  single-use invitation that carries a token rather than a room code. **Friends**, in the
+  account menu, holds every friendship and every request in either direction whether or
+  not the other person is online, and opens over whatever page you are on, so a request
+  that arrives while you are drawing can be answered without leaving the game. The
+  lobby's online list carries no *report* of a request in either direction,
+  because a row there comes and goes as people open and close tabs and a request
+  reported on one could be answered only while its sender happened to still be
+  standing there; a row's menu does offer the ask, alongside opening the profile,
+  since an action taken once and finished is not state to be read. A request that arrives offers **Accept** on the notice itself, and
+  lingers long enough to reach mid-turn. Declining
+  and removing are confirmed first: a decline is kept, so the person refused cannot ask
+  again, though the one who declined may still ask them. Cancelling a request you sent
+  leaves nothing behind. Guests are not offered friendships, since a guest name belongs
+  to a browser and is purged after a month of not playing. Somebody you are not
+  sharing a lobby with is still reachable: every registered name in the online list
+  links to that player's profile, which carries the **Add friend** control — and
+  says plainly when you already are friends — so the person you finished a game
+  with yesterday can be added today.
+  **Friends** also suggests registered accounts you finished a game with in the last
+  30 days. That list is built only from games you sat in yourself — there is still
+  no way to search for, or reach, somebody you have never played with.
+  A friend's avatar wears a small two-person mark on its bottom-right corner, so you
+  can pick out who you know at a glance — in the lobby, on a profile, and on the seats
+  around you in a game. It is the same disc that shows a ring for you and a gold crown
+  for the room's host, and like those it is drawn for whoever is reading: two players
+  looking at the same roster see different marks.
+  A request arriving, and one you sent being accepted, are both announced wherever
+  you are — a live game included — and the number waiting for an answer sits on your
+  account chip. A request that was declined is not announced: your list simply stops
+  showing it.
 - Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -582,7 +615,7 @@ process. These deployment settings can be tuned without code changes:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL` |
+| `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL`, and a missing `SMTP_HOST` |
 | `DB_POOL_SIZE` | `5` | Persistent connections per process |
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
@@ -595,7 +628,7 @@ process. These deployment settings can be tuned without code changes:
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
 | `AFK_INACTIVITY_SECONDS` | `300` | How long a seat may send nothing a person sent before the room asks whether anybody is there. Only somebody who has touched nothing at all reaches it: a browser that has seen input answers the check by itself |
 | `AFK_CHECK_SECONDS` | `25` | How long that question stays open before the seat is marked AFK |
-| `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent |
+| `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent — which production refuses to start without, since that would put live reset links in the log and send nothing (#466) |
 | `SMTP_PORT` | `587` | Relay port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
 | `SMTP_STARTTLS` | `1` | Upgrade the connection before sending |
@@ -603,7 +636,7 @@ process. These deployment settings can be tuned without code changes:
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
 | `LOG_LEVEL` | `info` | Level for the application's own logs as well as uvicorn's |
-| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable |
+| `LOG_FORMAT` | `json` in production, else `text` | `json` writes one object per line (`ts`, `level`, `logger`, `msg`, `request_id`, `sid`, `event`, `fields`, `exc`), redacts secrets and e-mail addresses, takes over uvicorn's lines and replaces its access log with one carrying the request id. `text` is the development console exactly as it always was: plain lines, uvicorn's own output, nothing redacted - the reset links the console mail transport prints stay usable, and the transport that prints them does not run in production |
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
@@ -782,6 +815,14 @@ messages are logged instead of sent, so a self-hoster can see what would have
 gone out - including the confirmation and reset links, which is the only way
 that flow can be completed on a deployment without mail.
 
+That is a development behaviour. With `SKETCHY_ENV=production` the server
+refuses to start without `SMTP_HOST`, and the console transport refuses to
+write a body even if something reaches it: the same line that makes recovery
+possible on a checkout would put a live reset link in a log store kept far
+longer than the hour the token lives, while every player who forgot a password
+waited for a message nobody was sending. A delivery that is given up on is
+logged with the recipient's domain and not their address.
+
 The address is used to reset a password, and to tell someone their account was
 suspended or their content hidden. Nothing else is ever sent to it.
 
@@ -919,6 +960,27 @@ line retention did not keep cannot be cited, so its author's name is plain text
 and nothing explains why; a player's own lines, and every line seen by a guest,
 are plain for the same reasons the room gives.
 
+What an account *carries* - its **name** and its **picture** - is reported from
+where it is actually seen. A row in the lobby's online list opens a menu, the
+way a seat in a room already does: **Open player profile**, **Add as friend**,
+and **Report**. On a profile the same report sits beside the name. Until now
+both could only be reported from inside a room, which is the one place either is
+least likely to be met - they are on every lobby row and on every profile, and
+the people who object are usually not sitting at a table with their owner.
+Nothing is cited, there being nothing said to cite. The dialog offers the
+picture as a reason only when there is one, since a complaint about a picture
+that does not exist is refused; the name is always there, and where it is the
+only reason the dialog says so instead of offering a choice of one. Every
+complaint about one account's name or picture is one incident, whichever screen
+it came from. If the picture changes before a moderator looks, the queue says so and
+shows the one on the account now - the old one is gone, an upload deleting what
+it replaces, so it is never quietly shown in its place. A picture that has been
+*taken down* says that instead, and says who did it: a removal a moderator
+carried out - naming this case, when it was this case - reads as already
+removed rather than as a different picture, which is the opposite of what
+happened to it, and a player quietly taking their own down reads as neither,
+because that is not a punishment and sets no block.
+
 **Moderation** carries a third tab for suspensions: who is suspended, why, and
 until when. A suspension can be given an end date - 24 hours, 7 days, 30 days,
 or none - and one with an end date lifts itself, because the list reports what
@@ -934,16 +996,86 @@ their preserved message evidence and, when one was attached, the drawing drawn
 from its stored frame beside the prompt the drawer was given, and
 prompt-content reports against a list or a single prompt. A warned or
 suspended player is shown that same drawing with their own words: it is
-their work, and a reason with nothing behind it is easy to dismiss. Resolving a content
+their work, and a reason with nothing behind it is easy to dismiss.
+
+Reports of one incident are read and decided together. Five people watching one
+person do one thing file five reports, and the one-open-report rule does not stop
+that - it stops one *reporter* saying it twice. So the queue groups them by the
+reported player and the room instance the complaint came from, and shows one entry
+saying how many complained. The count is shown and never sorts the queue: six
+reports is six people who chose to complain, not six times the evidence, and
+letting a pile-on jump the queue would reward arranging one. Each complaint keeps
+its own reason and its own words, because five people rarely describe one thing the
+same way; the evidence is merged into one thread, each line once, marked with how
+many of the reporters picked it out. One Dismiss, Warn or Suspend then covers the
+whole of it under one note - and the warning or suspension shows the player the
+cited lines and drawings from all of it, not from whichever complaint the
+moderator happened to open. Every lobby report about one account shares one bucket,
+the lobby having no room instance to name; a report that cited nothing names no
+place to look and stands on its own. Prompt-content reports group the same way, on
+the list or prompt version they are about: the content is one thing, so one decision
+hides it or leaves it up once and closes every complaint about it. Resolving a content
 report records that it was looked at; hiding the list or prompt is the separate
 decision that acts on it, and the owner is told when it happens if they have a
 confirmed address. Every review takes a note, so no decision is anonymous. A
 **Closed** queue lists every decided case, player and content together, newest
 decision first and a page at a time, each with a chip saying how it ended -
 dismissed, warned, suspended; hidden or left up for content - and, opened, the
-decision itself: what was done, who did it, when, and the note. The open
-queues are small enough to show whole, but closed cases accumulate for as
-long as the server runs, and the newest are the ones worth finding.
+decision itself: what was done, who did it, when, and the note. It reads like the
+queue it came from: one entry per decision, so an incident five people reported is
+one closed case rather than five, and a page holds a page's worth of decisions
+rather than being swallowed by a pile-on. The open queues are small enough to show
+whole, but closed cases accumulate for as long as the server runs, and the newest
+are the ones worth finding.
+
+Deciding an incident closes it for good, so somebody complained about again in
+the same place opens a *new* one rather than reopening the old. That is right,
+and on its own it would put an identical case in front of a moderator with
+nothing to show it had ever been dealt with. So a repeat carries what was last
+decided about that same incident: what was done, when, by whom, and the note,
+which is required of every decision precisely because it is written for whoever
+reads the case next. It is keyed on the incident and not the account - the
+standing beside every case already says how often this player has come up, and
+the thing worth saying here is narrower: *this, in this room, was already
+settled*. The ending a repeat usually has is offered from that notice - one
+press dismisses it, carrying the decision above as its note, so nobody retypes
+what is on the screen in front of them and the ledger gets more than a bare
+word. Only dismissal is offered that way: it restricts nobody, which is what
+makes it safe a press from a notice, and a warning or suspension is not
+something to repeat by shortcut.
+
+The **rules** are published at `/rules` — one page, a section per rule, reachable
+from the account menu and named when an account is created rather than only
+after somebody is told they broke one. Every decision category is anchored
+there, so a notice saying *recorded as spam* links to the paragraph that says
+what spam is: a decision whose rule you can read is one you can check.
+
+They live in the repository, one typed module per language, reviewed like code
+— which is what the wiki this follows does, and what keeps a translation from
+quietly going missing. English is the reference and the fallback for any
+language not yet written. Section and rule ids are English and never
+translated, because they are anchors and a link in a notice has to survive the
+page being read in another language.
+
+A decision may record **what rule it was about** — the moderator's own
+finding, from the same six words a report uses, never the reporters' reason,
+which is their claim rather than a finding and would tell the player how people
+they cannot see described them. It is optional: a decision already sits behind
+a step-up and a required note, so the category buys structure where the note is
+terse rather than being one more thing to get past. Every notice reads
+correctly without it.
+
+A warning also says, in general terms, that a further report may lead to a
+suspension. That is what a warning is *for* — the step between nothing and a
+suspension — and a notice that does not say so informs without deterring. It
+names no ladder, because nothing enforces one.
+
+Whoever sent a report is told it was **reviewed** — a count of their own
+reports and nothing else, once, as a notice rather than an interruption.
+Reporting into silence is what teaches people not to report; what was decided
+is the reported player's business, and an outcome told back to whoever asked
+about them would turn a report into a way of finding things out about
+somebody.
 
 A suspended player is told before they are signed out. Suspending revokes every
 session and ends every live seat at once, so without it the experience is a
@@ -951,10 +1083,15 @@ game that stops and a page that starts refusing things. A player mid-game hears
 it on the socket; everybody else learns from the first request that is refused,
 which now carries the reason and the end date rather than only saying no. When the
 suspension was decided from a report, the notice also shows the messages that
-report was about - their own words, as they were when it was made, which is
-what turns a reason into something they can weigh. `user_bans.source_report_id`
-is what makes that possible, and a ban naming a report about somebody else is
-refused, so a suspension cannot be used to show one player another's messages.
+decision was about - their own words, as they were when the reports were made,
+which is what turns a reason into something they can weigh. That is the cited
+lines of every report the decision covered rather than only the one the ban
+names, so what they are shown does not depend on which complaint was opened
+first; it cannot show them anything but their own, since a cited line is theirs
+by construction and what was said *around* it stays a moderator's.
+`user_bans.source_report_id` is what makes that possible, and a ban naming a
+report about somebody else is refused, so a suspension cannot be used to show
+one player another's messages.
 The notice cannot be dismissed, because there is nothing behind it to go back
 to; its one button really signs out, which is why logout is among the few paths
 a suspended account may still reach.
@@ -1029,8 +1166,23 @@ sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial. A picture can be
-reported, a moderator can remove it through the report, and removal blocks
-uploads for a week. The export carries the bytes; deletion removes them.
+reported - from the lobby's row menu, from a profile, or from a room - and a
+moderator can remove it through the report.
+
+A removal is **told to its owner**, written in the same transaction that
+carries it out, because a picture that vanishes with no word reads as a fault
+rather than a decision. The wait before another may go up grows with how many
+of that account's pictures a moderator has taken down: none for the first,
+then a week, a month, three months, and three months from there on. The first
+costs nothing because a picture can be wrong without its owner meaning
+anything by it, and being told is already the correction; the ladder stops
+rather than becoming permanent, because a fourth removed picture is no longer
+an avatar problem and the answer to it is a suspension somebody decides on.
+Only a moderator's removals count - taking your own picture down is not a
+punishment and sets no block. The notice is marked as a removal rather than a
+warning, so it never carries a warning's line about nothing being restricted -
+which of a removal would be the opposite of what was done. The export carries the bytes; deletion removes
+them.
 
 A registered player's **name color** is one of thirteen palette swatches. The
 server holds the rule the palette was drawn to — at least 1.8:1 against the
@@ -1339,6 +1491,7 @@ backend/
       game_handoff.py Durable handoff of a finished game into history: staged whole, replayed by a loop
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
+      incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
     presenters.py Pure construction of room, turn, round, and session payloads
@@ -1353,8 +1506,10 @@ backend/
     test_*.py     Domain, protocol, payload, wire-contract, timer, DB, repository, and performance unit tests
 frontend/
   src/
-    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat
-    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, BugReportsPage (admin triage)
+    components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
+                  SettingsOverlay, FriendsOverlay
+    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
+    content/rules/ The published rules, one typed module per language
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL

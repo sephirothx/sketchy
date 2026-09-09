@@ -10,14 +10,19 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.avatars import create_avatar_router
 from app.api.moderation import create_moderation_router
-from app.auth.avatars import AVATAR_REUPLOAD_BLOCK, MAX_AVATAR_BYTES, avatar_key_for
+from app.auth.avatars import (
+    AVATAR_REUPLOAD_BLOCKS,
+    MAX_AVATAR_BYTES,
+    avatar_key_for,
+    avatar_reupload_block,
+)
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, UploadedAvatarAsset, User
+from app.db.models import AuditEvent, PlayerReport, UploadedAvatarAsset, User, UserWarning
 from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import AvatarBlocked, remove_avatar, set_avatar
@@ -229,7 +234,7 @@ async def test_an_oversized_picture_is_refused_by_the_body_cap_and_the_rule(env)
         await set_avatar(factory, user_id=account["id"], payload=heavy)
 
 
-async def test_a_moderator_removes_a_reported_picture_and_blocks_reuploads(env):
+async def test_a_moderator_removes_a_reported_picture(env):
     new_client, factory = env
     target_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
     target = await register(target_http, "Offender")
@@ -258,7 +263,7 @@ async def test_a_moderator_removes_a_reported_picture_and_blocks_reuploads(env):
     # The queue shows the picture, so the case can be judged from it.
     listed = await moderator_http.get("/api/moderation/reports")
     assert listed.status_code == 200
-    case = next(item for item in listed.json()["reports"] if item["id"] == report_id)
+    case = next(item for item in listed.json()["incidents"] if item["id"] == report_id)
     assert case["reportedPlayer"]["avatarUrl"] == f"/api/avatars/{key}"
 
     # Only a moderator can act on it, and it acts through the report.
@@ -267,29 +272,20 @@ async def test_a_moderator_removes_a_reported_picture_and_blocks_reuploads(env):
     ).status_code == 403
     removed = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
     assert removed.status_code == 200
-    assert removed.json() == {"ok": True, "removed": True}
+    assert removed.json() == {"ok": True, "removed": True, "blockedUntil": None}
     assert (await target_http.get("/api/auth/me")).json()["avatarUrl"] is None
     assert (await target_http.get(f"/api/avatars/{key}")).status_code == 404
     new_client.changed.assert_awaited_with(target["id"], None)
 
-    # Putting it straight back is refused for a week, with the date.
+    # A first removal costs no wait: a picture can be wrong without its owner
+    # meaning anything by it, and being told is the correction (R-AVA-08).
     again = await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=3)))
-    assert again.status_code == 403
-    assert "moderator removed" in again.json()["detail"]
+    assert again.status_code == 200, again.text
     assert reporter["id"] != target["id"]
 
     async with factory() as session:
-        row = await session.get(User, UUID(target["id"]))
-        blocked_until = row.avatar_upload_blocked_until
-        if blocked_until.tzinfo is None:
-            blocked_until = blocked_until.replace(tzinfo=timezone.utc)
-        assert blocked_until - datetime.now(timezone.utc) > AVATAR_REUPLOAD_BLOCK - timedelta(minutes=1)
         events = (await session.scalars(select(AuditEvent).where(AuditEvent.event_type == "avatar.removed"))).all()
     assert any(event.details.get("by_moderator") and event.details.get("report_id") == report_id for event in events)
-
-    # A week later the block has lifted.
-    later = datetime.now(timezone.utc) + AVATAR_REUPLOAD_BLOCK + timedelta(seconds=1)
-    assert await set_avatar(factory, user_id=target["id"], payload=png_bytes(seed=4), now=later)
 
 
 async def test_the_block_is_the_moderators_alone(env):
@@ -303,13 +299,52 @@ async def test_the_block_is_the_moderators_alone(env):
 
 
 async def test_a_blocked_upload_says_when(env):
+    """The second removal is the one that starts the wait, so a refusal takes
+    two - and when it comes it says the date rather than only refusing."""
     new_client, factory = env
     http = new_client()
     account = await register(http, "Waiting")
     await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
+    assert await set_avatar(factory, user_id=account["id"], payload=png_bytes())
+    await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
     with pytest.raises(AvatarBlocked) as refused:
-        await set_avatar(factory, user_id=account["id"], payload=png_bytes())
+        await set_avatar(factory, user_id=account["id"], payload=png_bytes(seed=2))
     assert refused.value.until > datetime.now(timezone.utc)
+    assert "moderator removed" in str(refused.value)
+
+
+def test_the_wait_grows_with_each_picture_a_moderator_takes_down():
+    """Nothing for the first, then a week, a month, three months - and three
+    months from there on. A fourth removed picture is no longer really an
+    avatar problem, and a block that never lifts is not the remedy for it
+    (R-AVA-08)."""
+    assert avatar_reupload_block(0) == timedelta(0)
+    assert avatar_reupload_block(1) == timedelta(days=7)
+    assert avatar_reupload_block(2) == timedelta(days=30)
+    assert avatar_reupload_block(3) == timedelta(days=90)
+    # It stops there rather than growing without bound or becoming permanent.
+    assert avatar_reupload_block(4) == timedelta(days=90)
+    assert avatar_reupload_block(50) == AVATAR_REUPLOAD_BLOCKS[-1]
+    # A negative count is not a thing, and must not read as the top rung.
+    assert avatar_reupload_block(-1) == timedelta(0)
+
+
+async def test_a_players_own_removals_never_move_them_up_the_ladder(env):
+    """Taking your own picture down is not a punishment and sets no block
+    (R-AVA-04), so it cannot be what makes the next moderator removal cost a
+    week."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "OwnTidy")
+    for seed in (1, 2, 3):
+        await set_avatar(factory, user_id=account["id"], payload=png_bytes(seed=seed))
+        await remove_avatar(factory, user_id=account["id"], actor_id=account["id"])
+
+    # Three removals on the ledger, none of them a moderator's: the first one
+    # a moderator makes is still the first.
+    await set_avatar(factory, user_id=account["id"], payload=png_bytes(seed=4))
+    await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
+    assert await set_avatar(factory, user_id=account["id"], payload=png_bytes(seed=5))
 
 
 async def test_a_report_about_nobody_cannot_take_a_picture_down(env):
@@ -333,3 +368,446 @@ async def test_a_key_that_is_not_a_content_address_is_not_looked_up(env):
     assert (await http.get("/api/avatars/../etc/passwd")).status_code in (404, 422)
     assert (await http.get("/api/avatars/initial")).status_code == 404
     assert (await http.get("/api/avatars/" + "0" * 64 + ".png")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reports_about_one_picture_are_one_incident(env):
+    """A picture belongs to the account, not to a room or a line of chat, so
+    several people objecting to one are objecting to one thing - whichever
+    screen each of them was looking at when they did (#620, R-AVA-04)."""
+    new_client, factory = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "Pictured")
+    moderator = await register(moderator_http, "PicMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=5)))
+
+    for name in ("PicRepA", "PicRepB", "PicRepC"):
+        reporter_http = new_client()
+        await register(reporter_http, name)
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "inappropriate_avatar",
+                "details": f"{name} objects.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+
+    listed = await moderator_http.get("/api/moderation/reports")
+    incidents = [
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"]
+    ]
+    assert len(incidents) == 1
+    [incident] = incidents
+    assert incident["reporterCount"] == 3
+    # Its own scope: no room instance, and not the catch-all a report that
+    # cited nothing would otherwise land in.
+    assert incident["scope"] == "profile"
+    assert incident["picture"]["status"] == "same"
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PlayerReport).where(
+                    PlayerReport.reported_user_id == UUID(target["id"])
+                )
+            )
+        ).all()
+    assert {row.scope for row in rows} == {"profile"}
+    assert all(row.room_instance_id is None for row in rows)
+    assert all(row.reported_avatar_key is not None for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_a_reviewer_is_told_the_picture_is_no_longer_the_reported_one(env):
+    """An upload deletes the picture it replaces, so the old one cannot be
+    shown and is not pretended at. What a reviewer gets instead is the fact
+    that it changed, beside the picture the account carries now - which is
+    the one Remove picture would act on (R-AVA-04)."""
+    new_client, factory = env
+    target_http = new_client()
+    reporter_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "Swapper")
+    await register(reporter_http, "SwapRep")
+    moderator = await register(moderator_http, "SwapMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+
+    first_key = (
+        await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=7)))
+    ).json()["avatarKey"]
+    sent = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "Not that.",
+        },
+    )
+    assert sent.status_code == 201
+
+    async def incident():
+        listed = await moderator_http.get("/api/moderation/reports")
+        return next(
+            item
+            for item in listed.json()["incidents"]
+            if item["reportedUserId"] == target["id"]
+        )
+
+    before = await incident()
+    assert before["picture"]["status"] == "same"
+    assert before["reports"][0]["pictureStatus"] == "same"
+    assert before["reportedPlayer"]["avatarUrl"] == f"/api/avatars/{first_key}"
+
+    second_key = (
+        await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=9)))
+    ).json()["avatarKey"]
+    assert second_key != first_key
+
+    after = await incident()
+    assert after["picture"]["status"] == "replaced"
+    assert after["reports"][0]["pictureStatus"] == "replaced"
+    # Replaced, not removed: there is still a picture, just not that one.
+    assert after["picture"]["removedByModerator"] is False
+    # The one on the account now, which is what a decision is about.
+    assert after["reportedPlayer"]["avatarUrl"] == f"/api/avatars/{second_key}"
+    # The key itself never goes over the wire; it is compared, not shown.
+    assert "_avatarKey" not in after["reportedPlayer"]
+
+
+@pytest.mark.asyncio
+async def test_a_picture_that_is_not_there_cannot_be_reported(env):
+    """A complaint about something that does not exist is a dead end for
+    whoever has to read it, so it is refused rather than queued."""
+    new_client, factory = env
+    target_http = new_client()
+    reporter_http = new_client()
+    target = await register(target_http, "NoPicture")
+    await register(reporter_http, "NoPicRep")
+
+    refused = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "There is nothing there.",
+        },
+    )
+    assert refused.status_code == 422
+    assert "no picture" in refused.json()["detail"]
+
+    async with factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count(PlayerReport.id)).where(
+                    PlayerReport.reported_user_id == UUID(target["id"])
+                )
+            )
+        ) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_picture_a_moderator_removed_does_not_read_as_a_different_one(env):
+    """`Remove picture` leaves the account with none, and "no picture" is a
+    different thing from "a different picture" - it reads as the opposite of
+    what was just done. The moderator most likely to see it is the one who
+    removed it, from this very case, a minute earlier (R-AVA-07)."""
+    new_client, factory = env
+    target_http = new_client()
+    reporter_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "Removed")
+    await register(reporter_http, "RemRep")
+    moderator = await register(moderator_http, "RemMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=11)))
+    sent = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "Please take it down.",
+        },
+    )
+    assert sent.status_code == 201
+    report_id = sent.json()["id"]
+
+    async def incident():
+        listed = await moderator_http.get("/api/moderation/reports")
+        return next(
+            item
+            for item in listed.json()["incidents"]
+            if item["reportedUserId"] == target["id"]
+        )
+
+    removed = await moderator_http.post(
+        f"/api/moderation/reports/{report_id}/remove-avatar"
+    )
+    assert removed.status_code == 200, removed.text
+
+    after = await incident()
+    picture = after["picture"]
+    assert picture["status"] == "removed"
+    assert picture["removedByModerator"] is True
+    # The case it was removed from, which is the one being read.
+    assert picture["removedFromThisIncident"] is True
+    assert picture["removedAt"] is not None
+    assert after["reports"][0]["pictureStatus"] == "removed"
+    # The removal does not decide the report; that is still a separate act.
+    assert after["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_a_player_taking_their_own_picture_down_is_not_read_as_a_removal(env):
+    """Taking your own picture down is not a punishment and sets no block
+    (R-AVA-04), so it must not be reported to a moderator as though somebody
+    had acted on the complaint."""
+    new_client, factory = env
+    target_http = new_client()
+    reporter_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "SelfGone")
+    await register(reporter_http, "SelfRep")
+    moderator = await register(moderator_http, "SelfMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=13)))
+    sent = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "Please look.",
+        },
+    )
+    assert sent.status_code == 201
+
+    taken_down = await target_http.delete("/api/users/me/avatar")
+    assert taken_down.status_code in (200, 204), taken_down.text
+
+    listed = await moderator_http.get("/api/moderation/reports")
+    incident = next(
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"]
+    )
+    picture = incident["picture"]
+    assert picture["status"] == "removed"
+    assert picture["removedByModerator"] is False
+    assert picture["removedFromThisIncident"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_name_is_reported_against_the_account_like_a_picture(env):
+    """A name belongs to the account, not to anything it said, so complaints
+    about one meet where complaints about a picture do (R-AVA-06). Unlike a
+    picture it is always there, so it is never refused for want of one, and
+    it names no picture that could have changed."""
+    new_client, factory = env
+    target_http = new_client()
+    target = await register(target_http, "BadName")
+    for name in ("NameRepA", "NameRepB"):
+        reporter_http = new_client()
+        await register(reporter_http, name)
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "inappropriate_name",
+                "details": f"{name} objects to it.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PlayerReport).where(
+                    PlayerReport.reported_user_id == UUID(target["id"])
+                )
+            )
+        ).all()
+    assert len(rows) == 2
+    # One bucket, so the two are one incident.
+    assert {row.scope for row in rows} == {"profile"}
+    assert all(row.room_instance_id is None for row in rows)
+    # No picture was complained about, so none is recorded.
+    assert all(row.reported_avatar_key is None for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_a_removed_picture_is_something_its_owner_is_told_about(env):
+    """A picture that disappears with no word reads as a fault rather than a
+    decision, and with no wait on the first removal there would be nothing
+    else to notice at all. So the removal writes the notice in its own
+    transaction: there is no state where the picture is gone and nothing owes
+    an explanation (R-AVA-08)."""
+    new_client, factory = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "ToldTgt")
+    moderator = await register(moderator_http, "ToldMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=21)))
+
+    reporter_http = new_client()
+    await register(reporter_http, "ToldRep")
+    sent = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "Please take it down.",
+        },
+    )
+    report_id = sent.json()["id"]
+    removed = await moderator_http.post(
+        f"/api/moderation/reports/{report_id}/remove-avatar"
+    )
+    assert removed.status_code == 200, removed.text
+
+    pending = await target_http.get("/api/warnings/pending")
+    assert pending.status_code == 200
+    warning = pending.json()["warning"]
+    assert warning is not None
+    assert "removed the picture" in warning["reason"]
+    # The first costs nothing, and the notice says so rather than leaving them
+    # to discover it by trying.
+    assert "upload another one now" in warning["reason"]
+    # It carries no evidence: the picture it was about is deleted, and there
+    # are no words to quote.
+    assert warning["messages"] == []
+    assert warning["drawings"] == []
+
+    # Acknowledged like any other, and gone.
+    ack = await target_http.post(f"/api/warnings/{warning['id']}/acknowledge")
+    assert ack.status_code == 200
+    assert (await target_http.get("/api/warnings/pending")).json()["warning"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_second_removal_says_when_the_picture_may_come_back(env):
+    """The wait is the part a player can act on, so it is what the notice
+    ends with once there is one."""
+    new_client, factory = env
+    target_http = new_client()
+    target = await register(target_http, "SecondTgt")
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=22)))
+    await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=23)))
+    await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
+
+    async with factory() as session:
+        warnings = (
+            await session.scalars(
+                select(UserWarning)
+                .where(UserWarning.user_id == UUID(target["id"]))
+                .order_by(UserWarning.created_at)
+            )
+        ).all()
+    assert len(warnings) == 2
+    assert "upload another one now" in warnings[0].reason
+    assert "upload another one on" in warnings[1].reason
+
+
+@pytest.mark.asyncio
+async def test_a_removal_notice_is_not_a_formal_warning(env):
+    """A removal rides the warning machinery and is not a warning: a formal
+    one restricts nothing and says so, while a removal restricts uploading -
+    by more each time. The row says which it is, so the two cannot share
+    words that are false of one of them (R-AVA-08)."""
+    new_client, factory = env
+    target_http = new_client()
+    target = await register(target_http, "KindTgt")
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=31)))
+    await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
+
+    shown = (await target_http.get("/api/warnings/pending")).json()["warning"]
+    assert shown["kind"] == "avatar_removal"
+
+    async with factory() as session:
+        row = await session.scalar(
+            select(UserWarning).where(UserWarning.user_id == UUID(target["id"]))
+        )
+    assert row.kind == "avatar_removal"
+
+
+@pytest.mark.asyncio
+async def test_a_moderator_is_told_when_the_block_actually_lifts(env):
+    """The wait is no longer one length, so the queue states the date rather
+    than a duration - and states none at all when the removal cost no wait."""
+    new_client, factory = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "BlockTgt")
+    moderator = await register(moderator_http, "BlockMod")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+
+    async def report_and_remove(seed, reporter_name):
+        # A fresh reporter each time: a removal does not decide the report it
+        # was made through, so the first one is still open (R-MOD-05).
+        reporter_http = new_client()
+        await register(reporter_http, reporter_name)
+        await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=seed)))
+        sent = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"],
+                "reason": "inappropriate_avatar",
+                "details": "Please look.",
+            },
+        )
+        assert sent.status_code == 201, sent.text
+        removed = await moderator_http.post(
+            f"/api/moderation/reports/{sent.json()['id']}/remove-avatar"
+        )
+        assert removed.status_code == 200, removed.text
+        return removed.json()
+
+    # The first costs no wait, so the route reports none rather than a date
+    # that has already passed.
+    first = await report_and_remove(41, "BlockRepA")
+    assert first["blockedUntil"] is None
+
+    listed = await moderator_http.get("/api/moderation/reports")
+    incident = next(
+        item
+        for item in listed.json()["incidents"]
+        if item["reportedUserId"] == target["id"]
+    )
+    assert incident["picture"]["status"] == "removed"
+    assert incident["picture"]["uploadBlockedUntil"] is None
+
+    # The second starts one, and it is a date.
+    second = await report_and_remove(42, "BlockRepB")
+    assert second["blockedUntil"] is not None

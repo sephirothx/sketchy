@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { sessionFrom } from "../lib/roomEntryState";
 import { emitWithAck } from "../lib/socket";
-import { friendActionFor, isFriend, withFriendsFirst } from "../lib/friends";
+import { isFriend, lobbyRowMayOfferFriendship, withFriendsFirst } from "../lib/friends";
 import { presenceSummary } from "../lib/lobbyPresence";
 import type { OnlinePlayer } from "../lib/lobbyPresence";
 import { useAuthStore } from "../store/authStore";
@@ -12,8 +12,9 @@ import { useGameStore } from "../store/gameStore";
 import { usePresenceStore } from "../store/presenceStore";
 import { useToast } from "../lib/toast";
 import { Avatar } from "./ui/Avatar";
+import { LobbyPlayerMenu } from "./LobbyPlayerMenu";
+import { ReportAccountDialog } from "./ReportAccountDialog";
 import { Button } from "./ui/Button";
-import { PlusIcon } from "./icons";
 import type { AckResponse } from "../types";
 
 /** Who else is here, beside the room list.
@@ -21,38 +22,42 @@ import type { AckResponse } from "../types";
 A plain list rather than something to open: at the lobby's scale it fits on
 screen, and the whole value of it is being readable without a click.
 
+**No request state.** It says who is around and what they are doing, and never
+reports a request in either direction — a row comes and goes as people open and
+close tabs, so a request reported on one was answerable only while its sender
+happened to still be standing there. Answering is on the friends surface,
+whether or not the other person is online
+(R-FRIEND-10, R-FRIEND-11). *Join* is here because it is about a friend's game
+rather than about the friendship, and each row's menu offers what can be done
+about the person on it: their profile, a friendship, a report.
+
 There is deliberately no filter. The list is capped, so a filter over it would
 answer "no such player" about somebody who is online — and nobody scans a list
 this size by typing anyway. Finding a specific person is a different feature
-from seeing who is around, and it needs a server-side lookup rather than a text
-box over the rows that happened to fit. */
+from seeing who is around: it is the profile, reached from a row's menu here or
+from a game's participant list. */
 export function OnlinePlayersPanel() {
   const presence = usePresenceStore((state) => state.presence);
   const myUserId = useAuthStore((state) => state.user?.id ?? null);
   const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
   const lists = useFriendsStore((state) => state.lists);
-  const pending = useFriendsStore((state) => state.pending);
   const addFriend = useFriendsStore((state) => state.add);
-  const acceptRequest = useFriendsStore((state) => state.accept);
-  const declineRequest = useFriendsStore((state) => state.remove);
   const { notify } = useToast();
   const navigate = useNavigate();
   const setSession = useGameStore((state) => state.setSession);
+  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<{
+    userId: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null>(null);
+  // The viewer, in the shape the friendship rules take it.
+  const me = myUserId ? { userId: myUserId, isAnonymous: iAmAGuest } : null;
 
   // Friends first, then the order the server sent — see `withFriendsFirst`.
   const players = useMemo(
     () => withFriendsFirst(presence.players, lists),
     [presence.players, lists],
-  );
-
-  // Somebody who has asked to be friends but is not online has nowhere else to
-  // appear, so the requests ride above the list rather than inside it.
-  const offlineRequests = useMemo(
-    () =>
-      lists.incoming.filter(
-        (entry) => !presence.players.some((p) => p.userId === entry.userId),
-      ),
-    [lists.incoming, presence.players],
   );
 
   async function joinFriend(player: OnlinePlayer) {
@@ -83,51 +88,12 @@ export function OnlinePlayersPanel() {
         <span className="lobby-rooms-count">{presenceSummary(presence)}</span>
       </div>
 
-      {offlineRequests.length > 0 && (
-        <ul className="online-players-list online-requests" data-testid="friend-requests">
-          {offlineRequests.map((entry) => (
-            <li key={entry.userId} className="online-player-row is-request">
-              <Avatar
-                name={entry.displayName}
-                nameColor={entry.nameColor ?? undefined}
-                avatarUrl={entry.avatarUrl}
-                isAnonymous={entry.isAnonymous}
-                size={28}
-              />
-              <span className="online-player-name">{entry.displayName}</span>
-              <span className="online-player-actions">
-                <Button
-                  variant="primary"
-                  compact
-                  disabled={pending === entry.userId}
-                  onClick={() => void acceptRequest(entry.userId)}
-                >
-                  Accept
-                </Button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-compact"
-                  disabled={pending === entry.userId}
-                  onClick={() => void declineRequest(entry.userId)}
-                >
-                  Decline
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {players.length === 0 && offlineRequests.length === 0 ? (
+      {players.length === 0 ? (
         <p className="online-players-empty">Nobody else is here right now.</p>
       ) : (
         <ul className="online-players-list" data-testid="online-players-list">
           {players.map((player) => {
-            const action = iAmAGuest
-              ? "none"
-              : friendActionFor(player, lists, myUserId);
             const theyAreAFriend = isFriend(lists, player.userId);
-            const busy = pending === player.userId;
             return (
               <li
                 key={player.userId}
@@ -138,45 +104,66 @@ export function OnlinePlayersPanel() {
                   nameColor={player.nameColor ?? undefined}
                   avatarUrl={player.avatarUrl}
                   isAnonymous={player.isAnonymous}
+                  isFriend={theyAreAFriend}
                   size={28}
                 />
-                <span
-                  className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
-                  style={
-                    player.isAnonymous || !player.nameColor
-                      ? undefined
-                      : { color: player.nameColor }
-                  }
-                >
-                  {player.displayName}
-                </span>
+                {/* The disc's mark is decorative, so the name carries the
+                    word - beside it rather than inside the name itself,
+                    which is the player's and nothing else. */}
+                {theyAreAFriend && <span className="visually-hidden">Friend</span>}
+                {/* A guest has no profile worth opening, nothing to befriend
+                    and no account to report: their identity is a browser, so
+                    their name stays plain text and the row offers nothing.
+                    Your own row offers nothing either. */}
+                {player.isAnonymous || player.userId === myUserId ? (
+                  <span
+                    className={`online-player-name${player.isAnonymous ? " is-guest" : ""}`}
+                    style={
+                      player.isAnonymous || !player.nameColor
+                        ? undefined
+                        : { color: player.nameColor }
+                    }
+                  >
+                    {player.displayName}
+                  </span>
+                ) : (
+                  <LobbyPlayerMenu
+                    userId={player.userId}
+                    displayName={player.displayName}
+                    isOpen={openMenuFor === player.userId}
+                    onOpenChange={(open) =>
+                      setOpenMenuFor(open ? player.userId : null)
+                    }
+                    onAddFriend={
+                      lobbyRowMayOfferFriendship(
+                        { userId: player.userId, isAnonymous: player.isAnonymous },
+                        lists,
+                        me,
+                      )
+                        ? () => void addFriend(player.userId)
+                        : null
+                    }
+                    onReport={
+                      iAmAGuest
+                        ? null
+                        : () =>
+                            setReporting({
+                              userId: player.userId,
+                              displayName: player.displayName,
+                              avatarUrl: player.avatarUrl ?? null,
+                            })
+                    }
+                  >
+                    <span
+                      className="online-player-name"
+                      style={player.nameColor ? { color: player.nameColor } : undefined}
+                    >
+                      {player.displayName}
+                    </span>
+                  </LobbyPlayerMenu>
+                )}
 
                 <span className="online-player-actions">
-                  {action === "add" && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-compact online-add-friend"
-                      disabled={busy}
-                      title={`Add ${player.displayName} as a friend`}
-                      aria-label={`Add ${player.displayName} as a friend`}
-                      onClick={() => void addFriend(player.userId)}
-                    >
-                      <PlusIcon size={14} />
-                    </button>
-                  )}
-                  {action === "accept" && (
-                    <Button
-                      variant="primary"
-                      compact
-                      disabled={busy}
-                      onClick={() => void acceptRequest(player.userId)}
-                    >
-                      Accept
-                    </Button>
-                  )}
-                  {action === "sent" && (
-                    <span className="online-player-status">Request sent</span>
-                  )}
                   {/* Only a friend gets a way in, and only when there is
                       something to join. Everyone else's row says where they
                       are and stops there. */}
@@ -198,6 +185,14 @@ export function OnlinePlayersPanel() {
             );
           })}
         </ul>
+      )}
+      {reporting && (
+        <ReportAccountDialog
+          userId={reporting.userId}
+          displayName={reporting.displayName}
+          avatarUrl={reporting.avatarUrl}
+          onClose={() => setReporting(null)}
+        />
       )}
     </section>
   );

@@ -4,7 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { AuthDialog } from "../components/AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { AppHeader } from "../components/AppHeader";
-import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
+import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons";
+import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
@@ -31,6 +32,10 @@ import {
 } from "../lib/profile";
 import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
+import { isFriend, profileFriendActionFor } from "../lib/friends";
+import { useFriendsStore } from "../store/friendsStore";
+import { FriendButton } from "../components/FriendButton";
+import { FriendMarkIcon } from "../components/icons";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -443,9 +448,20 @@ function ProfileView({ userId }: { userId: string }) {
   // falling apart should still be findable.
   const [includeAbandoned, setIncludeAbandoned] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportingPicture, setReportingPicture] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
   const login = useAuthStore((s) => s.login);
+  const friendLists = useFriendsStore((s) => s.lists);
+  // Nothing about a friendship is drawn until the lists are an answer about
+  // *this* viewer. Empty lists and unread lists are the same shape, and
+  // guessing wrong here is not cosmetic: an incoming request would be shown
+  // as "Add friend", and pressing it accepts (asking back is how you say
+  // yes) - so the page would have offered one thing and done another.
+  const friendsKnown = useFriendsStore(
+    (s) => s.loaded && s.ownerId === (currentUser?.id ?? null),
+  );
+  const viewerIsFriend = friendsKnown && isFriend(friendLists, userId);
 
   // Which list is current. Bumped when a reload starts and again when it
   // replaces the list, so a page fetched for the previous one - a "load
@@ -515,7 +531,12 @@ function ProfileView({ userId }: { userId: string }) {
       {subject && stats && (
         <>
           <header className="profile-identity">
-            {/* The avatar wears the same color as the name it belongs to. */}
+            {/* The avatar wears the same color as the name it belongs to, and
+                the friend mark if this is one — the same shape the lobby and
+                the roster use, so "we are friends" looks identical wherever
+                it is read. Its own markup rather than `<Avatar>`: this disc
+                is 56px with the page's own type scale on it. */}
+            <span className="avatar-frame" aria-hidden="true">
             <span
               className={`profile-avatar avatar avatar-player${
                 !subject.isAnonymous && subject.avatarUrl ? " has-picture" : ""
@@ -535,8 +556,17 @@ function ProfileView({ userId }: { userId: string }) {
                 avatarInitial(shownName)
               )}
             </span>
+            {viewerIsFriend && (
+              <span className="avatar-friend">
+                <FriendMarkIcon size={22} />
+              </span>
+            )}
+            </span>
             <div>
               <h1>
+                {/* The disc's mark is decorative, so the heading carries the
+                    word for a screen reader. */}
+                {viewerIsFriend && <span className="visually-hidden">Friend. </span>}
                 <PlayerName
                   name={shownName}
                   nameColor={subject.nameColor}
@@ -556,7 +586,50 @@ function ProfileView({ userId }: { userId: string }) {
                 )}
               </p>
             </div>
+            {/* The one place a person is reachable after the game they were
+                in has ended. The lobby can only offer this to whoever is
+                standing in it right now, and a profile is linked from every
+                game's participant list (R-FRIEND-10). */}
+            <FriendButton
+              action={!friendsKnown ? "none" : profileFriendActionFor(
+                { userId, isAnonymous: subject.isAnonymous },
+                friendLists,
+                currentUser
+                  ? { userId: currentUser.id, isAnonymous: currentUser.isAnonymous }
+                  : null,
+                )}
+              userId={userId}
+              displayName={shownName}
+            />
+            {/* The other place an account's name and picture are actually
+                looked at, and so the other place they have to be reportable
+                from (R-AVA-06). Offered on the same terms as the lobby's:
+                somebody else's registered account, and an identity of your
+                own to report from (R-MOD-06). No picture is not a reason to
+                withhold it - the name is always there to complain about. */}
+            {!isOwnProfile &&
+              !currentUser?.isAnonymous &&
+              !subject.isAnonymous && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact profile-report-picture"
+                  title={`Report ${shownName}`}
+                  aria-label={`Report ${shownName}`}
+                  onClick={() => setReportingPicture(true)}
+                >
+                  <FlagIcon size={14} />
+                </button>
+              )}
           </header>
+
+          {reportingPicture && (
+            <ReportAccountDialog
+              userId={userId}
+              displayName={shownName}
+              avatarUrl={subject.avatarUrl}
+              onClose={() => setReportingPicture(false)}
+            />
+          )}
 
           {isOwnProfile && subject.isAnonymous && (
             <section className="panel profile-claim">

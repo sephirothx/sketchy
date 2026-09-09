@@ -2,6 +2,7 @@ import { Avatar } from "./ui/Avatar";
 import { rankGuesses } from "../lib/guessOrder";
 import { useGameStore } from "../store/gameStore";
 import type { PlayerInfo } from "../types";
+import { useRoomFriendsStore } from "../store/roomFriendsStore";
 
 /**
  * Who has already guessed, and who is still hunting — the turn's live
@@ -20,6 +21,7 @@ interface GuessPipsProps {
 
 export function GuessPips({ onOpenPlayers }: GuessPipsProps) {
   const players = useGameStore((state) => state.players);
+  const friendSeats = useRoomFriendsStore((state) => state.seatIds);
   const drawerId = useGameStore((state) => state.drawerId);
   const myPlayerId = useGameStore((state) => state.playerId);
   const turnCorrectGuesses = useGameStore((state) => state.turnCorrectGuesses);
@@ -54,6 +56,7 @@ export function GuessPips({ onOpenPlayers }: GuessPipsProps) {
             player={player}
             place={placeOf[player.playerId]}
             isMe={player.playerId === myPlayerId}
+            isFriend={friendSeats.has(player.playerId)}
           />
         ))}
       </span>
@@ -88,19 +91,22 @@ function GuessPip({
   player,
   place,
   isMe,
+  isFriend,
 }: {
   player: PlayerInfo;
   place: number | undefined;
   isMe: boolean;
+  isFriend: boolean;
 }) {
   const got = place != null;
   return (
     <span
       className={`guess-pip${got ? " has-guessed" : ""}${isMe ? " is-me" : ""}`}
-      title={got ? `${player.nickname} guessed it` : `${player.nickname} is still guessing`}
+      title={`${player.nickname}${isFriend ? " (friend)" : ""} ${got ? "guessed it" : "is still guessing"}`}
       data-testid={got ? "guess-pip-correct" : "guess-pip-waiting"}
     >
       <Avatar
+        isFriend={isFriend}
         name={player.nickname}
         nameColor={player.nameColor}
         avatarUrl={player.avatarUrl}

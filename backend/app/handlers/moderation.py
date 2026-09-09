@@ -17,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.erasure import AccountErasedError, require_live_account
-from app.db.models import PlayerReport
-from app.domain_values import ReportStatus
+from app.db.models import PlayerReport, User
+from app.domain_values import ReportReason, ReportScope, ReportStatus
 from app.rooms import majority_of
 from app.services.player_reports import (
     context_around,
@@ -199,6 +199,17 @@ async def report_player(ctx: HandlerContext, sid, data):
                         "has not looked at it yet."
                     ),
                 }
+            about_picture = payload.reason == ReportReason.INAPPROPRIATE_AVATAR.value
+            reported_avatar_key = None
+            if about_picture:
+                reported_avatar_key = await session.scalar(
+                    select(User.avatar_key).where(User.id == UUID(target.user_id))
+                )
+                if reported_avatar_key is None:
+                    return {
+                        "ok": False, "errorCode": ErrorCode.CANNOT_REPORT,
+                        "error": "That player has no picture to report.",
+                    }
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),
@@ -220,6 +231,16 @@ async def report_player(ctx: HandlerContext, sid, data):
                 # once the evidence itself names them.
                 game_id=None,
                 turn_id=None,
+                # The room this seat is sitting in, which is the incident
+                # (#620). Taken from the live room rather than from anything
+                # the client said, like the evidence above it.
+                scope=ReportScope.ROOM,
+                room_instance_id=UUID(room.retention_scope_id),
+                # Which picture, when the complaint is about one. A room
+                # report keeps its room scope - it happened at that table -
+                # but a reviewer still has to be told the picture changed
+                # since (R-AVA-04).
+                reported_avatar_key=reported_avatar_key,
                 reason=payload.reason,
                 details=payload.details,
                 messages=messages,

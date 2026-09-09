@@ -14,7 +14,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.friends import create_friends_router
+from app.api.friends import ACCOUNT_REQUIRED_HEADER, create_friends_router
 from app.api.user_blocks import create_user_blocks_router
 from app.auth.blocks import BlockService
 from app.auth.middleware import SessionAuthMiddleware
@@ -461,3 +461,109 @@ async def test_a_request_is_still_answered_vaguely(env):
     blocked = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
     assert blocked.status_code == 200
     assert blocked.json()["status"] == FriendshipState.PENDING.value
+
+
+async def test_the_guest_refusal_names_itself_so_a_403_is_not_guessed_at(env):
+    """A status is not a reason, and this one is acted on hard.
+
+    The client shows an empty friends list on the strength of it. A suspended
+    account is refused with a 403 too, by the middleware and before any of
+    this runs - so reading "403" as "this caller is a guest" would wipe a real
+    account's lists off the screen.
+    """
+    new_client, _, _ = env
+    guest_http = new_client()
+    await name_a_guest(guest_http, "Guesty")
+
+    refused = await guest_http.get("/api/users/me/friends")
+    assert refused.status_code == 403
+    assert refused.headers.get(ACCOUNT_REQUIRED_HEADER)
+
+    # And a refusal that is *not* about having an account does not carry it,
+    # which is the half that makes the header worth reading.
+    signed_out = new_client()
+    anonymous = await signed_out.get("/api/users/me/friends")
+    assert anonymous.status_code == 401
+    assert ACCOUNT_REQUIRED_HEADER not in anonymous.headers
+
+
+async def test_an_acceptance_is_owed_to_the_asker_however_late_they_read(env):
+    """The news survives the asker not being there for it.
+
+    It used to be derived on the client, by watching a name move from
+    `outgoing` to `friends`. A client that never saw the `outgoing` state
+    cannot see that move: reload while the answer is in flight and the first
+    lists it ever reads already contain the friendship, so nothing is noticed
+    and the asker is never told - on that visit or any later one (#724).
+    """
+    new_client, _, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "AdaOwed")
+    bob = await register(bob_http, "BobOwed")
+
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    # Nothing owed while it is still waiting.
+    assert (await ada_http.get("/api/users/me/friends")).json()["announce"] == []
+
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+
+    # Ada reads for the first time *after* the answer. There is no earlier
+    # read to compare against, and she is told anyway.
+    owed = (await ada_http.get("/api/users/me/friends")).json()["announce"]
+    assert [entry["userId"] for entry in owed] == [bob["id"]]
+    assert owed[0]["displayName"] == "BobOwed"
+
+    # It stays owed until it has actually been said: reading is not telling.
+    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
+
+    told = await ada_http.post(
+        "/api/users/me/friends/announced", json={"userIds": [bob["id"]]}
+    )
+    assert told.json() == {"ok": True, "announced": 1}
+    assert (await ada_http.get("/api/users/me/friends")).json()["announce"] == []
+
+    # Said once: a second acknowledgement takes nothing.
+    again = await ada_http.post(
+        "/api/users/me/friends/announced", json={"userIds": [bob["id"]]}
+    )
+    assert again.json() == {"ok": True, "announced": 0}
+
+
+async def test_only_the_asker_is_owed_the_news_of_an_acceptance(env):
+    """The one who accepted already knows: they did it."""
+    new_client, _, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "AdaSide")
+    bob = await register(bob_http, "BobSide")
+
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+
+    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
+    assert (await bob_http.get("/api/users/me/friends")).json()["announce"] == []
+
+    # And the accepter cannot mark the asker's news as told for them.
+    taken = await bob_http.post(
+        "/api/users/me/friends/announced", json={"userIds": [ada["id"]]}
+    )
+    assert taken.json() == {"ok": True, "announced": 0}
+    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
+
+
+async def test_an_acknowledgement_naming_nothing_records_nothing(env):
+    """What a torn-down render sends, if it sends anything at all: the
+    message was never shown, so nothing is owed less than it was."""
+    new_client, _, _ = env
+    ada_http, bob_http = new_client(), new_client()
+    ada = await register(ada_http, "AdaEmpty")
+    bob = await register(bob_http, "BobEmpty")
+
+    await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    await bob_http.post(f"/api/users/me/friends/{ada['id']}/accept")
+
+    empty = await ada_http.post(
+        "/api/users/me/friends/announced", json={"userIds": []}
+    )
+    assert empty.json() == {"ok": True, "announced": 0}
+    # Still owed, because nobody was told.
+    assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
