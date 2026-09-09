@@ -2,11 +2,12 @@ import { useClock } from "../hooks/useClock";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api";
-import { fetchSuspensionDrawing, reportedDrawing } from "../lib/moderation";
+import { fetchSuspensionDrawing } from "../lib/moderation";
 import { socket } from "../lib/socket";
 import { ReportedDrawing } from "./ReportedDrawing";
 import {
   onSuspended,
+  reportedDrawings,
   reportedMessages,
   reportSuspended,
   suspensionDuration,
@@ -36,7 +37,7 @@ export function SuspensionNotice() {
         reason: typeof body.reason === "string" ? body.reason : null,
         expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
         messages: reportedMessages(body.messages),
-        drawing: reportedDrawing(body.drawing),
+        drawings: reportedDrawings(body.drawings),
       });
     }
     socket.on("account_suspended", onAccountSuspended);
@@ -103,20 +104,26 @@ export function SuspensionNotice() {
             </ul>
           </>
         )}
-        {suspension.drawing && (
+        {suspension.drawings.length > 0 && (
           <>
             <p className="modal-body suspension-evidence-label">
-              The drawing this was about:
+              {suspension.drawings.length === 1
+                ? "The drawing this was about:"
+                : "The drawings this was about:"}
             </p>
-            {/* Their own work, as it was when the report was made. The bytes
-                come through the one path a suspended account may still
-                reach for them. */}
-            <ReportedDrawing
-              className="suspension-drawing"
-              load={fetchSuspensionDrawing}
-              label={`Your drawing of ${suspension.drawing.prompt}, as it was reported`}
-              caption={<>You were asked to draw <strong>{suspension.drawing.prompt}</strong>.</>}
-            />
+            {/* Their own work, as it was when each report was made - several
+                when several reporters each caught the canvas at their own
+                moment. The bytes come through the one path a suspended
+                account may still reach for them. */}
+            {suspension.drawings.map((drawing) => (
+              <ReportedDrawing
+                key={drawing.reportId}
+                className="suspension-drawing"
+                load={() => fetchSuspensionDrawing(drawing.reportId)}
+                label={`Your drawing of ${drawing.prompt}, as it was reported`}
+                caption={<>You were asked to draw <strong>{drawing.prompt}</strong>.</>}
+              />
+            ))}
           </>
         )}
         <button

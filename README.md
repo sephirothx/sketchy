@@ -961,7 +961,23 @@ their preserved message evidence and, when one was attached, the drawing drawn
 from its stored frame beside the prompt the drawer was given, and
 prompt-content reports against a list or a single prompt. A warned or
 suspended player is shown that same drawing with their own words: it is
-their work, and a reason with nothing behind it is easy to dismiss. Resolving a content
+their work, and a reason with nothing behind it is easy to dismiss.
+
+Reports of one incident are read and decided together. Five people watching one
+person do one thing file five reports, and the one-open-report rule does not stop
+that - it stops one *reporter* saying it twice. So the queue groups them by the
+reported player and the room instance the complaint came from, and shows one entry
+saying how many complained. The count is shown and never sorts the queue: six
+reports is six people who chose to complain, not six times the evidence, and
+letting a pile-on jump the queue would reward arranging one. Each complaint keeps
+its own reason and its own words, because five people rarely describe one thing the
+same way; the evidence is merged into one thread, each line once, marked with how
+many of the reporters picked it out. One Dismiss, Warn or Suspend then covers the
+whole of it under one note - and the warning or suspension shows the player the
+cited lines and drawings from all of it, not from whichever complaint the
+moderator happened to open. Every lobby report about one account shares one bucket,
+the lobby having no room instance to name; a report that cited nothing names no
+place to look and stands on its own. Resolving a content
 report records that it was looked at; hiding the list or prompt is the separate
 decision that acts on it, and the owner is told when it happens if they have a
 confirmed address. Every review takes a note, so no decision is anonymous. A
@@ -978,10 +994,15 @@ game that stops and a page that starts refusing things. A player mid-game hears
 it on the socket; everybody else learns from the first request that is refused,
 which now carries the reason and the end date rather than only saying no. When the
 suspension was decided from a report, the notice also shows the messages that
-report was about - their own words, as they were when it was made, which is
-what turns a reason into something they can weigh. `user_bans.source_report_id`
-is what makes that possible, and a ban naming a report about somebody else is
-refused, so a suspension cannot be used to show one player another's messages.
+decision was about - their own words, as they were when the reports were made,
+which is what turns a reason into something they can weigh. That is the cited
+lines of every report the decision covered rather than only the one the ban
+names, so what they are shown does not depend on which complaint was opened
+first; it cannot show them anything but their own, since a cited line is theirs
+by construction and what was said *around* it stays a moderator's.
+`user_bans.source_report_id` is what makes that possible, and a ban naming a
+report about somebody else is refused, so a suspension cannot be used to show
+one player another's messages.
 The notice cannot be dismissed, because there is nothing behind it to go back
 to; its one button really signs out, which is why logout is among the few paths
 a suspended account may still reach.
@@ -1366,6 +1387,7 @@ backend/
       game_handoff.py Durable handoff of a finished game into history: staged whole, replayed by a loop
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
+      incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
     presenters.py Pure construction of room, turn, round, and session payloads
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable

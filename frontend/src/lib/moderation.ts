@@ -108,6 +108,72 @@ export interface PlayerReport {
   reviewedAt: string | null;
 }
 
+/** Where a complaint happened, and so which incident it belongs to.
+
+`room` groups by the room instance it was filed in; `lobby` shares one bucket
+per reported account, the lobby having no instance to name; `unscoped` cited
+nothing, names no place to look, and stands alone. */
+export type ReportScope = "room" | "lobby" | "unscoped";
+
+/** One complaint inside an incident: who made it, in what words, and why.
+
+It carries no evidence of its own - the incident merges that above these,
+because several reporters describing one thing are describing one thread seen
+from several seats. */
+export interface IncidentReport {
+  id: string;
+  reporterUserId: string | null;
+  reason: ReportReason;
+  details: string;
+  contextSnapshot: Record<string, unknown>;
+  gameId: string | null;
+  turnId: string | null;
+  createdAt: string;
+  /** The canvas as this reporter saw it, if they attached one. */
+  drawing: PlayerReportDrawing | null;
+}
+
+/** A line of an incident's merged thread, and who complained about it. */
+export interface IncidentEvidence extends PlayerReportMessageEvidence {
+  /** The reports that cited this line. Empty for context the server copied
+      around somebody else's citation - `role` says the same thing. */
+  citedBy: string[];
+}
+
+/** One reported account, in one place: the reports about it read as one case.
+
+This is what a moderator reads and decides. `reporterCount` is shown and
+deliberately orders nothing - six reports is six people who chose to complain,
+not six times the evidence, and letting a pile-on jump the queue would reward
+arranging one. */
+export interface ModerationIncident {
+  /** The oldest report's id. Stable as more reporters arrive, and already a
+      row every decision route accepts. */
+  id: string;
+  reportedUserId: string | null;
+  /** Null when the account is gone. */
+  reportedPlayer: ReportedPlayerContext | null;
+  scope: ReportScope;
+  reporterCount: number;
+  /** The distinct reasons given, in the order they were first given. */
+  reasons: ReportReason[];
+  openedAt: string;
+  latestReportedAt: string;
+  status: ReportStatus;
+  reports: IncidentReport[];
+  /** Every report's evidence as one thread, each line once, as it was said. */
+  evidence: IncidentEvidence[];
+  /** Every canvas the reports carried - the drawing as it changed under them. */
+  drawings: (PlayerReportDrawing & { reportId: string })[];
+  outcome: ReportOutcome;
+  reviewedByUserId: string | null;
+  reviewedBy: string | null;
+  resolutionNote: string | null;
+  reviewedAt: string | null;
+  /** Which moderator action decided it; null while it waits. */
+  decisionGroupId: string | null;
+}
+
 export interface UserBan {
   id: string;
   userId: string | null;
@@ -173,11 +239,20 @@ export function submitPlayerReport(input: {
   return apiRequest("/api/reports", { method: "POST", body: input });
 }
 
-export function listModerationReports(status?: ReportStatus): Promise<{
-  reports: PlayerReport[];
-}> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest(`/api/moderation/reports${query}`);
+/** The queue as incidents: reports of one thing, read once.
+
+`limit` and `offset` page incidents rather than reports, because an incident
+is the unit a moderator reads and decides. */
+export function listModerationReports(
+  status?: ReportStatus,
+  input: { limit?: number; offset?: number } = {},
+): Promise<{ incidents: ModerationIncident[]; total: number; hasMore: boolean }> {
+  const query = new URLSearchParams();
+  if (status) query.set("status", status);
+  if (input.limit !== undefined) query.set("limit", String(input.limit));
+  if (input.offset !== undefined) query.set("offset", String(input.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return apiRequest(`/api/moderation/reports${suffix}`);
 }
 
 /** The drawing a report carries, in the wire format a live canvas uses. */
@@ -202,11 +277,13 @@ export function listClosedCases(input: { limit?: number; offset?: number } = {})
   return apiRequest(`/api/moderation/closed-cases?limit=${limit}&offset=${offset}`);
 }
 
+/** Decide an incident. The id names one of its reports; every report of the
+    incident is decided with it, under one note and one step-up. */
 export function reviewModerationReport(
   reportId: string,
   status: Exclude<ReportStatus, "pending">,
   note: string,
-): Promise<PlayerReport> {
+): Promise<ModerationIncident> {
   return apiRequest(`/api/moderation/reports/${reportId}`, {
     method: "PATCH",
     body: { status, note },
@@ -236,20 +313,24 @@ export interface PendingWarning {
   id: string;
   reason: string;
   createdAt: string;
-  /** The reported messages behind it - the player's own words. */
+  /** The reported messages behind it - the player's own words, from every
+      report the decision covered. */
   messages: { text: string; at: string | null }[];
-  /** The drawing the report carried, if one did - the player's own work. */
-  drawing: PlayerReportDrawing | null;
+  /** The canvases those reports carried, if any did - the player's own work. */
+  drawings: (PlayerReportDrawing & { reportId: string })[];
 }
 
-/** The drawing behind the caller's own warning. */
-export function fetchWarningDrawing(warningId: string): Promise<ArrayBuffer> {
-  return apiBinaryRequest(`/api/warnings/${warningId}/drawing`);
+/** One drawing behind the caller's own warning. */
+export function fetchWarningDrawing(
+  warningId: string,
+  reportId: string,
+): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/warnings/${warningId}/drawings/${reportId}`);
 }
 
-/** The drawing behind the caller's own suspension, reachable while suspended. */
-export function fetchSuspensionDrawing(): Promise<ArrayBuffer> {
-  return apiBinaryRequest("/api/suspension/drawing");
+/** One drawing behind the caller's own suspension, reachable while suspended. */
+export function fetchSuspensionDrawing(reportId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/suspension/drawings/${reportId}`);
 }
 
 /** Keep only a payload shaped like a drawing's metadata. */

@@ -165,9 +165,11 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             request.url.path.startswith("/api/auth/data-exports")
             or request.url.path == "/api/auth/account"
             or request.url.path == "/api/auth/logout"
-            # The drawing the suspension notice is about: the refusal below
-            # names it, and this is the one path that can hand it over.
-            or request.url.path == "/api/suspension/drawing"
+            # The drawings the suspension notice is about: the refusal below
+            # names them, and this is the one path that can hand them over.
+            # One per report the decision covered (#620), so the path names
+            # which; the route checks it against that decision group.
+            or request.url.path.startswith("/api/suspension/drawings/")
         )
         if (
             resolution.banned_user_id is not None

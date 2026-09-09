@@ -32,7 +32,15 @@ function warningFromPayload(payload: unknown): PendingWarning | null {
             !!line && typeof (line as { text?: unknown }).text === "string",
         )
       : [],
-    drawing: reportedDrawing(warning.drawing),
+    drawings: Array.isArray(warning.drawings)
+      ? warning.drawings.flatMap((entry) => {
+          const drawing = reportedDrawing(entry);
+          const reportId = (entry as { reportId?: unknown })?.reportId;
+          return drawing && typeof reportId === "string"
+            ? [{ ...drawing, reportId }]
+            : [];
+        })
+      : [],
   };
 }
 
@@ -133,18 +141,22 @@ export function WarningNotice() {
             </ul>
           </>
         )}
-        {warning.drawing && (
+        {warning.drawings.length > 0 && (
           <>
             <p className="modal-body suspension-evidence-label">
-              The drawing this was about:
+              {warning.drawings.length === 1
+                ? "The drawing this was about:"
+                : "The drawings this was about:"}
             </p>
-            <ReportedDrawing
-              key={warning.id}
-              className="suspension-drawing"
-              load={() => fetchWarningDrawing(warning.id)}
-              label={`Your drawing of ${warning.drawing.prompt}, as it was reported`}
-              caption={<>You were asked to draw <strong>{warning.drawing.prompt}</strong>.</>}
-            />
+            {warning.drawings.map((drawing) => (
+              <ReportedDrawing
+                key={drawing.reportId}
+                className="suspension-drawing"
+                load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
+                label={`Your drawing of ${drawing.prompt}, as it was reported`}
+                caption={<>You were asked to draw <strong>{drawing.prompt}</strong>.</>}
+              />
+            ))}
           </>
         )}
         <button

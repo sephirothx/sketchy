@@ -1,6 +1,7 @@
 """Reports, moderator actions, bans, and authentication enforcement."""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -232,7 +233,8 @@ async def test_report_pins_only_messages_the_reporter_received(env):
     assert forbidden.status_code == 403
 
     listing = await moderator_http.get("/api/moderation/reports")
-    evidence = listing.json()["reports"][0]["messageEvidence"]
+    incident = listing.json()["incidents"][0]
+    evidence = incident["evidence"]
     assert evidence == [
         {
             "sourceMessageId": str(visible_id),
@@ -250,6 +252,10 @@ async def test_report_pins_only_messages_the_reporter_received(env):
             "text": "Selected abusive message",
             "messageCreatedAt": now.isoformat(),
             "copiedAt": evidence[0]["copiedAt"],
+            # Which reports complained about this line. One, here; the merged
+            # thread of an incident says how many of its reporters picked it
+            # out (#620).
+            "citedBy": [incident["reports"][0]["id"]],
         }
     ]
 
@@ -285,7 +291,8 @@ async def test_moderator_can_review_once_and_every_action_is_audited(env):
         "/api/moderation/reports", params={"status": "pending"}
     )
     assert listing.status_code == 200
-    assert listing.json()["reports"][0]["details"] == "Repeated harassment in chat."
+    incident = listing.json()["incidents"][0]
+    assert incident["reports"][0]["details"] == "Repeated harassment in chat."
 
     reviewed = await moderator_http.patch(
         f"/api/moderation/reports/{report_id}",
@@ -988,7 +995,7 @@ async def test_the_queue_shows_the_reported_players_standing(env):
     listing = await moderator_http.get(
         "/api/moderation/reports", params={"status": "pending"}
     )
-    report = listing.json()["reports"][0]
+    report = listing.json()["incidents"][0]
     player = report["reportedPlayer"]
     assert player["displayName"] == "StandingTarget"
     assert player["registered"] is True
@@ -1033,7 +1040,7 @@ async def test_a_consequence_decides_its_report_in_one_transaction(env):
     listing = await moderator_http.get(
         "/api/moderation/reports", params={"status": "resolved"}
     )
-    resolved = listing.json()["reports"][0]
+    resolved = listing.json()["incidents"][0]
     assert resolved["id"] == report_id
     assert resolved["resolutionNote"] == "Formal warning."
     assert resolved["reviewedByUserId"] == moderator["id"]
@@ -1159,13 +1166,13 @@ async def test_a_lobby_line_is_evidence_on_its_own_terms(env):
     listing = await moderator_http.get("/api/moderation/reports")
     [pinned] = [
         item
-        for item in listing.json()["reports"]
+        for item in listing.json()["incidents"]
         if item["reportedUserId"] == target["id"]
     ]
     # The cited line, and around it the reporter's own lobby line as context:
     # the lobby is one conversation, so that is where the context comes from,
     # and the room line is nowhere in it.
-    copied = pinned["messageEvidence"]
+    copied = pinned["evidence"]
     assert [(line["role"], line["text"]) for line in copied] == [
         ("cited", "Said to the whole lobby"),
         ("context", "The reporter's own lobby line"),
@@ -1260,17 +1267,17 @@ async def test_a_report_carries_what_was_said_around_the_cited_line(env):
     listing = await moderator_http.get("/api/moderation/reports")
     [case] = [
         item
-        for item in listing.json()["reports"]
+        for item in listing.json()["incidents"]
         if item["reportedUserId"] == target["id"]
     ]
-    copied = [(line["role"], line["text"]) for line in case["messageEvidence"]]
+    copied = [(line["role"], line["text"]) for line in case["evidence"]]
     assert copied == [
         *[("context", f"before {index}") for index in range(2, 12)],
         ("cited", "the line itself"),
         *[("context", f"after {index}") for index in range(5)],
     ]
     # Who said what survives the copy, so the thread reads as one.
-    by_text = {line["text"]: line for line in case["messageEvidence"]}
+    by_text = {line["text"]: line for line in case["evidence"]}
     assert by_text["before 2"]["senderDisplayName"] == "CtxOther"
     assert by_text["after 0"]["senderDisplayName"] == "CtxReporter"
     assert by_text["the line itself"]["senderUserId"] == target["id"]
@@ -1333,10 +1340,10 @@ async def test_a_report_with_nothing_cited_has_no_context(env):
     listing = await moderator_http.get("/api/moderation/reports")
     [case] = [
         item
-        for item in listing.json()["reports"]
+        for item in listing.json()["incidents"]
         if item["reportedUserId"] == target["id"]
     ]
-    assert case["messageEvidence"] == []
+    assert case["evidence"] == []
 
 
 @pytest.mark.asyncio
@@ -1413,10 +1420,10 @@ async def test_lobby_context_omits_authors_the_reporter_blocked(env):
     listing = await moderator_http.get("/api/moderation/reports")
     [case] = [
         item
-        for item in listing.json()["reports"]
+        for item in listing.json()["incidents"]
         if item["reportedUserId"] == target["id"]
     ]
-    assert [(line["role"], line["text"]) for line in case["messageEvidence"]] == [
+    assert [(line["role"], line["text"]) for line in case["evidence"]] == [
         ("context", "seen, said before"),
         ("cited", "the reported line"),
         ("context", "seen, said after"),
@@ -1478,9 +1485,9 @@ async def test_the_queue_carries_the_drawing_and_only_a_reviewer_reads_it(env):
         "/api/moderation/reports", params={"status": "pending"}
     )
     assert listing.status_code == 200
-    (report,) = listing.json()["reports"]
+    (report,) = listing.json()["incidents"]
     assert report["id"] == with_drawing
-    drawing = report["drawing"]
+    (drawing,) = report["drawings"]
     assert drawing["prompt"] == "lighthouse"
     assert drawing["roundNumber"] == 2
     assert drawing["actionCount"] == 0
@@ -1511,7 +1518,7 @@ async def test_the_queue_carries_the_drawing_and_only_a_reviewer_reads_it(env):
         json={"status": "resolved", "note": "It was a lighthouse after all."},
     )
     assert reviewed.status_code == 200
-    assert reviewed.json()["drawing"]["prompt"] == "lighthouse"
+    assert [row["prompt"] for row in reviewed.json()["drawings"]] == ["lighthouse"]
     assert (
         await moderator_http.get(f"/api/moderation/reports/{with_drawing}/drawing")
     ).content == frame
@@ -1530,7 +1537,7 @@ async def test_the_queue_carries_the_drawing_and_only_a_reviewer_reads_it(env):
         await moderator_http.get(
             "/api/moderation/reports", params={"status": "pending"}
         )
-    ).json()["reports"][0]["drawing"] is None
+    ).json()["incidents"][0]["drawings"] == []
     assert (
         await moderator_http.get(f"/api/moderation/reports/{without_drawing}/drawing")
     ).status_code == 404
@@ -1805,8 +1812,8 @@ async def test_a_closed_case_says_what_was_done_and_by_whom(env):
     assert still_open not in by_id
     pending = (
         await moderator_http.get("/api/moderation/reports", params={"status": "pending"})
-    ).json()["reports"]
-    assert [report["outcome"] for report in pending] == ["pending"]
+    ).json()["incidents"]
+    assert [incident["outcome"] for incident in pending] == ["pending"]
     assert pending[0]["reviewedBy"] is None
 
 
@@ -1849,19 +1856,32 @@ async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
         )
     ).json()["id"]
     pending = (await warned_http.get("/api/warnings/pending")).json()["warning"]
-    assert pending["drawing"]["prompt"] == "lighthouse"
-    assert "payload" not in pending["drawing"]
+    (drawing,) = pending["drawings"]
+    assert drawing["prompt"] == "lighthouse"
+    assert drawing["reportId"] == warning_report
+    assert "payload" not in drawing
     assert (
-        await warned_http.get(f"/api/warnings/{warning_id}/drawing")
+        await warned_http.get(
+            f"/api/warnings/{warning_id}/drawings/{warning_report}"
+        )
     ).content == frame
     # Nobody else's to see: not the reporter's, and not a moderator's by
     # this route either.
     assert (
-        await reporter_http.get(f"/api/warnings/{warning_id}/drawing")
+        await reporter_http.get(
+            f"/api/warnings/{warning_id}/drawings/{warning_report}"
+        )
+    ).status_code == 404
+    # A report the decision behind this warning did not cover names nothing
+    # this route will hand over, whoever asks.
+    assert (
+        await warned_http.get(
+            f"/api/warnings/{warning_id}/drawings/{generate_uuid()}"
+        )
     ).status_code == 404
     # A warning without a drawing behind it has none to give.
     assert (
-        await suspended_http.get("/api/suspension/drawing")
+        await suspended_http.get(f"/api/suspension/drawings/{generate_uuid()}")
     ).status_code == 404, "not suspended yet, so no suspension to ask about"
 
     suspension_report = await report_with_drawing(suspended["id"])
@@ -1873,8 +1893,12 @@ async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
     ).status_code == 201
     refused = await suspended_http.get("/api/auth/me")
     assert refused.status_code == 403
-    assert refused.json()["drawing"]["prompt"] == "lighthouse"
-    picture = await suspended_http.get("/api/suspension/drawing")
+    (suspension_drawing,) = refused.json()["drawings"]
+    assert suspension_drawing["prompt"] == "lighthouse"
+    assert suspension_drawing["reportId"] == suspension_report
+    picture = await suspended_http.get(
+        f"/api/suspension/drawings/{suspension_report}"
+    )
     assert picture.status_code == 200
     assert picture.content == frame
     assert picture.headers["cache-control"] == "private, no-store"
@@ -2029,3 +2053,484 @@ async def test_every_decision_records_which_decision_covered_the_report(env):
     # Every decision is its own, so no two of them share a group id.
     groups = [await group_of(row) for row in (dismissed, warned, banned)]
     assert len(set(groups)) == 3
+
+
+async def _room_report(client, target_id: str, message_id, details: str):
+    return await client.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target_id,
+            "reason": "harassment",
+            "details": details,
+            "messageIds": [str(message_id)],
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_reports_of_one_incident_are_one_queue_entry(env):
+    """Four people watching one thing are four complaints and one case (#620).
+
+    They meet on the reported account and the room instance the lines came
+    from. The reports keep their own words and reasons, because those differ
+    and a moderator reads them; the evidence is merged, because it is one
+    conversation seen from four seats. A report about the same account from a
+    different room instance is a different incident and stays its own entry.
+    """
+    new_client, factory, _ = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "PileTarget")
+    moderator = await register(moderator_http, "PileMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    reporters = []
+    for index in range(4):
+        client = new_client()
+        reporters.append((client, await register(client, f"PileRep{index}")))
+
+    now = datetime.now(timezone.utc)
+    room, other_room = generate_uuid(), generate_uuid()
+    shouted, muttered, elsewhere = generate_uuid(), generate_uuid(), generate_uuid()
+    audience = [target["id"], *[person["id"] for _, person in reporters]]
+    async with factory() as session:
+        async with session.begin():
+            common = {
+                "sender_user_id": UUID(target["id"]),
+                "sender_display_name_snapshot": "PileTarget",
+                "sender_is_anonymous_snapshot": False,
+                "is_spectator": False,
+                "message_kind": "chat",
+                "near_miss_kind": None,
+                "audience": "room",
+                "sender_player_id": generate_uuid(),
+                "created_at": now,
+                "expires_at": now + timedelta(days=30),
+            }
+            session.add_all(
+                [
+                    RoomMessage(
+                        id=shouted,
+                        room_instance_id=room,
+                        audience_user_ids=audience,
+                        text="the line everyone saw",
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=muttered,
+                        room_instance_id=room,
+                        audience_user_ids=[target["id"], reporters[0][1]["id"]],
+                        text="the line only one of them saw",
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=elsewhere,
+                        room_instance_id=other_room,
+                        audience_user_ids=audience,
+                        text="said in another room entirely",
+                        **common,
+                    ),
+                ]
+            )
+
+    # Three cite the line they all saw; the first also cites the one only
+    # they received, which is what the merged thread has to reconcile.
+    assert (
+        await _room_report(
+            reporters[0][0], target["id"], muttered, "They said this to me."
+        )
+    ).status_code == 201
+    for client, _ in reporters[1:3]:
+        assert (
+            await _room_report(client, target["id"], shouted, "This was out of order.")
+        ).status_code == 201
+    # A fourth complaint about the same person, from another room instance:
+    # same account, different incident.
+    assert (
+        await _room_report(
+            reporters[3][0], target["id"], elsewhere, "A different room."
+        )
+    ).status_code == 201
+
+    listing = await moderator_http.get(
+        "/api/moderation/reports", params={"status": "pending"}
+    )
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["total"] == 2, "two rooms, two incidents"
+    [pile, other] = body["incidents"]
+
+    assert pile["reporterCount"] == 3
+    assert pile["scope"] == "room"
+    assert pile["reportedUserId"] == target["id"]
+    assert len(pile["reports"]) == 3
+    # Each complaint keeps its own words.
+    assert [report["details"] for report in pile["reports"]] == [
+        "They said this to me.",
+        "This was out of order.",
+        "This was out of order.",
+    ]
+    # The incident is named by its oldest report, which is one the decision
+    # routes already accept.
+    assert pile["id"] == pile["reports"][0]["id"]
+
+    # One thread, each line once, in the order it was said - and it says how
+    # many of the incident's reporters picked each line out.
+    cites = {line["text"]: sorted(line["citedBy"]) for line in pile["evidence"]}
+    assert len(cites["the line everyone saw"]) == 2
+    assert len(cites["the line only one of them saw"]) == 1
+    assert "said in another room entirely" not in cites
+
+    assert other["reporterCount"] == 1
+    assert other["id"] != pile["id"]
+
+
+@pytest.mark.asyncio
+async def test_one_decision_closes_every_report_of_the_incident(env):
+    """A suspension for what somebody did leaves nothing for the other
+    complaints about it to still be waiting on (#620).
+
+    One step-up, one note, one action - and each report still carries its own
+    reviewer, moment and audit entry, so review stays one-way per row.
+    """
+    new_client, factory, _ = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "OneDecTarget")
+    moderator = await register(moderator_http, "OneDecMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+
+    now = datetime.now(timezone.utc)
+    room = generate_uuid()
+    line = generate_uuid()
+    reporters = []
+    for index in range(3):
+        client = new_client()
+        reporters.append((client, await register(client, f"OneDecRep{index}")))
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                RoomMessage(
+                    id=line,
+                    room_instance_id=room,
+                    sender_user_id=UUID(target["id"]),
+                    sender_player_id=generate_uuid(),
+                    sender_display_name_snapshot="OneDecTarget",
+                    sender_is_anonymous_snapshot=False,
+                    is_spectator=False,
+                    message_kind="chat",
+                    near_miss_kind=None,
+                    audience="room",
+                    audience_user_ids=[
+                        target["id"],
+                        *[person["id"] for _, person in reporters],
+                    ],
+                    text="what they all complained about",
+                    created_at=now,
+                    expires_at=now + timedelta(days=30),
+                )
+            )
+    for client, _ in reporters:
+        assert (
+            await _room_report(client, target["id"], line, "Please look at this.")
+        ).status_code == 201
+
+    incident = (
+        await moderator_http.get(
+            "/api/moderation/reports", params={"status": "pending"}
+        )
+    ).json()["incidents"][0]
+    assert incident["reporterCount"] == 3
+    report_ids = [report["id"] for report in incident["reports"]]
+
+    # Decided from the middle report, not the one that names the incident:
+    # any of them reaches the whole of it.
+    decided = await moderator_http.patch(
+        f"/api/moderation/reports/{report_ids[1]}",
+        json={"status": "dismissed", "note": "Heated, but not a rule broken."},
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["reporterCount"] == 3
+    assert decided.json()["outcome"] == "dismissed"
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PlayerReport).where(PlayerReport.id.in_([UUID(i) for i in report_ids]))
+            )
+        ).all()
+        assert {row.status for row in rows} == {"dismissed"}
+        # Each row carries its own decision, and they name one action.
+        assert all(row.reviewed_at is not None for row in rows)
+        assert all(row.reviewed_by_user_id == UUID(moderator["id"]) for row in rows)
+        assert len({row.decision_group_id for row in rows}) == 1
+        # One audit entry per report, every one naming that action.
+        events = (
+            await session.scalars(
+                select(AuditEvent).where(AuditEvent.event_type == "report.dismissed")
+            )
+        ).all()
+        assert len(events) == 3
+        assert {event.details["decision_group_id"] for event in events} == {
+            str(rows[0].decision_group_id)
+        }
+
+    # Nothing is left waiting, and a second decision on any of them refuses.
+    assert (
+        await moderator_http.get(
+            "/api/moderation/reports", params={"status": "pending"}
+        )
+    ).json()["incidents"] == []
+    again = await moderator_http.patch(
+        f"/api/moderation/reports/{report_ids[0]}",
+        json={"status": "resolved", "note": "Second thoughts."},
+    )
+    assert again.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_a_suspension_shows_every_reporters_cited_lines_and_drawings(env):
+    """Their own words, from the whole decision rather than whichever report
+    the suspension happens to name (R-BAN-08, #620).
+
+    Widening this cannot show them somebody else's words: every cited line is
+    authored by the reported player by construction. What was said *around*
+    those lines stays a moderator's context and never reaches the notice.
+    """
+    new_client, factory, _ = env
+    target_http = new_client()
+    moderator_http = new_client()
+    target = await register(target_http, "UnionTarget")
+    moderator = await register(moderator_http, "UnionMod")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    first_http, second_http = new_client(), new_client()
+    first = await register(first_http, "UnionRepA")
+    second = await register(second_http, "UnionRepB")
+
+    now = datetime.now(timezone.utc)
+    room = generate_uuid()
+    theirs_a, theirs_b, somebody_else = generate_uuid(), generate_uuid(), generate_uuid()
+    everyone = [target["id"], first["id"], second["id"]]
+    async with factory() as session:
+        async with session.begin():
+            common = {
+                "sender_player_id": generate_uuid(),
+                "sender_is_anonymous_snapshot": False,
+                "is_spectator": False,
+                "message_kind": "chat",
+                "near_miss_kind": None,
+                "audience": "room",
+                "room_instance_id": room,
+                "audience_user_ids": everyone,
+                "expires_at": now + timedelta(days=30),
+            }
+            session.add_all(
+                [
+                    RoomMessage(
+                        id=theirs_a,
+                        sender_user_id=UUID(target["id"]),
+                        sender_display_name_snapshot="UnionTarget",
+                        text="the first thing they said",
+                        created_at=now - timedelta(minutes=2),
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=somebody_else,
+                        sender_user_id=UUID(first["id"]),
+                        sender_display_name_snapshot="UnionRepA",
+                        text="somebody else's line entirely",
+                        created_at=now - timedelta(minutes=1),
+                        **common,
+                    ),
+                    RoomMessage(
+                        id=theirs_b,
+                        sender_user_id=UUID(target["id"]),
+                        sender_display_name_snapshot="UnionTarget",
+                        text="the second thing they said",
+                        created_at=now,
+                        **common,
+                    ),
+                ]
+            )
+    # Each reporter cites a different line of the target's.
+    assert (
+        await _room_report(first_http, target["id"], theirs_a, "This one.")
+    ).status_code == 201
+    assert (
+        await _room_report(second_http, target["id"], theirs_b, "And this one.")
+    ).status_code == 201
+
+    incident = (
+        await moderator_http.get(
+            "/api/moderation/reports", params={"status": "pending"}
+        )
+    ).json()["incidents"][0]
+    assert incident["reporterCount"] == 2
+
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={
+                "userId": target["id"],
+                "reason": "Twice over.",
+                # Names the second report; the notice is read from the whole
+                # decision either way.
+                "reportId": incident["reports"][1]["id"],
+            },
+        )
+    ).status_code == 201
+
+    refused = await target_http.get("/api/auth/me")
+    assert refused.status_code == 403
+    shown = [line["text"] for line in refused.json()["messages"]]
+    assert shown == ["the first thing they said", "the second thing they said"]
+    # Context around the cited lines is a moderator's, never the player's.
+    assert "somebody else's line entirely" not in shown
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="row locks only really lock on PostgreSQL",
+)
+@pytest.mark.asyncio
+async def test_two_moderators_deciding_one_incident_produce_one_decision(env):
+    """Two moderators reaching the same incident from two different reports
+    of it, at once (#620).
+
+    The lock is taken over the whole incident in id order and never starting
+    from the report the request named, which is what keeps two requests from
+    taking the same two rows in opposite orders. One of them decides
+    everything; the other is refused with the answer a slow retry gets, and
+    nothing is decided twice or left half decided.
+    """
+    import asyncio
+
+    new_client, factory, _ = env
+    target_http = new_client()
+    first_mod, second_mod = new_client(), new_client()
+    target = await register(target_http, "RaceTarget")
+    one = await register(first_mod, "RaceModA")
+    two = await register(second_mod, "RaceModB")
+    await set_role(factory, one["id"], UserRole.MODERATOR)
+    await set_role(factory, two["id"], UserRole.MODERATOR)
+
+    now = datetime.now(timezone.utc)
+    room, line = generate_uuid(), generate_uuid()
+    reporters = []
+    for index in range(4):
+        client = new_client()
+        reporters.append((client, await register(client, f"RaceRep{index}")))
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                RoomMessage(
+                    id=line,
+                    room_instance_id=room,
+                    sender_user_id=UUID(target["id"]),
+                    sender_player_id=generate_uuid(),
+                    sender_display_name_snapshot="RaceTarget",
+                    sender_is_anonymous_snapshot=False,
+                    is_spectator=False,
+                    message_kind="chat",
+                    near_miss_kind=None,
+                    audience="room",
+                    audience_user_ids=[
+                        target["id"],
+                        *[person["id"] for _, person in reporters],
+                    ],
+                    text="the line they all cited",
+                    created_at=now,
+                    expires_at=now + timedelta(days=30),
+                )
+            )
+    for client, _ in reporters:
+        assert (
+            await _room_report(client, target["id"], line, "Please look.")
+        ).status_code == 201
+
+    incident = (
+        await first_mod.get("/api/moderation/reports", params={"status": "pending"})
+    ).json()["incidents"][0]
+    report_ids = [report["id"] for report in incident["reports"]]
+
+    # Each names a different report of the one incident, and they arrive
+    # together.
+    first, second = await asyncio.gather(
+        first_mod.patch(
+            f"/api/moderation/reports/{report_ids[0]}",
+            json={"status": "dismissed", "note": "Nothing in it."},
+        ),
+        second_mod.patch(
+            f"/api/moderation/reports/{report_ids[3]}",
+            json={"status": "resolved", "note": "Something in it."},
+        ),
+    )
+    assert sorted([first.status_code, second.status_code]) == [200, 409]
+    winner = first if first.status_code == 200 else second
+    assert winner.json()["reporterCount"] == 4
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(PlayerReport).where(
+                    PlayerReport.id.in_([UUID(row_id) for row_id in report_ids])
+                )
+            )
+        ).all()
+        # One decision reached all four, and only one did.
+        assert len({row.status for row in rows}) == 1
+        assert len({row.decision_group_id for row in rows}) == 1
+        assert len({row.reviewed_by_user_id for row in rows}) == 1
+        assert {row.resolution_note for row in rows} == {
+            winner.json()["resolutionNote"]
+        }
+
+
+@pytest.mark.asyncio
+async def test_a_suspension_notice_for_no_suspension_says_only_that(env):
+    """The refusal is built from whatever is on the row, and an account with
+    no active ban has nothing to put on it.
+
+    Both readers take the same shape: `suspended` and nothing that would
+    imply a decision - no reason, no end date, no evidence. A malformed id is
+    not a suspension either, and must not be made into a database round-trip.
+    """
+    from app.auth.bans import is_user_banned, suspension_payload
+
+    _, factory, _ = env
+    bare = {"detail": "This account is suspended.", "suspended": True, "reason": None, "expiresAt": None}
+
+    # Never suspended: the notice says it is suspended and knows nothing else,
+    # rather than inventing an empty evidence list to go with it.
+    assert await suspension_payload(factory, str(generate_uuid())) == bare
+    # Not a UUID at all - the two readers agree, and neither asks the
+    # database about it.
+    assert await suspension_payload(factory, "not-a-uuid") == bare
+    assert await is_user_banned(factory, "not-a-uuid") is False
+    assert await is_user_banned(factory, None) is False
+
+
+@pytest.mark.asyncio
+async def test_a_permanent_suspension_carries_no_end_date(env):
+    """`expiresAt` is null for a suspension nobody put an end on, and an
+    instant for one somebody did. The notice reads it either way."""
+    from app.auth.bans import suspension_payload
+
+    new_client, factory, _ = env
+    moderator_http, target_http = new_client(), new_client()
+    moderator = await register(moderator_http, "ForeverMod")
+    target = await register(target_http, "ForeverTgt")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={"userId": target["id"], "reason": "No end date."},
+        )
+    ).status_code == 201
+
+    notice = await suspension_payload(factory, target["id"])
+    assert notice["suspended"] is True
+    assert notice["reason"] == "No end date."
+    assert notice["expiresAt"] is None
+    # Issued without a report, so there is nothing of theirs to show back.
+    assert notice["messages"] == []
+    assert notice["drawings"] == []

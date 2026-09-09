@@ -25,9 +25,11 @@ export type Suspension = {
       is what makes the reason something they can weigh rather than just be
       told. Empty when the suspension was issued without a report. */
   messages: ReportedMessage[];
-  /** The drawing the report behind this was about - their own work - or
-      null; the bytes are fetched through the ban-time credential. */
-  drawing: PlayerReportDrawing | null;
+  /** The canvases the reports behind this were about - their own work, one
+      per reporter who attached the drawing as it stood when they sent. Empty
+      when none did; the bytes are fetched through the ban-time credential,
+      naming the report each belongs to. */
+  drawings: (PlayerReportDrawing & { reportId: string })[];
 };
 
 type Listener = (suspension: Suspension) => void;
@@ -57,8 +59,23 @@ export function suspensionFromPayload(payload: unknown): Suspension | null {
     reason: typeof body.reason === "string" ? body.reason : null,
     expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
     messages: reportedMessages(body.messages),
-    drawing: reportedDrawing(body.drawing),
+    drawings: reportedDrawings(body.drawings),
   };
+}
+
+/** Keep only entries shaped like a drawing that names its report. A malformed
+one is dropped rather than rendered as a broken canvas. */
+export function reportedDrawings(
+  value: unknown,
+): (PlayerReportDrawing & { reportId: string })[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const drawing = reportedDrawing(entry);
+    const reportId = (entry as { reportId?: unknown })?.reportId;
+    return drawing && typeof reportId === "string"
+      ? [{ ...drawing, reportId }]
+      : [];
+  });
 }
 
 /** Keep only entries shaped like a message; a malformed one is dropped rather
