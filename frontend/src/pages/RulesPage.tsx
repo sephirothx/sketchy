@@ -74,11 +74,6 @@ export function RulesPage() {
       <header className="rules-masthead">
         <SectionLabel>Sketchy</SectionLabel>
         <h1>{rules.title}</h1>
-        {rules.intro.map((paragraph) => (
-          <p key={paragraph} className="rules-intro">
-            {paragraph}
-          </p>
-        ))}
       </header>
 
       <div className="rules-layout">
@@ -116,6 +111,15 @@ export function RulesPage() {
         </aside>
 
         <div className="rules-document">
+          {/* In the column, not above it: a full-width paragraph over a
+              two-column layout leaves the grid starting halfway down the
+              page and reads as a different document. */}
+          <div className="rules-intro">
+            {rules.intro.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+
           {rules.sections.map((section) => (
             <Card key={section.id} id={section.id} className="rules-section">
               <SectionLabel>{section.heading}</SectionLabel>

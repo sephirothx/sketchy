@@ -1398,19 +1398,27 @@ a.online-player-name:focus-visible {
    the page sits on the same grid as everything else. */
 
 .rules-masthead {
-  margin-bottom: 20px;
-  max-width: 68ch;
+  margin-bottom: 16px;
 }
 
 .rules-masthead h1 {
   font-size: 30px;
-  margin: 4px 0 10px;
+  margin: 4px 0 0;
 }
 
-.rules-intro {
+/* Sits at the top of the document column rather than across the page: the
+   grid then starts at the top instead of halfway down, and the introduction
+   keeps the same measure as everything it introduces. */
+.rules-intro p {
   color: var(--muted);
+  font-size: 16px;
   line-height: 1.65;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
+  max-width: 62ch;
+}
+
+.rules-intro p:last-child {
+  margin-bottom: 0;
 }
 
 .rules-layout {
