@@ -12,6 +12,7 @@ import { InviteFriendsList } from "./InviteFriendsList";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
+import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import type {
   ColorMode,
   DrawingToolGroup,
@@ -58,6 +59,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   useLobbyChannel();
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
+  // The same seat set the sidebar roster marks from, so a friendship reads
+  // identically whichever of the two is on screen (R-FRIEND-13).
+  const friendSeats = useRoomFriendsStore((state) => state.seatIds);
   // Narrow only. Above this the players panel has a column of its own and
   // says more than a grid of faces can, so rendering both would put every
   // nickname on the page twice.
@@ -185,6 +189,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 isAnonymous={player.isAnonymous}
                 isHost={player.isHost}
                 isSelf={player.playerId === myPlayerId}
+                isFriend={friendSeats.has(player.playerId)}
                 size={46}
               />
               <span className="waiting-roster-name">
@@ -198,6 +203,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                   <span className="visually-hidden">(you)</span>
                 )}
                 {player.isHost && <span className="visually-hidden">Host</span>}
+                {friendSeats.has(player.playerId) && (
+                  <span className="visually-hidden">Friend</span>
+                )}
               </span>
             </li>
           ))}

@@ -619,3 +619,60 @@ async def test_signing_in_does_not_announce_requests_that_were_already_there():
             for context in (asker_context, owner_context, fresh_context):
                 await context.close()
             await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_the_friend_mark_survives_the_narrow_layout():
+    """R-FRIEND-13 says *wherever* a player is drawn, and a phone draws them
+    somewhere else.
+
+    Under 900px the sidebar roster is not mounted at all: the waiting room
+    draws its own tile grid instead. The seats are asked for once for the
+    whole room precisely so that the mark does not belong to whichever panel
+    happened to fetch it.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        ada_context = await browser.new_context()
+        bob_context = await browser.new_context()
+        ada, bob = await ada_context.new_page(), await bob_context.new_page()
+        ada_name, bob_name = unique("Ada"), unique("Bob")
+
+        try:
+            await sign_up(ada, ada_name)
+            await sign_up(bob, bob_name)
+            await make_friends(ada, bob, ada_name, bob_name)
+
+            await bob.click('button:has-text("Create room")')
+            await bob.click('button:has-text("Public")')
+            await bob.click('button:has-text("Create room")')
+            await bob.wait_for_selector(".room-copy-button")
+            code = await bob.locator(".room-copy-button").first.get_attribute(
+                "data-room-code"
+            )
+            await join_by_code(ada, code)
+            await ada.wait_for_selector('[data-testid="waiting-room"]')
+
+            # Narrowed once seated, rather than joined on a phone: getting in
+            # is a different flow there (a thumb dock rather than the header),
+            # and this is about what the room draws, not how it was entered.
+            await ada.set_viewport_size({"width": 420, "height": 900})
+
+            # The narrow waiting roster, which is a different component from
+            # the sidebar one and used to draw no marks at all.
+            tile = ada.locator(
+                f'.waiting-roster-tile:has(.waiting-roster-name:has-text("{bob_name}"))'
+            )
+            await expect(tile).to_be_visible(timeout=SETTLE_MS)
+            await expect(tile.locator(".avatar-friend")).to_have_count(
+                1, timeout=SETTLE_MS
+            )
+            # And still only for the one reading: Ada's own tile is unmarked.
+            own = ada.locator(
+                f'.waiting-roster-tile:has(.waiting-roster-name:has-text("{ada_name}"))'
+            )
+            await expect(own.locator(".avatar-friend")).to_have_count(0)
+        finally:
+            await ada_context.close()
+            await bob_context.close()
+            await browser.close()

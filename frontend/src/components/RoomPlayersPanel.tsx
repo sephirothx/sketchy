@@ -4,7 +4,6 @@ import { recordRender } from "../lib/renderDiagnostics";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
-import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
 import { EyeIcon } from "./icons";
 
 interface RoomPlayersPanelProps {
@@ -31,9 +30,6 @@ export function RoomPlayersPanel({
   turnCorrectGuesses,
 }: RoomPlayersPanelProps) {
   recordRender("players");
-  // Which of these seats are friends. Asked here rather than in `PlayerList`,
-  // which is drawn in four places and would ask four times for one answer.
-  useRoomFriendSeats(players);
   const [promotionBusy, setPromotionBusy] = useState(false);
   const [promotionError, setPromotionError] = useState<string | null>(null);
   const activePlayers = players.filter((player) => !player.isSpectator);

@@ -24,14 +24,27 @@ interface RoomFriendsStore {
   reset: () => void;
 }
 
+/** Ordering, so a slow answer cannot repaint a roster that has moved on.
+
+Two things trigger a read - the roster changing and `friends_changed` - and
+leaving a room cancels the question outright. All three can overlap, and the
+answer names seats, which only mean anything in the room they were asked
+about: an answer from the previous room would mark whoever now holds those
+ids. So a read applies only if nothing newer has been issued since. Unlike
+the account's own lists, there is no baseline to preserve here - the set is
+either current or wrong - so the newest issued wins outright. */
+let readSeq = 0;
+
 export const useRoomFriendsStore = create<RoomFriendsStore>((set) => ({
   seatIds: new Set(),
   refresh: async () => {
+    const seq = ++readSeq;
     try {
       const answer = await emitWithAck<{ ok?: boolean; playerIds?: unknown }>(
         "friends_in_room",
         {},
       );
+      if (seq !== readSeq) return;
       const ids = Array.isArray(answer?.playerIds) ? answer.playerIds : [];
       set({
         seatIds: new Set(ids.filter((id): id is string => typeof id === "string")),
@@ -40,8 +53,13 @@ export const useRoomFriendsStore = create<RoomFriendsStore>((set) => ({
       // A mark that does not arrive is a mark that is not drawn. Nothing here
       // is load-bearing, so a failure leaves the roster reading exactly as it
       // did before friendships were drawn on it at all.
+      if (seq !== readSeq) return;
       set({ seatIds: new Set() });
     }
   },
-  reset: () => set({ seatIds: new Set() }),
+  reset: () => {
+    // Anything in flight is now about a room this client has left.
+    readSeq += 1;
+    set({ seatIds: new Set() });
+  },
 }));
