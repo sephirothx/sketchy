@@ -1389,3 +1389,90 @@ a.online-player-name:focus-visible {
   color: var(--danger);
   margin-top: 0.15rem;
 }
+
+/* The rules, read rather than operated: a reading measure, generous leading,
+   and headings that carry the structure rather than boxes that fence it. */
+.rules-page {
+  margin: 0 auto;
+  max-width: 900px;
+  padding: 0 16px 64px;
+}
+
+.rules-document {
+  max-width: 68ch;
+}
+
+.rules-document h1 {
+  font-size: 30px;
+  margin-bottom: 12px;
+}
+
+.rules-intro {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Every rule, in the order they appear. Six entries, so a plain list rather
+   than a nested contents tree. */
+.rules-contents {
+  border-bottom: 1.5px solid var(--line);
+  border-top: 1.5px solid var(--line);
+  margin: 24px 0;
+  padding: 12px 0;
+}
+
+.rules-contents ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rules-section {
+  margin-top: 36px;
+}
+
+.rules-section h2 {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.rules-blurb {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+/* Scrolled to from a notice, so it needs room above it: an anchor that lands
+   with its heading against the top of the window reads as the middle of the
+   previous rule. */
+.rules-rule {
+  margin-top: 24px;
+  scroll-margin-top: 24px;
+}
+
+.rules-rule h3 {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+
+.rules-rule p {
+  line-height: 1.6;
+}
+
+.rules-examples-label {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.rules-examples {
+  color: var(--muted);
+  margin-top: 0;
+  padding-left: 20px;
+}
+
+.rules-examples li {
+  margin-bottom: 3px;
+}

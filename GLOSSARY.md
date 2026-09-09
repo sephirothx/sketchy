@@ -225,6 +225,7 @@ Three different things, never used for one another:
 
 | Term | Meaning | Avoid |
 | --- | --- | --- |
+| **Rules** | The published text of what the service enforces, on one page with a section per rule. Every **Report** reason and every decision category is anchored there, so a notice naming one links to the rule behind it. Written per language in the repository, English being the reference and the fallback. | terms, guidelines, ToS |
 | **Report** | A private request for a moderator to review another player's behavior, with a reason, the reporter's details, and bounded context evidence. It is distinct from a **Prompt-content report**. Reports are never room announcements or public profile data. | complaint, flag |
 | **Bug report** | A player's private report that the *software* is broken, naming a bounded area and severity. Read by administrators, not moderators: it is about the app rather than a person, and is distinct from a **Report** and a **Prompt-content report**. | complaint, ticket, crash report |
 | **Client context** | What a reporter's browser said about itself alongside a **Bug report** — build, viewport, browser, preferences, connection, and its own error tail. Always reporter-supplied evidence, never a fact the server checked. | telemetry, diagnostics (unqualified) |

@@ -1032,6 +1032,19 @@ word. Only dismissal is offered that way: it restricts nobody, which is what
 makes it safe a press from a notice, and a warning or suspension is not
 something to repeat by shortcut.
 
+The **rules** are published at `/rules` — one page, a section per rule, reachable
+from the account menu and named when an account is created rather than only
+after somebody is told they broke one. Every decision category is anchored
+there, so a notice saying *recorded as spam* links to the paragraph that says
+what spam is: a decision whose rule you can read is one you can check.
+
+They live in the repository, one typed module per language, reviewed like code
+— which is what the wiki this follows does, and what keeps a translation from
+quietly going missing. English is the reference and the fallback for any
+language not yet written. Section and rule ids are English and never
+translated, because they are anchors and a link in a notice has to survive the
+page being read in another language.
+
 A decision may record **what rule it was about** — the moderator's own
 finding, from the same six words a report uses, never the reporters' reason,
 which is their claim rather than a finding and would tell the player how people
@@ -1480,7 +1493,8 @@ frontend/
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
                   SettingsOverlay, FriendsOverlay
-    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, BugReportsPage (admin triage)
+    pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
+    content/rules/ The published rules, one typed module per language
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
