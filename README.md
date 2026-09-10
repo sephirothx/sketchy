@@ -518,7 +518,10 @@ anything a moderator had hidden, and counts against your 25-list allowance. Comm
 through the same report and review path any player-authored content uses — an
 administrator can switch new publications into a review queue instead
 (`POST /api/admin/prompt-list-review`) without a redeploy, if that stops being
-enough. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
+enough. Lists held that way wait in a moderation queue of their own, where a
+moderator releases them into the catalogue or takes them down; it is separate
+from the report queue because nothing was reported — they were held by a policy,
+not an accusation. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
 by language and tag and sorted by stars or by recency; it is a route of its own
 rather than a filter on the official one, so official content and player content
 are never in the same listing. A host can pick a published list for a room

@@ -1494,6 +1494,10 @@
    "displayName",
    "expiresAt",
    "hasMore",
+   "moderationState",
+   "ownerDisplayName",
+   "promptCount",
+   "publishedAt",
    "reportIds",
    "userId"
   ],
@@ -1507,6 +1511,11 @@
   "api.moderation:list_prompt_content_reports": [
    "hasMore"
   ],
+  "api.moderation:list_publications_awaiting_review": [
+   "ownerDisplayName",
+   "promptCount",
+   "publishedAt"
+  ],
   "api.moderation:list_reports": [
    "hasMore"
   ],
@@ -1518,6 +1527,10 @@
   ],
   "api.moderation:review_prompt_content_report": [
    "displayName"
+  ],
+  "api.moderation:review_publication": [
+   "displayName",
+   "moderationState"
   ],
   "api.moderation:submit_prompt_content_report": [
    "createdAt"

@@ -9,7 +9,7 @@ import json
 import secrets
 from uuid import UUID
 
-from sqlalchemy import and_, desc, exists, func, or_, select, update
+from sqlalchemy import and_, delete, desc, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
@@ -86,6 +86,7 @@ from app.services.user_stats_projection import (
 )
 from app.services.friends import friendship_key, other_of
 from app.repositories.interfaces import (
+    AuditStamp,
     CommunityPromptList,
     CommunityPromptListPage,
     AccountAlreadyClaimedError,
@@ -157,6 +158,24 @@ LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 # filter is the better answer than a longer scroll.
 MAX_COMMUNITY_PAGE = 48
 MAX_COMMUNITY_OFFSET = 480
+
+
+def _published_by_a_player():
+    """What "in the community catalogue" means, in one place.
+
+    The fourth clause is the one that was missing everywhere it mattered.
+    Bundled lists are public and active too - that is what the official
+    catalogue *is* - so a predicate checking only public-active-present let an
+    official list be starred and forked. Forking one was the worse half: the
+    fork path builds its entries directly, so copying the 592-prompt bundled
+    list would have written an owned list well past R-LIST-04's 500.
+    """
+    return (
+        PromptList.visibility == PromptListVisibility.PUBLIC.value,
+        PromptList.moderation_state == PromptContentModerationState.ACTIVE.value,
+        PromptList.deleted_at.is_(None),
+        PromptList.is_bundled.is_(False),
+    )
 
 
 def _encode_catalogue_cursor(offset: int) -> str:
@@ -2532,13 +2551,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         stmt = (
             select(PromptList, self._prompt_count(), star_count, User.display_name)
             .join(User, User.id == PromptList.owner_user_id)
-            .where(
-                PromptList.visibility == PromptListVisibility.PUBLIC.value,
-                PromptList.moderation_state
-                == PromptContentModerationState.ACTIVE.value,
-                PromptList.deleted_at.is_(None),
-                PromptList.is_bundled.is_(False),
-            )
+            .where(*_published_by_a_player())
         )
         if language is not None:
             stmt = stmt.where(PromptList.language == language)
@@ -2672,11 +2685,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     .order_by(PromptList.updated_at.desc(), PromptList.name)
                 )
             ).all()
+            # One query for every row's tags rather than one per row: the
+            # collection is capped at 25 lists, but a per-row read here would
+            # be the shape that stops being fine the moment the cap moves.
+            tags_by_list = await self._current_revision_tags(
+                session, [prompt_list.id for prompt_list, _, _ in rows]
+            )
             return [
                 _to_owned_prompt_list(
                     prompt_list,
                     prompt_count=int(prompt_count),
                     star_count=int(stars),
+                    tags=tags_by_list.get(prompt_list.id, ()),
                 )
                 for prompt_list, prompt_count, stars in rows
             ]
@@ -2731,16 +2751,23 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             .select_from(PromptListStar)
             .where(PromptListStar.prompt_list_id == prompt_list.id)
         )
+        # Revision one's, not the current revision's. `forked_from_revision_id`
+        # is a fact about one revision - where *it* was derived from - and only
+        # the revision a fork starts life as was derived from anywhere else.
+        # Reading the current one answered correctly until the fork's owner
+        # made their first edit, and null from then on.
+        origin = await session.scalar(
+            select(PromptListRevision.forked_from_revision_id).where(
+                PromptListRevision.prompt_list_id == prompt_list.id,
+                PromptListRevision.version == 1,
+            )
+        )
         return _to_owned_prompt_list(
             prompt_list,
             entries,
             tags=tags,
             star_count=int(stars or 0),
-            forked_from_revision_id=(
-                _public_id(revision.forked_from_revision_id)
-                if revision is not None and revision.forked_from_revision_id
-                else None
-            ),
+            forked_from_revision_id=_public_id(origin) if origin else None,
         )
 
     async def get_owned(
@@ -3008,10 +3035,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 source = await session.scalar(
                     select(PromptList).where(
                         PromptList.id == source_id,
-                        PromptList.visibility == PromptListVisibility.PUBLIC.value,
-                        PromptList.moderation_state
-                        == PromptContentModerationState.ACTIVE.value,
-                        PromptList.deleted_at.is_(None),
+                        *_published_by_a_player(),
                     )
                 )
                 if source is None:
@@ -3073,6 +3097,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     raise PromptListMutationError(
                         "That list has no usable prompts to copy."
                     )
+                # Through the same validation an editor's save goes through.
+                # A fork built its entries in code and reached
+                # `_write_owned_revision` directly, so every bound the editor
+                # is held to - the 500 ceiling above all - was unenforced on
+                # this path. Sources are capped at 500 themselves now that
+                # bundled lists are out, so this refuses nothing reachable;
+                # it is here so the next thing that copies entries cannot
+                # quietly acquire its own rules.
+                entries = self._clean_owned_entries(
+                    entries, language=source.language
+                )
                 list_id = generate_uuid()
                 fork = PromptList(
                     id=list_id,
@@ -3135,25 +3170,34 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 target = await session.scalar(
                     select(PromptList.id).where(
                         PromptList.id == list_id,
-                        PromptList.visibility == PromptListVisibility.PUBLIC.value,
-                        PromptList.moderation_state
-                        == PromptContentModerationState.ACTIVE.value,
-                        PromptList.deleted_at.is_(None),
+                        *_published_by_a_player(),
                     )
                 )
                 if target is None:
                     raise PromptListNotFoundError("Prompt list not found.")
-                existing = await session.get(
-                    PromptListStar, (starrer_id, list_id)
-                )
-                if starred and existing is None:
-                    session.add(
-                        PromptListStar(
-                            user_id=starrer_id, prompt_list_id=list_id
+                if starred:
+                    # A savepoint, not a read-then-insert. Two requests for
+                    # the same star - a double click, a retry - both saw no
+                    # row and both inserted, and the loser got a primary-key
+                    # IntegrityError for asking for a state that now holds.
+                    # The composite key is still what makes starring twice
+                    # one row; this is what makes it one row *concurrently*.
+                    try:
+                        async with session.begin_nested():
+                            session.add(
+                                PromptListStar(
+                                    user_id=starrer_id, prompt_list_id=list_id
+                                )
+                            )
+                    except IntegrityError:
+                        pass
+                else:
+                    await session.execute(
+                        delete(PromptListStar).where(
+                            PromptListStar.user_id == starrer_id,
+                            PromptListStar.prompt_list_id == list_id,
                         )
                     )
-                elif not starred and existing is not None:
-                    await session.delete(existing)
             return int(
                 await session.scalar(
                     select(func.count())
@@ -3170,6 +3214,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         *,
         published: bool,
         under_review: bool = False,
+        audit: AuditStamp | None = None,
     ) -> OwnedPromptList:
         """Publish or unpublish an owned list (R-LIST-11).
 
@@ -3230,6 +3275,27 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     prompt_list.visibility = PromptListVisibility.PRIVATE.value
                     prompt_list.published_at = None
                 prompt_list.updated_at = datetime.now(timezone.utc)
+                # In this transaction, not a later one. Written after the
+                # refusals above, so the ledger records what happened rather
+                # than what was attempted - and with the change, so a failure
+                # between the two cannot leave a list published with nothing
+                # in the ledger to say who published it.
+                if audit is not None:
+                    session.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type=audit.event_type,
+                            actor_user_id=_optional_entity_id(
+                                audit.actor_user_id
+                            ),
+                            target_type=AuditTargetType.PROMPT_LIST.value,
+                            target_id=str(prompt_list.id),
+                            request_id=audit.request_id,
+                            ip_hash=audit.ip_hash,
+                            details={},
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result

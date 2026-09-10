@@ -409,6 +409,21 @@ class PromptListSummary:
 
 
 @dataclass(frozen=True)
+class AuditStamp:
+    """Who did an audited thing, and from where.
+
+    Carried into a repository call so the ledger entry commits with the change
+    it describes. `config_store` states the reason for the shape: an audit
+    event that commits separately is a ledger that can disagree with the world.
+    """
+
+    event_type: str
+    actor_user_id: str
+    request_id: str | None = None
+    ip_hash: str | None = None
+
+
+@dataclass(frozen=True)
 class CommunityPromptList:
     """One published list as the community catalogue presents it (R-LIST-14).
 
@@ -1063,6 +1078,7 @@ class PromptListRepository(ABC):
         *,
         published: bool,
         under_review: bool = False,
+        audit: AuditStamp | None = None,
     ) -> OwnedPromptList:
         """Publish or unpublish an owned list as an act of its own (R-LIST-11)."""
         ...

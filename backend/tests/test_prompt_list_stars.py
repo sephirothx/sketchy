@@ -22,8 +22,11 @@ from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import create_prompt_list_router, star_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import PromptList, PromptListStar, User
-from app.repositories.interfaces import PromptListEntryInput
+from app.db.models import PromptList, PromptListStar, User, generate_uuid
+from app.repositories.interfaces import (
+    BundledPromptDefinition,
+    PromptListEntryInput,
+)
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
     SqlAlchemyUserRepository,
@@ -219,3 +222,71 @@ async def test_a_star_on_an_unpublished_list_cannot_be_given(env):
     await sign_in(http, factory, reader.id)
 
     assert (await http.put(f"/api/prompt-lists/{published.id}/star")).status_code == 404
+
+
+async def test_a_star_that_already_exists_is_not_an_error(env):
+    """The conflicting-insert path, reached deterministically.
+
+    `set_star` no longer reads before it writes: it inserts and lets the
+    composite primary key refuse a duplicate. That refusal has to be a state
+    the caller asked for and got, not a 500 - which is what a read-then-insert
+    produced when two requests both saw no row and both inserted.
+
+    A test cannot make those two requests genuinely race here (see the note in
+    the PR), so this pins the branch rather than the collision: the row is
+    already there when the insert runs, which is the state the loser of a race
+    finds.
+    """
+    http, users, prompts, factory = env
+    owner = await verified(users, factory, "Owner")
+    reader = await verified(users, factory, "Reader")
+    published = await a_list(prompts, factory, owner.id)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PromptListStar(
+                    user_id=UUID(reader.id), prompt_list_id=UUID(published.id)
+                )
+            )
+    await sign_in(http, factory, reader.id)
+
+    response = await http.put(f"/api/prompt-lists/{published.id}/star")
+
+    assert response.status_code == 200
+    assert response.json() == {"starCount": 1, "starredByMe": True}
+    async with factory() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(PromptListStar)
+        ) == 1
+
+
+async def test_an_official_bundled_list_cannot_be_starred(env):
+    """Bundled lists are public and active - that is what the official
+    catalogue is - so a public-active-present check let them in."""
+    http, users, prompts, factory = env
+    reader = await verified(users, factory, "Reader")
+    await prompts.upsert_bundled(
+        slug="official",
+        name="Official",
+        description="",
+        language="en",
+        prompts=[
+            BundledPromptDefinition(
+                concept_id=str(generate_uuid()), answer="otter"
+            )
+        ],
+        version=1,
+    )
+    async with factory() as session:
+        bundled_id = await session.scalar(
+            select(PromptList.id).where(PromptList.slug == "official")
+        )
+    await sign_in(http, factory, reader.id)
+
+    response = await http.put(f"/api/prompt-lists/{bundled_id}/star")
+
+    assert response.status_code == 404
+    async with factory() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(PromptListStar)
+        ) == 0

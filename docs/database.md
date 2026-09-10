@@ -1634,6 +1634,12 @@ be the way to launder one.
 The operator switch is `app_config['prompt_lists.publication_review']`
 ([`services/publication_policy.py`](../backend/app/services/publication_policy.py)):
 with it set, a newly published list lands `under_review` instead of `active` and waits.
+A list it holds waits in `GET /api/moderation/prompt-lists`, which is a queue of its own
+rather than an entry in the report queue: nothing was complained about, so there is no
+report to hang it on, and the owner cannot make one (a self-report is refused). Without
+that queue the switch was a trapdoor — held lists were out of the catalogue, unplayable,
+and reachable only by editing the database.
+
 It is read per publish rather than cached, because a cached posture is stale exactly
 when it matters — just after an operator turned it on because something is going wrong —
 and it is **not retroactive**, since sweeping already-published lists into a queue would
@@ -1747,10 +1753,18 @@ is what stops a prompt version being deleted out from under a revision a game pi
 `forked_from_revision_id` is written by `fork_published` and nothing else. It names the
 exact revision a copy was taken from, which is what keeps it meaningful: both lists go
 on being edited, so a pointer at the *list* would stop saying anything after the first
-edit on either side. It may end up naming a revision nothing serves — the source was
-hidden or retired afterwards — and that is correct rather than dangling: revisions are
-immutable, and the column records where a copy came from rather than promising it is
-still reachable. A fork gets **new prompt concepts and versions** rather than references
+edit on either side. It may end up naming a revision nothing serves — the source was hidden, and revisions are
+immutable, so the id stays true while the content is out of play. When the source is
+**retired**, the pointer goes: the reclaim sweep deletes unpinned revisions and the
+`SET NULL` clears it.
+
+That is deliberate, and it is why a fork reference is **not** a pin. Pins exist so a
+finished game's provenance survives its content's author tidying up (R-PRIV-05); a fork
+is not a finished game, it is a live list somebody else owns and edits. Counting one as a
+pin would mean an author who deletes their list can never actually remove it once a
+stranger has copied it — the revision would be kept alive for as long as the copy exists,
+which is indefinitely. The copy keeps every prompt it took; it forgets only where they
+came from, because the person they came from asked for the list to go. A fork gets **new prompt concepts and versions** rather than references
 to the source's, so one owner's edit cannot rewrite what the other's list means, and
 hidden versions are left out of the copy entirely.
 

@@ -18,8 +18,11 @@ from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import community_limiter, create_prompt_list_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import PromptList, PromptListStar
-from app.repositories.interfaces import PromptListEntryInput
+from app.db.models import PromptList, PromptListStar, generate_uuid
+from app.repositories.interfaces import (
+    BundledPromptDefinition,
+    PromptListEntryInput,
+)
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
     SqlAlchemyUserRepository,
@@ -271,3 +274,41 @@ async def test_a_catalogue_row_names_its_owner_and_no_account_id(env):
     [row] = response.json()["lists"]
     assert row["ownerDisplayName"] == "Cartographer"
     assert owner.id not in response.text
+
+
+async def test_a_guest_reads_as_nobody_rather_than_as_unstarred(env):
+    """`false` is the registered answer, and a guest cannot star at all.
+
+    A guest holds a session and a user id like anyone else, so passing that id
+    through answered "you have not starred this" to somebody who cannot — and
+    a client reading it would offer a control that answers 403.
+    """
+    http, users, prompts, factory = env
+    owner = await account(users, "Owner")
+    await published(prompts, factory, owner.id, "Findable", users=users)
+    guest = await users.create_anonymous("Guest")
+    issued = await create_session(factory, user_id=guest.id, device_label="Test")
+    http.cookies.set(COOKIE_NAME, issued.token)
+
+    response = await http.get("/api/prompt-lists/community")
+
+    assert [row["starredByMe"] for row in response.json()["lists"]] == [None]
+
+
+async def test_an_official_bundled_list_never_reaches_the_catalogue(env):
+    """The three-clause predicate matched them; the fourth is what excludes."""
+    http, users, prompts, factory = env
+    await prompts.upsert_bundled(
+        slug="official",
+        name="Official",
+        description="",
+        language="en",
+        prompts=[
+            BundledPromptDefinition(concept_id=str(generate_uuid()), answer="otter")
+        ],
+        version=1,
+    )
+
+    response = await http.get("/api/prompt-lists/community")
+
+    assert response.json()["lists"] == []

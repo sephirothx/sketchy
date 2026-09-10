@@ -497,3 +497,143 @@ async def test_content_reports_about_one_target_are_one_incident(env):
             json={"status": "dismissed", "note": "Second thoughts."},
         )
     ).status_code == 409
+
+
+async def test_a_held_publication_is_findable_and_can_be_released(env):
+    """The switch used to be a trapdoor.
+
+    Content moderation is otherwise report-driven: somebody complains, and the
+    complaint is the queue entry. A publication routed to review by R-LIST-13's
+    operator switch has no complaint behind it — it was held by a posture, not
+    an accusation — so it appeared in no queue, could not be played, was out of
+    the catalogue, and could not be reported by its owner, who is barred from
+    reporting their own list. Nothing but a hand-edited database moved it.
+    """
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    moderator_http = new_client()
+    owner = await register(owner_http, "HeldOwner")
+    moderator = await register(moderator_http, "HeldModerator")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+
+    prompt_list = await prompts.create_owned(
+        owner["id"],
+        name="Waiting room",
+        description="Held by the switch",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    await prompts.set_owned_publication(
+        owner["id"], prompt_list.id, published=True, under_review=True
+    )
+
+    queue = await moderator_http.get("/api/moderation/prompt-lists")
+    assert queue.status_code == 200
+    assert queue.json()["waiting"] == 1
+    [row] = queue.json()["lists"]
+    assert row["id"] == prompt_list.id
+    assert row["name"] == "Waiting room"
+    assert row["ownerDisplayName"] == "HeldOwner"
+    assert row["promptCount"] == 1
+
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{prompt_list.id}",
+        json={"state": "active", "note": "Read it; it is fine."},
+    )
+
+    assert decision.status_code == 200
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(prompt_list.id))
+        assert row.moderation_state == "active"
+        assert row.moderated_by_user_id == reviewer.id
+        assert row.moderated_at is not None
+        event = await session.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "prompt_list.review_active"
+            )
+        )
+    assert event is not None and event.details["note"].startswith("Read it")
+    # And it is now playable, which is the whole point of releasing it.
+    resolved = await prompts.resolve_selection([row.slug])
+    assert list(resolved.prompts) == ["otter"]
+    assert (await moderator_http.get("/api/moderation/prompt-lists")).json()[
+        "waiting"
+    ] == 0
+
+
+async def test_a_held_publication_can_be_taken_down_instead(env):
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    moderator_http = new_client()
+    owner = await register(owner_http, "HeldOwner2")
+    moderator = await register(moderator_http, "HeldModerator2")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    prompt_list = await prompts.create_owned(
+        owner["id"],
+        name="Not fine",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    await prompts.set_owned_publication(
+        owner["id"], prompt_list.id, published=True, under_review=True
+    )
+
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{prompt_list.id}",
+        json={"state": "hidden", "note": "Against the rules."},
+    )
+
+    assert decision.status_code == 200
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(prompt_list.id))
+    assert row.moderation_state == "hidden"
+    with pytest.raises(PromptListSelectionError):
+        await prompts.resolve_selection([row.slug])
+
+
+async def test_a_list_nobody_held_cannot_be_decided_from_this_queue(env):
+    """A decision about content the queue never showed the reviewer."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    moderator_http = new_client()
+    owner = await register(owner_http, "ActiveOwner")
+    moderator = await register(moderator_http, "ActiveModerator")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    prompt_list = await prompts.create_owned(
+        owner["id"],
+        name="Ordinary",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+
+    response = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{prompt_list.id}",
+        json={"state": "hidden", "note": "No."},
+    )
+
+    assert response.status_code == 409
+
+
+async def test_the_publication_queue_is_staff_only(env):
+    new_client, factory, prompts = env
+    player_http = new_client()
+    await register(player_http, "OrdinaryPlayer")
+
+    assert (await player_http.get("/api/moderation/prompt-lists")).status_code == 403
