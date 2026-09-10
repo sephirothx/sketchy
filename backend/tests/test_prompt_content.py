@@ -18,6 +18,8 @@ from app.prompt_content import (
     clean_prompt_aliases,
     clean_prompt_tags,
     normalize_prompt_answer,
+    prompt_match_key,
+    prompt_match_variants,
     validate_prompt_language,
 )
 
@@ -46,6 +48,80 @@ def test_language_aware_match_keys_and_bounded_metadata():
             validate_prompt_language(invalid)
     with pytest.raises(ValueError):
         clean_prompt_tags(["Not A Slug"])
+
+
+def test_a_language_folds_the_way_it_is_written_rather_than_the_way_english_is():
+    """German writes an unavailable umlaut out, so "ae" is a spelling of "ä"
+    and not a typo. The shared accent fold alone gives "madchen", which nobody
+    writes, and would tell a German player they were wrong."""
+    assert prompt_match_key("Mädchen", "de") == "maedchen"
+    assert prompt_match_variants("Mädchen", "de") == {"maedchen", "madchen"}
+    assert prompt_match_variants("Maedchen", "de") == {"maedchen"}
+    assert prompt_match_variants("Madchen", "de") == {"madchen"}
+    # ß needs no rule of its own: case-folding already writes it out.
+    assert prompt_match_key("Fußball", "de") == "fussball"
+    assert prompt_match_key("Fussball", "de") == "fussball"
+    # French ligatures are letters rather than letters with a mark, so the
+    # accent fold never reaches them; "coeur" is how the word is typed.
+    assert prompt_match_key("cœur", "fr") == "coeur"
+    assert prompt_match_variants("cœur", "fr") == {"coeur", "cœur"}
+    assert prompt_match_variants("coeur", "fr") == {"coeur"}
+    # The Dutch digraph's single codepoint is the two letters everyone types.
+    assert prompt_match_key("ĳsbeer", "nl") == "ijsbeer"
+
+    # The other five are unchanged: one canonical spelling, accents folded.
+    for language, written, folded in (
+        ("en", "Café", "cafe"),
+        ("fr", "Éléphant", "elephant"),
+        ("es", "Año", "ano"),
+        ("it", "Città", "citta"),
+        ("pt", "Coração", "coracao"),
+    ):
+        assert prompt_match_key(written, language) == folded
+        assert prompt_match_variants(written, language) == {folded}
+    # An umlaut in an English room still folds the shared way: the rule
+    # belongs to the room's language, not to the character.
+    assert prompt_match_key("Mädchen", "en") == "madchen"
+
+
+def test_a_german_room_accepts_both_spellings_without_widening_near_misses():
+    game = Game(
+        turn_order=["drawer", "guesser"],
+        prompt_pool=["Mädchen"],
+        prompt_language="de",
+    )
+    game.phase = Phase.DRAWING
+    game.current_drawer = "drawer"
+    game.prompt = "Mädchen"
+    game.phase_deadline = None
+
+    assert game.submit_guess("guesser", "Maedchen")[0] is True
+
+    for written in ("Mädchen", "Madchen", "mädchen"):
+        room = Game(
+            turn_order=["drawer", "guesser"],
+            prompt_pool=["Mädchen"],
+            prompt_language="de",
+        )
+        room.phase = Phase.DRAWING
+        room.current_drawer = "drawer"
+        room.prompt = "Mädchen"
+        room.phase_deadline = None
+        assert room.submit_guess("guesser", written)[0] is True, written
+
+    # Wider acceptance, not wider anything else: a different word is still
+    # wrong, and a near miss is still measured on the canonical spelling.
+    missed = Game(
+        turn_order=["drawer", "guesser"],
+        prompt_pool=["Mädchen"],
+        prompt_language="de",
+    )
+    missed.phase = Phase.DRAWING
+    missed.current_drawer = "drawer"
+    missed.prompt = "Mädchen"
+    missed.phase_deadline = None
+    assert missed.submit_guess("guesser", "Männchen")[0] is False
+    assert missed.guess_hint("guesser", "Maedche") == "close"
 
 
 def test_exact_version_aliases_are_accepted_and_drive_near_miss_hints():

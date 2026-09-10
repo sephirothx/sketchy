@@ -60,24 +60,79 @@ def default_prompt_list_slug(language: str) -> str:
     return f"{PromptLanguage(validate_prompt_language(language)).name.lower()}_standard"
 
 
-def prompt_match_key(answer: str, language: str = "en") -> str:
-    """Build a comparison key for a supported Latin-script language.
+def _fold_accents(text: str) -> str:
+    """Drop canonically decomposable diacritics: "è" reads as "e".
 
-    The initial registry deliberately contains only languages whose answers can
-    use the same case-folding, whitespace, and canonical-accent rules. A future
-    language with materially different tokenization must add its own strategy
-    before it can be stored.
+    Letters such as "ø" and "ł" survive, because NFD does not decompose them
+    into an ASCII letter and a mark.
+    """
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFD", text)
+        if not unicodedata.combining(character)
+    )
+
+
+# What a language writes when the keyboard - or the writer - has no diacritic.
+# These are spellings of the same word, not near misses: a German who types
+# "Maedchen" has written "Mädchen". Folding the accent away instead
+# (R-GUESS-01's shared rule) gives "madchen", which nobody writes.
+#
+# ß is absent deliberately: case-folding already turns it into "ss", so
+# "Fußball" and "Fussball" have met before any of this runs.
+_TRANSLITERATIONS: dict[str, dict[str, str]] = {
+    "de": {"ä": "ae", "ö": "oe", "ü": "ue"},
+    # French ligatures. NFD leaves both alone - they are letters, not letters
+    # with a mark - so "coeur" would otherwise never reach "cœur", which is
+    # how almost everyone types it.
+    "fr": {"œ": "oe", "æ": "ae"},
+    # The Dutch digraph has a single-codepoint form that NFD leaves alone;
+    # everyone types the two letters.
+    "nl": {"ĳ": "ij"},
+}
+
+
+def _transliterate(text: str, language: str) -> str:
+    table = _TRANSLITERATIONS.get(language)
+    if not table:
+        return text
+    return "".join(table.get(character, character) for character in text)
+
+
+def prompt_match_key(answer: str, language: str = "en") -> str:
+    """Build the canonical comparison key for a supported Latin-script language.
+
+    Every supported language case-folds, collapses whitespace and folds
+    canonically decomposable accents; a language may then add its own
+    transliteration, applied *before* the accents are folded so that "ä"
+    becomes "ae" rather than "a".
+
+    This is one string, because it is also an identity: it backs the unique
+    constraints on prompt versions and aliases. Matching a guess asks the wider
+    question - see `prompt_match_variants`.
     """
     language = validate_prompt_language(language)
     collapsed = " ".join(answer.split()).casefold()
-    if language in PROMPT_LANGUAGES:
-        decomposed = unicodedata.normalize("NFD", collapsed)
-        return "".join(
-            character
-            for character in decomposed
-            if not unicodedata.combining(character)
-        )
-    raise AssertionError(f"missing matching strategy for supported language {language}")
+    return _fold_accents(_transliterate(collapsed, language))
+
+
+def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
+    """Every spelling of `answer` this language accepts as the same word.
+
+    A language with transliterations has two of them - "Mädchen" is written
+    "maedchen" and, by a writer who dropped the umlaut rather than expanding
+    it, "madchen" - and one stored key cannot be both. A guess is accepted when
+    its own variants meet the answer's, so both spellings land without either
+    becoming the identity.
+    """
+    language = validate_prompt_language(language)
+    collapsed = " ".join(answer.split()).casefold()
+    return frozenset(
+        {
+            _fold_accents(_transliterate(collapsed, language)),
+            _fold_accents(collapsed),
+        }
+    )
 
 
 def normalize_prompt_answer(answer: str, language: str = "en") -> str:
