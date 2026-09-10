@@ -31,6 +31,7 @@ import {
 } from "../components/LanguagePicker";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -61,10 +62,10 @@ function RemovedFromRoomDialog({
       <div className="modal-icon is-danger" aria-hidden="true">
         <AlertCircleIcon size={22} />
       </div>
-      <h3 id={titleId} className="modal-title">Removed from room</h3>
+      <h3 id={titleId} className="modal-title">{ui.lobbyBrowserPage.removedFromRoom}</h3>
       <p id={descriptionId} className="modal-body">{message}</p>
       <button ref={okButtonRef} type="button" className="modal-button" onClick={onDismiss}>
-        OK
+        {ui.lobbyBrowserPage.ok}
       </button>
     </ModalShell>
   );
@@ -96,7 +97,7 @@ function RoomCodeInput({
       className={`room-code-label${hideLabel ? " is-unlabelled" : ""}`}
       htmlFor={fieldId}
     >
-      <span className={hideLabel ? "visually-hidden" : undefined}>Room code</span>
+      <span className={hideLabel ? "visually-hidden" : undefined}>{ui.lobbyBrowserPage.roomCode}</span>
       <span className="room-code-cells">
         {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
         <input
@@ -111,7 +112,7 @@ function RoomCodeInput({
             if (e.key === "Enter") onSubmit();
           }}
           maxLength={ROOM_CODE_LENGTH}
-          placeholder="ABC123"
+          placeholder={ui.lobbyBrowserPage.abc123}
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
@@ -175,10 +176,10 @@ export function LobbyBrowserPage() {
         setJoinCode(cleaned);
         setError(null);
       } else {
-        setError("There is no room code on the clipboard.");
+        setError(ui.lobbyBrowserPage.thereNoRoomCodeClipboard);
       }
     } catch {
-      setError("Sketchy could not read the clipboard. Paste into the boxes instead.");
+      setError(ui.lobbyBrowserPage.sketchyCouldNotReadClipboardPaste);
     }
     codeFieldRef.current?.focus();
   }
@@ -256,7 +257,7 @@ export function LobbyBrowserPage() {
 
   async function handleJoinByCode(asSpectator = false) {
     if (!joinCode.trim()) {
-      setError("Please enter a room code");
+      setError(ui.lobbyBrowserPage.pleaseEnterRoomCode);
       return;
     }
     await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
@@ -296,7 +297,7 @@ export function LobbyBrowserPage() {
         setSession(session);
         navigate(`/room/${session.code}`);
       } else {
-        setError(refusalText(res, "Failed to join room"));
+        setError(refusalText(res, ui.lobbyBrowserPage.failedJoinRoom));
       }
     } catch (joinError) {
       setError(socketRequestErrorMessage(joinError, asSpectator ? "join as a spectator" : "join the room"));
@@ -315,7 +316,7 @@ export function LobbyBrowserPage() {
               className="btn btn-secondary btn-compact"
               onClick={() => setCodeSheetOpen(true)}
             >
-              Join by code
+              {ui.lobbyBrowserPage.joinByCode}
             </button>
             <Button
               variant="primary"
@@ -323,7 +324,7 @@ export function LobbyBrowserPage() {
               iconLeft={<PlusIcon size={15} />}
               onClick={() => void handleOpenCreateRoom()}
             >
-              Create room
+              {ui.lobbyBrowserPage.createRoom}
             </Button>
           </>
         }
@@ -344,7 +345,7 @@ export function LobbyBrowserPage() {
 
       <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
-          <h2>Public rooms</h2>
+          <h2>{ui.lobbyBrowserPage.publicRooms}</h2>
           <span className="lobby-rooms-count">
             {!roomsState.loaded ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
           </span>
@@ -358,8 +359,8 @@ export function LobbyBrowserPage() {
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search rooms by name or code"
-                aria-label="Search rooms by name or code"
+                placeholder={ui.lobbyBrowserPage.searchRoomsByNameCode}
+                aria-label={ui.lobbyBrowserPage.searchRoomsByNameCode}
                 autoComplete="off"
                 enterKeyHint="search"
               />
@@ -375,7 +376,7 @@ export function LobbyBrowserPage() {
                 aria-pressed={activeFilterCount > 0}
                 onClick={() => setFilterSheetOpen(true)}
               >
-                Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+                {ui.lobbyBrowserPage.filtersWithCount({ count: activeFilterCount })}
               </button>
             ) : (
               <>
@@ -393,7 +394,7 @@ export function LobbyBrowserPage() {
                   aria-pressed={hideFullRooms}
                   onClick={() => setHideFullRooms((v) => !v)}
                 >
-                  Hide full
+                  {ui.lobbyBrowserPage.hideFull}
                 </button>
                 <button
                   type="button"
@@ -401,7 +402,7 @@ export function LobbyBrowserPage() {
                   aria-pressed={hideInProgressRooms}
                   onClick={() => setHideInProgressRooms((v) => !v)}
                 >
-                  Hide in progress
+                  {ui.lobbyBrowserPage.hideProgress}
                 </button>
               </>
             )}
@@ -410,7 +411,7 @@ export function LobbyBrowserPage() {
 
         {filterSheetOpen && (
           <BottomSheet
-            title="Filters"
+            title={ui.lobbyBrowserPage.filters}
             testId="lobby-filter-sheet"
             onDismiss={() => setFilterSheetOpen(false)}
             footer={
@@ -425,18 +426,18 @@ export function LobbyBrowserPage() {
                       setHideInProgressRooms(false);
                     }}
                   >
-                    Clear filters
+                    {ui.lobbyBrowserPage.clearFilters}
                   </button>
                 )}
                 <Button variant="primary" onClick={() => setFilterSheetOpen(false)}>
-                  Show {filteredRooms.length} {filteredRooms.length === 1 ? "room" : "rooms"}
+                  {ui.lobbyBrowserPage.showRooms({ count: filteredRooms.length })}
                 </Button>
               </>
             }
           >
             <div className="lobby-filter-sheet">
               <div className="lobby-filter-row">
-                <span>Language</span>
+                <span>{ui.lobbyBrowserPage.language}</span>
                 <LanguagePicker
                   label="Filter by language"
                   value={languageFilter}
@@ -452,7 +453,7 @@ export function LobbyBrowserPage() {
                 aria-pressed={hideFullRooms}
                 onClick={() => setHideFullRooms((v) => !v)}
               >
-                <span>Hide full rooms</span>
+                <span>{ui.lobbyBrowserPage.hideFullRooms}</span>
                 <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
               </button>
               <button
@@ -461,7 +462,7 @@ export function LobbyBrowserPage() {
                 aria-pressed={hideInProgressRooms}
                 onClick={() => setHideInProgressRooms((v) => !v)}
               >
-                <span>Hide games in progress</span>
+                <span>{ui.lobbyBrowserPage.hideGamesProgress}</span>
                 <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
               </button>
             </div>
@@ -473,12 +474,12 @@ export function LobbyBrowserPage() {
             and a socket that is down is what `ConnectionStatusBanner` is for.
             The only states left are "not told yet" and "told". */}
         {!roomsState.loaded ? (
-          <div className="room-list-loading" role="status">Loading public rooms…</div>
+          <div className="room-list-loading" role="status">{ui.lobbyBrowserPage.loadingPublicRooms}</div>
         ) : rooms.length === 0 ? (
-          <p>No public rooms yet. Create one!</p>
+          <p>{ui.lobbyBrowserPage.noPublicRoomsYetCreateOne}</p>
         ) : filteredRooms.length === 0 ? (
           <p className="lobby-no-matches">
-            No public rooms match your search criteria.
+            {ui.lobbyBrowserPage.noPublicRoomsMatchYourSearch}
           </p>
         ) : (
           <div className="room-list">
@@ -514,21 +515,21 @@ export function LobbyBrowserPage() {
             iconLeft={<PlusIcon size={16} />}
             onClick={() => void handleOpenCreateRoom()}
           >
-            Create a room
+            {ui.lobbyBrowserPage.createRoom2}
           </Button>
           <button
             type="button"
             className="btn btn-secondary lobby-dock-code"
             onClick={() => setCodeSheetOpen(true)}
           >
-            Join with a code
+            {ui.lobbyBrowserPage.joinWithCode}
           </button>
         </div>
       )}
 
       {codeSheetOpen && (
         <BottomSheet
-          title="Join with a code"
+          title={ui.lobbyBrowserPage.joinWithCode}
           testId="lobby-code-sheet"
           closeLabel="Close"
           onDismiss={() => setCodeSheetOpen(false)}
@@ -539,7 +540,7 @@ export function LobbyBrowserPage() {
               className="chip chip-neutral room-code-paste"
               onClick={() => void pasteCode()}
             >
-              Paste
+              {ui.lobbyBrowserPage.paste}
             </button>
           }
           footer={

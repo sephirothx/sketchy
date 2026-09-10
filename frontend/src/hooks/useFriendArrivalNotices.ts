@@ -6,6 +6,7 @@ import { useToast } from "../lib/toast";
 import { useOpenOverlay } from "./useOverlayRoute";
 import { FRIENDS_PATH } from "../lib/overlayRoutes";
 import type { FriendEntry } from "../lib/friends";
+import { ui } from "../content/ui/index.ts";
 
 /** Say when a friend request arrives, and when one is accepted.
 
@@ -56,12 +57,12 @@ export function useFriendArrivalNotices(): void {
     const { arrived, accepted } = notices;
     if (arrived.length === 1) {
       const asker = arrived[0];
-      notify(`${asker.displayName} wants to be friends.`, "info", ACTIONABLE_MS, {
+      notify(ui.useFriendArrivalNotices.wantsToBeFriends({ name: asker.displayName }), ui.useFriendArrivalNotices.info, ACTIONABLE_MS, {
         label: "Accept",
         onClick: () => void accept(asker.userId),
       });
     } else if (arrived.length > 1) {
-      notify(manyArrived(arrived), "info", ACTIONABLE_MS, {
+      notify(manyArrived(arrived), ui.useFriendArrivalNotices.info, ACTIONABLE_MS, {
         label: "Open",
         onClick: () => openOverlay(FRIENDS_PATH),
       });
@@ -70,9 +71,9 @@ export function useFriendArrivalNotices(): void {
     // Nothing to do about an acceptance - it is already a friendship - so
     // this one is only read, and keeps the ordinary length.
     if (accepted.length === 1) {
-      notify(`${accepted[0].displayName} accepted your friend request.`);
+      notify(ui.useFriendArrivalNotices.acceptedYourRequest({ name: accepted[0].displayName }));
     } else if (accepted.length > 1) {
-      notify(`${accepted.length} people accepted your friend requests.`);
+      notify(ui.useFriendArrivalNotices.severalAccepted({ count: accepted.length }));
     }
     // Told, so it is not told again - and only the ones this message named,
     // so an acceptance that landed since the read keeps its turn. After the

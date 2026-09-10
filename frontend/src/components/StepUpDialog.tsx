@@ -5,6 +5,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
 import { stepUp } from "../lib/secondFactor";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * The prompt a staff action raises when it needs the second factor again.
@@ -54,7 +55,7 @@ export function StepUpDialog({
       await stepUp(entered);
       onProved();
     } catch (problem) {
-      setError(refusalText(problem, "That code was not accepted."));
+      setError(refusalText(problem, ui.stepUpDialog.thatCodeWasNotAccepted));
       setBusy(false);
     }
   }
@@ -73,7 +74,7 @@ export function StepUpDialog({
       setError(
         problem instanceof DOMException
           ? "That passkey was not used. You can try again."
-          : refusalText(problem, "That passkey was not accepted."),
+          : refusalText(problem, ui.stepUpDialog.thatPasskeyWasNotAccepted),
       );
       setBusy(false);
     }
@@ -89,7 +90,7 @@ export function StepUpDialog({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="modal-title">Confirm it is you</h3>
+        <h3 id={titleId} className="modal-title">{ui.stepUpDialog.confirmYou}</h3>
         <p className="modal-body">{reason}</p>
         {error && <p className="auth-error" role="alert">{error}</p>}
         {canUsePasskeys && (
@@ -106,7 +107,7 @@ export function StepUpDialog({
           {useRecovery ? (
             <>
               <label className="two-factor-field-label" htmlFor="step-up-recovery">
-                Recovery code
+                {ui.stepUpDialog.recoveryCode}
               </label>
               <input
                 id="step-up-recovery"
@@ -121,7 +122,7 @@ export function StepUpDialog({
           ) : (
             <>
               <span className="two-factor-field-label">
-                Code from your authenticator app
+                {ui.stepUpDialog.codeFromYourAuthenticatorApp}
               </span>
               <SegmentedCodeInput
                 value={code}
@@ -145,7 +146,7 @@ export function StepUpDialog({
             {useRecovery ? "Use your authenticator app" : "Use a recovery code"}
           </button>
           <div className="step-up-actions">
-            <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
+            <button type="button" onClick={onCancel} disabled={busy}>{ui.stepUpDialog.cancel}</button>
             <button type="submit" disabled={busy}>{busy ? "Checking…" : "Confirm"}</button>
           </div>
         </form>

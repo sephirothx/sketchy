@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { CanvasSnapshot } from "./CanvasSnapshot";
 import { decodeCanvasHistory, type DecodedCanvasAction } from "../lib/canvasHistory";
+import { ui } from "../content/ui/index.ts";
 
 /** A drawing kept with a report, drawn from its stored frame.
 
@@ -35,10 +36,10 @@ export function ReportedDrawing({
         if (stale) return;
         const decoded = decodeCanvasHistory(bytes);
         if (decoded) setActions(decoded);
-        else setError("This drawing could not be decoded.");
+        else setError(ui.reportedDrawing.thisDrawingCouldNotBeDecoded);
       })
       .catch(() => {
-        if (!stale) setError("The drawing could not be loaded.");
+        if (!stale) setError(ui.reportedDrawing.drawingCouldNotBeLoaded);
       });
     return () => {
       stale = true;

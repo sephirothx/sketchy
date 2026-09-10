@@ -8,6 +8,7 @@ import {
 } from "../lib/promptLanguages";
 import { getFocusableElements, useEscapeLayer } from "../hooks/useFocusTrap";
 import type { PromptLanguage } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /** The lobby's filter adds "every language" to the same list of choices. */
 export const ANY_LANGUAGE = "all";
@@ -136,7 +137,7 @@ export function LanguagePicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        aria-label={`${label}: ${accessibleName(value)}`}
+        aria-label={ui.languagePicker.currentChoice({ label, value: accessibleName(value) })}
         title={flagOnly ? `${label}: ${accessibleName(value)}` : undefined}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
@@ -201,7 +202,7 @@ export function LanguageFace({
           <GlobeIcon size={Math.round(flagWidth * 0.85)} />
         </span>
         <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
-          Every language
+          {ui.languagePicker.everyLanguage}
         </span>
       </span>
     );

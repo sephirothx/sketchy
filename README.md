@@ -1556,6 +1556,8 @@ frontend/
                   SettingsOverlay, FriendsOverlay
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
     content/rules/ The published rules, one typed module per language
+    content/ui/   Every word the interface says, one typed module per language
+                  (en.ts is the reference; format.ts holds the Intl formatters)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL

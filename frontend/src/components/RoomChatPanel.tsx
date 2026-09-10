@@ -11,6 +11,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { chatLineText } from "../lib/announcements.ts";
+import { ui } from "../content/ui/index.ts";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
@@ -35,17 +36,6 @@ type GuessFlash = {
   text: string;
   kind: "close" | "miss" | "info" | "error";
 };
-
-function ordinal(n: number): string {
-  const rem100 = n % 100;
-  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1: return `${n}st`;
-    case 2: return `${n}nd`;
-    case 3: return `${n}rd`;
-    default: return `${n}th`;
-  }
-}
 
 function letterRunLengths(text: string): number[] {
   const runs: number[] = [];
@@ -290,7 +280,7 @@ export function RoomChatPanel({
         setText("");
         scrollToBottom();
       } else {
-        setError(refusalText(response, "Could not send message"));
+        setError(refusalText(response, ui.roomChatPanel.couldNotSendMessage));
       }
     } catch (sendError) {
       setError(socketRequestErrorMessage(sendError, "send the message"));
@@ -381,7 +371,7 @@ export function RoomChatPanel({
         </div>
         {isScrolledUp && unreadCount > 0 && (
           <button type="button" className="chat-scroll-bottom-button" onClick={scrollToBottom}>
-            <ChevronDownIcon size={13} /> {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
+            <ChevronDownIcon size={13} /> {ui.roomChatPanel.unreadMessages({ count: unreadCount })}
           </button>
         )}
       </div>
@@ -395,7 +385,9 @@ export function RoomChatPanel({
       {mode === "playing" && guessedPrompt && (
         <p className="guess-verdict-hit" data-testid="guess-verdict-hit">
           <span className="guess-verdict-hit-head">
-            Correct{guessPlace ? ` · ${ordinal(guessPlace)}` : ""}
+            {ui.roomChatPanel.correctWithPlace({
+              place: guessPlace ? ui.format.ordinal({ value: guessPlace }) : null,
+            })}
           </span>
           <span className="guess-verdict-hit-word">{guessedPrompt}</span>
           {guessBreakdown && guessBreakdown.points > 0 && (
@@ -417,7 +409,7 @@ export function RoomChatPanel({
             >
               {guessFlash.kind === "close" ? guessFlash.text : guessFlash.kind === "miss" ? (
                 <>
-                  <span className="guess-focus-flash-label">Sent:</span> {guessFlash.text}
+                  <span className="guess-focus-flash-label">{ui.roomChatPanel.sent}</span> {guessFlash.text}
                 </>
               ) : (
                 guessFlash.text
@@ -477,14 +469,14 @@ export function RoomChatPanel({
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" className="chat-send-button" disabled={sending} aria-label="Send">
+            <button type="submit" className="chat-send-button" disabled={sending} aria-label={ui.roomChatPanel.send}>
               <ChevronRightIcon size={17} />
             </button>
           </div>
         </form>
       )}
       {mode === "playing" && isDrawer && (
-        <p className="room-chat-drawer-note">You’re drawing—watch the guesses come in.</p>
+        <p className="room-chat-drawer-note">{ui.roomChatPanel.youReDrawingWatchGuessesCome}</p>
       )}
     </section>
   );

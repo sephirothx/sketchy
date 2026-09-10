@@ -10,6 +10,7 @@ import {
   type DataExportJob,
 } from "../lib/accountData";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 function dateLabel(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
@@ -46,7 +47,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       .catch((failure) => {
         if (active) {
           setError(
-            refusalText(failure, "Could not load your data exports."),
+            refusalText(failure, ui.accountDataDialog.couldNotLoadYourDataExports),
           );
         }
       })
@@ -93,7 +94,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       if (refreshed) setNextRequestAt(refreshed.nextRequestAt);
     } catch (failure) {
       setError(
-        refusalText(failure, "Could not request your data export."),
+        refusalText(failure, ui.accountDataDialog.couldNotRequestYourDataExport),
       );
     } finally {
       setRequesting(false);
@@ -120,22 +121,22 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="modal-title">Your data</h3>
+        <h3 id={titleId} className="modal-title">{ui.accountDataDialog.yourData}</h3>
         <p className="modal-body">
-          Download a private JSON copy of your account and gameplay data. Other players’ profiles and messages are not included.
+          {ui.accountDataDialog.downloadPrivateJsonCopyYourAccount}
         </p>
         {error && <p className="auth-error" role="alert">{error}</p>}
 
         <section className="account-data-section" aria-labelledby={`${titleId}-exports`}>
           <div className="account-data-heading-row">
-            <h4 id={`${titleId}-exports`}>Data exports</h4>
+            <h4 id={`${titleId}-exports`}>{ui.accountDataDialog.dataExports}</h4>
             <button type="button" onClick={() => void startExport()} disabled={!canRequest}>
               {requesting ? "Requesting…" : "Request export"}
             </button>
           </div>
-          {loading && <p role="status">Loading exports…</p>}
+          {loading && <p role="status">{ui.accountDataDialog.loadingExports}</p>}
           {!loading && exports.length === 0 && (
-            <p className="account-data-empty">You have not requested an export yet.</p>
+            <p className="account-data-empty">{ui.accountDataDialog.youHaveNotRequestedExportYet}</p>
           )}
           {exports.length > 0 && (
             <ul className="account-export-list">
@@ -144,27 +145,31 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
                   <span>
                     <strong>{exportLabel(job)}</strong>
                     <small>
-                      Requested {dateLabel(job.createdAt, dateTime)} · format v{job.schemaVersion}
+                      {ui.accountDataDialog.requestedOn({
+                        when: dateLabel(job.createdAt, dateTime),
+                        schemaVersion: job.schemaVersion,
+                      })}
                     </small>
                     {exportFailureNote(job) && (
                       <small className="account-export-note">{exportFailureNote(job)}</small>
                     )}
                   </span>
                   {job.downloadUrl && (
-                    <a href={job.downloadUrl} download>Download</a>
+                    <a href={job.downloadUrl} download>{ui.accountDataDialog.download}</a>
                   )}
                 </li>
               ))}
             </ul>
           )}
           <p className="account-data-note">
-            One export a week; ready exports expire after seven days.
-            {waitUntil && ` You can request another on ${date(waitUntil)}.`}
+            {ui.accountDataDialog.exportAllowance({
+              nextAllowed: waitUntil ? date(waitUntil) : null,
+            })}
           </p>
         </section>
 
         <div className="account-data-actions">
-          <button type="button" onClick={onClose}>Close</button>
+          <button type="button" onClick={onClose}>{ui.accountDataDialog.close}</button>
         </div>
       </div>
     </div>

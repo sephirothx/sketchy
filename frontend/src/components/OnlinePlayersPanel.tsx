@@ -16,6 +16,7 @@ import { LobbyPlayerMenu } from "./LobbyPlayerMenu";
 import { ReportAccountDialog } from "./ReportAccountDialog";
 import { Button } from "./ui/Button";
 import type { AckResponse } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /** Who else is here, beside the room list.
 
@@ -75,21 +76,21 @@ export function OnlinePlayersPanel() {
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify("Could not join that game.");
+      notify(ui.onlinePlayersPanel.couldNotJoinThatGame);
     }
   }
 
   return (
     <section className="panel lobby-online-panel" aria-labelledby="online-heading">
       <div className="lobby-rooms-heading">
-        <h2 id="online-heading">Who is online</h2>
+        <h2 id="online-heading">{ui.onlinePlayersPanel.whoOnline}</h2>
         {/* The true total, not the number of rows: a cap must never read as a
             quiet server (R-PRESENCE-04). */}
         <span className="lobby-rooms-count">{presenceSummary(presence)}</span>
       </div>
 
       {players.length === 0 ? (
-        <p className="online-players-empty">Nobody else is here right now.</p>
+        <p className="online-players-empty">{ui.onlinePlayersPanel.nobodyElseHereRightNow}</p>
       ) : (
         <ul className="online-players-list" data-testid="online-players-list">
           {players.map((player) => {
@@ -110,7 +111,7 @@ export function OnlinePlayersPanel() {
                 {/* The disc's mark is decorative, so the name carries the
                     word - beside it rather than inside the name itself,
                     which is the player's and nothing else. */}
-                {theyAreAFriend && <span className="visually-hidden">Friend</span>}
+                {theyAreAFriend && <span className="visually-hidden">{ui.onlinePlayersPanel.friend}</span>}
                 {/* A guest has no profile worth opening, nothing to befriend
                     and no account to report: their identity is a browser, so
                     their name stays plain text and the row offers nothing.
@@ -173,7 +174,7 @@ export function OnlinePlayersPanel() {
                       compact
                       onClick={() => void joinFriend(player)}
                     >
-                      Join
+                      {ui.onlinePlayersPanel.join}
                     </Button>
                   ) : (
                     <span className={`online-player-status is-${player.status}`}>

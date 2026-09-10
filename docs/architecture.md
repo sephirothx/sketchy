@@ -196,6 +196,7 @@ frontend/src/
 ├── main.tsx, App.tsx      Router, identity bootstrap, socket connection
 ├── pages/                 One component per route
 ├── components/            Canvas, toolbar, player list, dialogs, overlays
+├── content/ui/            The interface's words, one typed module per locale
 │   └── CrashBoundary.tsx  The class both crash boundaries use (R-UX-06); pages/CrashPage.tsx is its fallback
 ├── hooks/
 │   ├── useGameSocketListeners.ts  Every server→client listener, registered once

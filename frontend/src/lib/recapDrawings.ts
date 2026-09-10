@@ -1,6 +1,7 @@
 import { emitWithAck } from "./socket";
 import type { DrawingRecapMetadata, DrawingRecapResponse } from "../types";
 import { refusalText } from "./refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Fetch a drawing the live room still holds in memory.
@@ -17,7 +18,7 @@ export async function loadRecapDrawing(
     index: entry.index,
   });
   if (!response.ok || !response.drawing) {
-    throw new Error(refusalText(response, "This drawing could not be loaded."));
+    throw new Error(refusalText(response, ui.recapDrawings.thisDrawingCouldNotBeLoaded));
   }
   return response.drawing.canvas;
 }

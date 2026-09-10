@@ -6,6 +6,7 @@ import {
   type ToastTone,
 } from "../lib/toast";
 import { XIcon } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 interface Toast {
   id: number;
@@ -59,7 +60,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ notify }}>
       {children}
-      <div className="toast-viewport" role="region" aria-label="Notifications">
+      <div className="toast-viewport" role="region" aria-label={ui.toastProvider.notifications}>
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -82,7 +83,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 {toast.action.label}
               </button>
             )}
-            <button type="button" onClick={() => dismiss(toast.id)} aria-label="Dismiss notification"><XIcon size={14} /></button>
+            <button type="button" onClick={() => dismiss(toast.id)} aria-label={ui.toastProvider.dismissNotification}><XIcon size={14} /></button>
           </div>
         ))}
       </div>

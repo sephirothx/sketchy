@@ -3,6 +3,7 @@ import { canCastRestartVote, restartVoteCounts, secondsUntil } from "../lib/rest
 import { CheckIcon, XIcon } from "./icons";
 import type { RestartVoter } from "../lib/restartVote";
 import type { RestartVoteState } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 interface RestartVoteBannerProps {
   vote: RestartVoteState;
@@ -43,7 +44,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
             ? (
                 <>
                   <span className="restart-approved-check" aria-hidden="true"><CheckIcon size={15} /></span>
-                  Restart approved!
+                  {ui.restartVoteBanner.restartApproved}
                 </>
               )
             : `${vote.proposerNickname} proposed restarting · ${remaining}s`}
@@ -57,7 +58,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
       <div
         className="restart-vote-meter"
         role="img"
-        aria-label={`${counts.yes} yes, ${counts.no} no, ${counts.pending} pending`}
+        aria-label={ui.restartVoteBanner.voteTally(counts)}
       >
         {castVotes.map(({ playerId, vote: castVote }) => (
           <span
@@ -77,13 +78,13 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
         ))}
       </div>
       {vote.status === "approved" && (
-        <div className="restart-approved-countdown" aria-label={`Restarting in ${remaining} seconds`}>
+        <div className="restart-approved-countdown" aria-label={ui.restartVoteBanner.restartingIn({ seconds: remaining })}>
           <strong>{remaining}</strong>
-          <span>seconds</span>
+          <span>{ui.restartVoteBanner.seconds}</span>
         </div>
       )}
       {vote.status === "voting" && eligible && (
-        <div className="restart-vote-actions" aria-label="Vote to restart the game">
+        <div className="restart-vote-actions" aria-label={ui.restartVoteBanner.voteRestartGame}>
           <button
             type="button"
             className={myVote === true ? "selected yes" : "yes"}
@@ -91,7 +92,7 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
             disabled={busy}
             onClick={() => onVote(true)}
           >
-            Restart
+            {ui.restartVoteBanner.restart}
           </button>
           <button
             type="button"
@@ -100,13 +101,13 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
             disabled={busy}
             onClick={() => onVote(false)}
           >
-            Keep playing
+            {ui.restartVoteBanner.keepPlaying}
           </button>
         </div>
       )}
       {vote.status === "voting" && !eligible && (
         <span className="restart-vote-spectator-note">
-          Only eligible players present when the vote started can vote.
+          {ui.restartVoteBanner.onlyEligiblePlayersPresentWhenVote}
         </span>
       )}
     </section>

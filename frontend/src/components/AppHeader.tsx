@@ -4,6 +4,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { AccountMenu } from "./AccountMenu";
 import { BackIcon, GearIcon, Wordmark } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * The shared page chrome outside a room: the wordmark on the left, preceded by
@@ -63,8 +64,8 @@ export function AppHeader({
             type="button"
             className="btn btn-icon header-settings-button"
             onClick={() => openSettings()}
-            title="Player settings"
-            aria-label="Player settings"
+            title={ui.appHeader.playerSettings}
+            aria-label={ui.appHeader.playerSettings}
           >
             <GearIcon size={18} />
           </button>

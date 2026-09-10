@@ -20,6 +20,7 @@ import { promptLanguageLabel } from "../lib/promptLanguages";
 import { useAuthStore } from "../store/authStore";
 import type { OwnedPromptList, PromptLanguage } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const LANGUAGES: PromptLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt"];
 const EMPTY_DRAFT: PromptListDraft = {
@@ -77,7 +78,7 @@ export function MyPromptListsPage() {
         if (!cancelled) setLists(loaded);
       })
       .catch(() => {
-        if (!cancelled) setError("Could not load your prompt lists.");
+        if (!cancelled) setError(ui.myPromptListsPage.couldNotLoadYourPromptLists);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -114,7 +115,7 @@ export function MyPromptListsPage() {
       setBulkInput("");
       setMergeSummary(null);
     } catch {
-      setError("Could not open that prompt list.");
+      setError(ui.myPromptListsPage.couldNotOpenThatPromptList);
     } finally {
       setLoading(false);
     }
@@ -157,7 +158,7 @@ export function MyPromptListsPage() {
   async function save() {
     if (busy) return;
     if (draft.prompts.length === 0) {
-      setError("Add at least one prompt before saving.");
+      setError(ui.myPromptListsPage.addAtLeastOnePromptBefore);
       return;
     }
     setBusy(true);
@@ -193,7 +194,7 @@ export function MyPromptListsPage() {
       setNotice("Prompt list saved.");
     } catch (saveError) {
       setError(
-        refusalText(saveError, "Could not save this prompt list."),
+        refusalText(saveError, ui.myPromptListsPage.couldNotSaveThisPromptList),
       );
     } finally {
       setBusy(false);
@@ -211,7 +212,7 @@ export function MyPromptListsPage() {
       beginNew();
       setNotice("Prompt list deleted.");
     } catch {
-      setError("Could not delete this prompt list.");
+      setError(ui.myPromptListsPage.couldNotDeleteThisPromptList);
     } finally {
       setBusy(false);
     }
@@ -221,18 +222,18 @@ export function MyPromptListsPage() {
     <AppHeader backLabel="Back to lobby" />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
-        <div><p>Your library</p><h1>Reusable prompt lists</h1></div>
-        {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />New list</button>}
+        <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
+        {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
       </div>
       {!user || user.isAnonymous ? (
         <div className="prompt-list-manager-empty">
-          <p>Create an account to save, revise, and share prompt lists. Quick room prompts stay local and ephemeral.</p>
+          <p>{ui.myPromptListsPage.createAccountSaveReviseSharePrompt}</p>
         </div>
       ) : (
         <div className="prompt-list-manager-layout">
-          <aside aria-label="Your prompt lists">
-            {loading && lists.length === 0 && <p>Loading…</p>}
-            {lists.length === 0 && !loading && <p>No saved lists yet.</p>}
+          <aside aria-label={ui.myPromptListsPage.yourPromptLists}>
+            {loading && lists.length === 0 && <p>{ui.myPromptListsPage.loading}</p>}
+            {lists.length === 0 && !loading && <p>{ui.myPromptListsPage.noSavedListsYet}</p>}
             {lists.map((item) => <button
               type="button"
               key={item.id}
@@ -240,34 +241,45 @@ export function MyPromptListsPage() {
               onClick={() => void openList(item.id)}
             >
               <strong>{item.name}</strong>
-              <span>{item.promptCount} prompts · {item.visibility}{item.moderationState !== "active" ? ` · ${item.moderationState.replace("_", " ")}` : ""}</span>
+              <span>
+                  {ui.myPromptListsPage.listSummary({
+                    prompts: item.promptCount,
+                    visibility: item.visibility,
+                    moderationState:
+                      item.moderationState !== "active"
+                        ? item.moderationState.replace("_", " ")
+                        : null,
+                  })}
+                </span>
             </button>)}
           </aside>
           <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
             {moderationState !== "active" && <p className="prompt-list-moderation-warning" role="status">
-              This list is {moderationState.replace("_", " ")} and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.
+              {ui.myPromptListsPage.listUnderReview({
+                state: moderationState.replace("_", " "),
+              })}
             </p>}
-            <label>Name<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-            <label>Description<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+            <label>{ui.myPromptListsPage.name}<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+            <label>{ui.myPromptListsPage.description}<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
             <div className="prompt-list-manager-meta">
-              <label>Language<select value={draft.language} disabled={Boolean(selectedId)} onChange={(event) => setDraft({ ...draft, language: event.target.value as PromptLanguage })}>
+              <label>{ui.myPromptListsPage.language}<select value={draft.language} disabled={Boolean(selectedId)} onChange={(event) => setDraft({ ...draft, language: event.target.value as PromptLanguage })}>
                 {LANGUAGES.map((language) => <option key={language} value={language}>{promptLanguageLabel(language)}</option>)}
               </select></label>
-              <label>Visibility<select value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as "private" | "unlisted" })}>
-                <option value="private">Private</option>
-                <option value="unlisted">Anyone with code</option>
+              <label>{ui.myPromptListsPage.visibility}<select value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as "private" | "unlisted" })}>
+                <option value="private">{ui.myPromptListsPage.private}</option>
+                <option value="unlisted">{ui.myPromptListsPage.anyoneWithCode}</option>
               </select></label>
             </div>
             {draft.visibility === "unlisted" && shareCode && <div className="prompt-list-share-code">
-              <span>Share code</span><code>{shareCode}</code>
-              <button type="button" className="btn btn-secondary btn-compact" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError("Could not copy the share code."))}>Copy</button>
+              <span>{ui.myPromptListsPage.shareCode}</span><code>{shareCode}</code>
+              <button type="button" className="btn btn-secondary btn-compact" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError(ui.myPromptListsPage.couldNotCopyShareCode))}>{ui.myPromptListsPage.copy}</button>
             </div>}
             <div className="prompt-list-bulk-add">
-              <label htmlFor="prompt-bulk-input">Add prompts</label>
+              <label htmlFor="prompt-bulk-input">{ui.myPromptListsPage.addPrompts}</label>
               <textarea
                 id="prompt-bulk-input"
                 value={bulkInput}
-                placeholder={"One prompt per line\nor separate entries with commas"}
+                placeholder={ui.myPromptListsPage.onePromptPerLineSeparateEntries}
                 aria-describedby="prompt-bulk-summary"
                 onChange={(event) => setBulkInput(event.target.value)}
               />
@@ -281,23 +293,23 @@ export function MyPromptListsPage() {
                   disabled={!bulkInput.trim() || draft.prompts.length >= MAX_LIST_PROMPTS}
                   onClick={addBulkPrompts}
                 >
-                  Add to list
+                  {ui.myPromptListsPage.addList}
                 </button>
               </div>
             </div>
             <div className="prompt-list-collection">
             {draft.prompts.length === 0 ? (
-              <p className="prompt-list-manager-empty">No prompts yet. Paste some above to get started.</p>
+              <p className="prompt-list-manager-empty">{ui.myPromptListsPage.noPromptsYetPasteSomeAbove}</p>
             ) : (
               <>
                 <div className="prompt-list-entry-filters">
-                  <h3>In this list</h3>
+                  <h3>{ui.myPromptListsPage.thisList}</h3>
                   <label>
-                    <span className="visually-hidden">Search prompts</span>
+                    <span className="visually-hidden">{ui.myPromptListsPage.searchPrompts}</span>
                     <input
                       type="search"
                       value={promptSearch}
-                      placeholder="Search prompts"
+                      placeholder={ui.myPromptListsPage.searchPrompts}
                       onChange={(event) => setPromptSearch(event.target.value)}
                     />
                   </label>
@@ -308,7 +320,7 @@ export function MyPromptListsPage() {
                         checked={showFlaggedOnly}
                         onChange={(event) => setShowFlaggedOnly(event.target.checked)}
                       />
-                      Needs review ({flaggedCount})
+                      {ui.myPromptListsPage.needsReview({ count: flaggedCount })}
                     </label>
                   )}
                   <span className="prompt-list-entry-count">
@@ -318,7 +330,7 @@ export function MyPromptListsPage() {
                   </span>
                 </div>
                 {visiblePrompts.length === 0 ? (
-                  <p className="prompt-list-manager-empty">Nothing matches that search.</p>
+                  <p className="prompt-list-manager-empty">{ui.myPromptListsPage.nothingMatchesThatSearch}</p>
                 ) : (
                   <ul className="prompt-list-entry-editor">
                     {visiblePrompts.map((prompt, index) => {
@@ -330,7 +342,7 @@ export function MyPromptListsPage() {
                         >
                           <span className="prompt-list-entry-text">{prompt.prompt}</span>
                           {flagged && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId!]?.replace("_", " ")}</span>}
-                          <button type="button" aria-label={`Remove ${prompt.prompt}`} onClick={() => removePrompt(prompt.prompt)}><XIcon size={13} /></button>
+                          <button type="button" aria-label={ui.myPromptListsPage.removePrompt({ prompt: prompt.prompt })} onClick={() => removePrompt(prompt.prompt)}><XIcon size={13} /></button>
                         </li>
                       );
                     })}
@@ -342,7 +354,7 @@ export function MyPromptListsPage() {
             {error && <p className="auth-error" role="alert">{error}</p>}
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
             <div className="prompt-list-manager-actions">
-              {selectedId && <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />Delete list…</button>}
+              {selectedId && <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
               <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save list"}</button>
             </div>
           </form>

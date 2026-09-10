@@ -1,5 +1,6 @@
 import { useId, useRef } from "react";
 import { ModalShell } from "./ui/ModalShell";
+import { ui } from "../content/ui/index.ts";
 
 interface ConfirmationDialogProps {
   title: string;
@@ -34,7 +35,7 @@ export function ConfirmationDialog({
       <p id={descriptionId} className="modal-body">{description}</p>
       <div className="confirmation-dialog-actions">
         <button ref={cancelButtonRef} type="button" className="confirmation-cancel-button" onClick={onCancel}>
-          Cancel
+          {ui.confirmationDialog.cancel}
         </button>
         <button type="button" className="confirmation-danger-button" onClick={onConfirm}>
           {confirmLabel}

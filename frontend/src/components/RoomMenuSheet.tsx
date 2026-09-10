@@ -8,6 +8,7 @@ import {
   RoundsIcon,
   UsersIcon,
 } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 interface RoomMenuSheetProps {
   isPlaying: boolean;
@@ -55,20 +56,20 @@ export function RoomMenuSheet({
   };
 
   return (
-    <BottomSheet title="Room" onDismiss={onDismiss} testId="room-menu-sheet">
+    <BottomSheet title={ui.roomMenuSheet.room} onDismiss={onDismiss} testId="room-menu-sheet">
       <ul className="sheet-menu">
         {isPlaying && (
           <li>
             <button type="button" className="sheet-menu-item" onClick={run(onOpenPlayers)}>
               <UsersIcon size={19} />
-              <span>Players and scores</span>
+              <span>{ui.roomMenuSheet.playersScores}</span>
             </button>
           </li>
         )}
         <li>
           <button type="button" className="sheet-menu-item" onClick={run(onCopyLink)}>
             <LinkIcon size={19} />
-            <span>Copy the invite link</span>
+            <span>{ui.roomMenuSheet.copyInviteLink}</span>
           </button>
         </li>
         <li>
@@ -86,7 +87,7 @@ export function RoomMenuSheet({
           <li>
             <button type="button" className="sheet-menu-item" onClick={run(onSaveImage)}>
               <DownloadIcon size={19} />
-              <span>Save this drawing</span>
+              <span>{ui.roomMenuSheet.saveThisDrawing}</span>
             </button>
           </li>
         )}
@@ -100,9 +101,9 @@ export function RoomMenuSheet({
             >
               <RoundsIcon size={19} />
               <span>
-                Start the game over
+                {ui.roomMenuSheet.startTheGameOver}
                 {restartCooldownSeconds > 0 && (
-                  <small> · in {restartCooldownSeconds}s</small>
+                  <small>{ui.roomMenuSheet.startOverCooldown({ seconds: restartCooldownSeconds })}</small>
                 )}
               </span>
             </button>
@@ -111,13 +112,13 @@ export function RoomMenuSheet({
         <li>
           <button type="button" className="sheet-menu-item" onClick={run(onOpenSettings)}>
             <GearIcon size={19} />
-            <span>Settings</span>
+            <span>{ui.roomMenuSheet.settings}</span>
           </button>
         </li>
         <li className="sheet-menu-sep">
           <button type="button" className="sheet-menu-item is-danger" onClick={run(onLeave)}>
             <LeaveIcon size={19} />
-            <span>Leave the room</span>
+            <span>{ui.roomMenuSheet.leaveRoom}</span>
           </button>
         </li>
       </ul>

@@ -10,6 +10,7 @@ import {
   type EmailState,
 } from "../lib/accountRecovery";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** Add, replace, or just look at the address an account is recovered through.
 
@@ -55,7 +56,7 @@ export function AddEmailDialog({
     event.preventDefault();
     if (busy) return;
     if (!emailLooksUsable(email)) {
-      setError("That does not look like an email address.");
+      setError(ui.addEmailDialog.thatDoesNotLookLikeEmail);
       return;
     }
     setBusy(true);
@@ -65,7 +66,7 @@ export function AddEmailDialog({
       setSentTo(pendingAddress);
     } catch (submitError) {
       setError(
-        refusalText(submitError, "Something went wrong. Please try again."),
+        refusalText(submitError, ui.addEmailDialog.somethingWentWrongPleaseTryAgain),
       );
     } finally {
       setBusy(false);
@@ -100,25 +101,21 @@ export function AddEmailDialog({
         {sentTo ? (
           <>
             <p className="modal-body">
-              Follow the link sent to {sentTo}. Until you do, the address is not
-              attached to your account and cannot be used to recover it
-              {replacing ? ", and the one you had stays in place." : "."}
+              {ui.addEmailDialog.followTheLink({ address: sentTo, replacing })}
             </p>
             <button
               type="button"
               className="modal-button"
               onClick={() => onSaved(sentTo)}
             >
-              Done
+              {ui.addEmailDialog.done}
             </button>
           </>
         ) : (
           <>
             {state && <p className="modal-body">{recoveryStatusMessage(state)}</p>}
             <p className="modal-body">
-              Used only to reset your password and to tell you if your account
-              or something you shared is actioned. Nothing else is ever sent
-              here.
+              {ui.addEmailDialog.usedOnlyResetYourPasswordTell}
             </p>
             <form onSubmit={submit} className="auth-form">
               <label htmlFor={`${titleId}-email`}>

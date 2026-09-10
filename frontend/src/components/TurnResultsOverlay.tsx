@@ -7,6 +7,7 @@ import {
   hasPreviousOrder,
   rowStartOffsets,
 } from "../lib/standings";
+import { ui } from "../content/ui/index.ts";
 
 interface TurnResultsOverlayProps {
   prompt: string;
@@ -126,26 +127,26 @@ export function TurnResultsOverlay({
       <div className="turn-results-panel">
         <h3 id="turn-results-title">{showScores ? "Turn results" : "Turn complete"}</h3>
         <p className="turn-results-prompt">
-          The prompt was <strong>{prompt}</strong>
+          {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>
         {reactions && <div className="turn-results-reactions">{reactions}</div>}
         {showScores && mine && (
           <p className="turn-results-personal">
-            Your turn:{" "}
-            {myBreakdown && myBreakdown.hintSpend > 0 ? (
-              <strong>
-                +{myBreakdown.basePoints}{" "}
-                <span className="turn-results-hint-debt">-{myBreakdown.hintSpend} hints</span> ={" "}
-                {myBreakdown.points} points
-              </strong>
-            ) : (
-              <strong>{mine.delta >= 0 ? `+${mine.delta}` : mine.delta} points</strong>
-            )}{" "}
-            · now #{mine.newRank}
+            {myBreakdown && myBreakdown.hintSpend > 0
+              ? ui.turnResultsOverlay.yourTurnWithHints({
+                  base: myBreakdown.basePoints,
+                  hintSpend: myBreakdown.hintSpend,
+                  points: myBreakdown.points,
+                  rank: mine.newRank,
+                })
+              : ui.turnResultsOverlay.yourTurn({
+                  delta: mine.delta,
+                  rank: mine.newRank,
+                })}
           </p>
         )}
         {guesses.length === 0 && (
-          <p className="turn-results-no-guesses">No one guessed correctly.</p>
+          <p className="turn-results-no-guesses">{ui.turnResultsOverlay.noOneGuessedCorrectly}</p>
         )}
         {showScores && (
           <ul className="turn-results-score-list">
@@ -184,7 +185,7 @@ export function TurnResultsOverlay({
                       {entry.nickname}
                     </span>
                     {entry.playerId === myPlayerId && (
-                      <span className="turn-results-score-you"> (you)</span>
+                      <span className="turn-results-score-you"> {ui.turnResultsOverlay.you}</span>
                     )}
                   </span>
                   {guessTimes.has(entry.playerId) && (
@@ -204,7 +205,7 @@ export function TurnResultsOverlay({
                       contained. */}
                   <span className={`turn-results-score-delta${entry.delta > 0 ? " positive" : ""}`}>
                     {entry.playerId === drawerId && (
-                      <span className="turn-results-score-brush" title="Drew this turn">
+                      <span className="turn-results-score-brush" title={ui.turnResultsOverlay.drewThisTurn}>
                         <BrushIcon size={12} />
                       </span>
                     )}
@@ -219,7 +220,7 @@ export function TurnResultsOverlay({
         {nextTurnSeconds > 0 && (
           <div className="turn-results-progress">
             <div className="turn-results-progress-labels">
-              <span>Next turn</span>
+              <span>{ui.turnResultsOverlay.nextTurn}</span>
             </div>
             <div className="turn-results-progress-track" aria-hidden="true">
               <span style={{ width: `${progressFraction * 100}%` }} />

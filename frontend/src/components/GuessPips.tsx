@@ -3,6 +3,7 @@ import { rankGuesses } from "../lib/guessOrder";
 import { useGameStore } from "../store/gameStore";
 import type { PlayerInfo } from "../types";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Who has already guessed, and who is still hunting — the turn's live
@@ -102,7 +103,7 @@ function GuessPip({
   return (
     <span
       className={`guess-pip${got ? " has-guessed" : ""}${isMe ? " is-me" : ""}`}
-      title={`${player.nickname}${isFriend ? " (friend)" : ""} ${got ? "guessed it" : "is still guessing"}`}
+      title={ui.guessPips.playerGuessState({ nickname: player.nickname, isFriend, guessed: got })}
       data-testid={got ? "guess-pip-correct" : "guess-pip-waiting"}
     >
       <Avatar

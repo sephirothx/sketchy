@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { ui } from "../content/ui/index.ts";
 
 /** What a row in the lobby's online list offers about the person on it.
 
@@ -83,7 +84,7 @@ export function LobbyPlayerMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        aria-label={`What to do about ${displayName}`}
+        aria-label={ui.lobbyPlayerMenu.whatToDoAbout({ name: displayName })}
         onClick={() => onOpenChange(!isOpen)}
       >
         {children}
@@ -95,7 +96,7 @@ export function LobbyPlayerMenu({
           ref={menuRef}
           className="online-player-menu"
           role="menu"
-          aria-label={`What to do about ${displayName}`}
+          aria-label={ui.lobbyPlayerMenu.whatToDoAbout({ name: displayName })}
           onKeyDown={handleMenuKeyDown}
           data-testid="online-player-menu"
         >
@@ -108,7 +109,7 @@ export function LobbyPlayerMenu({
             className="online-player-menu-item"
             onClick={() => onOpenChange(false)}
           >
-            Open player profile
+            {ui.lobbyPlayerMenu.openPlayerProfile}
           </Link>
           {onAddFriend && (
             <button
@@ -120,7 +121,7 @@ export function LobbyPlayerMenu({
                 onAddFriend();
               }}
             >
-              Add as friend
+              {ui.lobbyPlayerMenu.addAsFriend}
             </button>
           )}
           {onReport && (
@@ -133,7 +134,7 @@ export function LobbyPlayerMenu({
                 onReport();
               }}
             >
-              Report
+              {ui.lobbyPlayerMenu.report}
             </button>
           )}
         </div>

@@ -4,6 +4,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 interface CustomPromptsResponse extends AckResponse {
   prompts?: string[];
@@ -215,7 +216,7 @@ function VirtualPromptList({ activePrompt, onDismiss, onShow, records }: Virtual
       className="waiting-custom-prompts-list is-virtualized"
       role="list"
       tabIndex={0}
-      aria-label={`${records.length} custom prompts`}
+      aria-label={ui.customPromptsPreview.customPromptCount({ count: records.length })}
       onScroll={(event) => {
         onDismiss();
         const element = event.currentTarget;
@@ -309,8 +310,11 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
   const hasFilters = Boolean(query.trim()) || lengthFilter !== "all";
 
   const resultSummary = hasFilters
-    ? `${filteredPrompts.length} of ${prompts.length} prompts match`
-    : `${prompts.length} prompt${prompts.length === 1 ? "" : "s"}`;
+    ? ui.customPromptsPreview.resultsMatching({
+        shown: filteredPrompts.length,
+        total: prompts.length,
+      })
+    : ui.customPromptsPreview.promptCount({ count: prompts.length });
 
   async function loadPrompts() {
     if (loading) return;
@@ -321,7 +325,7 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
       if (response.ok && response.prompts) {
         setPrompts(response.prompts.map(createPromptRecord));
       } else {
-        setError(refusalText(response, "Could not load the custom prompts"));
+        setError(refusalText(response, ui.customPromptsPreview.couldNotLoadCustomPrompts));
       }
     } catch (loadError) {
       setError(socketRequestErrorMessage(loadError, "load the custom prompts"));
@@ -337,31 +341,29 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
         if (event.currentTarget.open) void loadPrompts();
       }}
     >
-      <summary>
-        Inspect {count} custom prompt{count === 1 ? "" : "s"}
-      </summary>
+      <summary>{ui.customPromptsPreview.inspectPrompts({ count })}</summary>
       <div className="waiting-custom-prompts-content">
         {loading ? (
-          <p>Loading custom prompts…</p>
+          <p>{ui.customPromptsPreview.loadingCustomPrompts}</p>
         ) : error ? (
           <p className="waiting-custom-prompts-error" role="alert">{error}</p>
         ) : (
           <>
             <div className="waiting-custom-prompts-heading">
               <div>
-                <strong>Room prompt collection</strong>
-                <p>Read-only list supplied by the room host.</p>
+                <strong>{ui.customPromptsPreview.roomPromptCollection}</strong>
+                <p>{ui.customPromptsPreview.readOnlyListSuppliedByRoom}</p>
               </div>
               <span>{prompts.length}</span>
             </div>
 
             <label className="waiting-custom-prompts-search">
-              <span>Find a prompt</span>
+              <span>{ui.customPromptsPreview.findPrompt}</span>
               <input
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search custom prompts…"
+                placeholder={ui.customPromptsPreview.searchCustomPrompts}
                 autoComplete="off"
               />
             </label>
@@ -369,7 +371,7 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
             <div
               className="waiting-custom-prompts-filters"
               role="group"
-              aria-label="Filter prompts by length"
+              aria-label={ui.customPromptsPreview.filterPromptsByLength}
             >
               {lengthFilters.map((filter) => (
                 <button
@@ -414,7 +416,7 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
               </div>
             ) : (
               <p className="waiting-custom-prompts-empty">
-                No custom prompts match these filters.
+                {ui.customPromptsPreview.noCustomPromptsMatchTheseFilters}
               </p>
             )}
             {activePrompt && <FullPromptTooltip activePrompt={activePrompt} />}

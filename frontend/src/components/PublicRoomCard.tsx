@@ -5,6 +5,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 interface RosterEntry {
   nickname: string;
@@ -73,7 +74,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             printed, for anyone who cannot see the flag or is unsure of it. */}
         <h3 className="public-room-name">
           <span className="public-room-name-text">{room.name}</span>
-          <span className="public-room-language" title={`Prompt language: ${languageLabel}`}>
+          <span className="public-room-language" title={ui.publicRoomCard.promptLanguage({ language: languageLabel })}>
             <Flag language={room.promptLanguage} />
             <span className="visually-hidden">{languageLabel}</span>
           </span>
@@ -86,33 +87,33 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             className={`public-room-roster-toggle${rosterOpen ? " is-open" : ""}`}
             aria-expanded={rosterOpen}
             onClick={() => void toggleRoster()}
-            title="See who is in this room"
+            title={ui.publicRoomCard.seeWhoThisRoom}
           >
             <UsersIcon size={14} />
             {room.playerCount}/{room.maxPlayers}
             <ChevronDownIcon size={12} />
           </button>
-          <span title="Rounds">
+          <span title={ui.publicRoomCard.rounds}>
             <RoundsIcon size={14} />
-            {room.rounds} {room.rounds === 1 ? "round" : "rounds"}
+            {ui.publicRoomCard.roundCount({ count: room.rounds })}
           </span>
-          <span title="Drawing time">
+          <span title={ui.publicRoomCard.drawingTime}>
             <ClockIcon size={14} />
             {room.drawingSeconds}s
           </span>
           {/* Not decoration: full removes the Join button, and a game already
               running means joining puts you in a later turn. */}
-          {full && <strong className="public-room-flag">Full</strong>}
-          {!full && playing && <strong className="public-room-flag is-playing">In progress</strong>}
+          {full && <strong className="public-room-flag">{ui.publicRoomCard.full}</strong>}
+          {!full && playing && <strong className="public-room-flag is-playing">{ui.publicRoomCard.inProgress}</strong>}
         </p>
         {rosterOpen && (
           <div className="public-room-roster">
             {rosterError && <p className="public-room-roster-note" role="alert">{rosterError}</p>}
             {!rosterError && roster === null && (
-              <p className="public-room-roster-note">Looking…</p>
+              <p className="public-room-roster-note">{ui.publicRoomCard.looking}</p>
             )}
             {!rosterError && roster !== null && roster.length === 0 && (
-              <p className="public-room-roster-note">Nobody is seated yet.</p>
+              <p className="public-room-roster-note">{ui.publicRoomCard.nobodySeatedYet}</p>
             )}
             {!rosterError && roster !== null && roster.length > 0 && (
               <ul>
@@ -132,7 +133,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
                     >
                       {player.nickname}
                     </span>
-                    {player.isHost && <span className="visually-hidden">Host</span>}
+                    {player.isHost && <span className="visually-hidden">{ui.publicRoomCard.host}</span>}
                   </li>
                 ))}
               </ul>

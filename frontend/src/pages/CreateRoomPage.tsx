@@ -25,6 +25,8 @@ import {
   type RoomPresetSummary,
 } from "../lib/roomPresets";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
@@ -100,7 +102,7 @@ export function CreateRoomPage() {
         if (!cancelled) setPresets(value);
       })
       .catch(() => {
-        if (!cancelled) setError("Could not load your room presets.");
+        if (!cancelled) setError(ui.createRoomPage.couldNotLoadYourRoomPresets);
       });
     return () => { cancelled = true; };
   }, [authUser]);
@@ -213,7 +215,7 @@ export function CreateRoomPage() {
       setPresetName(preset.name);
       setPresetStatus({ text: `Applied “${preset.name}”.`, undo: before });
     } catch (presetError) {
-      setError(refusalText(presetError, "Could not apply that preset."));
+      setError(refusalText(presetError, ui.createRoomPage.couldNotApplyThatPreset));
     } finally {
       setPresetBusy(false);
     }
@@ -221,7 +223,7 @@ export function CreateRoomPage() {
 
   async function handleSavePreset() {
     if (!presetName.trim()) {
-      setError("Enter a name for the room preset.");
+      setError(ui.createRoomPage.enterNameRoomPreset);
       return;
     }
     setPresetBusy(true);
@@ -233,7 +235,7 @@ export function CreateRoomPage() {
       setNamingPreset(false);
       setPresetStatus({ text: `Saved “${created.name}”.` });
     } catch (presetError) {
-      setError(refusalText(presetError, "Could not save that preset."));
+      setError(refusalText(presetError, ui.createRoomPage.couldNotSaveThatPreset));
     } finally {
       setPresetBusy(false);
     }
@@ -260,7 +262,7 @@ export function CreateRoomPage() {
       setPresetStatus({ text: `Updated “${updated.name}”.` });
       setPresetName(updated.name);
     } catch (presetError) {
-      setError(refusalText(presetError, "Could not update that preset."));
+      setError(refusalText(presetError, ui.createRoomPage.couldNotUpdateThatPreset));
     } finally {
       setPresetBusy(false);
     }
@@ -277,7 +279,7 @@ export function CreateRoomPage() {
       setSelectedPresetId("");
       setPresetName("");
     } catch (presetError) {
-      setError(refusalText(presetError, "Could not delete that preset."));
+      setError(refusalText(presetError, ui.createRoomPage.couldNotDeleteThatPreset));
     } finally {
       setPresetBusy(false);
     }
@@ -285,7 +287,7 @@ export function CreateRoomPage() {
 
   async function handleCreate() {
     if (customPrompts.analysis.hasErrors) {
-      setError("Fix the custom-prompt entries marked above before creating the room.");
+      setError(ui.createRoomPage.fixCustomPromptEntriesMarkedAbove);
       return;
     }
     setBusy(true);
@@ -303,7 +305,7 @@ export function CreateRoomPage() {
         navigate(`/room/${session.code}`);
         return;
       }
-      setError(refusalText(response, "Failed to create room"));
+      setError(refusalText(response, ui.createRoomPage.failedCreateRoom));
     } catch (createError) {
       setError(socketRequestErrorMessage(createError, "create the room"));
     } finally {
@@ -334,19 +336,19 @@ export function CreateRoomPage() {
     <AppHeader backLabel="Back to lobby" />
     <div className="create-room-heading-row">
       <div className="create-room-heading">
-        <SectionLabel>Room setup</SectionLabel>
-        <h1>Create a room</h1>
+        <SectionLabel>{ui.createRoomPage.roomSetup}</SectionLabel>
+        <h1>{ui.createRoomPage.createRoom}</h1>
       </div>
       {authUser && !authUser.isAnonymous && (
         <div className="room-preset-bar">
           {presets.length > 0 && (
             <select
-              aria-label="Start from a saved preset"
+              aria-label={ui.createRoomPage.startFromSavedPreset}
               value={selectedPresetId}
               disabled={presetBusy}
               onChange={(event) => void handleChoosePreset(event.target.value)}
             >
-              <option value="">Start from a preset…</option>
+              <option value="">{ui.createRoomPage.startFromPreset}</option>
               {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
             </select>
           )}
@@ -356,25 +358,25 @@ export function CreateRoomPage() {
                 type="text"
                 className="room-preset-name"
                 value={presetName}
-                placeholder="Name this preset"
+                placeholder={ui.createRoomPage.nameThisPreset}
                 maxLength={64}
                 autoFocus
                 onChange={(event) => setPresetName(event.target.value)}
               />
-              <button type="button" className="auth-link" disabled={presetBusy || !presetName.trim()} onClick={() => void handleSavePreset()}>Save</button>
-              <button type="button" className="auth-link" onClick={() => setNamingPreset(false)}>Cancel</button>
+              <button type="button" className="auth-link" disabled={presetBusy || !presetName.trim()} onClick={() => void handleSavePreset()}>{ui.createRoomPage.save}</button>
+              <button type="button" className="auth-link" onClick={() => setNamingPreset(false)}>{ui.createRoomPage.cancel}</button>
             </>
           ) : (
             <>
-              <button type="button" className="auth-link" disabled={presetBusy} onClick={beginNamingPreset}>Save as preset</button>
-              {selectedPresetId && <button type="button" className="auth-link" disabled={presetBusy} onClick={() => void handleUpdatePreset()}>Update</button>}
-              {selectedPresetId && <button type="button" className="auth-link room-preset-delete" disabled={presetBusy} onClick={() => void handleDeletePreset()}>Delete</button>}
+              <button type="button" className="auth-link" disabled={presetBusy} onClick={beginNamingPreset}>{ui.createRoomPage.saveAsPreset}</button>
+              {selectedPresetId && <button type="button" className="auth-link" disabled={presetBusy} onClick={() => void handleUpdatePreset()}>{ui.createRoomPage.update}</button>}
+              {selectedPresetId && <button type="button" className="auth-link room-preset-delete" disabled={presetBusy} onClick={() => void handleDeletePreset()}>{ui.createRoomPage.delete}</button>}
             </>
           )}
           {presetStatus && (
             <span className="room-preset-status" role="status">
               {presetStatus.text}
-              {presetStatus.undo && <button type="button" className="auth-link" onClick={undoPreset}>Undo</button>}
+              {presetStatus.undo && <button type="button" className="auth-link" onClick={undoPreset}>{ui.createRoomPage.undo}</button>}
             </span>
           )}
         </div>
@@ -426,18 +428,26 @@ export function CreateRoomPage() {
           className="custom-prompts-apply"
           onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
         >
-          Save as reusable list
+          {ui.createRoomPage.saveAsReusableList}
         </button>
       ) : undefined}
       durationNote={
         <p className="create-room-duration">
           <ClockIcon size={17} />
           <span>
-            This setup runs <strong>about {fullMinutes} minutes</strong> with a full room of{" "}
-            <strong>{maxPlayers}</strong>
-            {halfPlayers >= 2 && halfPlayers < maxPlayers && (
-              <> — closer to <strong>{halfMinutes}</strong> if {halfPlayers} join</>
-            )}
+            {fill(ui.createRoomPage.setupTiming, {
+              full: (
+                <strong>
+                  {ui.createRoomPage.setupTimingFull({ minutes: fullMinutes })}
+                </strong>
+              ),
+              capacity: <strong>{maxPlayers}</strong>,
+            })}
+            {halfPlayers >= 2 && halfPlayers < maxPlayers
+              && fill(
+                ui.createRoomPage.setupTimingHalf({ players: halfPlayers }),
+                { half: <strong>{halfMinutes}</strong> },
+              )}
             .
           </span>
         </p>

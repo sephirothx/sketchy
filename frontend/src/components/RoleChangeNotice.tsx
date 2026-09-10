@@ -13,6 +13,7 @@ import {
 } from "../lib/roleNotices";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
+import { ui } from "../content/ui/index.ts";
 
 // The same chunk Settings pulls, and for the same reason: the QR encoder is
 // fetched by somebody who is about to enrol, not by everybody who plays.
@@ -162,8 +163,7 @@ export function RoleChangeNotice() {
         <p className="modal-body">{body}</p>
         {signedOutByTheChange && (
           <p className="modal-body">
-            You have been signed out on every device so the change can take
-            effect. Sign in again to carry on.
+            {ui.roleChangeNotice.youHaveBeenSignedOutEvery}
           </p>
         )}
         {notice.pending ? (
@@ -180,7 +180,7 @@ export function RoleChangeNotice() {
                 void dismiss();
               }}
             >
-              Set it up now
+              {ui.roleChangeNotice.setUpNow}
             </button>
             <button
               type="button"
@@ -188,7 +188,7 @@ export function RoleChangeNotice() {
               disabled={busy}
               onClick={() => void dismiss()}
             >
-              Later
+              {ui.roleChangeNotice.later}
             </button>
           </div>
         ) : (

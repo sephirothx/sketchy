@@ -11,6 +11,7 @@ import {
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
+import { ui } from "../content/ui/index.ts";
 
 /** A standing note that this account cannot currently be recovered.
 
@@ -70,13 +71,13 @@ export function EmailRecoveryReminder() {
         </span>
         {!state.pendingAddress && (
           <button type="button" onClick={() => setAdding(true)}>
-            Add an email
+            {ui.emailRecoveryReminder.addEmail}
           </button>
         )}
         <button
           type="button"
           className="email-reminder-dismiss"
-          aria-label="Dismiss"
+          aria-label={ui.emailRecoveryReminder.dismiss}
           onClick={() => void close()}
         >
           <XIcon size={14} />

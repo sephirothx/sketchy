@@ -9,6 +9,8 @@ import { Avatar } from "./ui/Avatar";
 import { SectionLabel } from "./ui/Card";
 import { BrushIcon, CrownIcon, TimerRing, TrophyIcon } from "./icons";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 interface GameEndOverlayProps {
   scores: ScoreEntry[];
@@ -25,13 +27,6 @@ const DISPLAY_SECONDS = 10;
 
 const PODIUM_COLORS = ["var(--gold)", "var(--silver)", "var(--bronze)"];
 const PODIUM_HEIGHTS = [104, 74, 56];
-
-function ordinal(place: number): string {
-  const tail = place % 100;
-  if (tail >= 11 && tail <= 13) return `${place}th`;
-  const last = place % 10;
-  return `${place}${last === 1 ? "st" : last === 2 ? "nd" : last === 3 ? "rd" : "th"}`;
-}
 
 function ConfettiDots() {
   return (
@@ -98,7 +93,7 @@ export function GameEndOverlay({
   return <main className="game-end-overlay" aria-labelledby="game-end-title" aria-live="polite" data-testid="game-end-overlay">
     <section className="game-end-podium">
       <ConfettiDots />
-      <SectionLabel>Game over</SectionLabel>
+      <SectionLabel>{ui.gameEndOverlay.gameOver}</SectionLabel>
       <h1 id="game-end-title">
         {scoringMode !== "none" && (
           <span className="game-end-crown" aria-hidden="true">
@@ -130,7 +125,13 @@ export function GameEndOverlay({
         <>
           {myScore != null && (
             <p className="game-end-placement">
-              You finished <strong>{ordinal(Math.max(1, placement))}</strong> with {myScore} points.
+              {fill(ui.gameEndOverlay.youFinished({ points: myScore }), {
+                place: (
+                  <strong>
+                    {ui.format.ordinal({ value: Math.max(1, placement) })}
+                  </strong>
+                ),
+              })}
             </p>
           )}
           <div className="game-end-podium-row">
@@ -156,9 +157,9 @@ export function GameEndOverlay({
                     >
                       {entry.nickname}
                     </span>
-                    {entry.playerId === myPlayerId && <span className="game-end-you">you</span>}
+                    {entry.playerId === myPlayerId && <span className="game-end-you">{ui.gameEndOverlay.you}</span>}
                     {friendSeats.has(entry.playerId) && (
-                      <span className="visually-hidden">Friend</span>
+                      <span className="visually-hidden">{ui.gameEndOverlay.friend}</span>
                     )}
                   </span>
                   <div className="game-end-podium-block" style={{ height, background: color }}>
@@ -184,9 +185,9 @@ export function GameEndOverlay({
                   />
                   <span className="game-end-standing-name">
                     <span className={playerNameClass(score.isAnonymous)} style={playerNameStyle(score.nameColor, score.isAnonymous)}>{score.nickname}</span>
-                    {score.playerId === myPlayerId ? <span className="game-end-you">you</span> : null}
+                    {score.playerId === myPlayerId ? <span className="game-end-you">{ui.gameEndOverlay.you}</span> : null}
                     {friendSeats.has(score.playerId) && (
-                      <span className="visually-hidden">Friend</span>
+                      <span className="visually-hidden">{ui.gameEndOverlay.friend}</span>
                     )}
                   </span>
                   <strong>{score.score}</strong>
@@ -196,21 +197,21 @@ export function GameEndOverlay({
           )}
         </>
       ) : (
-        <p className="game-end-no-score">No scores this time—just a room full of sketches and guesses.</p>
+        <p className="game-end-no-score">{ui.gameEndOverlay.noScoresThisTimeJustRoom}</p>
       )}
       {isUnclaimedGuest && (
         <aside className="game-end-claim">
           {/* One line. Three lines of explanation cost more of this screen
               than the podium did, for a nudge nobody came here to read. */}
           <p className="game-end-claim-copy">
-            Keep <strong>{user!.displayName}</strong> as your username
+            {ui.gameEndOverlay.keep} <strong>{user!.displayName}</strong> {ui.gameEndOverlay.asYourUsername}
           </p>
           <button
             type="button"
             className="game-end-claim-action"
             onClick={() => setAuthMode("claim")}
           >
-            Create account
+            {ui.gameEndOverlay.createAccount}
           </button>
         </aside>
       )}
@@ -219,21 +220,21 @@ export function GameEndOverlay({
         {highlightCount > 0 && (
           <button type="button" className="btn btn-secondary" onClick={onViewHighlights}>
             <TrophyIcon size={15} />
-            Highlights
+            {ui.gameEndOverlay.highlights}
           </button>
         )}
         {drawingCount > 0 && (
           <button type="button" className="btn btn-secondary" onClick={onViewDrawings}>
             <BrushIcon size={15} />
-            Drawings
+            {ui.gameEndOverlay.drawings}
           </button>
         )}
         <button
           type="button"
           className="game-end-continue"
           aria-label={countdownVisible
-            ? `Continue to waiting room, ${remaining} seconds left`
-            : "Continue to waiting room"}
+            ? ui.gameEndOverlay.continueWithCountdown({ seconds: remaining })
+            : ui.gameEndOverlay.continueToWaitingRoom}
           onClick={onContinue}
         >
           {countdownVisible && (
@@ -245,13 +246,13 @@ export function GameEndOverlay({
               track="rgba(255, 255, 255, 0.35)"
             />
           )}
-          Continue
+          {ui.gameEndOverlay.continueLabel}
         </button>
       </div>
       {!hold && (
         <p className="game-end-stay">
           <button type="button" className="game-end-stay-link" onClick={() => setHold(true)}>
-            Stay here
+            {ui.gameEndOverlay.stayHere}
           </button>
         </p>
       )}

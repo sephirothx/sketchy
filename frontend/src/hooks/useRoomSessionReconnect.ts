@@ -9,6 +9,7 @@ import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const STALL_GRACE_MS = 2500;
 const STALL_CHECK_MS = 1000;
@@ -86,7 +87,7 @@ export function useRoomSessionReconnect() {
         setRoomBindingStatus("ready");
         return;
       }
-      throw new Error(refusalText(response, "join_room failed"));
+      throw new Error(refusalText(response, ui.useRoomSessionReconnect.joinRoomFailed));
     }
 
     async function rebindSession(

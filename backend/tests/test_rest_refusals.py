@@ -156,14 +156,16 @@ def test_no_player_facing_screen_renders_the_server_s_sentence():
 
 
 def test_the_client_has_a_sentence_for_every_code():
-    """`refusals.ts` is exhaustive over `ErrorCode`, and the compiler proves it.
+    """The catalogue is exhaustive over `ErrorCode`, and the compiler proves it.
 
     `Record<ErrorCode, …>` is what does the proving, so this only checks the
     declaration is still written that way - a widened type would let a new
-    server code reach a player as a blank with nothing failing.
+    server code reach a player as a blank with nothing failing. The sentences
+    live with every other word the interface says (#762), so a locale
+    translates them in the same pass as the rest.
     """
-    source = (FRONTEND_SRC / "lib" / "refusals.ts").read_text(encoding="utf-8")
-    assert "const SENTENCES: Record<ErrorCode, Sentence>" in source, (
-        "refusals.ts must declare SENTENCES as Record<ErrorCode, Sentence>, so "
+    source = (FRONTEND_SRC / "content" / "ui" / "en.ts").read_text(encoding="utf-8")
+    assert "const REFUSALS: Record<ErrorCode, Sentence>" in source, (
+        "the catalogue must declare REFUSALS as Record<ErrorCode, Sentence>, so "
         "a code with no sentence fails the build rather than the player."
     )

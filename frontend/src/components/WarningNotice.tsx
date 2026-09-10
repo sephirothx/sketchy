@@ -13,6 +13,8 @@ import { ruleAnchorFor } from "../content/rules";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 /** Keep only a payload shaped like a warning; a malformed one is dropped
 rather than rendered as "undefined" in front of the player. */
@@ -126,10 +128,13 @@ export function WarningNotice() {
             {/* The rule itself, not just its name: a decision you can read
                 the rule behind is one you can check rather than only be
                 told (R-RULES-02). */}
-            Recorded as{" "}
-            <a href={ruleAnchorFor(warning.category)}>
-              {humanizeCategory(warning.category)}
-            </a>
+            {fill(ui.warningNotice.recordedAs, {
+              category: (
+                <a href={ruleAnchorFor(warning.category)}>
+                  {humanizeCategory(warning.category)}
+                </a>
+              ),
+            })}
           </p>
         )}
         <p className="modal-body suspension-reason">{warning.reason}</p>
@@ -142,13 +147,10 @@ export function WarningNotice() {
             "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected."
           ) : (
             <>
-              A report about your behaviour was reviewed, and this is the
-              outcome.
               {/* What a warning is *for* - the step between nothing and a
                   suspension - said in general terms. Naming a ladder would
-                  promise one nobody is bound to and nothing enforces. */}{" "}
-              Nothing is restricted, but a further report may lead to your
-              account being suspended.
+                  promise one nobody is bound to and nothing enforces. */}
+              {ui.warningNotice.whatAWarningMeans}
             </>
           )}
         </p>
@@ -188,7 +190,7 @@ export function WarningNotice() {
                 className="suspension-drawing"
                 load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
                 label={`Your drawing of ${drawing.prompt}, as it was reported`}
-                caption={<>You were asked to draw <strong>{drawing.prompt}</strong>.</>}
+                caption={<>{ui.warningNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
               />
             ))}
           </>

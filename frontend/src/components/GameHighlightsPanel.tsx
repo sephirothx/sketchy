@@ -5,6 +5,7 @@ import { AlertIcon, BackIcon, BrushIcon, ClockIcon, HeartIcon, XIcon, ZapIcon } 
 import { SectionLabel } from "./ui/Card";
 import type { GameHighlight } from "../types";
 import type { ReactNode } from "react";
+import { ui } from "../content/ui/index.ts";
 
 interface GameHighlightsPanelProps {
   highlights: GameHighlight[];
@@ -38,14 +39,14 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
       <section className="game-highlights-card">
         <header className="game-highlights-header">
           <div>
-            <SectionLabel className="game-highlights-kicker">Last game</SectionLabel>
-            <h1 id="game-highlights-title">Highlights</h1>
+            <SectionLabel className="game-highlights-kicker">{ui.gameHighlightsPanel.lastGame}</SectionLabel>
+            <h1 id="game-highlights-title">{ui.gameHighlightsPanel.highlights}</h1>
           </div>
           <button
             type="button"
             className="game-highlights-close"
             onClick={onClose}
-            aria-label="Close highlights"
+            aria-label={ui.gameHighlightsPanel.closeHighlights}
           >
             <XIcon size={17} />
           </button>
@@ -53,8 +54,7 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
 
         {presented.length === 0 ? (
           <p className="game-highlights-empty">
-            That game was too short to say much about. Play a longer one and the
-            highlights will show up here.
+            {ui.gameHighlightsPanel.thatGameWasTooShortSay}
           </p>
         ) : (
           <ul className="game-highlights-list">
@@ -92,7 +92,7 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
                         className="game-highlights-link"
                         onClick={() => onOpenDrawing(highlight.drawingIndex!)}
                       >
-                        See it
+                        {ui.gameHighlightsPanel.seeIt}
                       </button>
                     </>
                   )}
@@ -105,7 +105,7 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
         <div className="game-highlights-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             <BackIcon size={15} />
-            Back
+            {ui.gameHighlightsPanel.back}
           </button>
         </div>
       </section>

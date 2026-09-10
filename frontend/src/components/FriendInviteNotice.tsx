@@ -11,6 +11,7 @@ import { useGameStore } from "../store/gameStore";
 import { useToast } from "../lib/toast";
 import { XIcon } from "./icons";
 import type { AckResponse } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /** An invitation from a friend, and the one control that answers it.
 
@@ -94,22 +95,22 @@ export function FriendInviteNotice() {
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify("That game could not be joined.");
+      notify(ui.friendInviteNotice.thatGameCouldNotBeJoined);
     }
   }
 
   return (
     <div className="friend-invite-notice" role="status" data-testid="friend-invite">
       <span className="friend-invite-text">
-        <strong>{invite.displayName}</strong> invited you to their game.
+        <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
       </span>
       <button type="button" className="btn btn-primary btn-compact" onClick={() => void join()}>
-        Join
+        {ui.friendInviteNotice.join}
       </button>
       <button
         type="button"
         className="btn btn-icon friend-invite-dismiss"
-        aria-label="Dismiss invitation"
+        aria-label={ui.friendInviteNotice.dismissInvitation}
         onClick={() => setInvite(null)}
       >
         <XIcon size={14} />

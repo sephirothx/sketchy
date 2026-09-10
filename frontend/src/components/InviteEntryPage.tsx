@@ -7,6 +7,7 @@ import type { RoomSummary } from "../types";
 import { AppHeader } from "./AppHeader";
 import { FirstRunIdentity } from "./FirstRunIdentity";
 import { XIcon } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
@@ -30,8 +31,8 @@ function DelayedInviteLoader() {
   return (
     <main className="invite-card invite-loading-card" aria-live="polite">
       <div className="invite-loading-spinner" aria-hidden="true" />
-      <h1>Checking your invite…</h1>
-      <p>Loading room details.</p>
+      <h1>{ui.inviteEntryPage.checkingYourInvite}</h1>
+      <p>{ui.inviteEntryPage.loadingRoomDetails}</p>
     </main>
   );
 }
@@ -52,10 +53,10 @@ export function InviteEntryPage({ code }: { code: string }) {
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">
           <div className="invite-status-icon" aria-hidden="true"><XIcon size={20} /></div>
-          <p className="invite-eyebrow">Room {code}</p>
-          <h1>Room unavailable</h1>
+          <p className="invite-eyebrow">{ui.inviteEntryPage.roomCode({ code })}</p>
+          <h1>{ui.inviteEntryPage.roomUnavailable}</h1>
           <p>{state.message}</p>
-          <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>Back to lobby</button>
+          <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>{ui.inviteEntryPage.backLobby}</button>
         </main>
       ) : !room ? (
         <DelayedInviteLoader />
@@ -72,8 +73,11 @@ export function InviteEntryPage({ code }: { code: string }) {
           </div>
 
           <p className="invite-room-headline">
-            <strong>{room.playerCount}/{room.maxPlayers}</strong> here
-            {room.isFull ? " · full" : ""}
+            {ui.inviteEntryPage.hereCount({
+              here: room.playerCount,
+              capacity: room.maxPlayers,
+              full: room.isFull,
+            })}
           </p>
 
           {/* The settings matter to the host who chose them, and to nobody
@@ -83,17 +87,21 @@ export function InviteEntryPage({ code }: { code: string }) {
           <details className="invite-details" open={!isMobile}>
             <summary>
               <span className="invite-details-summary">
-                {room.rounds} rounds · {room.drawingSeconds}s · {hintModeLabel(room).toLowerCase()}
+                {ui.inviteEntryPage.roomSummary({
+                  rounds: room.rounds,
+                  seconds: room.drawingSeconds,
+                  hintMode: hintModeLabel(room).toLowerCase(),
+                })}
               </span>
             </summary>
             <dl className="invite-room-facts">
-              <div><dt>Players</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
-              <div><dt>Rounds</dt><dd>{room.rounds}</dd></div>
-              <div><dt>Draw time</dt><dd>{room.drawingSeconds}s</dd></div>
-              <div><dt>Scoring</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
+              <div><dt>{ui.inviteEntryPage.players}</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
+              <div><dt>{ui.inviteEntryPage.rounds}</dt><dd>{room.rounds}</dd></div>
+              <div><dt>{ui.inviteEntryPage.drawTime}</dt><dd>{room.drawingSeconds}s</dd></div>
+              <div><dt>{ui.inviteEntryPage.scoring}</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
             </dl>
 
-            <ul className="invite-rule-list" aria-label="Room rules">
+            <ul className="invite-rule-list" aria-label={ui.inviteEntryPage.roomRules}>
               <li>{hintModeLabel(room)}</li>
               <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
               <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
@@ -106,7 +114,7 @@ export function InviteEntryPage({ code }: { code: string }) {
           </details>
 
           {room.state === "playing" && (
-            <p className="invite-callout">This game is already in progress. Joining as a player adds you to a future turn.</p>
+            <p className="invite-callout">{ui.inviteEntryPage.thisGameAlreadyProgressJoiningAs}</p>
           )}
           {notice && <p className="invite-notice">{notice}</p>}
 
@@ -139,7 +147,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                 {busy ? "Joining…" : "Spectate"}
               </button>
             </div>
-            {room.isFull && <p className="invite-action-hint">Player slots are full. Spectating is still open.</p>}
+            {room.isFull && <p className="invite-action-hint">{ui.inviteEntryPage.playerSlotsAreFullSpectatingStill}</p>}
           </div>
         </main>
       )}

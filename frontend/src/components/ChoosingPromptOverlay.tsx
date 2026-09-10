@@ -1,3 +1,5 @@
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 interface ChoosingPromptOverlayProps {
   drawerNickname: string;
   drawerNameColor?: string;
@@ -20,18 +22,21 @@ export function ChoosingPromptOverlay({
           <span />
           <span />
         </div>
-        <p className="choosing-prompt-kicker">Next turn</p>
+        <p className="choosing-prompt-kicker">{ui.choosingPromptOverlay.nextTurn}</p>
         <p className="choosing-prompt-message">
-          <strong
-            className="colored-player-name"
-            style={{ color: drawerNameColor }}
-          >
-            {drawerNickname}
-          </strong>{" "}
-          is choosing a prompt…
+          {fill(ui.choosingPromptOverlay.isChoosingPrompt, {
+            drawer: (
+              <strong
+                className="colored-player-name"
+                style={{ color: drawerNameColor }}
+              >
+                {drawerNickname}
+              </strong>
+            ),
+          })}
         </p>
         <p className="choosing-prompt-hint">
-          Drawing will begin as soon as they choose.
+          {ui.choosingPromptOverlay.drawingWillBeginAsSoonAs}
         </p>
       </div>
     </div>

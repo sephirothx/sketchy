@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** Report what an account itself carries: its name, or its picture.
 
@@ -76,7 +77,7 @@ export function ReportAccountDialog({
       setSent(true);
     } catch (problem) {
       setError(
-        refusalText(problem, "That report could not be sent. Please try again."),
+        refusalText(problem, ui.reportAccountDialog.thatReportCouldNotBeSent),
       );
     } finally {
       setBusy(false);
@@ -106,15 +107,14 @@ export function ReportAccountDialog({
         {!sent ? (
           <>
             <p className="modal-body">
-              A moderator will see this. Nothing happens to {displayName} right
-              now, and they are not told who reported them.
+              {ui.reportAccountDialog.nothingHappensYet({ name: displayName })}
             </p>
             {/* Shown only while it is what the complaint is about: a picture
                 beside a complaint about a name is the wrong evidence in front
                 of the person choosing. */}
             {avatarUrl && reason === "inappropriate_avatar" && (
               <figure className="report-quoted-picture" data-testid="report-quoted-picture">
-                <img src={avatarUrl} alt={`${displayName}'s picture`} />
+                <img src={avatarUrl} alt={ui.reportAccountDialog.theirPicture({ name: displayName })} />
               </figure>
             )}
             <form onSubmit={submit} className="auth-form">
@@ -123,7 +123,7 @@ export function ReportAccountDialog({
                   question with a single answer. */}
               {reasons.length > 1 ? (
                 <>
-                  <label htmlFor={`${titleId}-reason`}>What is wrong with it</label>
+                  <label htmlFor={`${titleId}-reason`}>{ui.reportAccountDialog.whatWrongWith}</label>
                   <select
                     id={`${titleId}-reason`}
                     ref={reasonRef}
@@ -142,11 +142,11 @@ export function ReportAccountDialog({
                 </>
               ) : (
                 <p className="auth-hint">
-                  Reported for their name. They have no picture to report.
+                  {ui.reportAccountDialog.reportedTheirNameTheyHaveNo}
                 </p>
               )}
 
-              <label htmlFor={`${titleId}-details`}>Anything else (optional)</label>
+              <label htmlFor={`${titleId}-details`}>{ui.reportAccountDialog.anythingElseOptional}</label>
               <textarea
                 id={`${titleId}-details`}
                 ref={detailsRef}
@@ -158,7 +158,7 @@ export function ReportAccountDialog({
                   setDetails(change.target.value);
                   setError(null);
                 }}
-                placeholder="Anything a moderator should know"
+                placeholder={ui.reportAccountDialog.anythingModeratorShouldKnow}
               />
               <p className="auth-hint">
                 {reason === "inappropriate_avatar"
@@ -179,10 +179,10 @@ export function ReportAccountDialog({
         ) : (
           <>
             <p className="modal-body">
-              Sent, with what it is about attached.
+              {ui.reportAccountDialog.sentWithWhatAboutAttached}
             </p>
             <button type="button" className="modal-button" onClick={onClose}>
-              Done
+              {ui.reportAccountDialog.done}
             </button>
           </>
         )}

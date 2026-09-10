@@ -6,6 +6,7 @@ import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../ty
 import { PlayerList } from "./PlayerList";
 import { EyeIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 interface RoomPlayersPanelProps {
   mode: "waiting" | "playing" | "game-end";
@@ -57,7 +58,7 @@ export function RoomPlayersPanel({
     setPromotionError(null);
     try {
       const response = await emitWithAck<AckResponse>("become_player", {});
-      if (!response.ok) setPromotionError(refusalText(response, "Could not join as a player"));
+      if (!response.ok) setPromotionError(refusalText(response, ui.roomPlayersPanel.couldNotJoinAsPlayer));
     } catch (promotionRequestError) {
       setPromotionError(
         socketRequestErrorMessage(promotionRequestError, "join as a player"),
@@ -71,12 +72,12 @@ export function RoomPlayersPanel({
     <section className="room-players-panel" aria-labelledby="room-players-title">
       <div className="room-panel-heading">
         <div>
-          {showFinalStandings && <p className="room-panel-kicker">Final standings</p>}
+          {showFinalStandings && <p className="room-panel-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
           <div className="room-players-title-row">
-            <h2 id="room-players-title">Players</h2>
+            <h2 id="room-players-title">{ui.roomPlayersPanel.players}</h2>
             <span
               className="room-player-occupancy"
-              aria-label={`${activePlayers.length} of ${maxPlayers} players`}
+              aria-label={ui.roomPlayersPanel.playersOfCapacity({ here: activePlayers.length, capacity: maxPlayers })}
             >
               {activePlayers.length}/{maxPlayers}
             </span>
@@ -85,7 +86,7 @@ export function RoomPlayersPanel({
         <div className="room-panel-actions">
           {mode === "waiting" && (
             <span className={`waiting-ready-count ${eligiblePlayers.length >= 2 ? "is-ready" : ""}`}>
-              {eligiblePlayers.length} ready
+              {ui.roomPlayersPanel.readyCount({ count: eligiblePlayers.length })}
             </span>
           )}
           {spectators.length > 0 && (
@@ -93,7 +94,7 @@ export function RoomPlayersPanel({
               className="room-spectator-indicator"
               data-testid="spectator-indicator"
               tabIndex={0}
-              aria-label={`${spectators.length} spectator${spectators.length === 1 ? "" : "s"}`}
+              aria-label={ui.roomPlayersPanel.spectatorCount({ count: spectators.length })}
               aria-describedby="room-spectator-tooltip"
             >
               <span className="room-spectator-icon" aria-hidden="true"><EyeIcon size={14} /></span>
@@ -104,7 +105,7 @@ export function RoomPlayersPanel({
                 role="tooltip"
                 data-testid="spectator-tooltip"
               >
-                <strong>Spectators ({spectators.length})</strong>
+                <strong>{ui.roomPlayersPanel.spectatorsHeading({ count: spectators.length })}</strong>
                 <ul>
                   {spectators.map((spectator) => (
                     <li key={spectator.playerId}>
