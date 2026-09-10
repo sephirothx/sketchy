@@ -81,3 +81,40 @@ export function selectionForLanguage(
   const chosen = standard ?? inLanguage[0];
   return chosen ? [chosen.slug] : [];
 }
+
+/**
+ * The language this visitor plays in, as the browser reports it.
+ *
+ * A signed-in player's stored setting wins over this; it is what a visitor
+ * with no account has, and what seeds the setting when they register. An
+ * unsupported or absent list falls back to English rather than to nothing,
+ * because every screen this feeds has to render either way.
+ */
+export function preferredPromptLanguage(
+  candidates: readonly string[] | undefined,
+): PromptLanguage {
+  for (const candidate of candidates ?? []) {
+    const tag = candidate.trim().toLowerCase();
+    if (!tag) continue;
+    const base = tag.split("-", 1)[0];
+    if (base in PROMPT_LANGUAGE_LABELS) return base as PromptLanguage;
+  }
+  return "en";
+}
+
+/**
+ * Your language first, everything else in the order it arrived.
+ *
+ * Nothing is hidden: a lobby filtered to one language looks empty while rooms
+ * are open, which is a worse answer than a longer list. `sort` is stable, so
+ * the server's ordering survives inside each group.
+ */
+export function sortRoomsByLanguage<T extends { promptLanguage: string }>(
+  rooms: readonly T[],
+  language: string,
+): T[] {
+  return [...rooms].sort((left, right) =>
+    Number(right.promptLanguage === language)
+    - Number(left.promptLanguage === language),
+  );
+}

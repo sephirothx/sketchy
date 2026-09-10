@@ -532,10 +532,19 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `theme` · `sound_effects` · `confetti_effects` · `sound_effects_volume` (0.0–1.0) ·
 `brush_cursor` (`crosshair \| circle`) · `time_format` (`system \| 12h \| 24h`) ·
 `key_bindings` (JSON) ·
-`colorblind_safe_colors` · `email_reminder_last_shown_at` · timestamps.
+`colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
+`email_reminder_last_shown_at` · timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
 supported action set.
+
+`prompt_language` is the language this player *plays* in (R-PROMPT-11) — what the
+lobby leads with and what a new room starts in — not an interface locale, which is
+the same line `prompt_lists` draws between its content language and its localized
+catalogue copy. It is stored rather than read from `Accept-Language` every time
+because a header describes the device, and a player who chose a language on their
+laptop should not have to choose it again on their phone; registration seeds it from
+the header, and it is a setting from then on.
 
 `auto_clear_chat_on_guess` and `custom_brush_presets` were removed rather than kept:
 the first is now the only behaviour (a guess you got right is not a draft worth
@@ -666,7 +675,7 @@ guesses, prompt-list revision history, unexpired authored retained messages, sub
 evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v5_fields.json`](../fixtures/account_data_export_v5_fields.json).
+pinned by [`fixtures/account_data_export_v6_fields.json`](../fixtures/account_data_export_v6_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·

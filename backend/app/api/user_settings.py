@@ -66,6 +66,12 @@ class UserSettingsSeed(BaseModel):
     time_format: Literal["system", "12h", "24h"] = Field(
         default="system", alias="timeFormat"
     )
+    # Seeded from the browser at registration and a setting from then on: the
+    # language a player plays in follows them to another device, which is the
+    # whole reason it is stored rather than read from the header each time.
+    prompt_language: Literal["en", "de", "es", "fr", "it", "nl", "pt"] = Field(
+        default="en", alias="promptLanguage"
+    )
 
     @field_validator("key_bindings")
     @classmethod
@@ -94,6 +100,9 @@ class UserSettingsPatch(BaseModel):
     time_format: Literal["system", "12h", "24h"] | None = Field(
         default=None, alias="timeFormat"
     )
+    prompt_language: Literal["en", "de", "es", "fr", "it", "nl", "pt"] | None = Field(
+        default=None, alias="promptLanguage"
+    )
 
     @field_validator("key_bindings")
     @classmethod
@@ -117,6 +126,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "keyBindings": settings.key_bindings,
         "colorblindSafeColors": settings.colorblind_safe_colors,
         "timeFormat": settings.time_format,
+        "promptLanguage": settings.prompt_language,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }

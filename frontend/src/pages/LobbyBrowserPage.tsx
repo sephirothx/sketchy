@@ -19,8 +19,16 @@ import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, ChevronDownIcon, PlusIcon, SearchIcon } from "../components/icons";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import { AlertCircleIcon, PlusIcon, SearchIcon } from "../components/icons";
+import {
+  SUPPORTED_PROMPT_LANGUAGES,
+  sortRoomsByLanguage,
+} from "../lib/promptLanguages";
+import {
+  ANY_LANGUAGE,
+  LanguagePicker,
+  type LanguageChoice,
+} from "../components/LanguagePicker";
 import type { AckResponse, RoomSummary } from "../types";
 
 const ROOM_CODE_LENGTH = 6;
@@ -143,6 +151,7 @@ export function LobbyBrowserPage() {
   const location = useLocation();
   const nameColor = useSettingsStore((s) => s.nameColor);
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
+  const playerLanguage = useSettingsStore((s) => s.promptLanguage);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
   // Pushed over the lobby channel rather than polled (#462). The store is
@@ -183,13 +192,13 @@ export function LobbyBrowserPage() {
   // The validator from the last successful fetch. A ref rather than state:
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [languageFilter, setLanguageFilter] = useState("all");
+  const [languageFilter, setLanguageFilter] = useState<LanguageChoice>(ANY_LANGUAGE);
   const [hideFullRooms, setHideFullRooms] = useState(false);
   const [hideInProgressRooms, setHideInProgressRooms] = useState(false);
   // Drives the chip's badge, so a list narrowed by filters that are out of
   // sight in a sheet never looks like a list with nothing in it.
   const activeFilterCount =
-    (languageFilter !== "all" ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
+    (languageFilter !== ANY_LANGUAGE ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
   // Nothing here works without a name: the server provisions on naming,
   // needs an account to open a room, and needs a valid nickname to seat
   // anybody. The first-run block above asks for it.
@@ -201,18 +210,22 @@ export function LobbyBrowserPage() {
     setExitingRoom(false);
   }, [setExitingRoom]);
 
-  const roomLanguages = [...new Set(rooms.map((room) => room.promptLanguage))].sort((a, b) =>
-    promptLanguageLabel(a).localeCompare(promptLanguageLabel(b)),
-  );
+  // The languages the game has content in, not the ones that happen to have a
+  // room open: a control that appears and disappears with the population reads
+  // as a bug, and "no rooms in Dutch" is an answer worth being able to get.
+  const roomLanguages = SUPPORTED_PROMPT_LANGUAGES;
 
-  const filteredRooms = rooms.filter((room) => {
+  // Your language first, nobody hidden (R-PROMPT-11).
+  const orderedRooms = sortRoomsByLanguage(rooms, playerLanguage);
+
+  const filteredRooms = orderedRooms.filter((room) => {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       const nameMatch = room.name.toLowerCase().includes(q);
       const codeMatch = room.code?.toLowerCase().includes(q);
       if (!nameMatch && !codeMatch) return false;
     }
-    if (languageFilter !== "all" && room.promptLanguage !== languageFilter) {
+    if (languageFilter !== ANY_LANGUAGE && room.promptLanguage !== languageFilter) {
       return false;
     }
     if (hideFullRooms && room.playerCount >= room.maxPlayers) {
@@ -365,19 +378,14 @@ export function LobbyBrowserPage() {
               </button>
             ) : (
               <>
-                <span className="lobby-language-filter">
-                  <select
-                    aria-label="Filter by prompt language"
-                    value={languageFilter}
-                    onChange={(e) => setLanguageFilter(e.target.value)}
-                  >
-                    <option value="all">All languages</option>
-                    {roomLanguages.map((language) => (
-                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
-                    ))}
-                  </select>
-                  <ChevronDownIcon size={14} />
-                </span>
+                <LanguagePicker
+                  label="Filter by language"
+                  value={languageFilter}
+                  options={roomLanguages}
+                  includeAny
+                  compact
+                  onChange={setLanguageFilter}
+                />
                 <button
                   type="button"
                   className="lobby-filter-toggle"
@@ -426,21 +434,17 @@ export function LobbyBrowserPage() {
             }
           >
             <div className="lobby-filter-sheet">
-              <label className="lobby-filter-row">
-                <span>Prompt language</span>
-                <span className="lobby-language-filter">
-                  <select
-                    value={languageFilter}
-                    onChange={(e) => setLanguageFilter(e.target.value)}
-                  >
-                    <option value="all">All languages</option>
-                    {roomLanguages.map((language) => (
-                      <option key={language} value={language}>{promptLanguageLabel(language)}</option>
-                    ))}
-                  </select>
-                  <ChevronDownIcon size={14} />
-                </span>
-              </label>
+              <div className="lobby-filter-row">
+                <span>Language</span>
+                <LanguagePicker
+                  label="Filter by language"
+                  value={languageFilter}
+                  options={roomLanguages}
+                  includeAny
+                  compact
+                  onChange={setLanguageFilter}
+                />
+              </div>
               <button
                 type="button"
                 className="lobby-filter-row is-toggle"

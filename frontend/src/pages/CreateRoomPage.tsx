@@ -48,7 +48,12 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
-  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>("en");
+  // The language this player plays in - their setting if they have an account,
+  // and what their browser says otherwise. A host who wants another one says
+  // so in the form; this is only where it starts.
+  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>(
+    () => useSettingsStore.getState().promptLanguage,
+  );
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   const [promptListShareCodes, setPromptListShareCodes] = useState<string[]>([]);
   const [customPrompts, dispatchCustomPrompts] = useReducer(

@@ -1757,6 +1757,7 @@
    "confettiEffects",
    "createdAt",
    "keyBindings",
+   "promptLanguage",
    "soundEffects",
    "timeFormat",
    "updatedAt"
@@ -1940,6 +1941,7 @@
    "lastSeenAt",
    "mergedAt",
    "nameColor",
+   "promptLanguage",
    "requestedByMe",
    "requesterWasActor",
    "requesterWasTarget",

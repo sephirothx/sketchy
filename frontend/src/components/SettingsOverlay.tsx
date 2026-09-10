@@ -37,6 +37,9 @@ import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { PictureCropDialog } from "./PictureCropDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
+import { SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
+import { LanguagePicker } from "./LanguagePicker";
+import type { PromptLanguage } from "../types";
 import { Avatar } from "./ui/Avatar";
 import {
   ACTION_LABELS,
@@ -922,7 +925,14 @@ function AppearancePane() {
   const setBrushCursor = useSettingsStore((state) => state.setBrushCursor);
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
+  const promptLanguage = useSettingsStore((state) => state.promptLanguage);
+  const setPromptLanguage = useSettingsStore((state) => state.setPromptLanguage);
   const activePlayerId = useGameStore((state) => state.playerId);
+
+  function choosePromptLanguage(next: PromptLanguage) {
+    setPromptLanguage(next);
+    queueSettingsSync({ promptLanguage: next });
+  }
 
   function chooseTimeFormat(next: TimeFormat) {
     setTimeFormat(next);
@@ -978,6 +988,20 @@ function AppearancePane() {
               </button>
             ))}
           </div>
+        </Row>
+        {/* The language you play in, not the language the app is written in:
+            the interface is English either way, and saying so here is cheaper
+            than letting someone discover it. */}
+        <Row
+          label="Language you play in"
+          hint="Rooms in this language come first in the lobby, and a room you create starts in it. The interface itself stays in English."
+        >
+          <LanguagePicker
+            label="Language you play in"
+            value={promptLanguage}
+            options={SUPPORTED_PROMPT_LANGUAGES}
+            onChange={(next) => choosePromptLanguage(next as PromptLanguage)}
+          />
         </Row>
         <Row
           label="Time format"

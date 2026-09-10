@@ -226,32 +226,6 @@
   flex: 0 0 auto;
 }
 
-.lobby-language-filter {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  color: var(--faint);
-}
-
-.lobby-language-filter select {
-  appearance: none;
-  background: var(--field);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 9px 34px 9px 12px;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  min-height: 42px;
-}
-
-.lobby-language-filter svg {
-  position: absolute;
-  right: 12px;
-  pointer-events: none;
-}
-
 .lobby-filter-toggle {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
