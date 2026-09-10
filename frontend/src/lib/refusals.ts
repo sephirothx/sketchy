@@ -105,7 +105,8 @@ const SENTENCES: Record<ErrorCode, Sentence> = {
   invalid_letter: "That letter is not valid.",
   invalid_prompt_lists: "Those prompt lists cannot be used together.",
   invalid_custom_prompts: "Those custom prompts could not be read.",
-  max_players_below_seated: "There are already more players than that in the room.",
+  max_players_below_seated: (params) =>
+    `Max players cannot be below the ${count(params.seated, 2)} players already in the room.`,
   empty_message: "Type something first.",
 
   // Rate and capacity

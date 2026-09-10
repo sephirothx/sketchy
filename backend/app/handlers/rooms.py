@@ -37,7 +37,7 @@ from app.rooms import (
     generate_random_name_color,
     normalize_name_color,
 )
-from app.handlers.refusals import ErrorCode
+from app.handlers.refusals import ErrorCode, refuse
 
 logger = logging.getLogger("sketchy.handlers.rooms")
 
@@ -433,7 +433,13 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
             return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
         active_count = len(room.seated_players())
         if settings["max_players"] < active_count:
-            return {"ok": False, "errorCode": ErrorCode.MAX_PLAYERS_BELOW_SEATED, "error": f"Max players cannot be below the {active_count} players already in the room"}
+            # The count is a value, not a sentence: the client says how many
+            # are seated in its own words (R-I18N-02).
+            return refuse(
+                ErrorCode.MAX_PLAYERS_BELOW_SEATED,
+                f"Max players cannot be below the {active_count} players already in the room",
+                params={"seated": active_count},
+            )
         if not settings["custom_prompts"]:
             settings["custom_prompts_only"] = False
         try:
