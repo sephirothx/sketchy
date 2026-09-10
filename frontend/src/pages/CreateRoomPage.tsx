@@ -12,6 +12,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { reconcileSelectionForLanguage } from "../lib/promptLanguages";
 import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, PromptLanguage, ScoringMode } from "../types";
 import { currentPlayerName, needsIdentity, useAuthStore } from "../store/authStore";
 import {
@@ -102,6 +103,22 @@ export function CreateRoomPage() {
       });
     return () => { cancelled = true; };
   }, [authUser]);
+
+  /**
+   * The catalogue arriving is when the guess above becomes checkable.
+   *
+   * The language comes from the player's own preference and the selection
+   * from a constant, and nothing kept the two in step: someone who plays in
+   * German opened this form declaring German with `english_standard`
+   * selected, which the server refuses. The lists say which slugs belong to
+   * the language, so this is the first moment the selection can be put right.
+   */
+  function handleListsLoaded(lists: PromptListSummary[]) {
+    setLoadedLists(lists);
+    setPromptListSlugs((current) =>
+      reconcileSelectionForLanguage(lists, promptLanguage, current),
+    );
+  }
 
   function currentPresetSettings(): RoomPresetSettings {
     return {
@@ -400,7 +417,7 @@ export function CreateRoomPage() {
       customPrompts={customPrompts}
       dispatchCustomPrompts={dispatchCustomPrompts}
       namePlaceholder="Leave blank for a random name!"
-      onListsLoaded={setLoadedLists}
+      onListsLoaded={handleListsLoaded}
       loadedLists={loadedLists}
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
         <button
