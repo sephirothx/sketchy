@@ -79,9 +79,22 @@ test("the language options offered are the ones with content, plus the room's ow
     { slug: "english_extended", language: "en" },
     { slug: "user-de", language: "de" },
   ];
-  // Sorted by the label a host reads, so English comes before German.
-  assert.deepEqual(availablePromptLanguages(lists, "en"), ["en", "de"]);
+  // Sorted by the name each language uses for itself, which is what the
+  // picker shows: "Deutsch" comes before "English".
+  assert.deepEqual(availablePromptLanguages(lists, "en"), ["de", "en"]);
   assert.deepEqual(availablePromptLanguages([], "fr"), ["fr"]);
   assert.deepEqual(selectionForLanguage(lists, "de"), ["user-de"]);
   assert.deepEqual(selectionForLanguage(lists, "it"), []);
+  // Standard rather than whatever sorts first: the catalogue is alphabetical,
+  // so the first German list is `german_extended`.
+  assert.deepEqual(
+    selectionForLanguage(
+      [
+        { slug: "german_extended", language: "de" },
+        { slug: "german_standard", language: "de" },
+      ],
+      "de",
+    ),
+    ["german_standard"],
+  );
 });

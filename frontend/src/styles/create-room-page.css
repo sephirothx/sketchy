@@ -189,20 +189,6 @@ details.form-section > .form-section-body {
   font-weight: 800;
 }
 
-.create-room-language-field select {
-  background: var(--field);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  color: var(--ink);
-  font: inherit;
-  padding: 7px 30px 7px 10px;
-}
-
-.create-room-language-field output {
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 800;
-}
 
 .create-room-language-caption {
   color: var(--faint);

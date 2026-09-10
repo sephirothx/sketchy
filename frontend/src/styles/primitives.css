@@ -250,3 +250,151 @@
 .avatar-friend .mark-line {
   stroke: currentColor;
 }
+
+/* ------------------------------------------------------- language picker
+
+   The one control that picks a language, wherever it is picked: the create
+   form, the room's rules, the settings overlay and the lobby's filter. Built
+   out of the pieces already here — the setup form's field for the trigger,
+   the lobby menu's floating panel for the list — because a language is not a
+   new kind of choice and should not look like one.
+
+   A native <select> cannot do this job: its popup is the platform's, so the
+   flag and the endonym stop at the closed field and never reach the list. */
+.language-picker {
+  display: inline-flex;
+  position: relative;
+}
+
+.language-picker-trigger {
+  align-items: center;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 44px;
+  min-width: 190px;
+  padding: 8px 12px;
+}
+
+.language-picker.is-compact .language-picker-trigger {
+  font-size: 13.5px;
+  min-height: 42px;
+  min-width: 0;
+  padding: 7px 10px;
+}
+
+.language-picker-trigger:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.language-picker-trigger:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.language-picker-trigger svg:last-child {
+  color: var(--faint);
+  flex: none;
+}
+
+/* The one-choice and locked forms: the face without the mechanism. */
+.language-picker-static {
+  align-items: center;
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 800;
+  min-height: 32px;
+}
+
+.language-picker-face {
+  align-items: center;
+  display: inline-flex;
+  gap: 9px;
+  min-width: 0;
+}
+
+.language-picker-flag {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  line-height: 0;
+}
+
+.language-picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A raised card rather than the inverted popover the seat menus use: this one
+   opens inside a form, among white fields on paper, and a black panel in the
+   middle of that reads as a different application. `--card` is white on paper
+   and elevated slate in the dark theme, so the panel follows the page it
+   belongs to instead of fighting it. */
+.language-picker-list {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  left: 0;
+  /* Seven rows fit; a language added later scrolls rather than running off
+     the bottom of a phone. */
+  max-height: min(360px, 60vh);
+  min-width: 100%;
+  overflow-y: auto;
+  padding: 6px;
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 100;
+}
+
+.language-picker-option {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.language-picker-option:hover,
+.language-picker-option:focus-visible {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.language-picker-option.is-selected {
+  background: var(--primary-soft);
+}
+
+/* The tick keeps its slot whether or not it is drawn, so the names stay in
+   one column and the list does not shift as the choice moves. */
+.language-picker-check {
+  color: var(--primary);
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  line-height: 0;
+  width: 13px;
+}

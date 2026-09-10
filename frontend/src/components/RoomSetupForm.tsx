@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CustomPromptsEditor } from "./CustomPromptsEditor";
 import { PromptListPicker } from "./PromptListPicker";
+import { LanguageFace, LanguagePicker } from "./LanguagePicker";
 import {
   ChoiceCards,
   InputNumber,
@@ -196,35 +197,28 @@ export function RoomSetupForm({
             </div>
           </div>
           <div className="create-room-language-field">
-            <span className="create-room-language-label" id="room-language-label">
-              Language
-            </span>
-            {languageLocked || languageOptions.length < 2 ? (
-              <output aria-labelledby="room-language-label">
-                {promptLanguageLabel(promptLanguage)}
-              </output>
+            <span className="create-room-language-label">Language</span>
+            {languageLocked ? (
+              // The same face the picker wears, without the mechanism: a room
+              // that cannot change its language still looks like the control
+              // that set it.
+              <span className="language-picker-static">
+                <LanguageFace value={promptLanguage} />
+              </span>
             ) : (
-              <select
-                aria-labelledby="room-language-label"
+              <LanguagePicker
+                label="Language"
                 value={promptLanguage}
-                onChange={(event) => {
-                  const next = event.target.value as PromptLanguage;
-                  onChange({
-                    promptLanguage: next,
-                    // Lists cannot span languages, and the bearer codes that
-                    // authorized the old ones belong to the language being
-                    // left, so neither carries over.
-                    promptListSlugs: selectionForLanguage(loadedLists, next),
-                    promptListShareCodes: [],
-                  });
-                }}
-              >
-                {languageOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {promptLanguageLabel(option)}
-                  </option>
-                ))}
-              </select>
+                options={languageOptions}
+                onChange={(next) => onChange({
+                  promptLanguage: next as PromptLanguage,
+                  // Lists cannot span languages, and the bearer codes that
+                  // authorized the old ones belong to the language being
+                  // left, so neither carries over.
+                  promptListSlugs: selectionForLanguage(loadedLists, next),
+                  promptListShareCodes: [],
+                })}
+              />
             )}
             <span className="create-room-language-caption">
               {languageLocked
