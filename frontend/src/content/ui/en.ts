@@ -693,7 +693,7 @@ export const EN = {
 
   customPromptsPreview: {
     resultsMatching: (p: { shown: number; total: number }) =>
-      `${p.shown} of ${p.total} prompts match`,
+      `${number(p.shown)} of ${number(p.total)} prompts match`,
     promptCount: (p: { count: number }) =>
       counted(p.count, { one: "prompt", other: "prompts" }),
     customPromptCount: (p: { count: number }) =>
