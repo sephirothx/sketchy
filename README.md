@@ -429,7 +429,15 @@ Aliases are unique within a concept and language, and are attached separately
 to each version so changing an alias later cannot rewrite how an older game
 matched guesses. The initial supported Latin-language registry—English,
 German, Spanish, French, Italian, Dutch, and Portuguese—case-folds, collapses
-whitespace, and folds canonically decomposable accents. Other BCP-47 tags are
+whitespace, and folds canonically decomposable accents. Beyond that shared
+rule, a language folds the way it is written: German accepts `Maedchen` for
+**Mädchen** (`ä→ae`, `ö→oe`, `ü→ue`, expanded before the accents are folded,
+because `madchen` is nobody's spelling), and Dutch reads the single-codepoint
+`ĳ` as `ij`. Case-folding already turns `ß` into `ss`, so `Fussball` and
+**Fußball** meet without a rule. Where two spellings are both right, the
+stored key stays one canonical string—it is an identity as well as a
+comparison—and a guess is accepted when its spellings meet the answer's; near
+misses and prompt provenance keep to the canonical one. Other BCP-47 tags are
 rejected until their matching semantics are implemented.
 Each room **declares** its **Prompt language**: the host chooses it when the
 room is created, it is fixed for the room's life, and every selected list must

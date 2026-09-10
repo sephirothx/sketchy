@@ -1522,6 +1522,13 @@ registry, which case-folds, collapses whitespace, and folds canonically decompos
 accents ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
 BCP-47 tags are **rejected until their matching semantics are implemented.**
 
+`match_key` is that fold for the row's own language, with the language's
+transliterations applied first (German **Mädchen** stores `maedchen`, not `madchen`).
+It is deliberately **one** string: it is the identity these unique constraints are
+built on. A language where two spellings are both correct accepts them at match time
+instead (R-GUESS-01) — the alternative would be an identity that is a set, and two
+prompts could then be equal and unequal at once.
+
 ### `prompt_aliases` and `prompt_version_aliases`
 `prompt_aliases`: `id` · `concept_id` (CASCADE) · `language` · `answer` · `match_key`,
 unique on `(concept_id, language, match_key)`.

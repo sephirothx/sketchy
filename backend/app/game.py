@@ -31,7 +31,7 @@ from app.domain_values import (
 )
 from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
-from app.prompt_content import prompt_match_key
+from app.prompt_content import prompt_match_key, prompt_match_variants
 
 # How many prompts a drawer chooses between each turn. The pre-drawn sample
 # is sized off this, so the two must not drift apart.
@@ -141,14 +141,27 @@ class Phase(str, Enum):
 
 
 def _normalize(text: str, language: str = "en") -> str:
-    """Normalize guesses while preserving letters without canonical ASCII forms.
+    """The canonical key: one string, for provenance and near-miss distance.
 
-    Whitespace and case differences are ignored as before. Canonically
-    decomposable diacritics are stripped so, for example, "è" matches "e".
-    Letters such as "ø" and "ł" remain distinct because Unicode NFD does not
-    decompose them into ASCII letters.
+    Whitespace and case differences are ignored. Canonically decomposable
+    diacritics are stripped so, for example, "è" matches "e"; letters such as
+    "ø" and "ł" remain distinct because Unicode NFD does not decompose them
+    into ASCII letters. A language that transliterates (German "ä" as "ae")
+    does that first, so its canonical spelling is the expanded one.
     """
     return prompt_match_key(text, language)
+
+
+def _accepted_spellings(text: str, language: str = "en") -> frozenset[str]:
+    """Every spelling of `text` its language accepts (R-GUESS-01).
+
+    Deciding whether a guess is right asks this rather than `_normalize`: a
+    German answer is written both "maedchen" and "madchen", and no single key
+    can be both. Everything else - which prompt this was, how close a wrong
+    guess came - stays on the canonical key, so a wider accept set cannot
+    widen anything it was not meant to.
+    """
+    return prompt_match_variants(text, language)
 
 
 def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
@@ -966,9 +979,8 @@ class Game:
             return False, 0
         if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
-        normalized_guess = _normalize(text, self.prompt_language)
-        accepted_answers = self._accepted_answer_keys()
-        if normalized_guess not in accepted_answers:
+        guessed_spellings = _accepted_spellings(text, self.prompt_language)
+        if guessed_spellings.isdisjoint(self._accepted_answer_spellings()):
             # Counted here rather than at the caller so that only real attempts
             # land: the drawer and players who already have it return above,
             # and their messages are chat, not guesses.
@@ -1021,7 +1033,9 @@ class Game:
             return None
         guess = _normalize(text, self.prompt_language)
         accepted_answers = self._accepted_answer_keys()
-        if guess in accepted_answers:
+        if not _accepted_spellings(text, self.prompt_language).isdisjoint(
+            self._accepted_answer_spellings()
+        ):
             return None
         if any(_is_close_pair(guess, answer) for answer in accepted_answers):
             return "close"
@@ -1039,6 +1053,18 @@ class Game:
             if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
                 return "partial"
         return None
+
+    def _accepted_answer_spellings(self) -> frozenset[str]:
+        """Every spelling that wins the turn: the answer's and its aliases'."""
+        if not self.prompt:
+            return frozenset()
+        aliases = self.prompt_aliases.get(self.prompt, ())
+        return frozenset().union(
+            *(
+                _accepted_spellings(answer, self.prompt_language)
+                for answer in (self.prompt, *aliases)
+            )
+        )
 
     def _accepted_answer_keys(self) -> tuple[str, ...]:
         """Canonical answer plus aliases for this exact selected version."""
