@@ -297,10 +297,12 @@ jobs:
       # importing the fixture (backend/tests/database_backed.py, R-ENG-12).
       # Four workers on the runner's four vCPUs, shared with the PostgreSQL
       # container. With commits waiting on the disk (#658) four workers made
-      # every database-bound test two to four times slower than two did and
-      # the 33,000-game rebuild test overran its 30 s statement budget; with
-      # durability off above, the container is CPU-bound like the workers
-      # and four is faster again (#660).
+      # every database-bound test two to four times slower than two did, and
+      # the rebuild test that then seeded 33,000 games overran its statement
+      # budget; with durability off above, the container is CPU-bound like the
+      # workers and four is faster again (#660). That test seeds forty games
+      # now and asserts the bound it was crossing, which is what stopped this
+      # step costing 85 s or 175 s depending on the run.
       - name: Run the backend suite against PostgreSQL
         run: .venv/bin/pytest -q -n 4 --dist=loadgroup --database-backed-only --deselect tests/test_migrations.py --durations=50 --junitxml=test-results/postgresql.xml
 
