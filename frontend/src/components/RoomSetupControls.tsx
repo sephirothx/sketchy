@@ -16,6 +16,24 @@ function stepDiscrete(value: number, direction: -1 | 1, options: readonly number
   return options[0];
 }
 
+/**
+ * A segment's label, over a hidden copy of itself in the weight the selected
+ * state uses.
+ *
+ * Selecting a segment makes it bolder, and bold is wider: pressing Private
+ * grew the control by 2.4px and shoved the whole row left, mid-click. The
+ * sizer holds the widest the segment can ever be, so the control's width is
+ * the same whichever segment is on.
+ */
+function SegmentLabel({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <span className="segment-sizer" aria-hidden="true">{children}</span>
+      <span className="segment-label">{children}</span>
+    </>
+  );
+}
+
 export function FieldHint({ hint }: { hint: string }) {
   return (
     <span className="m3-switch-hint-wrap">
@@ -163,7 +181,7 @@ export function SegmentedControl<T extends string>({
           aria-label={option.name}
           onClick={() => onChange(option.value)}
         >
-          {option.label}
+          <SegmentLabel>{option.label}</SegmentLabel>
         </button>
       ))}
     </div>
@@ -226,7 +244,7 @@ export function ChoiceChips<T extends string>({
             disabled={disabled || option.disabled}
             onClick={() => onChange(option.value)}
           >
-            {option.label}
+            <SegmentLabel>{option.label}</SegmentLabel>
           </button>
         ))}
       </div>

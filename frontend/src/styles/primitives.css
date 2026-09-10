@@ -289,11 +289,13 @@
    flag nearly fills its frame - shrunk to a chip beside a chevron it stops
    being a picture of anything at all. */
 .language-picker.is-flag-only .language-picker-trigger {
-  height: 44px;
+  /* Level with the name field beside it, and 18:13 to a quarter of a
+     percent - which is what the flag is stretched by, and is not visible. */
+  height: 42px;
   min-width: 0;
   overflow: hidden;
   padding: 0;
-  width: 61px;
+  width: 58px;
 }
 
 /* The flag is the button's whole face, so the button's own border is the
