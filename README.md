@@ -511,7 +511,10 @@ and play it. It is a deliberate act with its own controls rather than a
 visibility setting: it needs a verified email address and no unread moderator
 warning, it is rate-limited, it is recorded in the audit ledger, and editing a
 published list never takes it back out. Unpublishing does, at once, and leaves
-its stars where they are. Community content is moderated **after** publication,
+its stars where they are. Any published list can also be **forked** — copied into a private list
+of your own, recording the exact revision it came from. A fork is independent
+content from the moment it exists, gets its own prompt versions, leaves out
+anything a moderator had hidden, and counts against your 25-list allowance. Community content is moderated **after** publication,
 through the same report and review path any player-authored content uses — an
 administrator can switch new publications into a review queue instead
 (`POST /api/admin/prompt-list-review`) without a redeploy, if that stops being

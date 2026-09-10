@@ -69,6 +69,19 @@ export function listCommunityPromptLists(
   return apiRequest(`/api/prompt-lists/community${search ? `?${search}` : ""}`);
 }
 
+/**
+ * Take a copy of a published list into one of your own.
+ *
+ * The copy is private: a fork is content taken to work on, and publishing it
+ * is a separate act (R-LIST-17). It counts against the account's list
+ * allowance and is refused at the cap, having written nothing.
+ */
+export function forkPromptList(id: string): Promise<OwnedPromptList> {
+  return apiRequest(`/api/prompt-lists/${encodeURIComponent(id)}/fork`, {
+    method: "POST",
+  });
+}
+
 export interface StarResult {
   starCount: number;
   starredByMe: boolean;

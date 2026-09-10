@@ -228,6 +228,8 @@ class ErrorCode(StrEnum):
     UNKNOWN_PROMPT_TAG = "unknown_prompt_tag"
     # A list a moderator hid cannot be put back in front of people by its owner.
     PROMPT_LIST_HIDDEN = "prompt_list_hidden"
+    # R-LIST-04's 25, reached by creating or by forking; carries `max`.
+    PROMPT_LIST_ALLOWANCE_REACHED = "prompt_list_allowance_reached"
     UNKNOWN_SORT = "unknown_sort"
     TIMEZONE_REQUIRED = "timezone_required"
     RANGE_REVERSED = "range_reversed"

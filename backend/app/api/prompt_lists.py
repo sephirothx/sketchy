@@ -436,6 +436,31 @@ def create_prompt_list_router(
             raise mutation_error(error) from error
         return {"starCount": count, "starredByMe": starred}
 
+    @router.post(
+        "/prompt-lists/{prompt_list_id}/fork",
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def fork_prompt_list(prompt_list_id: str, request: Request):
+        """Take a copy of a published list (R-LIST-17).
+
+        The copy is **private**: a fork is somebody taking content to work on,
+        and publishing it is a separate act with its own gate. It counts
+        against R-LIST-04's allowance and is refused visibly at the cap,
+        having written nothing.
+        """
+        user = await require_registered(request)
+        if not publish_limiter.check(client_key(request)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
+            )
+        try:
+            forked = await prompt_list_repo.fork_published(user.id, prompt_list_id)
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        return owned_prompt_list_payload(forked)
+
     @router.put("/prompt-lists/{prompt_list_id}/star")
     async def star_prompt_list(prompt_list_id: str, request: Request):
         """Star a published list. Idempotent: the composite primary key is
