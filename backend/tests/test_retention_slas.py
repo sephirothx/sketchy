@@ -55,7 +55,6 @@ from app.services.sweeps import SweepBudget
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 # A real PNG header, so the row is the shape the submit path would leave.
 PNG = b"\x89PNG\r\n\x1a\n" + b"pixels" * 32

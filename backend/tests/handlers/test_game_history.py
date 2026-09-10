@@ -22,8 +22,6 @@ from tests.handlers.helpers import (
     staged_rows,
 )
 
-pytestmark = pytest.mark.asyncio
-
 
 def attach_curated_sources(room, *revision_ids: str) -> None:
     """Pin the room to revisions its game will draw curated prompts from.

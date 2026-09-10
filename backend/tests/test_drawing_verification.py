@@ -6,7 +6,6 @@ import tracemalloc
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-import pytest
 from sqlalchemy import event, select, update
 
 from app.db.models import TurnDrawing, generate_uuid
@@ -20,8 +19,6 @@ from tests.test_repositories import (
     _save_game_with_drawings,
     _skch_bytes,
 )
-
-pytestmark = pytest.mark.asyncio
 
 
 async def _store(factory, count: int, *, spacing_seconds: float = 1.0) -> list[UUID]:

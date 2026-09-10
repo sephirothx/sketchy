@@ -8,7 +8,6 @@ how many lines there are.
 import re
 import uuid
 
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -34,7 +33,6 @@ def line_saying(page, text: str):
     return page.locator(".lobby-chat-line", has_text=text)
 
 
-@pytest.mark.asyncio
 async def test_a_line_reaches_every_open_lobby_and_whoever_arrives_after(
     assert_input_contract,
 ):

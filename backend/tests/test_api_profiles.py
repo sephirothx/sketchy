@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -29,7 +28,6 @@ from app.repositories.sqlalchemy import (
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 START = datetime(2026, 8, 19, 12, 0, tzinfo=timezone.utc)
 

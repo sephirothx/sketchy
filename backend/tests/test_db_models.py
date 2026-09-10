@@ -68,10 +68,6 @@ from tests.dbfixtures import (
     create_test_engine,
 )
 
-pytestmark = pytest.mark.asyncio
-
-
-
 
 async def test_app_config_crud():
     factory, engine = await create_test_db()
@@ -1770,7 +1766,6 @@ async def test_a_friendship_status_is_database_constrained():
                     )
     finally:
         await engine.dispose()
-
 
 
 async def test_a_lobby_line_has_no_room_and_no_seat_and_nothing_else_does():

@@ -6,7 +6,6 @@ sat with no caller, and the review queue could only ever be empty.
 """
 import asyncio
 
-import pytest
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
 
@@ -14,7 +13,6 @@ from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, u
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_a_player_reports_another_from_the_room_menu():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -104,7 +102,6 @@ async def test_a_player_reports_another_from_the_room_menu():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_guest_votes_but_is_offered_no_way_to_report():
     """The server refuses a guest's report, so offering the control is a dead
     end. The votes stay, because those need no account."""
@@ -168,7 +165,6 @@ async def _choose_prompt(pages):
     raise AssertionError("No drawer received prompt choices within 12 seconds")
 
 
-@pytest.mark.asyncio
 async def test_a_report_about_the_drawer_carries_the_drawing():
     """Mid-turn, a report about the player drawing offers to include the
     canvas, on by default, and the confirmation says it went. A report about

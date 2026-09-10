@@ -41,7 +41,6 @@ def emitted(sio, event: str) -> list[tuple]:
     ]
 
 
-@pytest.mark.asyncio
 async def test_creating_a_second_room_releases_the_seat_in_the_first():
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -63,7 +62,6 @@ async def test_creating_a_second_room_releases_the_seat_in_the_first():
     ctx.room_codes.retire_ephemeral.assert_awaited_once_with("FIRST1")
 
 
-@pytest.mark.asyncio
 async def test_joining_another_room_leaves_the_previous_one_running():
     """The room the socket walked out of keeps playing, minus that seat."""
     room_manager = RoomManager()
@@ -90,7 +88,6 @@ async def test_joining_another_room_leaves_the_previous_one_running():
     assert new.players[moved["playerId"]].sid == "sid-A"
 
 
-@pytest.mark.asyncio
 async def test_a_refused_create_keeps_the_seat_the_socket_already_had():
     """The old seat is only given up once the new one is certain."""
 
@@ -129,7 +126,6 @@ async def test_a_refused_create_keeps_the_seat_the_socket_already_had():
     assert seat.connected is True and seat.sid == "sid-A"
 
 
-@pytest.mark.asyncio
 async def test_disconnect_reconciles_every_room_the_socket_sits_in():
     """Even a seat the session no longer names has to become disconnected."""
     room_manager = RoomManager()
@@ -155,7 +151,6 @@ async def test_disconnect_reconciles_every_room_the_socket_sits_in():
     await ctx.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_racing_creates_on_one_socket_still_leave_a_single_seat():
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
@@ -184,7 +179,6 @@ async def test_racing_creates_on_one_socket_still_leave_a_single_seat():
     assert len(seats) == 1
 
 
-@pytest.mark.asyncio
 async def test_a_socket_that_drops_while_creating_leaves_no_connected_seat():
     """The disconnect can win the race with the join it interrupts."""
     room_manager = RoomManager()
@@ -217,7 +211,6 @@ async def test_a_socket_that_drops_while_creating_leaves_no_connected_seat():
     await ctx.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_two_sockets_superseding_each_other_do_not_wait_for_each_other():
     """Cutting off a displaced tab runs its disconnect handler inline.
 
@@ -266,7 +259,6 @@ async def test_two_sockets_superseding_each_other_do_not_wait_for_each_other():
     await ctx.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_reclaiming_a_stranded_seat_keeps_the_binding_to_the_room_sat_in():
     """Giving up a seat somewhere else must not unseat the socket here.
 
@@ -290,7 +282,6 @@ async def test_reclaiming_a_stranded_seat_keeps_the_binding_to_the_room_sat_in()
     assert await ctx.game_flow.require_current_player("sid-A") is not None
 
 
-@pytest.mark.asyncio
 async def test_leaving_the_room_the_session_names_drops_its_binding():
     """The other half of the same rule, which the leave path relies on."""
     room_manager = RoomManager()

@@ -1,12 +1,10 @@
 """The prompt stats page: reachable, sortable, and honest about thin data."""
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

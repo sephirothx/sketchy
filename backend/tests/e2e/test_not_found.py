@@ -1,5 +1,4 @@
 """The page a URL with nothing behind it gets, and the status that comes with it."""
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.a11y import assert_no_axe_violations
 from tests.e2e.lobby_helpers import register_account, use_guest_name
@@ -7,7 +6,6 @@ from tests.e2e.lobby_helpers import register_account, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_an_unknown_url_answers_404_and_offers_the_way_back():
     """R-UX-05. The status matters as much as the page.
 
@@ -41,7 +39,6 @@ async def test_an_unknown_url_answers_404_and_offers_the_way_back():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_staff_route_shows_the_same_page_to_everyone_else():
     """R-ROLE-01, on the client side of the door.
 

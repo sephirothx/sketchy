@@ -1,7 +1,6 @@
 """The registered-owner REST workflow for persistent prompt lists."""
 from __future__ import annotations
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -15,8 +14,6 @@ from app.repositories.sqlalchemy import (
 )
 
 from tests.dbfixtures import create_test_db
-
-pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture

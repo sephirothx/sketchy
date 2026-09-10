@@ -26,7 +26,6 @@ from tests.dbfixtures import create_test_db
 
 from tests.staffauth import mark_staff_ready
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 PNG = (

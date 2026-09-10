@@ -12,15 +12,12 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
 from app.services.friends import FriendshipRefused
 from tests.handlers.helpers import SessionStore
-
-pytestmark = pytest.mark.asyncio
 
 
 class StubFriendService:

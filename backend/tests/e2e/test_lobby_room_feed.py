@@ -9,7 +9,6 @@ remembered, while a card that *goes* is the diff noticing an absence.
 Asserts on this test's own room. The suite's workers share one server, so
 every other test's rooms are in the same list.
 """
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -20,7 +19,6 @@ BASE_URL = "http://localhost:8000"
 SETTLE_MS = 8000
 
 
-@pytest.mark.asyncio
 async def test_a_room_opening_and_closing_reaches_a_lobby_nobody_touched():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

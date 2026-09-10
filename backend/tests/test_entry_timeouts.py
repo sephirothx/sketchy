@@ -44,7 +44,6 @@ def never_answers():
     return AsyncMock(side_effect=hang)
 
 
-@pytest.mark.asyncio
 async def test_a_hung_code_allocation_refuses_rather_than_hanging(monkeypatch):
     monkeypatch.setattr("app.handlers.rooms.ENTRY_DB_TIMEOUT_SECONDS", 0.05)
     room_manager = RoomManager()
@@ -66,7 +65,6 @@ async def test_a_hung_code_allocation_refuses_rather_than_hanging(monkeypatch):
     assert room_manager.rooms == {}
 
 
-@pytest.mark.asyncio
 async def test_a_socket_that_drops_during_a_stall_is_still_reconciled(monkeypatch):
     """The failure this is really about: the socket drops while the entry is
     stuck, and its disconnect is waiting at the same gate."""
@@ -101,7 +99,6 @@ def test_the_bound_matches_the_one_the_history_write_already_uses():
     assert ENTRY_DB_TIMEOUT_SECONDS == HISTORY_WRITE_TIMEOUT_SECONDS
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["join_room", "get_room_preview"])
 async def test_a_hung_code_lookup_refuses_rather_than_raising(monkeypatch, command):
     """Both paths that ask whether a code has been retired reach the database,
@@ -145,7 +142,6 @@ def quotas_that_refuse_the_second_capacity_check(**overrides):
     return quotas
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "broken",
     ["release_unpublished", "refund_creation"],
@@ -220,7 +216,6 @@ def _gate(monkeypatch, module, name, real):
     return reached, release
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["create_room", "join_room"])
 @pytest.mark.parametrize("when", ["before seating", "while seating"])
 async def test_an_account_ending_mid_entry_is_not_seated(monkeypatch, command, when):
@@ -287,7 +282,6 @@ def a_database_that_never_answers(monkeypatch):
     return HangingFactory()
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "is_anonymous, expected",
     [(False, True), (True, False)],

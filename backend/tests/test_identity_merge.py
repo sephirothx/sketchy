@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-import pytest
 from sqlalchemy import select
 
 from app.db.models import (
@@ -29,7 +28,6 @@ from app.repositories.sqlalchemy import (
 from tests.dbfixtures import create_test_db
 
 
-@pytest.mark.asyncio
 async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)

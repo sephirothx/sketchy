@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from uuid import UUID
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -26,7 +25,6 @@ from app.services.friends import FriendService, friendship_key
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 

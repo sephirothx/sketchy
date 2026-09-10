@@ -59,7 +59,6 @@ from app.services.game_history import GameHistoryWrite
 from app.services.sweeps import SweepBudget
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 _FRAMES = json.loads(
     (Path(__file__).parents[2] / "fixtures" / "canvas_protocol_v1.json").read_text()

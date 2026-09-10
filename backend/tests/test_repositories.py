@@ -58,8 +58,6 @@ from app.repositories.sqlalchemy import (
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
 
 async def test_user_repository_crud_and_stats():
     factory, engine = await create_test_db()

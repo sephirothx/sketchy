@@ -28,8 +28,6 @@ from app.services.sweeps import SweepBudget, SweepReport, sweep_budget_from_env
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
 
 def _capture_sql(engine) -> list[str]:
     statements: list[str] = []

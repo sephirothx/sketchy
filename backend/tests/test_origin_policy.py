@@ -60,7 +60,6 @@ def test_the_rule_for_one_request(method, origin, referer, allowed):
     ) is allowed
 
 
-@pytest.mark.asyncio
 async def test_the_middleware_refuses_a_foreign_unsafe_request_before_anything_else():
     app = FastAPI()
     seen: list[str] = []
@@ -103,7 +102,6 @@ def test_the_socket_handshake_admits_the_serving_origin_and_the_configured_ones_
     assert allowed("https://evil.example", plain) is False
 
 
-@pytest.mark.asyncio
 async def test_the_real_socket_server_refuses_a_foreign_origin_and_admits_its_own():
     """Through the ASGI app itself: Engine.IO answers a handshake whose
     Origin is another site with 400 and never opens a session."""

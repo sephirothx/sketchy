@@ -1,7 +1,6 @@
 """A finished game reaches the profile page: stats, history, and round detail."""
 import asyncio
 
-import pytest
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
@@ -31,7 +30,6 @@ async def choose_prompt(pages: list[Page]) -> tuple[Page, Page, str]:
     raise AssertionError("No drawer received prompt choices within 12 seconds")
 
 
-@pytest.mark.asyncio
 async def test_finished_game_shows_up_on_the_profile_page():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

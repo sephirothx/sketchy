@@ -36,7 +36,6 @@ async def _add_user(database, *, username: str | None, state: str) -> str:
         return str(user.id)
 
 
-@pytest.mark.asyncio
 async def test_bootstrap_promotes_registered_user_and_writes_audit(database):
     user_id = await _add_user(
         database, username="Operator", state=AccountState.REGISTERED.value
@@ -57,7 +56,6 @@ async def test_bootstrap_promotes_registered_user_and_writes_audit(database):
         assert event.details == {"reason": "Initial production operator"}
 
 
-@pytest.mark.asyncio
 async def test_bootstrap_is_one_time_only(database):
     await _add_user(database, username="First", state=AccountState.REGISTERED.value)
     await _add_user(database, username="Second", state=AccountState.REGISTERED.value)
@@ -71,7 +69,6 @@ async def test_bootstrap_is_one_time_only(database):
         assert count == 1
 
 
-@pytest.mark.asyncio
 async def test_bootstrap_rejects_guest_and_requires_reason(database):
     await _add_user(database, username=None, state=AccountState.ANONYMOUS.value)
     with pytest.raises(AdminBootstrapError, match="registered account"):

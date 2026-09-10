@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.client_config import ClientConfig
@@ -38,7 +37,6 @@ def test_the_client_config_carries_the_live_drawing_allowance():
     assert ClientConfig().payload()["drawingFramesPerWindow"] == DRAWING.default.limit
 
 
-@pytest.mark.asyncio
 async def test_a_drawing_budget_change_is_announced_like_a_client_cadence(monkeypatch):
     from app import main
 
@@ -69,7 +67,6 @@ def _game():
 POINTS = [{"x": 0.1 + i / 1000, "y": 0.1 + (i % 7) / 500} for i in range(150)]
 
 
-@pytest.mark.asyncio
 async def test_a_stroke_replayed_at_its_original_cadence_is_cut_off_by_the_budget():
     """The reproduced case, kept as the reason the client repacks."""
     room, sio = _game()
@@ -88,7 +85,6 @@ async def test_a_stroke_replayed_at_its_original_cadence_is_cut_off_by_the_budge
     assert room.game.canvas.active_draw_sequence == 1, "left open"
 
 
-@pytest.mark.asyncio
 async def test_the_same_stroke_repacked_commits_in_three_frames():
     room, sio = _game()
     draw = sio.handlers["/"]["draw"]
@@ -103,7 +99,6 @@ async def test_the_same_stroke_repacked_commits_in_three_frames():
     assert len(room.game.canvas.history) == 1
 
 
-@pytest.mark.asyncio
 async def test_a_resend_of_a_committed_stroke_gets_its_commit_back_not_a_sync():
     """What makes the client's deadline resend safe: one resend resolves a
     lost end frame and a lost commit alike."""

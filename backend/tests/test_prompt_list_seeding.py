@@ -24,10 +24,6 @@ from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
-
-
 
 async def test_seed_bundled_prompt_lists():
     factory, engine = await create_test_db()
@@ -171,7 +167,6 @@ async def test_seeded_revisions_carry_the_letter_histogram_of_their_prompts():
                 assert revision.letter_total > 0
     finally:
         await engine.dispose()
-
 
 
 async def test_pinning_agrees_with_resolution_about_what_a_selection_holds():

@@ -1,7 +1,6 @@
 """Highlights live on their own screen, reachable from both sides of game over."""
 import asyncio
 
-import pytest
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
@@ -30,7 +29,6 @@ async def choose_prompt(pages: list[Page]):
     raise AssertionError("no drawer was offered prompt choices")
 
 
-@pytest.mark.asyncio
 async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

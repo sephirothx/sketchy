@@ -13,7 +13,6 @@ import asyncio
 import json
 from pathlib import Path
 
-import pytest
 
 from app.rooms import RoomManager
 from app.services.presence import (
@@ -347,7 +346,6 @@ class StubUser:
         self.avatar_key = None
 
 
-@pytest.mark.asyncio
 async def test_warming_reads_once_and_then_answers_from_memory():
     repo = StubUserRepo({"user-1": StubUser("user-1", "Ada")})
     cache = PresenceIdentityCache(repo)
@@ -357,7 +355,6 @@ async def test_warming_reads_once_and_then_answers_from_memory():
     assert cache.cached(["user-1"])["user-1"].display_name == "Ada"
 
 
-@pytest.mark.asyncio
 async def test_invalidation_makes_the_next_warm_read_again():
     """The four writers of a display name all come through here."""
     repo = StubUserRepo({"user-1": StubUser("user-1", "Ada")})
@@ -370,7 +367,6 @@ async def test_invalidation_makes_the_next_warm_read_again():
     assert cache.cached(["user-1"])["user-1"].display_name == "Adalovelace"
 
 
-@pytest.mark.asyncio
 async def test_a_read_that_never_answers_leaves_the_row_out(monkeypatch):
     """Never a blank name, and never a snapshot that waits on a database."""
     monkeypatch.setattr("app.services.presence.IDENTITY_TIMEOUT_SECONDS", 0.01)
@@ -379,7 +375,6 @@ async def test_a_read_that_never_answers_leaves_the_row_out(monkeypatch):
     assert cache.cached(["user-1"]) == {}
 
 
-@pytest.mark.asyncio
 async def test_the_cache_is_bounded():
     users = {f"user-{i}": StubUser(f"user-{i}", f"p{i}") for i in range(10)}
     cache = PresenceIdentityCache(StubUserRepo(users), max_cached=4)
@@ -405,7 +400,6 @@ def broadcaster_for(registry, room_manager, cache):
     )
 
 
-@pytest.mark.asyncio
 async def test_a_tick_with_nothing_to_say_emits_nothing_and_holds_the_revision():
     registry = PresenceRegistry()
     cache = PresenceIdentityCache(None)
@@ -415,7 +409,6 @@ async def test_a_tick_with_nothing_to_say_emits_nothing_and_holds_the_revision()
     assert caster._sio.emitted == []
 
 
-@pytest.mark.asyncio
 async def test_a_change_is_broadcast_once_with_the_next_revision():
     registry = PresenceRegistry()
     cache = PresenceIdentityCache(None)
@@ -434,7 +427,6 @@ async def test_a_change_is_broadcast_once_with_the_next_revision():
     assert len(caster._sio.emitted) == 1
 
 
-@pytest.mark.asyncio
 async def test_the_count_moving_alone_is_still_worth_broadcasting():
     """An account beyond the cap changes 'showing 100 of 412' and nothing else."""
     registry = PresenceRegistry()
@@ -461,7 +453,6 @@ async def test_the_count_moving_alone_is_still_worth_broadcasting():
     assert len(caster._sio.emitted) == before + 1
 
 
-@pytest.mark.asyncio
 async def test_a_new_watcher_is_handed_the_revision_already_broadcast():
     """So its first delta is the next one in the same sequence, not a gap."""
     registry = PresenceRegistry()
@@ -485,7 +476,6 @@ async def test_a_new_watcher_is_handed_the_revision_already_broadcast():
     assert apply_delta(snapshot.entries, delta) == caster._last.entries
 
 
-@pytest.mark.asyncio
 async def test_the_loop_records_a_healthy_tick_and_survives_a_broken_one():
     """A fourth supervised loop, so `/api/health` has to be able to tell.
 
@@ -578,7 +568,6 @@ def test_a_ceiling_that_is_not_a_positive_number_falls_back(caplog):
     assert blank.list_limit == DEFAULT_LIST_LIMIT
 
 
-@pytest.mark.asyncio
 async def test_a_repository_that_raises_leaves_the_row_out():
     class BrokenRepo:
         async def get_by_id(self, user_id):
@@ -589,14 +578,12 @@ async def test_a_repository_that_raises_leaves_the_row_out():
     assert cache.cached(["user-1"]) == {}
 
 
-@pytest.mark.asyncio
 async def test_an_account_that_no_longer_exists_is_not_remembered():
     cache = PresenceIdentityCache(StubUserRepo({}))
     await cache.warm("user-gone")
     assert cache.cached_accounts() == 0
 
 
-@pytest.mark.asyncio
 async def test_a_merge_clears_every_cached_identity():
     """Aliases move names between accounts, so none of them is trustworthy."""
     cache = PresenceIdentityCache(StubUserRepo({}))
@@ -606,7 +593,6 @@ async def test_a_merge_clears_every_cached_identity():
     assert cache.cached_accounts() == 0
 
 
-@pytest.mark.asyncio
 async def test_warming_without_a_repository_is_a_no_op():
     """The handler stack is built without a database in most of the suite."""
     cache = PresenceIdentityCache(None)
@@ -625,7 +611,6 @@ class CountingRepo(StubUserRepo):
         self._users[user_id] = StubUser(user_id, name)
 
 
-@pytest.mark.asyncio
 async def test_an_invalidated_identity_comes_back_on_the_next_tick():
     """A rename must not delete somebody from the lobby.
 
@@ -654,7 +639,6 @@ async def test_an_invalidated_identity_comes_back_on_the_next_tick():
     assert [e.display_name for e in caster._last.entries] == ["Adalovelace"]
 
 
-@pytest.mark.asyncio
 async def test_an_account_evicted_from_the_cache_comes_back():
     """The same hole, reached without anybody writing anything.
 
@@ -697,7 +681,6 @@ def test_the_identity_cache_holds_every_account_that_can_be_online(monkeypatch):
     assert ctx.presence_identities.capacity >= ctx.room_capacity.sockets
 
 
-@pytest.mark.asyncio
 async def test_repopulating_is_bounded_per_tick():
     """A cold cache must not turn one tick into hundreds of database reads."""
     users = {f"user-{i}": StubUser(f"user-{i}", f"player{i}") for i in range(200)}
@@ -714,7 +697,6 @@ async def test_repopulating_is_bounded_per_tick():
     assert repo.reads > 0, "nothing was repopulated at all"
 
 
-@pytest.mark.asyncio
 async def test_one_player_logging_in_does_not_empty_the_lobby():
     """A merge invalidates the two accounts it merged, not the process.
 
@@ -757,7 +739,6 @@ class AliasingRepo(StubUserRepo):
         return await super().get_by_id(self._aliases.get(user_id, user_id))
 
 
-@pytest.mark.asyncio
 async def test_warming_an_aliased_id_does_not_spin_for_ever():
     """`warm(x)` must make `missing([x])` false, whatever the repository says.
 
@@ -778,7 +759,6 @@ async def test_warming_an_aliased_id_does_not_spin_for_ever():
     assert repo.reads == 1, "a satisfied key was read again"
 
 
-@pytest.mark.asyncio
 async def test_a_merged_guest_becomes_the_account_it_merged_into():
     """One person, one row - without closing a socket that may be mid-game.
 

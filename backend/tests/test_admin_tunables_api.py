@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -37,7 +36,6 @@ from app.services.tunables import build_runtime_settings
 
 from tests.staffauth import mark_staff_ready
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 

@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 import logging
 from unittest.mock import AsyncMock
 
-import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
 
@@ -21,9 +20,6 @@ from app.services.shutdown import (
 )
 
 from tests.dbfixtures import create_test_db
-
-
-pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture

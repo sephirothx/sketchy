@@ -86,7 +86,6 @@ def test_token_carries_no_account_details():
 
 # --- passwords ------------------------------------------------------------
 
-@pytest.mark.asyncio
 async def test_password_hash_and_verify():
     hashed = await hash_password("a-good-password")
     assert hashed != "a-good-password"
@@ -95,14 +94,12 @@ async def test_password_hash_and_verify():
     assert await verify_password("not-a-hash", "a-good-password") is False
 
 
-@pytest.mark.asyncio
 async def test_dummy_hash_is_verifiable_but_never_matches():
     """Used for absent usernames, so it must behave like a real hash."""
     assert await verify_password(DUMMY_HASH, "no-such-account") is True
     assert await verify_password(DUMMY_HASH, "anything-else") is False
 
 
-@pytest.mark.asyncio
 async def test_stale_argon2_parameters_are_detected_and_hashes_fit_storage():
     password = "a-good-password"
     current = await hash_password(password)
@@ -208,7 +205,6 @@ def test_flooding_the_limiter_cannot_evict_a_saturated_bucket():
     assert limiter.check("attacker") is False
 
 
-@pytest.mark.asyncio
 async def test_auth_limit_persists_across_limiter_instances_and_hashes_keys(monkeypatch):
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import select
@@ -250,7 +246,6 @@ async def test_auth_limit_persists_across_limiter_instances_and_hashes_keys(monk
 
 # --- REST -----------------------------------------------------------------
 
-@pytest.mark.asyncio
 async def test_naming_yourself_provisions_a_guest_and_sets_an_httponly_cookie(client):
     # Looking at the site provisions nothing: a crawler, a link preview and an
     # uptime check each used to cost two rows.
@@ -276,14 +271,12 @@ async def test_naming_yourself_provisions_a_guest_and_sets_an_httponly_cookie(cl
     assert "max-age=31536000" in cookie
 
 
-@pytest.mark.asyncio
 async def test_me_is_stable_across_calls(client):
     first = await become_guest(client)
     second = (await client.get("/api/auth/me")).json()
     assert first["id"] == second["id"]
 
 
-@pytest.mark.asyncio
 async def test_register_claims_the_current_guest_identity(client):
     guest = await become_guest(client)
 
@@ -300,7 +293,6 @@ async def test_register_claims_the_current_guest_identity(client):
     assert (await client.get("/api/auth/me")).json()["username"] == "Stefano"
 
 
-@pytest.mark.asyncio
 async def test_register_rejects_a_taken_username_case_insensitively(client):
     await become_guest(client)
     await client.post(
@@ -316,7 +308,6 @@ async def test_register_rejects_a_taken_username_case_insensitively(client):
     assert clash.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_register_rejects_weak_password_and_bad_username(client):
     await become_guest(client)
     assert (
@@ -329,7 +320,6 @@ async def test_register_rejects_weak_password_and_bad_username(client):
     ).status_code == 400
 
 
-@pytest.mark.asyncio
 async def test_login_logout_round_trip(client):
     await become_guest(client)
     await client.post(
@@ -348,7 +338,6 @@ async def test_login_logout_round_trip(client):
     assert signed_in.json()["username"] == "Stefano"
 
 
-@pytest.mark.asyncio
 async def test_login_links_the_current_guest_identity(client):
     from uuid import UUID
     from sqlalchemy import select
@@ -381,7 +370,6 @@ async def test_login_links_the_current_guest_identity(client):
         assert alias is not None and str(alias.target_user_id) == account_id
 
 
-@pytest.mark.asyncio
 async def test_active_sessions_can_be_listed_and_revoked_individually(client):
     await client.post(
         "/api/auth/register",
@@ -413,7 +401,6 @@ async def test_active_sessions_can_be_listed_and_revoked_individually(client):
         assert (await other.get("/api/auth/sessions")).status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_logout_all_revokes_every_device(client):
     await client.post(
         "/api/auth/register",
@@ -431,7 +418,6 @@ async def test_logout_all_revokes_every_device(client):
         assert (await other.get("/api/auth/sessions")).status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_login_rehashes_a_stale_password(client, monkeypatch):
     from unittest.mock import AsyncMock
     from app.auth import routes as routes_module
@@ -462,7 +448,6 @@ async def test_login_rehashes_a_stale_password(client, monkeypatch):
     assert refreshed.password_hash != credentials.password_hash
 
 
-@pytest.mark.asyncio
 async def test_login_failures_are_indistinguishable(client):
     await become_guest(client)
     await client.post(
@@ -479,7 +464,6 @@ async def test_login_failures_are_indistinguishable(client):
     assert wrong_password.json()["detail"] == no_such_user.json()["detail"]
 
 
-@pytest.mark.asyncio
 async def test_nickname_availability_reflects_registered_usernames(client):
     await become_guest(client)
     await client.post(
@@ -496,7 +480,6 @@ async def test_nickname_availability_reflects_registered_usernames(client):
     assert invalid.json()["available"] is False
 
 
-@pytest.mark.asyncio
 async def test_login_is_rate_limited(client):
     await become_guest(client)
     await client.post(
@@ -514,7 +497,6 @@ async def test_login_is_rate_limited(client):
     assert 429 in statuses, "brute force was never throttled"
 
 
-@pytest.mark.asyncio
 async def test_registering_twice_is_rejected(client):
     await become_guest(client)
     await client.post(
@@ -526,7 +508,6 @@ async def test_registering_twice_is_rejected(client):
     assert again.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_guest_display_name_is_persisted_and_survives_reload(client):
     await become_guest(client)
     saved = await client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
@@ -536,7 +517,6 @@ async def test_guest_display_name_is_persisted_and_survives_reload(client):
     assert (await client.get("/api/auth/me")).json()["displayName"] == "Wanderer"
 
 
-@pytest.mark.asyncio
 async def test_guest_cannot_take_a_registered_username_as_display_name(client):
     await become_guest(client)
     await client.post(
@@ -553,7 +533,6 @@ async def test_guest_cannot_take_a_registered_username_as_display_name(client):
         ).status_code == 400
 
 
-@pytest.mark.asyncio
 async def test_claiming_an_account_aligns_display_name_with_username(client):
     await become_guest(client)
     await client.post("/api/auth/display-name", json={"displayName": "Wanderer"})
@@ -564,7 +543,6 @@ async def test_claiming_an_account_aligns_display_name_with_username(client):
     assert claimed.json()["displayName"] == "Stefano"
 
 
-@pytest.mark.asyncio
 async def test_a_first_run_is_the_absence_of_an_account(client):
     """Having no account at all is the signal that this is someone's first run.
 
@@ -581,7 +559,6 @@ async def test_a_first_run_is_the_absence_of_an_account(client):
 
 # --- name color -----------------------------------------------------------
 
-@pytest.mark.asyncio
 async def test_registered_player_colour_is_stored_on_the_account(client):
     """Settings keeps the colour in localStorage; the account is what lets it
     show up anywhere the player is not currently sitting."""
@@ -596,7 +573,6 @@ async def test_registered_player_colour_is_stored_on_the_account(client):
     assert (await client.get("/api/auth/me")).json()["nameColor"] == "#a761e5"
 
 
-@pytest.mark.asyncio
 async def test_a_guest_cannot_colour_their_name(client):
     """Grey italics is the only cue an unclaimed name carries."""
     await become_guest(client)
@@ -604,7 +580,6 @@ async def test_a_guest_cannot_colour_their_name(client):
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
 async def test_a_colour_that_is_not_a_colour_is_rejected(client):
     await client.post(
         "/api/auth/register", json={"username": "painter", "password": "a-good-password"}

@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
@@ -42,7 +41,6 @@ async def database():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_raw_token_is_never_stored(database):
     factory, user = database
     issued = await create_session(
@@ -56,7 +54,6 @@ async def test_raw_token_is_never_stored(database):
     assert user.id not in issued.token
 
 
-@pytest.mark.asyncio
 async def test_rotation_revokes_predecessor_and_preserves_device(database):
     factory, user = database
     started = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -92,7 +89,6 @@ async def test_rotation_revokes_predecessor_and_preserves_device(database):
     assert await resolve_session(factory, issued.token, now=just_after) is None
 
 
-@pytest.mark.asyncio
 async def test_session_revocation_is_scoped_to_owner(database):
     factory, user = database
     other = await SqlAlchemyUserRepository(factory).create_anonymous("Other")
@@ -107,7 +103,6 @@ async def test_session_revocation_is_scoped_to_owner(database):
     assert await resolve_session(factory, issued.token) is None
 
 
-@pytest.mark.asyncio
 async def test_list_and_revoke_all_exclude_revoked_sessions(database):
     factory, user = database
     first = await create_session(factory, user_id=user.id, device_label="One")
@@ -128,7 +123,6 @@ def test_device_label_is_coarse_and_drops_versions():
     assert "140" not in label
 
 
-@pytest.mark.asyncio
 async def test_socket_handshake_uses_the_same_revocation_record(database):
     factory, user = database
     issued = await create_session(factory, user_id=user.id, device_label="Browser")

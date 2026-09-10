@@ -31,8 +31,6 @@ def _database_url() -> str:
     return url
 
 
-
-
 async def a_registered_page(browser, username: str):
     context = await browser.new_context()
     page = await context.new_page()
@@ -43,7 +41,6 @@ async def a_registered_page(browser, username: str):
     return context, page
 
 
-@pytest.mark.asyncio
 async def test_an_administrator_promotes_by_name_and_the_player_is_told():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

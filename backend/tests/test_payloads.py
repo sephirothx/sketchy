@@ -89,7 +89,6 @@ def test_binary_drawing_and_undo_wire_shapes_are_typed_and_bounded():
         parse_undo_payload([1, 2, True, 0])
 
 
-@pytest.mark.asyncio
 async def test_every_json_command_rejects_non_object_payloads_consistently():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -130,7 +129,6 @@ async def test_every_json_command_rejects_non_object_payloads_consistently():
     sio.emit.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_validation_finishes_before_domain_mutation_or_broadcast():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Before", rounds=3)
@@ -166,7 +164,6 @@ async def test_validation_finishes_before_domain_mutation_or_broadcast():
     sio.emit.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_malformed_canvas_requests_do_not_partially_mutate_history():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -213,7 +210,6 @@ async def test_malformed_canvas_requests_do_not_partially_mutate_history():
         ({"scoringMode": "default"}, "wheel"),
     ),
 )
-@pytest.mark.asyncio
 async def test_updating_settings_reapplies_the_hint_rule(update, expected):
     """The rule has to be re-evaluated against the merged settings.
 

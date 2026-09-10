@@ -1469,6 +1469,12 @@ production interval it fast-forwards the page's own clock with Playwright's
 `page.clock` rather than spending the time — which keeps the interval a production
 constant instead of something bent for the tests.
 
+An async test carries **no** `pytest.mark.asyncio`: `asyncio_mode = auto` in
+[`backend/pytest.ini`](../backend/pytest.ini) says once what 565 decorators and 59
+module-level `pytestmark` lines used to say individually. Their other effect was to land
+on the sync tests sitting in the same files, where pytest-asyncio ignored the mark and
+warned about it — 26 warnings a run, in which a real one could sit unread.
+
 The shared persistence fixture is
 [`backend/tests/dbfixtures.py`](../backend/tests/dbfixtures.py): PostgreSQL when
 `TEST_DATABASE_URL` is set, otherwise in-memory SQLite configured the way the

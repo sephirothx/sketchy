@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, update
@@ -25,8 +24,6 @@ from app.repositories.sqlalchemy import (
 )
 
 from tests.dbfixtures import create_test_db
-
-pytestmark = pytest.mark.asyncio
 
 
 def _capture(engine) -> list[str]:

@@ -5,7 +5,6 @@ from tests.e2e.lobby_helpers import register_account, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("color_scheme", "stored_theme", "expected_theme"),
     [
@@ -39,7 +38,6 @@ async def test_theme_defaults_to_system_preference_unless_saved(
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_settings_apply_as_they_change_without_a_save():
     """Preferences are not a transaction: each row lands as it is changed.
 
@@ -133,7 +131,6 @@ async def test_settings_apply_as_they_change_without_a_save():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_settings_url_opens_over_the_lobby_for_a_direct_visit():
     """The URL is real: typed straight in, it draws over the lobby."""
     async with async_playwright() as p:
@@ -157,7 +154,6 @@ async def test_settings_url_opens_over_the_lobby_for_a_direct_visit():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_registered_player_settings_follow_login_to_a_fresh_device():
     """Account settings override a fresh browser's local defaults after login."""
     username = "CrossDeviceSettings"
@@ -256,7 +252,6 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
     """Settings is opened with other people looking at the screen."""
     async with async_playwright() as p:
@@ -305,7 +300,6 @@ async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_changing_the_password_from_settings_signs_other_devices_out():
     username = "SettingsRekey"
     async with async_playwright() as p:
@@ -355,7 +349,6 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tmp_path):
     """#573: the picture chosen in Settings replaces the initial on the chip
     and on the seat, cropped and shrunk by the browser before it is sent."""

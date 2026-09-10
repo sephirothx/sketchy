@@ -2,7 +2,6 @@ import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock, patch
 
-import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
@@ -13,7 +12,6 @@ from app.rooms import RoomManager
 from app.prompts import MAX_PROMPT_LENGTH
 
 
-@pytest.mark.asyncio
 async def test_host_can_update_waiting_room_settings_and_chat():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Before", is_public=True, max_players=4)
@@ -49,7 +47,6 @@ async def test_host_can_update_waiting_room_settings_and_chat():
     assert chat["ok"] is True
     assert any(call.args[0] == "chat_message" and call.args[1]["text"] == "Ready?" for call in sio.emit.await_args_list)
 
-@pytest.mark.asyncio
 async def test_waiting_chat_rejects_oversized_message_without_broadcast():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -77,7 +74,6 @@ async def test_waiting_chat_rejects_oversized_message_without_broadcast():
     assert len(chat_messages) == 1
     assert len(chat_messages[0].args[1]["text"]) == MAX_CHAT_MESSAGE_LENGTH
 
-@pytest.mark.asyncio
 async def test_active_message_limit_rejects_before_processing_or_broadcast():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -134,7 +130,6 @@ async def test_active_message_limit_rejects_before_processing_or_broadcast():
         for call in sio.emit.await_args_list
     )
 
-@pytest.mark.asyncio
 async def test_only_messages_within_word_limit_are_processed_as_guesses():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -171,7 +166,6 @@ async def test_only_messages_within_word_limit_are_processed_as_guesses():
         for call in sio.emit.await_args_list
     )
 
-@pytest.mark.asyncio
 async def test_simultaneous_final_guesses_end_turn_once():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -220,7 +214,6 @@ async def test_simultaneous_final_guesses_end_turn_once():
     with suppress(asyncio.CancelledError):
         await timer
 
-@pytest.mark.asyncio
 async def test_buy_hint_purchase_mode():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True, hint_mode="purchase")
@@ -279,7 +272,6 @@ async def test_buy_hint_purchase_mode():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_a_correct_guess_is_credited_net_of_hints():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True, hint_mode="purchase")
@@ -347,7 +339,6 @@ async def test_a_correct_guess_is_credited_net_of_hints():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_buy_wheel_letter():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True, hint_mode="wheel")
@@ -399,7 +390,6 @@ async def test_buy_wheel_letter():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_near_miss_guess_privacy_and_restricted_chat():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -489,7 +479,6 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True, spectators_see_prompt=True)
@@ -539,7 +528,6 @@ async def test_spectator_chat_is_restricted_and_solution_visible_when_enabled():
             await timer
 
 
-@pytest.mark.asyncio
 async def test_empty_privileged_recipient_list_does_not_broadcast_close_guess():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -575,7 +563,6 @@ async def test_empty_privileged_recipient_list_does_not_broadcast_close_guess():
         with suppress(asyncio.CancelledError):
             await timer
 
-@pytest.mark.asyncio
 async def test_chatting_removes_afk_status():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -602,7 +589,6 @@ async def test_chatting_removes_afk_status():
     assert p1.is_afk is False
 
 
-@pytest.mark.asyncio
 async def test_pressure_room_credits_the_decayed_points():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Racy", scoring_mode="pressure")
@@ -668,7 +654,6 @@ def _guess_lines(sio, text):
     ]
 
 
-@pytest.mark.asyncio
 async def test_a_retried_guess_is_acknowledged_but_not_processed_twice():
     """The client resends a guess it never saw acknowledged. If the first copy
     did arrive, replaying it would double the chat line and the turn's counts."""
@@ -682,7 +667,6 @@ async def test_a_retried_guess_is_acknowledged_but_not_processed_twice():
     assert room.game.wrong_guesses[guesser.id] == 1
 
 
-@pytest.mark.asyncio
 async def test_the_same_word_guessed_again_under_a_new_id_is_processed():
     room, guesser, sio = _guessing_room()
     guess = sio.handlers["/"]["guess"]
@@ -694,7 +678,6 @@ async def test_the_same_word_guessed_again_under_a_new_id_is_processed():
     assert room.game.wrong_guesses[guesser.id] == 2
 
 
-@pytest.mark.asyncio
 async def test_a_reconnected_client_restarts_its_guess_ids_without_being_deduped():
     """Ids are per connection. A reconnect starts them over, and judging the
     new counter against the old one would swallow a genuine guess."""
@@ -712,7 +695,6 @@ async def test_a_reconnected_client_restarts_its_guess_ids_without_being_deduped
     assert room.game.wrong_guesses[guesser.id] == 2
 
 
-@pytest.mark.asyncio
 async def test_a_guess_without_an_id_is_never_deduped():
     """A client that sends no id forgoes deduplication rather than losing
     guesses to an id it never claimed."""
@@ -726,7 +708,6 @@ async def test_a_guess_without_an_id_is_never_deduped():
     assert room.game.wrong_guesses[guesser.id] == 2
 
 
-@pytest.mark.asyncio
 async def test_a_near_miss_retry_repeats_neither_the_echo_nor_the_hint():
     """The near-miss path answers one guess with two messages to the guesser -
     their own line and the hint. A replayed guess would duplicate both."""
@@ -748,7 +729,6 @@ async def test_a_near_miss_retry_repeats_neither_the_echo_nor_the_hint():
     assert room.game.near_misses[guesser.id] == 1
 
 
-@pytest.mark.asyncio
 async def test_a_correct_guess_retried_is_answered_with_silence():
     """Scoring twice is already impossible - the guesser is in
     `correct_guessers` by then. What the retry would otherwise produce is a
@@ -766,7 +746,6 @@ async def test_a_correct_guess_retried_is_answered_with_silence():
     assert sio.emit.await_args_list == []
 
 
-@pytest.mark.asyncio
 async def test_an_invalid_guess_payload_is_refused_in_the_acknowledgement():
     room, _guesser, sio = _guessing_room()
     guess = sio.handlers["/"]["guess"]
@@ -846,7 +825,6 @@ async def _room_at_drawing_phase(hint_mode: str, prompt: str):
     return ctx, room, drawer, guesser, spectator
 
 
-@pytest.mark.asyncio
 async def test_a_spectator_cannot_buy_a_hint_letter():
     ctx, room, _drawer, guesser, spectator = await _room_at_drawing_phase(
         "purchase", "volleyball"
@@ -871,7 +849,6 @@ async def test_a_spectator_cannot_buy_a_hint_letter():
     await ctx.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_a_spectator_cannot_buy_a_wheel_letter():
     ctx, room, _drawer, guesser, spectator = await _room_at_drawing_phase(
         "wheel", "volleyball"
@@ -936,7 +913,6 @@ async def _room_with_a_turn_in_progress():
     return ctx, sio, room, drawer
 
 
-@pytest.mark.asyncio
 async def test_a_player_who_joins_mid_turn_may_still_guess():
     """The turn's frozen population records who was here, and it used to be
     read as a gag order: a seat that arrived after drawing began had its
@@ -972,7 +948,6 @@ async def test_a_player_who_joins_mid_turn_may_still_guess():
     await ctx.timers.close()
 
 
-@pytest.mark.asyncio
 async def test_a_turn_waits_for_the_player_who_joined_mid_turn():
     """Every eligible guesser ends the turn early, and the latecomer is one."""
     ctx, sio, room, drawer = await _room_with_a_turn_in_progress()
@@ -1007,7 +982,6 @@ async def test_a_turn_waits_for_the_player_who_joined_mid_turn():
 # --- #599: a guess is scoped to the room and turn it was made in ---------------
 
 
-@pytest.mark.asyncio
 async def test_a_guess_naming_another_room_or_turn_is_acknowledged_and_ignored(monkeypatch):
     from app.handlers import chat as chat_module
     from app.services.telemetry import Telemetry
@@ -1055,7 +1029,6 @@ async def test_a_guess_naming_another_room_or_turn_is_acknowledged_and_ignored(m
     assert sio.emit.await_count == before
 
 
-@pytest.mark.asyncio
 async def test_a_guess_with_no_scope_is_accepted_as_before():
     """A client that sends no scope forgoes the protection, like one that
     sends no id; the fields are optional for the same reason."""

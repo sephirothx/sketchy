@@ -7,7 +7,6 @@ made in the lobby is what lets somebody through a door they can never name.
 import re
 import uuid
 
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import join_by_code, register_account, use_guest_name
 
@@ -93,7 +92,6 @@ async def make_friends(asker, accepter, asker_name: str, accepter_name: str) -> 
     await expect(row_for(asker, accepter_name)).to_be_visible(timeout=SETTLE_MS)
 
 
-@pytest.mark.asyncio
 async def test_friends_are_made_in_the_lobby_and_open_a_private_room():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -137,7 +135,6 @@ async def test_friends_are_made_in_the_lobby_and_open_a_private_room():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_an_invitation_reaches_a_friend_and_seats_them():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -177,7 +174,6 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_guest_is_not_offered_a_friendship_it_cannot_have():
     """A guest identity is a browser, not a person, and is purged after a month."""
     async with async_playwright() as p:
@@ -214,7 +210,6 @@ async def test_a_guest_is_not_offered_a_friendship_it_cannot_have():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_friends_surface_shows_a_request_from_somebody_offline():
     """The gap the surface exists to close (R-FRIEND-10).
 
@@ -266,7 +261,6 @@ async def test_the_friends_surface_shows_a_request_from_somebody_offline():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_friends_surface_draws_over_a_live_room():
     """Answering a request must not cost a seat (R-FRIEND-10, R-SET-06).
 
@@ -299,7 +293,6 @@ async def test_the_friends_surface_draws_over_a_live_room():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_online_panel_carries_no_friendship_state_at_all():
     """Who is online says who is around, and stops (R-FRIEND-11).
 
@@ -351,7 +344,6 @@ async def test_the_online_panel_carries_no_friendship_state_at_all():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_profile_is_reachable_from_the_lobby_and_offers_a_friendship():
     """The other half of the gap: reaching one specific person (R-FRIEND-10).
 
@@ -396,7 +388,6 @@ async def test_a_profile_is_reachable_from_the_lobby_and_offers_a_friendship():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_your_own_profile_offers_you_no_friendship_with_yourself():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -414,7 +405,6 @@ async def test_your_own_profile_offers_you_no_friendship_with_yourself():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_profile_says_whether_you_are_already_friends():
     """A profile with no control on it is ambiguous.
 
@@ -457,7 +447,6 @@ async def test_a_profile_says_whether_you_are_already_friends():
             await bob_context.close()
 
 
-@pytest.mark.asyncio
 async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
     """Both halves of R-FRIEND-12, in the place they exist for.
 
@@ -524,7 +513,6 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
     """The mark in a room, and the thing that makes it safe (R-FRIEND-13).
 
@@ -589,7 +577,6 @@ async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_signing_in_does_not_announce_requests_that_were_already_there():
     """A change of identity is a new baseline, not a list of changes.
 
@@ -638,7 +625,6 @@ async def test_signing_in_does_not_announce_requests_that_were_already_there():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_friend_mark_survives_the_narrow_layout():
     """R-FRIEND-13 says *wherever* a player is drawn, and a phone draws them
     somewhere else.

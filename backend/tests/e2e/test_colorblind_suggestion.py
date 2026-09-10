@@ -1,7 +1,6 @@
 """Host-only colorblind-safe room suggestion behavior in real browsers."""
 from __future__ import annotations
 
-import pytest
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
@@ -35,7 +34,6 @@ async def _join_invite(page, code: str, name: str, *, spectator: bool = False):
     await page.get_by_test_id("waiting-room").wait_for()
 
 
-@pytest.mark.asyncio
 async def test_only_host_sees_suggestion_and_acceptance_switches_room_colors():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
@@ -96,7 +94,6 @@ async def test_only_host_sees_suggestion_and_acceptance_switches_room_colors():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_dismissed_suggestion_does_not_return_when_preference_changes():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
@@ -141,7 +138,6 @@ async def test_dismissed_suggestion_does_not_return_when_preference_changes():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_colorblind_host_starts_a_room_on_colorblind_safe_colors():
     """The palette a host plays with is the one their room should start on."""
 

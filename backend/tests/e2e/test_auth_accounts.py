@@ -1,7 +1,6 @@
 """Account identity end to end: guests, claiming, and seat ownership."""
 import asyncio
 
-import pytest
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 
@@ -19,7 +18,6 @@ async def _create_room(page, name):
     return await room_code(page)
 
 
-@pytest.mark.asyncio
 async def test_guest_session_survives_a_reload_without_any_stored_credential():
     """Identity lives in an HttpOnly cookie, unreadable from JavaScript."""
     async with async_playwright() as p:
@@ -46,7 +44,6 @@ async def test_guest_session_survives_a_reload_without_any_stored_credential():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_registering_keeps_the_seat_and_drops_the_guest_styling():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -74,7 +71,6 @@ async def test_registering_keeps_the_seat_and_drops_the_guest_styling():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_first_run_offers_an_account_first_and_guest_play_second():
     """The lobby is never gated, and the account is the headline action."""
     async with async_playwright() as p:
@@ -119,7 +115,6 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_guest_renames_from_settings_and_cannot_take_a_username():
     """Renaming has exactly one home, and it respects registered names."""
     async with async_playwright() as p:
@@ -163,7 +158,6 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_opening_the_same_room_twice_moves_the_seat_and_tells_the_old_tab():
     """One seat per account: the second tab takes it, the first is told why."""
     async with async_playwright() as p:
@@ -189,7 +183,6 @@ async def test_opening_the_same_room_twice_moves_the_seat_and_tells_the_old_tab(
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
     """The strongest ask lands where there is something to lose.
 
@@ -285,7 +278,6 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_identity_controls_wait_for_provisioning_to_settle():
     """No identity UI while GET /api/auth/me is still in flight.
 
@@ -321,7 +313,6 @@ async def test_identity_controls_wait_for_provisioning_to_settle():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_player_can_download_then_delete_account_from_settings():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])

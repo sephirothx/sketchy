@@ -27,9 +27,6 @@ from app.services.user_stats_projection import rebuild_user_stats_projection
 from tests.dbfixtures import create_test_db
 
 
-pytestmark = pytest.mark.asyncio
-
-
 async def _save_game(history, *, finished_at, first, second, first_wins):
     first_turn = str(generate_uuid())
     second_turn = str(generate_uuid())

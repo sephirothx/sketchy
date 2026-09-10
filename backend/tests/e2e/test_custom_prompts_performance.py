@@ -1,6 +1,5 @@
 from time import perf_counter
 
-import pytest
 from playwright.async_api import async_playwright
 
 from app.prompts import MAX_CUSTOM_PROMPTS, MAX_RAW_INPUT_LENGTH
@@ -12,7 +11,6 @@ BASE_URL = "http://localhost:8000"
 MAX_INTERACTION_SECONDS = 5
 
 
-@pytest.mark.asyncio
 async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded():
     prompts = maximum_custom_prompts()
     raw = "\n".join(prompts)

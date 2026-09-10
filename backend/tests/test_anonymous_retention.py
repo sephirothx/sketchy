@@ -30,7 +30,6 @@ from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository, SqlAlch
 from tests.dbfixtures import create_test_db
 
 
-@pytest.mark.asyncio
 async def test_retention_previews_then_removes_stale_guest_tiers():
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
@@ -114,7 +113,6 @@ async def test_retention_previews_then_removes_stale_guest_tiers():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_touch_last_active_is_distinct_from_login_activity():
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
@@ -155,7 +153,6 @@ async def _session_row(session, user_id, *, expires_at, revoked_at=None):
     return row
 
 
-@pytest.mark.asyncio
 async def test_expired_sessions_go_but_revoked_live_ones_stay():
     """The condition is expiry, not revocation: a revoked but unexpired row is
     still what keeps a ban-time token recognisable rather than looking like a
@@ -197,7 +194,6 @@ async def test_expired_sessions_go_but_revoked_live_ones_stay():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
     """R-BAN-04: export, deletion, and logout stay available through the
     ban-time credential. A suspended account cannot log in to make a new
@@ -268,7 +264,6 @@ async def test_a_suspended_account_keeps_its_route_to_export_and_deletion():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_an_uncollected_export_does_not_outlive_its_own_window():
     """An export used to go only when its owner asked for another one, so one
     generated and never collected kept the largest non-blob value in the
@@ -328,7 +323,6 @@ async def _stale_guest(users, factory, name: str, *, now: datetime, days: int):
     return guest
 
 
-@pytest.mark.asyncio
 async def test_a_candidate_claimed_between_selection_and_deletion_is_kept(monkeypatch):
     """The delete repeats the predicates: a registration that lands after the
     select is a registered account, and the sweep is for guests only."""
@@ -374,7 +368,6 @@ async def test_a_candidate_claimed_between_selection_and_deletion_is_kept(monkey
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_a_candidate_seated_or_written_into_a_game_before_the_delete_is_kept(
     monkeypatch,
 ):
@@ -440,7 +433,6 @@ async def test_a_candidate_seated_or_written_into_a_game_before_the_delete_is_ke
     not os.environ.get("TEST_DATABASE_URL"),
     reason="skip-locked selection is only real on PostgreSQL",
 )
-@pytest.mark.asyncio
 async def test_a_sweep_skips_a_guest_another_write_holds_and_a_preview_never_waits():
     """Whatever is holding the row - a claim, a merge, a seat, a game write -
     the sweep leaves it for next time instead of queueing gameplay behind

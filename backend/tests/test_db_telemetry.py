@@ -13,9 +13,6 @@ from app.services.telemetry import Telemetry
 from tests.dbfixtures import create_test_db
 
 
-pytestmark = pytest.mark.asyncio
-
-
 async def test_statements_are_timed_and_failures_counted_apart():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     store = Telemetry()

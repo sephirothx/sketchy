@@ -1,4 +1,3 @@
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
@@ -7,7 +6,6 @@ from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_players_approve_restart_without_losing_room_context():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -120,7 +118,6 @@ async def test_players_approve_restart_without_losing_room_context():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_players_see_a_rejected_restart_and_cooldown():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

@@ -25,8 +25,6 @@ from app.services.friends import (
 )
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
 
 def _now():
     from datetime import datetime, timezone

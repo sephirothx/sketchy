@@ -114,7 +114,6 @@ def chat_emits(sio):
     ]
 
 
-@pytest.mark.asyncio
 async def test_a_line_reaches_the_channel_and_nowhere_else(monkeypatch):
     ctx, sio, _ = lobby_stack(monkeypatch)
     await arrive(ctx, sio, "sid-a", "tok-a")
@@ -140,7 +139,6 @@ async def test_a_line_reaches_the_channel_and_nowhere_else(monkeypatch):
     assert payload["sentAt"].endswith("+00:00")
 
 
-@pytest.mark.asyncio
 async def test_the_acknowledgement_hands_an_arrival_the_recent_lines(monkeypatch):
     """The third baseline on the one acknowledgement: nothing to place a line
     against otherwise, and the number of the last line said so the client can
@@ -160,7 +158,6 @@ async def test_the_acknowledgement_hands_an_arrival_the_recent_lines(monkeypatch
     assert {"revision", "players", "onlineCount", "rooms", "roomsRevision"} <= set(later)
 
 
-@pytest.mark.asyncio
 async def test_the_backlog_handed_over_is_bounded(monkeypatch):
     ctx, sio, _ = lobby_stack(monkeypatch)
     await arrive(ctx, sio, "sid-a", "tok-a")
@@ -182,7 +179,6 @@ async def test_the_backlog_handed_over_is_bounded(monkeypatch):
     assert answer["chatSeq"] == LOBBY_CHAT_BACKLOG + 10
 
 
-@pytest.mark.asyncio
 async def test_a_visitor_without_a_name_may_read_but_not_speak(monkeypatch):
     ctx, sio, _ = build_stack()
     account_cookies(monkeypatch, {})
@@ -195,7 +191,6 @@ async def test_a_visitor_without_a_name_may_read_but_not_speak(monkeypatch):
     assert ctx.lobby_chat.last_seq == 0
 
 
-@pytest.mark.asyncio
 async def test_a_socket_not_watching_the_lobby_cannot_speak_into_it(monkeypatch):
     ctx, sio, _ = lobby_stack(monkeypatch)
     await arrive(ctx, sio, "sid-a", "tok-a", watch=False)
@@ -210,7 +205,6 @@ async def test_a_socket_not_watching_the_lobby_cannot_speak_into_it(monkeypatch)
     assert ctx.lobby_chat.last_seq == 0
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["", "   ", "x" * 501])
 async def test_an_empty_or_oversized_line_is_refused_before_it_is_numbered(
     monkeypatch, text
@@ -236,7 +230,6 @@ def muted(pairs: dict[str, set[str]]):
     return SimpleNamespace(blockers_of=AsyncMock(side_effect=blockers_of), warm=AsyncMock())
 
 
-@pytest.mark.asyncio
 async def test_a_muted_author_is_heard_by_everyone_but_the_one_who_muted_them(
     monkeypatch,
 ):
@@ -268,7 +261,6 @@ async def test_a_muted_author_is_heard_by_everyone_but_the_one_who_muted_them(
     assert call.kwargs == {"room": LOBBY_CHANNEL}
 
 
-@pytest.mark.asyncio
 async def test_the_backlog_is_filtered_for_the_one_who_muted_its_author(monkeypatch):
     ctx, sio, _ = lobby_stack(monkeypatch)
     ctx.block_service = muted({"user-ada": {"user-bob"}})
@@ -285,7 +277,6 @@ async def test_the_backlog_is_filtered_for_the_one_who_muted_its_author(monkeypa
     assert for_bob["chatSeq"] == for_carol["chatSeq"] == 1
 
 
-@pytest.mark.asyncio
 async def test_a_block_lookup_that_answers_nobody_delivers_unfiltered(monkeypatch):
     """`BlockService` answers an empty set when the read fails inside its
     bound (R-BLOCK-06); the lobby must take that as a broadcast, not as a
@@ -305,7 +296,6 @@ async def test_a_block_lookup_that_answers_nobody_delivers_unfiltered(monkeypatc
     ctx.block_service.blockers_of.assert_any_await("user-ada")
 
 
-@pytest.mark.asyncio
 async def test_a_name_the_cache_has_lost_is_read_once_before_the_line_goes(
     monkeypatch,
 ):
@@ -325,7 +315,6 @@ async def test_a_name_the_cache_has_lost_is_read_once_before_the_line_goes(
     assert call.args[1]["displayName"] == "Ada"
 
 
-@pytest.mark.asyncio
 async def test_a_line_with_no_name_to_sign_it_is_refused(monkeypatch):
     ctx, sio, _ = lobby_stack(monkeypatch)
     await arrive(ctx, sio, "sid-a", "tok-a")
@@ -342,7 +331,6 @@ async def test_a_line_with_no_name_to_sign_it_is_refused(monkeypatch):
     assert ctx.lobby_chat.last_seq == 0
 
 
-@pytest.mark.asyncio
 async def test_a_retained_line_carries_its_identifier_and_an_unretained_one_does_not(
     monkeypatch,
 ):
@@ -375,7 +363,6 @@ async def test_a_retained_line_carries_its_identifier_and_an_unretained_one_does
     ]
 
 
-@pytest.mark.asyncio
 async def test_no_lobby_chat_payload_names_the_room_anybody_is_in(monkeypatch):
     ctx, sio, room_manager = lobby_stack(monkeypatch)
     room = room_manager.create_room(name="Hidden Studio", is_public=False)
@@ -394,7 +381,6 @@ async def test_no_lobby_chat_payload_names_the_room_anybody_is_in(monkeypatch):
     assert room.name not in timeline
 
 
-@pytest.mark.asyncio
 async def test_speaking_answers_to_its_own_budget(monkeypatch):
     """A lobby line reaches every open lobby, so it is not a `conversation`
     line: tightening one must never tighten guessing."""
@@ -410,7 +396,6 @@ async def test_speaking_answers_to_its_own_budget(monkeypatch):
     assert ctx.lobby_chat.last_seq == budget.limit
 
 
-@pytest.mark.asyncio
 async def test_a_line_said_while_the_subscription_is_looking_things_up_is_heard(monkeypatch):
     """The client says its first line the moment it is connected, while its
     `watch_lobby` is still awaiting the block lookup. The join has to come

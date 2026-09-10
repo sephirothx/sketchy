@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.game import Game
@@ -47,7 +46,6 @@ def _events(sio, name):
 OPENER = encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 6})
 
 
-@pytest.mark.asyncio
 async def test_a_burst_of_stale_openings_costs_one_notice_and_no_dump(monkeypatch):
     store = Telemetry()
     monkeypatch.setattr(game_flow_module, "telemetry", store)
@@ -64,7 +62,6 @@ async def test_a_burst_of_stale_openings_costs_one_notice_and_no_dump(monkeypatc
     assert store.canvas_recovery_notices.get(("stale_generation",)) == DRAWING.default.limit, "every occurrence counted"
 
 
-@pytest.mark.asyncio
 async def test_each_former_dump_path_is_a_notice_and_undo_answers_only_its_acknowledgement():
     room, drawer, sio, ctx = _game()
     draw = sio.handlers["/"]["draw"]
@@ -93,7 +90,6 @@ async def test_each_former_dump_path_is_a_notice_and_undo_answers_only_its_ackno
     assert _events(sio, "sync_strokes") == []
 
 
-@pytest.mark.asyncio
 async def test_a_join_snapshot_spends_the_resync_window_and_a_rejoin_inside_it_is_deferred():
     room, drawer, sio, ctx = _game()
     flow = ctx.game_flow
@@ -118,7 +114,6 @@ async def test_a_join_snapshot_spends_the_resync_window_and_a_rejoin_inside_it_i
     assert len(_events(sio, "sync_strokes")) == 2
 
 
-@pytest.mark.asyncio
 async def test_the_amplification_is_bounded_per_window_across_every_path():
     """The number the issue asked for: how many full dumps one socket can
     make the server send per resync window, whatever it sends - one pushed

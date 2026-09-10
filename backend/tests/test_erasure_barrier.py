@@ -54,7 +54,6 @@ from app.services.message_retention import MessageRetentionService
 from tests.dbfixtures import create_test_db
 from tests.test_account_data import _skch_drawing, record_private_game
 
-pytestmark = pytest.mark.asyncio
 
 ON_POSTGRESQL = bool(os.environ.get("TEST_DATABASE_URL"))
 

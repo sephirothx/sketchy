@@ -32,8 +32,6 @@ from app.services.game_flow import (
     RoomPromptResolutionError,
 )
 
-pytestmark = pytest.mark.asyncio
-
 
 def pin(room, repo, *, revision_ids=("revision-1",)):
     """Put the room in the state `authorize_selection` would have left it in."""

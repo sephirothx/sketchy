@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 from playwright.async_api import Page, async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
@@ -52,7 +51,6 @@ def chip(page: Page, code: str):
     )
 
 
-@pytest.mark.asyncio
 async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profile():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

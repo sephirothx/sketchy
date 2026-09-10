@@ -2,7 +2,6 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
@@ -18,7 +17,6 @@ from tests.fake_user_repo import FakeUserRepository
 from tests.handlers.helpers import StubPromptListRepo
 
 
-@pytest.mark.asyncio
 async def test_published_room_code_comes_from_global_reservation_service():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -48,7 +46,6 @@ async def test_published_room_code_comes_from_global_reservation_service():
     ctx.room_codes.retire_ephemeral.assert_awaited_once_with("SAFE01")
 
 
-@pytest.mark.asyncio
 async def test_retired_room_code_has_a_distinct_invite_error():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -70,7 +67,6 @@ async def test_retired_room_code_has_a_distinct_invite_error():
     assert join == preview
 
 
-@pytest.mark.asyncio
 async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -96,7 +92,6 @@ async def test_create_room_accepts_no_scoring_and_disables_point_purchase_hints(
     assert room.hint_mode == "none"
     assert room.player_list()[0].score == 0
 
-@pytest.mark.asyncio
 async def test_registered_player_name_color_is_created_and_can_be_updated_live():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
@@ -142,7 +137,6 @@ async def test_registered_player_name_color_is_created_and_can_be_updated_live()
     assert player.name_color == "#199647"
 
 
-@pytest.mark.asyncio
 async def test_anonymous_player_is_grey_and_cannot_change_color():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -170,7 +164,6 @@ async def test_anonymous_player_is_grey_and_cannot_change_color():
     assert result["ok"] is False
     assert player.name_color == ANONYMOUS_NAME_COLOR
 
-@pytest.mark.asyncio
 async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -190,7 +183,6 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
     assert "waiting room" in (await update("host-sid", {"rounds": 4}))["error"]
     assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is False
 
-@pytest.mark.asyncio
 async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
     """The lobby autosaves one setting at a time, so a patch has to leave the
     rest of the room alone - and stay out of the chat, which would otherwise
@@ -225,7 +217,6 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
     assert "chat_message" not in events
 
 
-@pytest.mark.asyncio
 async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
     class AuthorizingPromptListRepo(StubPromptListRepo):
         def __init__(self):
@@ -288,7 +279,6 @@ def build_settings_room(room_manager, prompt_list_repo, **room_kwargs):
     return room, sio
 
 
-@pytest.mark.asyncio
 async def test_a_settings_change_does_not_re_read_prompt_lists_it_left_alone():
     room_manager = RoomManager()
     repo = StubPromptListRepo()
@@ -305,7 +295,6 @@ async def test_a_settings_change_does_not_re_read_prompt_lists_it_left_alone():
     assert room.prompt_pool_size == 2
 
 
-@pytest.mark.asyncio
 async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
     """A read that failed when the room was made leaves the pool empty, and the
     room would draw from the built-in list for the rest of its life while the
@@ -326,7 +315,6 @@ async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
     assert room.prompt_pool_size == 2
 
 
-@pytest.mark.asyncio
 async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matching():
     room_manager = RoomManager()
     repo = StubPromptListRepo(
@@ -371,7 +359,6 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
     }
 
 
-@pytest.mark.asyncio
 async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room():
     class InvalidSelectionRepo:
         async def authorize_selection(self, slugs):
@@ -401,7 +388,6 @@ async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room
     assert room.prompt_pool_size == 1
 
 
-@pytest.mark.asyncio
 async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
     class HiddenSelectionRepo:
         async def authorize_selection(self, slugs):
@@ -428,7 +414,6 @@ async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
     assert room.game is None
 
 
-@pytest.mark.asyncio
 async def test_starting_waits_for_a_settings_change_that_arrived_first():
     """Settings save themselves now, so the host can change one and press Start
     a breath later. Socket.IO gives each event its own task, so arriving first
@@ -487,7 +472,6 @@ async def test_starting_waits_for_a_settings_change_that_arrived_first():
     ctx.timers.cancel_phase_timer(room.id)
 
 
-@pytest.mark.asyncio
 async def test_room_members_can_inspect_custom_prompts_only_while_waiting():
     room_manager = RoomManager()
     room = room_manager.create_room(
@@ -525,7 +509,6 @@ async def test_room_members_can_inspect_custom_prompts_only_while_waiting():
     sio.get_session = AsyncMock(return_value=None)
     assert (await get_custom_prompts("outsider-sid", {}))["ok"] is False
 
-@pytest.mark.asyncio
 async def test_waiting_spectator_can_become_player_when_space_is_available():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", max_players=2)
@@ -553,7 +536,6 @@ async def test_waiting_spectator_can_become_player_when_space_is_available():
         for call in sio.emit.await_args_list
     )
 
-@pytest.mark.asyncio
 async def test_spectator_cannot_become_player_when_room_is_full_or_playing():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", max_players=2)
@@ -582,7 +564,6 @@ async def test_spectator_cannot_become_player_when_room_is_full_or_playing():
     assert "waiting room" in playing_response["error"]
     assert spectator.is_spectator is True
 
-@pytest.mark.asyncio
 async def test_room_preview_returns_private_room_metadata_without_joining():
     room_manager = RoomManager()
     room = room_manager.create_room(
@@ -613,7 +594,6 @@ async def test_room_preview_returns_private_room_metadata_without_joining():
     assert len(room.players) == 1
 
 
-@pytest.mark.asyncio
 async def test_reconnect_only_join_never_seats_a_new_player():
     """The invite screen probes for an existing seat; it must not create one."""
     room_manager = RoomManager()
@@ -643,7 +623,6 @@ async def test_reconnect_only_join_never_seats_a_new_player():
     assert len(room.player_list()) == 1
 
 
-@pytest.mark.asyncio
 async def test_registering_mid_game_upgrades_the_existing_seat():
     """A guest who signs up keeps their seat but stops being a guest on it."""
     room_manager = RoomManager()
@@ -680,7 +659,6 @@ async def test_registering_mid_game_upgrades_the_existing_seat():
     assert len(room.player_list()) == 1
 
 
-@pytest.mark.asyncio
 async def test_guest_can_rename_and_the_name_sticks_to_the_account():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
@@ -711,7 +689,6 @@ async def test_guest_can_rename_and_the_name_sticks_to_the_account():
     )
 
 
-@pytest.mark.asyncio
 async def test_rename_rejects_bad_names_and_registered_usernames():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
@@ -737,7 +714,6 @@ async def test_rename_rejects_bad_names_and_registered_usernames():
     assert player.nickname == "BriskOtter"
 
 
-@pytest.mark.asyncio
 async def test_registered_players_cannot_rename_away_from_their_username():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
@@ -760,7 +736,6 @@ async def test_registered_players_cannot_rename_away_from_their_username():
     assert player.nickname == "Stefano"
 
 
-@pytest.mark.asyncio
 async def test_reconnect_probe_works_with_no_local_nickname():
     """A returning player with cleared local state must still reconnect.
 
@@ -787,7 +762,6 @@ async def test_reconnect_probe_works_with_no_local_nickname():
     assert reconnected["playerId"] == seat.id
 
 
-@pytest.mark.asyncio
 async def test_guest_seat_is_named_from_the_account_not_the_payload():
     """The client cannot pick a name by asking for one on the wire."""
     room_manager = RoomManager()
@@ -808,7 +782,6 @@ async def test_guest_seat_is_named_from_the_account_not_the_payload():
     assert room.players[response["playerId"]].nickname == "BriskOtter"
 
 
-@pytest.mark.asyncio
 async def test_a_guest_with_no_name_cannot_be_seated():
     """The name is asked for before create/join, so this only happens if
     something bypassed the UI. It must not produce a nameless player."""
@@ -831,7 +804,6 @@ async def test_a_guest_with_no_name_cannot_be_seated():
     assert room.player_list() == []
 
 
-@pytest.mark.asyncio
 async def test_changing_colour_in_a_room_also_stores_it_on_the_account():
     """Otherwise the seat and the profile disagree about the same player."""
     room_manager = RoomManager()
@@ -858,7 +830,6 @@ async def test_changing_colour_in_a_room_also_stores_it_on_the_account():
     assert user_repo.users["user-1"].name_color == "#a761e5"
 
 
-@pytest.mark.asyncio
 async def test_a_failed_colour_write_still_updates_the_room():
     """The seat has already changed colour; skipping the broadcast would leave
     everyone else looking at the old one."""
@@ -891,7 +862,6 @@ async def test_a_failed_colour_write_still_updates_the_room():
     assert any(call.args[0] == "room_state" for call in sio.emit.await_args_list)
 
 
-@pytest.mark.asyncio
 async def test_a_registered_player_is_seated_in_their_account_colour():
     """The colour is chosen in Settings and kept per browser, so a second
     device would otherwise seat the same player in a different colour."""
@@ -917,7 +887,6 @@ async def test_a_registered_player_is_seated_in_their_account_colour():
     assert player.name_color == "#a761e5"
 
 
-@pytest.mark.asyncio
 async def test_a_registered_player_without_a_stored_colour_keeps_the_client_one():
     """Nothing to inherit yet: the account is backfilled from the client."""
     room_manager = RoomManager()
@@ -939,7 +908,6 @@ async def test_a_registered_player_without_a_stored_colour_keeps_the_client_one(
     assert room.players[response["playerId"]].name_color == "#139288"
 
 
-@pytest.mark.asyncio
 async def test_a_guest_is_still_pinned_to_the_guest_grey():
     room_manager = RoomManager()
     user_repo = FakeUserRepository()
@@ -960,7 +928,6 @@ async def test_a_guest_is_still_pinned_to_the_guest_grey():
     assert room.players[response["playerId"]].name_color == ANONYMOUS_NAME_COLOR
 
 
-@pytest.mark.asyncio
 async def test_the_host_edits_the_drawing_rules_and_the_room_carries_them_everywhere():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -992,7 +959,6 @@ async def test_the_host_edits_the_drawing_rules_and_the_room_carries_them_everyw
         assert payload["colorMode"] == "colorblind_safe"
 
 
-@pytest.mark.asyncio
 async def test_a_tool_set_with_nothing_to_draw_with_is_refused():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -1009,7 +975,6 @@ async def test_a_tool_set_with_nothing_to_draw_with_is_refused():
     assert room.allowed_tools == ["brush", "fill", "shapes"]
 
 
-@pytest.mark.asyncio
 async def test_editing_one_drawing_rule_leaves_the_other_alone():
     room_manager = RoomManager()
     room = room_manager.create_room(
@@ -1044,7 +1009,6 @@ class UnreachablePromptListRepo:
         return None
 
 
-@pytest.mark.asyncio
 async def test_a_prompt_store_failure_refuses_the_room_rather_than_swapping_prompts():
     """The room must not open quietly playing the built-in list while the host
     is shown the lists they chose."""
@@ -1067,7 +1031,6 @@ async def test_a_prompt_store_failure_refuses_the_room_rather_than_swapping_prom
     assert room_manager.rooms == {}, "a room opened on prompts nobody could read"
 
 
-@pytest.mark.asyncio
 async def test_a_prompt_store_failure_leaves_the_settings_it_could_not_read():
     """A failed read must not strand the room on an empty curated pool, which
     `effective_prompt_pool` reads as permission to use the built-in prompts."""
@@ -1089,7 +1052,6 @@ async def test_a_prompt_store_failure_leaves_the_settings_it_could_not_read():
     assert room.prompt_pool_size == 2
 
 
-@pytest.mark.asyncio
 async def test_a_custom_only_room_still_opens_when_the_prompt_store_is_down():
     """The one case where an empty curated pool is the correct outcome: the
     room was never going to draw from a list."""

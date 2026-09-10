@@ -1,5 +1,4 @@
 """A player saves, revises, and shares reusable prompt content."""
-import pytest
 from playwright.async_api import async_playwright
 
 from tests.e2e.lobby_helpers import register_account, use_guest_name
@@ -7,7 +6,6 @@ from tests.e2e.lobby_helpers import register_account, use_guest_name
 BASE_URL = "http://localhost:8000"
 
 
-@pytest.mark.asyncio
 async def test_registered_owner_can_manage_and_share_a_prompt_list():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])

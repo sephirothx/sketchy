@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -32,7 +31,6 @@ from app.services.telemetry import RING_MINUTES, Telemetry
 from tests.dbfixtures import create_test_db
 
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 # What the `env` fixture wired into the router, for tests that drive it.
 INJECTED: dict[str, object] = {}

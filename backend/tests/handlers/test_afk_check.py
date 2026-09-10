@@ -10,7 +10,6 @@ from __future__ import annotations
 import contextlib
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.flow_timing import FlowTiming
@@ -64,7 +63,6 @@ def rewire(ctx, room_manager, sio, clock):
     return watch
 
 
-@pytest.mark.asyncio
 async def test_a_guess_counts_as_activity_and_the_heartbeat_does_not():
     """The whole rule rests on which commands reach the ledger."""
     clock = FakeClock()
@@ -81,7 +79,6 @@ async def test_a_guess_counts_as_activity_and_the_heartbeat_does_not():
     assert ctx.activity.idle_seconds(ann.sid) == 0, "a chat line is"
 
 
-@pytest.mark.asyncio
 async def test_answering_the_check_keeps_the_seat_and_says_nothing_to_the_room():
     """The common answer must not put a `room_state` on the wire per window."""
     clock = FakeClock()
@@ -113,7 +110,6 @@ async def test_answering_the_check_keeps_the_seat_and_says_nothing_to_the_room()
     assert watch.open_checks == 0
 
 
-@pytest.mark.asyncio
 async def test_an_unanswered_check_marks_the_seat_and_tells_the_room():
     clock = FakeClock()
     sio, ctx, room_manager, room, players = build()
@@ -132,7 +128,6 @@ async def test_an_unanswered_check_marks_the_seat_and_tells_the_room():
     assert any(c.args[0] == "room_state" for c in sio.emit.await_args_list)
 
 
-@pytest.mark.asyncio
 async def test_a_disconnect_takes_the_stamp_and_the_open_check_with_it():
     """A stamp that outlived its socket would mark whoever inherits the id."""
     clock = FakeClock()
@@ -150,7 +145,6 @@ async def test_a_disconnect_takes_the_stamp_and_the_open_check_with_it():
     assert watch.open_checks == 0
 
 
-@pytest.mark.asyncio
 async def test_refused_handshakes_do_not_pile_up_in_the_ledger(monkeypatch):
     """A refusal is the cheapest thing for a caller to generate.
 
@@ -180,7 +174,6 @@ async def test_refused_handshakes_do_not_pile_up_in_the_ledger(monkeypatch):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_an_unanswered_check_passes_the_host_role_on():
     """`start_game` is host-only, so an absent host is a room nobody can start."""
     clock = FakeClock()
@@ -201,7 +194,6 @@ async def test_an_unanswered_check_passes_the_host_role_on():
     assert not ann.is_host and bob.is_host
 
 
-@pytest.mark.asyncio
 async def test_setting_afk_on_yourself_keeps_the_room():
     """Only the automatic path moves the role: a self-toggle is reversible."""
     _, ctx, _, room, players = build()
@@ -213,7 +205,6 @@ async def test_setting_afk_on_yourself_keeps_the_room():
     assert not players["Bob"].is_host
 
 
-@pytest.mark.asyncio
 async def test_a_host_alone_with_a_spectator_keeps_the_role():
     """A spectator can neither start a game nor be asked to give it back."""
     clock = FakeClock()
@@ -233,7 +224,6 @@ async def test_a_host_alone_with_a_spectator_keeps_the_role():
     assert ann.is_host and not watcher.is_host
 
 
-@pytest.mark.asyncio
 async def test_the_role_never_lands_back_on_the_seat_it_was_taken_from():
     """The seat being released is not a candidate to inherit from itself.
 
@@ -259,7 +249,6 @@ async def test_the_role_never_lands_back_on_the_seat_it_was_taken_from():
     assert bob.is_host
 
 
-@pytest.mark.asyncio
 async def test_the_role_goes_to_somebody_who_can_answer():
     """Handing a stuck room to another absent seat changes nothing about it."""
     clock = FakeClock()

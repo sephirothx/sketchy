@@ -16,8 +16,6 @@ from app.db.models import (
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
 
 async def _database():
     return await create_test_db()

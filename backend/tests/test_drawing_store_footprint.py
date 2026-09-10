@@ -19,7 +19,6 @@ from app.services.telemetry import Telemetry
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 ON_POSTGRESQL = os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql")
 

@@ -25,8 +25,6 @@ from app.services.data_export_worker import (
 from app.services.readiness import LoopHealth
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
-
 
 @pytest_asyncio.fixture
 async def env(monkeypatch, tmp_path):

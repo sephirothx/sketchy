@@ -34,7 +34,6 @@ async def open_room(sio, sessions, sid="host-sid"):
     return await sio.handlers["/"]["create_room"](sid, {"nickname": "Host"})
 
 
-@pytest.mark.asyncio
 async def test_a_room_takes_only_so_many_spectators():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
@@ -67,7 +66,6 @@ async def test_a_room_takes_only_so_many_spectators():
     assert seated["ok"] is True
 
 
-@pytest.mark.asyncio
 async def test_a_spectator_leaving_makes_room_for_another():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
@@ -93,7 +91,6 @@ async def test_a_spectator_leaving_makes_room_for_another():
     assert allowed["ok"] is True
 
 
-@pytest.mark.asyncio
 async def test_the_server_stops_accepting_sockets_past_its_ceiling():
     """Told rather than refused: a refusal carries no diagnosable signal, and
     ConnectionRefusedError is reserved for suspensions."""
@@ -128,7 +125,6 @@ async def test_the_server_stops_accepting_sockets_past_its_ceiling():
     ]) == 1
 
 
-@pytest.mark.asyncio
 async def test_one_socket_cannot_hammer_the_join_path():
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
@@ -152,7 +148,6 @@ async def test_one_socket_cannot_hammer_the_join_path():
     assert "too quickly" in results[2]["error"]
 
 
-@pytest.mark.asyncio
 async def test_confirming_a_seat_never_spends_the_join_allowance():
     """A client heartbeats through the same-room confirmation, and a liveness
     check must not be able to lock a player out of their own room."""
@@ -215,7 +210,6 @@ def test_room_state_carries_vote_lists_only_where_there_are_votes():
     assert "afkVotes" not in by_id[seats[1].id]
 
 
-@pytest.mark.asyncio
 async def test_a_handshake_that_fails_does_not_hold_a_place_for_ever():
     """The ledger must balance on every way out, not just the happy one."""
     room_manager = RoomManager()
@@ -237,7 +231,6 @@ async def test_a_handshake_that_fails_does_not_hold_a_place_for_ever():
     assert ctx.room_capacity.open_sockets == 0
 
 
-@pytest.mark.asyncio
 async def test_taking_over_a_seat_from_another_tab_is_rate_limited():
     """A takeover costs the room a full broadcast and supersedes a socket.
 
@@ -269,7 +262,6 @@ async def test_taking_over_a_seat_from_another_tab_is_rate_limited():
     assert room.players[seat.id].sid == "tab-1"
 
 
-@pytest.mark.asyncio
 async def test_being_turned_away_from_a_full_room_does_not_spend_the_allowance():
     """A budget buys a seat; an attempt that got none must not be charged.
 

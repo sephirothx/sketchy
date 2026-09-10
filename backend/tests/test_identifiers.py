@@ -12,7 +12,6 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-import pytest
 
 from app.identifiers import generate_uuid7
 
@@ -90,7 +89,6 @@ def test_threaded_generation_never_repeats_a_value():
     assert all(value.version == 7 for value in generated)
 
 
-@pytest.mark.asyncio
 async def test_concurrent_tasks_never_repeat_a_value():
     async def batch() -> list[uuid.UUID]:
         values = []

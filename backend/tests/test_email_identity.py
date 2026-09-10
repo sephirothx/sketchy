@@ -32,7 +32,6 @@ def test_invalid_email_is_rejected(raw):
         normalize_email(raw)
 
 
-@pytest.mark.asyncio
 async def test_database_requires_normalized_unique_email_and_verification_source():
     factory, engine = await create_test_db()
     try:

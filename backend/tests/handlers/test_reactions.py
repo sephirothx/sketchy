@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import pytest
 
 from app.game import Phase
 from app.services.drawing_reactions import (
@@ -22,8 +21,6 @@ from tests.handlers.helpers import (
     play_to_completion,
     replay_staged,
 )
-
-pytestmark = pytest.mark.asyncio
 
 
 def wire(ctx, room, players):

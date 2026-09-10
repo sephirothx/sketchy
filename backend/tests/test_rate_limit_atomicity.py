@@ -46,7 +46,6 @@ async def factory(tmp_path: Path):
     await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_simultaneous_attempts_cannot_walk_past_the_ceiling(factory):
     limiter = PersistentRateLimiter(
         factory, scope="concurrent", limit=5, window_seconds=3600
@@ -66,7 +65,6 @@ async def test_simultaneous_attempts_cannot_walk_past_the_ceiling(factory):
     assert bucket is not None and bucket.attempt_count == 5
 
 
-@pytest.mark.asyncio
 async def test_simultaneous_first_attempts_make_one_bucket(factory):
     """The window has to start exactly once, however many arrive together."""
     limiter = PersistentRateLimiter(
@@ -85,7 +83,6 @@ async def test_simultaneous_first_attempts_make_one_bucket(factory):
     assert len(buckets) == 1
 
 
-@pytest.mark.asyncio
 async def test_refunds_cannot_hand_back_more_than_was_taken(factory):
     limiter = PersistentRateLimiter(
         factory, scope="refunds", limit=5, window_seconds=3600
@@ -125,7 +122,6 @@ def test_only_a_live_bucket_at_its_limit_is_a_refusal(attempts, expires_in, expe
     )
 
 
-@pytest.mark.asyncio
 async def test_a_slot_freed_by_a_refund_is_given_to_the_next_caller(factory):
     """The end state the race is about: capacity exists, so the next attempt
     is admitted rather than refused for the row merely being there."""

@@ -11,9 +11,6 @@ from app.services.room_codes import RoomCodeAllocationError, RoomCodeService
 from tests.dbfixtures import create_test_db
 
 
-pytestmark = pytest.mark.asyncio
-
-
 async def _database():
     factory, engine = await create_test_db()
     return engine, factory

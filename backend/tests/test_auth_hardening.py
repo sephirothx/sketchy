@@ -152,7 +152,6 @@ def test_an_ordinary_passphrase_is_accepted():
         assert screening_failure(password, username="player") is None, password
 
 
-@pytest.mark.asyncio
 async def test_the_refusal_says_which_rule_refused(env):
     """A generic length sentence sends somebody back with the same password."""
     new_client, *_ = env
@@ -168,7 +167,6 @@ async def test_the_refusal_says_which_rule_refused(env):
 
 # --- the three throttles --------------------------------------------------
 
-@pytest.mark.asyncio
 async def test_one_account_is_guarded_across_every_address(env):
     """The hole PR-17 named: ten thousand hosts, ten guesses each.
 
@@ -189,7 +187,6 @@ async def test_one_account_is_guarded_across_every_address(env):
     assert verdict.retry_after_seconds > 0
 
 
-@pytest.mark.asyncio
 async def test_signing_in_correctly_costs_nothing(env):
     """Why the ceilings can be low: a household never meets them."""
     _, factory, _ = env
@@ -199,7 +196,6 @@ async def test_signing_in_correctly_costs_nothing(env):
     assert (await guard.check(username="Housemate", address="10.0.0.1")).allowed
 
 
-@pytest.mark.asyncio
 async def test_consecutive_failures_buy_an_increasing_wait(env):
     """A fixed window forgets; a lockout is what makes a slow attack cost."""
     _, factory, _ = env
@@ -214,7 +210,6 @@ async def test_consecutive_failures_buy_an_increasing_wait(env):
     assert second.retry_after_seconds > first.retry_after_seconds
 
 
-@pytest.mark.asyncio
 async def test_one_correct_password_clears_the_backoff(env):
     _, factory, _ = env
     guard = LoginGuard(factory)
@@ -225,7 +220,6 @@ async def test_one_correct_password_clears_the_backoff(env):
     assert (await guard.check(username="Recovered", address="10.0.0.9")).allowed
 
 
-@pytest.mark.asyncio
 async def test_a_username_that_does_not_exist_is_charged_the_same(env):
     """R-AUTH-09: the counters must not answer what the message will not."""
     new_client, factory, _ = env
@@ -252,7 +246,6 @@ async def test_a_username_that_does_not_exist_is_charged_the_same(env):
     assert len(rows) == 2
 
 
-@pytest.mark.asyncio
 async def test_repeated_wrong_passwords_end_in_a_refusal_with_a_wait(env):
     new_client, _, _ = env
     http = new_client()
@@ -276,7 +269,6 @@ async def test_repeated_wrong_passwords_end_in_a_refusal_with_a_wait(env):
 
 # --- what a stolen cookie is worth ----------------------------------------
 
-@pytest.mark.asyncio
 async def test_a_session_nobody_uses_ends_before_its_expiry(env):
     """R-AUTH-03's idle bound: the year is not the only limit any more."""
     _, factory, repo = env
@@ -296,7 +288,6 @@ async def test_a_session_nobody_uses_ends_before_its_expiry(env):
     assert await resolve_session(factory, abandoned.token, now=gone) is None
 
 
-@pytest.mark.asyncio
 async def test_a_staff_session_lives_a_week_rather_than_a_year(env):
     _, factory, repo = env
     user = await repo.create_anonymous("Moderator")
@@ -309,7 +300,6 @@ async def test_a_staff_session_lives_a_week_rather_than_a_year(env):
     assert await resolve_session(factory, issued.token, now=after_a_week) is None
 
 
-@pytest.mark.asyncio
 async def test_a_sessions_lifetime_is_the_one_it_was_issued_under(env):
     """Frozen at issue, and safe to freeze because a promotion ends it.
 
@@ -334,7 +324,6 @@ async def test_a_sessions_lifetime_is_the_one_it_was_issued_under(env):
     assert await resolve_session(factory, issued.token) is None
 
 
-@pytest.mark.asyncio
 async def test_a_rotated_away_token_used_later_takes_the_chain_down(env):
     """R-AUTH-22: presenting a spent token means a second copy exists."""
     _, factory, repo = env
@@ -363,7 +352,6 @@ async def test_a_rotated_away_token_used_later_takes_the_chain_down(env):
     assert len(events) == 1
 
 
-@pytest.mark.asyncio
 async def test_two_requests_racing_a_rotation_do_not_sign_anybody_out(env):
     """The honest case the grace window exists for."""
     _, factory, repo = env
@@ -381,7 +369,6 @@ async def test_two_requests_racing_a_rotation_do_not_sign_anybody_out(env):
     assert await resolve_session(factory, successor.token, now=inside) is not None
 
 
-@pytest.mark.asyncio
 async def test_a_session_used_from_another_browser_is_flagged(env):
     _, factory, repo = env
     user = await repo.create_anonymous("Moved")
@@ -403,7 +390,6 @@ async def test_a_session_used_from_another_browser_is_flagged(env):
     assert [event.details["reason"] for event in events] == ["device"]
 
 
-@pytest.mark.asyncio
 async def test_a_moved_session_has_to_prove_itself_again(env):
     """A step-up is a claim about the browser holding the session."""
     _, factory, repo = env
@@ -435,7 +421,6 @@ def test_the_lifetime_a_role_gets_is_the_shorter_one():
 
 # --- the second factor ----------------------------------------------------
 
-@pytest.mark.asyncio
 async def test_a_staff_account_cannot_sign_in_without_one(env):
     """R-AUTH-20 is a rule, not an intention: no grace by default."""
     new_client, factory, _ = env
@@ -453,7 +438,6 @@ async def test_a_staff_account_cannot_sign_in_without_one(env):
     assert "two-factor" in response.json()["detail"].lower()
 
 
-@pytest.mark.asyncio
 async def test_a_staff_sign_in_asks_for_the_code_and_then_accepts_it(env):
     new_client, factory, _ = env
     http = new_client()
@@ -480,7 +464,6 @@ async def test_a_staff_sign_in_asks_for_the_code_and_then_accepts_it(env):
     assert signed_in.status_code == 200, signed_in.text
 
 
-@pytest.mark.asyncio
 async def test_a_code_cannot_be_used_twice(env):
     """What makes a relayed code worth less than the thirty seconds it lives."""
     _, factory, repo = env
@@ -506,7 +489,6 @@ async def test_a_code_cannot_be_used_twice(env):
     )
 
 
-@pytest.mark.asyncio
 async def test_a_recovery_code_works_once(env):
     _, factory, repo = env
     user = await repo.create_anonymous("Lost")
@@ -530,7 +512,6 @@ async def test_a_recovery_code_works_once(env):
     )
 
 
-@pytest.mark.asyncio
 async def test_grinding_six_digits_locks_the_second_factor(env):
     _, factory, repo = env
     user = await repo.create_anonymous("Ground")
@@ -554,7 +535,6 @@ async def test_grinding_six_digits_locks_the_second_factor(env):
     )
 
 
-@pytest.mark.asyncio
 async def test_an_abandoned_enrolment_stores_nothing(env):
     """A secret nobody confirmed must not be able to lock an account out."""
     new_client, factory, _ = env
@@ -576,7 +556,6 @@ async def test_an_abandoned_enrolment_stores_nothing(env):
     assert refused.status_code == 403
 
 
-@pytest.mark.asyncio
 async def test_recovery_codes_are_shown_once_and_stored_hashed(env):
     new_client, factory, _ = env
     http = new_client()
@@ -609,7 +588,6 @@ async def test_recovery_codes_are_shown_once_and_stored_hashed(env):
 
 # --- step-up on the destructive actions -----------------------------------
 
-@pytest.mark.asyncio
 async def test_a_staff_session_alone_does_not_suspend_anybody(env):
     """R-AUTH-21, checked at the boundary the gate is composed from."""
     from app.api.admin_auth import admin_gate
@@ -638,7 +616,6 @@ async def test_a_staff_session_alone_does_not_suspend_anybody(env):
         await gate(FakeRequest(live))
 
 
-@pytest.mark.asyncio
 async def test_a_fresh_step_up_opens_the_window(env):
     new_client, factory, _ = env
     http = new_client()
@@ -657,7 +634,6 @@ async def test_a_fresh_step_up_opens_the_window(env):
     )
 
 
-@pytest.mark.asyncio
 async def test_the_device_list_says_when_a_session_will_lapse(env):
     new_client, _, _ = env
     http = new_client()
@@ -670,7 +646,6 @@ async def test_the_device_list_says_when_a_session_will_lapse(env):
 
 # --- the paths a first pass leaves untested -------------------------------
 
-@pytest.mark.asyncio
 async def test_replacing_recovery_codes_invalidates_the_old_set(env):
     """A leaked sheet of codes has to be revocable without dropping 2FA."""
     new_client, factory, _ = env
@@ -706,7 +681,6 @@ async def test_replacing_recovery_codes_invalidates_the_old_set(env):
     )
 
 
-@pytest.mark.asyncio
 async def test_the_password_is_required_to_touch_the_second_factor(env):
     """The one thing a stolen cookie does not carry."""
     new_client, _, _ = env
@@ -725,7 +699,6 @@ async def test_the_password_is_required_to_touch_the_second_factor(env):
     assert removal.status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_a_player_may_drop_their_second_factor_and_staff_may_not(env):
     """R-AUTH-20: giving up the role is what removes the requirement."""
     new_client, factory, _ = env
@@ -747,7 +720,6 @@ async def test_a_player_may_drop_their_second_factor_and_staff_may_not(env):
     assert (await http.get("/api/auth/second-factor")).json()["enrolled"] is False
 
 
-@pytest.mark.asyncio
 async def test_re_enrolling_retires_the_codes_of_the_old_secret(env):
     """A code that still opened the account after the app was replaced."""
     new_client, factory, _ = env
@@ -785,7 +757,6 @@ async def test_re_enrolling_retires_the_codes_of_the_old_secret(env):
     )
 
 
-@pytest.mark.asyncio
 async def test_a_wrong_code_at_enrolment_stores_nothing(env):
     new_client, _, _ = env
     http = new_client()
@@ -803,7 +774,6 @@ async def test_a_wrong_code_at_enrolment_stores_nothing(env):
     assert (await http.get("/api/auth/second-factor")).json()["enrolled"] is False
 
 
-@pytest.mark.asyncio
 async def test_a_step_up_without_a_second_factor_is_a_conflict(env):
     new_client, _, _ = env
     http = new_client()
@@ -812,7 +782,6 @@ async def test_a_step_up_without_a_second_factor_is_a_conflict(env):
     assert response.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_the_address_bucket_still_stops_one_host_spraying(env):
     """The key the account bucket cannot see: many usernames, one machine."""
     _, factory, _ = env
@@ -823,7 +792,6 @@ async def test_the_address_bucket_still_stops_one_host_spraying(env):
     assert not verdict.allowed
 
 
-@pytest.mark.asyncio
 async def test_the_deployment_ceiling_catches_a_spray_no_other_key_sees(env, monkeypatch):
     """Neither key repeats: a different username from a different host each time.
 
@@ -845,7 +813,6 @@ async def test_the_deployment_ceiling_catches_a_spray_no_other_key_sees(env, mon
     assert await count_open_lockouts(factory) == 0
 
 
-@pytest.mark.asyncio
 async def test_the_deployment_ceiling_can_be_switched_off(env, monkeypatch):
     """N-17's escape hatch: the one bucket an attacker can saturate on purpose."""
     _, factory, _ = env
@@ -858,7 +825,6 @@ async def test_the_deployment_ceiling_can_be_switched_off(env, monkeypatch):
     assert (await guard.check(username="Innocent", address="10.8.8.8")).allowed
 
 
-@pytest.mark.asyncio
 async def test_an_account_being_held_back_is_countable(env):
     """What an operator sees while an attack is under way."""
     _, factory, _ = env
@@ -868,7 +834,6 @@ async def test_an_account_being_held_back_is_countable(env):
     assert await count_open_lockouts(factory) == 1
 
 
-@pytest.mark.asyncio
 async def test_finished_lockouts_are_forgotten(env):
     _, factory, _ = env
     guard = LoginGuard(factory)
@@ -880,7 +845,6 @@ async def test_finished_lockouts_are_forgotten(env):
     assert (await guard.check(username="Ancient", address="10.0.0.1")).allowed
 
 
-@pytest.mark.asyncio
 async def test_a_cold_server_establishes_its_hashing_key_once(env, monkeypatch):
     """The first page load is a dozen requests at once, not one.
 
@@ -918,7 +882,6 @@ async def test_a_cold_server_establishes_its_hashing_key_once(env, monkeypatch):
 
 # --- what the review of #679 found ---------------------------------------
 
-@pytest.mark.asyncio
 async def test_a_staff_session_rotates_daily_on_the_path_that_reads_it(env):
     """The rotation cadence has to survive the round trip through the row.
 
@@ -950,7 +913,6 @@ async def test_a_staff_session_rotates_daily_on_the_path_that_reads_it(env):
     assert not should_rotate(player_resolved, now=a_day_later)
 
 
-@pytest.mark.asyncio
 async def test_a_step_up_with_nowhere_to_record_it_is_not_a_success(env):
     """A right code and a session that cannot hold it is a refusal, not `ok`.
 
@@ -985,7 +947,6 @@ async def test_a_step_up_with_nowhere_to_record_it_is_not_a_success(env):
     assert not response.json().get("ok")
 
 
-@pytest.mark.asyncio
 async def test_guessing_a_password_at_the_second_factor_switch_is_throttled(env):
     """The cheapest place to guess a password was the one with no bucket."""
     new_client, _, _ = env
@@ -1008,7 +969,6 @@ async def test_guessing_a_password_at_the_second_factor_switch_is_throttled(env)
 
 # --- the second review of #679 -------------------------------------------
 
-@pytest.mark.asyncio
 async def test_using_a_session_pushes_its_idle_deadline_out(env):
     """R-AUTH-03 says ninety days *unused*, not ninety days.
 
@@ -1037,7 +997,6 @@ async def test_using_a_session_pushes_its_idle_deadline_out(env):
     assert await resolve_session(factory, issued.token, now=later) is not None
 
 
-@pytest.mark.asyncio
 async def test_a_rotated_away_token_carries_no_step_up_through_the_grace(env):
     """R-AUTH-21 must not be satisfiable by the copy rather than the browser.
 
@@ -1075,7 +1034,6 @@ async def test_a_rotated_away_token_carries_no_step_up_through_the_grace(env):
     assert not predecessor.is_stepped_up()
 
 
-@pytest.mark.asyncio
 async def test_replacing_a_second_factor_needs_the_password(env):
     """A stolen cookie must not be able to swap the authenticator out.
 
@@ -1118,7 +1076,6 @@ async def test_replacing_a_second_factor_needs_the_password(env):
 
 # --- the third review of #679 --------------------------------------------
 
-@pytest.mark.asyncio
 async def test_setting_up_a_second_factor_asks_for_no_password(env):
     """It is optional and a player's own business, so it does not ask.
 
@@ -1144,7 +1101,6 @@ async def test_setting_up_a_second_factor_asks_for_no_password(env):
     assert not state.password_proved
 
 
-@pytest.mark.asyncio
 async def test_a_role_needs_a_second_factor_somebody_proved_was_theirs(env):
     """R-AUTH-20's real requirement, in the place it actually bites.
 
@@ -1193,7 +1149,6 @@ async def test_a_role_needs_a_second_factor_somebody_proved_was_theirs(env):
     assert (await second_factor_state(factory, user_id=account["id"])).password_proved
 
 
-@pytest.mark.asyncio
 async def test_proving_a_factor_is_yours_needs_the_factor_as_well(env):
     """A password alone says the owner is here, not whose authenticator it is.
 
@@ -1235,7 +1190,6 @@ async def test_proving_a_factor_is_yours_needs_the_factor_as_well(env):
     ).password_proved
 
 
-@pytest.mark.asyncio
 async def test_nothing_is_vouched_for_when_there_is_no_factor_to_vouch_for(env):
     """The endpoint checks first, but the write refuses on its own account.
 
@@ -1251,7 +1205,6 @@ async def test_nothing_is_vouched_for_when_there_is_no_factor_to_vouch_for(env):
     ).password_proved
 
 
-@pytest.mark.asyncio
 async def test_something_that_is_not_a_code_at_all_burns_nothing(env):
     """`!!!-!!!` is not a wrong recovery code; it is not one.
 
@@ -1303,7 +1256,6 @@ def test_an_offer_is_judged_against_the_clock_whatever_shape_its_timestamp_is():
     assert pending_offer(account, now) == "moderator"
 
 
-@pytest.mark.asyncio
 async def test_taking_up_an_offer_for_something_that_is_not_an_account(env):
     """The id comes from a session, but the function does not assume it."""
     _, factory, _ = env
@@ -1311,7 +1263,6 @@ async def test_taking_up_an_offer_for_something_that_is_not_an_account(env):
     assert await take_up_offer(factory, user_id=str(uuid4())) is None
 
 
-@pytest.mark.asyncio
 async def test_a_password_given_at_setup_counts_as_the_proof(env):
     """Offered rather than demanded: giving it saves the separate step."""
     new_client, factory, _ = env
@@ -1329,7 +1280,6 @@ async def test_a_password_given_at_setup_counts_as_the_proof(env):
     assert (await second_factor_state(factory, user_id=account["id"])).password_proved
 
 
-@pytest.mark.asyncio
 async def test_a_saturated_deployment_bucket_still_lets_a_clean_caller_in(env, monkeypatch):
     """A global ceiling must be a ceiling, not a lever.
 
@@ -1352,7 +1302,6 @@ async def test_a_saturated_deployment_bucket_still_lets_a_clean_caller_in(env, m
     assert not refused.allowed
 
 
-@pytest.mark.asyncio
 async def test_a_spray_is_still_bounded_once_the_deployment_bucket_is_full(env, monkeypatch):
     """The ceiling's own job: one more attempt per key, not unlimited."""
     _, factory, _ = env

@@ -1,12 +1,9 @@
 """Getting a finished game's highlights to the room that played it."""
 from __future__ import annotations
 
-import pytest
 
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import build_context, build_room, play_to_completion
-
-pytestmark = pytest.mark.asyncio
 
 
 def game_ended_payload(ctx) -> dict:

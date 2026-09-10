@@ -18,8 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from app.db import create_db_engine, get_alembic_config
 from app.db.models import Base
 
-pytestmark = pytest.mark.asyncio
-
 
 async def _migrate(engine: AsyncEngine, operation, target: str) -> None:
     config = get_alembic_config()

@@ -37,7 +37,6 @@ class FakeServer:
         self.disconnected.append(sid)
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "ending, event",
     [
@@ -77,7 +76,6 @@ async def test_every_socket_of_the_account_is_told_and_then_closed(
     assert server.disconnected == ["seated-sid", unseated]
 
 
-@pytest.mark.asyncio
 async def test_deleting_an_account_closes_its_sockets_too(monkeypatch):
     """This half was only ever done for suspensions."""
     from app import main
@@ -97,7 +95,6 @@ async def test_deleting_an_account_closes_its_sockets_too(monkeypatch):
     assert server.emitted[0][0] == "session_superseded"
 
 
-@pytest.mark.asyncio
 async def test_the_mark_is_taken_before_the_sweep_awaits_anything(monkeypatch):
     """The mark is what a mid-entry socket sees, and every step of a sweep
     yields: reading the suspension, walking the rooms, emitting the notice,

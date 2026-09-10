@@ -22,7 +22,6 @@ async def _client() -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-@pytest.mark.asyncio
 async def test_an_unchanged_lobby_is_answered_304_with_no_body():
     room_manager.create_room(name="Studio", is_public=True)
     async with await _client() as client:
@@ -38,7 +37,6 @@ async def test_an_unchanged_lobby_is_answered_304_with_no_body():
         assert again.headers["ETag"] == etag
 
 
-@pytest.mark.asyncio
 async def test_a_changed_lobby_gets_a_new_validator_and_a_body():
     room_manager.create_room(name="Studio", is_public=True)
     async with await _client() as client:
@@ -52,7 +50,6 @@ async def test_a_changed_lobby_gets_a_new_validator_and_a_body():
         assert {room["name"] for room in changed.json()} == {"Studio", "Annex"}
 
 
-@pytest.mark.asyncio
 async def test_the_validator_tracks_fields_a_change_counter_would_miss():
     """A hash cannot go stale; a hand-maintained counter can.
 
@@ -69,7 +66,6 @@ async def test_the_validator_tracks_fields_a_change_counter_would_miss():
         assert renamed.headers["ETag"] != etag
 
 
-@pytest.mark.asyncio
 async def test_a_client_that_sends_no_validator_still_gets_the_list():
     """The old client, and the first poll of every new one."""
     room_manager.create_room(name="Studio", is_public=True)

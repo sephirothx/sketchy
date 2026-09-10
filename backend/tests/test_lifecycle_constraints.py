@@ -36,7 +36,6 @@ from app.services.friends import friendship_key
 
 from tests.dbfixtures import create_test_db
 
-pytestmark = pytest.mark.asyncio
 
 NOW = datetime(2026, 9, 6, 12, tzinfo=timezone.utc)
 

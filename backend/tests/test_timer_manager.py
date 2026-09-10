@@ -2,12 +2,10 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 
 from app.services.timers import TimerManager
 
 
-@pytest.mark.asyncio
 async def test_naturally_completed_tasks_leave_every_registry():
     timers = TimerManager()
     phase = asyncio.create_task(asyncio.sleep(0))
@@ -31,7 +29,6 @@ async def test_naturally_completed_tasks_leave_every_registry():
     assert timers.restart_timers == {}
 
 
-@pytest.mark.asyncio
 async def test_cancel_methods_cancel_tasks_and_clear_registries():
     timers = TimerManager()
     phase = asyncio.create_task(asyncio.sleep(60))
@@ -59,7 +56,6 @@ async def test_cancel_methods_cancel_tasks_and_clear_registries():
     assert timers.restart_timers == {}
 
 
-@pytest.mark.asyncio
 async def test_completed_replaced_task_cannot_remove_its_replacement():
     timers = TimerManager()
     old_phase = asyncio.create_task(asyncio.sleep(60))
@@ -81,7 +77,6 @@ async def test_completed_replaced_task_cannot_remove_its_replacement():
     await timers.close()
 
 
-@pytest.mark.asyncio
 async def test_repeated_disconnect_registration_keeps_only_latest_task():
     timers = TimerManager()
     tasks = [asyncio.create_task(asyncio.sleep(60)) for _ in range(3)]
@@ -96,7 +91,6 @@ async def test_repeated_disconnect_registration_keeps_only_latest_task():
     await timers.close()
 
 
-@pytest.mark.asyncio
 async def test_close_cancels_and_awaits_outstanding_tasks():
     timers = TimerManager()
     cleaned_up = asyncio.Event()
@@ -122,7 +116,6 @@ async def test_close_cancels_and_awaits_outstanding_tasks():
     assert timers.restart_timers == {}
 
 
-@pytest.mark.asyncio
 async def test_application_lifespan_closes_timer_manager(monkeypatch):
     from app import main
 

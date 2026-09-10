@@ -42,7 +42,6 @@ from tests.dbfixtures import create_test_db
 
 from tests.staffauth import mark_staff_ready
 
-pytestmark = pytest.mark.asyncio
 PASSWORD = "a-good-password"
 
 
@@ -1184,7 +1183,6 @@ async def test_a_lobby_line_is_evidence_on_its_own_terms(env):
     assert copied[1]["sourceMessageId"] == str(reporters_own)
 
 
-@pytest.mark.asyncio
 async def test_a_report_carries_what_was_said_around_the_cited_line(env):
     """A line on its own is often unreadable, so the server copies the
     conversation around it: ten before and five after, within twelve hours,
@@ -1297,7 +1295,6 @@ async def test_a_report_carries_what_was_said_around_the_cited_line(env):
     ]
 
 
-@pytest.mark.asyncio
 async def test_a_report_with_nothing_cited_has_no_context(env):
     """No cited line means no place to look: a REST report with no
     messageIds copies nothing, rather than guessing a room."""
@@ -1348,7 +1345,6 @@ async def test_a_report_with_nothing_cited_has_no_context(env):
     assert case["evidence"] == []
 
 
-@pytest.mark.asyncio
 async def test_lobby_context_omits_authors_the_reporter_blocked(env):
     """A lobby line by somebody the reporter muted was never delivered to
     them (R-LCHAT-03). The retained row records no recipients, so the block
@@ -1908,7 +1904,6 @@ async def test_a_warning_and_a_suspension_show_the_drawing_they_were_about(env):
     assert (await suspended_http.get("/api/warnings/pending")).status_code == 403
 
 
-@pytest.mark.asyncio
 async def test_a_report_records_where_the_complaint_happened(env):
     """The incident a report belongs to, written from what the server already
     proved rather than from anything a client said (#620).
@@ -1988,7 +1983,6 @@ async def test_a_report_records_where_the_complaint_happened(env):
     assert await scope_of([]) == ("unscoped", None)
 
 
-@pytest.mark.asyncio
 async def test_every_decision_records_which_decision_covered_the_report(env):
     """A decided report says which moderator action decided it, so reports of
     one incident can later point at one decision (#620). Dismissing, warning
@@ -2069,7 +2063,6 @@ async def _room_report(client, target_id: str, message_id, details: str):
     )
 
 
-@pytest.mark.asyncio
 async def test_reports_of_one_incident_are_one_queue_entry(env):
     """Four people watching one thing are four complaints and one case (#620).
 
@@ -2186,7 +2179,6 @@ async def test_reports_of_one_incident_are_one_queue_entry(env):
     assert other["id"] != pile["id"]
 
 
-@pytest.mark.asyncio
 async def test_one_decision_closes_every_report_of_the_incident(env):
     """A suspension for what somebody did leaves nothing for the other
     complaints about it to still be waiting on (#620).
@@ -2289,7 +2281,6 @@ async def test_one_decision_closes_every_report_of_the_incident(env):
     assert again.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_a_suspension_shows_every_reporters_cited_lines_and_drawings(env):
     """Their own words, from the whole decision rather than whichever report
     the suspension happens to name (R-BAN-08, #620).
@@ -2393,7 +2384,6 @@ async def test_a_suspension_shows_every_reporters_cited_lines_and_drawings(env):
     not os.environ.get("TEST_DATABASE_URL"),
     reason="row locks only really lock on PostgreSQL",
 )
-@pytest.mark.asyncio
 async def test_two_moderators_deciding_one_incident_produce_one_decision(env):
     """Two moderators reaching the same incident from two different reports
     of it, at once (#620).
@@ -2487,7 +2477,6 @@ async def test_two_moderators_deciding_one_incident_produce_one_decision(env):
         }
 
 
-@pytest.mark.asyncio
 async def test_a_suspension_notice_for_no_suspension_says_only_that(env):
     """The refusal is built from whatever is on the row, and an account with
     no active ban has nothing to put on it.
@@ -2517,7 +2506,6 @@ async def test_a_suspension_notice_for_no_suspension_says_only_that(env):
     assert await is_user_banned(factory, None) is False
 
 
-@pytest.mark.asyncio
 async def test_a_permanent_suspension_carries_no_end_date(env):
     """`expiresAt` is null for a suspension nobody put an end on, and an
     instant for one somebody did. The notice reads it either way."""
@@ -2544,7 +2532,6 @@ async def test_a_permanent_suspension_carries_no_end_date(env):
     assert notice["drawings"] == []
 
 
-@pytest.mark.asyncio
 async def test_the_queue_loads_evidence_only_for_the_page_it_renders(env):
     """Grouping needs every report at once; rendering needs one page of them.
 
@@ -2629,7 +2616,6 @@ async def test_the_queue_loads_evidence_only_for_the_page_it_renders(env):
     ), evidence_reads
 
 
-@pytest.mark.asyncio
 async def test_the_closed_stream_shows_one_entry_per_decision(env):
     """Decided history reads like the queue it came from (#620).
 
@@ -2728,7 +2714,6 @@ async def test_the_closed_stream_shows_one_entry_per_decision(env):
     assert len({entry["decisionGroupId"] for entry in mine}) == 2
 
 
-@pytest.mark.asyncio
 async def test_closed_pages_count_decisions_not_reports(env):
     """`limit` and `offset` page decisions, so a pile-on cannot swallow a page
     (R-MOD-15, #620). A three-report incident takes one slot, not three, and
@@ -2805,7 +2790,6 @@ async def test_closed_pages_count_decisions_not_reports(env):
     assert seen == list(reversed(notes)), "newest decision first"
 
 
-@pytest.mark.asyncio
 async def test_a_repeat_of_a_decided_incident_says_what_was_decided(env):
     """A decided incident cannot be reopened (R-MOD-07), so a fresh complaint
     about the same person in the same place opens a new one - which is right,
@@ -2901,7 +2885,6 @@ async def test_a_repeat_of_a_decided_incident_says_what_was_decided(env):
     assert prior["decidedAt"] is not None
 
 
-@pytest.mark.asyncio
 async def test_a_repeat_elsewhere_is_not_reported_as_the_same_incident(env):
     """Keyed on the incident, not on the account. The standing counts beside
     a case already say this person has come up before; the distinct thing
@@ -2973,7 +2956,6 @@ async def test_a_repeat_elsewhere_is_not_reported_as_the_same_incident(env):
     assert pending["reportedPlayer"]["priorReports"] >= 1
 
 
-@pytest.mark.asyncio
 async def test_an_incident_shows_what_was_done_whichever_report_it_was_done_from(env):
     """A warning or a suspension names the one report a moderator was looking
     at, but the decision covered the whole incident. Read from a single
@@ -3062,7 +3044,6 @@ async def test_an_incident_shows_what_was_done_whichever_report_it_was_done_from
     assert case["outcome"] == "suspended"
 
 
-@pytest.mark.asyncio
 async def test_a_decision_may_record_what_it_was_about_and_reads_without_it(env):
     """The category is the moderator's finding, shown to the player with the
     decision. Optional, so a notice has to read correctly with it absent -
@@ -3106,7 +3087,6 @@ async def test_a_decision_may_record_what_it_was_about_and_reads_without_it(env)
     assert refused.status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
     """Reporting into silence teaches people not to bother, so a decided
     report is told back to whoever made it - as a count, and nothing else.
@@ -3164,7 +3144,6 @@ async def test_a_reporter_is_told_their_report_was_looked_at_and_no_more(env):
     assert (await other_http.get("/api/reports/reviewed")).json()["count"] == 0
 
 
-@pytest.mark.asyncio
 async def test_the_reviewed_count_needs_an_identity_of_its_own(env):
     """It is about the caller's own reports, so there has to be a caller."""
     new_client, _, _ = env
@@ -3177,7 +3156,6 @@ async def test_the_reviewed_count_needs_an_identity_of_its_own(env):
     ).status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_a_report_decided_mid_notice_is_counted_rather_than_swallowed(env):
     """The claim counts and stamps in one statement. Counting first and
     stamping second would mark whatever is decided by the time the second
@@ -3243,7 +3221,6 @@ async def test_a_report_decided_mid_notice_is_counted_rather_than_swallowed(env)
     assert again.json() == {"ok": True, "acknowledged": 0}
 
 
-@pytest.mark.asyncio
 async def test_a_message_that_was_never_shown_marks_nothing_as_told(env):
     """The reader is read-only, so a page that asks and then never renders -
     the account signs out mid-request, the effect is torn down - leaves the
@@ -3289,7 +3266,6 @@ async def test_a_message_that_was_never_shown_marks_nothing_as_told(env):
     assert (await reporter_http.get("/api/reports/reviewed")).json()["count"] == 1
 
 
-@pytest.mark.asyncio
 async def test_an_acknowledgement_cannot_name_somebody_elses_report(env):
     """The list is a client's account of what it showed, never authority over
     a row: every condition is checked again on the write."""

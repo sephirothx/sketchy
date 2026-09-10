@@ -6,7 +6,6 @@ online at the same time and any exact total would be a coin flip.
 """
 import re
 
-import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -23,7 +22,6 @@ def row_for(page, name: str):
     )
 
 
-@pytest.mark.asyncio
 async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -68,7 +66,6 @@ async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_the_viewer_can_find_themselves_in_the_list():
     """Marked in place rather than moved to the top, so the order is one order."""
     async with async_playwright() as p:

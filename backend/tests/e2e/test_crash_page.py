@@ -46,7 +46,6 @@ async def send_report(page) -> None:
     await expect(page.locator(".crash-sent")).to_contain_text("your report is with")
 
 
-@pytest.mark.asyncio
 async def test_a_crash_at_the_root_shows_the_page_and_files_a_prefilled_report():
     """R-UX-06, R-BUG-01. Before this a render error was a blank page.
 
@@ -105,7 +104,6 @@ async def test_a_crash_at_the_root_shows_the_page_and_files_a_prefilled_report()
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_a_crash_in_the_room_can_leave_it_and_the_seat_goes_too():
     """R-UX-06. The socket outlives the crashed tree, so leaving has to say so.
 
@@ -150,7 +148,6 @@ async def test_a_crash_in_the_room_can_leave_it_and_the_seat_goes_too():
             await browser.close()
 
 
-@pytest.mark.asyncio
 async def test_reloading_after_a_room_crash_keeps_the_seat():
     """R-UX-06. Reload is the way back *into* the room, not out of it.
 

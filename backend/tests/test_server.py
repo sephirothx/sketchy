@@ -20,7 +20,6 @@ def _server(coordinator):
     return server
 
 
-@pytest.mark.asyncio
 async def test_listener_closes_then_application_drains_then_uvicorn_disconnects():
     timeline = []
 
@@ -50,7 +49,6 @@ async def test_listener_closes_then_application_drains_then_uvicorn_disconnects(
     assert timeline == ["listener", "socket", "drain", "listener", "lifespan"]
 
 
-@pytest.mark.asyncio
 async def test_a_forced_exit_is_offered_to_the_drain():
     """A second termination signal must be able to cut the window short."""
 

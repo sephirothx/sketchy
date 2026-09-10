@@ -121,7 +121,6 @@ class FakeServer:
         raise AssertionError(url)
 
 
-@pytest.mark.asyncio
 async def test_saved_sessions_are_reused_while_the_server_still_knows_them(tmp_path):
     state = tmp_path / "sessions.json"
     server = FakeServer(known=set())
@@ -136,7 +135,6 @@ async def test_saved_sessions_are_reused_while_the_server_still_knows_them(tmp_p
     assert server.provisioned == 2
 
 
-@pytest.mark.asyncio
 async def test_a_session_the_server_forgot_is_replaced_alone(tmp_path):
     state = tmp_path / "sessions.json"
     save_sessions(state, "http://x", {"host": "sketchy_session=old-host", "guest": "sketchy_session=old-guest"})
@@ -149,7 +147,6 @@ async def test_a_session_the_server_forgot_is_replaced_alone(tmp_path):
     assert load_sessions(state, "http://x") == {"host": host, "guest": guest}
 
 
-@pytest.mark.asyncio
 async def test_a_state_file_for_another_server_is_not_trusted(tmp_path):
     state = tmp_path / "sessions.json"
     save_sessions(state, "http://elsewhere", {"host": "a", "guest": "b"})
@@ -159,7 +156,6 @@ async def test_a_state_file_for_another_server_is_not_trusted(tmp_path):
     assert load_sessions(tmp_path / "junk.json", "http://x") == {}
 
 
-@pytest.mark.asyncio
 async def test_the_rate_limit_is_named_rather_than_reported_as_a_status():
     server = FakeServer(known=set(), limit_after=1)
     with pytest.raises(ProbeError) as caught:
@@ -168,7 +164,6 @@ async def test_the_rate_limit_is_named_rather_than_reported_as_a_status():
     assert "GUEST_PROVISION_LIMIT" in str(caught.value)
 
 
-@pytest.mark.asyncio
 async def test_a_rotated_session_is_adopted_not_kept(tmp_path):
     """Half a lifetime in, `/me` retires the cookie it was asked with and
     hands over a successor; the game must be played with the successor."""
@@ -210,7 +205,6 @@ class QuietThenChatty:
         raise AssertionError("unreachable")
 
 
-@pytest.mark.asyncio
 async def test_a_quiet_poll_is_retried_rather_than_ending_the_receiver():
     from app.probe import POLL_TIMEOUT_SECONDS
 
@@ -227,7 +221,6 @@ async def test_a_quiet_poll_is_retried_rather_than_ending_the_receiver():
         await socket.close()
 
 
-@pytest.mark.asyncio
 async def test_a_failed_poll_is_reported_by_the_next_expect():
     transport = QuietThenChatty(then_fail=ConnectionRefusedError("gone"))
     socket = PollingSocket("http://x", transport, "c=1", label="draw")
@@ -260,7 +253,6 @@ class Scripted:
         raise AssertionError("unreachable")
 
 
-@pytest.mark.asyncio
 async def test_a_refused_connection_fails_the_probe_with_the_servers_reason():
     """`44{...}` is the server saying no; it must not become a step timeout."""
     transport = Scripted([b'0{"sid":"eio1"}', b'44{"message":"This account is suspended."}'])
@@ -272,7 +264,6 @@ async def test_a_refused_connection_fails_the_probe_with_the_servers_reason():
     await socket.close()
 
 
-@pytest.mark.asyncio
 async def test_an_unreadable_packet_fails_the_waiting_call_and_expect():
     transport = Scripted([b'42["room_state",{"a":1}]', b"4}not json"])
     socket = PollingSocket("http://x", transport, "c=1", label="create")

@@ -16,9 +16,6 @@ from app.request_timing import RequestTimingMiddleware
 from app.services.telemetry import STATIC_ROUTE, UNROUTED_ROUTE, Telemetry
 
 
-pytestmark = pytest.mark.asyncio
-
-
 @pytest.fixture
 def env(tmp_path):
     """An app stacked the way `main.py` stacks it: timing outermost, gzip inside."""

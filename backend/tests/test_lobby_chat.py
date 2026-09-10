@@ -146,7 +146,6 @@ async def _database():
     return engine, factory
 
 
-@pytest.mark.asyncio
 async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
     """The ring is memory, but the lines were retained: the most recent
     fifty come back, oldest first, minus what expired, what was said in a
@@ -192,7 +191,6 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
         await engine.dispose()
 
 
-@pytest.mark.asyncio
 async def test_a_database_that_does_not_answer_leaves_the_backlog_empty():
     """A deploy must not wait on the chat backlog."""
 

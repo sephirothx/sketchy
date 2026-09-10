@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock
 
-import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
@@ -12,7 +11,6 @@ from app.protocol import PROTOCOL_VERSION
 from app.rooms import DrawingRecapEntry, RoomManager
 
 
-@pytest.mark.asyncio
 async def test_public_player_ids_are_broadcast_but_account_identity_is_private():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -75,7 +73,6 @@ async def test_public_player_ids_are_broadcast_but_account_identity_is_private()
     )
     assert all(not contains_secret(payload, host.user_id) for payload in shared_payloads)
 
-@pytest.mark.asyncio
 async def test_reconnect_supersedes_old_socket_and_rejects_stale_host_commands():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -127,7 +124,6 @@ async def test_reconnect_supersedes_old_socket_and_rejects_stale_host_commands()
     assert current == {"ok": True}
     assert room.rounds == 4
 
-@pytest.mark.asyncio
 async def test_session_player_id_cannot_impersonate_another_active_player():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
@@ -152,7 +148,6 @@ async def test_session_player_id_cannot_impersonate_another_active_player():
         for call in sio.emit.await_args_list
     )
 
-@pytest.mark.asyncio
 async def test_join_without_a_session_cookie_still_seats_the_player():
     """A visitor whose browser sends no cookie plays, just without reconnect."""
     room_manager = RoomManager()
@@ -176,7 +171,6 @@ async def test_join_without_a_session_cookie_still_seats_the_player():
     assert sorted(p.nickname for p in room.player_list()) == ["Host", "Visitor"]
 
 
-@pytest.mark.asyncio
 async def test_join_rejects_a_nickname_breaking_the_shared_name_rule():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=False)
@@ -191,7 +185,6 @@ async def test_join_rejects_a_nickname_breaking_the_shared_name_rule():
         assert response["ok"] is False, bad
     assert room.player_list() == []
 
-@pytest.mark.asyncio
 async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -222,7 +215,6 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
     assert "your_prompt_choices" in emitted_events
     assert "you_are_drawing" not in emitted_events
 
-@pytest.mark.asyncio
 async def test_already_joined_socket_resyncs_active_drawing_state():
     """Soft health checks must refresh game state even when the sid is unchanged."""
     room_manager = RoomManager()
@@ -260,7 +252,6 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
     assert "player_reconnected" not in emitted_events
     assert "player_joined" not in emitted_events
 
-@pytest.mark.asyncio
 async def test_sync_game_carries_the_running_hint_spend():
     """A reconnect is the only way the client's running hint total can be
     lost, so sync_game has to restore it."""
@@ -292,7 +283,6 @@ async def test_sync_game_carries_the_running_hint_spend():
     assert sync["hintSpend"] == spend
     assert sync["maxHintSpend"] == MAX_HINT_SPEND
 
-@pytest.mark.asyncio
 async def test_already_joined_socket_resyncs_turn_results_overlay():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -326,7 +316,6 @@ async def test_already_joined_socket_resyncs_turn_results_overlay():
     assert turn_ended_calls[0].kwargs.get("to") == "drawer-sid"
     assert turn_ended_calls[0].args[1]["prompt"] == room.game.prompt
 
-@pytest.mark.asyncio
 async def test_session_ping_reports_phase_or_needs_rebind():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -356,7 +345,6 @@ async def test_session_ping_reports_phase_or_needs_rebind():
     missing = await session_ping("ghost-sid")
     assert missing == [0]
 
-@pytest.mark.asyncio
 async def test_soft_already_joined_skips_canvas_sync():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)
@@ -386,7 +374,6 @@ async def test_soft_already_joined_skips_canvas_sync():
     assert "sync_strokes" not in emitted_events
 
 
-@pytest.mark.asyncio
 async def test_a_matching_protocol_version_connects_without_an_upgrade_notice():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -404,7 +391,6 @@ async def test_a_matching_protocol_version_connects_without_an_upgrade_notice():
     assert ctx is not None
 
 
-@pytest.mark.asyncio
 async def test_a_stale_protocol_version_is_told_to_upgrade_rather_than_refused():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -428,7 +414,6 @@ async def test_a_stale_protocol_version_is_told_to_upgrade_rather_than_refused()
     assert notices[0].args[1]["received"] == PROTOCOL_VERSION - 1
 
 
-@pytest.mark.asyncio
 async def test_a_client_that_names_no_protocol_at_all_is_told_to_upgrade():
     room_manager = RoomManager()
     sio = socketio.AsyncServer(async_mode="asgi")
@@ -460,7 +445,6 @@ def _stack():
     return ctx, sio, room_manager
 
 
-@pytest.mark.asyncio
 async def test_a_stale_socket_is_refused_every_command_and_mutates_nothing(monkeypatch):
     """#476: told to upgrade, then held to it. A stale build that ignores the
     notice cannot create or join a room, draw, or watch the lobby: its
@@ -498,7 +482,6 @@ async def test_a_stale_socket_is_refused_every_command_and_mutates_nothing(monke
     ctx.release_stale("sid-stale")
 
 
-@pytest.mark.asyncio
 async def test_a_stale_socket_that_does_not_reload_is_closed_and_one_that_goes_is_forgotten(monkeypatch):
     import asyncio
 
@@ -518,7 +501,6 @@ async def test_a_stale_socket_that_does_not_reload_is_closed_and_one_that_goes_i
     assert closed == ["sid-slow"]
 
 
-@pytest.mark.asyncio
 async def test_capacity_and_suspension_outcomes_stay_their_own_for_a_stale_client(monkeypatch):
     """The version is checked after admission: a stale build turned away for
     capacity hears `server_full`, and a suspended account is refused, with no

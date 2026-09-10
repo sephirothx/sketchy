@@ -269,7 +269,6 @@ def test_the_process_sampler_reads_cpu_and_memory():
     assert process["diskTotalBytes"] is None or process["diskTotalBytes"] > 0
 
 
-@pytest.mark.asyncio
 async def test_the_sampler_measures_a_blocked_loop():
     telemetry = Telemetry()
     health = LoopHealth("loop_lag")
@@ -292,7 +291,6 @@ async def test_the_sampler_measures_a_blocked_loop():
     ) >= 0.05
 
 
-@pytest.mark.asyncio
 async def test_a_blocked_loop_says_so_in_the_log(caplog):
     """#735: a histogram nobody is scraping records a stall for nobody.
 
@@ -319,7 +317,6 @@ async def test_a_blocked_loop_says_so_in_the_log(caplog):
     assert float(blocked[0].args[0]) >= 0.05
 
 
-@pytest.mark.asyncio
 async def test_an_unblocked_loop_stays_quiet(caplog):
     """Or the line means nothing: every run of every suite would carry it."""
     telemetry = Telemetry()
