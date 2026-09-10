@@ -5,7 +5,12 @@ import {
 } from "../lib/promptLanguages.ts";
 import type { PromptLanguage } from "../types";
 
-import { DEFAULT_TIME_FORMAT, isTimeFormat, type TimeFormat } from "../lib/clock.ts";
+import {
+  DEFAULT_TIME_FORMAT,
+  isTimeFormat,
+  setClockLocale,
+  type TimeFormat,
+} from "../lib/clock.ts";
 import {
   BRUSH_CURSOR_KEY,
   LEGACY_BRUSH_CURSOR_KEY,
@@ -13,6 +18,14 @@ import {
   migrateKeyBindings,
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
+import { setCatalogue } from "../content/ui/index.ts";
+import {
+  applyDocumentLocale,
+  rememberLocale,
+  resolveLocale,
+  storedLocale,
+  type Locale,
+} from "../lib/interfaceLocale.ts";
 
 export type BrushCursorStyle = "crosshair" | "circle";
 export type AppTheme = "light" | "dark" | "system";
@@ -225,8 +238,11 @@ interface SettingsStore {
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
   /** The language this player plays in: the lobby leads with it and a new
-      room starts in it. Not an interface locale - the UI is not translated. */
+      room starts in it. **Not** the interface locale - a Dutch speaker
+      playing an English room is ordinary (R-I18N-06). */
   promptLanguage: PromptLanguage;
+  /** The language this player reads the interface in. */
+  locale: Locale;
   nameColor: string;
   /** Adopt an account's copy wholesale, as login and registration do (R-SET-03). */
   setAllSettings: (payload: {
@@ -239,6 +255,7 @@ interface SettingsStore {
     colorblindSafeColors?: boolean;
     timeFormat?: TimeFormat;
     promptLanguage?: PromptLanguage;
+    locale?: Locale;
     nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
@@ -251,6 +268,7 @@ interface SettingsStore {
   setColorblindSafeColors: (enabled: boolean) => void;
   setTimeFormat: (timeFormat: TimeFormat) => void;
   setPromptLanguage: (promptLanguage: PromptLanguage) => void;
+  setLocale: (locale: Locale) => void;
   resetKeyBindings: () => void;
 }
 
@@ -264,6 +282,19 @@ try {
 const initialTheme = loadStoredTheme();
 applyThemeToDocument(initialTheme);
 
+// Before the first paint, not after it: a page that renders in English and
+// then switches has already shown the wrong language to whoever reads
+// slowest (R-I18N-06). An account's own choice arrives later, with the rest
+// of its settings, and moves the app again if it differs.
+const initialLocale = setCatalogue(
+  resolveLocale({
+    stored: storedLocale(),
+    browser: typeof navigator === "undefined" ? [] : navigator.languages,
+  }),
+);
+applyDocumentLocale(initialLocale);
+setClockLocale(initialLocale);
+
 export const useSettingsStore = create<SettingsStore>((set) => ({
   keyBindings: loadStoredKeyBindings(),
   brushCursor: loadStoredBrushCursor(),
@@ -274,6 +305,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   colorblindSafeColors: loadStoredFlag("sketchy_colorblindsafecolors", false),
   timeFormat: loadStoredTimeFormat(),
   promptLanguage: loadStoredPromptLanguage(),
+  locale: initialLocale,
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
@@ -285,6 +317,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     colorblindSafeColors = false,
     timeFormat = DEFAULT_TIME_FORMAT,
     promptLanguage = loadStoredPromptLanguage(),
+    locale = initialLocale,
     nameColor,
   }) =>
     set(() => {
@@ -300,6 +333,13 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem(PROMPT_LANGUAGE_KEY, promptLanguage);
       localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
+      // The account's choice wins over this browser's, and is remembered
+      // here too so the next visit does not flash the other language before
+      // the settings arrive.
+      const inForce = setCatalogue(locale);
+      rememberLocale(inForce);
+      applyDocumentLocale(inForce);
+      setClockLocale(inForce);
       return {
         keyBindings,
         brushCursor,
@@ -310,6 +350,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         colorblindSafeColors,
         timeFormat,
         promptLanguage,
+        locale: inForce,
         nameColor,
       };
     }),
@@ -362,6 +403,14 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_timeformat", timeFormat);
       return { timeFormat };
+    }),
+  setLocale: (locale) =>
+    set(() => {
+      const inForce = setCatalogue(locale);
+      rememberLocale(inForce);
+      applyDocumentLocale(inForce);
+      setClockLocale(inForce);
+      return { locale: inForce };
     }),
   setPromptLanguage: (promptLanguage) =>
     set(() => {

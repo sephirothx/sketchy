@@ -7,6 +7,7 @@ import {
   type TimeFormat,
 } from "../store/settingsStore";
 import type { PromptLanguage } from "../types";
+import type { Locale } from "./interfaceLocale.ts";
 
 /** The preferences that follow a registered player across devices (R-SET-01). */
 export interface AccountSettings {
@@ -19,6 +20,9 @@ export interface AccountSettings {
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
   promptLanguage: PromptLanguage;
+  /** The language the interface is read in - not the one the room plays in
+      (R-I18N-06). */
+  locale: Locale;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -35,6 +39,7 @@ export function currentSettingsPayload(): AccountSettings {
     colorblindSafeColors: settings.colorblindSafeColors,
     timeFormat: settings.timeFormat,
     promptLanguage: settings.promptLanguage,
+    locale: settings.locale,
   };
 }
 

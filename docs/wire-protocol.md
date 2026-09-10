@@ -1688,7 +1688,7 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers. Includes `promptLanguage`, the language the player plays in (R-PROMPT-11) — seeded from `Accept-Language` at registration, a setting afterwards, and never an interface locale |
+| `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers. Carries **two** languages, and they are not the same one: `promptLanguage`, the language the player *plays* in (R-PROMPT-11), and `locale`, the language they *read* in (R-I18N-06). Both are seeded at registration from what the new account's browser resolved, and are settings afterwards; both are stored because a browser describes a device rather than a person |
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
 | `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing, announce}`. Refusals are in none of them. A guest is refused **403 with `X-Sketchy-Account-Required`** — the header names the reason, because a status cannot: the middleware answers 403 for a suspended account before this route runs, and a client that reads any 403 as *this caller is a guest* shows an empty friends list for a real account. Same pattern as `X-Sketchy-Step-Up`. Also `announce`: the requests this account **sent** that were accepted and that nobody has told them about yet — a fact on the row rather than a difference between two reads, so a client that was reloading when the answer came still learns it (R-FRIEND-14) |
 | `POST` | `/api/users/me/friends/announced` | `{ userIds }` → `{ ok, announced }`. Records that the asker was told, for exactly the friendships the message named, re-checking on the write that each is their own request, accepted, and still unannounced. Sent **after** the message is shown: recording first loses the news whenever the render does not happen |
@@ -1883,7 +1883,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (3) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (6) | The export document, pinned by [`fixtures/account_data_export_v6_fields.json`](../fixtures/account_data_export_v6_fields.json) | The export's field surface changes |
+| Data export `schema_version` (7) | The export document, pinned by [`fixtures/account_data_export_v7_fields.json`](../fixtures/account_data_export_v7_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 

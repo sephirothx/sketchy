@@ -35,7 +35,7 @@ FRONTEND_SRC = REPO_ROOT / "frontend" / "src"
 BUILTIN_EVENTS = {"connect", "disconnect", "connect_error"}
 ACK_FIELDS = {"ok", "error", "field"}
 EXPORT_CONTRACT = json.loads(
-    (REPO_ROOT / "fixtures" / "account_data_export_v6_fields.json").read_text(
+    (REPO_ROOT / "fixtures" / "account_data_export_v7_fields.json").read_text(
         encoding="utf-8"
     )
 )

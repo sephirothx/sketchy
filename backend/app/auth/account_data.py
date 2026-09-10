@@ -93,7 +93,7 @@ from app.domain_values import (
 # document's field surface changed, and a reader that keys off the version
 # should be able to tell which shape it has. To 5 when the account gained
 # `lastSeenAt` (#469).
-EXPORT_SCHEMA_VERSION = 6
+EXPORT_SCHEMA_VERSION = 7
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -921,6 +921,7 @@ async def _write_export_artifact(
             "colorblindSafeColors": settings.colorblind_safe_colors,
             "timeFormat": settings.time_format,
             "promptLanguage": settings.prompt_language,
+            "locale": settings.locale,
             "createdAt": _timestamp(settings.created_at),
             "updatedAt": _timestamp(settings.updated_at),
         }

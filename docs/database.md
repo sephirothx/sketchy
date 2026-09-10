@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d0e1f2a3b4c5_staff_passkeys.py` (#684).
+`a4b5c6d7e8f9_interface_locale.py` (#763).
 
 To regenerate an authoritative dump of this schema:
 
@@ -533,18 +533,30 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `brush_cursor` (`crosshair \| circle`) · `time_format` (`system \| 12h \| 24h`) ·
 `key_bindings` (JSON) ·
 `colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
+`locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · timestamps.
 
 Bounded at both the API and database layers: key bindings must describe the complete
 supported action set.
 
-`prompt_language` is the language this player *plays* in (R-PROMPT-11) — what the
-lobby leads with and what a new room starts in — not an interface locale, which is
-the same line `prompt_lists` draws between its content language and its localized
-catalogue copy. It is stored rather than read from `Accept-Language` every time
-because a header describes the device, and a player who chose a language on their
-laptop should not have to choose it again on their phone; registration seeds it from
-the header, and it is a setting from then on.
+**Two languages, and they are not the same one.** `prompt_language` is the language
+this player *plays* in (R-PROMPT-11) — what the lobby leads with and what a new room
+starts in. `locale` is the language they *read* in (R-I18N-06): the interface, the
+refusals, the room's own announcements. A Dutch speaker playing an English room is
+ordinary, and one column could not describe them; it is the same line `prompt_lists`
+draws between its content language and its localized catalogue copy.
+
+The registries behind them are separate too, and bound by different things: a prompt
+language needs matching semantics before it can exist at all (N-09, R-PROMPT-09),
+while an interface locale needs only somebody to have written the words. They hold
+the same seven values today and are free to diverge.
+
+Both are stored rather than resolved from the browser every time, because a browser
+describes the device, and a player who chose a language on their laptop should not
+have to choose it again on their phone. Registration seeds each from whatever the
+new account's browser resolved — it sends its settings with the registration — and
+they are settings from then on. `Accept-Language` is the server's own fallback, for
+the one reader with no browser attached: the mail it sends (R-I18N-08).
 
 `auto_clear_chat_on_guess` and `custom_brush_presets` were removed rather than kept:
 the first is now the only behaviour (a guess you got right is not a draft worth
@@ -675,7 +687,7 @@ guesses, prompt-list revision history, unexpired authored retained messages, sub
 evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v6_fields.json`](../fixtures/account_data_export_v6_fields.json).
+pinned by [`fixtures/account_data_export_v7_fields.json`](../fixtures/account_data_export_v7_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
