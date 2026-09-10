@@ -3419,6 +3419,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     row.visibility == PromptListVisibility.UNLISTED.value
                     and row.share_code in supplied_share_codes
                 )
+                # Published: the fourth ground a room may admit a list on
+                # (R-LIST-15). It needs no capability because publishing is
+                # the owner saying so, and it is checked here rather than at
+                # the picker so that Start re-checks it too - which is what
+                # makes an unpublish or a takedown between the two refuse the
+                # room visibly instead of quietly shrinking its pool.
+                or row.visibility == PromptListVisibility.PUBLIC.value
             )
         ]
         found = {row.slug for row in authorized_rows}
