@@ -60,6 +60,10 @@ class RoomPresetConfig(RoomPresetSummary):
     hide_masked_prompt: bool
     allowed_tools: tuple[str, ...]
     color_mode: str
+    # Derived from the saved lists rather than stored beside them: a preset's
+    # language is whatever its lists are in, and the two can then never
+    # disagree. Applying a preset is what carries it into the new room.
+    prompt_language: str
     prompt_list_ids: tuple[str, ...]
     prompt_list_slugs: tuple[str, ...]
 
@@ -106,6 +110,8 @@ class RoomPresetService:
         session: AsyncSession,
         slugs: list[str],
         owner_id: UUID,
+        *,
+        expected_language: str,
     ) -> list[str]:
         rows = (
             await session.scalars(
@@ -128,11 +134,15 @@ class RoomPresetService:
             raise RoomPresetError(
                 "Room presets may use only active built-in prompt lists or lists you own"
             )
+        if any(by_slug[slug].language != expected_language for slug in slugs):
+            raise RoomPresetError(
+                "A room preset's prompt lists must be in the preset's language"
+            )
         return [str(by_slug[slug].id) for slug in slugs]
 
     async def _slugs_for_row(
         self, row: RoomPreset, owner_id: UUID
-    ) -> list[str]:
+    ) -> tuple[list[str], str]:
         try:
             ids = [UUID(value) for value in row.prompt_list_ids]
         except (TypeError, ValueError) as error:
@@ -172,7 +182,7 @@ class RoomPresetService:
             raise RoomPresetUnavailable(
                 "This preset's saved prompt lists are unavailable"
             ) from error
-        return list(resolved.slugs)
+        return list(resolved.slugs), resolved.language
 
     @staticmethod
     def _validate_configuration(settings: dict) -> None:
@@ -221,7 +231,10 @@ class RoomPresetService:
                             f"An account may save at most {MAX_ROOM_PRESETS_PER_OWNER} room presets"
                         )
                     prompt_list_ids = await self._durable_prompt_list_ids(
-                        session, list(settings["prompt_list_slugs"]), owner_id
+                        session,
+                        list(settings["prompt_list_slugs"]),
+                        owner_id,
+                        expected_language=settings["prompt_language"],
                     )
                     row = RoomPreset(
                         owner_user_id=owner_id,
@@ -267,7 +280,7 @@ class RoomPresetService:
     async def _config(
         self, row: RoomPreset, owner_id: UUID
     ) -> RoomPresetConfig:
-        slugs = await self._slugs_for_row(row, owner_id)
+        slugs, language = await self._slugs_for_row(row, owner_id)
         return RoomPresetConfig(
             **_summary(row).__dict__,
             room_name=row.room_name,
@@ -281,6 +294,7 @@ class RoomPresetService:
             hide_masked_prompt=row.hide_masked_prompt,
             allowed_tools=tuple(row.allowed_tools),
             color_mode=row.color_mode,
+            prompt_language=language,
             prompt_list_ids=tuple(row.prompt_list_ids),
             prompt_list_slugs=tuple(slugs),
         )
@@ -315,7 +329,10 @@ class RoomPresetService:
                             "Room preset changed; reload before editing"
                         )
                     prompt_list_ids = await self._durable_prompt_list_ids(
-                        session, list(settings["prompt_list_slugs"]), owner_id
+                        session,
+                        list(settings["prompt_list_slugs"]),
+                        owner_id,
+                        expected_language=settings["prompt_language"],
                     )
                     row.name = clean_name
                     row.name_key = name_key

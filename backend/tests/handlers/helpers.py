@@ -15,6 +15,7 @@ from app.prompt_content import prompt_match_key
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
     PinnedPromptSelection,
+    PromptListSelectionError,
     PromptSample,
     SampledPrompt,
 )
@@ -247,9 +248,16 @@ class StubPromptListRepo:
         return prompt_match_key(prompt, self.language)
 
     async def authorize_selection(
-        self, slugs, *, requesting_user_id=None, share_codes=()
+        self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
     ):
         self.reads += 1
+        # The live store refuses a selection that is not in the room's declared
+        # language (R-PROMPT-02); a stub that answered anyway would let a test
+        # pass on a room the server would never have opened.
+        if expected_language is not None and expected_language != self.language:
+            raise PromptListSelectionError(
+                "Selected prompt lists are not in this room's language"
+            )
         counts, total = letter_histogram(self.prompts)
         return PinnedPromptSelection(
             slugs=tuple(slugs),

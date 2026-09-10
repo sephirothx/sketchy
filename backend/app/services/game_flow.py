@@ -43,6 +43,7 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
+from app.prompt_content import default_prompt_list_slug
 from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.repositories.interfaces import (
     PromptListSelectionError,
@@ -124,6 +125,13 @@ class GameFlowService:
                 return parsed
             return getattr(fallback, fallback_field or field)
 
+        # The room declares its language and the lists must agree with it
+        # (R-PROMPT-02). Only creation carries the field: it is fixed for the
+        # room's life, so an update reads it back off the room it is editing.
+        declared_language = (
+            getattr(payload, "prompt_language", None)
+            or (fallback.prompt_language if fallback else "en")
+        )
         scoring_mode = value("scoring_mode")
         hint_mode = value("hint_mode")
         hide_masked_prompt = value("hide_masked_prompt")
@@ -139,7 +147,7 @@ class GameFlowService:
         elif fallback is not None:
             prompt_list_slugs = list(fallback.prompt_list_slugs)
         else:
-            prompt_list_slugs = ["english_standard"]
+            prompt_list_slugs = [default_prompt_list_slug(declared_language)]
         raw_share_codes = getattr(payload, "prompt_list_share_codes", None)
         if raw_share_codes is not None:
             prompt_list_share_codes = list(raw_share_codes)
@@ -148,7 +156,6 @@ class GameFlowService:
         else:
             prompt_list_share_codes = []
 
-        prompt_language = fallback.prompt_language if fallback else "en"
         prompt_list_revision_ids = (
             list(fallback.prompt_list_revision_ids) if fallback else []
         )
@@ -175,14 +182,14 @@ class GameFlowService:
                         prompt_list_slugs,
                         requesting_user_id=requesting_user_id,
                         share_codes=prompt_list_share_codes,
+                        expected_language=declared_language,
                     )
                 else:
                     # Keep protocol-compatible adapters simple: public bundled
                     # selection has no authorization context to pass.
                     selection = await self._ctx.prompt_list_repo.authorize_selection(
-                        prompt_list_slugs
+                        prompt_list_slugs, expected_language=declared_language
                     )
-                prompt_language = selection.language
                 prompt_list_revision_ids = list(selection.revision_ids)
                 prompt_pool_size = selection.prompt_count
                 prompt_letter_counts = dict(selection.letter_counts)
@@ -220,7 +227,7 @@ class GameFlowService:
             "hide_masked_prompt": hide_masked_prompt,
             "allowed_tools": list(value("allowed_tools")),
             "color_mode": value("color_mode"),
-            "prompt_language": prompt_language,
+            "prompt_language": declared_language,
             "prompt_list_slugs": prompt_list_slugs,
             "prompt_list_share_codes": prompt_list_share_codes,
             "prompt_list_revision_ids": prompt_list_revision_ids,
@@ -246,10 +253,11 @@ class GameFlowService:
                     list(room.prompt_list_slugs),
                     requesting_user_id=requesting_user_id,
                     share_codes=room.prompt_list_share_codes,
+                    expected_language=room.prompt_language,
                 )
             else:
                 selection = await self._ctx.prompt_list_repo.authorize_selection(
-                    list(room.prompt_list_slugs)
+                    list(room.prompt_list_slugs), expected_language=room.prompt_language
                 )
         except PromptListSelectionError as error:
             raise RoomPromptResolutionError(str(error)) from error
@@ -258,7 +266,6 @@ class GameFlowService:
             raise RoomPromptResolutionError(
                 "Prompt lists could not be loaded. Please try again."
             ) from error
-        room.prompt_language = selection.language
         room.prompt_list_revision_ids = list(selection.revision_ids)
         room.prompt_pool_size = selection.prompt_count
         room.prompt_letter_counts = dict(selection.letter_counts)

@@ -57,6 +57,7 @@ def _config_payload(preset: RoomPresetConfig) -> dict:
             "hideMaskedPrompt": preset.hide_masked_prompt,
             "allowedTools": list(preset.allowed_tools),
             "colorMode": preset.color_mode,
+            "promptLanguage": preset.prompt_language,
             "promptListSlugs": list(preset.prompt_list_slugs),
             "promptListShareCodes": [],
         },

@@ -32,12 +32,17 @@ import {
   hintLabelFor,
   scoringLabelFor,
 } from "../lib/roomSetup";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import {
+  availablePromptLanguages,
+  promptLanguageLabel,
+  selectionForLanguage,
+} from "../lib/promptLanguages";
 import type { CustomPromptsAction, CustomPromptsState } from "../lib/customPrompts";
 import type {
   ColorMode,
   DrawingToolGroup,
   HintMode,
+  PromptLanguage,
   PromptListSummary,
   ScoringMode,
 } from "../types";
@@ -50,6 +55,7 @@ export interface RoomSetupValues {
   maxPlayers: number;
   rounds: number;
   drawingSeconds: number;
+  promptLanguage: PromptLanguage;
   promptListSlugs: string[];
   promptListShareCodes: string[];
   allowedTools: DrawingToolGroup[];
@@ -72,7 +78,12 @@ interface RoomSetupFormProps {
   onListsLoaded?: (lists: PromptListSummary[]) => void;
   /** Create puts its running-time estimate under the three numbers. */
   durationNote?: ReactNode;
-  selectedLists?: PromptListSummary[];
+  /** Every list the host may choose from, in any language: what the language
+      field offers, and what the prompts summary is read from. */
+  loadedLists?: PromptListSummary[];
+  /** A room's language is fixed at creation, so the editor shows it rather
+      than offering it. */
+  languageLocked?: boolean;
 }
 
 /**
@@ -95,7 +106,8 @@ export function RoomSetupForm({
   promptsFooter,
   onListsLoaded,
   durationNote,
-  selectedLists = [],
+  loadedLists = [],
+  languageLocked = false,
 }: RoomSetupFormProps) {
   const {
     name,
@@ -103,6 +115,7 @@ export function RoomSetupForm({
     maxPlayers,
     rounds,
     drawingSeconds,
+    promptLanguage,
     promptListSlugs,
     promptListShareCodes,
     allowedTools,
@@ -113,10 +126,12 @@ export function RoomSetupForm({
     hideMaskedPrompt,
   } = values;
 
+  const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
+  const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
+
   const promptsSummary = (() => {
-    const parts: string[] = [];
+    const parts: string[] = [promptLanguageLabel(promptLanguage)];
     if (selectedLists.length > 0) {
-      parts.push(promptLanguageLabel(selectedLists[0].language));
       const names = selectedLists.map((list) => list.name);
       parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
       const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
@@ -180,6 +195,43 @@ export function RoomSetupForm({
               </span>
             </div>
           </div>
+          <div className="create-room-language-field">
+            <span className="create-room-language-label" id="room-language-label">
+              Language
+            </span>
+            {languageLocked || languageOptions.length < 2 ? (
+              <output aria-labelledby="room-language-label">
+                {promptLanguageLabel(promptLanguage)}
+              </output>
+            ) : (
+              <select
+                aria-labelledby="room-language-label"
+                value={promptLanguage}
+                onChange={(event) => {
+                  const next = event.target.value as PromptLanguage;
+                  onChange({
+                    promptLanguage: next,
+                    // Lists cannot span languages, and the bearer codes that
+                    // authorized the old ones belong to the language being
+                    // left, so neither carries over.
+                    promptListSlugs: selectionForLanguage(loadedLists, next),
+                    promptListShareCodes: [],
+                  });
+                }}
+              >
+                {languageOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {promptLanguageLabel(option)}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span className="create-room-language-caption">
+              {languageLocked
+                ? "Fixed when the room was created."
+                : "What the prompts are in, and how guesses are matched."}
+            </span>
+          </div>
           <div className="setting-cards">
             {/* No hints under these three. The ranges are enforced by the
                 controls themselves, "everyone draws once per round" is what a
@@ -222,6 +274,7 @@ export function RoomSetupForm({
         </summary>
         <div className="form-section-body">
           <PromptListPicker
+            language={promptLanguage}
             selectedSlugs={promptListSlugs}
             onChange={(slugs) => onChange({ promptListSlugs: slugs })}
             shareCodes={promptListShareCodes}

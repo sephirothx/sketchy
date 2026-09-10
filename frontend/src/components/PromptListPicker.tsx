@@ -9,6 +9,9 @@ import { PromptContentReportDialog } from "./PromptContentReportDialog";
 import { AlertIcon, CheckIcon, InfoIcon, PlusIcon } from "./icons";
 
 interface PromptListPickerProps {
+  /** The room's declared language. Lists answer to it; it is never read back
+      off the selection (R-PROMPT-02). */
+  language: PromptLanguage;
   selectedSlugs: string[];
   onChange: (slugs: string[]) => void;
   shareCodes?: string[];
@@ -19,6 +22,7 @@ interface PromptListPickerProps {
 }
 
 export function PromptListPicker({
+  language,
   selectedSlugs,
   onChange,
   shareCodes = [],
@@ -96,8 +100,15 @@ export function PromptListPicker({
         }));
       }
       const selection = addSharedPromptSelection(
-        selectedSlugs, shareCodes, shared, submittedCode, activeLanguage
+        selectedSlugs, shareCodes, shared, submittedCode, language
       );
+      if (!selection.ok) {
+        setShareError(
+          `That list is in ${promptLanguageLabel(selection.language)}; this room is in `
+          + `${promptLanguageLabel(language)}.`,
+        );
+        return;
+      }
       onShareCodesChange?.(selection.shareCodes);
       onChange(selection.slugs);
       setShareCode("");
@@ -119,20 +130,7 @@ export function PromptListPicker({
     }
   }
 
-  const selectedList = promptLists.find((list) => selectedSlugs.includes(list.slug));
-  const activeLanguage = selectedList?.language
-    ?? promptLists.find((list) => list.language === "en")?.language
-    ?? promptLists[0]?.language
-    ?? "en";
-  const languages = [...new Set(promptLists.map((list) => list.language))]
-    .sort((left, right) => promptLanguageLabel(left).localeCompare(promptLanguageLabel(right)));
-  const visibleLists = promptLists.filter((list) => list.language === activeLanguage);
-
-  function handleLanguage(language: PromptLanguage) {
-    if (disabled || language === activeLanguage) return;
-    const firstList = promptLists.find((list) => list.language === language);
-    if (firstList) onChange([firstList.slug]);
-  }
+  const visibleLists = promptLists.filter((list) => list.language === language);
 
   if (loading) {
     return (
@@ -155,25 +153,12 @@ export function PromptListPicker({
   return (
     <fieldset className="room-choice-group prompt-list-picker-group">
       <legend>Prompt lists</legend>
-      <div className="prompt-list-language-row">
-        <label htmlFor="prompt-list-language">Prompt language</label>
-        {languages.length > 1 ? (
-          <select
-            id="prompt-list-language"
-            value={activeLanguage}
-            disabled={disabled}
-            onChange={(event) => handleLanguage(event.target.value as PromptLanguage)}
-          >
-            {languages.map((language) => (
-              <option key={language} value={language}>
-                {promptLanguageLabel(language)}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <output>{promptLanguageLabel(activeLanguage)}</output>
-        )}
-      </div>
+      {visibleLists.length === 0 && (
+        <p className="prompt-list-fallback-note">
+          No prompt lists in {promptLanguageLabel(language)} yet — this room draws
+          on its own custom prompts.
+        </p>
+      )}
       <div className="toggle-chips" role="group" aria-label="Prompt lists">
         {visibleLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);

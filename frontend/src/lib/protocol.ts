@@ -9,7 +9,7 @@ every command the socket sends and closes it after a few seconds (#476), so
 a reload is the only way forward - and the same number rides every REST
 response in `PROTOCOL_HEADER`, so a tab that is not on a socket is caught by
 its next request. */
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 
 /** The response header every REST answer carries the server's version in. */
 export const PROTOCOL_HEADER = "x-sketchy-protocol";

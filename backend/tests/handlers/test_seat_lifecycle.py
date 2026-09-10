@@ -98,7 +98,7 @@ async def test_a_refused_create_keeps_the_seat_the_socket_already_had():
             super().__init__(("apple", "boat"))
 
         async def authorize_selection(
-            self, slugs, *, requesting_user_id=None, share_codes=()
+            self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
         ):
             if "safari" in slugs:
                 raise RuntimeError("prompt store is unreachable")

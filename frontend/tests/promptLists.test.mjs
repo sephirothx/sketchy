@@ -4,6 +4,10 @@ import {
   addSharedPromptSelection,
   promptEntriesFromQuickInput,
 } from "../src/lib/promptListDrafts.ts";
+import {
+  availablePromptLanguages,
+  selectionForLanguage,
+} from "../src/lib/promptLanguages.ts";
 
 function toggleWordListSlug(currentSlugs, slugToToggle) {
   if (currentSlugs.includes(slugToToggle)) {
@@ -35,22 +39,49 @@ test("quick room prompts become a bounded deduplicated persistence draft", () =>
   ]);
 });
 
-test("a shared list retains its bearer code and switches incompatible language", () => {
+const sharedFrenchList = {
+  slug: "user-fr",
+  name: "Français",
+  description: "",
+  language: "fr",
+  promptCount: 10,
+  isBundled: false,
+  version: 1,
+};
+
+test("a shared list in the room's language is added and keeps its bearer code", () => {
+  const selection = addSharedPromptSelection(
+    ["francais_standard"],
+    [],
+    sharedFrenchList,
+    "same-code",
+    "fr",
+  );
+  assert.equal(selection.ok, true);
+  assert.deepEqual(selection.slugs, ["francais_standard", "user-fr"]);
+  assert.deepEqual(selection.shareCodes, ["same-code"]);
+});
+
+test("a shared list in another language is refused, not swapped in", () => {
   const selection = addSharedPromptSelection(
     ["english_standard"],
     ["same-code"],
-    {
-      slug: "user-fr",
-      name: "Français",
-      description: "",
-      language: "fr",
-      promptCount: 10,
-      isBundled: false,
-      version: 1,
-    },
-    "same-code",
+    sharedFrenchList,
+    "another-code",
     "en",
   );
-  assert.deepEqual(selection.slugs, ["user-fr"]);
-  assert.deepEqual(selection.shareCodes, ["same-code"]);
+  assert.deepEqual(selection, { ok: false, language: "fr" });
+});
+
+test("the language options offered are the ones with content, plus the room's own", () => {
+  const lists = [
+    { slug: "english_standard", language: "en" },
+    { slug: "english_extended", language: "en" },
+    { slug: "user-de", language: "de" },
+  ];
+  // Sorted by the label a host reads, so English comes before German.
+  assert.deepEqual(availablePromptLanguages(lists, "en"), ["en", "de"]);
+  assert.deepEqual(availablePromptLanguages([], "fr"), ["fr"]);
+  assert.deepEqual(selectionForLanguage(lists, "de"), ["user-de"]);
+  assert.deepEqual(selectionForLanguage(lists, "it"), []);
 });

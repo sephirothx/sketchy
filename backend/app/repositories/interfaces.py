@@ -860,8 +860,14 @@ class PromptListRepository(ABC):
         *,
         requesting_user_id: str | None = None,
         share_codes: Sequence[str] = (),
+        expected_language: str | None = None,
     ) -> ResolvedPromptSelection:
-        """Resolve an authorized, language-homogeneous list selection."""
+        """Resolve an authorized, language-homogeneous list selection.
+
+        `expected_language` is the language the caller has already committed to
+        - a room's declared one (R-PROMPT-02). Passing it turns "these lists
+        agree with each other" into "these lists agree with the room".
+        """
         ...
 
     @abstractmethod
@@ -871,6 +877,7 @@ class PromptListRepository(ABC):
         *,
         requesting_user_id: str | None = None,
         share_codes: Sequence[str] = (),
+        expected_language: str | None = None,
     ) -> PinnedPromptSelection:
         """Validate and pin a selection without reading its prompts.
 

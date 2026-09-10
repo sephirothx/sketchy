@@ -42,6 +42,7 @@ def settings(slug: str, **overrides) -> dict:
         "hideMaskedPrompt": False,
         "allowedTools": ["brush", "shapes"],
         "colorMode": "colorblind_safe",
+        "promptLanguage": "en",
         "promptListSlugs": [slug],
         "promptListShareCodes": [],
     }
@@ -226,6 +227,43 @@ async def test_rejects_guests_quick_prompts_shared_lists_and_duplicate_names(env
         )
         assert external.status_code == 422
         assert (await other_client.get(f"/api/room-presets/{first.json()['id']}")).status_code == 404
+
+
+async def test_a_preset_carries_the_language_of_the_lists_it_saved(env):
+    """A preset is applied to a new room, and the room declares its language
+    before it picks lists (R-PROMPT-02). The preset therefore has to say which
+    language it is for - derived from the lists it saved, so the two can never
+    disagree - and refuse to save a language its lists are not in."""
+    client, _, prompt_lists, _, _ = env
+    owner = await register(client)
+    german = await prompt_lists.create_owned(
+        owner["id"],
+        name="Meine Begriffe",
+        description="",
+        language="de",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="Rotpanda"),),
+    )
+
+    created = await client.post(
+        "/api/room-presets",
+        json={
+            "name": "Spieleabend",
+            "settings": settings(german.slug, promptLanguage="de"),
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["settings"]["promptLanguage"] == "de"
+
+    mismatched = await client.post(
+        "/api/room-presets",
+        json={
+            "name": "Mismatched",
+            "settings": settings(german.slug, promptLanguage="en"),
+        },
+    )
+    assert mismatched.status_code == 422
+    assert "language" in mismatched.json()["detail"]
 
 
 async def test_deleted_prompt_list_makes_preset_visibly_unavailable(env):

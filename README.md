@@ -23,7 +23,7 @@ keyboard that takes half the screen, and one thumb.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code.
-- Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. The picker and stats catalogue show each official list's content language; every room resolves exactly one language and cannot combine lists with different matching rules. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
+- Prompt lists selectable during room creation, combined with optional custom prompts. Standard and Extended English ship with the game; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. Every room declares one language when it is created — chosen at the top of the create form, fixed thereafter, and offered only for languages that have content — and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line. Points go out every 80 ms, each frame relative to the last point sent, the last batch of a stroke carrying its end, and a viewer plays each batch out over the next 80 ms at the screen's own rate rather than painting it in one step, so it sees ink smoothly, up to 80 ms behind the drawer's hand.
 - Drawing rules — two **Room rules** the host sets at creation and edits while waiting.
@@ -431,11 +431,16 @@ matched guesses. The initial supported Latin-language registry—English,
 German, Spanish, French, Italian, Dutch, and Portuguese—case-folds, collapses
 whitespace, and folds canonically decomposable accents. Other BCP-47 tags are
 rejected until their matching semantics are implemented.
-Each room's **Prompt language** is derived authoritatively from its selected
-lists, carried into exact and near-match game logic, and exposed in room
-payloads. Missing, empty, or mixed-language selections are visible validation
-failures rather than silent fallback. A custom-prompts-only room may continue
-when the list store is unavailable because it does not consume that content.
+Each room **declares** its **Prompt language**: the host chooses it when the
+room is created, it is fixed for the room's life, and every selected list must
+be in it. It is carried into exact and near-match game logic — for the room's
+own quick prompts as much as for list content, so a room typing its own German
+prompts is no longer matched under English rules — and exposed in room
+payloads. Selecting a list never changes it: a list or share code in another
+language is a visible validation failure against the prompt-list field, and an
+empty selection resolves to that language's own Standard list rather than to
+English. A custom-prompts-only room may continue when the list store is
+unavailable because it does not consume that content.
 List `name` and `description` are authored catalogue copy; optional translated
 copy is stored separately by interface locale and selected from
 `Accept-Language`, so translating the UI never changes a list's content
