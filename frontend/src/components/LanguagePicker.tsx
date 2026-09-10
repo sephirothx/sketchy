@@ -24,6 +24,8 @@ interface LanguagePickerProps {
   disabled?: boolean;
   /** Sizes the trigger where it sits in a filter bar rather than in a form. */
   compact?: boolean;
+  /** Trigger shows the flag alone; the list still names every language. */
+  flagOnly?: boolean;
 }
 
 /**
@@ -52,6 +54,7 @@ export function LanguagePicker({
   includeAny = false,
   disabled = false,
   compact = false,
+  flagOnly = false,
 }: LanguagePickerProps) {
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -123,7 +126,7 @@ export function LanguagePicker({
 
   return (
     <div
-      className={`language-picker${compact ? " is-compact" : ""}`}
+      className={`language-picker${compact ? " is-compact" : ""}${flagOnly ? " is-flag-only" : ""}`}
       ref={rootRef}
     >
       <button
@@ -134,11 +137,12 @@ export function LanguagePicker({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={`${label}: ${accessibleName(value)}`}
+        title={flagOnly ? `${label}: ${accessibleName(value)}` : undefined}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
-        <LanguageFace value={value} />
-        <ChevronDownIcon size={14} />
+        <LanguageFace value={value} nameHidden={flagOnly} flagWidth={flagOnly ? 38 : 18} />
+        {!flagOnly && <ChevronDownIcon size={14} />}
       </button>
 
       {open && (
@@ -179,14 +183,20 @@ export function LanguagePicker({
  * for itself. Read-only surfaces use it too, so a room that cannot change its
  * language still looks like the control that set it.
  */
-export function LanguageFace({ value }: { value: LanguageChoice }) {
+export function LanguageFace({
+  value,
+  nameHidden = false,
+  flagWidth = 18,
+}: { value: LanguageChoice; nameHidden?: boolean; flagWidth?: number }) {
   if (value === ANY_LANGUAGE) {
     return (
       <span className="language-picker-face">
         <span className="language-picker-flag" aria-hidden="true">
-          <GlobeIcon size={15} />
+          <GlobeIcon size={Math.round(flagWidth * 0.85)} />
         </span>
-        <span className="language-picker-name">Every language</span>
+        <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
+          Every language
+        </span>
       </span>
     );
   }
@@ -195,9 +205,11 @@ export function LanguageFace({ value }: { value: LanguageChoice }) {
   return (
     <span className="language-picker-face">
       <span className="language-picker-flag" aria-hidden="true">
-        <Flag language={value} />
+        <Flag language={value} width={flagWidth} />
       </span>
-      <span className="language-picker-name">{endonym}</span>
+      <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
+        {endonym}
+      </span>
       {/* The interface is English and untranslated, so the English name is
           what makes the row answerable to a screen reader — but only where it
           says something the endonym does not. */}

@@ -60,19 +60,19 @@
     </div>
   
       <div style="display: grid; gap: 16px">
-        <div style="display: flex; align-items: flex-start; gap: 20px">
+        <div style="display: flex; align-items: flex-end; gap: 14px">
           <label style="flex: 1; display: grid; gap: 6px; font-size: 14.5px; font-weight: 800; color: var(--ink)">Room name
             <span style="display: flex; align-items: center; gap: 8px">
               <input type="text" placeholder="Leave blank for a random name!" style="background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14.5px; color: var(--ink); min-height: 42px; width: 100%">
               <button type="button" title="Roll a random name" aria-label="Roll a random name" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; background: var(--card); color: var(--muted); border: 1.5px solid var(--lineStrong); border-radius: 10px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.2" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="8.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="8.2" cy="15.8" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.8" cy="15.8" r="1.1" fill="currentColor" stroke="none"/></svg></button>
             </span>
           </label>
-          <div style="display: grid; gap: 6px; justify-items: start">
-            <span style="font-size: 14.5px; font-weight: 800; color: var(--ink)">Visibility</span>
+          <span style="display: inline-flex; align-items: center; justify-content: center; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 6px; min-height: 44px; flex: none"><svg width="38" height="27" viewBox="0 0 18 13" aria-hidden="true" style="flex: none; border-radius: 5.428571428571429px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15)"><rect width="18" height="13" fill="#29427B"/><path d="M0 0 18 13M18 0 0 13" stroke="#FDFBF6" stroke-width="2.6"/><path d="M0 0 18 13M18 0 0 13" stroke="#CF475C" stroke-width="1.1"/><path d="M9 0v13M0 6.5h18" stroke="#FDFBF6" stroke-width="4"/><path d="M9 0v13M0 6.5h18" stroke="#CF475C" stroke-width="2.2"/></svg></span>
+          <div style="display: flex; align-items: center; gap: 8px">
             <div style="display: inline-flex; gap: 3px; background: var(--track); border-radius: 999px; padding: 4px; width: fit-content">
     <button type="button" aria-pressed="true" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--card); border: 0; border-radius: 999px; color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 800; padding: 8px 16px; box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14); white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z"/></svg>Public</button><button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 0; border-radius: 999px; color: var(--muted); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 13.5px; font-weight: 700; padding: 8px 16px; white-space: nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private</button>
   </div>
-            <span style="font-size: 11.5px; font-weight: 700; color: var(--faint)">Listed in the lobby — anyone can wander in.</span>
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--track); color: var(--muted); font-size: 10.5px; font-weight: 800; flex: none">?</span>
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px">

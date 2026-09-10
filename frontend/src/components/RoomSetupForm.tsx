@@ -4,6 +4,7 @@ import { PromptListPicker } from "./PromptListPicker";
 import { LanguageFace, LanguagePicker } from "./LanguagePicker";
 import {
   ChoiceCards,
+  FieldHint,
   InputNumber,
   SegmentedControl,
   Switch,
@@ -178,8 +179,36 @@ export function RoomSetupForm({
                 enterKeyHint="done"
               />
             </label>
+            <div className="create-room-language-field">
+              {languageLocked ? (
+                // The same face the picker wears, without the mechanism: a room
+                // that cannot change its language still looks like the control
+                // that set it.
+                <span className="language-picker-static">
+                  <LanguageFace value={promptLanguage} />
+                </span>
+              ) : (
+                <LanguagePicker
+                  label="Language"
+                  flagOnly
+                  value={promptLanguage}
+                  options={languageOptions}
+                  onChange={(next) => onChange({
+                    promptLanguage: next as PromptLanguage,
+                    // Lists cannot span languages, and the bearer codes that
+                    // authorized the old ones belong to the language being
+                    // left, so neither carries over.
+                    promptListSlugs: selectionForLanguage(loadedLists, next),
+                    promptListShareCodes: [],
+                  })}
+                />
+              )}
+            </div>
+            {/* The caption this replaces was the only place the difference
+                was spelled out - a lock says "restricted", not "share the
+                code" - so it moves to the hint the form already has rather
+                than being dropped. */}
             <div className="visibility-field">
-              <span className="visibility-field-label" aria-hidden="true">Visibility</span>
               <SegmentedControl
                 label="Visibility"
                 value={isPublic ? "public" : "private"}
@@ -189,42 +218,12 @@ export function RoomSetupForm({
                   { value: "private", label: <><LockIcon size={14} />Private</> },
                 ]}
               />
-              <span className="visibility-caption">
-                {isPublic
+              <FieldHint
+                hint={isPublic
                   ? "Listed in the lobby — anyone can wander in."
                   : "Joinable only with the code or invite link."}
-              </span>
-            </div>
-          </div>
-          <div className="create-room-language-field">
-            <span className="create-room-language-label">Language</span>
-            {languageLocked ? (
-              // The same face the picker wears, without the mechanism: a room
-              // that cannot change its language still looks like the control
-              // that set it.
-              <span className="language-picker-static">
-                <LanguageFace value={promptLanguage} />
-              </span>
-            ) : (
-              <LanguagePicker
-                label="Language"
-                value={promptLanguage}
-                options={languageOptions}
-                onChange={(next) => onChange({
-                  promptLanguage: next as PromptLanguage,
-                  // Lists cannot span languages, and the bearer codes that
-                  // authorized the old ones belong to the language being
-                  // left, so neither carries over.
-                  promptListSlugs: selectionForLanguage(loadedLists, next),
-                  promptListShareCodes: [],
-                })}
               />
-            )}
-            <span className="create-room-language-caption">
-              {languageLocked
-                ? "Fixed when the room was created."
-                : "What the prompts are in, and how guesses are matched."}
-            </span>
+            </div>
           </div>
           <div className="setting-cards">
             {/* No hints under these three. The ranges are enforced by the

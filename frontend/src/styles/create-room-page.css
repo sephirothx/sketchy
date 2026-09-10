@@ -144,7 +144,7 @@ details.form-section > .form-section-body {
 
 /* ------------------------------------------------------------------- basics */
 .create-room-name-row {
-  align-items: flex-start;
+  align-items: flex-end;
   display: flex;
   gap: 20px;
   min-width: 0;
@@ -162,10 +162,10 @@ details.form-section > .form-section-body {
 }
 
 .visibility-field {
-  display: grid;
-  gap: 6px;
-  justify-items: start;
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
+  gap: 8px;
 }
 
 .visibility-field-label {
@@ -177,16 +177,8 @@ details.form-section > .form-section-body {
 /* The language sits with the name and the visibility, not with the lists:
    it is what the room is, and the lists answer to it. */
 .create-room-language-field {
-  display: grid;
-  gap: 6px;
-  justify-items: start;
-  margin-top: 12px;
-}
-
-.create-room-language-label {
-  color: var(--ink);
-  font-size: 14.5px;
-  font-weight: 800;
+  display: flex;
+  flex: 0 0 auto;
 }
 
 
@@ -697,10 +689,16 @@ details.form-section > .form-section-body {
 @media (max-width: 640px) {
   .create-room-heading-row { align-items: stretch; flex-direction: column; }
   .room-preset-bar { justify-content: flex-start; }
+  /* The name takes the width; the language and the visibility share the line
+     under it, which is what the two of them are - one short answer each. */
   .create-room-name-row {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: flex-end;
+    flex-wrap: wrap;
     gap: 14px;
+  }
+
+  .create-room-name-field {
+    flex: 1 1 100%;
   }
 
   /* ── The three numbers ────────────────────────────────────────────────

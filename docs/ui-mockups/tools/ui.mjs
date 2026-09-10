@@ -194,12 +194,26 @@ export const icon = {
 };
 
 // Prompt-language flags, drawn inline so they render identically everywhere.
-const flagWrap = (inner) =>
-  `<svg width="18" height="13" viewBox="0 0 18 13" aria-hidden="true" style="flex: none; border-radius: 2.5px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15)">${inner}</svg>`;
+// The colours are the app's (`FLAG` in frontend/src/components/icons.tsx):
+// each national palette taken down a stop, because at this size a flag drawn
+// to specification is the loudest thing on the page.
+const F = {
+  ukNavy: '#29427B', ukRed: '#CF475C', deInk: '#232220', deRed: '#DF4342',
+  deGold: '#F9DA5A', itGreen: '#32A166', itRed: '#D35860', white: '#FDFBF6',
+};
+const flagWrap = (inner, w = 18) =>
+  `<svg width="${w}" height="${Math.round((w * 13) / 18)}" viewBox="0 0 18 13" aria-hidden="true" style="flex: none; border-radius: ${Math.max(2.5, w / 7)}px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15)">${inner}</svg>`;
+const FLAG_ART = {
+  en: `<rect width="18" height="13" fill="${F.ukNavy}"/><path d="M0 0 18 13M18 0 0 13" stroke="${F.white}" stroke-width="2.6"/><path d="M0 0 18 13M18 0 0 13" stroke="${F.ukRed}" stroke-width="1.1"/><path d="M9 0v13M0 6.5h18" stroke="${F.white}" stroke-width="4"/><path d="M9 0v13M0 6.5h18" stroke="${F.ukRed}" stroke-width="2.2"/>`,
+  it: `<rect width="6" height="13" fill="${F.itGreen}"/><rect x="6" width="6" height="13" fill="${F.white}"/><rect x="12" width="6" height="13" fill="${F.itRed}"/>`,
+  de: `<rect width="18" height="4.33" fill="${F.deInk}"/><rect y="4.33" width="18" height="4.34" fill="${F.deRed}"/><rect y="8.67" width="18" height="4.33" fill="${F.deGold}"/>`,
+};
 export const flag = {
-  en: flagWrap('<rect width="18" height="13" fill="#012169"/><path d="M0 0 18 13M18 0 0 13" stroke="#fff" stroke-width="2.6"/><path d="M0 0 18 13M18 0 0 13" stroke="#C8102E" stroke-width="1.1"/><path d="M9 0v13M0 6.5h18" stroke="#fff" stroke-width="4"/><path d="M9 0v13M0 6.5h18" stroke="#C8102E" stroke-width="2.2"/>'),
-  it: flagWrap('<rect width="6" height="13" fill="#009246"/><rect x="6" width="6" height="13" fill="#fff"/><rect x="12" width="6" height="13" fill="#CE2B37"/>'),
-  de: flagWrap('<rect width="18" height="4.33" fill="#111"/><rect y="4.33" width="18" height="4.34" fill="#DD0000"/><rect y="8.67" width="18" height="4.33" fill="#FFCE00"/>'),
+  en: flagWrap(FLAG_ART.en),
+  it: flagWrap(FLAG_ART.it),
+  de: flagWrap(FLAG_ART.de),
+  /** The create form's control: the flag alone, nearly filling its button. */
+  big: (language) => flagWrap(FLAG_ART[language] ?? FLAG_ART.en, 38),
 };
 
 // A small squiggle underline used under the wordmark and section moments.
@@ -286,6 +300,16 @@ export const switchCtl = (label, on, hint = '') => `
   </span>
   <span style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">${label}${hint ? ` <span style="font-weight: 600; color: ${T.faint}">${hint}</span>` : ''}</span>
 </label>`;
+
+// The room's language, as the create form shows it: the flag alone, nearly
+// filling its button. The list it opens names every language (see the app's
+// LanguagePicker); an artboard only has to show the closed control.
+export const flagButton = (flag) =>
+  `<span style="display: inline-flex; align-items: center; justify-content: center; background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 6px; min-height: 44px; flex: none">${flag}</span>`;
+
+// A "?" that carries the sentence a caption used to spell out.
+export const fieldHint = () =>
+  `<span style="display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: ${T.track}; color: ${T.muted}; font-size: 10.5px; font-weight: 800; flex: none">?</span>`;
 
 export const selectBox = (label) =>
   `<span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; padding: 9px 12px; font-size: 14px; font-weight: 700; color: ${T.ink}; min-height: 42px">${label}<span style="color: ${T.faint}; display: inline-flex">${icon.chevD(14)}</span></span>`;

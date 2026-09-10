@@ -255,16 +255,21 @@ const FLAG_SHAPES: Record<string, ReactNode> = {
   ),
 };
 
-export function Flag({ language }: { language: string }) {
+/** `width` in CSS pixels; the 18x13 artwork scales with it. */
+export function Flag({ language, width = 18 }: { language: string; width?: number }) {
   const shape = FLAG_SHAPES[language];
   if (!shape) return null;
   return (
     <svg
-      width="18"
-      height="13"
+      width={width}
+      height={Math.round((width * 13) / 18)}
       viewBox="0 0 18 13"
       aria-hidden="true"
-      style={{ flex: "none", borderRadius: 2.5, boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.15)" }}
+      style={{
+        flex: "none",
+        borderRadius: Math.max(2.5, width / 7),
+        boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.15)",
+      }}
     >
       {shape}
     </svg>

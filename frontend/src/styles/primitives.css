@@ -284,6 +284,17 @@
   padding: 8px 12px;
 }
 
+/* Flag alone, where the row it sits in says what it is: the list still names
+   every language, and the button carries the name for a screen reader. The
+   flag nearly fills its frame - shrunk to a chip beside a chevron it stops
+   being a picture of anything at all. */
+.language-picker.is-flag-only .language-picker-trigger {
+  justify-content: center;
+  min-width: 0;
+  /* The 44px floor is the tap target; the flag itself is what is seen. */
+  padding: 6px;
+}
+
 .language-picker.is-compact .language-picker-trigger {
   font-size: 13.5px;
   min-height: 42px;
