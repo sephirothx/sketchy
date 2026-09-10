@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from app.domain_values import PROMPT_LANGUAGES
+from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 from app.prompts import MAX_PROMPT_LENGTH
 
 MAX_PROMPT_ALIASES = 20
@@ -45,6 +45,19 @@ def best_supported_prompt_locale(accept_language: str | None) -> str:
         if base in PROMPT_LANGUAGES:
             return base
     return "en"
+
+
+def default_prompt_list_slug(language: str) -> str:
+    """The official Standard list a room in `language` starts from.
+
+    Bundled slugs are named for the language written out - `english_standard`,
+    `german_standard` - which is exactly what the enum member is called, so the
+    convention lives in one place instead of a second table that can disagree
+    with it. A language whose content has not shipped yet resolves to a slug
+    that is simply not found, which is a visible refusal rather than a room
+    quietly opening on English prompts.
+    """
+    return f"{PromptLanguage(validate_prompt_language(language)).name.lower()}_standard"
 
 
 def prompt_match_key(answer: str, language: str = "en") -> str:

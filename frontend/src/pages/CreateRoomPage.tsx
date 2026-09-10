@@ -12,7 +12,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
+import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, PromptLanguage, ScoringMode } from "../types";
 import { currentPlayerName, needsIdentity, useAuthStore } from "../store/authStore";
 import {
   createRoomPreset,
@@ -48,6 +48,7 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
+  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>("en");
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   const [promptListShareCodes, setPromptListShareCodes] = useState<string[]>([]);
   const [customPrompts, dispatchCustomPrompts] = useReducer(
@@ -112,6 +113,7 @@ export function CreateRoomPage() {
       hideMaskedPrompt,
       allowedTools,
       colorMode,
+      promptLanguage,
       promptListSlugs,
       promptListShareCodes: [],
     };
@@ -129,6 +131,9 @@ export function CreateRoomPage() {
     setHideMaskedPrompt(settings.hideMaskedPrompt);
     setAllowedTools(settings.allowedTools);
     setColorMode(settings.colorMode);
+    // A preset carries the language of the lists it saved, and applying it
+    // sets both together: a room declares its language before it has lists.
+    setPromptLanguage(settings.promptLanguage);
     setPromptListSlugs(settings.promptListSlugs);
     setPromptListShareCodes([]);
     dispatchCustomPrompts({ type: "reset", value: "", only: false });
@@ -266,8 +271,8 @@ export function CreateRoomPage() {
       const response = await emitWithAck<AckResponse>("create_room", {
         nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
-        spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptListSlugs,
-        promptListShareCodes,
+        spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptLanguage,
+        promptListSlugs, promptListShareCodes,
       });
       const session = sessionFrom(response);
       if (session) {
@@ -285,7 +290,6 @@ export function CreateRoomPage() {
 
   // The form's own collapsed summaries live with the form. What is left here
   // is the one the dock carries, which is about the room as a whole.
-  const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
   const scoringSummary = `${scoringMode === "none" ? "No scoring" : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const footerSummary = [
     isPublic ? "Public" : "Private",
@@ -362,6 +366,7 @@ export function CreateRoomPage() {
         maxPlayers,
         rounds,
         drawingSeconds,
+        promptLanguage,
         promptListSlugs,
         promptListShareCodes,
         allowedTools,
@@ -377,6 +382,7 @@ export function CreateRoomPage() {
         if (patch.maxPlayers !== undefined) setMaxPlayers(patch.maxPlayers);
         if (patch.rounds !== undefined) setRounds(patch.rounds);
         if (patch.drawingSeconds !== undefined) setDrawingSeconds(patch.drawingSeconds);
+        if (patch.promptLanguage !== undefined) setPromptLanguage(patch.promptLanguage);
         if (patch.promptListSlugs !== undefined) setPromptListSlugs(patch.promptListSlugs);
         if (patch.promptListShareCodes !== undefined) setPromptListShareCodes(patch.promptListShareCodes);
         if (patch.allowedTools !== undefined) setAllowedTools(patch.allowedTools);
@@ -390,7 +396,7 @@ export function CreateRoomPage() {
       dispatchCustomPrompts={dispatchCustomPrompts}
       namePlaceholder="Leave blank for a random name!"
       onListsLoaded={setLoadedLists}
-      selectedLists={selectedLists}
+      loadedLists={loadedLists}
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
         <button
           type="button"

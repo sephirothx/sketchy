@@ -34,6 +34,7 @@ function toFormValues(settings: EditableRoomSettings): RoomSetupValues {
     maxPlayers: settings.maxPlayers,
     rounds: settings.rounds,
     drawingSeconds: settings.drawingSeconds,
+    promptLanguage: settings.promptLanguage,
     promptListSlugs: settings.promptListSlugs || ["english_standard"],
     promptListShareCodes: settings.promptListShareCodes || [],
     allowedTools: settings.allowedTools,
@@ -148,8 +149,13 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     setSaving(true);
     setError(null);
     try {
+      // The room's language is fixed at creation (R-PROMPT-02), so it is not
+      // in the update at all: the server refuses the key outright rather than
+      // comparing it with what the room already holds.
+      const editable: Partial<RoomSetupValues> = { ...values };
+      delete editable.promptLanguage;
       const response = await emitWithAck<AckResponse>("update_room_settings", {
-        ...values,
+        ...editable,
         customPrompts: customPrompts.value,
         customPromptsOnly: customPrompts.only,
       });
@@ -191,7 +197,8 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         customPrompts={customPrompts}
         dispatchCustomPrompts={dispatchCustomPrompts}
         onListsLoaded={setLoadedLists}
-        selectedLists={loadedLists.filter((list) => values.promptListSlugs.includes(list.slug))}
+        loadedLists={loadedLists}
+        languageLocked
       />
     )}
     {error && <p className="create-room-error" role="alert">{error}</p>}

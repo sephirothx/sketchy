@@ -600,11 +600,20 @@ mirrors it with every field optional (absent means *unchanged*).
 | `hideMaskedPrompt` | boolean | `false` | forces hints off |
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
-| `promptListSlugs` | string[] | `["english_standard"]` | ≤ 20, trimmed/lowercased/deduped; empty ⇒ default on create, refused on update |
-| `promptListShareCodes` | string[] | `[]` | ≤ 20, each 8 – 24 chars |
+| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`. **Create only** — see below |
+| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` |
+| `promptListShareCodes` | string[] | `[]` | ≤ 20, each 8 – 24 chars; a code resolving to a list in another language is refused against `promptListSlugs` |
 
 `create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), and `colorblindSafeColors`.
+
+**`promptLanguage` is declared, not derived, and only at creation** (R-PROMPT-02).
+The room says what language it is in and its lists answer to that; selecting a list
+never changes it. `UpdateRoomSettingsPayload` therefore has no such field, and since
+unknown fields are rejected (§ payload policy), sending one is refused with
+`field: "promptLanguage"` rather than compared against what the room already holds.
+A room's own quick custom prompts are matched under the declared language too, which
+is what a room drawing on nothing but custom prompts gets out of the field.
 
 ### `get_room_preview`
 
@@ -1652,8 +1661,8 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
 | `GET` | `/api/users/me/recent-players` | `{players}` — registered accounts the caller **finished a game with** in the last 30 days, most recent first, capped at 20. Not a search and not a directory (N-06): it answers only about games the caller sat in, so it can never name a stranger. Deliberately **unfiltered by friendship or block** — an absence from it would be readable, and "absent because they declined you" is the fact R-FRIEND-04 refuses to disclose, so the client drops the rows it can already see for itself and leaves a refusal in place |
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
-| `GET`/`POST` | `/api/room-presets` | ≤ 20 per account |
-| `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check |
+| `GET`/`POST` | `/api/room-presets` | ≤ 20 per account. `settings` is `RoomSettingsFields`, so it carries `promptLanguage`; a preset whose lists are not in it is refused **422** |
+| `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check. The `promptLanguage` read back is **derived from the saved lists**, so a preset and its lists can never disagree; applying a preset sets the new room's language and its lists together |
 
 ### Reports and moderation — [`backend/app/api/moderation.py`](../backend/app/api/moderation.py)
 
@@ -1828,7 +1837,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (17) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (20) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

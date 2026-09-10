@@ -36,6 +36,10 @@
   /* lines */
   --line: #e7dfd2;
   --line-strong: #d3c8b4;
+  /* The hairline around a flag, which is part of the artwork rather than of
+     the surface under it: a white stripe needs an edge to stop against, and
+     on slate that edge has to be lighter than the flag, not darker. */
+  --flag-edge: rgba(41, 37, 32, 0.18);
 
   /* avatars */
   --avatar-ink: #ffffff;
@@ -121,6 +125,7 @@
 
   --line: #334155;
   --line-strong: #475569;
+  --flag-edge: rgba(226, 232, 240, 0.32);
 
   --avatar-ink: #132036;
   --guest-avatar: #c3cbd8;

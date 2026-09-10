@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { CustomPromptsEditor } from "./CustomPromptsEditor";
 import { PromptListPicker } from "./PromptListPicker";
+import { LanguageFace, LanguagePicker } from "./LanguagePicker";
 import {
   ChoiceCards,
+  FieldHint,
   InputNumber,
   SegmentedControl,
   Switch,
@@ -32,12 +34,17 @@ import {
   hintLabelFor,
   scoringLabelFor,
 } from "../lib/roomSetup";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import {
+  availablePromptLanguages,
+  promptLanguageLabel,
+  selectionForLanguage,
+} from "../lib/promptLanguages";
 import type { CustomPromptsAction, CustomPromptsState } from "../lib/customPrompts";
 import type {
   ColorMode,
   DrawingToolGroup,
   HintMode,
+  PromptLanguage,
   PromptListSummary,
   ScoringMode,
 } from "../types";
@@ -50,6 +57,7 @@ export interface RoomSetupValues {
   maxPlayers: number;
   rounds: number;
   drawingSeconds: number;
+  promptLanguage: PromptLanguage;
   promptListSlugs: string[];
   promptListShareCodes: string[];
   allowedTools: DrawingToolGroup[];
@@ -72,7 +80,12 @@ interface RoomSetupFormProps {
   onListsLoaded?: (lists: PromptListSummary[]) => void;
   /** Create puts its running-time estimate under the three numbers. */
   durationNote?: ReactNode;
-  selectedLists?: PromptListSummary[];
+  /** Every list the host may choose from, in any language: what the language
+      field offers, and what the prompts summary is read from. */
+  loadedLists?: PromptListSummary[];
+  /** A room's language is fixed at creation, so the editor shows it rather
+      than offering it. */
+  languageLocked?: boolean;
 }
 
 /**
@@ -95,7 +108,8 @@ export function RoomSetupForm({
   promptsFooter,
   onListsLoaded,
   durationNote,
-  selectedLists = [],
+  loadedLists = [],
+  languageLocked = false,
 }: RoomSetupFormProps) {
   const {
     name,
@@ -103,6 +117,7 @@ export function RoomSetupForm({
     maxPlayers,
     rounds,
     drawingSeconds,
+    promptLanguage,
     promptListSlugs,
     promptListShareCodes,
     allowedTools,
@@ -113,10 +128,12 @@ export function RoomSetupForm({
     hideMaskedPrompt,
   } = values;
 
+  const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
+  const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
+
   const promptsSummary = (() => {
-    const parts: string[] = [];
+    const parts: string[] = [promptLanguageLabel(promptLanguage)];
     if (selectedLists.length > 0) {
-      parts.push(promptLanguageLabel(selectedLists[0].language));
       const names = selectedLists.map((list) => list.name);
       parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
       const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
@@ -162,8 +179,36 @@ export function RoomSetupForm({
                 enterKeyHint="done"
               />
             </label>
+            <div className="create-room-language-field">
+              {languageLocked ? (
+                // The same face the picker wears, without the mechanism: a room
+                // that cannot change its language still looks like the control
+                // that set it.
+                <span className="language-picker-static">
+                  <LanguageFace value={promptLanguage} />
+                </span>
+              ) : (
+                <LanguagePicker
+                  label="Language"
+                  flagOnly
+                  value={promptLanguage}
+                  options={languageOptions}
+                  onChange={(next) => onChange({
+                    promptLanguage: next as PromptLanguage,
+                    // Lists cannot span languages, and the bearer codes that
+                    // authorized the old ones belong to the language being
+                    // left, so neither carries over.
+                    promptListSlugs: selectionForLanguage(loadedLists, next),
+                    promptListShareCodes: [],
+                  })}
+                />
+              )}
+            </div>
+            {/* The caption this replaces was the only place the difference
+                was spelled out - a lock says "restricted", not "share the
+                code" - so it moves to the hint the form already has rather
+                than being dropped. */}
             <div className="visibility-field">
-              <span className="visibility-field-label" aria-hidden="true">Visibility</span>
               <SegmentedControl
                 label="Visibility"
                 value={isPublic ? "public" : "private"}
@@ -173,11 +218,11 @@ export function RoomSetupForm({
                   { value: "private", label: <><LockIcon size={14} />Private</> },
                 ]}
               />
-              <span className="visibility-caption">
-                {isPublic
+              <FieldHint
+                hint={isPublic
                   ? "Listed in the lobby — anyone can wander in."
                   : "Joinable only with the code or invite link."}
-              </span>
+              />
             </div>
           </div>
           <div className="setting-cards">
@@ -222,6 +267,7 @@ export function RoomSetupForm({
         </summary>
         <div className="form-section-body">
           <PromptListPicker
+            language={promptLanguage}
             selectedSlugs={promptListSlugs}
             onChange={(slugs) => onChange({ promptListSlugs: slugs })}
             shareCodes={promptListShareCodes}

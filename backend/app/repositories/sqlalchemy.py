@@ -2984,6 +2984,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         requesting_user_id: str | None,
         share_codes: Sequence[str],
         load_items: bool,
+        expected_language: str | None = None,
     ) -> tuple[list[PromptListRevision], str]:
         """Authorize a selection and pin the revision each list is currently on.
 
@@ -3034,6 +3035,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListSelectionError(
                 "Selected prompt lists must use the same language"
             )
+        # The room declares the language and the lists answer to it
+        # (R-PROMPT-02). Without this the language would still be a property of
+        # whatever was selected last, which is what a declared field replaces.
+        if expected_language is not None and expected_language not in languages:
+            raise PromptListSelectionError(
+                "Selected prompt lists are not in this room's language"
+            )
         rows_by_slug = {row.slug: row for row in authorized_rows}
         revisions: list[PromptListRevision] = []
         for slug in slugs:
@@ -3066,6 +3074,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         *,
         requesting_user_id: str | None = None,
         share_codes: Sequence[str] = (),
+        expected_language: str | None = None,
     ) -> ResolvedPromptSelection:
         if not slugs:
             raise PromptListSelectionError("Select at least one prompt list")
@@ -3076,6 +3085,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 requesting_user_id=requesting_user_id,
                 share_codes=share_codes,
                 load_items=True,
+                expected_language=expected_language,
             )
             languages = {language}
 
@@ -3142,6 +3152,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         *,
         requesting_user_id: str | None = None,
         share_codes: Sequence[str] = (),
+        expected_language: str | None = None,
     ) -> PinnedPromptSelection:
         if not slugs:
             raise PromptListSelectionError("Select at least one prompt list")
@@ -3152,6 +3163,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 requesting_user_id=requesting_user_id,
                 share_codes=share_codes,
                 load_items=False,
+                expected_language=expected_language,
             )
             revision_ids = [revision.id for revision in revisions]
 

@@ -209,6 +209,11 @@ canvas.** Applying one fills the create form but does not enable *Keep this room
 future games*. Borrowed Unlisted share codes and quick custom prompts are never stored;
 that content must be saved as an owned list first. ≤ 20 per account.
 
+It stores **no language column either**, although a room declares one (R-PROMPT-02):
+the preset's language is read back from the lists it saved, so the two cannot drift
+apart. Saving a preset whose lists are not in the declared language is refused rather
+than stored.
+
 ### `planned_shutdown_abandonments`
 The privacy-safe fact that a planned drain expired with a game still live.
 

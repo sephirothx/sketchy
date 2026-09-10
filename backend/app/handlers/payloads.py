@@ -53,6 +53,7 @@ from app.rooms import (
     MAX_PLAYERS_MAX,
     MAX_PLAYERS_MIN,
 )
+from app.prompt_content import default_prompt_list_slug, validate_prompt_language
 from app.prompts import MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
@@ -148,7 +149,11 @@ class RoomSettingsFields(RequestModel):
         default_factory=lambda: list(DEFAULT_ALLOWED_TOOLS), alias="allowedTools"
     )
     color_mode: str = Field(default=DEFAULT_COLOR_MODE, alias="colorMode")
-    prompt_list_slugs: list[str] = Field(default_factory=lambda: ["english_standard"], alias="promptListSlugs")
+    # Declared by the host, not read back off the lists (R-PROMPT-02). The
+    # empty default list below is filled in from it, so a room in a language
+    # cannot open on another language's prompts.
+    prompt_language: str = Field(default="en", alias="promptLanguage", max_length=32)
+    prompt_list_slugs: list[str] = Field(default_factory=list, alias="promptListSlugs")
     prompt_list_share_codes: list[str] = Field(
         default_factory=list, alias="promptListShareCodes", max_length=MAX_PROMPT_LISTS
     )
@@ -158,10 +163,34 @@ class RoomSettingsFields(RequestModel):
     def strip_text(cls, value: str) -> str:
         return value.strip()
 
+    @field_validator("prompt_language")
+    @classmethod
+    def valid_prompt_language(cls, value: str) -> str:
+        try:
+            return validate_prompt_language(value)
+        except ValueError as error:
+            raise ValueError(str(error)) from error
+
     @field_validator("prompt_list_slugs")
     @classmethod
     def clean_prompt_list_slugs(cls, slugs: list[str]) -> list[str]:
-        return _clean_slugs(slugs) or ["english_standard"]
+        return _clean_slugs(slugs)
+
+    @model_validator(mode="after")
+    def default_prompt_list_for_language(self) -> "RoomSettingsFields":
+        """Fill an empty selection with the declared language's Standard list.
+
+        A room that names no list still has to draw from something, and which
+        list that is follows from the language rather than from a hardcoded
+        English slug.
+        """
+        if not self.prompt_list_slugs:
+            object.__setattr__(
+                self,
+                "prompt_list_slugs",
+                [default_prompt_list_slug(self.prompt_language)],
+            )
+        return self
 
     @field_validator("prompt_list_share_codes")
     @classmethod

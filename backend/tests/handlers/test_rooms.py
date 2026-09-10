@@ -224,7 +224,7 @@ async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
             self.authorization = None
 
         async def authorize_selection(
-            self, slugs, *, requesting_user_id=None, share_codes=()
+            self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
         ):
             self.authorization = (requesting_user_id, tuple(share_codes))
             return await super().authorize_selection(
@@ -315,7 +315,7 @@ async def test_a_settings_change_retries_prompt_lists_that_never_loaded():
     assert room.prompt_pool_size == 2
 
 
-async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matching():
+async def test_declared_room_language_reaches_every_payload_and_game_matching():
     room_manager = RoomManager()
     repo = StubPromptListRepo(
         ("éléphant", "vélo"),
@@ -327,8 +327,9 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
     room, sio = build_settings_room(
         room_manager,
         repo,
-        prompt_list_slugs=["english_standard"],
-        prompt_pool_size=1,
+        prompt_language="fr",
+        prompt_list_slugs=["francais"],
+        prompt_pool_size=0,
     )
     room_manager.add_player(room, "Guest")
 
@@ -359,9 +360,128 @@ async def test_prompt_list_language_is_resolved_into_room_payloads_and_game_matc
     }
 
 
+async def test_a_custom_only_room_is_played_in_the_language_its_host_declared():
+    """The defect a declared language closes.
+
+    Quick prompts used to be matched under English rules whatever the host
+    typed, because the language was read back off a list this room never draws
+    from - and with no list resolvable at all it stayed at the "en" default.
+    """
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=UnreachablePromptListRepo())
+    sio.get_session = AsyncMock(return_value={"user_id": "user-host"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {
+            "nickname": "Host",
+            "promptLanguage": "de",
+            "customPrompts": "Igel\nLeuchtturm",
+            "customPromptsOnly": True,
+        },
+    )
+
+    assert response["ok"] is True
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    assert room.prompt_language == "de"
+    for payload in (
+        room.to_state_payload(),
+        room.to_public_summary(),
+        editable_room_settings_payload(room),
+    ):
+        assert payload["promptLanguage"] == "de"
+
+
+async def test_a_list_in_another_language_is_refused_rather_than_switching_the_room():
+    """Selecting a list no longer decides what language the room is in."""
+    room_manager = RoomManager()
+    room, sio = build_settings_room(
+        room_manager,
+        StubPromptListRepo(("éléphant", "vélo"), language="fr"),
+        prompt_language="en",
+        prompt_list_slugs=["english_standard"],
+        prompt_pool_size=2,
+    )
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"promptListSlugs": ["francais"]}
+    )
+
+    assert result["ok"] is False
+    assert result["field"] == "promptListSlugs"
+    assert room.prompt_language == "en"
+    assert room.prompt_list_slugs == ["english_standard"]
+
+
+async def test_the_room_language_cannot_be_edited_after_the_room_opens():
+    """Fixed at creation, like a saved list's own content language."""
+    room_manager = RoomManager()
+    room, sio = build_settings_room(
+        room_manager,
+        StubPromptListRepo(),
+        prompt_language="en",
+        prompt_list_slugs=["english_standard"],
+        prompt_pool_size=2,
+    )
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"promptLanguage": "de"}
+    )
+
+    assert result["ok"] is False
+    assert result["field"] == "promptLanguage"
+    assert room.prompt_language == "en"
+
+
+async def test_an_unsupported_prompt_language_is_refused_at_creation():
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=StubPromptListRepo())
+    sio.get_session = AsyncMock(return_value={"user_id": "user-host"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid", {"nickname": "Host", "promptLanguage": "ja"}
+    )
+
+    assert response["ok"] is False
+    assert response["field"] == "promptLanguage"
+    assert room_manager.rooms == {}
+
+
+async def test_an_empty_selection_falls_back_to_the_declared_language_s_own_list():
+    """The default list follows the room's language rather than a hardcoded
+    English slug, so a room cannot open on prompts in another language."""
+    room_manager = RoomManager()
+    repo = StubPromptListRepo(("Anker", "Ballon"), language="de")
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, prompt_list_repo=repo)
+    sio.get_session = AsyncMock(return_value={"user_id": "user-host"})
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid", {"nickname": "Host", "promptLanguage": "de", "promptListSlugs": []}
+    )
+
+    assert response["ok"] is True
+    room = room_manager.get_room(response["roomId"])
+    assert room is not None
+    assert room.prompt_list_slugs == ["german_standard"]
+    assert room.prompt_language == "de"
+
+
 async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room():
     class InvalidSelectionRepo:
-        async def authorize_selection(self, slugs):
+        async def authorize_selection(self, slugs, **kwargs):
             raise PromptListSelectionError(
                 "Selected prompt lists must use the same language"
             )
@@ -390,7 +510,7 @@ async def test_invalid_prompt_list_selection_is_visible_and_does_not_mutate_room
 
 async def test_start_revalidates_a_waiting_room_after_content_is_hidden():
     class HiddenSelectionRepo:
-        async def authorize_selection(self, slugs):
+        async def authorize_selection(self, slugs, **kwargs):
             raise PromptListSelectionError("A selected prompt list is unavailable")
 
     room_manager = RoomManager()
@@ -436,7 +556,7 @@ async def test_starting_waits_for_a_settings_change_that_arrived_first():
 
     class BlockingPromptListRepo(StubPromptListRepo):
         async def authorize_selection(
-            self, slugs, *, requesting_user_id=None, share_codes=()
+            self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
         ):
             reading.set()
             await finish_reading.wait()
@@ -1000,7 +1120,7 @@ class UnreachablePromptListRepo:
         self.reads = 0
 
     async def authorize_selection(
-        self, slugs, *, requesting_user_id=None, share_codes=()
+        self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
     ):
         self.reads += 1
         raise RuntimeError("prompt store is unreachable")

@@ -168,69 +168,111 @@ export function DiceIcon(p: IconProps) { return <IconBase {...p}><rect x="3" y="
 /* ------------------------------------------------------ prompt-language flags
  * Drawn inline so they render identically on every OS. Simplified but
  * recognizable; one per supported prompt language (R-PROMPT registry). */
+/* The flags, each in its own colours, taken down a stop.
+ *
+ * These sit at 18x13 on warm paper, beside crayon indigo, on every lobby card
+ * and every row of the language list - and a flag drawn to specification is
+ * drawn in the most saturated ink there is. Portugal's #FF0000 against
+ * #FFFF00 was the brightest thing on the page by a wide margin.
+ *
+ * So each colour is mixed toward a warm white by how bright it already reads
+ * - saturation times lightness, with a nudge through the yellow-green band
+ * the eye takes hardest - which lands heavily on the primaries and barely
+ * touches a navy or a deep crimson. Every flag keeps its own palette; nothing
+ * is shared between them, because a Spanish red and a French red are not the
+ * same red and this is not the place to decide they are. */
+const FLAG = {
+  ukNavy: "#29427B",
+  ukRed: "#CF475C",
+  deInk: "#232220",
+  deRed: "#DF4342",
+  deGold: "#F9DA5A",
+  esRed: "#B54447",
+  esGold: "#F0D15A",
+  frBlue: "#334DA3",
+  frRed: "#EC646E",
+  itGreen: "#32A166",
+  itRed: "#D35860",
+  nlRed: "#B84951",
+  nlBlue: "#456298",
+  ptGreen: "#287927",
+  ptRed: "#F84B4A",
+  ptYellow: "#F9F85A",
+  /* Warm rather than pure, so a white stripe still shows on a white panel. */
+  white: "#FDFBF6",
+} as const;
+
 const FLAG_SHAPES: Record<string, ReactNode> = {
   en: (
     <>
-      <rect width="18" height="13" fill="#012169" />
-      <path d="M0 0 18 13M18 0 0 13" stroke="#fff" strokeWidth="2.6" />
-      <path d="M0 0 18 13M18 0 0 13" stroke="#C8102E" strokeWidth="1.1" />
-      <path d="M9 0v13M0 6.5h18" stroke="#fff" strokeWidth="4" />
-      <path d="M9 0v13M0 6.5h18" stroke="#C8102E" strokeWidth="2.2" />
+      <rect width="18" height="13" fill={FLAG.ukNavy} />
+      <path d="M0 0 18 13M18 0 0 13" stroke={FLAG.white} strokeWidth="2.6" />
+      <path d="M0 0 18 13M18 0 0 13" stroke={FLAG.ukRed} strokeWidth="1.1" />
+      <path d="M9 0v13M0 6.5h18" stroke={FLAG.white} strokeWidth="4" />
+      <path d="M9 0v13M0 6.5h18" stroke={FLAG.ukRed} strokeWidth="2.2" />
     </>
   ),
   de: (
     <>
-      <rect width="18" height="4.33" fill="#111" />
-      <rect y="4.33" width="18" height="4.34" fill="#DD0000" />
-      <rect y="8.67" width="18" height="4.33" fill="#FFCE00" />
+      <rect width="18" height="4.33" fill={FLAG.deInk} />
+      <rect y="4.33" width="18" height="4.34" fill={FLAG.deRed} />
+      <rect y="8.67" width="18" height="4.33" fill={FLAG.deGold} />
     </>
   ),
   es: (
     <>
-      <rect width="18" height="13" fill="#AA151B" />
-      <rect y="3.25" width="18" height="6.5" fill="#F1BF00" />
+      <rect width="18" height="13" fill={FLAG.esRed} />
+      <rect y="3.25" width="18" height="6.5" fill={FLAG.esGold} />
     </>
   ),
   fr: (
     <>
-      <rect width="6" height="13" fill="#002395" />
-      <rect x="6" width="6" height="13" fill="#fff" />
-      <rect x="12" width="6" height="13" fill="#ED2939" />
+      <rect width="6" height="13" fill={FLAG.frBlue} />
+      <rect x="6" width="6" height="13" fill={FLAG.white} />
+      <rect x="12" width="6" height="13" fill={FLAG.frRed} />
     </>
   ),
   it: (
     <>
-      <rect width="6" height="13" fill="#009246" />
-      <rect x="6" width="6" height="13" fill="#fff" />
-      <rect x="12" width="6" height="13" fill="#CE2B37" />
+      <rect width="6" height="13" fill={FLAG.itGreen} />
+      <rect x="6" width="6" height="13" fill={FLAG.white} />
+      <rect x="12" width="6" height="13" fill={FLAG.itRed} />
     </>
   ),
   nl: (
     <>
-      <rect width="18" height="4.33" fill="#AE1C28" />
-      <rect y="4.33" width="18" height="4.34" fill="#fff" />
-      <rect y="8.67" width="18" height="4.33" fill="#21468B" />
+      <rect width="18" height="4.33" fill={FLAG.nlRed} />
+      <rect y="4.33" width="18" height="4.34" fill={FLAG.white} />
+      <rect y="8.67" width="18" height="4.33" fill={FLAG.nlBlue} />
     </>
   ),
   pt: (
     <>
-      <rect width="7" height="13" fill="#006600" />
-      <rect x="7" width="11" height="13" fill="#FF0000" />
-      <circle cx="7" cy="6.5" r="2.4" fill="#FFFF00" stroke="#006600" strokeWidth="0.6" />
+      <rect width="7" height="13" fill={FLAG.ptGreen} />
+      <rect x="7" width="11" height="13" fill={FLAG.ptRed} />
+      <circle cx="7" cy="6.5" r="2.4" fill={FLAG.ptYellow} stroke={FLAG.ptGreen} strokeWidth="0.6" />
     </>
   ),
 };
 
-export function Flag({ language }: { language: string }) {
+/** `width` in CSS pixels; the 18x13 artwork scales with it. */
+export function Flag({ language, width = 18 }: { language: string; width?: number }) {
   const shape = FLAG_SHAPES[language];
   if (!shape) return null;
   return (
     <svg
-      width="18"
-      height="13"
+      width={width}
+      /* Exact, not rounded: a box a fraction taller than 18:13 makes the
+         artwork letterbox itself inside its own ring, which reads as a gap
+         down each side. */
+      height={(width * 13) / 18}
       viewBox="0 0 18 13"
       aria-hidden="true"
-      style={{ flex: "none", borderRadius: 2.5, boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.15)" }}
+      style={{
+        flex: "none",
+        borderRadius: Math.max(2.5, width / 7),
+        boxShadow: "0 0 0 1px var(--flag-edge)",
+      }}
     >
       {shape}
     </svg>

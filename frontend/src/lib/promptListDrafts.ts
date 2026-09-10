@@ -92,20 +92,33 @@ export function describePromptMerge(result: PromptMergeResult): string | null {
   return `${kept}; skipped ${skipped.join(", ")}.`;
 }
 
+export type SharedPromptSelection =
+  | { ok: true; slugs: string[]; shareCodes: string[] }
+  | { ok: false; language: PromptLanguage };
+
+/**
+ * Fold a shared list into the room's selection, or refuse it.
+ *
+ * A shared list used to replace the whole selection when its language differed,
+ * which quietly moved the room into that language. The room declares its
+ * language now, so a list in another one is simply not for this room: the code
+ * is not retained either, since it authorized nothing.
+ */
 export function addSharedPromptSelection(
   selectedSlugs: string[],
   shareCodes: string[],
   shared: PromptListSummary,
   code: string,
-  activeLanguage: PromptLanguage,
-): { slugs: string[]; shareCodes: string[] } {
-  const slugs = selectedSlugs.includes(shared.slug)
-    ? selectedSlugs
-    : shared.language === activeLanguage
-      ? [...selectedSlugs, shared.slug]
-      : [shared.slug];
+  roomLanguage: PromptLanguage,
+): SharedPromptSelection {
+  if (shared.language !== roomLanguage) {
+    return { ok: false, language: shared.language };
+  }
   return {
-    slugs,
+    ok: true,
+    slugs: selectedSlugs.includes(shared.slug)
+      ? selectedSlugs
+      : [...selectedSlugs, shared.slug],
     shareCodes: [...new Set([...shareCodes, code.trim()])],
   };
 }

@@ -186,6 +186,12 @@
       "title": "Nickname",
       "type": "string"
      },
+     "promptLanguage": {
+      "default": "en",
+      "maxLength": 32,
+      "title": "Promptlanguage",
+      "type": "string"
+     },
      "promptListShareCodes": {
       "items": {
        "type": "string"
@@ -1615,6 +1621,7 @@
    "hintMode",
    "isPublic",
    "maxPlayers",
+   "promptLanguage",
    "promptListShareCodes",
    "promptListSlugs",
    "scoringMode",
@@ -2517,7 +2524,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 19,
+ "protocolVersion": 20,
  "refusal": {
   "codes": [
    "invalid_payload",

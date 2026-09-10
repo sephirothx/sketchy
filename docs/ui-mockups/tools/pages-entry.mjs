@@ -1,5 +1,5 @@
 // Entry screens: lobby, room creation, account recovery.
-import { T, P, icon, flag, avatar, pname, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle } from './ui.mjs';
+import { T, P, icon, flag, avatar, pname, btn, chip, card, sectionLabel, segmented, selectBox, switchCtl, input, wordmark, squiggle, flagButton, fieldHint } from './ui.mjs';
 import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from './notFoundArt.mjs';
 import { CRASH_PATHS, CRASH_VIEWBOX } from './crashArt.mjs';
 
@@ -213,17 +213,17 @@ export const CreateRoomPage = `
   <div style="display: grid; gap: 14px">
     ${formSection('Basics', '', `
       <div style="display: grid; gap: 16px">
-        <div style="display: flex; align-items: flex-start; gap: 20px">
+        <div style="display: flex; align-items: flex-end; gap: 14px">
           <label style="flex: 1; display: grid; gap: 6px; font-size: 14.5px; font-weight: 800; color: ${T.ink}">Room name
             <span style="display: flex; align-items: center; gap: 8px">
               ${input({ placeholder: 'Leave blank for a random name!' })}
               <button type="button" title="Roll a random name" aria-label="Roll a random name" style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: none; background: ${T.card}; color: ${T.muted}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; box-shadow: ${T.shadow}">${icon.dice(19)}</button>
             </span>
           </label>
-          <div style="display: grid; gap: 6px; justify-items: start">
-            <span style="font-size: 14.5px; font-weight: 800; color: ${T.ink}">Visibility</span>
+          ${flagButton(flag.big('en'))}
+          <div style="display: flex; align-items: center; gap: 8px">
             ${segmented([`${icon.globe(14)}Public`, `${icon.lock(14)}Private`], 0)}
-            <span style="font-size: 11.5px; font-weight: 700; color: ${T.faint}">Listed in the lobby — anyone can wander in.</span>
+            ${fieldHint()}
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px">
