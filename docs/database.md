@@ -97,6 +97,7 @@ erDiagram
     users ||--o| user_settings : "prefers"
     users ||--o{ user_stats_daily : "projects to"
     users ||--o{ prompt_lists : "owns"
+    users ||--o{ prompt_list_stars : "stars"
     users ||--o{ room_presets : "owns"
     users ||--o{ user_bans : "suspended by"
     users ||--o{ user_warnings : "warned by"
@@ -116,6 +117,7 @@ erDiagram
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
     prompt_versions ||--o{ prompt_version_aliases : "accepts"
+    prompt_lists ||--o{ prompt_list_stars : "starred by"
     prompt_lists ||--o{ prompt_list_revisions : "versions"
     prompt_list_revisions ||--o{ prompt_list_revision_items : "membership"
     prompt_list_revisions ||--o{ prompt_usage_facts : "usage"
@@ -136,7 +138,7 @@ erDiagram
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
-| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompts`, `prompt_usage_facts` |
+| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
 | **Bug reports** | `bug_reports` |
 
@@ -683,11 +685,11 @@ cd backend && .venv/bin/python -m app.auth.account_data --limit 25
 
 Format v1 exports expire after seven days. The document contains the owner's account
 fields, linked guest identities, session metadata, game seats, drawn turns, correct
-guesses, prompt-list revision history, unexpired authored retained messages, submitted
-evidence, blocks, presets, and account-event metadata.
+guesses, prompt-list revision history, the lists it starred, unexpired authored retained
+messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v7_fields.json`](../fixtures/account_data_export_v7_fields.json).
+pinned by [`fixtures/account_data_export_v8_fields.json`](../fixtures/account_data_export_v8_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1576,7 +1578,8 @@ Deliberately relational rather than a JSON tag blob.
 `id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
 `language` · `is_bundled` · `visibility` (`private \| unlisted \| public`) ·
 `share_code` VARCHAR(24) **unique** · `moderation_state` · `moderated_by_user_id` ·
-`moderated_at` · `version` · `deleted_at` (indexed, nullable) · timestamps.
+`moderated_at` · `version` · `published_at` (nullable) · `deleted_at` (indexed,
+nullable) · timestamps.
 
 **Deleting a list retires it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py)):
 `deleted_at` is set, the share code is revoked, the visibility falls back to private
@@ -1612,11 +1615,25 @@ Account erasure retires the account's lists the same way, with the name and desc
 erased as authored copy.
 
 `ck_prompt_lists_bundled_owner` forbids an owner on a bundled list;
-`ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list.
+`ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list;
+`ck_prompt_lists_published_at` requires `published_at` on a public one.
+
+**`published_at` is the record of an act, not a derived date.** Publishing is
+gated, rate-limited and audited (R-LIST-11, R-LIST-12), so the schema refuses a
+public row that carries no moment it became public — the hole worth closing here
+rather than in a code path, because a `visibility` value on its own cannot say the
+act happened. `updated_at` could not answer it either: that moves for every edit.
+Unpublishing clears it, so a later publish is a new act with its own moment.
+`ix_prompt_lists_published` is partial on published-active-present, which is the
+community catalogue's whole question and the join the star counts hang off.
+The bundled catalogue was backfilled to its own `created_at` rather than to the
+migration's clock: it has been published since it was seeded.
 
 **Governance is schema-first and deny-by-default.** User-owned lists default to
-**Private**; **Unlisted** requires a unique share code; **Public** is currently reserved
-for official bundled lists and for a future moderation-approved discovery feature.
+**Private**; **Unlisted** requires a unique share code; **Public** is reached only by
+publishing (R-LIST-02) — never by an ordinary save, which is what keeps the gate in
+front of it from being optional. `ck_prompt_lists_public_is_bundled` held the value
+for the official catalogue alone until #398 withdrew N-04.
 Ownership, fork provenance, revision tags, moderation actor/time, and moderation state
 are relational fields — never JSON tags or a lossy `is_nsfw` flag. Difficulty and content
 rating stay on the exact immutable prompt version where their meaning belongs.
@@ -1627,6 +1644,32 @@ history, preset, or log payloads.**
 
 Limits: an account may own at most **25** lists, and a saved list may contain at most
 **500** prompts.
+
+### `prompt_list_stars`
+`user_id` (CASCADE) · `prompt_list_id` (CASCADE) · `created_at`. Composite primary key
+on `(user_id, prompt_list_id)`, plus `ix_prompt_list_stars_list`.
+
+**Facts, not a counter** (R-LIST-16). There is no `star_count` on `prompt_lists`, and
+that is deliberate: a count derived from these rows cannot drift, cannot be
+double-incremented by a retried request, and cannot be left too high by an account that
+went away. The primary key already answers *did I star this* and *what have I starred*;
+the index answers the other direction, *how many starred this*, which the catalogue asks
+once per row and would otherwise scan for.
+
+The composite key is also the idempotency: starring twice writes the same row, so the
+endpoint needs no separate guard.
+
+Only a published list may be starred. A star on an Unlisted list would be a durable
+record that its owner holds that list's bearer share code, which is exactly the
+disclosure R-LIST-03 exists to prevent — narrowing the target removes the problem
+instead of mitigating it. Unpublishing keeps the rows: the list stops being reachable,
+and a later publish finds its stars where it left them.
+
+**Account deletion removes them explicitly**, in `anonymize_account` — the `CASCADE` on
+this table never fires, because deletion tombstones the user row rather than removing
+it. Without the explicit delete a stranger's list would go on carrying the approval of
+an account that no longer exists. They are also exported (`stars[]`, schema version 6),
+naming the list and never its owner's account id.
 
 ### `prompt_list_revisions` / `_items` / `_tags`
 `prompt_list_revisions`: `id` · `prompt_list_id` (CASCADE) · `forked_from_revision_id`
