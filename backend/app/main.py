@@ -461,12 +461,20 @@ async def lifespan(_app: FastAPI):
     shutdown_coordinator.begin_startup(
         drain_seconds=shutdown_drain_seconds()
     )
+    # Every handle the `finally` stops, named before anything can fail. A
+    # startup that raises before the loops start - a database at a revision
+    # this checkout does not know, a relay it refuses to serve without - still
+    # runs that block, and a handle missing here would raise an
+    # `UnboundLocalError` from the cleanup that buries the real cause under a
+    # second traceback about a loop that never existed.
     mail_delivery = None
     export_build = None
     metrics_flush = None
     retention_sweep = None
     presence_broadcast = None
+    afk_sweep = None
     lag_sampler = None
+    history_replay = None
     mail_health = LoopHealth("mail_delivery")
     exports_health = LoopHealth("data_exports")
     handoff_health = LoopHealth("history_handoff")
@@ -568,14 +576,18 @@ async def lifespan(_app: FastAPI):
         # pass replays what it can, and whatever is left is a row the next
         # process picks up on its first sweep - that is the point of #541.
         await stop_handoff_worker(history_replay)
-        try:
-            await asyncio.wait_for(
-                finished_game_worker.drain(), timeout=HISTORY_WRITE_TIMEOUT_SECONDS
-            )
-        except (asyncio.TimeoutError, Exception):
-            logging.getLogger("sketchy.main").warning(
-                "finished games left staged for the next process", exc_info=True
-            )
+        # Only if the worker ran: a startup that failed before it started
+        # staged nothing, and a drain against a database that would not open
+        # logs a traceback about the shutdown instead of the failure.
+        if history_replay is not None:
+            try:
+                await asyncio.wait_for(
+                    finished_game_worker.drain(), timeout=HISTORY_WRITE_TIMEOUT_SECONDS
+                )
+            except (asyncio.TimeoutError, Exception):
+                logging.getLogger("sketchy.main").warning(
+                    "finished games left staged for the next process", exc_info=True
+                )
         # After the sockets are drained, so the last thing anybody said is
         # written rather than left in the queue.
         if handler_context.message_retention is not None:
