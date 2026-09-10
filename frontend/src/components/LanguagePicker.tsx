@@ -141,7 +141,7 @@ export function LanguagePicker({
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
-        <LanguageFace value={value} nameHidden={flagOnly} flagWidth={flagOnly ? 38 : 18} />
+        <LanguageFace value={value} nameHidden={flagOnly} flagWidth={flagOnly ? 36 : 18} />
         {!flagOnly && <ChevronDownIcon size={14} />}
       </button>
 

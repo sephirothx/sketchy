@@ -29,6 +29,7 @@ export const PALETTES = {
     faint: '#A29883',
     line: '#E7DFD2',
     lineStrong: '#D3C8B4',
+    flagEdge: 'rgba(41, 37, 32, 0.18)',   // hairline around a flag
     track: '#F1EBE0',        // segmented-control well
     guestBg: '#F0EADD',      // guest avatar fill
     avatarInk: '#FFFFFF',    // avatar initial
@@ -74,6 +75,7 @@ export const PALETTES = {
     faint: '#64748B',
     line: '#334155',
     lineStrong: '#475569',
+    flagEdge: 'rgba(226, 232, 240, 0.32)',
     track: 'rgba(2, 6, 23, 0.45)',
     guestBg: 'rgba(148, 163, 184, 0.18)',
     avatarInk: '#132036',    // dark initial on pastel avatar
@@ -202,7 +204,7 @@ const F = {
   deGold: '#F9DA5A', itGreen: '#32A166', itRed: '#D35860', white: '#FDFBF6',
 };
 const flagWrap = (inner, w = 18) =>
-  `<svg width="${w}" height="${Math.round((w * 13) / 18)}" viewBox="0 0 18 13" aria-hidden="true" style="flex: none; border-radius: ${Math.max(2.5, w / 7)}px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15)">${inner}</svg>`;
+  `<svg width="${w}" height="${(w * 13) / 18}" viewBox="0 0 18 13" aria-hidden="true" style="flex: none; border-radius: ${Math.max(2.5, w / 7)}px; box-shadow: 0 0 0 1px var(--flagEdge)">${inner}</svg>`;
 const FLAG_ART = {
   en: `<rect width="18" height="13" fill="${F.ukNavy}"/><path d="M0 0 18 13M18 0 0 13" stroke="${F.white}" stroke-width="2.6"/><path d="M0 0 18 13M18 0 0 13" stroke="${F.ukRed}" stroke-width="1.1"/><path d="M9 0v13M0 6.5h18" stroke="${F.white}" stroke-width="4"/><path d="M9 0v13M0 6.5h18" stroke="${F.ukRed}" stroke-width="2.2"/>`,
   it: `<rect width="6" height="13" fill="${F.itGreen}"/><rect x="6" width="6" height="13" fill="${F.white}"/><rect x="12" width="6" height="13" fill="${F.itRed}"/>`,
@@ -213,7 +215,7 @@ export const flag = {
   it: flagWrap(FLAG_ART.it),
   de: flagWrap(FLAG_ART.de),
   /** The create form's control: the flag alone, nearly filling its button. */
-  big: (language) => flagWrap(FLAG_ART[language] ?? FLAG_ART.en, 38),
+  big: (language) => flagWrap(FLAG_ART[language] ?? FLAG_ART.en, 36),
 };
 
 // A small squiggle underline used under the wordmark and section moments.

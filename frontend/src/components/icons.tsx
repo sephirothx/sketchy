@@ -262,13 +262,16 @@ export function Flag({ language, width = 18 }: { language: string; width?: numbe
   return (
     <svg
       width={width}
-      height={Math.round((width * 13) / 18)}
+      /* Exact, not rounded: a box a fraction taller than 18:13 makes the
+         artwork letterbox itself inside its own ring, which reads as a gap
+         down each side. */
+      height={(width * 13) / 18}
       viewBox="0 0 18 13"
       aria-hidden="true"
       style={{
         flex: "none",
         borderRadius: Math.max(2.5, width / 7),
-        boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.15)",
+        boxShadow: "0 0 0 1px var(--flag-edge)",
       }}
     >
       {shape}
