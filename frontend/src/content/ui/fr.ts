@@ -304,6 +304,27 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Quelqu’un d’autre a modifié cette liste. Recharge-la et réessaie.",
   prompt_list_invalid: "Cette liste de mots n’a pas pu être enregistrée.",
   prompt_list_forbidden: "Cette liste de mots n’est pas à toi.",
+  email_verification_required: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Une adresse e-mail confirmée est nécessaire pour publier une liste.";
+      case "star":
+        return "Une adresse e-mail confirmée est nécessaire pour donner une étoile à une liste.";
+      default:
+        return "Une adresse e-mail confirmée est nécessaire pour cela.";
+    }
+  },
+  warning_unread: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "L’avertissement de la modération doit être lu avant de publier une liste.";
+      case "star":
+        return "L’avertissement de la modération doit être lu avant de donner une étoile.";
+      default:
+        return "L’avertissement de la modération doit d’abord être lu.";
+    }
+  },
+  prompt_list_hidden: "Cette liste est masquée et ne peut pas être publiée. La modération doit d’abord l’examiner.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `« ${tag} » n’est pas une étiquette qu’une liste peut porter.`;
@@ -1148,6 +1169,16 @@ export const FR: Catalogue = {
     "abstract": "Abstrait",
   },
   myPromptListsPage: {
+    inCommunityCatalogue: "Dans le catalogue de la communauté",
+    notPublished: "Non publiée",
+    publishedExplainer: "Tout le monde peut trouver cette liste, y jouer, lui donner une étoile ou en faire sa propre copie.",
+    unpublishedExplainer: "Publier cette liste permet à tout le monde de la trouver et d’y jouer. Elle peut être retirée à tout moment.",
+    publish: "Publier",
+    unpublish: "Retirer",
+    promptListPublished: "Liste de mots publiée.",
+    promptListUnpublished: "Liste de mots retirée.",
+    couldNotChangePublication: "Impossible de changer la publication de cette liste.",
+    published: "Publiée",
     tags: "Étiquettes",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} sur ${p.max} choisies`,
     tagsAreHowListsAreFound: "Les étiquettes permettent de trouver cette liste dans le catalogue de la communauté.",

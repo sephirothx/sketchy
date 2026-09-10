@@ -316,6 +316,27 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Somebody else changed that list. Reload it and try again.",
   prompt_list_invalid: "That prompt list could not be saved.",
   prompt_list_forbidden: "That prompt list is not yours to change.",
+  email_verification_required: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Verify your email address before publishing a list.";
+      case "star":
+        return "Verify your email address before starring a list.";
+      default:
+        return "Verify your email address to do that.";
+    }
+  },
+  warning_unread: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Read your moderator warning before publishing a list.";
+      case "star":
+        return "Read your moderator warning before starring a list.";
+      default:
+        return "Read your moderator warning first.";
+    }
+  },
+  prompt_list_hidden: "This list is hidden, so it cannot be published. A moderator has to review it first.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `“${tag}” is not one of the tags a list can carry.`;
@@ -1160,6 +1181,16 @@ export const EN = {
     "abstract": "Abstract",
   },
   myPromptListsPage: {
+    inCommunityCatalogue: "In the community catalogue",
+    notPublished: "Not published",
+    publishedExplainer: "Anyone can find this list, play it, star it, or make a copy of their own.",
+    unpublishedExplainer: "Publishing puts this list where anyone can find and play it. You can take it back out at any time.",
+    publish: "Publish",
+    unpublish: "Unpublish",
+    promptListPublished: "Prompt list published.",
+    promptListUnpublished: "Prompt list unpublished.",
+    couldNotChangePublication: "Could not change whether this list is published.",
+    published: "Published",
     tags: "Tags",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} of ${p.max} chosen`,
     tagsAreHowListsAreFound: "Tags are how somebody finds this list in the community catalogue.",

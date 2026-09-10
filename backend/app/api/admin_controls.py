@@ -44,6 +44,11 @@ from app.domain_values import AccountState, GRANTABLE_ROLES, UserRole
 from app.game import Phase
 from app.rooms import RoomManager
 from app.services import config_store
+from app.services.publication_policy import (
+    PUBLICATION_REVIEW_EVENT,
+    PUBLICATION_REVIEW_KEY,
+    read_publication_review,
+)
 from app.services.shutdown import ShutdownCoordinator
 
 # The stored flag, so a pause survives the restart it was probably taken for.
@@ -104,6 +109,13 @@ class RoleRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=200)
 
 
+class PublicationReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    review: bool
+    reason: str = Field(default="", max_length=200)
+
+
 class MaintenanceRequest(BaseModel):
     # Stripped like the two above it. The reason is optional here, so without
     # this a handful of spaces counts as "given" and is written to the ledger
@@ -118,6 +130,9 @@ class MaintenanceRequest(BaseModel):
 async def read_paused(session_factory: async_sessionmaker[AsyncSession]) -> bool:
     """Whether this deployment was left paused."""
     return await config_store.read_one(session_factory, MAINTENANCE_PAUSED_KEY) == "1"
+
+
+
 
 
 def create_admin_controls_router(
@@ -241,6 +256,61 @@ def create_admin_controls_router(
         if on_change is not None:
             await on_change(shutdown.pause_payload())
         return _state(shutdown)
+
+    @router.get("/api/admin/prompt-list-review")
+    async def read_prompt_list_review(request: Request):
+        await require_admin(request)
+        return {"review": await read_publication_review(session_factory)}
+
+    @router.post("/api/admin/prompt-list-review")
+    async def set_prompt_list_review(
+        request: Request,
+        body: PublicationReviewRequest,
+        admin: User = Depends(require_admin_action),
+    ):
+        """Turn pre-publication review on or off (R-LIST-13).
+
+        Community lists are moderated after the fact, on the report and review
+        path #378 already built, because an approval queue in a
+        single-operator deployment makes the catalogue's contents depend on
+        the scarcest resource here - and because pre-approval fights R-LIST-05,
+        which gives every metadata edit a new immutable revision. This switch
+        is what keeps that a reversible decision: with it on, a list published
+        from now on lands `under_review` and waits, without a release.
+
+        It is deliberately not retroactive. Lists already published were
+        published under the posture in force at the time, and sweeping them
+        into a queue would punish people for a rule that did not exist when
+        they acted - as well as producing, in one moment, the backlog this
+        design exists to avoid.
+        """
+        if body.review == await read_publication_review(session_factory):
+            return {"review": body.review}
+
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        async with session_factory() as session:
+            async with session.begin():
+                if body.review:
+                    await config_store.put(session, PUBLICATION_REVIEW_KEY, "1")
+                else:
+                    await config_store.drop(session, PUBLICATION_REVIEW_KEY)
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type=PUBLICATION_REVIEW_EVENT,
+                        actor_user_id=admin.id,
+                        target_type=AuditTargetType.APP_CONFIG.value,
+                        target_id=PUBLICATION_REVIEW_KEY,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={
+                            "review": body.review,
+                            **({"reason": body.reason} if body.reason else {}),
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+        return {"review": body.review}
 
     # ------------------------------------------------------------------ rooms
 

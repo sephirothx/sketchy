@@ -8,6 +8,7 @@ import {
   getOwnedPromptList,
   listOwnedPromptLists,
   listPromptTags,
+  setOwnedPromptListPublished,
   updateOwnedPromptList,
   type PromptListDraft,
 } from "../lib/promptLists";
@@ -40,12 +41,25 @@ function tagName(tag: PromptTag): string {
   return (ui.promptTags as Record<string, string>)[tag.slug] ?? tag.slug;
 }
 
+/** Visibility as a reader says it. The sidebar used to print the stored value -
+"private", "unlisted" - in every locale, and `public` would have joined them. */
+function visibilityLabel(visibility: OwnedPromptList["visibility"]): string {
+  switch (visibility) {
+    case "public":
+      return ui.myPromptListsPage.published;
+    case "unlisted":
+      return ui.myPromptListsPage.anyoneWithCode;
+    default:
+      return ui.myPromptListsPage.private;
+  }
+}
+
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
   return {
     name: promptList.name,
     description: promptList.description,
     language: promptList.language,
-    visibility: promptList.visibility,
+    visibility: promptList.visibility === "public" ? "private" : promptList.visibility,
     prompts: promptList.prompts.map((prompt) => ({
       conceptId: prompt.conceptId,
       prompt: prompt.prompt,
@@ -64,6 +78,7 @@ export function MyPromptListsPage() {
   const [lists, setLists] = useState<OwnedPromptList[]>([]);
   const [tagVocabulary, setTagVocabulary] = useState<PromptTag[]>([]);
   const [maxTags, setMaxTags] = useState(0);
+  const [published, setPublished] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [shareCode, setShareCode] = useState<string | null>(null);
@@ -121,6 +136,7 @@ export function MyPromptListsPage() {
     setSelectedId(null);
     setVersion(null);
     setShareCode(null);
+    setPublished(false);
     setModerationState("active");
     setPromptModeration({});
     setDraft({ ...EMPTY_DRAFT, prompts: [] });
@@ -128,6 +144,33 @@ export function MyPromptListsPage() {
     setMergeSummary(null);
     setError(null);
     setNotice(null);
+  }
+
+  async function togglePublished() {
+    if (!selectedId) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await setOwnedPromptListPublished(selectedId, !published);
+      setPublished(saved.visibility === "public");
+      setVersion(saved.version);
+      setShareCode(saved.shareCode);
+      setModerationState(saved.moderationState);
+      setDraft(draftFromList(saved));
+      setLists((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setNotice(saved.visibility === "public"
+        ? ui.myPromptListsPage.promptListPublished
+        : ui.myPromptListsPage.promptListUnpublished);
+    } catch (publishError) {
+      // Written from the refusal's code, not the server's words: every reason
+      // a publish is refused is something the owner can act on - confirm an
+      // address, read a warning, wait for a moderator - so each has its own
+      // sentence, in the reader's language (R-I18N-01).
+      setError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openList(id: string) {
@@ -138,6 +181,7 @@ export function MyPromptListsPage() {
       setSelectedId(loaded.id);
       setVersion(loaded.version);
       setShareCode(loaded.shareCode);
+      setPublished(loaded.visibility === "public");
       setModerationState(loaded.moderationState);
       setPromptModeration(Object.fromEntries(
         loaded.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
@@ -217,6 +261,7 @@ export function MyPromptListsPage() {
       setSelectedId(saved.id);
       setVersion(saved.version);
       setShareCode(saved.shareCode);
+      setPublished(saved.visibility === "public");
       setModerationState(saved.moderationState);
       setPromptModeration(Object.fromEntries(
         saved.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
@@ -276,7 +321,7 @@ export function MyPromptListsPage() {
               <span>
                   {ui.myPromptListsPage.listSummary({
                     prompts: item.promptCount,
-                    visibility: item.visibility,
+                    visibility: visibilityLabel(item.visibility),
                     moderationState:
                       item.moderationState !== "active"
                         ? item.moderationState.replace("_", " ")
@@ -302,6 +347,20 @@ export function MyPromptListsPage() {
                 <option value="unlisted">{ui.myPromptListsPage.anyoneWithCode}</option>
               </select></label>
             </div>
+            {selectedId && <div className="prompt-list-publication">
+              <div>
+                <strong>{published ? ui.myPromptListsPage.inCommunityCatalogue : ui.myPromptListsPage.notPublished}</strong>
+                <p>{published
+                  ? ui.myPromptListsPage.publishedExplainer
+                  : ui.myPromptListsPage.unpublishedExplainer}</p>
+              </div>
+              <button
+                type="button"
+                className={published ? "btn btn-secondary btn-compact" : "btn btn-primary btn-compact"}
+                disabled={busy}
+                onClick={() => void togglePublished()}
+              >{published ? ui.myPromptListsPage.unpublish : ui.myPromptListsPage.publish}</button>
+            </div>}
             {tagVocabulary.length > 0 && <fieldset className="prompt-list-tags">
               {/* Toggle chips rather than checkboxes: choosing several things
                   out of a fixed set is what `toggle-chip` is for, and the

@@ -68,7 +68,8 @@ export interface OwnedPromptEntry {
 
 export interface OwnedPromptList extends PromptListSummary {
   id: string;
-  visibility: "private" | "unlisted";
+  /** `public` is reached by publishing, never by saving (R-LIST-02). */
+  visibility: "private" | "unlisted" | "public";
   shareCode: string | null;
   moderationState: "active" | "under_review" | "hidden";
   /** Curated tag slugs on the list's current revision, in vocabulary order. */
@@ -559,6 +560,7 @@ export type ErrorCode =
   | "email_in_use"
   | "email_change_refused"
   | "verification_link_invalid"
+  | "email_verification_required"
   | "reset_link_invalid"
   | "export_not_found"
   | "export_expired"
@@ -589,6 +591,7 @@ export type ErrorCode =
   | "prompt_list_invalid"
   | "prompt_list_forbidden"
   | "unknown_prompt_tag"
+  | "prompt_list_hidden"
   | "unknown_sort"
   | "timezone_required"
   | "range_reversed"
@@ -616,6 +619,7 @@ export type ErrorCode =
   | "evidence_not_in_game"
   | "evidence_not_in_turn"
   | "no_such_warning"
+  | "warning_unread"
   | "no_drawing";
 
 export interface AckResponse {
