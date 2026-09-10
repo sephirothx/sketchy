@@ -255,10 +255,35 @@ const FLAG_SHAPES: Record<string, ReactNode> = {
   ),
 };
 
-/** `width` in CSS pixels; the 18x13 artwork scales with it. */
-export function Flag({ language, width = 18 }: { language: string; width?: number }) {
+/**
+ * `width` in CSS pixels; the 18x13 artwork scales with it.
+ *
+ * `fill` hands the sizing to whatever is around it: the flag takes the whole
+ * box, keeps no ring and no corners of its own, and lets that box clip it.
+ * That is how the language button wears one - the button *is* the flag - and
+ * the 0.1% stretch a 61x44 frame asks of 18:13 is not visible at this size.
+ */
+export function Flag({
+  language,
+  width = 18,
+  fill = false,
+}: { language: string; width?: number; fill?: boolean }) {
   const shape = FLAG_SHAPES[language];
   if (!shape) return null;
+  if (fill) {
+    return (
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 18 13"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        style={{ display: "block" }}
+      >
+        {shape}
+      </svg>
+    );
+  }
   return (
     <svg
       width={width}

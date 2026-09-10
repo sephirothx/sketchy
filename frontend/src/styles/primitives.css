@@ -289,10 +289,20 @@
    flag nearly fills its frame - shrunk to a chip beside a chevron it stops
    being a picture of anything at all. */
 .language-picker.is-flag-only .language-picker-trigger {
-  justify-content: center;
+  height: 44px;
   min-width: 0;
-  /* The 44px floor is the tap target; the flag itself is what is seen. */
-  padding: 6px;
+  overflow: hidden;
+  padding: 0;
+  width: 61px;
+}
+
+/* The flag is the button's whole face, so the button's own border is the
+   frame and the flag needs none of its own. */
+.language-picker.is-flag-only .language-picker-face,
+.language-picker.is-flag-only .language-picker-flag {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
 .language-picker.is-compact .language-picker-trigger {
