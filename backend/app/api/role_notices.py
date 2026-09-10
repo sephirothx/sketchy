@@ -16,10 +16,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.auth.pending_role import pending_offer
 from app.db.models import RoleChangeNotice, User
 
@@ -104,7 +106,7 @@ def create_role_notice_router(
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return await pending_role_notice_payload(session_factory, user_id)
 
     @router.post("/api/role-notices/{notice_id}/acknowledge")
@@ -117,7 +119,7 @@ def create_role_notice_router(
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         caller = UUID(user_id)
         async with session_factory() as session:
             async with session.begin():
@@ -129,7 +131,7 @@ def create_role_notice_router(
                 # Somebody else's notice is not this caller's to see, or to
                 # acknowledge away; answering 404 keeps its existence private.
                 if notice is None or notice.user_id != caller:
-                    raise HTTPException(status_code=404, detail="No such notice.")
+                    raise Refusal(404, ErrorCode.NO_SUCH_NOTICE, "No such notice.")
                 now = datetime.now(timezone.utc)
                 pending = (
                     await session.scalars(

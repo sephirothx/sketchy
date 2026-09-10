@@ -5,6 +5,7 @@ import {
   type PromptContentReportReason,
 } from "../lib/promptLists";
 import type { SharedPromptList } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 const REASONS: Array<{ value: PromptContentReportReason; label: string }> = [
   { value: "inappropriate", label: "Inappropriate content" },
@@ -57,7 +58,7 @@ export function PromptContentReportDialog({
       });
       onSubmitted();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not send the report.");
+      setError(refusalText(caught, "Could not send the report."));
     } finally {
       setBusy(false);
     }

@@ -4,7 +4,6 @@ import { Suspense, lazy, useEffect, useId, useRef, useState } from "react";
 const AuthenticatorQrCode = lazy(() => import("./AuthenticatorQrCode"));
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import { downloadRecoveryCodes } from "../lib/recoveryCodeFile";
 import { SegmentedCodeInput } from "./SegmentedCodeInput";
 import { CopyIcon, DownloadIcon } from "./icons";
@@ -21,6 +20,7 @@ import {
   type EnrolmentOffer,
   type SecondFactorState,
 } from "../lib/secondFactor";
+import { refusalText } from "../lib/refusals.ts";
 
 /**
  * Setting up the second factor an account can hold, and a staff account must.
@@ -95,7 +95,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   function failed(problem: unknown, fallback: string) {
-    setError(problem instanceof ApiError ? problem.message : fallback);
+    setError(refusalText(problem, fallback));
   }
 
   async function start() {

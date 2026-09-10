@@ -3,6 +3,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { maskedWords, splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 interface PromptDisplayProps {
   isDrawer: boolean;
@@ -115,7 +116,7 @@ export function PromptDisplay({
     setPendingAction(key);
     try {
       const response = await emitWithAck<AckResponse>(event, data);
-      if (!response.ok) notify(response.error || `Could not ${action}.`, "error");
+      if (!response.ok) notify(refusalText(response, `Could not ${action}.`), "error");
     } catch (requestError) {
       notify(socketRequestErrorMessage(requestError, action), "error");
     } finally {

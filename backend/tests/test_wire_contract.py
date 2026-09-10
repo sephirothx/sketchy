@@ -418,7 +418,7 @@ def test_every_audit_event_about_somebody_names_them_as_its_subject(trees):
 
 
 def _refusal_codes() -> list[str]:
-    from app.handlers.refusals import ErrorCode
+    from app.refusals import ErrorCode
 
     return [member.value for member in ErrorCode]
 

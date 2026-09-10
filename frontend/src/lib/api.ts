@@ -1,3 +1,5 @@
+import type { ErrorCode } from "../types.ts";
+import type { RefusalParams } from "./refusals.ts";
 import { PROTOCOL_HEADER, handleProtocolHeader } from "./protocol.ts";
 import { noteUpdateStuckFromRest } from "./socket.ts";
 import { reportSuspended, suspensionFromPayload } from "./suspension.ts";
@@ -7,12 +9,73 @@ const BINARY_TIMEOUT_MS = 20000;
 export class ApiError extends Error {
   readonly status: number;
 
-  constructor(status: number, message: string) {
+  /** Why the server refused, as one of the enumerated codes. Absent only for
+      a failure with no response body - a timeout, a proxy, a 502. Branch on
+      this and write the sentence with `refusalText`; `message` is the
+      server's English and is for a log, never for a player (R-I18N-01). */
+  readonly errorCode?: ErrorCode;
+
+  /** The values that sentence needs - a limit, a count, a reason slug. Never
+      rendered text. */
+  readonly params?: RefusalParams;
+
+  /** The payload field that failed validation, for binding to a form. */
+  readonly field?: string;
+
+  /** When the server knows trying again could work. */
+  readonly retryAfterMs?: number;
+
+  constructor(
+    status: number,
+    message: string,
+    refusal: {
+      errorCode?: ErrorCode;
+      params?: RefusalParams;
+      field?: string;
+      retryAfterMs?: number;
+    } = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.errorCode = refusal.errorCode;
+    this.params = refusal.params;
+    this.field = refusal.field;
+    this.retryAfterMs = refusal.retryAfterMs;
   }
 }
+
+/** Pull the refusal out of a response body, whatever shape it came in.
+
+An unconverted route still answers `{"detail": "..."}`, and a body that is not
+JSON at all answers nothing; both leave `errorCode` unset, which is exactly
+what `refusalText`'s fallback is for. */
+function refusalFrom(payload: unknown): {
+  errorCode?: ErrorCode;
+  params?: RefusalParams;
+  field?: string;
+  retryAfterMs?: number;
+} {
+  if (!payload || typeof payload !== "object") return {};
+  const body = payload as Record<string, unknown>;
+  return {
+    errorCode: typeof body.errorCode === "string" ? (body.errorCode as ErrorCode) : undefined,
+    params:
+      body.params && typeof body.params === "object"
+        ? (body.params as RefusalParams)
+        : undefined,
+    field: typeof body.field === "string" ? body.field : undefined,
+    retryAfterMs: typeof body.retryAfterMs === "number" ? body.retryAfterMs : undefined,
+  };
+}
+
+/** The refusal fields an `ApiError` subclass passes through unchanged. */
+type RefusalFields = {
+  errorCode?: ErrorCode;
+  params?: RefusalParams;
+  field?: string;
+  retryAfterMs?: number;
+};
 
 /** The header naming a 403 that means *this caller has no account*. */
 export const ACCOUNT_REQUIRED_HEADER = "X-Sketchy-Account-Required";
@@ -24,8 +87,8 @@ not a reason, and the callers that act on this refusal act on it *hard* - the
 friends list treats it as "there is no list" and shows an empty one. A
 suspension is also a 403 on the same path. */
 export class AccountRequiredError extends ApiError {
-  constructor(message: string) {
-    super(403, message);
+  constructor(message: string, refusal: RefusalFields = {}) {
+    super(403, message, refusal);
     // Read by `isNoFriendListRefusal`, which lives in a module with no
     // runtime imports and so cannot name this class.
     this.name = "AccountRequiredError";
@@ -53,16 +116,20 @@ export class SecondFactorRequiredError extends ApiError {
       passkey instead of a field (R-AUTH-23). */
   readonly kind: "required" | "passkey";
 
-  constructor(message: string, kind: "required" | "passkey" = "required") {
-    super(401, message);
+  constructor(
+    message: string,
+    kind: "required" | "passkey" = "required",
+    refusal: RefusalFields = {},
+  ) {
+    super(401, message, refusal);
     this.name = "SecondFactorRequiredError";
     this.kind = kind;
   }
 }
 
 export class StepUpRequiredError extends ApiError {
-  constructor(message: string) {
-    super(403, message);
+  constructor(message: string, refusal: RefusalFields = {}) {
+    super(403, message, refusal);
     this.name = "StepUpRequiredError";
   }
 }
@@ -143,23 +210,25 @@ export async function apiRequest<T>(
       const detail =
         (payload && typeof payload.detail === "string" && payload.detail)
         || `Request failed with ${response.status}`;
+      const refusal = refusalFrom(payload);
       if (response.status === 403 && response.headers.get(STEP_UP_HEADER)) {
-        throw new StepUpRequiredError(detail);
+        throw new StepUpRequiredError(detail, refusal);
       }
       // "You need an account for this", told apart from every other 403 by
       // the server rather than guessed from the status - a suspension is one
       // too, and reads the same way from here (R-FRIEND-03).
       if (response.status === 403 && response.headers.get(ACCOUNT_REQUIRED_HEADER)) {
-        throw new AccountRequiredError(detail);
+        throw new AccountRequiredError(detail, refusal);
       }
       const secondFactor = response.headers.get(SECOND_FACTOR_HEADER);
       if (response.status === 401 && secondFactor) {
         throw new SecondFactorRequiredError(
           detail,
           secondFactor === "passkey" ? "passkey" : "required",
+          refusal,
         );
       }
-      throw new ApiError(response.status, detail);
+      throw new ApiError(response.status, detail, refusal);
     }
     return payload as T;
   } finally {

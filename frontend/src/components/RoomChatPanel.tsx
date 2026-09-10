@@ -9,6 +9,7 @@ import { sendGuess } from "../lib/guessSender";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
+import { refusalText } from "../lib/refusals.ts";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
@@ -288,7 +289,7 @@ export function RoomChatPanel({
         setText("");
         scrollToBottom();
       } else {
-        setError(response.error || "Could not send message");
+        setError(refusalText(response, "Could not send message"));
       }
     } catch (sendError) {
       setError(socketRequestErrorMessage(sendError, "send the message"));

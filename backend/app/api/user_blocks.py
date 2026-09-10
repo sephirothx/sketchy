@@ -3,12 +3,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.auth.audit import audit_coordinates
 from app.auth.blocks import BlockService
 from app.services.friends import FriendService
@@ -66,7 +68,7 @@ def create_user_blocks_router(
     def blocker_id(request: Request) -> UUID:
         value = getattr(request.state, "user_id", None)
         if not value:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return UUID(value)
 
     @router.get("")
@@ -94,10 +96,12 @@ def create_user_blocks_router(
                 async with session.begin():
                     target = await _target_user(session, body.user_id)
                     if target is None:
-                        raise HTTPException(status_code=404, detail="No such player.")
+                        raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
                     if current_id == target.id:
-                        raise HTTPException(
-                            status_code=422, detail="You cannot block yourself."
+                        raise Refusal(
+                            422,
+                            ErrorCode.CANNOT_BLOCK_YOURSELF,
+                            "You cannot block yourself.",
                         )
                     existing = await session.scalar(
                         select(UserBlock).where(
@@ -115,8 +119,11 @@ def create_user_blocks_router(
                         )
                     )
                     if (count or 0) >= MAX_BLOCKS_PER_ACCOUNT:
-                        raise HTTPException(
-                            status_code=409, detail="Your block list is full."
+                        raise Refusal(
+                            409,
+                            ErrorCode.BLOCK_LIST_FULL,
+                            "Your block list is full.",
+                            params={"limit": MAX_BLOCKS_PER_ACCOUNT},
                         )
                     block = UserBlock(
                         blocker_user_id=current_id,

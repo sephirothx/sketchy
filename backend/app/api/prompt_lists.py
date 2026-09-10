@@ -4,9 +4,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.api.serializers import (
     owned_prompt_list_payload,
     prompt_list_payload,
@@ -122,11 +124,13 @@ def create_prompt_list_router(
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_repo and user_id else None
         if user is None:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if user.is_anonymous:
-            raise HTTPException(
-                status_code=403,
-                detail="Create an account to save reusable prompt lists.",
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account to save reusable prompt lists.",
+                params={"action": "prompt_lists"},
             )
         return user
 
@@ -142,12 +146,12 @@ def create_prompt_list_router(
             for prompt in prompts
         )
 
-    def mutation_error(error: PromptListMutationError) -> HTTPException:
+    def mutation_error(error: PromptListMutationError) -> Refusal:
         if isinstance(error, PromptListNotFoundError):
-            return HTTPException(status_code=404, detail=str(error))
+            return Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, str(error))
         if isinstance(error, PromptListConflictError):
-            return HTTPException(status_code=409, detail=str(error))
-        return HTTPException(status_code=422, detail=str(error))
+            return Refusal(409, ErrorCode.PROMPT_LIST_CONFLICT, str(error))
+        return Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error))
 
     @router.get("/prompt-lists")
     async def list_prompt_lists(
@@ -159,7 +163,7 @@ def create_prompt_list_router(
             try:
                 language = validate_prompt_language(language)
             except ValueError as error:
-                raise HTTPException(status_code=422, detail=str(error)) from error
+                raise Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error)) from error
         locale = best_supported_prompt_locale(request.headers.get("accept-language"))
         return [
             prompt_list_payload(prompt_list)
@@ -202,7 +206,7 @@ def create_prompt_list_router(
         user = await require_registered(request)
         prompt_list = await prompt_list_repo.get_owned(user.id, prompt_list_id)
         if prompt_list is None:
-            raise HTTPException(status_code=404, detail="Prompt list not found.")
+            raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
         return owned_prompt_list_payload(prompt_list)
 
     @router.put("/prompt-lists/mine/{prompt_list_id}")
@@ -233,7 +237,7 @@ def create_prompt_list_router(
     async def delete_my_prompt_list(prompt_list_id: str, request: Request):
         user = await require_registered(request)
         if not await prompt_list_repo.delete_owned(user.id, prompt_list_id):
-            raise HTTPException(status_code=404, detail="Prompt list not found.")
+            raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.post("/prompt-lists/shared")
@@ -241,12 +245,18 @@ def create_prompt_list_router(
         body: SharedPromptListRequest, request: Request
     ):
         if not share_limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429, detail="Too many attempts. Please wait and try again."
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
             )
         prompt_list = await prompt_list_repo.get_shared(body.code)
         if prompt_list is None:
-            raise HTTPException(status_code=404, detail="No shared prompt list found.")
+            raise Refusal(
+                404,
+                ErrorCode.SHARED_PROMPT_LIST_NOT_FOUND,
+                "No shared prompt list found.",
+            )
         return shared_prompt_list_payload(prompt_list)
 
     @router.get("/prompt-lists/{slug}/prompt-stats")
@@ -273,23 +283,29 @@ def create_prompt_list_router(
         has drawn yet.
         """
         if not stats_limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429, detail="Too many requests. Please wait and try again."
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REQUESTS,
+                "Too many requests. Please wait and try again.",
             )
         if sort not in SORTS:
-            raise HTTPException(status_code=422, detail="Unknown sort.")
+            raise Refusal(422, ErrorCode.UNKNOWN_SORT, "Unknown sort.", field="sort")
         for field_name, value in (("from", from_time), ("to", to_time)):
             if value is not None and value.tzinfo is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"{field_name} must include a timezone.",
+                raise Refusal(
+                    422,
+                    ErrorCode.TIMEZONE_REQUIRED,
+                    f"{field_name} must include a timezone.",
+                    field=field_name,
                 )
         if from_time is not None:
             from_time = from_time.astimezone(timezone.utc)
         if to_time is not None:
             to_time = to_time.astimezone(timezone.utc)
         if from_time is not None and to_time is not None and from_time >= to_time:
-            raise HTTPException(status_code=422, detail="from must be earlier than to.")
+            raise Refusal(
+                422, ErrorCode.RANGE_REVERSED, "from must be earlier than to.", field="from"
+            )
 
         summaries = await prompt_list_repo.get_prompt_stats(
             slug,
@@ -299,7 +315,7 @@ def create_prompt_list_router(
             hint_mode=hint_mode.value if hint_mode else None,
         )
         if not summaries:
-            raise HTTPException(status_code=404, detail="No such prompt list.")
+            raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "No such prompt list.")
 
         ordered = _ordered(summaries, sort)
         rated_count = sum(1 for summary in summaries if _is_rated(summary))

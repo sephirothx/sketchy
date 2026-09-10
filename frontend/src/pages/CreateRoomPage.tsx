@@ -24,6 +24,7 @@ import {
   type RoomPresetSettings,
   type RoomPresetSummary,
 } from "../lib/roomPresets";
+import { refusalText } from "../lib/refusals.ts";
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
@@ -212,7 +213,7 @@ export function CreateRoomPage() {
       setPresetName(preset.name);
       setPresetStatus({ text: `Applied “${preset.name}”.`, undo: before });
     } catch (presetError) {
-      setError(presetError instanceof Error ? presetError.message : "Could not apply that preset.");
+      setError(refusalText(presetError, "Could not apply that preset."));
     } finally {
       setPresetBusy(false);
     }
@@ -232,7 +233,7 @@ export function CreateRoomPage() {
       setNamingPreset(false);
       setPresetStatus({ text: `Saved “${created.name}”.` });
     } catch (presetError) {
-      setError(presetError instanceof Error ? presetError.message : "Could not save that preset.");
+      setError(refusalText(presetError, "Could not save that preset."));
     } finally {
       setPresetBusy(false);
     }
@@ -259,7 +260,7 @@ export function CreateRoomPage() {
       setPresetStatus({ text: `Updated “${updated.name}”.` });
       setPresetName(updated.name);
     } catch (presetError) {
-      setError(presetError instanceof Error ? presetError.message : "Could not update that preset.");
+      setError(refusalText(presetError, "Could not update that preset."));
     } finally {
       setPresetBusy(false);
     }
@@ -276,7 +277,7 @@ export function CreateRoomPage() {
       setSelectedPresetId("");
       setPresetName("");
     } catch (presetError) {
-      setError(presetError instanceof Error ? presetError.message : "Could not delete that preset.");
+      setError(refusalText(presetError, "Could not delete that preset."));
     } finally {
       setPresetBusy(false);
     }
@@ -302,7 +303,7 @@ export function CreateRoomPage() {
         navigate(`/room/${session.code}`);
         return;
       }
-      setError(response.error || "Failed to create room");
+      setError(refusalText(response, "Failed to create room"));
     } catch (createError) {
       setError(socketRequestErrorMessage(createError, "create the room"));
     } finally {

@@ -4,11 +4,13 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.db.models import User, UserSettings
 from app.domain_values import AccountState, DEFAULT_USER_KEY_BINDINGS
 
@@ -227,7 +229,7 @@ def create_user_settings_router(
     def user_id(request: Request) -> str:
         value = getattr(request.state, "user_id", None)
         if not value:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return value
 
     @router.get("")
@@ -237,7 +239,7 @@ def create_user_settings_router(
                 session_factory, user_id=user_id(request)
             )
         except UserSettingsError as error:
-            raise HTTPException(status_code=403, detail=str(error)) from error
+            raise Refusal(403, ErrorCode.SETTING_REFUSED, str(error)) from error
 
     @router.patch("")
     async def patch_settings(body: UserSettingsPatch, request: Request):
@@ -246,6 +248,6 @@ def create_user_settings_router(
                 session_factory, user_id=user_id(request), values=body
             )
         except UserSettingsError as error:
-            raise HTTPException(status_code=403, detail=str(error)) from error
+            raise Refusal(403, ErrorCode.SETTING_REFUSED, str(error)) from error
 
     return router

@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
+from app.api.errors import install_refusal_handler
 from app.api.profiles import create_profile_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
@@ -597,6 +598,9 @@ async def lifespan(_app: FastAPI):
 
 
 api = FastAPI(title="Sketchy", lifespan=lifespan)
+# A refusal that names its reason renders with its code in the body; anything
+# still raising a plain HTTPException keeps FastAPI's own shape (#760).
+install_refusal_handler(api)
 # The frontend is served from this same origin, so the session cookie rides
 # along without CORS involvement, and no other origin is read by a browser:
 # CORS is granted only to the origins named in ALLOWED_ORIGINS (a frontend

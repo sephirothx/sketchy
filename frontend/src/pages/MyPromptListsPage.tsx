@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { PlusIcon, TrashIcon, XIcon } from "../components/icons";
-import { ApiError } from "../lib/api";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
@@ -20,6 +19,7 @@ import {
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { useAuthStore } from "../store/authStore";
 import type { OwnedPromptList, PromptLanguage } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 const LANGUAGES: PromptLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt"];
 const EMPTY_DRAFT: PromptListDraft = {
@@ -193,9 +193,7 @@ export function MyPromptListsPage() {
       setNotice("Prompt list saved.");
     } catch (saveError) {
       setError(
-        saveError instanceof ApiError
-          ? saveError.message
-          : "Could not save this prompt list.",
+        refusalText(saveError, "Could not save this prompt list."),
       );
     } finally {
       setBusy(false);

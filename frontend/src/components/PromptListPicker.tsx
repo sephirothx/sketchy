@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary, SharedPromptList } from "../types";
 import { PromptContentReportDialog } from "./PromptContentReportDialog";
 import { AlertIcon, CheckIcon, InfoIcon, PlusIcon } from "./icons";
+import { refusalText } from "../lib/refusals.ts";
 
 interface PromptListPickerProps {
   /** The room's declared language. Lists answer to it; it is never read back
@@ -65,7 +66,7 @@ export function PromptListPicker({
         }
       } catch (err) {
         if (!cancelled) {
-          setFetchError(err instanceof Error ? err.message : "Failed to load prompt lists");
+          setFetchError(refusalText(err, "Failed to load prompt lists"));
         }
       } finally {
         if (!cancelled) {
@@ -113,7 +114,7 @@ export function PromptListPicker({
       onChange(selection.slugs);
       setShareCode("");
     } catch (error) {
-      setShareError(error instanceof Error ? error.message : "Could not add that shared list.");
+      setShareError(refusalText(error, "Could not add that shared list."));
     } finally {
       setResolvingShare(false);
     }

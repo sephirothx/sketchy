@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import {
   clampCrop,
   cropRect,
@@ -11,6 +10,7 @@ import {
   type CropState,
 } from "../lib/avatarCrop.ts";
 import { AvatarInputError, encodePicture, loadPicture, type LoadedPicture } from "../lib/avatars";
+import { refusalText } from "../lib/refusals.ts";
 
 /** The square the player frames the picture in, in CSS pixels. */
 export const CROP_VIEWPORT = 272;
@@ -148,9 +148,9 @@ export function PictureCropDialog({
       await onUse(base64);
     } catch (failure) {
       setError(
-        failure instanceof AvatarInputError || failure instanceof ApiError
+        failure instanceof AvatarInputError
           ? failure.message
-          : "Could not set that picture. Please try again.",
+          : refusalText(failure, "Could not set that picture. Please try again."),
       );
       setBusy(false);
     }

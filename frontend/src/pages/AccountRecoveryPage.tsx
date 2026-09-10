@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { ApiError } from "../lib/api";
 import { Squiggle, Wordmark } from "../components/icons";
 import { SectionLabel } from "../components/ui/Card";
 import {
@@ -12,6 +11,7 @@ import {
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
+import { refusalText } from "../lib/refusals.ts";
 
 type Mode = "forgot" | "reset" | "verify";
 
@@ -53,9 +53,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       .catch((confirmError) => {
         if (cancelled) return;
         setError(
-          confirmError instanceof ApiError
-            ? confirmError.message
-            : "That confirmation link could not be used.",
+          refusalText(confirmError, "That confirmation link could not be used."),
         );
       })
       .finally(() => {
@@ -93,9 +91,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       setDone(detail);
     } catch (requestError) {
       setError(
-        requestError instanceof ApiError
-          ? requestError.message
-          : "Something went wrong. Please try again.",
+        refusalText(requestError, "Something went wrong. Please try again."),
       );
     } finally {
       setBusy(false);
@@ -117,9 +113,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       setDone("Your password is set and you are signed in again.");
     } catch (resetError) {
       setError(
-        resetError instanceof ApiError
-          ? resetError.message
-          : "Something went wrong. Please try again.",
+        refusalText(resetError, "Something went wrong. Please try again."),
       );
     } finally {
       setBusy(false);

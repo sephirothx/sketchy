@@ -2,9 +2,9 @@ import { useRef, useState } from "react";
 
 import { SegmentedCodeInput } from "./SegmentedCodeInput";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
 import { stepUp } from "../lib/secondFactor";
+import { refusalText } from "../lib/refusals.ts";
 
 /**
  * The prompt a staff action raises when it needs the second factor again.
@@ -54,7 +54,7 @@ export function StepUpDialog({
       await stepUp(entered);
       onProved();
     } catch (problem) {
-      setError(problem instanceof ApiError ? problem.message : "That code was not accepted.");
+      setError(refusalText(problem, "That code was not accepted."));
       setBusy(false);
     }
   }
@@ -73,9 +73,7 @@ export function StepUpDialog({
       setError(
         problem instanceof DOMException
           ? "That passkey was not used. You can try again."
-          : problem instanceof ApiError
-            ? problem.message
-            : "That passkey was not accepted.",
+          : refusalText(problem, "That passkey was not accepted."),
       );
       setBusy(false);
     }

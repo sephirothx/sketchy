@@ -249,8 +249,9 @@ it is sent every few seconds by every seat and carries no refusal a player could
 | --- | --- | --- |
 | `ok` | `boolean` | Whether the command was accepted |
 | `errorCode` | `ErrorCode?` | **On every refusal.** Why, as one of the enumerated codes below. The only field a program reads |
-| `error` | `string?` | The player's sentence. Shown, never compared: a test fails on any client branch that tests it |
+| `error` | `string?` | English prose for a **log**, a bug report, and an operator reading a response by hand. **Never rendered**: the client writes the player's sentence from `errorCode`, in the reader's language (R-I18N-01), and `test_rest_refusals.py` fails on any screen that prints this instead |
 | `field` | `string?` | The payload field that failed validation, for form binding |
+| `params` | `object?` | The values that sentence needs - a count, a limit, a reason slug. **Values, never fragments**: a server-built noun phrase dropped into a client sentence breaks in the first language that inflects (R-I18N-02). Defined for both transports; today only HTTP refusals send one |
 | `retryAfterMs` | `number?` | When the server knows trying again could work — a command budget's window, a restart-vote cooldown |
 
 Command-specific **success** additions, all optional: `roomId`, `code` (the invite
@@ -263,11 +264,19 @@ prose, plus on four paths a boolean nobody else set (`roomFull`, `codeRetired`,
 `serverDraining`, `serverPaused`); `useCanvasProtocol` compared the sentence "Drawing
 actions are out of sequence" to decide whether to resync, so a copy edit could change
 recovery. The codes are declared once, in
-[`backend/app/handlers/refusals.py`](../backend/app/handlers/refusals.py) (`ErrorCode`),
-mirrored member for member by `ErrorCode` in `types.ts`, and both facts are enforced by
+[`backend/app/refusals.py`](../backend/app/refusals.py) (`ErrorCode`) - top-level
+rather than under `app/handlers`, because REST raises the same vocabulary through
+[`app/api/errors.py`](../backend/app/api/errors.py) and a sibling package cannot own it
+(#760). They are mirrored member for member by `ErrorCode` in `types.ts`, and both
+facts are enforced by
 [`backend/tests/test_wire_contract.py`](../backend/tests/test_wire_contract.py): the two
 enums must match, every `"ok": False` literal on the server must carry a code, and no
 client source may compare `.error` to a string. Codes are added, never renamed.
+
+The table below lists the socket families. The REST-only codes - sessions, second
+factors, exports, pictures, prompt lists, presets and the reporter's side of
+moderation - are the rest of the same enum, and are listed at
+[`app/refusals.py`](../backend/app/refusals.py) rather than duplicated here.
 
 | Family | Codes |
 | --- | --- |
@@ -1539,6 +1548,21 @@ server's own log lines for that request are stamped with, and the one written in
 proxy and the operator can quote the same id. A supplied value that is not a UUID is
 replaced, not echoed.
 
+**A refusal names its reason.** A player-facing route answers
+
+    {"errorCode": "sign_in_required", "detail": "...", "field"?: ..., "params"?: {...}, "retryAfterMs"?: ...}
+
+built by `Refusal` ([`backend/app/api/errors.py`](../backend/app/api/errors.py)) from
+the same `ErrorCode` vocabulary the socket uses (§2). `detail` is English and is not
+rendered — the client writes the player's sentence from the code (R-I18N-01) — and
+`params` carries values, never fragments (R-I18N-02). **Staff-only routes** keep a
+plain `{"detail": "..."}`: the moderation queue and the operations pages are read by
+operators in one language, and the split is written down as an allowlist in
+[`backend/tests/test_rest_refusals.py`](../backend/tests/test_rest_refusals.py), which
+fails on a player-facing route that refuses with prose and on a stale exemption.
+FastAPI's own validation failures keep their `{"detail": [...]}` shape; a client that
+provoked one sent a payload no screen can produce.
+
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
 that — is not this server's own origin or one in `ALLOWED_ORIGINS` is answered **403**
@@ -1837,7 +1861,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (20) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (21) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

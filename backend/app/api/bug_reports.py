@@ -27,6 +27,8 @@ from sqlalchemy.orm import defer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.api.admin_auth import admin_gate
 from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
@@ -321,20 +323,24 @@ def create_bug_report_router(
         try:
             payload = base64.b64decode(encoded, validate=True)
         except (binascii.Error, ValueError) as error:
-            raise HTTPException(
-                status_code=422, detail="The screenshot could not be read."
+            raise Refusal(
+                422, ErrorCode.SCREENSHOT_UNREADABLE, "The screenshot could not be read."
             ) from error
         if not payload:
             return None
         if len(payload) > MAX_SCREENSHOT_BYTES:
-            raise HTTPException(
-                status_code=422,
-                detail="That screenshot is too large. The limit is 2 MB.",
+            raise Refusal(
+                422,
+                ErrorCode.SCREENSHOT_TOO_LARGE,
+                "That screenshot is too large. The limit is 2 MB.",
+                params={"limitBytes": MAX_SCREENSHOT_BYTES},
             )
         content_type = _sniff_image(payload)
         if content_type is None:
-            raise HTTPException(
-                status_code=422, detail="A screenshot must be a PNG or WebP image."
+            raise Refusal(
+                422,
+                ErrorCode.SCREENSHOT_UNSUPPORTED_TYPE,
+                "A screenshot must be a PNG or WebP image.",
             )
         return payload, content_type, hashlib.sha256(payload).hexdigest()
 
@@ -344,17 +350,21 @@ def create_bug_report_router(
         if not reporter_id:
             # Guests hold an account too, so this only refuses somebody with no
             # identity at all - and a bug nobody can be asked about helps least.
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if not await limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many bug reports. Please wait before sending another.",
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_BUG_REPORTS,
+                "Too many bug reports. Please wait before sending another.",
             )
 
         client_context = _trim_client_context(body.client_context)
         if len(json.dumps(client_context).encode()) > MAX_CLIENT_CONTEXT_BYTES:
-            raise HTTPException(
-                status_code=422, detail="That report carries too much context."
+            raise Refusal(
+                422,
+                ErrorCode.BUG_REPORT_CONTEXT_TOO_LARGE,
+                "That report carries too much context.",
+                params={"limitBytes": MAX_CLIENT_CONTEXT_BYTES},
             )
 
         screenshot = _decode_screenshot(body.screenshot)
@@ -384,7 +394,7 @@ def create_bug_report_router(
                 try:
                     await require_live_account(session, db_reporter_id)
                 except AccountErasedError:
-                    raise HTTPException(status_code=401, detail="Sign in first.") from None
+                    raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
                 reporter = await session.get(User, db_reporter_id)
                 if reporter is not None:
                     server_context["account"] = {

@@ -4,9 +4,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.api.serializers import (
     game_detail_payload,
     game_summary_payload,
@@ -94,8 +96,10 @@ def create_profile_router(
 
     def throttle(request: Request) -> None:
         if not profile_limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429, detail="Too many requests. Please wait and try again."
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REQUESTS,
+                "Too many requests. Please wait and try again.",
             )
 
     @router.get("/users/{user_id}/stats")
@@ -118,7 +122,7 @@ def create_profile_router(
         throttle(request)
         user = await user_repo.get_by_id(user_id)
         if user is None:
-            raise HTTPException(status_code=404, detail="No such player.")
+            raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
         stats = await user_repo.get_stats(user_id)
         return {
             # Presence is keyed by the canonical account, which is what
@@ -173,12 +177,12 @@ def create_profile_router(
         throttle(request)
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
-            raise HTTPException(status_code=404, detail="No such game.")
+            raise Refusal(404, ErrorCode.NO_SUCH_GAME, "No such game.")
         detail = await game_history_repo.get_game_detail(
             game_id, requesting_user_id=requesting_user_id
         )
         if detail is None:
-            raise HTTPException(status_code=404, detail="No such game.")
+            raise Refusal(404, ErrorCode.NO_SUCH_GAME, "No such game.")
         return game_detail_payload(detail)
 
     @router.get("/games/{game_id}/turns/{turn_id}/drawing")
@@ -203,7 +207,7 @@ def create_profile_router(
         throttle(request)
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
-            raise HTTPException(status_code=404, detail="No such drawing.")
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         cache_headers = {
             # Participant-scoped bytes must never reach a shared cache, and a
             # browser's own copy is revalidated on every open: an erased
@@ -219,7 +223,7 @@ def create_profile_router(
                 game_id, turn_id, requesting_user_id=requesting_user_id
             )
             if checksum is None:
-                raise HTTPException(status_code=404, detail="No such drawing.")
+                raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
             validator = drawing_validator(checksum)
             if validator_matches(if_none_match, validator):
                 return Response(
@@ -229,7 +233,7 @@ def create_profile_router(
             game_id, turn_id, requesting_user_id=requesting_user_id
         )
         if drawing is None:
-            raise HTTPException(status_code=404, detail="No such drawing.")
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         try:
             payload = stored_drawing_wire_payload(
                 drawing.payload, checksum=drawing.checksum_sha256 or None
@@ -238,11 +242,11 @@ def create_profile_router(
             # A build older than the row it is reading. Answer as though the
             # drawing is absent rather than claiming it is broken.
             logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
-            raise HTTPException(status_code=404, detail="No such drawing.") from error
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
         except CorruptStoredDrawingError as error:
             logger.error("Stored drawing %s failed its checksum", turn_id)
-            raise HTTPException(
-                status_code=500, detail="That drawing could not be read."
+            raise Refusal(
+                500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
             ) from error
         return Response(
             content=payload,
@@ -266,14 +270,14 @@ def create_profile_router(
         throttle(request)
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
-            raise HTTPException(status_code=404, detail="No such drawing.")
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         if emoji is not None and emoji not in OFFERED_REACTION_EMOJI_CODES:
-            raise HTTPException(status_code=404, detail="No such drawing.")
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         result = await game_history_repo.set_drawing_reaction(
             game_id, turn_id, requesting_user_id=requesting_user_id, emoji=emoji
         )
         if result is None:
-            raise HTTPException(status_code=404, detail="No such drawing.")
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         return reaction_payload(result)
 
     @router.put("/games/{game_id}/turns/{turn_id}/reaction")

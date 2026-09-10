@@ -8,6 +8,7 @@ import { useGameStore } from "../store/gameStore";
 import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 const STALL_GRACE_MS = 2500;
 const STALL_CHECK_MS = 1000;
@@ -85,7 +86,7 @@ export function useRoomSessionReconnect() {
         setRoomBindingStatus("ready");
         return;
       }
-      throw new Error(response.error || "join_room failed");
+      throw new Error(refusalText(response, "join_room failed"));
     }
 
     async function rebindSession(

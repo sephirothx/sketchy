@@ -7,10 +7,12 @@ from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.auth.account_data import (
     AccountDataError,
     ExportNotYetAllowed,
@@ -455,9 +457,10 @@ def create_auth_router(
             try:
                 await user_repo.merge_guest_into_account(current.id, account.id)
             except IdentityMergeError as error:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Guest progress could not be linked to this account.",
+                raise Refusal(
+                    409,
+                    ErrorCode.GUEST_PROGRESS_UNLINKED,
+                    "Guest progress could not be linked to this account.",
                 ) from error
             if on_identity_merged is not None:
                 on_identity_merged(current.id, account.id)
@@ -480,8 +483,10 @@ def create_auth_router(
 
     async def throttle(limiter: PersistentRateLimiter, request: Request) -> None:
         if not await limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429, detail="Too many attempts. Please wait and try again."
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
             )
 
     async def _staff_second_factor_gate(user, body, *, address: str):
@@ -510,14 +515,16 @@ def create_auth_router(
                 # the password route rather than of the account, because the
                 # account is fine and the browser only has to be pointed at
                 # the passkey it already holds (R-AUTH-23).
-                return HTTPException(
-                    status_code=401,
-                    detail="Sign in with your passkey.",
+                return Refusal(
+                    401,
+                    ErrorCode.SECOND_FACTOR_PASSKEY_ONLY,
+                    "Sign in with your passkey.",
                     headers={"X-Sketchy-Second-Factor": "passkey"},
                 )
-            return HTTPException(
-                status_code=403,
-                detail=(
+            return Refusal(
+                403,
+                ErrorCode.SECOND_FACTOR_NOT_ENROLLED,
+                (
                     "This account needs two-factor authentication before it "
                     "can sign in. Ask an administrator to help you enrol."
                 ),
@@ -526,9 +533,10 @@ def create_auth_router(
         if not code:
             # 401 with a machine-readable reason: the browser has to know to
             # ask for a code rather than to say the password was wrong.
-            return HTTPException(
-                status_code=401,
-                detail="Enter the code from your authenticator app.",
+            return Refusal(
+                401,
+                ErrorCode.SECOND_FACTOR_REQUIRED,
+                "Enter the code from your authenticator app.",
                 headers={"X-Sketchy-Second-Factor": "required"},
             )
         outcome = await verify_second_factor(
@@ -539,14 +547,16 @@ def create_auth_router(
         if outcome is SecondFactorOutcome.RECOVERY_CODE_SPENT:
             return None
         if outcome is SecondFactorOutcome.LOCKED:
-            return HTTPException(
-                status_code=429,
-                detail="Too many codes were wrong. Please wait and try again.",
+            return Refusal(
+                429,
+                ErrorCode.SECOND_FACTOR_THROTTLED,
+                "Too many codes were wrong. Please wait and try again.",
             )
         await login_guard.note_failure(username=body.username, address=address)
-        return HTTPException(
-            status_code=401,
-            detail="That code is not right.",
+        return Refusal(
+            401,
+            ErrorCode.SECOND_FACTOR_CODE_WRONG,
+            "That code is not right.",
             headers={"X-Sketchy-Second-Factor": "required"},
         )
 
@@ -568,21 +578,23 @@ def create_auth_router(
             or not password
             or not await verify_password(credentials.password_hash, password)
         ):
-            raise HTTPException(status_code=401, detail="Password is incorrect.")
+            raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
 
     async def refuse_a_registered_name(name: str) -> None:
         """A guest may not play under a name that belongs to an account."""
         owner = await user_repo.get_by_username(name)
         if owner is not None and not owner.is_anonymous:
-            raise HTTPException(
-                status_code=409, detail="That name belongs to a registered player."
+            raise Refusal(
+                409,
+                ErrorCode.NAME_TAKEN_BY_ACCOUNT,
+                "That name belongs to a registered player.",
             )
 
     async def require_user(request: Request):
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
         if user is None:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return user
 
     @router.get("/me")
@@ -669,7 +681,7 @@ def create_auth_router(
         try:
             name = validate_name(body.display_name)
         except NameError_ as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(400, ErrorCode.INVALID_USERNAME, str(error)) from error
 
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
@@ -687,9 +699,10 @@ def create_auth_router(
                 # ceiling lifts and a caller who bought nothing would
                 # otherwise still be blocked by an allowance they never spent.
                 await provision_limiter.refund(client_key(request))
-                raise HTTPException(
-                    status_code=429,
-                    detail=(
+                raise Refusal(
+                    429,
+                    ErrorCode.NOT_TAKING_VISITORS,
+                    (
                         "Sketchy is not taking new visitors right now. "
                         "Please try again later."
                     ),
@@ -708,8 +721,10 @@ def create_auth_router(
         if not user.is_anonymous:
             # A registered player's name is their username; changing it here
             # would let the two drift apart.
-            raise HTTPException(
-                status_code=409, detail="Registered players play as their username."
+            raise Refusal(
+                409,
+                ErrorCode.REGISTERED_NAME_FIXED,
+                "Registered players play as their username.",
             )
 
         await refuse_a_registered_name(name)
@@ -733,20 +748,24 @@ def create_auth_router(
         color = normalize_name_color(body.name_color)
         if color is None:
             # Shape or readability (#571): the same rule the seat applies.
-            raise HTTPException(
-                status_code=400,
-                detail="Pick a color that reads on both the light and the dark player list.",
+            raise Refusal(
+                400,
+                ErrorCode.INVALID_NAME_COLOR,
+                "Pick a color that reads on both the light and the dark player list.",
             )
 
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
         if user is None:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if user.is_anonymous:
             # Grey italics is the only cue that separates an unclaimed name
             # from a registered one, so a guest color would erase it.
-            raise HTTPException(
-                status_code=403, detail="Create an account to choose a name color."
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account to choose a name color.",
+                params={"action": "name_color"},
             )
 
         updated = await user_repo.update_profile(user.id, name_color=color)
@@ -765,7 +784,7 @@ def create_auth_router(
         try:
             username = validate_name(body.username)
         except NameError_ as error:
-            raise HTTPException(status_code=400, detail=NAME_RULE_MESSAGE) from error
+            raise Refusal(400, ErrorCode.INVALID_USERNAME, NAME_RULE_MESSAGE) from error
         try:
             password = validate_password(
                 body.password, username=username, email=body.email
@@ -775,13 +794,21 @@ def create_auth_router(
             # refuses for reasons the length sentence does not describe, and
             # "must be 12-128 characters" in answer to a breached password
             # sends somebody straight back with the same password plus a digit.
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(
+                400,
+                ErrorCode.WEAK_PASSWORD,
+                str(error),
+                field="password",
+                params={"reason": error.reason, "detail": error.detail},
+            ) from error
 
         user_id = getattr(request.state, "user_id", None)
         current = await user_repo.get_by_id(user_id) if user_id else None
         if current is not None and not current.is_anonymous:
-            raise HTTPException(
-                status_code=409, detail="You are already signed in to an account."
+            raise Refusal(
+                409,
+                ErrorCode.ALREADY_SIGNED_IN,
+                "You are already signed in to an account.",
             )
 
         # Check before creating anything. Creating first and claiming second
@@ -789,7 +816,7 @@ def create_auth_router(
         # taken: committed, cookie-less, and belonging to nobody.
         owner = await user_repo.get_by_username(username)
         if owner is not None:
-            raise HTTPException(status_code=409, detail="That username is taken.")
+            raise Refusal(409, ErrorCode.USERNAME_TAKEN, "That username is taken.")
 
         password_hash = await hash_password(password)
         if current is None:
@@ -800,10 +827,14 @@ def create_auth_router(
         try:
             claimed = await user_repo.claim_account(current.id, username, password_hash)
         except UsernameTakenError as error:
-            raise HTTPException(status_code=409, detail="That username is taken.") from error
+            raise Refusal(
+                409, ErrorCode.USERNAME_TAKEN, "That username is taken."
+            ) from error
         except AccountAlreadyClaimedError as error:
-            raise HTTPException(
-                status_code=409, detail="You are already signed in to an account."
+            raise Refusal(
+                409,
+                ErrorCode.ALREADY_SIGNED_IN,
+                "You are already signed in to an account.",
             ) from error
 
         refreshed = await user_repo.touch_last_login(claimed.id)
@@ -847,9 +878,11 @@ def create_auth_router(
         address = client_key(request)
         verdict = await login_guard.check(username=body.username, address=address)
         if not verdict.allowed:
-            raise HTTPException(
-                status_code=429,
-                detail=verdict.message,
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                verdict.message,
+                retry_after_ms=verdict.retry_after_seconds * 1000,
                 headers={"Retry-After": str(verdict.retry_after_seconds)},
             )
         credentials = await user_repo.get_credentials_by_username(body.username)
@@ -865,9 +898,11 @@ def create_auth_router(
             # charged exactly like one that does: the counters must not be
             # the thing that answers R-AUTH-09's question.
             await login_guard.note_failure(username=body.username, address=address)
-            raise HTTPException(status_code=401, detail="Incorrect username or password.")
+            raise Refusal(
+                401, ErrorCode.CREDENTIALS_INCORRECT, "Incorrect username or password."
+            )
         if await is_user_banned(session_factory, credentials.user.id):
-            raise HTTPException(status_code=403, detail="This account is suspended.")
+            raise Refusal(403, ErrorCode.ACCOUNT_SUSPENDED, "This account is suspended.")
         # A staff account signs in only if it can also prove its second factor
         # (R-AUTH-20). Checked after the password so a wrong password is never
         # told that this account has one, and before anything is issued so a
@@ -895,7 +930,7 @@ def create_auth_router(
         """List the caller's active devices without exposing token hashes."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         current_id = getattr(request.state, "session_id", None)
         records = await list_active_sessions(session_factory, user_id=user_id)
         return {
@@ -932,12 +967,12 @@ def create_auth_router(
         """Revoke one device owned by the caller."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         revoked = await revoke_session(
             session_factory, session_id=session_id, user_id=user_id
         )
         if not revoked:
-            raise HTTPException(status_code=404, detail="Active session not found.")
+            raise Refusal(404, ErrorCode.SESSION_NOT_FOUND, "Active session not found.")
         if session_id == getattr(request.state, "session_id", None):
             clear_session_cookie(response, secure=is_secure_request(request))
         return {"ok": True}
@@ -947,7 +982,7 @@ def create_auth_router(
         """Revoke every session for the caller, including this device."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         revoked = await revoke_all_sessions(session_factory, user_id=user_id)
         clear_session_cookie(response, secure=is_secure_request(request))
         return {"ok": True, "revoked": revoked}
@@ -966,11 +1001,11 @@ def create_auth_router(
                 headers["Retry-After"] = str(
                     max(0, int((error.retry_at - datetime.now(timezone.utc)).total_seconds()))
                 )
-            raise HTTPException(
-                status_code=429, detail=str(error), headers=headers
+            raise Refusal(
+                429, ErrorCode.EXPORT_NOT_YET_ALLOWED, str(error), headers=headers
             ) from error
         except AccountDataError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
+            raise Refusal(409, ErrorCode.EXPORT_REFUSED, str(error)) from error
         # The row is the queue; this only says "now" rather than "next sweep".
         if on_export_requested is not None:
             on_export_requested()
@@ -1001,11 +1036,11 @@ def create_auth_router(
                 session_factory, export_id=export_id, user_id=user.id
             )
         except AccountDataError as error:
-            raise HTTPException(status_code=404, detail="Export not found.") from error
+            raise Refusal(404, ErrorCode.EXPORT_NOT_FOUND, "Export not found.") from error
         if job is None:
-            raise HTTPException(status_code=404, detail="Export not found.")
+            raise Refusal(404, ErrorCode.EXPORT_NOT_FOUND, "Export not found.")
         if job.expires_at <= datetime.now(timezone.utc):
-            raise HTTPException(status_code=410, detail="Export has expired.")
+            raise Refusal(410, ErrorCode.EXPORT_EXPIRED, "Export has expired.")
         return export_status_payload(job)
 
     @router.get("/data-exports/{export_id}/download")
@@ -1016,13 +1051,13 @@ def create_auth_router(
                 session_factory, export_id=export_id, user_id=user.id
             )
         except AccountDataError as error:
-            raise HTTPException(status_code=404, detail="Export not found.") from error
+            raise Refusal(404, ErrorCode.EXPORT_NOT_FOUND, "Export not found.") from error
         if job is None:
-            raise HTTPException(status_code=404, detail="Export not found.")
+            raise Refusal(404, ErrorCode.EXPORT_NOT_FOUND, "Export not found.")
         if job.expires_at <= datetime.now(timezone.utc):
-            raise HTTPException(status_code=410, detail="Export has expired.")
+            raise Refusal(410, ErrorCode.EXPORT_EXPIRED, "Export has expired.")
         if job.status != "ready" or job.artifact is None:
-            raise HTTPException(status_code=409, detail="Export is not ready.")
+            raise Refusal(409, ErrorCode.EXPORT_NOT_READY, "Export is not ready.")
         # The stored document is already JSON, already gzip: a client that
         # accepts gzip gets the row's bytes untouched, and one that does not
         # gets them decompressed a chunk at a time. Never parsed, never held
@@ -1037,9 +1072,10 @@ def create_auth_router(
             logger.exception(
                 "Data export %s is ready but its document is unreadable", job.id
             )
-            raise HTTPException(
-                status_code=500,
-                detail="Export document could not be read. Request a new export.",
+            raise Refusal(
+                500,
+                ErrorCode.EXPORT_UNREADABLE,
+                "Export document could not be read. Request a new export.",
             ) from error
         headers = {
             "Content-Disposition": (
@@ -1074,8 +1110,10 @@ def create_auth_router(
         user = await require_user(request)
         if not user.is_anonymous:
             if not body.password:
-                raise HTTPException(
-                    status_code=400, detail="Enter your password to delete the account."
+                raise Refusal(
+                    400,
+                    ErrorCode.PASSWORD_REQUIRED_TO_DELETE,
+                    "Enter your password to delete the account.",
                 )
             credentials = (
                 await user_repo.get_credentials_by_username(user.username)
@@ -1087,11 +1125,11 @@ def create_auth_router(
                 or credentials.user.id != user.id
                 or not await verify_password(credentials.password_hash, body.password)
             ):
-                raise HTTPException(status_code=401, detail="Password is incorrect.")
+                raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
         try:
             result = await anonymize_account(session_factory, user_id=user.id)
         except AccountDataError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
+            raise Refusal(409, ErrorCode.ACCOUNT_DELETE_REFUSED, str(error)) from error
         # Their friends lose a row too, and are still connected to hear it.
         # Best effort and after the commit, like every other notification: the
         # deletion is done, and a socket that missed this sees it on the next
@@ -1147,11 +1185,11 @@ def create_auth_router(
                 request_id=request_id,
             )
         except EmailAddressError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(400, ErrorCode.INVALID_EMAIL, str(error)) from error
         except EmailAlreadyInUse as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
+            raise Refusal(409, ErrorCode.EMAIL_IN_USE, str(error)) from error
         except RecoveryError as error:
-            raise HTTPException(status_code=403, detail=str(error)) from error
+            raise Refusal(403, ErrorCode.EMAIL_CHANGE_REFUSED, str(error)) from error
         return {"ok": True, "pendingAddress": address}
 
     @router.post("/email/verify")
@@ -1165,11 +1203,12 @@ def create_auth_router(
                 request_id=request_id,
             )
         except EmailAlreadyInUse as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
+            raise Refusal(409, ErrorCode.EMAIL_IN_USE, str(error)) from error
         if address is None:
-            raise HTTPException(
-                status_code=400,
-                detail="That confirmation link has expired or already been used.",
+            raise Refusal(
+                400,
+                ErrorCode.VERIFICATION_LINK_INVALID,
+                "That confirmation link has expired or already been used.",
             )
         return {"ok": True, "address": address}
 
@@ -1231,7 +1270,13 @@ def create_auth_router(
                 body.password, username=reset_username, email=reset_email
             )
         except PasswordPolicyError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(
+                400,
+                ErrorCode.WEAK_PASSWORD,
+                str(error),
+                field="password",
+                params={"reason": error.reason, "detail": error.detail},
+            ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         user_id = await reset_password(
             session_factory,
@@ -1241,9 +1286,10 @@ def create_auth_router(
             request_id=request_id,
         )
         if user_id is None:
-            raise HTTPException(
-                status_code=400,
-                detail="That reset link has expired or already been used.",
+            raise Refusal(
+                400,
+                ErrorCode.RESET_LINK_INVALID,
+                "That reset link has expired or already been used.",
             )
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
@@ -1265,8 +1311,11 @@ def create_auth_router(
         await throttle(password_change_limiter, request)
         user = await require_user(request)
         if user.is_anonymous:
-            raise HTTPException(
-                status_code=403, detail="Create an account to set a password."
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account to set a password.",
+                params={"action": "password"},
             )
         # The account's own address, read for the screening rule alone
         # (R-AUTH-19): `UserData` deliberately carries no email, and this is
@@ -1279,7 +1328,13 @@ def create_auth_router(
                 body.password, username=user.username, email=known_email
             )
         except PasswordPolicyError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(
+                400,
+                ErrorCode.WEAK_PASSWORD,
+                str(error),
+                field="password",
+                params={"reason": error.reason, "detail": error.detail},
+            ) from error
         credentials = (
             await user_repo.get_credentials_by_username(user.username)
             if user.username
@@ -1290,7 +1345,7 @@ def create_auth_router(
             or credentials.user.id != user.id
             or not await verify_password(credentials.password_hash, body.current_password)
         ):
-            raise HTTPException(status_code=401, detail="Password is incorrect.")
+            raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         changed = await change_password(
             session_factory,
@@ -1300,7 +1355,9 @@ def create_auth_router(
             request_id=request_id,
         )
         if not changed:
-            raise HTTPException(status_code=409, detail="Could not change the password.")
+            raise Refusal(
+                409, ErrorCode.PASSWORD_CHANGE_FAILED, "Could not change the password."
+            )
         # Every session was revoked, this one included. Signing the caller
         # back in is what keeps a password change from also being a logout.
         clear_session_cookie(response, secure=is_secure_request(request))
@@ -1368,9 +1425,10 @@ def create_auth_router(
     async def _require_passkey_holder(request: Request):
         user = await require_user(request)
         if user.is_anonymous or not _may_hold_a_passkey(user):
-            raise HTTPException(
-                status_code=403,
-                detail=(
+            raise Refusal(
+                403,
+                ErrorCode.PASSKEY_REFUSED,
+                (
                     "Passkeys are for moderator and administrator accounts. "
                     "You will be asked to set one up if you are ever offered "
                     "a role."
@@ -1416,7 +1474,7 @@ def create_auth_router(
                 label=(body.label or device_label(request))[:64],
             )
         except PasskeyError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(400, ErrorCode.PASSKEY_REFUSED, str(error)) from error
         # A passkey answers R-AUTH-20 on its own - registering it proved the
         # password, and a promotion reads the credential itself - so a role
         # waiting on this is now theirs.
@@ -1472,9 +1530,9 @@ def create_auth_router(
                 required=staff_second_factor_required(),
             )
         except LastFactorError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(400, ErrorCode.LAST_FACTOR, str(error)) from error
         if not removed:
-            raise HTTPException(status_code=404, detail="No such passkey.")
+            raise Refusal(404, ErrorCode.PASSKEY_NOT_FOUND, "No such passkey.")
         return {"ok": True}
 
     @router.post("/passkeys/challenge")
@@ -1505,7 +1563,7 @@ def create_auth_router(
         try:
             assertion = await verify_assertion(session_factory, credential=body.credential)
         except PasskeyError as error:
-            raise HTTPException(status_code=401, detail=str(error)) from error
+            raise Refusal(401, ErrorCode.PASSKEY_REFUSED, str(error)) from error
 
         account = await user_repo.get_by_id(assertion.user_id)
         # Registered, not merely present. An account that was deleted keeps its
@@ -1513,9 +1571,13 @@ def create_auth_router(
         # readable - and a credential is refused against one on its own
         # account, whatever else may have been left behind.
         if account is None or account.state != AccountState.REGISTERED.value:
-            raise HTTPException(status_code=401, detail="That passkey is not registered here.")
+            raise Refusal(
+                401,
+                ErrorCode.PASSKEY_NOT_REGISTERED,
+                "That passkey is not registered here.",
+            )
         if await is_user_banned(session_factory, account.id):
-            raise HTTPException(status_code=403, detail="This account is suspended.")
+            raise Refusal(403, ErrorCode.ACCOUNT_SUSPENDED, "This account is suspended.")
 
         if getattr(request.state, "user_id", None) == account.id:
             session_id = getattr(request.state, "session_id", None)
@@ -1523,9 +1585,10 @@ def create_auth_router(
                 session_factory, session_id=session_id, user_id=account.id
             ):
                 return {"ok": True, "user": user_payload(account), "steppedUp": True}
-            raise HTTPException(
-                status_code=409,
-                detail="This session has been replaced. Reload and try again.",
+            raise Refusal(
+                409,
+                ErrorCode.SESSION_REPLACED,
+                "This session has been replaced. Reload and try again.",
             )
 
         signed_in, session_id = await _sign_this_browser_in(response, request, account)
@@ -1547,9 +1610,11 @@ def create_auth_router(
         await throttle(second_factor_limiter, request)
         user = await require_user(request)
         if user.is_anonymous:
-            raise HTTPException(
-                status_code=403,
-                detail="Create an account before setting up two-factor authentication.",
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account before setting up two-factor authentication.",
+                params={"action": "second_factor"},
             )
         offer = begin_enrolment(account=user.username or user.display_name)
         return {"secret": offer.secret, "uri": offer.uri}
@@ -1601,9 +1666,10 @@ def create_auth_router(
             password_proved=bool(body.password),
         )
         if codes is None:
-            raise HTTPException(
-                status_code=400,
-                detail="That code is not right. Check your authenticator app.",
+            raise Refusal(
+                400,
+                ErrorCode.SECOND_FACTOR_CODE_WRONG,
+                "That code is not right. Check your authenticator app.",
             )
         # And if a role was waiting on exactly this, it is now theirs. The
         # order matters: the factor is written first, so a failure here leaves
@@ -1648,25 +1714,31 @@ def create_auth_router(
             session_factory, user_id=user.id, code=body.code
         )
         if outcome is SecondFactorOutcome.NOT_ENROLLED:
-            raise HTTPException(
-                status_code=409, detail="Two-factor authentication is not set up."
+            raise Refusal(
+                409,
+                ErrorCode.SECOND_FACTOR_NOT_SET_UP,
+                "Two-factor authentication is not set up.",
             )
         if outcome is SecondFactorOutcome.LOCKED:
-            raise HTTPException(
-                status_code=429,
-                detail="Too many codes were wrong. Please wait and try again.",
+            raise Refusal(
+                429,
+                ErrorCode.SECOND_FACTOR_THROTTLED,
+                "Too many codes were wrong. Please wait and try again.",
             )
         if outcome is SecondFactorOutcome.REJECTED:
             # A code just spent - by the enrolment a moment ago, most likely -
             # lands here too, so the way out is said rather than left to be
             # guessed at.
-            raise HTTPException(
-                status_code=401,
-                detail="That code is not right. Wait for the next one and try again.",
+            raise Refusal(
+                401,
+                ErrorCode.SECOND_FACTOR_CODE_WRONG,
+                "That code is not right. Wait for the next one and try again.",
             )
         if not await prove_second_factor_owner(session_factory, user_id=user.id):
-            raise HTTPException(
-                status_code=409, detail="Two-factor authentication is not set up."
+            raise Refusal(
+                409,
+                ErrorCode.SECOND_FACTOR_NOT_SET_UP,
+                "Two-factor authentication is not set up.",
             )
         # The same thing enrolment does, for a factor that was set up without a
         # password and has only now been vouched for.
@@ -1683,8 +1755,10 @@ def create_auth_router(
         await _prove_password(user, body.password)
         state = await second_factor_state(session_factory, user_id=user.id)
         if not state.enrolled:
-            raise HTTPException(
-                status_code=409, detail="Two-factor authentication is not set up."
+            raise Refusal(
+                409,
+                ErrorCode.SECOND_FACTOR_NOT_SET_UP,
+                "Two-factor authentication is not set up.",
             )
         return {"recoveryCodes": await replace_recovery_codes(
             session_factory, user_id=user.id
@@ -1708,16 +1782,17 @@ def create_auth_router(
         user = await require_user(request)
         await _prove_password(user, body.password)
         if user.role in STAFF_ROLES and staff_second_factor_required():
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Two-factor authentication is required for this account's role."
-                ),
+            raise Refusal(
+                409,
+                ErrorCode.SECOND_FACTOR_REQUIRED_FOR_ROLE,
+                "Two-factor authentication is required for this account's role.",
             )
         removed = await disable_second_factor(session_factory, user_id=user.id)
         if not removed:
-            raise HTTPException(
-                status_code=409, detail="Two-factor authentication is not set up."
+            raise Refusal(
+                409,
+                ErrorCode.SECOND_FACTOR_NOT_SET_UP,
+                "Two-factor authentication is not set up.",
             )
         return {"ok": True}
 
@@ -1733,7 +1808,7 @@ def create_auth_router(
         user = await require_user(request)
         session_id = getattr(request.state, "session_id", None)
         if not session_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         # An authenticator app nobody has vouched for is not a way to unlock a
         # destructive action, even though it is a way to sign in beside a
         # password. The difference is what each one costs an attacker: a
@@ -1745,9 +1820,10 @@ def create_auth_router(
         # issued to the same factor.
         enrolled = await second_factor_state(session_factory, user_id=user.id)
         if enrolled.enrolled and not enrolled.password_proved:
-            raise HTTPException(
-                status_code=403,
-                detail=(
+            raise Refusal(
+                403,
+                ErrorCode.SECOND_FACTOR_NOT_PROVED,
+                (
                     "This authenticator has not been confirmed as yours. Use a "
                     "passkey, or confirm it with your password in Settings."
                 ),
@@ -1756,16 +1832,21 @@ def create_auth_router(
             session_factory, user_id=user.id, code=body.code
         )
         if outcome is SecondFactorOutcome.NOT_ENROLLED:
-            raise HTTPException(
-                status_code=409, detail="Two-factor authentication is not set up."
+            raise Refusal(
+                409,
+                ErrorCode.SECOND_FACTOR_NOT_SET_UP,
+                "Two-factor authentication is not set up.",
             )
         if outcome is SecondFactorOutcome.LOCKED:
-            raise HTTPException(
-                status_code=429,
-                detail="Too many codes were wrong. Please wait and try again.",
+            raise Refusal(
+                429,
+                ErrorCode.SECOND_FACTOR_THROTTLED,
+                "Too many codes were wrong. Please wait and try again.",
             )
         if outcome is SecondFactorOutcome.REJECTED:
-            raise HTTPException(status_code=401, detail="That code is not right.")
+            raise Refusal(
+                401, ErrorCode.SECOND_FACTOR_CODE_WRONG, "That code is not right."
+            )
         recorded = await record_step_up(
             session_factory, session_id=session_id, user_id=user.id
         )
@@ -1775,9 +1856,10 @@ def create_auth_router(
             # inside a rotation's grace window is holding by definition. Saying
             # "ok" there would send them straight back into the action that
             # refused them, to be refused again with nothing changed.
-            raise HTTPException(
-                status_code=409,
-                detail="This session has been replaced. Reload and try again.",
+            raise Refusal(
+                409,
+                ErrorCode.SESSION_REPLACED,
+                "This session has been replaced. Reload and try again.",
             )
         return {
             "ok": True,
