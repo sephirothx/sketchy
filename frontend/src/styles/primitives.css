@@ -289,19 +289,25 @@
    flag nearly fills its frame - shrunk to a chip beside a chevron it stops
    being a picture of anything at all. */
 .language-picker.is-flag-only .language-picker-trigger {
-  /* Level with the name field beside it, and 18:13 to a quarter of a
-     percent - which is what the flag is stretched by, and is not visible. */
-  height: 42px;
+  /* Exactly as tall as the segmented control it stands beside - 43px is what
+     that control comes to (a 4px track around a 35px segment), and matching
+     it by number is what keeps the two the same object in the row. The width
+     follows 18:13 to within a percent, which is all the flag is stretched by
+     and is not visible at this size. */
+  height: 43px;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
   padding: 0;
-  width: 58px;
+  width: 59px;
 }
 
-/* The flag is the button's whole face, so the button's own border is the
-   frame and the flag needs none of its own. */
-.language-picker.is-flag-only .language-picker-face,
-.language-picker.is-flag-only .language-picker-flag {
+/* The flag is the *trigger's* whole face, so the trigger's border is the frame
+   and the flag needs none of its own. Scoped to the trigger: unscoped, this
+   also caught every row of the open list, where it turned each face into a
+   block and dropped the name onto a second line under its flag. */
+.language-picker.is-flag-only .language-picker-trigger .language-picker-face,
+.language-picker.is-flag-only .language-picker-trigger .language-picker-flag {
   display: block;
   height: 100%;
   width: 100%;
