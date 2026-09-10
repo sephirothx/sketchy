@@ -432,7 +432,8 @@ German, Spanish, French, Italian, Dutch, and Portuguese—case-folds, collapses
 whitespace, and folds canonically decomposable accents. Beyond that shared
 rule, a language folds the way it is written: German accepts `Maedchen` for
 **Mädchen** (`ä→ae`, `ö→oe`, `ü→ue`, expanded before the accents are folded,
-because `madchen` is nobody's spelling), and Dutch reads the single-codepoint
+because `madchen` is nobody's spelling), French reads the `œ` ligature as `oe`, since
+`coeur` is how **cœur** is typed; and Dutch reads the single-codepoint
 `ĳ` as `ij`. Case-folding already turns `ß` into `ss`, so `Fussball` and
 **Fußball** meet without a rule. Where two spellings are both right, the
 stored key stays one canonical string—it is an identity as well as a

@@ -61,14 +61,19 @@ def test_a_language_folds_the_way_it_is_written_rather_than_the_way_english_is()
     # ß needs no rule of its own: case-folding already writes it out.
     assert prompt_match_key("Fußball", "de") == "fussball"
     assert prompt_match_key("Fussball", "de") == "fussball"
+    # French ligatures are letters rather than letters with a mark, so the
+    # accent fold never reaches them; "coeur" is how the word is typed.
+    assert prompt_match_key("cœur", "fr") == "coeur"
+    assert prompt_match_variants("cœur", "fr") == {"coeur", "cœur"}
+    assert prompt_match_variants("coeur", "fr") == {"coeur"}
     # The Dutch digraph's single codepoint is the two letters everyone types.
     assert prompt_match_key("ĳsbeer", "nl") == "ijsbeer"
 
     # The other five are unchanged: one canonical spelling, accents folded.
     for language, written, folded in (
         ("en", "Café", "cafe"),
-        ("es", "Año", "ano"),
         ("fr", "Éléphant", "elephant"),
+        ("es", "Año", "ano"),
         ("it", "Città", "citta"),
         ("pt", "Coração", "coracao"),
     ):

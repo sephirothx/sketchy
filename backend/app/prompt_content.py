@@ -82,6 +82,10 @@ def _fold_accents(text: str) -> str:
 # "Fußball" and "Fussball" have met before any of this runs.
 _TRANSLITERATIONS: dict[str, dict[str, str]] = {
     "de": {"ä": "ae", "ö": "oe", "ü": "ue"},
+    # French ligatures. NFD leaves both alone - they are letters, not letters
+    # with a mark - so "coeur" would otherwise never reach "cœur", which is
+    # how almost everyone types it.
+    "fr": {"œ": "oe", "æ": "ae"},
     # The Dutch digraph has a single-codepoint form that NFD leaves alone;
     # everyone types the two letters.
     "nl": {"ĳ": "ij"},
