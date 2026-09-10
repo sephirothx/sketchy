@@ -1603,12 +1603,18 @@
   "api.profiles:user_games": [
    "hasMore"
   ],
+  "api.prompt_lists:_set_star": [
+   "starCount",
+   "starredByMe"
+  ],
   "api.prompt_lists:create_prompt_list_router": [
    "isRated",
    "maxPerList",
    "minRatedGuessers",
    "nextCursor",
    "ratedCount",
+   "starCount",
+   "starredByMe",
    "unratedCount"
   ],
   "api.prompt_lists:list_community_prompt_lists": [
@@ -1722,6 +1728,7 @@
    "promptCount",
    "promptVersionId",
    "shareCode",
+   "starCount",
    "updatedAt"
   ],
   "api.serializers:prompt_list_payload": [

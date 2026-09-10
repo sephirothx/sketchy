@@ -484,6 +484,10 @@ class OwnedPromptList:
     # list because a revision is what a game pins, and a discovery filter has
     # to agree with the content it found (R-LIST-18).
     tags: tuple[str, ...] = ()
+    # How many people starred it. The owner is entitled to the number and to
+    # nothing else about it: who starred a list is disclosed to nobody,
+    # including them (R-LIST-16).
+    star_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -1013,6 +1017,17 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
         """Delete a player-owned list and all of its revisions."""
+        ...
+
+    @abstractmethod
+    async def set_star(
+        self, user_id: str, prompt_list_id: str, *, starred: bool
+    ) -> int:
+        """Star or unstar a published list; returns the count afterwards.
+
+        Idempotent in both directions - the composite primary key is what
+        makes starring twice the same row (R-LIST-16).
+        """
         ...
 
     @abstractmethod
