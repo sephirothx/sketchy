@@ -22,7 +22,7 @@ keyboard that takes half the screen, and one thumb.
 
 ## Features
 
-- Lobby with a live, polled list of public rooms, or join a private room by code.
+- Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language the interface is written in: the interface is English either way.
 - Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line. Points go out every 80 ms, each frame relative to the last point sent, the last batch of a stroke carrying its end, and a viewer plays each batch out over the next 80 ms at the screen's own rate rather than painting it in one step, so it sees ink smoothly, up to 80 ms behind the drawer's hand.
@@ -1174,9 +1174,10 @@ of its guest aliases; the guest's sessions are revoked during the merge.
 
 Registered players' **Player settings** follow them across devices. Theme,
 time format (the device's convention, or a 12- or 24-hour clock), sound and
-confetti switches, volume, brush cursor, keyboard shortcuts, and the
-colorblind-safe color preference live in `user_settings` and are read or
-partially updated through `GET`/`PATCH /api/users/me/settings`. Values are
+confetti switches, volume, brush cursor, keyboard shortcuts, the
+colorblind-safe color preference, and the language the player plays in live in
+`user_settings` and are read or partially updated through
+`GET`/`PATCH /api/users/me/settings`. Values are
 bounded at the API and database layers; keyboard shortcuts must describe the
 complete supported action set.
 

@@ -6,6 +6,7 @@ import {
   type KeyBindings,
   type TimeFormat,
 } from "../store/settingsStore";
+import type { PromptLanguage } from "../types";
 
 /** The preferences that follow a registered player across devices (R-SET-01). */
 export interface AccountSettings {
@@ -17,6 +18,7 @@ export interface AccountSettings {
   keyBindings: KeyBindings;
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
+  promptLanguage: PromptLanguage;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -32,6 +34,7 @@ export function currentSettingsPayload(): AccountSettings {
     keyBindings: settings.keyBindings,
     colorblindSafeColors: settings.colorblindSafeColors,
     timeFormat: settings.timeFormat,
+    promptLanguage: settings.promptLanguage,
   };
 }
 

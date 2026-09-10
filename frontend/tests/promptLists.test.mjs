@@ -6,7 +6,9 @@ import {
 } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
+  preferredPromptLanguage,
   selectionForLanguage,
+  sortRoomsByLanguage,
 } from "../src/lib/promptLanguages.ts";
 
 function toggleWordListSlug(currentSlugs, slugToToggle) {
@@ -97,4 +99,32 @@ test("the language options offered are the ones with content, plus the room's ow
     ),
     ["german_standard"],
   );
+});
+
+test("the browser says which language a visitor plays in, English if it cannot", () => {
+  assert.equal(preferredPromptLanguage(["de-CH", "de", "en"]), "de");
+  assert.equal(preferredPromptLanguage(["pt-BR"]), "pt");
+  assert.equal(preferredPromptLanguage(["ja", "zh-CN", "fr"]), "fr");
+  assert.equal(preferredPromptLanguage(["ja", "zh-CN"]), "en");
+  assert.equal(preferredPromptLanguage([]), "en");
+  assert.equal(preferredPromptLanguage(undefined), "en");
+});
+
+test("the lobby leads with your language and hides nobody", () => {
+  const rooms = [
+    { code: "A", promptLanguage: "en" },
+    { code: "B", promptLanguage: "de" },
+    { code: "C", promptLanguage: "fr" },
+    { code: "D", promptLanguage: "de" },
+  ];
+  assert.deepEqual(
+    sortRoomsByLanguage(rooms, "de").map((room) => room.code),
+    ["B", "D", "A", "C"],
+  );
+  // Stable within each group: the server's order survives.
+  assert.deepEqual(
+    sortRoomsByLanguage(rooms, "it").map((room) => room.code),
+    ["A", "B", "C", "D"],
+  );
+  assert.equal(sortRoomsByLanguage(rooms, "de").length, rooms.length);
 });

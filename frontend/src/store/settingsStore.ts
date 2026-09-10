@@ -1,4 +1,9 @@
 import { create } from "zustand";
+import {
+  PROMPT_LANGUAGE_LABELS,
+  preferredPromptLanguage,
+} from "../lib/promptLanguages.ts";
+import type { PromptLanguage } from "../types";
 
 import { DEFAULT_TIME_FORMAT, isTimeFormat, type TimeFormat } from "../lib/clock.ts";
 import {
@@ -154,6 +159,21 @@ function loadStoredTimeFormat(): TimeFormat {
   }
 }
 
+const PROMPT_LANGUAGE_KEY = "sketchy_promptlanguage";
+
+/** Stored choice first, the browser's own languages next, English last. */
+function loadStoredPromptLanguage(): PromptLanguage {
+  try {
+    const raw = localStorage.getItem(PROMPT_LANGUAGE_KEY);
+    if (raw && raw in PROMPT_LANGUAGE_LABELS) return raw as PromptLanguage;
+  } catch {
+    // No storage: the browser still knows what language this is.
+  }
+  return preferredPromptLanguage(
+    typeof navigator === "undefined" ? [] : navigator.languages,
+  );
+}
+
 function loadStoredFlag(key: string, defaultValue = true): boolean {
   try {
     const raw = localStorage.getItem(key);
@@ -204,6 +224,9 @@ interface SettingsStore {
   volume: number;
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
+  /** The language this player plays in: the lobby leads with it and a new
+      room starts in it. Not an interface locale - the UI is not translated. */
+  promptLanguage: PromptLanguage;
   nameColor: string;
   /** Adopt an account's copy wholesale, as login and registration do (R-SET-03). */
   setAllSettings: (payload: {
@@ -215,6 +238,7 @@ interface SettingsStore {
     volume?: number;
     colorblindSafeColors?: boolean;
     timeFormat?: TimeFormat;
+    promptLanguage?: PromptLanguage;
     nameColor: string;
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
@@ -226,6 +250,7 @@ interface SettingsStore {
   setVolume: (volume: number) => void;
   setColorblindSafeColors: (enabled: boolean) => void;
   setTimeFormat: (timeFormat: TimeFormat) => void;
+  setPromptLanguage: (promptLanguage: PromptLanguage) => void;
   resetKeyBindings: () => void;
 }
 
@@ -248,6 +273,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   volume: loadStoredVolume(),
   colorblindSafeColors: loadStoredFlag("sketchy_colorblindsafecolors", false),
   timeFormat: loadStoredTimeFormat(),
+  promptLanguage: loadStoredPromptLanguage(),
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
@@ -258,6 +284,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     volume = DEFAULT_VOLUME,
     colorblindSafeColors = false,
     timeFormat = DEFAULT_TIME_FORMAT,
+    promptLanguage = loadStoredPromptLanguage(),
     nameColor,
   }) =>
     set(() => {
@@ -270,6 +297,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_volume", String(volume));
       localStorage.setItem("sketchy_colorblindsafecolors", String(colorblindSafeColors));
       localStorage.setItem("sketchy_timeformat", timeFormat);
+      localStorage.setItem(PROMPT_LANGUAGE_KEY, promptLanguage);
       localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
       return {
@@ -281,6 +309,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         volume,
         colorblindSafeColors,
         timeFormat,
+        promptLanguage,
         nameColor,
       };
     }),
@@ -333,6 +362,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_timeformat", timeFormat);
       return { timeFormat };
+    }),
+  setPromptLanguage: (promptLanguage) =>
+    set(() => {
+      localStorage.setItem(PROMPT_LANGUAGE_KEY, promptLanguage);
+      return { promptLanguage };
     }),
   resetKeyBindings: () =>
     set(() => {

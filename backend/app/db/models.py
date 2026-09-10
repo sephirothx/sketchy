@@ -481,6 +481,9 @@ class UserSettings(Base):
             "brush_cursor", BRUSH_CURSOR_STYLES, "ck_user_settings_brush_cursor"
         ),
         _values_check("time_format", TIME_FORMATS, "ck_user_settings_time_format"),
+        _values_check(
+            "prompt_language", PROMPT_LANGUAGES, "ck_user_settings_prompt_language"
+        ),
         CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
             name="ck_user_settings_volume",
@@ -536,6 +539,16 @@ class UserSettings(Base):
         String(8),
         default=TimeFormat.SYSTEM.value,
         server_default=TimeFormat.SYSTEM.value,
+        nullable=False,
+    )
+    # Which language this player plays in: the lobby leads with it and a new
+    # room starts in it (R-PROMPT-11). Stored per account rather than read from
+    # the browser every time, so it follows a player to their other devices;
+    # registration seeds it from the browser, and it is a setting afterwards.
+    prompt_language: Mapped[str] = mapped_column(
+        String(8),
+        default=PromptLanguage.ENGLISH.value,
+        server_default=PromptLanguage.ENGLISH.value,
         nullable=False,
     )
     # When the account was last told it has no way back in. Stored per account
