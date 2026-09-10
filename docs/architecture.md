@@ -376,6 +376,8 @@ no request in flight.
 11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 12. `mark_ready()` — `GET /api/ready` starts answering 200
 
+Any of steps 2–10 can refuse to start the process, and the cleanup in the lifespan's `finally` runs when one does. It stops only what was actually started: every loop handle is bound to `None` before the first step that can raise, and the finished-game drain is skipped when its worker never ran. A handle left unbound there raised an `UnboundLocalError` from the cleanup *after* the real error, and on a short terminal the cleanup's traceback is the only one the operator reads — which is the whole point of refusing with a direct instruction (R-PLAT-21).
+
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
 
 `/api/health` is liveness and stays process-only: a restart cannot fix a database
