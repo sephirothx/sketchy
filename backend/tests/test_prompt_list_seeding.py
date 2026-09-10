@@ -1,6 +1,7 @@
 """Unit tests for prompt list seeding, REST API, selection, and usage metrics."""
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -13,7 +14,9 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptVersion,
 )
-from app.db.seed import seed_prompt_lists
+from app.db.seed import DEFAULT_PROMPT_LISTS_DIR as PROMPT_LIST_DIR, seed_prompt_lists
+from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
+from app.prompt_content import default_prompt_list_slug, prompt_match_key
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
     BundledPromptDefinition,
@@ -60,6 +63,70 @@ async def test_seed_bundled_prompt_lists():
                 ["english_standard", "english_extended"]
             )
         ).revision_ids == first_revision_ids
+    finally:
+        await engine.dispose()
+
+
+async def test_every_supported_language_ships_a_standard_and_an_extended_list():
+    """A room may only be opened in a language that has content (R-PROMPT-01),
+    so the seven supported languages and the bundled catalogue have to be the
+    same set - and each language's two lists have to be playable together."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        seeded = await seed_prompt_lists(repo)
+        slugs = {summary.slug for summary in seeded}
+        assert len(slugs) == 2 * len(PROMPT_LANGUAGES)
+
+        for language in PROMPT_LANGUAGES:
+            stem = PromptLanguage(language).name.lower()
+            standard, extended = f"{stem}_standard", f"{stem}_extended"
+            assert {standard, extended} <= slugs, language
+            assert default_prompt_list_slug(language) == standard
+
+            # Both lists at once is the ordinary selection, and it is where a
+            # collision between the translated core and the native extension
+            # would show up as a refusal rather than as a bad prompt.
+            combined = await repo.resolve_selection([standard, extended])
+            assert combined.language == language
+            assert len(combined.revision_ids) == 2
+            assert len(combined.prompts) > 400
+
+            keys = [
+                prompt_match_key(answer, language) for answer in combined.prompts
+            ]
+            assert len(keys) == len(set(keys)), language
+    finally:
+        await engine.dispose()
+
+
+async def test_the_translated_core_is_one_concept_per_language():
+    """Standard is a concept-aligned translation: "anchor" and "Anker" are one
+    prompt concept in two languages, which is what the concept/version split
+    exists for. Usage facts key on the version, so the statistics stay apart."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        english = {
+            entry["conceptId"]
+            for entry in json.loads(
+                (PROMPT_LIST_DIR / "english_standard.json").read_text()
+            )["prompts"]
+        }
+        for language in PROMPT_LANGUAGES:
+            if language == "en":
+                continue
+            stem = PromptLanguage(language).name.lower()
+            translated = json.loads(
+                (PROMPT_LIST_DIR / f"{stem}_standard.json").read_text()
+            )["prompts"]
+            assert {entry["conceptId"] for entry in translated} <= english, language
+            # And the extension is native: its concepts are its own.
+            native = json.loads(
+                (PROMPT_LIST_DIR / f"{stem}_extended.json").read_text()
+            )["prompts"]
+            assert not {entry["conceptId"] for entry in native} & english, language
     finally:
         await engine.dispose()
 

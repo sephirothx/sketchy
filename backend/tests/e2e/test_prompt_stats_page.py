@@ -1,4 +1,6 @@
 """The prompt stats page: reachable, sortable, and honest about thin data."""
+import re
+
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -20,15 +22,20 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.get_by_role("heading", name="Prompt stats").wait_for()
 
             # Every prompt in the list is reachable, not just the ranked ones.
-            # The list is paged - rendering 592 rows is thirty screens of
-            # scroll on a phone - so the count is asserted through the
-            # "showing N of M" note and by paging to the end, which also
-            # proves nothing is silently dropped.
+            # The list is paged - rendering hundreds of rows is thirty screens
+            # of scroll on a phone - so the count is asserted by paging to the
+            # end, which also proves nothing is silently dropped. How many to
+            # expect is read off the picker's own option rather than written
+            # down here: the catalogue holds two lists per supported language
+            # and each one's size is content, not a constant this test knows.
             table = page.locator(".prompt-stats-table")
             await table.wait_for()
             rows = page.locator(".prompt-stats-table tbody tr")
             selected = await page.locator("#prompt-stats-list").input_value()
-            expected = 592 if selected == "english_extended" else 260
+            label = await page.locator(
+                f"#prompt-stats-list option[value='{selected}']"
+            ).inner_text()
+            expected = int(re.search(r"\((\d+)\)\s*$", label).group(1))
 
             more = page.locator(".prompt-stats-more button")
             while await more.count() > 0:
