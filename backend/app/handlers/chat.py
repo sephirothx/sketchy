@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import partial
 
+from app.announcements import Announcement
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     GuessPayload,
@@ -209,7 +210,6 @@ async def guess(ctx: HandlerContext, sid, data):
     if not correct:
         hint = game.guess_hint(player.id, text)
         if hint:
-            hint_text = f'"{text}" is very close!' if hint == "close" else "Some words are correct"
             # The guesser should always see their own guess, even when it's
             # not broadcast to the rest of the room.
             recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
@@ -229,10 +229,14 @@ async def guess(ctx: HandlerContext, sid, data):
                 retained_payload,
                 to=sid,
             )
-            await ctx.sio.emit(
-                "chat_message",
-                _chat_line(player, hint_text, close=True),
+            await ctx.game_flow.announce(
+                room,
+                Announcement.GUESS_VERY_CLOSE
+                if hint == "close"
+                else Announcement.GUESS_SOME_WORDS_CORRECT,
+                {"text": text} if hint == "close" else None,
                 to=sid,
+                close=True,
             )
         else:
             await _emit_player_chat(
@@ -343,12 +347,16 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
         },
         to=sid,
     )
-    price = f"'{letter.upper()}' -{cost} pts"
-    if found_count:
-        feedback = f"{price} - found {found_count} time{'s' if found_count != 1 else ''}!"
-    else:
-        feedback = f"{price} - not in the prompt."
-    await ctx.game_flow.announce(room, feedback, to=sid)
+    # The letter, its price and how often it landed - three values, so the
+    # client can say it in the reader's language and get the plural right
+    # (R-I18N-03). The server used to build the sentence, and "found 2 times"
+    # pluralises differently in five of the seven languages.
+    await ctx.game_flow.announce(
+        room,
+        Announcement.HINT_LETTER_FOUND if found_count else Announcement.HINT_LETTER_MISSING,
+        {"letter": letter.upper(), "cost": cost, **({"count": found_count} if found_count else {})},
+        to=sid,
+    )
     return {"ok": True, "cost": cost, "found": found_count, "hintSpend": hint_spend}
 
 

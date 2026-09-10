@@ -10,6 +10,7 @@ import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { chatLineText } from "../lib/announcements.ts";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
@@ -183,16 +184,16 @@ export function RoomChatPanel({
     if (mode === "playing" && canGuess) {
       let flash: GuessFlash | null = null;
       if (newestMessage.close) {
-        flash = { id: newestMessage.id, text: newestMessage.text, kind: "close" };
+        flash = { id: newestMessage.id, text: chatLineText(newestMessage), kind: "close" };
       } else if (newestMessage.restricted && (!newestMessage.playerId || newestMessage.playerId === myPlayerId)) {
-        flash = { id: newestMessage.id, text: newestMessage.text, kind: "miss" };
+        flash = { id: newestMessage.id, text: chatLineText(newestMessage), kind: "miss" };
       } else if (
         newestMessage.playerId === myPlayerId
         && !newestMessage.system
         && !newestMessage.correct
         && !newestMessage.close
       ) {
-        flash = { id: newestMessage.id, text: newestMessage.text, kind: "miss" };
+        flash = { id: newestMessage.id, text: chatLineText(newestMessage), kind: "miss" };
       }
       if (flash) {
         setGuessFlash(flash);
@@ -353,7 +354,7 @@ export function RoomChatPanel({
                 className={`chat-message${message.system ? " system" : ""}${message.correct ? " correct" : ""}${message.close ? " close-hint" : ""}${message.restricted ? " restricted" : ""}`}
               >
                 {message.system || message.close ? (
-                  message.text
+                  chatLineText(message)
                 ) : (
                   <>
                     <strong

@@ -437,6 +437,46 @@ def test_the_client_mirrors_every_error_code_and_nothing_else(frontend):
     assert client == _refusal_codes()
 
 
+def test_the_client_mirrors_every_announcement_code():
+    """`AnnouncementCode` in announcements.ts is the server enum, in order.
+
+    A room-authored line travels as a code, so a code the client cannot name
+    is a line that reaches a player blank - and one the client knows that the
+    server never sends is dead copy waiting to mislead the next reader.
+    """
+    from app.announcements import Announcement, RestartCancelReason
+
+    source = (FRONTEND_SRC / "lib" / "announcements.ts").read_text(encoding="utf-8")
+    for name, enum in (
+        ("AnnouncementCode", Announcement),
+        ("RestartCancelReason", RestartCancelReason),
+    ):
+        block = re.search(
+            rf"export type {name} =\n((?:  \| \"[a-z_]+\"\n?)+);", source
+        )
+        assert block, f"announcements.ts must declare `export type {name} = …`"
+        assert re.findall(r'"([a-z_]+)"', block.group(1)) == [
+            member.value for member in enum
+        ]
+
+
+def test_a_room_authored_line_carries_no_prose():
+    """One payload reaches every seat, so it cannot be written in a language.
+
+    `system_chat_message` is the only builder for those lines; a `text` on one
+    is a sentence the server chose for a room that need not share a reader
+    (R-I18N-03).
+    """
+    from app.announcements import Announcement
+    from app.presenters import system_chat_message
+
+    line = system_chat_message(Announcement.KICKED_BY_VOTE, {"nickname": "Ada"})
+    assert line["system"] is True
+    assert line["code"] == "kicked_by_vote"
+    assert line["params"] == {"nickname": "Ada"}
+    assert "text" not in line
+
+
 def test_every_refusal_literal_carries_a_code():
     """No `{"ok": False, …}` on the server without an `errorCode`.
 

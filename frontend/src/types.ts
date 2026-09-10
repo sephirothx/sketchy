@@ -1,3 +1,5 @@
+import type { AnnouncementCode } from "./lib/announcements.ts";
+
 export interface PlayerInfo {
   playerId: string;
   nickname: string;
@@ -211,7 +213,15 @@ export interface ChatMessage {
   /** The uploaded picture, content-addressed; absent for guests and initials. */
   avatarUrl?: string | null;
   isAnonymous?: boolean;
-  text: string;
+  /** What a player typed. Absent on a room-authored line, which carries a
+      `code` instead so each client can write it in its own language
+      (R-I18N-03). */
+  text?: string;
+  /** The room's own line, as a fact rather than a sentence. Mirrors
+      `Announcement` in `backend/app/announcements.py`. */
+  code?: AnnouncementCode;
+  /** The values that line needs - a nickname, a count, a reason slug. */
+  params?: Record<string, unknown>;
   correct: boolean;
   system?: boolean;
   close?: boolean;

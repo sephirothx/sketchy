@@ -8,7 +8,9 @@ import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Mapping
 
+from app.announcements import Announcement
 from app.auth.avatars import avatar_url
 from app.flow_timing import timing
 from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase
@@ -387,11 +389,23 @@ class GameFlowService:
             to=host.sid,
         )
 
-    async def announce(self, room: Room, text: str, *, to: str | None = None) -> None:
-        """Say something in the room's voice - to everyone, or to one socket."""
+    async def announce(
+        self,
+        room: Room,
+        code: Announcement,
+        params: Mapping[str, object] | None = None,
+        *,
+        to: str | None = None,
+        **flags: object,
+    ) -> None:
+        """Say something in the room's voice - to everyone, or to one socket.
+
+        One payload reaches every seat, and each client writes the sentence in
+        its own reader's language (R-I18N-03). Nothing here composes prose.
+        """
         await self._sio.emit(
             "chat_message",
-            system_chat_message(text),
+            system_chat_message(code, params, **flags),
             **({"to": to} if to else {"room": room.id}),
         )
 
@@ -600,7 +614,7 @@ class GameFlowService:
         )
         await self._emit_room_state(room)
         if restarted:
-            await self.announce(room, "The game was restarted by player vote.")
+            await self.announce(room, Announcement.GAME_RESTARTED_BY_VOTE)
         game_started_payload = {"restarted": True} if restarted else {}
         await self._sio.emit("game_started", game_started_payload, room=room.id)
         await self._start_turn(room)

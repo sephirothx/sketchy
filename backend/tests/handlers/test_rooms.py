@@ -804,7 +804,8 @@ async def test_guest_can_rename_and_the_name_sticks_to_the_account():
     assert (await user_repo.get_by_id("guest-1")).display_name == "Marta"
     assert any(
         call.args[0] == "chat_message"
-        and "is now known as Marta" in call.args[1].get("text", "")
+        and call.args[1].get("code") == "nickname_changed"
+        and call.args[1]["params"]["nickname"] == "Marta"
         for call in sio.emit.await_args_list
     )
 
