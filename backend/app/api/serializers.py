@@ -11,6 +11,7 @@ from app.auth.avatars import avatar_url
 from app.repositories.interfaces import (
     GameDetail,
     GameSummary,
+    CommunityPromptList,
     OwnedPromptList,
     PromptListSummary,
     SharedPromptList,
@@ -202,6 +203,33 @@ def prompt_list_payload(prompt_list: PromptListSummary) -> dict:
         "language": prompt_list.language,
         "promptCount": prompt_list.prompt_count,
         "isBundled": prompt_list.is_bundled,
+        "version": prompt_list.version,
+    }
+
+
+def community_prompt_list_payload(prompt_list: CommunityPromptList) -> dict:
+    """One catalogue row. The owner is a display name and nothing more.
+
+    No account id: attribution is a name on a list, and a stable third-party
+    identifier in a public listing is a join key for anybody who collects the
+    pages. A profile link, if one is ever wanted, is a decision of its own.
+
+    `starredByMe` is null for a caller who is not signed in - a different
+    answer from `false`, and the client shows it as one rather than offering a
+    star that would only ask them to sign in.
+    """
+    return {
+        "id": prompt_list.id,
+        "slug": prompt_list.slug,
+        "name": prompt_list.name,
+        "description": prompt_list.description,
+        "language": prompt_list.language,
+        "promptCount": prompt_list.prompt_count,
+        "ownerDisplayName": prompt_list.owner_display_name,
+        "tags": list(prompt_list.tags),
+        "starCount": prompt_list.star_count,
+        "starredByMe": prompt_list.starred_by_me,
+        "publishedAt": _timestamp(prompt_list.published_at),
         "version": prompt_list.version,
     }
 

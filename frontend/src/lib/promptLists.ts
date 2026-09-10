@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import type {
+  CommunityPromptList,
   OwnedPromptList,
   PromptLanguage,
   PromptTag,
@@ -33,6 +34,39 @@ export interface PromptTagVocabulary {
  */
 export function listPromptTags(): Promise<PromptTagVocabulary> {
   return apiRequest("/api/prompt-tags");
+}
+
+export interface CommunityPromptListPage {
+  lists: CommunityPromptList[];
+  nextCursor: string | null;
+}
+
+export interface CommunityPromptListQuery {
+  language?: PromptLanguage;
+  tags?: string[];
+  sort?: "stars" | "newest";
+  limit?: number;
+  cursor?: string | null;
+}
+
+/**
+ * Browse published lists. Separate from the official catalogue on purpose
+ * (R-LIST-14): nobody reading `/api/prompt-lists` has to ask whether a row
+ * was written by a stranger.
+ *
+ * A tag filter wants *every* tag given, not any of them.
+ */
+export function listCommunityPromptLists(
+  query: CommunityPromptListQuery = {},
+): Promise<CommunityPromptListPage> {
+  const params = new URLSearchParams();
+  if (query.language) params.set("language", query.language);
+  for (const tag of query.tags ?? []) params.append("tag", tag);
+  if (query.sort) params.set("sort", query.sort);
+  if (query.limit) params.set("limit", String(query.limit));
+  if (query.cursor) params.set("cursor", query.cursor);
+  const search = params.toString();
+  return apiRequest(`/api/prompt-lists/community${search ? `?${search}` : ""}`);
 }
 
 export function listOwnedPromptLists(): Promise<OwnedPromptList[]> {

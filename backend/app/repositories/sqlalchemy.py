@@ -9,7 +9,7 @@ import json
 import secrets
 from uuid import UUID
 
-from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy import and_, desc, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
@@ -28,6 +28,7 @@ from app.db.models import (
     PromptListRevision,
     PromptListRevisionItem,
     PromptListRevisionTag,
+    PromptListStar,
     PromptTag,
     PromptUsageBatch,
     PromptUsageFact,
@@ -85,6 +86,8 @@ from app.services.user_stats_projection import (
 )
 from app.services.friends import friendship_key, other_of
 from app.repositories.interfaces import (
+    CommunityPromptList,
+    CommunityPromptListPage,
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
     PinnedPromptSelection,
@@ -146,6 +149,33 @@ from app.prompts import letter_histogram
 from app.refusals import ErrorCode
 
 LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
+
+# One screenful of the community catalogue, and the depth past which browsing
+# has stopped being browsing. The ceiling is not about the database - the
+# offset is cheap at this size - but about what a deep page is *for*: nobody
+# reaches page four hundred by reading, so the request is a scrape, and a
+# filter is the better answer than a longer scroll.
+MAX_COMMUNITY_PAGE = 48
+MAX_COMMUNITY_OFFSET = 480
+
+
+def _encode_catalogue_cursor(offset: int) -> str:
+    return str(offset)
+
+
+def _decode_catalogue_cursor(cursor: str | None) -> int:
+    """A malformed cursor reads as the first page rather than an error.
+
+    It is an opaque token the client got from us; the only way to hold a bad
+    one is to have mangled it, and answering page one is a better outcome than
+    a 422 on a link somebody shared.
+    """
+    if not cursor:
+        return 0
+    try:
+        return max(0, int(cursor))
+    except ValueError:
+        return 0
 
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
@@ -2458,6 +2488,165 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             if exists is None:
                 return code
         raise PromptListMutationError("Could not generate a share code. Try again.")
+
+    async def list_community(
+        self,
+        *,
+        language: str | None = None,
+        tags: Sequence[str] = (),
+        sort: str = "stars",
+        limit: int = 24,
+        cursor: str | None = None,
+        requesting_user_id: str | None = None,
+    ) -> CommunityPromptListPage:
+        """One page of published lists (R-LIST-14).
+
+        Three conditions decide what is in the catalogue, and they are the
+        same three everywhere: public, active, and not retired. A takedown or a
+        deletion therefore drops a list out of here without a second code path
+        agreeing to it.
+
+        Star counts are derived from the rows rather than kept on the list
+        (R-LIST-16), so nothing can drift. At this scale the aggregate is one
+        grouped join; `user_stats_daily` is the precedent if it ever stops
+        being.
+        """
+        requester_id = _optional_entity_id(requesting_user_id)
+        limit = max(1, min(int(limit), MAX_COMMUNITY_PAGE))
+        star_count = (
+            select(func.count())
+            .select_from(PromptListStar)
+            .where(PromptListStar.prompt_list_id == PromptList.id)
+            .correlate(PromptList)
+            .scalar_subquery()
+            .label("star_count")
+        )
+        stmt = (
+            select(PromptList, self._prompt_count(), star_count, User.display_name)
+            .join(User, User.id == PromptList.owner_user_id)
+            .where(
+                PromptList.visibility == PromptListVisibility.PUBLIC.value,
+                PromptList.moderation_state
+                == PromptContentModerationState.ACTIVE.value,
+                PromptList.deleted_at.is_(None),
+                PromptList.is_bundled.is_(False),
+            )
+        )
+        if language is not None:
+            stmt = stmt.where(PromptList.language == language)
+        for slug in tags:
+            # One EXISTS per tag rather than an IN over all of them: a list
+            # must carry *every* tag asked for, and an IN would match a list
+            # carrying any one. Filters are capped at MAX_LIST_TAGS, so this
+            # cannot grow without bound.
+            stmt = stmt.where(
+                select(PromptListRevisionTag.revision_id)
+                .join(PromptTag, PromptTag.id == PromptListRevisionTag.tag_id)
+                .join(
+                    PromptListRevision,
+                    PromptListRevision.id == PromptListRevisionTag.revision_id,
+                )
+                .where(
+                    PromptListRevision.prompt_list_id == PromptList.id,
+                    PromptListRevision.version == PromptList.version,
+                    PromptTag.slug == slug,
+                )
+                .exists()
+            )
+        # Ties broken by id, and the cursor carries both halves: two lists
+        # published in the same millisecond, or with the same number of stars,
+        # would otherwise be able to swap places between pages and let one of
+        # them be shown twice or not at all.
+        if sort == "newest":
+            order = (PromptList.published_at.desc(), PromptList.id.desc())
+        else:
+            order = (
+                desc(star_count),
+                PromptList.published_at.desc(),
+                PromptList.id.desc(),
+            )
+        stmt = stmt.order_by(*order)
+        offset = _decode_catalogue_cursor(cursor)
+        # Offset paging, deliberately: the catalogue is browsed a few pages
+        # deep at most, and a keyset cursor over a derived count would have to
+        # re-rank on every request anyway. MAX_COMMUNITY_OFFSET is what keeps
+        # a deep page from becoming a scan somebody can ask for repeatedly.
+        if offset >= MAX_COMMUNITY_OFFSET:
+            return CommunityPromptListPage(lists=(), next_cursor=None)
+        stmt = stmt.offset(offset).limit(limit + 1)
+        async with self._session_factory() as session:
+            rows = (await session.execute(stmt)).all()
+            has_more = len(rows) > limit
+            rows = rows[:limit]
+            list_ids = [row[0].id for row in rows]
+            tags_by_list = await self._current_revision_tags(session, list_ids)
+            mine: set[UUID] = set()
+            if requester_id is not None and list_ids:
+                mine = {
+                    row
+                    for row in (
+                        await session.scalars(
+                            select(PromptListStar.prompt_list_id).where(
+                                PromptListStar.user_id == requester_id,
+                                PromptListStar.prompt_list_id.in_(list_ids),
+                            )
+                        )
+                    ).all()
+                }
+        return CommunityPromptListPage(
+            lists=tuple(
+                CommunityPromptList(
+                    id=_public_id(prompt_list.id),
+                    slug=prompt_list.slug,
+                    name=prompt_list.name,
+                    description=prompt_list.description,
+                    language=prompt_list.language,
+                    prompt_count=int(prompt_count),
+                    owner_display_name=display_name,
+                    tags=tags_by_list.get(prompt_list.id, ()),
+                    star_count=int(stars),
+                    published_at=prompt_list.published_at,
+                    version=prompt_list.version,
+                    starred_by_me=(
+                        None if requester_id is None else prompt_list.id in mine
+                    ),
+                )
+                for prompt_list, prompt_count, stars, display_name in rows
+            ),
+            next_cursor=(
+                _encode_catalogue_cursor(offset + limit) if has_more else None
+            ),
+        )
+
+    @staticmethod
+    async def _current_revision_tags(
+        session: AsyncSession, list_ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[str, ...]]:
+        """Tag slugs for each list's current revision, in vocabulary order."""
+        if not list_ids:
+            return {}
+        rows = (
+            await session.execute(
+                select(PromptListRevision.prompt_list_id, PromptTag.slug)
+                .join(
+                    PromptListRevisionTag,
+                    PromptListRevisionTag.revision_id == PromptListRevision.id,
+                )
+                .join(PromptTag, PromptTag.id == PromptListRevisionTag.tag_id)
+                .join(PromptList, PromptList.id == PromptListRevision.prompt_list_id)
+                .where(
+                    PromptListRevision.prompt_list_id.in_(list_ids),
+                    PromptListRevision.version == PromptList.version,
+                )
+            )
+        ).all()
+        held: dict[UUID, set[str]] = {}
+        for list_id, slug in rows:
+            held.setdefault(list_id, set()).add(slug)
+        return {
+            list_id: tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in slugs)
+            for list_id, slugs in held.items()
+        }
 
     async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:
         owner_id = _optional_entity_id(owner_user_id)
