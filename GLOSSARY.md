@@ -106,7 +106,7 @@ the section is what is drawn with a name wherever a player appears.
 | **Prompt-list localization** | Optional translated name and description used to present a **Prompt list** in an interface locale. It does not translate prompts or change the room's **Prompt language**. | translation, localized list, content language |
 | **Editorial difficulty** | An author/editor classification—Unspecified, Easy, Medium, or Hard—stored on a **Prompt version**. It is distinct from measured difficulty in **Prompt stats**. | difficulty rating, live difficulty |
 | **Content rating** | The intended audience classification—Everyone, Teen, or Mature—stored on a **Prompt version**. | NSFW flag, age rating |
-| **Prompt tag** | A stable, explicit category attached to a **Prompt version** for organization and later discovery. | category string, label |
+| **Prompt tag** | A stable, explicit category from a curated vocabulary, attached to a **Prompt version** or to a **Prompt-list revision** so the **Community catalogue** can be filtered by it. Staff extend the vocabulary; owners choose from it. | category string, label, keyword |
 | **Word** | Keeps its ordinary English meaning, and only that: the individual words making up a multi-word prompt, and the letters and words hints and close guesses work on. It is never a name for the prompt itself. | — |
 | **Prompt options** | The three prompts offered to the drawer during the choosing phase. | word options, word choices, candidates |
 | **Masked prompt** | The prompt shown to guessers as letter tiles — one tile per letter, revealed letters filled in, word breaks visible, and each word's letter count as a superscript numeral beside it. | masked word, hidden word, blanks, underscores |

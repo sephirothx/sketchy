@@ -1,5 +1,10 @@
 import { apiRequest } from "./api";
-import type { OwnedPromptList, PromptLanguage, SharedPromptList } from "../types";
+import type {
+  OwnedPromptList,
+  PromptLanguage,
+  PromptTag,
+  SharedPromptList,
+} from "../types";
 
 export interface PromptListDraftEntry {
   conceptId?: string;
@@ -13,6 +18,21 @@ export interface PromptListDraft {
   language: PromptLanguage;
   visibility: "private" | "unlisted";
   prompts: PromptListDraftEntry[];
+  /** Slugs from the vocabulary `listPromptTags` returns; a save refuses others. */
+  tags: string[];
+}
+
+export interface PromptTagVocabulary {
+  tags: PromptTag[];
+  maxPerList: number;
+}
+
+/**
+ * The tags a list may carry. Fetched rather than hardcoded: a client guessing
+ * at the set would offer tags a save then refuses (R-LIST-18).
+ */
+export function listPromptTags(): Promise<PromptTagVocabulary> {
+  return apiRequest("/api/prompt-tags");
 }
 
 export function listOwnedPromptLists(): Promise<OwnedPromptList[]> {

@@ -71,9 +71,17 @@ export interface OwnedPromptList extends PromptListSummary {
   visibility: "private" | "unlisted";
   shareCode: string | null;
   moderationState: "active" | "under_review" | "hidden";
+  /** Curated tag slugs on the list's current revision, in vocabulary order. */
+  tags: string[];
   createdAt: string;
   updatedAt: string;
   prompts: OwnedPromptEntry[];
+}
+
+/** One entry of the curated list-tag vocabulary owners choose from. */
+export interface PromptTag {
+  slug: string;
+  name: string;
 }
 
 export interface SharedPromptEntry {
@@ -580,6 +588,7 @@ export type ErrorCode =
   | "prompt_list_conflict"
   | "prompt_list_invalid"
   | "prompt_list_forbidden"
+  | "unknown_prompt_tag"
   | "unknown_sort"
   | "timezone_required"
   | "range_reversed"

@@ -219,6 +219,7 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         "moderationState": prompt_list.moderation_state,
         "version": prompt_list.version,
         "promptCount": prompt_list.prompt_count,
+        "tags": list(prompt_list.tags),
         "createdAt": _timestamp(prompt_list.created_at),
         "updatedAt": _timestamp(prompt_list.updated_at),
         "prompts": [

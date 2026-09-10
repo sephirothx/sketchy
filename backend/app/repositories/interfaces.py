@@ -1,6 +1,8 @@
 """Abstract repository interfaces and domain transfer objects."""
 from __future__ import annotations
 
+from app.refusals import ErrorCode
+
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -443,6 +445,10 @@ class OwnedPromptList:
     created_at: datetime
     updated_at: datetime
     prompts: tuple[PromptListEntry, ...] = ()
+    # The current revision's tags. They live on the revision rather than the
+    # list because a revision is what a game pins, and a discovery filter has
+    # to agree with the content it found (R-LIST-18).
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -530,7 +536,23 @@ class PromptSeedConflictError(ValueError):
 
 
 class PromptListMutationError(ValueError):
-    """A safe validation or authorization failure for a player-owned list."""
+    """A safe validation or authorization failure for a player-owned list.
+
+    `code` and `params` are for a refusal the client can explain precisely.
+    Without them it reads as the generic `prompt_list_invalid` - which is
+    right for most of these, and wrong for one that names the thing refused.
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        code: ErrorCode | None = None,
+        params: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params
 
 
 class PromptListConflictError(PromptListMutationError):
@@ -932,6 +954,7 @@ class PromptListRepository(ABC):
         language: str,
         visibility: str,
         prompts: Sequence[PromptListEntryInput],
+        tags: Sequence[str] = (),
     ) -> OwnedPromptList:
         """Create a reusable player list and immutable revision one."""
         ...
@@ -947,6 +970,7 @@ class PromptListRepository(ABC):
         description: str,
         visibility: str,
         prompts: Sequence[PromptListEntryInput],
+        tags: Sequence[str] = (),
     ) -> OwnedPromptList:
         """Create the next immutable revision using optimistic concurrency."""
         ...
@@ -954,6 +978,11 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
         """Delete a player-owned list and all of its revisions."""
+        ...
+
+    @abstractmethod
+    async def seed_list_tags(self) -> tuple[str, ...]:
+        """Make the curated list-tag vocabulary present (R-LIST-18)."""
         ...
 
     @abstractmethod

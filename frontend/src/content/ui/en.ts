@@ -316,6 +316,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Somebody else changed that list. Reload it and try again.",
   prompt_list_invalid: "That prompt list could not be saved.",
   prompt_list_forbidden: "That prompt list is not yours to change.",
+  unknown_prompt_tag: (params: Record<string, unknown>) => {
+    const tag = String(params.tag ?? "");
+    return `“${tag}” is not one of the tags a list can carry.`;
+  },
   unknown_sort: "Sketchy cannot sort by that.",
   timezone_required: "Include a timezone with that date.",
   range_reversed: "The start of the range must come before its end.",
@@ -1138,7 +1142,27 @@ export const EN = {
     report: "Report",
   },
 
+  promptTags: {
+    "animals": "Animals",
+    "food-and-drink": "Food and drink",
+    "objects": "Objects",
+    "nature": "Nature",
+    "places": "Places",
+    "people": "People",
+    "actions": "Actions",
+    "sports-and-games": "Sports and games",
+    "transport": "Transport",
+    "entertainment": "Entertainment",
+    "science-and-technology": "Science and technology",
+    "history-and-culture": "History and culture",
+    "holidays": "Holidays",
+    "fantasy": "Fantasy",
+    "abstract": "Abstract",
+  },
   myPromptListsPage: {
+    tags: "Tags",
+    tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} of ${p.max} chosen`,
+    tagsAreHowListsAreFound: "Tags are how somebody finds this list in the community catalogue.",
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "prompt", other: "prompts" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
