@@ -435,93 +435,140 @@ async def test_a_full_rebuild_works_in_bounded_batches_of_accounts():
         await engine.dispose()
 
 
-async def test_an_account_with_more_games_than_a_statement_can_bind_still_rebuilds():
-    """asyncpg binds at most 32,767 parameters; the old rebuild sent every
-    game id of the account as one. The reads are keyed by identity now."""
+def _bound_parameter_counts(engine):
+    """Record how wide each statement's parameter list is, until released.
+
+    Not a count of statements or of rows: the regression below was one
+    statement whose bind list grew with the account's history, so the width
+    of the widest list is exactly what says whether it is back.
+    """
+    counts: list[int] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        # An executemany binds one row's parameters over and over, which is
+        # bounded by the batch rather than by the query. The driver's limit
+        # is on what a single statement binds.
+        if not executemany and parameters is not None:
+            counts.append(len(parameters))
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+
+    def release():
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+
+    return counts, release
+
+
+async def _seed_finished_games(factory, user_id: UUID, count: int, *, start: datetime) -> None:
+    """`count` finished games for one account, one seat and one turn each.
+
+    Always across the same two UTC days, so that two seedings of different
+    sizes differ in the number of games and in nothing else - the day count
+    is what the projection's own writes are bound by.
+    """
     from sqlalchemy import insert
 
     from app.db.models import GameParticipant, GameRecord, TurnRecord
 
-    # The maintenance budget, because that is the engine production rebuilds
-    # on: `_run_cli` opens `maintenance_engine()`, whose statement timeout is
-    # minutes rather than the seconds a player's request gets. Streaming an
-    # account's whole 33,000-game history is the work this test exists to
-    # exercise, and holding it to the web budget only ever measured how busy
-    # the runner was - it failed on CI five times across four pull requests,
-    # none of which touched this code.
+    games, seats, turns = [], [], []
+    for index in range(count):
+        game_id, seat_id = generate_uuid(), generate_uuid()
+        finished_at = start + timedelta(days=index % 2, minutes=index)
+        games.append(
+            {
+                "id": game_id,
+                "payload_hash": f"veteran-{user_id}-{index}",
+                "room_name": "Long ago",
+                "scoring_mode": "default",
+                "hint_mode": "none",
+                "drawing_seconds": 60,
+                "total_rounds": 1,
+                "player_count": 1,
+                "started_at": finished_at - timedelta(minutes=1),
+                "finished_at": finished_at,
+            }
+        )
+        seats.append(
+            {
+                "id": seat_id,
+                "game_id": game_id,
+                "user_id": user_id,
+                "display_name_snapshot": "Veteran",
+                "is_anonymous_snapshot": True,
+                "final_score": 10,
+                "final_rank": 1,
+            }
+        )
+        turns.append(
+            {
+                "id": generate_uuid(),
+                "game_id": game_id,
+                "round_number": 1,
+                "turn_number": 1,
+                "drawer_user_id": user_id,
+                "drawer_participant_id": seat_id,
+                "drawer_display_name_snapshot": "Veteran",
+                "drawer_is_anonymous_snapshot": True,
+                "prompt": "anchor",
+                "duration_seconds": 30,
+            }
+        )
+    async with factory() as session:
+        async with session.begin():
+            for table, rows in (
+                (GameRecord, games),
+                (GameParticipant, seats),
+                (TurnRecord, turns),
+            ):
+                await session.execute(insert(table), rows)
+
+
+async def test_no_statement_of_a_rebuild_widens_with_the_history():
+    """asyncpg binds at most 32,767 parameters, and the rebuild used to send
+    every game id of the account as one.
+
+    What must hold is not "33,000 games fit" but that every statement is
+    keyed by identity, so nothing they bind grows with the history at all -
+    which is what `_rebuild_accounts` says it does, reading the account's
+    games as a subquery rather than a bind list. Two small histories and a
+    count of what each statement binds pin that exactly.
+
+    This test used to seed 33,000 games to cross the driver's bound. It was
+    the largest in the suite by a factor of twenty-five, it took between 9 s
+    and 100 s on CI with nothing to say why, and it was the whole difference
+    between a fast and a slow PostgreSQL job. It also could not have caught a
+    rebuild that bound twenty thousand ids, which is the same defect one
+    account short of the limit.
+
+    The maintenance role is kept because that is the engine production
+    rebuilds on: `_run_cli` opens `maintenance_engine()`.
+    """
     factory, engine = await create_test_db(role="maintenance")
     users = SqlAlchemyUserRepository(factory)
     try:
-        player = await users.create_anonymous("Veteran")
         start = datetime(2020, 1, 1, tzinfo=timezone.utc)
-        games, seats, turns = [], [], []
-        for index in range(33_000):
-            game_id, seat_id = generate_uuid(), generate_uuid()
-            finished_at = start + timedelta(minutes=index)
-            games.append(
-                {
-                    "id": game_id,
-                    "payload_hash": f"veteran-{index}",
-                    "room_name": "Long ago",
-                    "scoring_mode": "default",
-                    "hint_mode": "none",
-                    "drawing_seconds": 60,
-                    "total_rounds": 1,
-                    "player_count": 1,
-                    "started_at": finished_at - timedelta(minutes=1),
-                    "finished_at": finished_at,
-                }
-            )
-            seats.append(
-                {
-                    "id": seat_id,
-                    "game_id": game_id,
-                    "user_id": UUID(player.id),
-                    "display_name_snapshot": "Veteran",
-                    "is_anonymous_snapshot": True,
-                    "final_score": 10,
-                    "final_rank": 1,
-                }
-            )
-            turns.append(
-                {
-                    "id": generate_uuid(),
-                    "game_id": game_id,
-                    "round_number": 1,
-                    "turn_number": 1,
-                    "drawer_user_id": UUID(player.id),
-                    "drawer_participant_id": seat_id,
-                    "drawer_display_name_snapshot": "Veteran",
-                    "drawer_is_anonymous_snapshot": True,
-                    "prompt": "anchor",
-                    "duration_seconds": 30,
-                }
-            )
-        # Seeded in chunks. The point of this test is what the *rebuild* does
-        # with 33,000 games, not what one INSERT does with them: sent whole,
-        # each of these three is a single statement big enough to run past the
-        # role's seven-second `statement_timeout` on a busy runner, and the
-        # test then fails during its own setup with an error about the thing
-        # it is not testing. It failed that way four times across three pull
-        # requests before this. The rows, and the assertions over them, are
-        # unchanged.
-        for table, rows_in in (
-            (GameRecord, games),
-            (GameParticipant, seats),
-            (TurnRecord, turns),
-        ):
-            for start_at in range(0, len(rows_in), 2_000):
-                async with factory() as session:
-                    async with session.begin():
-                        await session.execute(
-                            insert(table), rows_in[start_at : start_at + 2_000]
-                        )
+        widest = {}
+        for count in (4, 40):
+            player = await users.create_anonymous(f"Veteran{count}")
+            await _seed_finished_games(factory, UUID(player.id), count, start=start)
 
-        rows = await rebuild_user_stats_projection(factory, user_id=UUID(player.id))
+            counts, release = _bound_parameter_counts(engine)
+            try:
+                rows = await rebuild_user_stats_projection(
+                    factory, user_id=UUID(player.id)
+                )
+            finally:
+                release()
 
-        assert rows == 23, "one row per UTC day of a minute-apart history"
-        stats = await users.get_stats(player.id)
-        assert stats.games_played == 33_000 and stats.turns_played == 33_000
+            assert rows == 2, "one row per UTC day of the seeded history"
+            stats = await users.get_stats(player.id)
+            assert stats.games_played == count and stats.turns_played == count
+            widest[count] = max(counts)
+
+        assert widest[4] == widest[40], (
+            "a statement widened with the account's history: "
+            f"{widest[4]} parameters over 4 games, {widest[40]} over 40"
+        )
     finally:
         await engine.dispose()
 
