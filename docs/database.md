@@ -580,7 +580,11 @@ A full rebuild is **bounded per batch of accounts**, not per deployment: it walk
 canonical accounts by keyset in batches of `REBUILD_BATCH_ACCOUNTS` (100), each batch its
 own transaction that locks only its identities, reads facts keyed by those identity ids
 (the games they played are a subquery, never a bind list, so an account with more games
-than asyncpg can bind still rebuilds) and streams them 1,000 rows at a time. An
+than asyncpg can bind still rebuilds) and streams them 1,000 rows at a time. That last
+property is asserted as itself, by counting what each statement binds across two
+histories of different sizes
+([`test_no_statement_of_a_rebuild_widens_with_the_history`](../backend/tests/test_user_stats_projection.py)),
+rather than by seeding one history large enough to break a driver. An
 interrupted full rebuild leaves every finished batch correct and is simply run again; a
 batch that loses to a deadlock or serialization failure is retried whole. On a 40,000-game
 account the rebuild's peak allocation went from 63 MiB to 19 MiB (`benchmarks/user_stats.py`).
