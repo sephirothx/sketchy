@@ -289,10 +289,28 @@
    flag nearly fills its frame - shrunk to a chip beside a chevron it stops
    being a picture of anything at all. */
 .language-picker.is-flag-only .language-picker-trigger {
-  justify-content: center;
+  /* Exactly as tall as the segmented control it stands beside - 43px is what
+     that control comes to (a 4px track around a 35px segment), and matching
+     it by number is what keeps the two the same object in the row. The width
+     follows 18:13 to within a percent, which is all the flag is stretched by
+     and is not visible at this size. */
+  height: 43px;
+  min-height: 0;
   min-width: 0;
-  /* The 44px floor is the tap target; the flag itself is what is seen. */
-  padding: 6px;
+  overflow: hidden;
+  padding: 0;
+  width: 59px;
+}
+
+/* The flag is the *trigger's* whole face, so the trigger's border is the frame
+   and the flag needs none of its own. Scoped to the trigger: unscoped, this
+   also caught every row of the open list, where it turned each face into a
+   block and dropped the name onto a second line under its flag. */
+.language-picker.is-flag-only .language-picker-trigger .language-picker-face,
+.language-picker.is-flag-only .language-picker-trigger .language-picker-flag {
+  display: block;
+  height: 100%;
+  width: 100%;
 }
 
 .language-picker.is-compact .language-picker-trigger {

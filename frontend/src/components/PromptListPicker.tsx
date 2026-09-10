@@ -126,6 +126,15 @@ export function PromptListPicker({
       if (selectedSlugs.length <= 1) return;
       onChange(selectedSlugs.filter((s) => s !== slug));
     } else {
+      // A shared list is only resolvable while its bearer code travels with
+      // it, and the room drops every code when its language changes - so a
+      // list still on screen from before that switch would go back into the
+      // selection unauthorized and be refused on create. The code it was
+      // added with is still here; it goes back with it.
+      const shared = sharedAccess[slug];
+      if (shared && !shareCodes.includes(shared.code)) {
+        onShareCodesChange?.([...shareCodes, shared.code]);
+      }
       onChange([...selectedSlugs, slug]);
     }
   }

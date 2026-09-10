@@ -4,7 +4,6 @@ import { PromptListPicker } from "./PromptListPicker";
 import { LanguageFace, LanguagePicker } from "./LanguagePicker";
 import {
   ChoiceCards,
-  FieldHint,
   InputNumber,
   SegmentedControl,
   Switch,
@@ -204,11 +203,16 @@ export function RoomSetupForm({
                 />
               )}
             </div>
-            {/* The caption this replaces was the only place the difference
-                was spelled out - a lock says "restricted", not "share the
-                code" - so it moves to the hint the form already has rather
-                than being dropped. */}
-            <div className="visibility-field">
+            {/* No caption and no hint button beside it: the pair is two words
+                and two icons. The sentence they replaced stays as the control's
+                own tooltip, because a lock says "restricted" rather than
+                "share the code". */}
+            <div
+              className="visibility-field"
+              title={isPublic
+                ? "Listed in the lobby — anyone can wander in."
+                : "Joinable only with the code or invite link."}
+            >
               <SegmentedControl
                 label="Visibility"
                 value={isPublic ? "public" : "private"}
@@ -217,11 +221,6 @@ export function RoomSetupForm({
                   { value: "public", label: <><GlobeIcon size={14} />Public</> },
                   { value: "private", label: <><LockIcon size={14} />Private</> },
                 ]}
-              />
-              <FieldHint
-                hint={isPublic
-                  ? "Listed in the lobby — anyone can wander in."
-                  : "Joinable only with the code or invite link."}
               />
             </div>
           </div>

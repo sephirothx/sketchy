@@ -1,6 +1,8 @@
 """Stable prompt identity, localized versions, aliases, and editorial metadata."""
 from __future__ import annotations
 
+import unicodedata
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
@@ -82,6 +84,27 @@ def test_a_language_folds_the_way_it_is_written_rather_than_the_way_english_is()
     # An umlaut in an English room still folds the shared way: the rule
     # belongs to the room's language, not to the character.
     assert prompt_match_key("Mädchen", "en") == "madchen"
+
+    # Both Unicode spellings of the same word fold to one key. A macOS
+    # filename or an IME hands over the decomposed form, where the umlaut is
+    # a letter and a combining mark rather than the letter the German table
+    # is written in - and the two are canonically equivalent, so a key that
+    # told them apart would be an identity that depends on how the text was
+    # typed.
+    for written, language in (
+        ("Mädchen", "de"), ("Fußball", "de"), ("café", "fr"), ("Città", "it"),
+    ):
+        decomposed = unicodedata.normalize("NFD", written)
+        assert decomposed != written or "ß" in written
+        assert prompt_match_key(decomposed, language) == prompt_match_key(
+            written, language
+        ), written
+        assert prompt_match_variants(decomposed, language) == prompt_match_variants(
+            written, language
+        ), written
+    assert "maedchen" in prompt_match_variants(
+        unicodedata.normalize("NFD", "Mädchen"), "de"
+    )
 
 
 def test_a_german_room_accepts_both_spellings_without_widening_near_misses():

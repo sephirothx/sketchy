@@ -83,6 +83,28 @@ export function selectionForLanguage(
 }
 
 /**
+ * The selection a room in `language` should hold, given what it holds now.
+ *
+ * The two are set from different places - the language from the player's own
+ * preference, the lists from the catalogue - and nothing kept them in step:
+ * a German player opened the create form declaring German while the selection
+ * still said `english_standard`, which the server refuses. Anything already
+ * in the language is kept, and a selection with nothing left in it falls back
+ * to that language's Standard list.
+ */
+export function reconcileSelectionForLanguage(
+  lists: { slug: string; language: string }[],
+  language: string,
+  selected: readonly string[],
+): string[] {
+  const inLanguage = new Set(
+    lists.filter((list) => list.language === language).map((list) => list.slug),
+  );
+  const kept = selected.filter((slug) => inLanguage.has(slug));
+  return kept.length > 0 ? kept : selectionForLanguage(lists, language);
+}
+
+/**
  * The language this visitor plays in, as the browser reports it.
  *
  * A signed-in player's stored setting wins over this; it is what a visitor

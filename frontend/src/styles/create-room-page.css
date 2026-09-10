@@ -438,11 +438,10 @@ details.form-section > .form-section-body {
   border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
-  display: inline-flex;
+  display: grid;
   font: inherit;
   font-size: 13.5px;
   font-weight: 700;
-  gap: 6px;
   justify-content: center;
   padding: 8px 16px;
   position: relative;
@@ -454,6 +453,23 @@ details.form-section > .form-section-body {
 .segmented-control button[aria-pressed="true"] {
   color: var(--ink);
   font-weight: 800;
+}
+
+/* The two copies stack in one cell: the hidden one is always bold, so the
+   segment is as wide when it is off as when it is on and the row does not
+   move under the pointer that just pressed it. */
+.segmented-control button > .segment-sizer,
+.segmented-control button > .segment-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  grid-area: 1 / 1;
+  justify-content: center;
+}
+
+.segmented-control button > .segment-sizer {
+  font-weight: 800;
+  visibility: hidden;
 }
 @media (prefers-reduced-motion: reduce) {
   .segmented-control-thumb { transition: none; }

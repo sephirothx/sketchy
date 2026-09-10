@@ -141,7 +141,7 @@ export function LanguagePicker({
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
-        <LanguageFace value={value} nameHidden={flagOnly} flagWidth={flagOnly ? 36 : 18} />
+        <LanguageFace value={value} nameHidden={flagOnly} fill={flagOnly} />
         {!flagOnly && <ChevronDownIcon size={14} />}
       </button>
 
@@ -187,7 +187,13 @@ export function LanguageFace({
   value,
   nameHidden = false,
   flagWidth = 18,
-}: { value: LanguageChoice; nameHidden?: boolean; flagWidth?: number }) {
+  fill = false,
+}: {
+  value: LanguageChoice;
+  nameHidden?: boolean;
+  flagWidth?: number;
+  fill?: boolean;
+}) {
   if (value === ANY_LANGUAGE) {
     return (
       <span className="language-picker-face">
@@ -205,7 +211,7 @@ export function LanguageFace({
   return (
     <span className="language-picker-face">
       <span className="language-picker-flag" aria-hidden="true">
-        <Flag language={value} width={flagWidth} />
+        <Flag language={value} width={flagWidth} fill={fill} />
       </span>
       <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
         {endonym}

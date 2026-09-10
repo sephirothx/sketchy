@@ -7,6 +7,7 @@ import {
 import {
   availablePromptLanguages,
   preferredPromptLanguage,
+  reconcileSelectionForLanguage,
   selectionForLanguage,
   sortRoomsByLanguage,
 } from "../src/lib/promptLanguages.ts";
@@ -127,4 +128,34 @@ test("the lobby leads with your language and hides nobody", () => {
     ["A", "B", "C", "D"],
   );
   assert.equal(sortRoomsByLanguage(rooms, "de").length, rooms.length);
+});
+
+test("a selection that is not in the room's language is replaced, not kept", () => {
+  const lists = [
+    { slug: "english_standard", language: "en" },
+    { slug: "english_extended", language: "en" },
+    { slug: "german_standard", language: "de" },
+    { slug: "german_extended", language: "de" },
+  ];
+  // What a German player used to submit: their language, England's list.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "de", ["english_standard"]),
+    ["german_standard"],
+  );
+  // Anything already in the language is left exactly as it is.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "de", ["german_extended"]),
+    ["german_extended"],
+  );
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "en", ["english_extended", "english_standard"]),
+    ["english_extended", "english_standard"],
+  );
+  // A half-right selection keeps its right half rather than resetting.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "de", ["english_standard", "german_extended"]),
+    ["german_extended"],
+  );
+  // And a language with nothing to offer says so, rather than borrowing.
+  assert.deepEqual(reconcileSelectionForLanguage(lists, "it", ["english_standard"]), []);
 });

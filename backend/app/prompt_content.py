@@ -60,6 +60,18 @@ def default_prompt_list_slug(language: str) -> str:
     return f"{PromptLanguage(validate_prompt_language(language)).name.lower()}_standard"
 
 
+def _collapsed(answer: str) -> str:
+    """Whitespace collapsed, case folded, and *composed*.
+
+    NFC before anything language-specific, because a transliteration table is
+    written in letters: "ä" as one codepoint is in it, and "a" followed by a
+    combining diaeresis is not. Text arrives both ways - a macOS filename or
+    an IME can hand over the decomposed form - and the two are canonically
+    equivalent, so they have to fold to one key.
+    """
+    return unicodedata.normalize("NFC", " ".join(answer.split()).casefold())
+
+
 def _fold_accents(text: str) -> str:
     """Drop canonically decomposable diacritics: "è" reads as "e".
 
@@ -112,7 +124,7 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
     question - see `prompt_match_variants`.
     """
     language = validate_prompt_language(language)
-    collapsed = " ".join(answer.split()).casefold()
+    collapsed = _collapsed(answer)
     return _fold_accents(_transliterate(collapsed, language))
 
 
@@ -126,7 +138,7 @@ def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
     becoming the identity.
     """
     language = validate_prompt_language(language)
-    collapsed = " ".join(answer.split()).casefold()
+    collapsed = _collapsed(answer)
     return frozenset(
         {
             _fold_accents(_transliterate(collapsed, language)),
