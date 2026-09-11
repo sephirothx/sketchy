@@ -23,7 +23,7 @@ from app.services.sweeps import (
 
 from app.db.models import PlannedShutdownAbandonment
 from app.rooms import Room, RoomManager
-from app.handlers.refusals import ErrorCode
+from app.refusals import ErrorCode
 
 
 logger = logging.getLogger("sketchy.shutdown")
