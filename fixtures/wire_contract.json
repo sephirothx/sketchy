@@ -1519,6 +1519,11 @@
   "api.moderation:list_reports": [
    "hasMore"
   ],
+  "api.moderation:read_held_publication": [
+   "moderationState",
+   "ownerDisplayName",
+   "publishedAt"
+  ],
   "api.moderation:remove_reported_avatar": [
    "blockedUntil"
   ],

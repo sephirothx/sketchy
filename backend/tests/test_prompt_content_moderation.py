@@ -543,7 +543,11 @@ async def test_a_held_publication_is_findable_and_can_be_released(env):
 
     decision = await moderator_http.patch(
         f"/api/moderation/prompt-lists/{prompt_list.id}",
-        json={"state": "active", "note": "Read it; it is fine."},
+        json={
+            "state": "active",
+            "note": "Read it; it is fine.",
+            "expectedVersion": row["version"],
+        },
     )
 
     assert decision.status_code == 200
@@ -585,13 +589,17 @@ async def test_a_held_publication_can_be_taken_down_instead(env):
         visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
-    await prompts.set_owned_publication(
+    held = await prompts.set_owned_publication(
         owner["id"], prompt_list.id, published=True, under_review=True
     )
 
     decision = await moderator_http.patch(
         f"/api/moderation/prompt-lists/{prompt_list.id}",
-        json={"state": "hidden", "note": "Against the rules."},
+        json={
+            "state": "hidden",
+            "note": "Against the rules.",
+            "expectedVersion": held.version,
+        },
     )
 
     assert decision.status_code == 200
@@ -625,7 +633,11 @@ async def test_a_list_nobody_held_cannot_be_decided_from_this_queue(env):
 
     response = await moderator_http.patch(
         f"/api/moderation/prompt-lists/{prompt_list.id}",
-        json={"state": "hidden", "note": "No."},
+        json={
+            "state": "hidden",
+            "note": "No.",
+            "expectedVersion": prompt_list.version,
+        },
     )
 
     assert response.status_code == 409
@@ -637,3 +649,162 @@ async def test_the_publication_queue_is_staff_only(env):
     await register(player_http, "OrdinaryPlayer")
 
     assert (await player_http.get("/api/moderation/prompt-lists")).status_code == 403
+
+
+
+async def staffed_env(env, owner_name: str, moderator_name: str):
+    """An owner, a stepped-up moderator, and a held publication."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    moderator_http = new_client()
+    owner = await register(owner_http, owner_name)
+    moderator = await register(moderator_http, moderator_name)
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    created = await prompts.create_owned(
+        owner["id"],
+        name="Under the switch",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(
+            PromptListEntryInput(answer="otter", aliases=("river otter",)),
+            PromptListEntryInput(answer="badger"),
+        ),
+    )
+    held = await prompts.set_owned_publication(
+        owner["id"], created.id, published=True, under_review=True
+    )
+    return owner, moderator_http, prompts, factory, created, held
+
+
+async def test_the_reviewer_can_read_every_prompt_they_are_deciding_on(env):
+    """A release made from a name and a count was a blind one.
+
+    No other route could show a held list's prompts: the owner's route is the
+    owner's, and the catalogue and room resolution both exclude a list that is
+    not active. So the switch could not keep out anything it was turned on to
+    keep out.
+    """
+    _, moderator_http, _, _, created, held = await staffed_env(
+        env, "ReadOwner", "ReadModerator"
+    )
+
+    response = await moderator_http.get(f"/api/moderation/prompt-lists/{created.id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["version"] == held.version
+    assert [
+        (entry["prompt"], entry["aliases"], entry["moderationState"])
+        for entry in body["prompts"]
+    ] == [
+        ("otter", ["river otter"], "active"),
+        ("badger", [], "active"),
+    ]
+
+
+async def test_an_edit_after_the_reviewer_opened_the_list_refuses_the_decision(env):
+    """The bait and the switch.
+
+    An owner can edit a held list, and every save is a new revision. Without
+    the version on the decision, a moderator could read a harmless revision,
+    the owner could save a different one, and the release would put the one
+    nobody read into the catalogue.
+    """
+    owner, moderator_http, prompts, factory, created, held = await staffed_env(
+        env, "BaitOwner", "BaitModerator"
+    )
+    read = (
+        await moderator_http.get(f"/api/moderation/prompt-lists/{created.id}")
+    ).json()
+
+    await prompts.update_owned(
+        owner["id"],
+        created.id,
+        expected_version=held.version,
+        name="Under the switch",
+        description="",
+        visibility="private",
+        prompts=(
+            PromptListEntryInput(
+                answer="otter", concept_id=created.prompts[0].concept_id
+            ),
+            PromptListEntryInput(answer="something nobody reviewed"),
+        ),
+    )
+
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}",
+        json={
+            "state": "active",
+            "note": "Looked fine when I read it.",
+            "expectedVersion": read["version"],
+        },
+    )
+
+    assert decision.status_code == 409
+    assert "changed after you opened it" in decision.json()["detail"]
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(created.id))
+    assert row.moderation_state == "under_review", "nothing was released"
+
+
+async def test_the_detail_route_does_not_open_a_list_nobody_held(env):
+    """A reading surface for this queue, not a staff window into private lists."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    moderator_http = new_client()
+    owner = await register(owner_http, "PrivateOwner")
+    moderator = await register(moderator_http, "PrivateModerator")
+    async with factory() as session:
+        async with session.begin():
+            reviewer = await session.get(User, UUID(moderator["id"]))
+            reviewer.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, reviewer.id)
+    private = await prompts.create_owned(
+        owner["id"],
+        name="Nobody's business",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+
+    response = await moderator_http.get(f"/api/moderation/prompt-lists/{private.id}")
+
+    assert response.status_code == 404
+
+
+async def test_withdrawing_a_held_publication_releases_the_hold(env):
+    """A hold is released by withdrawing; a finding is not.
+
+    `under_review` on a list is written in one place - a publish under the
+    operator switch - so it only ever means "waiting to be published". Once the
+    owner withdraws there is nothing to publish, and keeping the hold left a
+    private list in the queue where a moderator could still decide on it.
+    """
+    owner, moderator_http, prompts, factory, created, held = await staffed_env(
+        env, "WithdrawOwner", "WithdrawMod"
+    )
+
+    withdrawn = await prompts.set_owned_publication(
+        owner["id"], created.id, published=False
+    )
+
+    assert withdrawn.visibility == "private"
+    assert withdrawn.moderation_state == "active"
+    queue = (await moderator_http.get("/api/moderation/prompt-lists")).json()
+    assert queue["waiting"] == 0 and queue["lists"] == []
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}",
+        json={
+            "state": "hidden",
+            "note": "Too late.",
+            "expectedVersion": withdrawn.version,
+        },
+    )
+    assert decision.status_code == 409

@@ -3274,6 +3274,21 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 else:
                     prompt_list.visibility = PromptListVisibility.PRIVATE.value
                     prompt_list.published_at = None
+                    # A hold is released by withdrawing, a finding is not.
+                    # `under_review` on a list is written in exactly one place -
+                    # the publish above, under the operator switch - so it
+                    # only ever means "waiting to be published". Withdrawn,
+                    # there is nothing left to publish, and leaving the hold
+                    # kept a private list in the moderators' queue where it
+                    # could still be decided on. `hidden` is a moderator's
+                    # ruling and stays, or withdrawal would launder a takedown.
+                    if (
+                        prompt_list.moderation_state
+                        == PromptContentModerationState.UNDER_REVIEW.value
+                    ):
+                        prompt_list.moderation_state = (
+                            PromptContentModerationState.ACTIVE.value
+                        )
                 prompt_list.updated_at = datetime.now(timezone.utc)
                 # In this transaction, not a later one. Written after the
                 # refusals above, so the ledger records what happened rather

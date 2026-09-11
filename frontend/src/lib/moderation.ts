@@ -611,7 +611,25 @@ export interface HeldPublication {
   language: PromptLanguage;
   ownerDisplayName: string | null;
   promptCount: number;
+  /** The revision on show. A decision names it, so an edit made after the
+  reviewer opened the list cannot be released unseen. */
+  version: number;
   publishedAt: string | null;
+}
+
+/** A held list with the prompts a reviewer has to read before deciding. */
+export interface HeldPublicationDetail extends Omit<HeldPublication, "promptCount"> {
+  prompts: {
+    prompt: string;
+    aliases: string[];
+    /** The prompt version's content state — not `ModerationState`, which is
+    a player's standing. A version may already be hidden by an earlier report. */
+    moderationState: "active" | "under_review" | "hidden";
+  }[];
+}
+
+export function readHeldPublication(promptListId: string): Promise<HeldPublicationDetail> {
+  return apiRequest(`/api/moderation/prompt-lists/${promptListId}`);
 }
 
 export function listHeldPublications(
@@ -632,10 +650,11 @@ export function reviewHeldPublication(
   promptListId: string,
   state: "active" | "hidden",
   note: string,
+  expectedVersion: number,
 ): Promise<{ id: string; moderationState: "active" | "hidden" }> {
   return apiRequest(`/api/moderation/prompt-lists/${promptListId}`, {
     method: "PATCH",
-    body: { state, note },
+    body: { state, note, expectedVersion },
   });
 }
 
