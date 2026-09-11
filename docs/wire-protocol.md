@@ -1070,7 +1070,12 @@ All multi-byte integers are **little-endian** except colors, which are big-endia
 | `clear_canvas` | `B` | header only |
 
 Shape IDs: `rectangle = 0`, `ellipse = 1`, `triangle = 2` (`SHAPE_IDS`,
-[`backend/app/canvas_history.py:32`](../backend/app/canvas_history.py)).
+[`backend/app/canvas_history.py:30`](../backend/app/canvas_history.py)).
+
+x₀, y₀ is where the drag started and x₁, y₁ where it ended, and the order is kept
+end to end. A rectangle or ellipse fills the box between them either way; a triangle
+does not — its base lies on the start's row and its apex on the end's, so swapping
+the two turns it upside down (#787).
 
 ### Coordinates
 

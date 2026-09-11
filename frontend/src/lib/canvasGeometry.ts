@@ -102,9 +102,12 @@ export function shapeOutlinePoints(
     }
     return points;
   }
+  // The base lies on the row the drag started from and the apex on the row it
+  // ended on, midway across: the start is always a corner, and dragging
+  // downwards draws the triangle upside down (#787).
   return [
-    { x: x + width / 2, y },
-    { x, y: y + height },
-    { x: x + width, y: y + height },
+    a,
+    { x: (a.x + b.x) / 2, y: b.y },
+    { x: b.x, y: a.y },
   ];
 }
