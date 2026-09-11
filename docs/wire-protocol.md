@@ -893,13 +893,25 @@ of a core. The loop stays. It has one payload shape rather than two, no second e
 whose loss would leave a drawer looking at a masked prompt, and mid-turn
 (`hint_revealed`, `sync_game`) the divergence is real anyway.
 
-**`chat_message`** (`ChatMessage`) has `id`, `nickname`, `text`, `correct`, and the
-optional `retainedMessageId`, `playerId`, `nameColor`, `isAnonymous`, `system`, `close`
+**`chat_message`** (`ChatMessage`) has `id`, `nickname`, `correct`, and the optional
+`text`, `retainedMessageId`, `playerId`, `nameColor`, `isAnonymous`, `system`, `close`
 (a near-miss hint), `restricted` (delivered only to the drawer, spectators, and correct
-guessers), and `isSpectator`. Room-authored announcements use
-`system_chat_message()` ([`backend/app/presenters.py:13`](../backend/app/presenters.py)),
-which is authorless by construction so no caller can accidentally attribute one to a
-player.
+guessers), and `isSpectator`.
+
+**A room-authored announcement carries no text.** It is `{system: true, code, params?}`
+- built by `system_chat_message()`
+([`backend/app/presenters.py`](../backend/app/presenters.py)) from the `Announcement`
+vocabulary in [`app/announcements.py`](../backend/app/announcements.py), mirrored by
+`AnnouncementCode` in
+[`lib/announcements.ts`](../frontend/src/lib/announcements.ts) with
+`tests/test_wire_contract.py` failing on drift. It is authorless by construction, so no
+caller can attribute one to a player, and **wordless** by construction, so no caller can
+write it in one language for a room that does not share one: one payload reaches every
+seat and each client renders the sentence for its own reader (R-I18N-03). `params`
+carry values, never fragments - `restart_cancelled` sends
+`reason: "server_update"`, not the clause English puts after *because*, which most
+languages do not build the same way. `text` remains for a line a **player** typed,
+which is never translated: what somebody said is what everybody sees.
 
 **Blocking is a presentation filter only.** When a sender is blocked, the recipient
 list is narrowed for that one `chat_message`
@@ -1861,7 +1873,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (21) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (22) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

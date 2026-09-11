@@ -5,6 +5,7 @@ import asyncio
 import logging
 from functools import partial
 
+from app.announcements import Announcement
 from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.services.runtime_metrics import metrics
@@ -937,7 +938,11 @@ async def rename_player(ctx: HandlerContext, sid, data):
         # is now stale for every other tab this player has open.
         ctx.presence_identities.invalidate(player.user_id)
 
-    await ctx.game_flow.announce(room, f"{previous} is now known as {nickname}.")
+    await ctx.game_flow.announce(
+        room,
+        Announcement.NICKNAME_CHANGED,
+        {"previous": previous, "nickname": nickname},
+    )
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True, "nickname": nickname}
 
@@ -962,7 +967,9 @@ async def become_player(ctx: HandlerContext, sid, data=None):
 
     player.is_spectator = False
     player.score = 0
-    await ctx.game_flow.announce(room, f"{player.nickname} joined as a player.")
+    await ctx.game_flow.announce(
+        room, Announcement.JOINED_AS_PLAYER, {"nickname": player.nickname}
+    )
     await ctx.game_flow._emit_room_state(room)
     return {"ok": True}
 

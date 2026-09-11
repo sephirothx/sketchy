@@ -381,7 +381,11 @@ async def test_buy_wheel_letter():
     # Verify system message emission
     emitted = [call.args for call in sio.emit.await_args_list]
     chat_emits = [args for args in emitted if args[0] == "chat_message"]
-    assert any(args[1]["text"].startswith("'A' -") for args in chat_emits)
+    assert any(
+        args[1].get("code") in {"hint_letter_found", "hint_letter_missing"}
+        and args[1]["params"]["letter"] == "A"
+        for args in chat_emits
+    )
     assert "room_state" not in [args[0] for args in emitted]
 
     timer = timers.phase_timers.pop(room.id, None)
@@ -430,7 +434,10 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
         if call.args[0] == "chat_message" and call.kwargs.get("to") == "guesser1-sid" and call.args[1].get("close")
     ]
     assert len(close_hints) == 1
-    assert "very close" in close_hints[0].args[1]["text"]
+    # The code, not the sentence: the client writes that, and in a room whose
+    # players read different languages there is no one sentence to assert on.
+    assert close_hints[0].args[1]["code"] == "guess_very_close"
+    assert close_hints[0].args[1]["params"] == {"text": "pandas"}
 
     forwarded_near_misses = [
         call
@@ -722,10 +729,9 @@ async def test_a_near_miss_retry_repeats_neither_the_echo_nor_the_hint():
         for call in sio.emit.await_args_list
         if call.args[0] == "chat_message" and call.kwargs.get("to") == "guesser-sid"
     ]
-    assert [call.args[1]["text"] for call in to_guesser] == [
-        "pandas",
-        '"pandas" is very close!',
-    ]
+    assert [
+        call.args[1].get("text") or call.args[1].get("code") for call in to_guesser
+    ] == ["pandas", "guess_very_close"]
     assert room.game.near_misses[guesser.id] == 1
 
 

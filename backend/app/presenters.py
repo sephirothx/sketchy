@@ -1,22 +1,36 @@
 """Pure construction of Socket.IO response and broadcast payloads."""
 from __future__ import annotations
 
+from typing import Mapping
+
+from app.announcements import Announcement
 from app.auth.avatars import avatar_url
 from app.flow_timing import timing
 from app.game import Game, MAX_HINT_SPEND, competition_ranks
 from app.rooms import Player, Room
 
 
-def system_chat_message(text: str) -> dict:
-    """A chat line spoken by the room itself. Authorless by construction, so no
-    caller can accidentally attribute one to a player."""
-    return {
+def system_chat_message(
+    code: Announcement, params: Mapping[str, object] | None = None, **flags: object
+) -> dict:
+    """A chat line spoken by the room itself.
+
+    Authorless by construction, so no caller can accidentally attribute one to
+    a player - and **wordless**, so no caller can accidentally write it in one
+    language for a room that does not share one. The code and its parameters
+    are the line; the client renders it (R-I18N-03).
+    """
+    payload: dict = {
         "playerId": "",
         "nickname": "",
-        "text": text,
+        "code": str(code),
         "correct": False,
         "system": True,
     }
+    if params:
+        payload["params"] = dict(params)
+    payload.update(flags)
+    return payload
 
 
 def room_state_payload(room: Room) -> dict:

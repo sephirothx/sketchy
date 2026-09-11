@@ -5,6 +5,7 @@ from functools import partial
 import logging
 from uuid import UUID
 
+from app.announcements import Announcement
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
@@ -101,7 +102,9 @@ async def vote_player(ctx: HandlerContext, sid, data):
             if target_sid:
                 await ctx.sio.emit("kicked", {"reason": "You were kicked from the room by vote."}, to=target_sid)
                 await ctx.sio.leave_room(target_sid, room.id)
-            await ctx.game_flow.announce(room, f"{target.nickname} was kicked by vote.")
+            await ctx.game_flow.announce(
+                room, Announcement.KICKED_BY_VOTE, {"nickname": target.nickname}
+            )
             if room.game and room.state == "playing":
                 await ctx.game_flow._remove_player_from_game(room, target.id)
             await ctx.game_flow._emit_room_state(room)
@@ -118,7 +121,9 @@ async def vote_player(ctx: HandlerContext, sid, data):
             target.afk_votes.clear()
             if target.sid:
                 await ctx.sio.emit("voted_afk", {"message": "You were marked AFK by room vote."}, to=target.sid)
-            await ctx.game_flow.announce(room, f"{target.nickname} was marked AFK by vote.")
+            await ctx.game_flow.announce(
+                room, Announcement.MARKED_AFK_BY_VOTE, {"nickname": target.nickname}
+            )
             await ctx.game_flow.apply_afk_consequences(room, target)
             await ctx.game_flow._emit_room_state(room)
             return {"ok": True, "action": "afk", "executed": True}

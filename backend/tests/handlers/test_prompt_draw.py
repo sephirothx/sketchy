@@ -389,10 +389,16 @@ async def test_a_restart_whose_draw_fails_is_cancelled_rather_than_crashing():
     assert room.state == "waiting"
     assert room.game is None
     assert room.restart_vote is None
-    announced = " ".join(
-        str(call.args) for call in ctx.sio.emit.await_args_list
+    announced = [
+        call.args[1]
+        for call in ctx.sio.emit.await_args_list
+        if call.args[0] == "chat_message"
+    ]
+    assert any(
+        line.get("code") == "restart_cancelled"
+        and line["params"]["reason"] == "prompt_lists_unavailable"
+        for line in announced
     )
-    assert "restart was cancelled" in announced
 
 
 async def test_a_list_room_whose_content_vanished_is_refused_not_quietly_rebuilt():

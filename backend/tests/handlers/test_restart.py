@@ -167,7 +167,7 @@ async def test_restart_vote_expiry_enforces_cooldown():
     assert "Another restart vote can be proposed" in retry["error"]
     assert any(
         call.args[0] == "chat_message"
-        and call.args[1]["text"] == "The restart vote expired without passing."
+        and call.args[1].get("code") == "restart_vote_expired"
         for call in sio.emit.await_args_list
     )
 
@@ -191,7 +191,7 @@ async def test_restart_vote_rejection_closes_immediately_and_enforces_cooldown()
     assert "Another restart vote can be proposed" in retry["error"]
     assert any(
         call.args[0] == "chat_message"
-        and call.args[1]["text"] == "The restart vote was rejected."
+        and call.args[1].get("code") == "restart_vote_rejected"
         for call in sio.emit.await_args_list
     )
 
@@ -353,7 +353,8 @@ async def test_approved_restart_is_cancelled_if_too_few_players_remain():
     assert room.restart_vote_cooldown_until > 0
     assert any(
         call.args[0] == "chat_message"
-        and "fewer than two active players remain" in call.args[1]["text"]
+        and call.args[1].get("code") == "restart_cancelled"
+        and call.args[1]["params"]["reason"] == "too_few_players"
         for call in sio.emit.await_args_list
     )
     restarted_events = [

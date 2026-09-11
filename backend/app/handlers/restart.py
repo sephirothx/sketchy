@@ -5,6 +5,7 @@ import asyncio
 import time
 from functools import partial
 
+from app.announcements import Announcement, RestartCancelReason
 from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
@@ -39,7 +40,7 @@ async def _reject_vote(
     ctx: HandlerContext,
     room: Room,
     vote: RestartVote,
-    message: str,
+    code: Announcement,
     *,
     cancel_timer: bool = True,
 ) -> None:
@@ -49,7 +50,7 @@ async def _reject_vote(
         return
     room.restart_vote = None
     room.restart_vote_cooldown_until = time.time() + timing.restart_vote_cooldown_seconds
-    await ctx.game_flow.announce(room, message)
+    await ctx.game_flow.announce(room, code)
     await ctx.game_flow._emit_room_state(room)
 
 
@@ -65,14 +66,16 @@ def _schedule_expiry(ctx: HandlerContext, room: Room, vote: RestartVote) -> None
             ctx,
             room,
             vote,
-            "The restart vote expired without passing.",
+            Announcement.RESTART_VOTE_EXPIRED,
             cancel_timer=False,
         )
 
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_expire()))
 
 
-async def _cancel_restart(ctx: HandlerContext, room: Room, reason: str) -> None:
+async def _cancel_restart(
+    ctx: HandlerContext, room: Room, reason: RestartCancelReason
+) -> None:
     """Give up an approved restart, and say why.
 
     The game it would have replaced is already gone by the time these run, so
@@ -85,7 +88,9 @@ async def _cancel_restart(ctx: HandlerContext, room: Room, reason: str) -> None:
     )
     room.state = "waiting"
     room.game = None
-    await ctx.game_flow.announce(room, f"The restart was cancelled because {reason}.")
+    await ctx.game_flow.announce(
+        room, Announcement.RESTART_CANCELLED, {"reason": str(reason)}
+    )
     await ctx.game_flow._emit_room_state(room)
 
 
@@ -100,15 +105,13 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
 
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             ctx.shutdown.notify_game_state_changed()
-            await _cancel_restart(ctx, room, "a server update is in progress")
+            await _cancel_restart(ctx, room, RestartCancelReason.SERVER_UPDATE)
             return
 
         active_players = room.active_players()
         seated_before = set(room.players)
         if len(active_players) < 2:
-            await _cancel_restart(
-                ctx, room, "fewer than two active players remain"
-            )
+            await _cancel_restart(ctx, room, RestartCancelReason.TOO_FEW_PLAYERS)
             return
 
         try:
@@ -125,12 +128,10 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
             # arrives and never being told why.
             logger.exception("Restart could not draw prompts for room %s", room.id)
             await _cancel_restart(
-                ctx, room, "the prompt lists could not be loaded"
+                ctx, room, RestartCancelReason.PROMPT_LISTS_UNAVAILABLE
             )
         except RoomNoLongerStartableError:
-            await _cancel_restart(
-                ctx, room, "everybody left before it could begin"
-            )
+            await _cancel_restart(ctx, room, RestartCancelReason.EVERYBODY_LEFT)
 
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_restart()))
 
@@ -180,7 +181,7 @@ async def propose_restart_vote(ctx: HandlerContext, sid, data=None):
     )
     room.restart_vote = vote
     await ctx.game_flow.announce(
-        room, f"{proposer.nickname} started a vote to restart the game."
+        room, Announcement.RESTART_VOTE_STARTED, {"nickname": proposer.nickname}
     )
     await ctx.game_flow._emit_room_state(room)
     _schedule_expiry(ctx, room, vote)
@@ -217,12 +218,7 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
         no_votes = sum(1 for value in vote.votes.values() if not value)
         rejection_threshold = len(vote.eligible_voter_ids) - vote.required_votes + 1
         if no_votes >= rejection_threshold:
-            await _reject_vote(
-                ctx,
-                room,
-                vote,
-                "The restart vote was rejected.",
-            )
+            await _reject_vote(ctx, room, vote, Announcement.RESTART_VOTE_REJECTED)
             return {"ok": True, "approved": False, "rejected": True}
         await ctx.game_flow._emit_room_state(room)
         return {
@@ -239,9 +235,7 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
         room.restart_vote_cooldown_until = (
             time.time() + timing.restart_vote_cooldown_seconds
         )
-        await ctx.game_flow.announce(
-            room, "The restart vote was cancelled because fewer than two active players remain."
-        )
+        await ctx.game_flow.announce(room, Announcement.RESTART_VOTE_ABANDONED)
         await ctx.game_flow._emit_room_state(room)
         return {
             "ok": True,
@@ -256,7 +250,9 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
     vote.status = "approved"
     vote.restart_at = time.time() + timing.restart_delay_seconds
     await ctx.game_flow.announce(
-        room, f"The restart vote passed. Restarting in {timing.restart_delay_seconds} seconds."
+        room,
+        Announcement.RESTART_VOTE_PASSED,
+        {"seconds": timing.restart_delay_seconds},
     )
     await ctx.game_flow._emit_room_state(room)
     _schedule_restart(ctx, room, vote)
