@@ -357,6 +357,7 @@
    and a tight one - with a classic scrollbar a 901px window leaves the
    column 278px. */
 .toolbar-compact {
+  container: toolbar-compact / inline-size;
   padding: 6px;
 }
 
@@ -377,6 +378,17 @@
 
 .toolbar-compact .toolbar-mobile-sep {
   display: none;
+}
+
+/* At the narrowest the room ever is, the carets go too: the chips still open
+   their panels, and a strip that fits is worth more than the hint that they
+   do. Arithmetic on the chips is not enough to know it fits - the same five
+   came out 7px wider on CI's Linux than on macOS, and 276px is all a 901px
+   window leaves once the page carries a classic scrollbar. */
+@container toolbar-compact (max-width: 300px) {
+  .toolbar-compact .toolbar-mobile-chip-caret {
+    display: none;
+  }
 }
 
 .toolbar-mobile-chip {
