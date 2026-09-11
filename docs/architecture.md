@@ -94,6 +94,7 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 ├── app/services/     Cross-domain workflows and background loops
 │   └── game_flow.py  The turn/round/timer/player-removal orchestration
 ├── app/presenters.py Pure construction of outgoing payloads
+├── app/refusals.py   The one refusal vocabulary, shared by REST and the socket
 ├── app/game.py       Pure game state machine — no I/O
 ├── app/rooms.py      In-memory Room/Player/RoomManager domain model
 ├── app/canvas_*.py   Canvas history, per-turn session, durable storage policy
@@ -1602,6 +1603,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | --- | --- |
 | [`app/api/__init__.py`](../backend/app/api/__init__.py) | REST routers served alongside the Socket.IO application. |
 | [`app/api/bug_reports.py`](../backend/app/api/bug_reports.py) | Player-filed bug reports and the administrator queue that triages them. |
+| [`app/api/errors.py`](../backend/app/api/errors.py) | The refused HTTP response, in the one shape the client reads. |
 | [`app/request_limits.py`](../backend/app/request_limits.py) | The ceiling on request bodies, applied before anything reads one. |
 | [`app/api/moderation.py`](../backend/app/api/moderation.py) | Player reports and role-gated moderation actions. |
 | [`app/api/operations.py`](../backend/app/api/operations.py) | Operator-facing views of how the server is behaving. |
@@ -1673,6 +1675,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/message_limits.py`](../backend/app/message_limits.py) | Shared backend limits for player-authored chat and guess text. |
 | [`app/presenters.py`](../backend/app/presenters.py) | Pure construction of Socket.IO response and broadcast payloads. |
 | [`app/prompt_content.py`](../backend/app/prompt_content.py) | Language-aware normalization and bounded metadata for prompt content. |
+| [`app/refusals.py`](../backend/app/refusals.py) | Every reason the server refuses something, named once for both surfaces. |
 | [`app/prompts.py`](../backend/app/prompts.py) | Static prompt list used for turn prompt selection. |
 | [`app/repositories/__init__.py`](../backend/app/repositories/__init__.py) | Repository layer for Sketchy data persistence. |
 | [`app/repositories/interfaces.py`](../backend/app/repositories/interfaces.py) | Abstract repository interfaces and domain transfer objects. |

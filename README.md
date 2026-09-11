@@ -1539,6 +1539,7 @@ backend/
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
       bug_report_retention.py A ceiling on how long an undecided bug report keeps its screenshot
     presenters.py Pure construction of room, turn, round, and session payloads
+    refusals.py   The one refusal vocabulary (`ErrorCode`), shared by REST and the socket
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model
     state.py      Shared RoomManager singleton
@@ -1557,6 +1558,7 @@ frontend/
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
+    lib/refusals.ts What a refusal says to the player: the sentence per `errorCode`
     lib/drawingRules.ts The client's copy of the room's tool and color rules
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry

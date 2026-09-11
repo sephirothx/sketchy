@@ -42,6 +42,7 @@ import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import { recordRender } from "../lib/renderDiagnostics";
 import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -182,7 +183,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setStartError(null);
     try {
       const response = await emitWithAck<AckResponse>("start_game", {});
-      if (!response.ok) setStartError(response.error || "Could not start the game. Please try again.");
+      if (!response.ok) setStartError(refusalText(response, "Could not start the game. Please try again."));
     } catch (startError) {
       setStartError(socketRequestErrorMessage(startError, "start the game"));
     } finally {
@@ -196,7 +197,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("propose_restart_vote", {});
       if (!response.ok) {
-        notify(response.error || "Could not start a restart vote.", "error");
+        notify(refusalText(response, "Could not start a restart vote."), "error");
       }
     } catch (restartError) {
       notify(socketRequestErrorMessage(restartError, "start a restart vote"), "error");
@@ -211,7 +212,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("cast_restart_vote", { vote });
       if (!response.ok) {
-        notify(response.error || "Could not record your restart vote.", "error");
+        notify(refusalText(response, "Could not record your restart vote."), "error");
       }
     } catch (restartError) {
       notify(socketRequestErrorMessage(restartError, "record your restart vote"), "error");
@@ -232,7 +233,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       );
       if (!response.ok) {
         notify(
-          response.error || `Could not ${action} the color suggestion.`,
+          refusalText(response, `Could not ${action} the color suggestion.`),
           "error",
         );
       }

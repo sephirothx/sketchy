@@ -1,4 +1,5 @@
 import type { AckResponse, RoomPreviewResponse, RoomSummary } from "../types";
+import { refusalText } from "./refusals.ts";
 
 /** Keep in sync with backend/app/auth/names.py. Guest nicknames and account
  * usernames share one rule, so a guest name can be claimed as a username. */
@@ -130,7 +131,7 @@ export class RoomEntryMachine {
             status: "error",
             message: response.errorCode === "room_ended"
               ? "This room has ended. Ask the host for a new invite."
-              : response.error || "This room is no longer available",
+              : refusalText(response, "This room is no longer available"),
           },
         });
       }
@@ -176,7 +177,7 @@ export class RoomEntryMachine {
       const room = justFilled ? { ...current.room, isFull: true } : current.room;
       const error = justFilled
         ? "The player slots just filled up, but you can still spectate."
-        : response.error || "Could not join this room";
+        : refusalText(response, "Could not join this room");
       this.publish({
         ...this.snapshot,
         state: { status: "preview", room, notice: current.notice, error },

@@ -10,7 +10,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { emitWithAck, socket } from "../lib/socket";
-import { ApiError } from "../lib/api";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
@@ -83,6 +82,7 @@ import {
   VolumeIcon,
   XIcon,
 } from "./icons";
+import { refusalText } from "../lib/refusals.ts";
 
 /* ------------------------------------------------------------- vocabulary */
 
@@ -452,7 +452,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       await useAuthStore.getState().fetchMe();
     } catch (error) {
       setPictureError(
-        error instanceof ApiError ? error.message : "Could not remove the picture.",
+        refusalText(error, "Could not remove the picture."),
       );
     } finally {
       setPictureBusy(false);
@@ -539,7 +539,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           { nickname: trimmed },
         );
         if (!response.ok) {
-          setNameError(response.error || "Could not change your display name.");
+          setNameError(refusalText(response, "Could not change your display name."));
           return;
         }
         await useAuthStore.getState().fetchMe();
@@ -552,9 +552,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       // the whole point of the check, and a generic line would leave the
       // player guessing why it was refused.
       setNameError(
-        error instanceof ApiError
-          ? error.message
-          : "Could not change your display name. Please try again.",
+        refusalText(error, "Could not change your display name. Please try again."),
       );
     } finally {
       setNameBusy(false);

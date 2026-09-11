@@ -29,6 +29,7 @@ not something somebody can act on.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import NamedTuple
 from pathlib import Path
 import re
 import unicodedata
@@ -142,12 +143,26 @@ def _identifier_parts(username: str | None, email: str | None) -> list[str]:
     return [_fold(part) for part in parts if len(part) >= MIN_IDENTIFIER_RUN]
 
 
+class ScreeningRefusal(NamedTuple):
+    """Why a password was refused: a name for a program, prose for a log.
+
+    The `reason` is what reaches the player - the client writes the sentence
+    from it, in their own language (R-I18N-01) - so it is a wire value and is
+    added, never renamed. `sentence` stays for the log and for anybody reading
+    a response by hand, and `detail` carries the one number a sentence needs.
+    """
+
+    reason: str
+    sentence: str
+    detail: int | None = None
+
+
 def screening_failure(
     password: str,
     *,
     username: str | None = None,
     email: str | None = None,
-) -> str | None:
+) -> ScreeningRefusal | None:
     """Why this password would fall to a list or a pattern, or None.
 
     Ordered so the most specific answer wins: being on the list is worth
@@ -156,31 +171,50 @@ def screening_failure(
     """
     folded = _fold(password)
     if folded in known_weak_passwords():
-        return "That password is one of the most common ones in use. Please choose another."
+        return ScreeningRefusal(
+            "common",
+            "That password is one of the most common ones in use. Please choose another.",
+        )
 
     unit = _shortest_repeated_unit(folded)
     if unit != folded and _fold(unit) in known_weak_passwords():
-        return "That is a common password repeated. Please choose another."
+        return ScreeningRefusal(
+            "common_repeated",
+            "That is a common password repeated. Please choose another.",
+        )
     # A password made of a short block repeated has the strength of the block,
     # whatever the block is: `xk2!xk2!xk2!` is four characters of secret.
     if unit != folded and len(unit) < 8:
-        return "That password is a short one repeated. Please choose another."
+        return ScreeningRefusal(
+            "short_repeated",
+            "That password is a short one repeated. Please choose another.",
+        )
 
     if len(set(folded)) < MIN_DISTINCT_CHARACTERS:
-        return (
-            f"That password uses only {len(set(folded))} different characters. "
-            "Please choose another."
+        return ScreeningRefusal(
+            "too_few_characters",
+            (
+                f"That password uses only {len(set(folded))} different characters. "
+                "Please choose another."
+            ),
+            len(set(folded)),
         )
 
     walk = _longest_walk_run(folded)
     if walk > MAX_WALK_RUN:
-        return "That password is mostly a run of keys in order. Please choose another."
+        return ScreeningRefusal(
+            "keyboard_walk",
+            "That password is mostly a run of keys in order. Please choose another.",
+        )
 
     for part in _identifier_parts(username, email):
         if part and part in folded:
-            return (
-                "A password must not contain your name, your email address, or "
-                "the name of this site."
+            return ScreeningRefusal(
+                "contains_identity",
+                (
+                    "A password must not contain your name, your email address, "
+                    "or the name of this site."
+                ),
             )
 
     # A single word with a year or a short run of digits after it is the shape
@@ -188,6 +222,9 @@ def screening_failure(
     # suffix rule rather than by searching the keyspace.
     stem = re.fullmatch(r"([a-z]+)([0-9]{1,6})", folded)
     if stem is not None and _fold(stem.group(1)) in known_weak_passwords():
-        return "That is a common password with digits added. Please choose another."
+        return ScreeningRefusal(
+            "common_with_digits",
+            "That is a common password with digits added. Please choose another.",
+        )
 
     return None

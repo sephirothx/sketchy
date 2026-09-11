@@ -1,7 +1,6 @@
 import { useClock } from "../hooks/useClock";
 import { useEffect, useId, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import {
   fetchAccountSessions,
   logoutEverywhere,
@@ -9,6 +8,7 @@ import {
   type AccountSession,
 } from "../lib/sessions";
 import { useAuthStore } from "../store/authStore";
+import { refusalText } from "../lib/refusals.ts";
 
 function usedLabel(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
@@ -35,9 +35,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       .catch((failure) => {
         if (active) {
           setError(
-            failure instanceof ApiError
-              ? failure.message
-              : "Could not load signed-in devices.",
+            refusalText(failure, "Could not load signed-in devices."),
           );
         }
       })
@@ -59,7 +57,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       }
       setSessions((items) => items.filter((item) => item.id !== session.id));
     } catch (failure) {
-      setError(failure instanceof ApiError ? failure.message : "Could not revoke device.");
+      setError(refusalText(failure, "Could not revoke device."));
     } finally {
       setBusyId(null);
     }
@@ -73,7 +71,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       onClose();
       await logout();
     } catch (failure) {
-      setError(failure instanceof ApiError ? failure.message : "Could not log out everywhere.");
+      setError(refusalText(failure, "Could not log out everywhere."));
       setBusyId(null);
     }
   }

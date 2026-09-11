@@ -10,6 +10,7 @@ import { useLobbyChatStore } from "../store/lobbyChatStore";
 import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
 import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
+import { refusalText } from "../lib/refusals.ts";
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
 without a new line arriving, which is the point of the label. */
@@ -82,7 +83,7 @@ export function LobbyChatPanel() {
         setText("");
         setIsScrolledUp(false);
       } else {
-        setError(response.error || "Could not send that.");
+        setError(refusalText(response, "Could not send that."));
       }
     } catch (sendError) {
       setError(socketRequestErrorMessage(sendError, "send the message"));

@@ -22,7 +22,10 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from fastapi import HTTPException, Request
+from fastapi import Request
+
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 
 from app.auth.sessions import SessionData
 
@@ -33,13 +36,14 @@ STEP_UP_HEADER = "X-Sketchy-Step-Up"
 STEP_UP_DETAIL = "Confirm with your authenticator app to continue."
 
 
-class StepUpRequired(HTTPException):
+class StepUpRequired(Refusal):
     """A 403 that means *not yet*, rather than *not you*."""
 
     def __init__(self) -> None:
         super().__init__(
-            status_code=403,
-            detail=STEP_UP_DETAIL,
+            403,
+            ErrorCode.STEP_UP_REQUIRED,
+            STEP_UP_DETAIL,
             headers={STEP_UP_HEADER: "required"},
         )
 

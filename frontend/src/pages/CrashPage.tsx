@@ -22,6 +22,7 @@ import {
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { refusalText } from "../lib/refusals.ts";
 
 /** Read something that may be the very thing that broke. The page must render
     with nothing rather than not render. */
@@ -164,7 +165,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
       });
       setSent(true);
     } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : "Could not send the report.");
+      setFailure(refusalText(caught, "Could not send the report."));
     } finally {
       setBusy(false);
     }

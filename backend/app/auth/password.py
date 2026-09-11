@@ -39,10 +39,19 @@ PASSWORD_RULE_MESSAGE = (
 class PasswordPolicyError(ValueError):
     """A password refused by policy before it is ever hashed.
 
-    Its message is shown to the person choosing the password, so it says which
-    rule refused it. A refusal somebody cannot act on sends them to a password
-    one character different from the one they just tried.
+    Which rule refused it is the whole value of the refusal: somebody who is
+    only told "no" comes back with a password one character different. So it
+    carries a `reason` a client can write its own sentence from, and `detail`
+    for the one reason whose sentence needs a number. The message stays for
+    the log (R-I18N-01).
     """
+
+    def __init__(
+        self, message: str, *, reason: str, detail: int | None = None
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.detail = detail
 
 
 def validate_password(
@@ -64,18 +73,24 @@ def validate_password(
     caller invent when it does not have one (R-AUTH-19).
     """
     if not isinstance(password, str):
-        raise PasswordPolicyError("Password must be text")
+        raise PasswordPolicyError("Password must be text", reason="not_text")
     if len(password) < MIN_PASSWORD_LENGTH:
         raise PasswordPolicyError(
-            f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+            f"Password must be at least {MIN_PASSWORD_LENGTH} characters",
+            reason="too_short",
+            detail=MIN_PASSWORD_LENGTH,
         )
     if len(password) > MAX_PASSWORD_LENGTH:
         raise PasswordPolicyError(
-            f"Password must be at most {MAX_PASSWORD_LENGTH} characters"
+            f"Password must be at most {MAX_PASSWORD_LENGTH} characters",
+            reason="too_long",
+            detail=MAX_PASSWORD_LENGTH,
         )
     refusal = screening_failure(password, username=username, email=email)
     if refusal is not None:
-        raise PasswordPolicyError(refusal)
+        raise PasswordPolicyError(
+            refusal.sentence, reason=refusal.reason, detail=refusal.detail
+        )
     return password
 
 

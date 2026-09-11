@@ -1,9 +1,9 @@
 import { useId, useRef, useState } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import { deleteAccount } from "../lib/accountData";
 import { useAuthStore } from "../store/authStore";
+import { refusalText } from "../lib/refusals.ts";
 
 const CONFIRMATION = "DELETE";
 
@@ -49,7 +49,7 @@ export function DeleteAccountDialog({
       await logout();
     } catch (failure) {
       setError(
-        failure instanceof ApiError ? failure.message : "Could not delete the account.",
+        refusalText(failure, "Could not delete the account."),
       );
       setDeleting(false);
     }

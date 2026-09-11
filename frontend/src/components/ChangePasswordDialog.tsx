@@ -1,10 +1,10 @@
 import { useId, useRef, useState } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
 import { useToast } from "../lib/toast";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
+import { refusalText } from "../lib/refusals.ts";
 
 
 
@@ -64,9 +64,7 @@ export function ChangePasswordDialog({
       onClose();
     } catch (failure) {
       setError(
-        failure instanceof ApiError
-          ? failure.message
-          : "Could not change the password. Please try again.",
+        refusalText(failure, "Could not change the password. Please try again."),
       );
       setBusy(false);
     }

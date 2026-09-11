@@ -9,7 +9,7 @@ import {
   requestDataExport,
   type DataExportJob,
 } from "../lib/accountData";
-import { ApiError } from "../lib/api";
+import { refusalText } from "../lib/refusals.ts";
 
 function dateLabel(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
@@ -46,9 +46,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       .catch((failure) => {
         if (active) {
           setError(
-            failure instanceof ApiError
-              ? failure.message
-              : "Could not load your data exports.",
+            refusalText(failure, "Could not load your data exports."),
           );
         }
       })
@@ -95,9 +93,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
       if (refreshed) setNextRequestAt(refreshed.nextRequestAt);
     } catch (failure) {
       setError(
-        failure instanceof ApiError
-          ? failure.message
-          : "Could not request your data export.",
+        refusalText(failure, "Could not request your data export."),
       );
     } finally {
       setRequesting(false);

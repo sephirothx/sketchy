@@ -17,7 +17,7 @@ import { FRIENDS_PATH } from "../lib/overlayRoutes";
 import { useAuthStore } from "../store/authStore";
 import { authSubmitter, type AuthCredentials, type AuthMode } from "../lib/authSubmit";
 import { avatarInitial, identityColor } from "../lib/avatar";
-import { ApiError, SecondFactorRequiredError } from "../lib/api";
+import { SecondFactorRequiredError } from "../lib/api";
 import { passkeysAvailable } from "../lib/passkeys";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { MAX_EMAIL_LENGTH, emailLooksUsable } from "../lib/accountRecovery";
@@ -43,6 +43,7 @@ import {
   UsersIcon,
   ZapIcon,
 } from "./icons";
+import { refusalText } from "../lib/refusals.ts";
 
 function MenuItem({
   icon,
@@ -473,9 +474,7 @@ export function AuthDialog({
         else setCodeWanted(true);
       }
       setError(
-        submitError instanceof ApiError
-          ? submitError.message
-          : "Something went wrong. Please try again.",
+        refusalText(submitError, "Something went wrong. Please try again."),
       );
     } finally {
       setBusy(false);
@@ -497,9 +496,7 @@ export function AuthDialog({
       setError(
         passkeyError instanceof DOMException
           ? "No passkey was used. You can sign in with your password instead."
-          : passkeyError instanceof ApiError
-            ? passkeyError.message
-            : "That passkey was not accepted.",
+          : refusalText(passkeyError, "That passkey was not accepted."),
       );
       setBusy(false);
     }

@@ -30,6 +30,7 @@ import {
   type LanguageChoice,
 } from "../components/LanguagePicker";
 import type { AckResponse, RoomSummary } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -295,7 +296,7 @@ export function LobbyBrowserPage() {
         setSession(session);
         navigate(`/room/${session.code}`);
       } else {
-        setError(res.error || "Failed to join room");
+        setError(refusalText(res, "Failed to join room"));
       }
     } catch (joinError) {
       setError(socketRequestErrorMessage(joinError, asSpectator ? "join as a spectator" : "join the room"));

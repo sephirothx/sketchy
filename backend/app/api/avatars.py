@@ -12,10 +12,12 @@ import base64
 import binascii
 from typing import Awaitable, Callable
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.auth.audit import audit_coordinates
 from app.auth.avatars import (
     AVATAR_KEY_PATTERN,
@@ -60,12 +62,15 @@ def create_avatar_router(
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
         if user is None:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if user.is_anonymous:
             # Guests play as the grey initial, so a name in the player list is
             # either a claimed account or an unclaimed guest (R-ACCT-05).
-            raise HTTPException(
-                status_code=403, detail="Create an account to choose a picture."
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account to choose a picture.",
+                params={"action": "avatar"},
             )
         return user
 
@@ -76,15 +81,19 @@ def create_avatar_router(
     @router.post("/api/users/me/avatar")
     async def upload_avatar(body: AvatarUploadBody, request: Request):
         if not await upload_limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429, detail="Too many pictures. Please wait and try again."
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_PICTURES,
+                "Too many pictures. Please wait and try again.",
             )
         user = await require_registered(request)
         try:
             payload = base64.b64decode(body.image, validate=True)
         except (binascii.Error, ValueError) as error:
-            raise HTTPException(
-                status_code=400, detail="That is not a WebP or PNG picture."
+            raise Refusal(
+                400,
+                ErrorCode.UNSUPPORTED_PICTURE_TYPE,
+                "That is not a WebP or PNG picture.",
             ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
@@ -96,9 +105,9 @@ def create_avatar_router(
                 ip_hash=ip_hash,
             )
         except AvatarBlocked as error:
-            raise HTTPException(status_code=403, detail=str(error)) from error
+            raise Refusal(403, ErrorCode.PICTURE_REFUSED, str(error)) from error
         except AvatarError as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise Refusal(400, ErrorCode.UNSUPPORTED_PICTURE_TYPE, str(error)) from error
         await announce(user.id, key)
         return {"avatarKey": key, "avatarUrl": avatar_url(key)}
 
@@ -119,10 +128,10 @@ def create_avatar_router(
     @router.get("/api/avatars/{key}")
     async def serve_avatar(key: str):
         if not AVATAR_KEY_PATTERN.fullmatch(key):
-            raise HTTPException(status_code=404, detail="No such picture.")
+            raise Refusal(404, ErrorCode.PICTURE_NOT_FOUND, "No such picture.")
         found = await read_avatar(session_factory, key=key)
         if found is None:
-            raise HTTPException(status_code=404, detail="No such picture.")
+            raise Refusal(404, ErrorCode.PICTURE_NOT_FOUND, "No such picture.")
         payload, content_type = found
         return Response(
             content=payload,

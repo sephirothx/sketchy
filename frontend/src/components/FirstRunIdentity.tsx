@@ -4,7 +4,7 @@ import { useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
-import { ApiError } from "../lib/api";
+import { refusalText } from "../lib/refusals.ts";
 
 /**
  * Shown only until the visitor has an account or a name of their own.
@@ -71,9 +71,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
       await setDisplayName(chosen);
     } catch (saveError) {
       setError(
-        saveError instanceof ApiError
-          ? saveError.message
-          : "Could not save that name. Please try again.",
+        refusalText(saveError, "Could not save that name. Please try again."),
       );
     } finally {
       setBusy(false);

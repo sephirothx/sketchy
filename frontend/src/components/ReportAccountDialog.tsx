@@ -2,8 +2,8 @@ import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
+import { refusalText } from "../lib/refusals.ts";
 
 /** Report what an account itself carries: its name, or its picture.
 
@@ -76,9 +76,7 @@ export function ReportAccountDialog({
       setSent(true);
     } catch (problem) {
       setError(
-        problem instanceof ApiError && problem.message
-          ? problem.message
-          : "That report could not be sent. Please try again.",
+        refusalText(problem, "That report could not be sent. Please try again."),
       );
     } finally {
       setBusy(false);

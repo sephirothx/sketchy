@@ -15,6 +15,7 @@ import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useToast } from "../lib/toast";
+import { refusalText } from "../lib/refusals.ts";
 
 const MAX_DETAILS = 4000;
 
@@ -91,7 +92,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         setDescriptionOnly(false);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not take the screenshot.");
+      setError(refusalText(caught, "Could not take the screenshot."));
     } finally {
       setCapturing(false);
     }
@@ -160,7 +161,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
       notify("Thanks — your report is with the people who run Sketchy.", "success");
       onClose();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not send the report.");
+      setError(refusalText(caught, "Could not send the report."));
     } finally {
       setBusy(false);
     }

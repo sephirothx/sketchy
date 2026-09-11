@@ -16,10 +16,12 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url
 from app.db.models import Friendship, User
 from app.domain_values import AccountState, FriendshipState
@@ -60,15 +62,17 @@ async def _current_account(
     """
     value = getattr(request.state, "user_id", None)
     if not value:
-        raise HTTPException(status_code=401, detail="Sign in first.")
+        raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
     async with session_factory() as session:
         user = await session.get(User, UUID(value))
     if user is None or user.state == AccountState.DELETED.value:
-        raise HTTPException(status_code=401, detail="Sign in first.")
+        raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
     if user.is_anonymous:
-        raise HTTPException(
-            status_code=403,
-            detail=REGISTER_FIRST,
+        raise Refusal(
+            403,
+            ErrorCode.ACCOUNT_REQUIRED,
+            REGISTER_FIRST,
+            params={"action": "friends"},
             headers={ACCOUNT_REQUIRED_HEADER: "1"},
         )
     return user
@@ -168,9 +172,9 @@ def create_friends_router(
             # in-room command answers to the same one.
             outcome = await friend_service.request(me.id, body.user_id)
         except FriendshipThrottled as throttled:
-            raise HTTPException(status_code=429, detail=str(throttled)) from throttled
+            raise Refusal(429, ErrorCode.FRIENDS_THROTTLED, str(throttled)) from throttled
         except FriendshipRefused as refused:
-            raise HTTPException(status_code=409, detail=str(refused)) from refused
+            raise Refusal(409, ErrorCode.FRIEND_REFUSED, str(refused)) from refused
         response.status_code = 201 if outcome == FriendshipOutcome.CREATED else 200
         return {"status": _reported_status(outcome)}
 
@@ -178,11 +182,11 @@ def create_friends_router(
     async def accept_friend(user_id: UUID, request: Request):
         me = await current_account(request)
         if user_id == me.id:
-            raise HTTPException(status_code=422, detail="That is you.")
+            raise Refusal(422, ErrorCode.THAT_IS_YOU, "That is you.")
         try:
             outcome = await friend_service.accept(me.id, user_id)
         except FriendshipRefused as refused:
-            raise HTTPException(status_code=409, detail=str(refused)) from refused
+            raise Refusal(409, ErrorCode.FRIEND_REFUSED, str(refused)) from refused
         return {"status": _accept_status(outcome)}
 
     @router.delete("/{user_id}", status_code=204)
@@ -194,7 +198,7 @@ def create_friends_router(
         """
         me = await current_account(request)
         if user_id == me.id:
-            raise HTTPException(status_code=422, detail="That is you.")
+            raise Refusal(422, ErrorCode.THAT_IS_YOU, "That is you.")
         await friend_service.remove(me.id, user_id)
         response.status_code = 204
         return None

@@ -16,6 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url
 from app.services.avatars import remove_avatar
 from app.auth.rate_limit import (
@@ -498,7 +500,7 @@ def _drawing_response(evidence: PlayerReportDrawingEvidence | None, *, who: str)
     and no route can forget to. `who` names the caller in the log line.
     """
     if evidence is None:
-        raise HTTPException(status_code=404, detail="No drawing.")
+        raise Refusal(404, ErrorCode.NO_DRAWING, "No drawing.")
     try:
         payload = stored_drawing_wire_payload(
             evidence.payload, checksum=evidence.checksum_sha256
@@ -509,11 +511,11 @@ def _drawing_response(evidence: PlayerReportDrawingEvidence | None, *, who: str)
         logger.error(
             "Cannot decode report drawing %s for %s: %s", evidence.report_id, who, error
         )
-        raise HTTPException(status_code=404, detail="No drawing.") from error
+        raise Refusal(404, ErrorCode.NO_DRAWING, "No drawing.") from error
     except CorruptStoredDrawingError as error:
         logger.error("Report drawing %s failed its checksum", evidence.report_id)
-        raise HTTPException(
-            status_code=500, detail="That drawing could not be read."
+        raise Refusal(
+            500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
         ) from error
     return Response(
         content=payload,
@@ -1010,11 +1012,12 @@ def create_moderation_router(
     ):
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if not await content_report_limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many reports. Please wait before sending another.",
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REPORTS,
+                "Too many reports. Please wait before sending another.",
             )
         db_reporter_id = UUID(reporter_id)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
@@ -1023,7 +1026,7 @@ def create_moderation_router(
                 try:
                     await require_live_account(session, db_reporter_id)
                 except AccountErasedError:
-                    raise HTTPException(status_code=401, detail="Sign in first.") from None
+                    raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
                 prompt_list = await session.get(PromptList, body.prompt_list_id)
                 if (
                     prompt_list is None
@@ -1039,13 +1042,16 @@ def create_moderation_router(
                         )
                     )
                 ):
-                    raise HTTPException(
-                        status_code=404, detail="No reportable prompt list found."
+                    raise Refusal(
+                        404,
+                        ErrorCode.NO_REPORTABLE_PROMPT_LIST,
+                        "No reportable prompt list found.",
                     )
                 if prompt_list.owner_user_id == db_reporter_id:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="You cannot report your own prompt list.",
+                    raise Refusal(
+                        422,
+                        ErrorCode.CANNOT_REPORT_OWN_PROMPT_LIST,
+                        "You cannot report your own prompt list.",
                     )
 
                 prompt_version = None
@@ -1068,9 +1074,10 @@ def create_moderation_router(
                         )
                     )
                     if prompt_version is None:
-                        raise HTTPException(
-                            status_code=422,
-                            detail="That prompt does not belong to this list.",
+                        raise Refusal(
+                            422,
+                            ErrorCode.PROMPT_NOT_IN_LIST,
+                            "That prompt does not belong to this list.",
                         )
 
                 # The rate limiter bounds how many reports one client may
@@ -1087,9 +1094,10 @@ def create_moderation_router(
                     )
                 )
                 if already_open is not None:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
+                    raise Refusal(
+                        409,
+                        ErrorCode.ALREADY_REPORTED,
+                        (
                             "You have already reported this, and a moderator "
                             "has not reviewed it yet."
                         ),
@@ -1141,9 +1149,10 @@ def create_moderation_router(
                     # check above; the partial unique index is what really
                     # decides, and the loser is told what a slower
                     # duplicate would have been told.
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
+                    raise Refusal(
+                        409,
+                        ErrorCode.ALREADY_REPORTED,
+                        (
                             "You have already reported this, and a moderator "
                             "has not reviewed it yet."
                         ),
@@ -1158,15 +1167,16 @@ def create_moderation_router(
     async def submit_report(body: ReportBody, request: Request):
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if not await report_limiter.check(client_key(request)):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many reports. Please wait before sending another.",
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REPORTS,
+                "Too many reports. Please wait before sending another.",
             )
         db_reporter_id = UUID(reporter_id)
         if db_reporter_id == body.reported_user_id:
-            raise HTTPException(status_code=422, detail="You cannot report yourself.")
+            raise Refusal(422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself.")
         request_id, ip_hash = await audit_coordinates(request, session_factory)
 
         async with session_factory() as session:
@@ -1177,24 +1187,25 @@ def create_moderation_router(
                 try:
                     await require_live_account(session, db_reporter_id)
                 except AccountErasedError:
-                    raise HTTPException(status_code=401, detail="Sign in first.") from None
+                    raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
                 target = await session.get(User, body.reported_user_id)
                 if target is None or target.state in {
                     AccountState.MERGED.value,
                     AccountState.DELETED.value,
                 }:
-                    raise HTTPException(status_code=404, detail="No such player.")
+                    raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
 
                 game = await session.get(GameRecord, body.game_id) if body.game_id else None
                 if body.game_id and game is None:
-                    raise HTTPException(status_code=422, detail="No such game context.")
+                    raise Refusal(422, ErrorCode.NO_SUCH_GAME_CONTEXT, "No such game context.")
                 turn = await session.get(TurnRecord, body.turn_id) if body.turn_id else None
                 if body.turn_id and turn is None:
-                    raise HTTPException(status_code=422, detail="No such turn context.")
+                    raise Refusal(422, ErrorCode.NO_SUCH_TURN_CONTEXT, "No such turn context.")
                 if turn is not None and game is not None and turn.game_id != game.id:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="The turn does not belong to that game.",
+                    raise Refusal(
+                        422,
+                        ErrorCode.TURN_NOT_IN_GAME,
+                        "The turn does not belong to that game.",
                     )
                 retained_messages: list[RoomMessage] = []
                 if body.message_ids:
@@ -1209,9 +1220,10 @@ def create_moderation_router(
                     ).all()
                     by_id = {message.id: message for message in found}
                     if set(by_id) != set(body.message_ids):
-                        raise HTTPException(
-                            status_code=422,
-                            detail="One or more selected messages are unavailable.",
+                        raise Refusal(
+                            422,
+                            ErrorCode.EVIDENCE_UNAVAILABLE,
+                            "One or more selected messages are unavailable.",
                         )
                     retained_messages = [
                         by_id[message_id] for message_id in body.message_ids
@@ -1228,40 +1240,46 @@ def create_moderation_router(
                         if message.audience == "lobby"
                     ]
                     if lobby_lines and len(lobby_lines) != len(retained_messages):
-                        raise HTTPException(
-                            status_code=422,
-                            detail="Lobby and room messages cannot be mixed in one report.",
+                        raise Refusal(
+                            422,
+                            ErrorCode.EVIDENCE_MIXED_SCOPES,
+                            "Lobby and room messages cannot be mixed in one report.",
                         )
                     if not lobby_lines and len(
                         {message.room_instance_id for message in retained_messages}
                     ) != 1:
-                        raise HTTPException(
-                            status_code=422,
-                            detail="Selected messages must come from one room instance.",
+                        raise Refusal(
+                            422,
+                            ErrorCode.EVIDENCE_SEVERAL_ROOMS,
+                            "Selected messages must come from one room instance.",
                         )
                     for message in retained_messages:
                         if message.sender_user_id != target.id:
-                            raise HTTPException(
-                                status_code=422,
-                                detail="Evidence must be authored by the reported player.",
+                            raise Refusal(
+                                422,
+                                ErrorCode.EVIDENCE_NOT_THEIRS,
+                                "Evidence must be authored by the reported player.",
                             )
                         if (
                             message.audience != "lobby"
                             and reporter_id not in message.audience_user_ids
                         ):
-                            raise HTTPException(
-                                status_code=403,
-                                detail="You cannot select a message you did not receive.",
+                            raise Refusal(
+                                403,
+                                ErrorCode.EVIDENCE_NOT_RECEIVED,
+                                "You cannot select a message you did not receive.",
                             )
                         if game is not None and message.game_id != game.id:
-                            raise HTTPException(
-                                status_code=422,
-                                detail="Selected message does not belong to that game.",
+                            raise Refusal(
+                                422,
+                                ErrorCode.EVIDENCE_NOT_IN_GAME,
+                                "Selected message does not belong to that game.",
                             )
                         if turn is not None and message.turn_id != turn.id:
-                            raise HTTPException(
-                                status_code=422,
-                                detail="Selected message does not belong to that turn.",
+                            raise Refusal(
+                                422,
+                                ErrorCode.EVIDENCE_NOT_IN_TURN,
+                                "Selected message does not belong to that turn.",
                             )
 
                     # Attach existing history context when all evidence agrees.
@@ -1297,9 +1315,10 @@ def create_moderation_router(
                     )
                 )
                 if already_open is not None:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
+                    raise Refusal(
+                        409,
+                        ErrorCode.ALREADY_REPORTED,
+                        (
                             "You have already reported this player, and a "
                             "moderator has not reviewed it yet."
                         ),
@@ -1338,9 +1357,10 @@ def create_moderation_router(
                     body.reason == ReportReason.INAPPROPRIATE_NAME
                 )
                 if about_picture and target.avatar_key is None:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="That player has no picture to report.",
+                    raise Refusal(
+                        422,
+                        ErrorCode.NO_PICTURE_TO_REPORT,
+                        "That player has no picture to report.",
                     )
                 # Only a complaint about the picture names one. A name report
                 # has no picture to have changed.
@@ -1391,9 +1411,10 @@ def create_moderation_router(
                     # Two submissions in the same instant both passed the check
                     # above; the partial unique index is what really decides,
                     # and the loser is told what a slower duplicate is told.
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
+                    raise Refusal(
+                        409,
+                        ErrorCode.ALREADY_REPORTED,
+                        (
                             "You have already reported this player, and a "
                             "moderator has not reviewed it yet."
                         ),
@@ -2406,7 +2427,7 @@ def create_moderation_router(
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         async with session_factory() as session:
             waiting = (
                 await session.scalars(
@@ -2441,7 +2462,7 @@ def create_moderation_router(
         """
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         if not body.report_ids:
             return {"ok": True, "acknowledged": 0}
         now = datetime.now(timezone.utc)
@@ -2469,7 +2490,7 @@ def create_moderation_router(
         shared with the live socket push (`app/auth/warnings.py`)."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return await pending_warning_payload(session_factory, user_id)
 
     async def _notice_drawing(
@@ -2497,11 +2518,11 @@ def create_moderation_router(
         404, as acknowledging one does."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         async with session_factory() as session:
             warning = await session.get(UserWarning, warning_id)
             if warning is None or warning.user_id != UUID(user_id):
-                raise HTTPException(status_code=404, detail="No such warning.")
+                raise Refusal(404, ErrorCode.NO_SUCH_WARNING, "No such warning.")
             evidence = await _notice_drawing(
                 session, warning.source_report_id, report_id
             )
@@ -2518,7 +2539,7 @@ def create_moderation_router(
         """
         banned_user_id = getattr(request.state, "banned_user_id", None)
         if banned_user_id is None:
-            raise HTTPException(status_code=404, detail="No drawing.")
+            raise Refusal(404, ErrorCode.NO_DRAWING, "No drawing.")
         async with session_factory() as session:
             ban = await active_ban_for_user(session, UUID(str(banned_user_id)))
             evidence = (
@@ -2533,7 +2554,7 @@ def create_moderation_router(
         """Recorded so a moderator can see the message actually landed."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         async with session_factory() as session:
             async with session.begin():
                 warning = await session.scalar(
@@ -2544,7 +2565,7 @@ def create_moderation_router(
                 # Someone else's warning is not this caller's to see, or to
                 # acknowledge away; answering 404 keeps its existence private.
                 if warning is None or warning.user_id != UUID(user_id):
-                    raise HTTPException(status_code=404, detail="No such warning.")
+                    raise Refusal(404, ErrorCode.NO_SUCH_WARNING, "No such warning.")
                 if warning.acknowledged_at is None:
                     warning.acknowledged_at = datetime.now(timezone.utc)
             return {"ok": True}

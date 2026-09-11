@@ -7,6 +7,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, EditableRoomSettings, PromptListSummary } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 const emptySettings: EditableRoomSettings = {
   name: "",
@@ -116,7 +117,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
           });
           setError(null);
         }
-        else setError(response.error || "Could not load room rules");
+        else setError(refusalText(response, "Could not load room rules"));
       } catch (loadError) {
         if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room rules"));
       } finally {
@@ -163,7 +164,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         // The server settles dependent settings itself — a hint mode the
         // scoring rules out, say — so a refusal is not simply "put the old
         // value back"; the form reloads from what the room actually holds.
-        const message = response.error || "The room refused those settings.";
+        const message = refusalText(response, "The room refused those settings.");
         setError(message);
         notify(message, "error");
         return;

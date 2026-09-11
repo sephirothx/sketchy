@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
-import { ApiError } from "../lib/api";
 import {
   MAX_EMAIL_LENGTH,
   emailLooksUsable,
@@ -10,6 +9,7 @@ import {
   setEmailAddress,
   type EmailState,
 } from "../lib/accountRecovery";
+import { refusalText } from "../lib/refusals.ts";
 
 /** Add, replace, or just look at the address an account is recovered through.
 
@@ -65,9 +65,7 @@ export function AddEmailDialog({
       setSentTo(pendingAddress);
     } catch (submitError) {
       setError(
-        submitError instanceof ApiError
-          ? submitError.message
-          : "Something went wrong. Please try again.",
+        refusalText(submitError, "Something went wrong. Please try again."),
       );
     } finally {
       setBusy(false);

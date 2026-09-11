@@ -5,6 +5,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
 import { EyeIcon } from "./icons";
+import { refusalText } from "../lib/refusals.ts";
 
 interface RoomPlayersPanelProps {
   mode: "waiting" | "playing" | "game-end";
@@ -56,7 +57,7 @@ export function RoomPlayersPanel({
     setPromotionError(null);
     try {
       const response = await emitWithAck<AckResponse>("become_player", {});
-      if (!response.ok) setPromotionError(response.error || "Could not join as a player");
+      if (!response.ok) setPromotionError(refusalText(response, "Could not join as a player"));
     } catch (promotionRequestError) {
       setPromotionError(
         socketRequestErrorMessage(promotionRequestError, "join as a player"),

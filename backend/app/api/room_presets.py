@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Request, Response, status
 from pydantic import ConfigDict, Field
 
+from app.api.errors import Refusal
+from app.refusals import ErrorCode
 from app.handlers.payloads import RequestModel, RoomSettingsFields
 from app.services.room_presets import (
     RoomPresetConfig,
@@ -14,7 +16,6 @@ from app.services.room_presets import (
     RoomPresetNotFound,
     RoomPresetService,
     RoomPresetSummary,
-    RoomPresetUnavailable,
 )
 
 
@@ -64,16 +65,19 @@ def _config_payload(preset: RoomPresetConfig) -> dict:
     }
 
 
-def _http_error(error: RoomPresetError) -> HTTPException:
+def _http_error(error: RoomPresetError) -> Refusal:
+    """The preset service's own vocabulary, mapped onto the wire's.
+
+    One place, so a new preset error cannot reach a player as a status with no
+    code attached: the fallthrough names the family rather than guessing.
+    """
     if isinstance(error, RoomPresetAuthorizationError):
-        return HTTPException(status_code=403, detail=str(error))
+        return Refusal(403, ErrorCode.ROOM_PRESET_FORBIDDEN, str(error))
     if isinstance(error, RoomPresetNotFound):
-        return HTTPException(status_code=404, detail=str(error))
+        return Refusal(404, ErrorCode.ROOM_PRESET_NOT_FOUND, str(error))
     if isinstance(error, RoomPresetConflict):
-        return HTTPException(status_code=409, detail=str(error))
-    if isinstance(error, RoomPresetUnavailable):
-        return HTTPException(status_code=422, detail=str(error))
-    return HTTPException(status_code=422, detail=str(error))
+        return Refusal(409, ErrorCode.ROOM_PRESET_CONFLICT, str(error))
+    return Refusal(422, ErrorCode.ROOM_PRESET_UNAVAILABLE, str(error))
 
 
 def create_room_preset_router(service: RoomPresetService) -> APIRouter:
@@ -82,7 +86,7 @@ def create_room_preset_router(service: RoomPresetService) -> APIRouter:
     def user_id(request: Request) -> str:
         value = getattr(request.state, "user_id", None)
         if not value:
-            raise HTTPException(status_code=401, detail="Sign in first.")
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return value
 
     @router.get("")
@@ -116,7 +120,9 @@ def create_room_preset_router(service: RoomPresetService) -> APIRouter:
         except (RoomPresetError, ValueError) as error:
             if isinstance(error, RoomPresetError):
                 raise _http_error(error) from error
-            raise HTTPException(status_code=404, detail="Room preset not found") from error
+            raise Refusal(
+                404, ErrorCode.ROOM_PRESET_NOT_FOUND, "Room preset not found"
+            ) from error
         return _config_payload(preset)
 
     @router.put("/{preset_id}")
@@ -134,7 +140,9 @@ def create_room_preset_router(service: RoomPresetService) -> APIRouter:
         except (RoomPresetError, ValueError) as error:
             if isinstance(error, RoomPresetError):
                 raise _http_error(error) from error
-            raise HTTPException(status_code=404, detail="Room preset not found") from error
+            raise Refusal(
+                404, ErrorCode.ROOM_PRESET_NOT_FOUND, "Room preset not found"
+            ) from error
         return _config_payload(preset)
 
     @router.delete("/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -146,7 +154,9 @@ def create_room_preset_router(service: RoomPresetService) -> APIRouter:
         except (RoomPresetError, ValueError) as error:
             if isinstance(error, RoomPresetError):
                 raise _http_error(error) from error
-            raise HTTPException(status_code=404, detail="Room preset not found") from error
+            raise Refusal(
+                404, ErrorCode.ROOM_PRESET_NOT_FOUND, "Room preset not found"
+            ) from error
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router

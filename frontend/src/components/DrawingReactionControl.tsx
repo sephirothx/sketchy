@@ -13,6 +13,7 @@ import { useToast } from "../lib/toast";
 import type { DrawingReaction } from "../types";
 import { HeartIcon } from "./icons";
 import { ReactionGlyph } from "./ReactionGlyph";
+import { refusalText } from "../lib/refusals.ts";
 
 interface DrawingReactionControlProps {
   /** Every reaction on this drawing, by reactor seat. */
@@ -164,7 +165,7 @@ export function DrawingReactionControl({
     } catch (failure) {
       // The strip holds emoji and nothing else, so a refusal is said elsewhere.
       notify(
-        failure instanceof Error ? failure.message : "That reaction could not be sent.",
+        refusalText(failure, "That reaction could not be sent."),
         "error",
       );
     } finally {

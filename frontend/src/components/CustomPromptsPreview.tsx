@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { AckResponse } from "../types";
+import { refusalText } from "../lib/refusals.ts";
 
 interface CustomPromptsResponse extends AckResponse {
   prompts?: string[];
@@ -320,7 +321,7 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
       if (response.ok && response.prompts) {
         setPrompts(response.prompts.map(createPromptRecord));
       } else {
-        setError(response.error || "Could not load the custom prompts");
+        setError(refusalText(response, "Could not load the custom prompts"));
       }
     } catch (loadError) {
       setError(socketRequestErrorMessage(loadError, "load the custom prompts"));
