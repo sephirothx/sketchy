@@ -1,5 +1,8 @@
 import type { PromptLanguage } from "../types";
+import { interfaceLocale } from "../content/ui/index.ts";
 
+/** Not copy: English names, the fallback for an engine without
+`Intl.DisplayNames` (see `promptLanguageLabel`). */
 export const PROMPT_LANGUAGE_LABELS: Record<PromptLanguage, string> = {
   de: "German",
   en: "English",
@@ -17,8 +20,10 @@ export const PROMPT_LANGUAGE_LABELS: Record<PromptLanguage, string> = {
  *
  * This is what a picker shows. Somebody looking for their own language is
  * looking for the word they use for it, and "German" is of no help to anyone
- * who would have searched for "Deutsch". The English name stays for the prose
- * around it, which is written in English (N-09 keeps the interface that way).
+ * who would have searched for "Deutsch". The prose around it names the
+ * language in the reader's interface language instead (`promptLanguageLabel`).
+ *
+ * Not copy: each name is in its own language whatever the reader's.
  */
 export const PROMPT_LANGUAGE_ENDONYMS: Record<PromptLanguage, string> = {
   de: "Deutsch",
@@ -30,7 +35,16 @@ export const PROMPT_LANGUAGE_ENDONYMS: Record<PromptLanguage, string> = {
   pt: "português",
 };
 
+/** A prompt language as the prose around it names it: in the interface's own
+language, so a German reader is told about "Englisch". The browser already
+knows every one of these names; the table is only for an engine that does not. */
 export function promptLanguageLabel(language: string): string {
+  try {
+    const name = new Intl.DisplayNames([interfaceLocale()], { type: "language" }).of(language);
+    if (name && name !== language) return name;
+  } catch {
+    // A code the engine refuses falls through to the table.
+  }
   return PROMPT_LANGUAGE_LABELS[language as PromptLanguage] ?? language;
 }
 

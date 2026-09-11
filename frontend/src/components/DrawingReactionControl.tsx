@@ -167,7 +167,7 @@ export function DrawingReactionControl({
       // The strip holds emoji and nothing else, so a refusal is said elsewhere.
       notify(
         refusalText(failure, ui.drawingReactionControl.thatReactionCouldNotBeSent),
-        ui.drawingReactionControl.error,
+        "error",
       );
     } finally {
       setBusy(false);
@@ -176,7 +176,7 @@ export function DrawingReactionControl({
 
   const summary =
     total === 0
-      ? "No reactions yet"
+      ? ui.drawingReactionControl.noReactionsYet
       : `${total} ${total === 1 ? "reaction" : "reactions"}: ${chips
           .map((chip) => `${chip.label} ${chip.count}`)
           .join(", ")}`;
@@ -207,7 +207,7 @@ export function DrawingReactionControl({
         <button
           type="button"
           className={`reaction-toggle${mine ? " has-mine" : ""}`}
-          aria-label={canPick ? `React to this drawing. ${summary}` : summary}
+          aria-label={canPick ? ui.drawingReactionControl.reactToThisDrawingSummary({ summary }) : summary}
           aria-haspopup="dialog"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
@@ -243,7 +243,7 @@ export function DrawingReactionControl({
               type="button"
               className={`reaction-option${mine === emoji.code ? " is-mine" : ""}`}
               aria-pressed={mine === emoji.code}
-              aria-label={mine === emoji.code ? `${emoji.label}, your reaction. Press to remove it` : emoji.label}
+              aria-label={mine === emoji.code ? ui.drawingReactionControl.labelYourReactionPressTo({ label: emoji.label }) : emoji.label}
               title={emoji.label}
               disabled={busy}
               onClick={() => void pick(emoji.code)}

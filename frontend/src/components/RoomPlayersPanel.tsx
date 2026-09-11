@@ -61,7 +61,7 @@ export function RoomPlayersPanel({
       if (!response.ok) setPromotionError(refusalText(response, ui.roomPlayersPanel.couldNotJoinAsPlayer));
     } catch (promotionRequestError) {
       setPromotionError(
-        socketRequestErrorMessage(promotionRequestError, "join as a player"),
+        socketRequestErrorMessage(promotionRequestError, ui.roomPlayersPanel.joinAsAPlayer),
       );
     } finally {
       setPromotionBusy(false);
@@ -140,15 +140,15 @@ export function RoomPlayersPanel({
         <div className="spectator-promotion" data-testid="spectator-promotion">
           <p>
             {playerSpaceAvailable
-              ? "A player slot is available."
-              : "Player slots are currently full."}
+              ? ui.roomPlayersPanel.aPlayerSlotIsAvailable
+              : ui.roomPlayersPanel.playerSlotsAreCurrentlyFull}
           </p>
           <button
             type="button"
             disabled={!playerSpaceAvailable || promotionBusy}
             onClick={() => void becomePlayer()}
           >
-            {promotionBusy ? "Joining…" : "Join as player"}
+            {promotionBusy ? ui.roomPlayersPanel.joining : ui.roomPlayersPanel.joinAsPlayer}
           </button>
           {promotionError && (
             <p className="spectator-promotion-error" role="alert">

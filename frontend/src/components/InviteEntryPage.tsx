@@ -12,11 +12,11 @@ import { ui } from "../content/ui/index.ts";
 const INVITE_LOADING_DELAY_MS = 250;
 
 function hintModeLabel(room: RoomSummary) {
-  if (room.hideMaskedPrompt) return "Prompt details hidden";
-  if (room.hintMode === "checkpoints") return "Timed hints";
-  if (room.hintMode === "purchase") return "Buyable letter hints";
-  if (room.hintMode === "wheel") return "Wheel of Fortune";
-  return "No letter hints";
+  if (room.hideMaskedPrompt) return ui.inviteEntryPage.promptDetailsHidden;
+  if (room.hintMode === "checkpoints") return ui.inviteEntryPage.timedHints;
+  if (room.hintMode === "purchase") return ui.inviteEntryPage.buyableLetterHints;
+  if (room.hintMode === "wheel") return ui.inviteEntryPage.wheelOfFortune;
+  return ui.inviteEntryPage.noLetterHints;
 }
 
 function DelayedInviteLoader() {
@@ -48,7 +48,7 @@ export function InviteEntryPage({ code }: { code: string }) {
 
   return (
     <div className="invite-entry-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader backLabel={ui.inviteEntryPage.backLobby} />
 
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">
@@ -64,11 +64,11 @@ export function InviteEntryPage({ code }: { code: string }) {
         <main className="invite-card">
           <div className="invite-card-heading">
             <div>
-              <p className="invite-eyebrow">{room.isPublic ? "Public room" : "Private invite"} · {room.code}</p>
+              <p className="invite-eyebrow">{room.isPublic ? ui.inviteEntryPage.publicRoom : ui.inviteEntryPage.privateInvite} · {room.code}</p>
               <h1>{room.name}</h1>
             </div>
             <span className={`invite-state-badge ${room.state}`}>
-              {room.state === "playing" ? "In progress" : "Waiting"}
+              {room.state === "playing" ? ui.inviteEntryPage.inProgress : ui.inviteEntryPage.waiting}
             </span>
           </div>
 
@@ -95,20 +95,22 @@ export function InviteEntryPage({ code }: { code: string }) {
               </span>
             </summary>
             <dl className="invite-room-facts">
-              <div><dt>{ui.inviteEntryPage.players}</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? " · Full" : ""}</dd></div>
+              <div><dt>{ui.inviteEntryPage.players}</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? ui.inviteEntryPage.full : ""}</dd></div>
               <div><dt>{ui.inviteEntryPage.rounds}</dt><dd>{room.rounds}</dd></div>
               <div><dt>{ui.inviteEntryPage.drawTime}</dt><dd>{room.drawingSeconds}s</dd></div>
-              <div><dt>{ui.inviteEntryPage.scoring}</dt><dd>{room.scoringMode === "none" ? "No scoring" : room.scoringMode === "pressure" ? "Pressure" : "Default"}</dd></div>
+              <div><dt>{ui.inviteEntryPage.scoring}</dt><dd>{room.scoringMode === "none" ? ui.inviteEntryPage.noScoring : room.scoringMode === "pressure" ? ui.inviteEntryPage.pressure : ui.inviteEntryPage.default}</dd></div>
             </dl>
 
             <ul className="invite-rule-list" aria-label={ui.inviteEntryPage.roomRules}>
               <li>{hintModeLabel(room)}</li>
-              <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? "Every tool and color"}</li>
-              <li>{room.spectatorsSeePrompt ? "Spectators can see the prompt" : "Spectators guess along"}</li>
+              <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? ui.inviteEntryPage.everyToolAndColor}</li>
+              <li>{room.spectatorsSeePrompt ? ui.inviteEntryPage.spectatorsCanSeeThePrompt : ui.inviteEntryPage.spectatorsGuessAlong}</li>
               <li>
                 {room.customPromptCount > 0
-                  ? `${room.customPromptCount} custom prompts${room.customPromptsOnly ? " only" : " plus defaults"}`
-                  : "Default prompt list"}
+                  ? (room.customPromptsOnly
+                    ? ui.inviteEntryPage.customPromptsOnly({ count: room.customPromptCount })
+                    : ui.inviteEntryPage.customPromptsPlusDefaults({ count: room.customPromptCount }))
+                  : ui.inviteEntryPage.defaultPromptList}
               </li>
             </ul>
           </details>
@@ -136,7 +138,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                 disabled={busy || room.isFull}
                 onClick={() => void join("player")}
               >
-                {room.isFull ? "Room full" : busy ? "Joining…" : room.state === "playing" ? "Join game in progress" : "Join game"}
+                {room.isFull ? ui.inviteEntryPage.roomFull : busy ? ui.inviteEntryPage.joining : room.state === "playing" ? ui.inviteEntryPage.joinGameInProgress : ui.inviteEntryPage.joinGame}
               </button>
               <button
                 type="button"
@@ -144,7 +146,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                 disabled={busy}
                 onClick={() => void join("spectator")}
               >
-                {busy ? "Joining…" : "Spectate"}
+                {busy ? ui.inviteEntryPage.joining : ui.inviteEntryPage.spectate}
               </button>
             </div>
             {room.isFull && <p className="invite-action-hint">{ui.inviteEntryPage.playerSlotsAreFullSpectatingStill}</p>}

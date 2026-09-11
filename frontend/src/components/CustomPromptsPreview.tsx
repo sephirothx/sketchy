@@ -29,10 +29,10 @@ interface ActivePrompt {
 }
 
 const lengthFilters: { value: LengthFilter; label: string; hint: string }[] = [
-  { value: "all", label: "All", hint: "All prompt lengths" },
-  { value: "short", label: "Short", hint: "5 characters or fewer" },
-  { value: "medium", label: "Medium", hint: "6 to 10 characters" },
-  { value: "long", label: "Long", hint: "11 characters or more" },
+  { value: "all", get label() { return ui.customPromptsPreview.all; }, get hint() { return ui.customPromptsPreview.allPromptLengths; } },
+  { value: "short", get label() { return ui.customPromptsPreview.short; }, get hint() { return ui.customPromptsPreview.n5CharactersOrFewer; } },
+  { value: "medium", get label() { return ui.customPromptsPreview.medium; }, get hint() { return ui.customPromptsPreview.n6To10Characters; } },
+  { value: "long", get label() { return ui.customPromptsPreview.long; }, get hint() { return ui.customPromptsPreview.n11CharactersOrMore; } },
 ];
 
 function createPromptRecord(prompt: string): PromptRecord {
@@ -328,7 +328,7 @@ export function CustomPromptsPreview({ count }: CustomPromptsPreviewProps) {
         setError(refusalText(response, ui.customPromptsPreview.couldNotLoadCustomPrompts));
       }
     } catch (loadError) {
-      setError(socketRequestErrorMessage(loadError, "load the custom prompts"));
+      setError(socketRequestErrorMessage(loadError, ui.customPromptsPreview.loadTheCustomPrompts));
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import type { AccountSettings } from "./userSettings.ts";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Sending an immediately-applied preference to the account (R-SET-05).
@@ -66,7 +67,7 @@ export function createSettingsSync(transport: SettingsSyncTransport): SettingsSy
       () => undefined,
       () => {
         report?.(
-          "That change applies here, but could not be saved to your account. Your other devices will not see it.",
+          ui.settingsSync.thatChangeAppliesHereBut,
         );
       },
     );

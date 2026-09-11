@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import type { AuthUser } from "../store/authStore";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Passkeys, as the staff surfaces use them (R-AUTH-23).
@@ -142,7 +143,7 @@ export async function registerPasskey(
   const credential = (await navigator.credentials.create({
     publicKey: decodeCreationOptions(JSON.parse(options)),
   })) as PublicKeyCredential | null;
-  if (!credential) throw new Error("No passkey was created.");
+  if (!credential) throw new Error(ui.passkeys.noPasskeyWasCreated);
   return apiRequest("/api/auth/passkeys", {
     method: "POST",
     body: { credential: encodeRegistration(credential), password },
@@ -168,7 +169,7 @@ export async function assertPasskey(): Promise<{
   const credential = (await navigator.credentials.get({
     publicKey: decodeRequestOptions(JSON.parse(options)),
   })) as PublicKeyCredential | null;
-  if (!credential) throw new Error("No passkey was used.");
+  if (!credential) throw new Error(ui.passkeys.noPasskeyWasUsed);
   return apiRequest("/api/auth/passkeys/verify", {
     method: "POST",
     body: { credential: encodeAssertion(credential) },

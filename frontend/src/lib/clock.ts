@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /**
  * How a clock reads to this player (#577).
  *
@@ -40,13 +41,13 @@ function clockOptions(format: TimeFormat): Intl.DateTimeFormatOptions {
 
 /** Just the time of day: "15:05", "3:05 PM", or whatever the device does. */
 export function formatClock(date: Date, format: TimeFormat): string {
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  if (Number.isNaN(date.getTime())) return ui.clock.unknown;
   return date.toLocaleTimeString(displayLocale, clockOptions(format));
 }
 
 /** Day and time together, for anything that happened on some other day. */
 export function formatDateTime(date: Date, format: TimeFormat): string {
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  if (Number.isNaN(date.getTime())) return ui.clock.unknown;
   return date.toLocaleString(displayLocale, {
     year: "numeric",
     month: "short",
@@ -57,7 +58,7 @@ export function formatDateTime(date: Date, format: TimeFormat): string {
 
 /** A day alone; no clock, so no preference to honour. */
 export function formatDate(date: Date): string {
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  if (Number.isNaN(date.getTime())) return ui.clock.unknown;
   return date.toLocaleDateString(displayLocale, {
     year: "numeric",
     month: "short",

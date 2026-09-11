@@ -1,4 +1,5 @@
 import type { HintMode, ScoringMode } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 export const MAX_PLAYERS_MIN = 2;
 export const MAX_PLAYERS_MAX = 16;
@@ -11,33 +12,33 @@ export const DEFAULT_HINT_MODE: HintMode = "checkpoints";
 export const SCORING_OPTIONS: { value: ScoringMode; label: string; description: string }[] = [
   {
     value: "default",
-    label: "Default",
-    description: "Faster guesses earn more, 100–300 points.",
+    get label() { return ui.roomSetup.default; },
+    get description() { return ui.roomSetup.fasterGuessesEarnMore100; },
   },
   {
     value: "pressure",
-    label: "Pressure",
-    description: "Points decay every second — twice as fast once someone guesses.",
+    get label() { return ui.roomSetup.pressure; },
+    get description() { return ui.roomSetup.pointsDecayEverySecondTwice; },
   },
-  { value: "none", label: "No scoring", description: "Just draw and guess. No standings." },
+  { value: "none", get label() { return ui.roomSetup.noScoring; }, get description() { return ui.roomSetup.justDrawAndGuessNo; } },
 ];
 
 export const HINT_OPTIONS: { value: HintMode; label: string; description: string }[] = [
   {
     value: "checkpoints",
-    label: "Timed hints",
-    description: "Letters reveal to everyone at fixed times.",
+    get label() { return ui.roomSetup.timedHints; },
+    get description() { return ui.roomSetup.lettersRevealToEveryoneAt; },
   },
-  { value: "none", label: "No hints", description: "Blanks only, all turn long." },
+  { value: "none", get label() { return ui.roomSetup.noHints; }, get description() { return ui.roomSetup.blanksOnlyAllTurnLong; } },
   {
     value: "purchase",
-    label: "Buy letters",
-    description: "Reveal a letter slot just for you — paid from that turn's points.",
+    get label() { return ui.roomSetup.buyLetters; },
+    get description() { return ui.roomSetup.revealALetterSlotJust; },
   },
   {
     value: "wheel",
-    label: "Wheel of Fortune",
-    description: "Pick a letter, pay its price — vowels cost extra.",
+    get label() { return ui.roomSetup.wheelOfFortune; },
+    get description() { return ui.roomSetup.pickALetterPayIts; },
   },
 ];
 
@@ -67,11 +68,11 @@ export function isSendableRoomNumber(
     use for these two, so the same room is described the same way wherever it
     is summarised. */
 export function scoringLabelFor(mode: ScoringMode) {
-  return SCORING_OPTIONS.find((option) => option.value === mode)?.label ?? "Default";
+  return SCORING_OPTIONS.find((option) => option.value === mode)?.label ?? ui.roomSetup.default;
 }
 
 export function hintLabelFor(hintMode: HintMode, hideMaskedPrompt: boolean) {
   return hideMaskedPrompt
-    ? "Hidden prompt"
-    : HINT_OPTIONS.find((option) => option.value === hintMode)?.label ?? "Timed hints";
+    ? ui.roomSetup.hiddenPrompt
+    : HINT_OPTIONS.find((option) => option.value === hintMode)?.label ?? ui.roomSetup.timedHints;
 }

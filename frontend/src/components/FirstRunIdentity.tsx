@@ -82,7 +82,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
   const account = (
     <div className="first-run-primary" key="account">
       <h2 id={`${fieldId}-heading`} className="first-run-heading">
-        {isNarrow ? "Been here before?" : "Play as yourself"}
+        {isNarrow ? ui.firstRunIdentity.beenHereBefore : ui.firstRunIdentity.playAsYourself}
       </h2>
       {!isNarrow && (
         <p className="first-run-copy">
@@ -117,7 +117,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
   const guest = (
     <form className="first-run-guest" onSubmit={playAsGuest} key="guest">
       <label htmlFor={`${fieldId}-name`} className="first-run-guest-label">
-        {isNarrow ? "What should we call you?" : "Just playing once? Pick a display name"}
+        {isNarrow ? ui.firstRunIdentity.whatShouldWeCallYou : ui.firstRunIdentity.justPlayingOncePickA}
       </label>
       <div className="first-run-guest-row">
         {/* Search type suppresses Android Chrome's unrelated autofill toolbar,
@@ -142,7 +142,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
           aria-describedby={error ? `${fieldId}-error` : undefined}
         />
         <button type="submit" className="first-run-guest-submit" disabled={busy}>
-          {busy ? "\u2026" : isNarrow ? "Play" : "Play as guest"}
+          {busy ? "\u2026" : isNarrow ? ui.firstRunIdentity.play : ui.firstRunIdentity.playAsGuest}
         </button>
       </div>
       {error && (

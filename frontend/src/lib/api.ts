@@ -207,6 +207,8 @@ export async function apiRequest<T>(
       // happened to be when it landed.
       const suspension = suspensionFromPayload(payload);
       if (suspension) reportSuspended(suspension);
+      // Not copy: the error's own message, for logs. A screen says what failed
+      // through refusalText and a catalogue fallback, never through this.
       const detail =
         (payload && typeof payload.detail === "string" && payload.detail)
         || `Request failed with ${response.status}`;

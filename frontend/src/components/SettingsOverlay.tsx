@@ -84,14 +84,15 @@ import {
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 
 /* ------------------------------------------------------------- vocabulary */
 
 const SECTION_LABELS: Record<SettingsSection, string> = {
-  account: "Account",
-  appearance: "Appearance",
-  sound: "Sound & effects",
-  shortcuts: "Shortcuts",
+  get account() { return ui.settingsOverlay.account; },
+  get appearance() { return ui.settingsOverlay.appearance; },
+  get sound() { return ui.settingsOverlay.soundEffects2; },
+  get shortcuts() { return ui.settingsOverlay.shortcuts; },
 };
 
 const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
@@ -103,19 +104,19 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
 
 /** The palette, with a name a screen reader can say instead of a hex. */
 const NAME_COLOR_NAMES: Record<(typeof NAME_COLOR_PALETTE)[number], string> = {
-  "#e11d48": "Red",
-  "#f97316": "Orange",
-  "#eab308": "Yellow",
-  "#84cc16": "Lime",
-  "#16a34a": "Green",
-  "#0d9488": "Teal",
-  "#38bdf8": "Sky",
-  "#2563eb": "Blue",
-  "#6366f1": "Indigo",
-  "#a855f7": "Purple",
-  "#d946ef": "Magenta",
-  "#f472b6": "Pink",
-  "#a0522d": "Brown",
+  get "#e11d48"() { return ui.settingsOverlay.red; },
+  get "#f97316"() { return ui.settingsOverlay.orange; },
+  get "#eab308"() { return ui.settingsOverlay.yellow; },
+  get "#84cc16"() { return ui.settingsOverlay.lime; },
+  get "#16a34a"() { return ui.settingsOverlay.green; },
+  get "#0d9488"() { return ui.settingsOverlay.teal; },
+  get "#38bdf8"() { return ui.settingsOverlay.sky; },
+  get "#2563eb"() { return ui.settingsOverlay.blue; },
+  get "#6366f1"() { return ui.settingsOverlay.indigo; },
+  get "#a855f7"() { return ui.settingsOverlay.purple; },
+  get "#d946ef"() { return ui.settingsOverlay.magenta; },
+  get "#f472b6"() { return ui.settingsOverlay.pink; },
+  get "#a0522d"() { return ui.settingsOverlay.brown; },
 };
 
 const ACTION_ICONS: Record<keyof KeyBindings, ReactNode> = {
@@ -131,24 +132,24 @@ const ACTION_ICONS: Record<keyof KeyBindings, ReactNode> = {
 };
 
 const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
+  { value: "light", get label() { return ui.settingsOverlay.light; } },
+  { value: "dark", get label() { return ui.settingsOverlay.dark; } },
+  { value: "system", get label() { return ui.settingsOverlay.system; } },
 ];
 
 const TIME_FORMAT_OPTIONS: { value: TimeFormat; label: string }[] = [
-  { value: "system", label: "System" },
+  { value: "system", get label() { return ui.settingsOverlay.system; } },
   { value: "12h", label: "12-hour" },
   { value: "24h", label: "24-hour" },
 ];
 
 const BRUSH_CURSOR_OPTIONS: { value: BrushCursorStyle; label: string }[] = [
-  { value: "crosshair", label: "Crosshair" },
-  { value: "circle", label: "Outline" },
+  { value: "crosshair", get label() { return ui.settingsOverlay.crosshair; } },
+  { value: "circle", get label() { return ui.settingsOverlay.outline; } },
 ];
 
 function formatKey(key: string): string {
-  if (key === " ") return "Space";
+  if (key === " ") return ui.settingsOverlay.space;
   if (key.length === 1) return key.toUpperCase();
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
@@ -288,15 +289,15 @@ function EmailAddressStatus({
         type="button"
         className="settings-email-reveal"
         aria-pressed={revealed}
-        aria-label={revealed ? "Hide the full address" : "Show the full address"}
-        title={revealed ? "Hide" : "Show in full"}
+        aria-label={revealed ? ui.settingsOverlay.hideTheFullAddress : ui.settingsOverlay.showTheFullAddress}
+        title={revealed ? ui.settingsOverlay.hide : ui.settingsOverlay.showInFull}
         onClick={() => setRevealed((shown) => !shown)}
       >
         {revealed ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
       </button>
       <span className={`settings-email-status ${verified ? "is-verified" : "is-unverified"}`}>
         {verified ? <CheckIcon size={12} /> : <ClockIcon size={12} />}
-        {verified ? "Verified" : "Not verified"}
+        {verified ? ui.settingsOverlay.verified : ui.settingsOverlay.notVerified}
       </span>
     </span>
   );
@@ -671,7 +672,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                     disabled={nameBusy || draftName.trim() === (user?.displayName ?? "")}
                     onClick={() => void saveDisplayName()}
                   >
-                    {nameBusy ? "Saving…" : "Save"}
+                    {nameBusy ? ui.settingsOverlay.saving : ui.settingsOverlay.save}
                   </button>
                   <button
                     type="button"
@@ -741,15 +742,15 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
 
       <Group title={ui.settingsOverlay.signingIn}>
         <Row
-          label="Email"
+          label={ui.settingsOverlay.email}
           locked={isGuest}
           hint={
             isGuest ? (
-              "A guest has nothing to recover: there is no password to forget."
+              ui.settingsOverlay.aGuestHasNothingTo
             ) : shownAddress ? (
               <EmailAddressStatus address={shownAddress} verified={shownVerified} />
             ) : (
-              "Without one there is no way back into this account if the password is forgotten."
+              ui.settingsOverlay.withoutOneThereIsNo
             )
           }
         >
@@ -762,15 +763,15 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               onClick={() => setEmailOpen(true)}
             >
               <MailIcon size={15} />
-              {shownAddress ? "Change" : "Add an email"}
+              {shownAddress ? ui.settingsOverlay.change : ui.settingsOverlay.addAnEmail}
             </button>
           )}
         </Row>
         <Row
-          label="Password"
+          label={ui.settingsOverlay.password}
           locked={isGuest}
           hint={
-            isGuest ? "Guests have no password." : "Changing it signs every other device out."
+            isGuest ? ui.settingsOverlay.guestsHaveNoPassword : ui.settingsOverlay.changingItSignsEveryOther
           }
         >
           {isGuest ? (
@@ -794,11 +795,11 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             been offered a role that waits on it. */}
         {showsTwoFactor && (
           <Row
-            label="Two-factor authentication"
+            label={ui.settingsOverlay.twoFactorAuthentication}
             hint={
               pendingRole
-                ? `Set this up and the ${roleName(pendingRole)} role you have been offered takes effect.`
-                : "An authenticator app's code, on top of your password. Moderators and administrators must have one."
+                ? ui.settingsOverlay.setThisUpAndThe({ pendingRole: roleName(pendingRole) })
+                : ui.settingsOverlay.anAuthenticatorAppSCode
             }
           >
             <button
@@ -808,18 +809,18 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             >
               <ShieldIcon size={15} />
               {twoFactorState && (twoFactorState.enrolled || twoFactorState.passkeys > 0)
-                ? "Manage"
-                : "Set up"}
+                ? ui.settingsOverlay.manage
+                : ui.settingsOverlay.setUp}
             </button>
           </Row>
         )}
         <Row
-          label="Signed-in devices"
+          label={ui.settingsOverlay.signedDevices}
           locked={isGuest}
           hint={
             isGuest
-              ? "This browser is the only place you exist."
-              : "Every browser still holding a session, and a way to end any of them."
+              ? ui.settingsOverlay.thisBrowserIsTheOnly
+              : ui.settingsOverlay.everyBrowserStillHoldingA
           }
         >
           {isGuest ? (
@@ -839,11 +840,11 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
 
       <Group title={ui.settingsOverlay.yourData}>
         <Row
-          label="Download everything"
+          label={ui.settingsOverlay.downloadEverything}
           hint={
             isGuest
-              ? "Works for a guest too: the games you have played are yours."
-              : "Every game, list and setting Sketchy holds about you, as one JSON file."
+              ? ui.settingsOverlay.worksForAGuestToo
+              : ui.settingsOverlay.everyGameListAndSetting
           }
         >
           <button
@@ -856,12 +857,12 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           </button>
         </Row>
         <Row
-          label={isGuest ? "Delete this guest" : "Delete your account"}
+          label={isGuest ? ui.settingsOverlay.deleteThisGuest : ui.settingsOverlay.deleteYourAccount}
           tone="danger"
           hint={
             isGuest
-              ? "Removes the name, the points and the history kept against this browser."
-              : "Games you played stay in other players’ histories, without your name on them."
+              ? ui.settingsOverlay.removesTheNameThePoints
+              : ui.settingsOverlay.gamesYouPlayedStayIn
           }
         >
           <button
@@ -925,11 +926,18 @@ function AppearancePane() {
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
   const promptLanguage = useSettingsStore((state) => state.promptLanguage);
   const setPromptLanguage = useSettingsStore((state) => state.setPromptLanguage);
+  const locale = useSettingsStore((state) => state.locale);
+  const setLocale = useSettingsStore((state) => state.setLocale);
   const activePlayerId = useGameStore((state) => state.playerId);
 
   function choosePromptLanguage(next: PromptLanguage) {
     setPromptLanguage(next);
     queueSettingsSync({ promptLanguage: next });
+  }
+
+  function chooseLocale(next: Locale) {
+    setLocale(next);
+    queueSettingsSync({ locale: next });
   }
 
   function chooseTimeFormat(next: TimeFormat) {
@@ -960,7 +968,7 @@ function AppearancePane() {
   return (
     <>
       <Group title={ui.settingsOverlay.display}>
-        <Row label="Color scheme" stacked hint="Applies the moment you pick it.">
+        <Row label={ui.settingsOverlay.colorScheme} stacked hint={ui.settingsOverlay.appliesMomentYouPick}>
           <div className="theme-cards" role="group" aria-label={ui.settingsOverlay.theme}>
             {THEME_OPTIONS.map((option) => (
               <button
@@ -987,26 +995,38 @@ function AppearancePane() {
             ))}
           </div>
         </Row>
-        {/* The language you play in, not the language the app is written in:
-            the interface is English either way, and saying so here is cheaper
-            than letting someone discover it. */}
+        {/* Two languages, next to each other because that is the only place
+            the difference is obvious: what you read, and what you play in.
+            Reading in Dutch while playing an English room is ordinary
+            (R-I18N-06). */}
         <Row
-          label="Language you play in"
-          hint="Rooms in this language come first in the lobby, and a room you create starts in it. The interface itself stays in English."
+          label={ui.settingsOverlay.interfaceLanguage}
+          hint={ui.settingsOverlay.interfaceLanguageHint}
         >
           <LanguagePicker
-            label="Language you play in"
+            label={ui.settingsOverlay.interfaceLanguage}
+            value={locale}
+            options={LOCALES}
+            onChange={(next) => chooseLocale(next as Locale)}
+          />
+        </Row>
+        <Row
+          label={ui.settingsOverlay.languageYouPlay}
+          hint={ui.settingsOverlay.roomsThisLanguageComeFirstLobby}
+        >
+          <LanguagePicker
+            label={ui.settingsOverlay.languageYouPlay}
             value={promptLanguage}
             options={SUPPORTED_PROMPT_LANGUAGES}
             onChange={(next) => choosePromptLanguage(next as PromptLanguage)}
           />
         </Row>
         <Row
-          label="Time format"
-          hint="How every clock reads: chat timestamps, sign-in dates, notices. System follows your device."
+          label={ui.settingsOverlay.timeFormat}
+          hint={ui.settingsOverlay.howEveryClockReadsChatTimestamps}
         >
           <SegmentedControl
-            label="Time format"
+            label={ui.settingsOverlay.timeFormat}
             value={timeFormat}
             options={TIME_FORMAT_OPTIONS}
             onChange={chooseTimeFormat}
@@ -1017,19 +1037,19 @@ function AppearancePane() {
           option: its own group, worded as what it says about you. */}
       <Group title={ui.settingsOverlay.accessibility}>
         <ToggleRow
-          label="I have trouble telling colors apart"
-          hint="Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own."
+          label={ui.settingsOverlay.iHaveTroubleTellingColorsApart}
+          hint={ui.settingsOverlay.nudgesHostsTowardRoomColorsThat}
           checked={colorblindSafeColors}
           onChange={chooseColorblindSafe}
         />
       </Group>
       <Group title={ui.settingsOverlay.theCanvas}>
         <Row
-          label="Brush cursor"
-          hint="A crosshair is precise at the point; an outline shows how wide the stroke will be."
+          label={ui.settingsOverlay.brushCursor}
+          hint={ui.settingsOverlay.crosshairPreciseAtPointOutlineShows}
         >
           <SegmentedControl
-            label="Brush cursor style"
+            label={ui.settingsOverlay.brushCursorStyle}
             value={brushCursor}
             options={BRUSH_CURSOR_OPTIONS}
             onChange={chooseCursor}
@@ -1054,8 +1074,8 @@ function SoundPane() {
     <>
       <Group title={ui.settingsOverlay.sound}>
         <ToggleRow
-          label="Sound effects"
-          hint="Chimes for a correct guess, the start of a round, the last ten seconds, and players coming and going."
+          label={ui.settingsOverlay.soundEffects}
+          hint={ui.settingsOverlay.chimesCorrectGuessStartRoundLast}
           checked={soundEffects}
           onChange={(next) => {
             setSoundEffects(next);
@@ -1063,7 +1083,7 @@ function SoundPane() {
           }}
         />
         {soundEffects && (
-          <Row label="Volume">
+          <Row label={ui.settingsOverlay.volume2}>
             <span
               className="settings-volume-control"
               style={{ ["--volume-progress" as string]: `${volume * 100}%` }}
@@ -1090,8 +1110,8 @@ function SoundPane() {
       </Group>
       <Group title={ui.settingsOverlay.effects}>
         <ToggleRow
-          label="Confetti"
-          hint="A burst when you guess right, and again for the winner at the end of a game."
+          label={ui.settingsOverlay.confetti}
+          hint={ui.settingsOverlay.burstWhenYouGuessRightAgain}
           checked={confettiEffects}
           onChange={(next) => {
             setConfettiEffects(next);
@@ -1154,7 +1174,7 @@ function ShortcutsPane() {
       )}
       <Group
         title={ui.settingsOverlay.drawingTools}
-        hint="Click a key to rebind it. Each action can hold two. Press Esc to cancel."
+        hint={ui.settingsOverlay.clickKeyRebindEachActionCan}
         action={
           <button
             type="button"
@@ -1181,9 +1201,9 @@ function ShortcutsPane() {
                   type="button"
                   className={`kbd-badge${secondary ? " secondary" : ""}${active ? " rebinding" : ""}`}
                   onClick={() => setRebinding({ action, slotIndex })}
-                  title={secondary ? "Click to rebind the second key" : "Click to rebind"}
+                  title={secondary ? ui.settingsOverlay.clickToRebindTheSecond : ui.settingsOverlay.clickToRebind}
                 >
-                  {active ? "Press key…" : key ? formatKey(key) : secondary ? "+ key" : "None"}
+                  {active ? ui.settingsOverlay.pressKey : key ? formatKey(key) : secondary ? ui.settingsOverlay.key : ui.settingsOverlay.none}
                 </button>
               );
             };
@@ -1239,7 +1259,7 @@ export function SettingsOverlay() {
   }, [isGuest]);
 
   useEffect(() => {
-    onSettingsSyncError((message) => notify(message, ui.settingsOverlay.error));
+    onSettingsSyncError((message) => notify(message, "error"));
     return () => {
       onSettingsSyncError(null);
       // Whatever is still waiting for company goes out as the pane closes.

@@ -78,19 +78,19 @@ export function mergePromptEntries(
 export function describePromptMerge(result: PromptMergeResult): string | null {
   const skipped: string[] = [];
   if (result.duplicates) {
-    skipped.push(`${result.duplicates} already in the list`);
+    skipped.push(ui.promptListDrafts.duplicatesAlreadyInTheList({ duplicates: result.duplicates }));
   }
   if (result.tooLong.length) {
     skipped.push(
-      `${result.tooLong.length} over ${MAX_LIST_PROMPT_LENGTH} characters`,
+      ui.promptListDrafts.tooLongCountOverMaxListPrompt({ tooLongCount: result.tooLong.length, MAX_LIST_PROMPT_LENGTH }),
     );
   }
   if (result.overLimit) {
-    skipped.push(`${result.overLimit} past the ${MAX_LIST_PROMPTS} limit`);
+    skipped.push(ui.promptListDrafts.overLimitPastTheMaxList({ overLimit: result.overLimit, MAX_LIST_PROMPTS }));
   }
   if (!skipped.length) return null;
   const kept = ui.promptListDrafts.promptsAdded({ count: result.added });
-  return `${kept}; skipped ${skipped.join(", ")}.`;
+  return ui.promptListDrafts.keptSkippedSkipped({ kept, skipped: skipped.join(", ") });
 }
 
 export type SharedPromptSelection =

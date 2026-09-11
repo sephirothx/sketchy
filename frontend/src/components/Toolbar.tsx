@@ -71,12 +71,12 @@ function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
-  { value: "brush", name: "Brush", glyph: <BrushIcon size={18} /> },
-  { value: "fill", name: "Fill", glyph: <FillIcon size={18} /> },
-  { value: "eraser", name: "Eraser", glyph: <EraserIcon size={18} /> },
-  { value: "rectangle", name: "Rectangle", glyph: <RectIcon size={18} /> },
-  { value: "triangle", name: "Triangle", glyph: <TriangleIcon size={18} /> },
-  { value: "ellipse", name: "Ellipse", glyph: <CircleIcon size={18} /> },
+  { value: "brush", get name() { return ui.toolbar.brush; }, glyph: <BrushIcon size={18} /> },
+  { value: "fill", get name() { return ui.toolbar.fill; }, glyph: <FillIcon size={18} /> },
+  { value: "eraser", get name() { return ui.toolbar.eraser; }, glyph: <EraserIcon size={18} /> },
+  { value: "rectangle", get name() { return ui.toolbar.rectangle; }, glyph: <RectIcon size={18} /> },
+  { value: "triangle", get name() { return ui.toolbar.triangle; }, glyph: <TriangleIcon size={18} /> },
+  { value: "ellipse", get name() { return ui.toolbar.ellipse; }, glyph: <CircleIcon size={18} /> },
 ];
 
 interface ToolbarProps {
@@ -114,11 +114,11 @@ export function Toolbar({
   const paletteClass = isPairedPalette(colorMode) ? "" : " is-flat";
   const disabledReason = (value: DrawTool): string | null => {
     if (value === "fill" && !fillAvailable) {
-      return "Fill is unavailable for the rest of this turn";
+      return ui.toolbar.fillIsUnavailableForThe;
     }
     // Shapes cost no points, so they outlive the brush.
     if ((value === "brush" || value === "eraser") && !strokeAvailable) {
-      return "Drawing by hand is unavailable for the rest of this turn";
+      return ui.toolbar.drawingByHandIsUnavailable;
     }
     return null;
   };
@@ -150,7 +150,7 @@ export function Toolbar({
     return keyStr ? `${name} (${keyStr})` : name;
   }
 
-  const labelPrefix = tool === "eraser" ? "Eraser" : "Brush";
+  const labelPrefix = tool === "eraser" ? ui.toolbar.eraser : ui.toolbar.brush;
   const sizePickerId = "brush-size-popover";
   const mobileToolPanelId = "toolbar-mobile-tool-panel";
   const mobileColorPanelId = "toolbar-mobile-color-panel";
@@ -392,7 +392,7 @@ export function Toolbar({
                     color={c}
                     selected={isSelectedColor(c)}
                     variant="toolbar-mobile-swatch-btn"
-                    label={`color ${c}`}
+                    label={ui.toolbar.colorOption({ color: c })}
                     onSelect={() => {
                       handleSelectColor(c);
                       setMobilePanel(null);
@@ -481,7 +481,7 @@ export function Toolbar({
                 key={c}
                 color={c}
                 selected={isSelectedColor(c)}
-                label={`color ${c}`}
+                label={ui.toolbar.colorOption({ color: c })}
                 title={ui.toolbar.colorSwatch({ color: c })}
                 onSelect={() => handleSelectColor(c)}
               />

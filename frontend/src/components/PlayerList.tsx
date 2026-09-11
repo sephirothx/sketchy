@@ -18,6 +18,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -100,7 +101,7 @@ export function PlayerList({
         status?: string;
       }>("add_friend", { playerId });
       if (!answer?.ok) {
-        notify(answer?.error ?? "That request could not be sent.");
+        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent));
         return;
       }
       // Two outcomes worth telling apart, and a third that deliberately is
@@ -360,17 +361,20 @@ function VoteChip({
   hasVoted: boolean;
   onVote?: () => void;
 }) {
-  const kind = action === "afk" ? "AFK" : "Kick";
+  const kind = action === "afk" ? ui.playerList.voteKindAfk : ui.playerList.voteKindKick;
   const className = cx(
     "player-vote-chip",
     `player-vote-chip-${action}`,
     hasVoted && "is-cast",
   );
+  const tally = { kind, nickname, count, required };
   const label = onVote
     ? hasVoted
-      ? `Undo ${kind} vote for ${nickname}, ${count} of ${required}`
-      : `Vote ${kind} for ${nickname}, ${count} of ${required}`
-    : `${kind} votes for ${nickname}, ${count} of ${required}${hasVoted ? ", including yours" : ""}`;
+      ? ui.playerList.undoVoteFor(tally)
+      : ui.playerList.voteFor(tally)
+    : hasVoted
+      ? ui.playerList.votesForIncludingYours(tally)
+      : ui.playerList.votesFor(tally);
   const body = `${kind} ${count}/${required}`;
 
   if (!onVote) {
@@ -490,7 +494,7 @@ function PlayerModerationMenu({
         aria-expanded={isOpen}
         aria-controls={menuId}
         aria-label={ui.playerList.moderationFor({ name: player.nickname })}
-        title={canVote ? "Vote AFK or kick, or report" : "Report this player"}
+        title={canVote ? ui.playerList.voteAfkOrKickOr : ui.playerList.reportThisPlayer}
         onClick={() => onOpenChange(!isOpen)}
       />
       {isOpen && (
@@ -512,7 +516,7 @@ function PlayerModerationMenu({
             >
               <span className="player-vote-action-kind">{ui.playerList.afk}</span>
               <span className="player-vote-action-label">
-                {hasVotedAfk ? "Undo vote" : "Vote"}
+                {hasVotedAfk ? ui.playerList.undoVote : ui.playerList.vote}
               </span>
               <span className="player-vote-action-count">
                 {afkVotes.length}/{requiredVotes}
@@ -528,7 +532,7 @@ function PlayerModerationMenu({
             >
               <span className="player-vote-action-kind">{ui.playerList.kick}</span>
               <span className="player-vote-action-label">
-                {hasVotedKick ? "Undo vote" : "Vote"}
+                {hasVotedKick ? ui.playerList.undoVote : ui.playerList.vote}
               </span>
               <span className="player-vote-action-count">
                 {kickVotes.length}/{requiredVotes}

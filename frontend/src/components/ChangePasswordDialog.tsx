@@ -3,7 +3,7 @@ import { useId, useRef, useState } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
 import { useToast } from "../lib/toast";
-import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
+import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -50,7 +50,7 @@ export function ChangePasswordDialog({
     event.preventDefault();
     if (busy) return;
     if (next.length < MIN_PASSWORD_LENGTH) {
-      setError(PASSWORD_TOO_SHORT);
+      setError(passwordTooShort());
       return;
     }
     if (next !== confirm) {
@@ -61,7 +61,7 @@ export function ChangePasswordDialog({
     setError(null);
     try {
       await changePassword(current, next);
-      notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, ui.changePasswordDialog.success);
+      notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, "success");
       onClose();
     } catch (failure) {
       setError(
@@ -97,7 +97,7 @@ export function ChangePasswordDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          {mailed ? "Check your inbox" : "Change your password"}
+          {mailed ? ui.changePasswordDialog.checkYourInbox : ui.changePasswordDialog.changeYourPassword}
         </h3>
 
         {mailed ? (
@@ -159,7 +159,7 @@ export function ChangePasswordDialog({
                 </p>
               )}
               <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? "Please wait…" : "Change password"}
+                {busy ? ui.changePasswordDialog.pleaseWait : ui.changePasswordDialog.changePassword}
               </button>
             </form>
             {/* The other way to do the same job, for somebody who does not
@@ -182,7 +182,7 @@ export function ChangePasswordDialog({
         )}
 
         <button type="button" className="modal-dismiss" onClick={onClose}>
-          {mailed ? "Close" : "Cancel"}
+          {mailed ? ui.changePasswordDialog.close : ui.changePasswordDialog.cancel}
         </button>
       </div>
     </div>

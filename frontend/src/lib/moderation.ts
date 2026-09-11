@@ -1,6 +1,7 @@
 import { apiBinaryRequest, apiRequest } from "./api.ts";
 import { emitWithAck } from "./socket.ts";
 import type { GamePhase, ModerationState } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 export function canCastModerationVote(
   moderation: ModerationState,
@@ -253,15 +254,6 @@ export const REPORT_REASONS: ReportReason[] = [
   "inappropriate_avatar",
 ];
 
-const CATEGORY_WORDS: Record<string, string> = {
-  harassment: "harassment",
-  offensive_drawing: "an offensive drawing",
-  inappropriate_name: "an inappropriate name",
-  cheating: "cheating",
-  spam: "spam",
-  inappropriate_avatar: "an inappropriate picture",
-};
-
 /** A category as it arrived, or null. Unchecked by both compilers, so a value
 that is not one of the six is dropped rather than rendered as itself. */
 export function asReportReason(value: unknown): ReportReason | null {
@@ -271,7 +263,10 @@ export function asReportReason(value: unknown): ReportReason | null {
 }
 
 export function humanizeCategory(value: string): string {
-  return CATEGORY_WORDS[value] ?? value.replace(/_/g, " ");
+  // Read by the player it is about, in their language; the moderation queue
+  // around it stays English (R-I18N-01).
+  const words: Record<string, string> = ui.moderationCategories;
+  return words[value] ?? value.replace(/_/g, " ");
 }
 
 /** The ledger cap a resolution note has to fit inside. */

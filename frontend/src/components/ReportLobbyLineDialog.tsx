@@ -12,9 +12,9 @@ import { ui } from "../content/ui/index.ts";
 reasons about a drawing, a picture, or play are left out rather than offered
 and never true. */
 const REASONS: { value: ReportReason; label: string }[] = [
-  { value: "harassment", label: "Harassment or abuse" },
-  { value: "spam", label: "Spam" },
-  { value: "inappropriate_name", label: "Inappropriate name" },
+  { value: "harassment", get label() { return ui.reportLobbyLineDialog.harassmentOrAbuse; } },
+  { value: "spam", get label() { return ui.reportLobbyLineDialog.spam; } },
+  { value: "inappropriate_name", get label() { return ui.reportLobbyLineDialog.inappropriateName; } },
 ];
 
 /** Report a line of the lobby's chat.
@@ -90,7 +90,7 @@ export function ReportLobbyLineDialog({
         data-testid="report-lobby-line-dialog"
       >
         <h3 id={titleId} className="modal-title">
-          {sent ? "Report sent" : `Report ${line.displayName}`}
+          {sent ? ui.reportLobbyLineDialog.reportSent : ui.reportLobbyLineDialog.reportDisplayName({ displayName: line.displayName })}
         </h3>
 
         {!sent ? (
@@ -146,7 +146,7 @@ export function ReportLobbyLineDialog({
                 </p>
               )}
               <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? "Sending…" : "Send report"}
+                {busy ? ui.reportLobbyLineDialog.sending : ui.reportLobbyLineDialog.sendReport}
               </button>
             </form>
           </>
@@ -160,7 +160,7 @@ export function ReportLobbyLineDialog({
         )}
 
         <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent ? "Close" : "Cancel"}
+          {sent ? ui.reportLobbyLineDialog.close : ui.reportLobbyLineDialog.cancel}
         </button>
       </div>
     </div>,

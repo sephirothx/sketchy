@@ -132,7 +132,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
                   disabled={busyId !== null}
                   onClick={() => void revoke(session)}
                 >
-                  {busyId === session.id ? "Revoking…" : "Revoke"}
+                  {busyId === session.id ? ui.sessionManagerDialog.revoking : ui.sessionManagerDialog.revoke}
                 </button>
               </li>
             ))}
@@ -146,7 +146,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
             onClick={() => void revokeAll()}
             disabled={busyId !== null || sessions.length === 0}
           >
-            {busyId === "all" ? "Logging out…" : "Log out everywhere"}
+            {busyId === "all" ? ui.sessionManagerDialog.loggingOut : ui.sessionManagerDialog.logOutEverywhere}
           </button>
         </div>
       </div>

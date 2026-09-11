@@ -19,6 +19,7 @@ import type {
   RoomStatePayload,
   TurnEndedPayload,
 } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 let messageSeq = 0;
 const nextMessageId = () => `${Date.now()}-${messageSeq++}`;
@@ -39,7 +40,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} joined the room`,
+        text: ui.useGameSocketListeners.nicknameJoinedTheRoom({ nickname: payload.nickname }),
         correct: false,
         system: true,
       });
@@ -78,7 +79,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: "Game started!",
+        text: ui.useGameSocketListeners.gameStarted,
         correct: false,
         system: true,
       });
@@ -96,7 +97,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.drawerNickname} is choosing a prompt...`,
+        text: ui.useGameSocketListeners.drawerNicknameIsChoosingAPrompt({ drawerNickname: payload.drawerNickname }),
         correct: false,
         system: true,
       });
@@ -149,15 +150,14 @@ export function useGameSocketListeners() {
       store.getState().recordCorrectGuess(payload.playerId);
       const elapsed = store.getState().turnCorrectGuesses[payload.playerId];
       const time = elapsed != null
-        ? ` · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
-        : "";
-      const pointsSuffix =
-        store.getState().scoringMode !== "none" ? ` (+${payload.points})` : "";
+        ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
+        : null;
+      const points = store.getState().scoringMode !== "none" ? payload.points : null;
       // `correct` styles the line as the green got-it event card.
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} got it${time}${pointsSuffix}`,
+        text: ui.useGameSocketListeners.gotIt({ nickname: payload.nickname, time, points }),
         correct: true,
         system: true,
       });
@@ -197,7 +197,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `The prompt was "${payload.prompt}"`,
+        text: ui.useGameSocketListeners.thePromptWasPrompt({ prompt: payload.prompt }),
         correct: false,
         system: true,
       });

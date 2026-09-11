@@ -47,12 +47,12 @@ export function RestartVoteBanner({ vote, player, busy, onVote }: RestartVoteBan
                   {ui.restartVoteBanner.restartApproved}
                 </>
               )
-            : `${vote.proposerNickname} proposed restarting · ${remaining}s`}
+            : ui.restartVoteBanner.proposerNicknameProposedRestartingRemainingS({ proposerNickname: vote.proposerNickname, remaining })}
         </strong>
         <span>
           {vote.status === "approved"
-            ? "The current game is restarting now."
-            : `${counts.yes} yes · ${counts.no} no · ${counts.pending} pending · ${vote.requiredVotes} needed`}
+            ? ui.restartVoteBanner.theCurrentGameIsRestarting
+            : ui.restartVoteBanner.yesYesNoNoPending({ yes: counts.yes, no: counts.no, pending: counts.pending, requiredVotes: vote.requiredVotes })}
         </span>
       </div>
       <div

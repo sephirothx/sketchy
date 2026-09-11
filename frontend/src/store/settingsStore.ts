@@ -18,7 +18,7 @@ import {
   migrateKeyBindings,
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
-import { setCatalogue } from "../content/ui/index.ts";
+import { setCatalogue, ui } from "../content/ui/index.ts";
 import {
   applyDocumentLocale,
   rememberLocale,
@@ -95,15 +95,15 @@ export function randomNameColor(exclude?: string): string {
 }
 
 export const ACTION_LABELS: Record<keyof KeyBindings, string> = {
-  brush: "Brush tool",
-  fill: "Fill tool",
-  eraser: "Eraser tool",
-  rectangle: "Rectangle tool",
-  triangle: "Triangle tool",
-  ellipse: "Ellipse tool",
-  brushDecrease: "Decrease brush size",
-  brushIncrease: "Increase brush size",
-  undo: "Undo stroke",
+  get brush() { return ui.settingsStore.brushTool; },
+  get fill() { return ui.settingsStore.fillTool; },
+  get eraser() { return ui.settingsStore.eraserTool; },
+  get rectangle() { return ui.settingsStore.rectangleTool; },
+  get triangle() { return ui.settingsStore.triangleTool; },
+  get ellipse() { return ui.settingsStore.ellipseTool; },
+  get brushDecrease() { return ui.settingsStore.decreaseBrushSize; },
+  get brushIncrease() { return ui.settingsStore.increaseBrushSize; },
+  get undo() { return ui.settingsStore.undoStroke; },
 };
 
 export function getSystemTheme(): ResolvedTheme {

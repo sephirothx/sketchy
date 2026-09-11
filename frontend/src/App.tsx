@@ -36,6 +36,7 @@ import { XIcon } from "./components/icons";
 import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
 import { useFriendsStore } from "./store/friendsStore";
+import { useSettingsStore } from "./store/settingsStore";
 import { socket } from "./lib/socket";
 import {
   parsePausedNotice,
@@ -122,6 +123,10 @@ function AppRoutes() {
 function App() {
   useGameSocketListeners();
   useRoomSessionReconnect();
+  // Every screen reads the catalogue through a live binding React cannot see
+  // change, so the root subscribes to the locale: switching it re-renders the
+  // whole tree rather than only the settings panel it was switched in.
+  useSettingsStore((state) => state.locale);
   const fetchMe = useAuthStore((state) => state.fetchMe);
   // App-wide rather than per page: the lobby lists friends, the waiting room
   // offers them an invitation, and the in-room menu needs to know who is one

@@ -80,7 +80,7 @@ export function DrawingRecapGallery({
       setActions(decoded);
     } catch (loadError) {
       if (loadGeneration !== loadGenerationRef.current) return;
-      setError(socketRequestErrorMessage(loadError, "load this drawing"));
+      setError(socketRequestErrorMessage(loadError, ui.drawingRecapGallery.loadThisDrawing));
     }
   }, [entry, loadEntry]);
 
@@ -192,7 +192,7 @@ export function DrawingRecapGallery({
               ref={canvasRef}
               actions={actions}
               downloadPrompt={entry.prompt}
-              label={`Drawing of ${entry.prompt} by ${entry.drawerNickname}`}
+              label={ui.drawingRecapGallery.drawingLabel({ prompt: entry.prompt, drawer: entry.drawerNickname })}
             />
           )}
         </div>

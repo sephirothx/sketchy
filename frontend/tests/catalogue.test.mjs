@@ -6,10 +6,13 @@ English button, which is too late. So this reads the tree the way
 `backend/tests/test_doc_invariants.py` reads the documents - as source, with a
 parser rather than a regex - and fails on a literal in a place a person reads.
 
-The three places are the ones a person actually reads: text between JSX tags,
-the attributes a screen reader speaks, and the arguments of the calls that put
-words on screen. A literal anywhere else - a CSS class, a test id, a sort key -
-is not copy and is left alone.
+The places checked are the ones a person actually reads: text between JSX
+tags, the attributes a screen reader speaks, this app's own copy-carrying
+props (`label`, `hint`, and the rest), and the arguments of the calls that put
+words on screen. A second scan reads where words hide out of the markup: the
+tables of labels, the branches, fallbacks and returned sentences. A literal
+that is plumbing - a CSS class, a test id, a sort key - is left alone, and one
+that only looks like words says so with a `// Not copy:` comment.
 
 Staff surfaces are exempt on purpose (R-I18N-01): the moderation queue and the
 operations pages are read by operators in one language.
@@ -32,14 +35,43 @@ const STAFF = [
 // The catalogue itself, and the rules document, hold copy on purpose.
 const CONTENT = ["content/"];
 
-const SPEAKING_CALLS = new Set([
-  "notify", "setError", "refusalText", "setNameError", "setPictureError",
-  "setFetchError", "setShareError", "setSubmitError", "setFailure",
-  "setStartError", "setPromotionError",
+// Which argument of each call is the thing a person reads. `notify` takes a
+// tone after its message, and `refusalText` takes the message *second* - so
+// "the first one" would be wrong in both directions.
+const SPEAKING_CALLS = new Map([
+  ["notify", 0],
+  ["refusalText", 1],
+  ["setError", 0],
+  ["setNameError", 0],
+  ["setPictureError", 0],
+  ["setFetchError", 0],
+  ["setShareError", 0],
+  ["setSubmitError", 0],
+  ["setFailure", 0],
+  ["setStartError", 0],
+  ["setPromotionError", 0],
+  ["setNotice", 0],
+  ["setReportNotice", 0],
+  ["setRosterError", 0],
+  ["setDeliveryError", 0],
+  ["setDetailError", 0],
+  ["setAnnouncement", 0],
+  ["setDone", 0],
+  ["confirm", 0],
+  ["failed", 0],
+  // The verb phrase slotted into "Could not …" - words, even when lowercase.
+  ["socketRequestErrorMessage", 1],
+  ["requestErrorMessage", 1],
 ]);
 const SPEAKING_ATTRS = new Set([
   "aria-label", "aria-description", "aria-valuetext", "aria-placeholder",
   "placeholder", "title", "alt", "aria-roledescription",
+  // This app's own components take copy as props, and nothing about a prop
+  // looks like text - which is exactly why #762's first pass walked past 57
+  // of them and a German settings page was still half English (#764).
+  "label", "hint", "heading", "caption", "description", "summary",
+  "confirmLabel", "cancelLabel", "actionLabel", "emptyLabel", "note",
+  "backLabel", "closeLabel", "namePlaceholder", "data-label",
 ]);
 
 function sourceFiles(dir = ROOT, out = []) {
@@ -90,16 +122,32 @@ function literalsIn(path) {
       const name = ts.isIdentifier(node.expression)
         ? node.expression.text
         : node.expression.getText(source).split(".").pop();
-      if (SPEAKING_CALLS.has(name)) {
-        for (const arg of node.arguments) {
-          const literal =
-            ts.isStringLiteral(arg)
-            || ts.isTemplateExpression(arg)
-            || ts.isNoSubstitutionTemplateLiteral(arg);
-          if (literal && words(arg.getText(source))) {
-            found.push(`${at(arg)} ${name}()`);
+      const position = SPEAKING_CALLS.get(name);
+      const message = position === undefined ? undefined : node.arguments[position];
+      if (message) {
+        // Anywhere inside the argument, not only at its root: a message is
+        // as often `count === 1 ? "..." : "..."` as it is a bare string.
+        // A value compared against (`action === "accept" ? … : …`) picks the
+        // message; it is not part of it.
+        const compared = (child) => ts.isBinaryExpression(child.parent)
+          && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken]
+            .includes(child.parent.operatorToken.kind);
+        const inside = (child) => {
+          if (
+            (ts.isStringLiteral(child)
+              || ts.isTemplateExpression(child)
+              || ts.isNoSubstitutionTemplateLiteral(child))
+            && words(child.getText(source))
+            && !compared(child)
+          ) {
+            found.push(`${at(child)} ${name}()`);
           }
-        }
+          // A nested speaking call carries its own message and is checked on
+          // its own; descending into it would report the same literal twice.
+          if (ts.isCallExpression(child)) return;
+          ts.forEachChild(child, inside);
+        };
+        inside(message);
       }
     }
     ts.forEachChild(node, visit);
@@ -146,6 +194,145 @@ test("the scan would notice a literal put back", () => {
   }
 });
 
+// Where a sentence hides once it is out of the markup: a table of labels, a
+// branch that picks one of two, a fallback, a function that returns one. The
+// first scan walked past every one of these, and #764's "complete" German
+// still had a settings tab bar, the report reasons and half the waiting room
+// in English. So this reads those places too, and a literal found there is copy
+// unless it says otherwise: a `// Not copy: <why>` comment above it, a key or
+// attribute that is plumbing by name, or a call that is styling or a log.
+const NOT_COPY_NAMES = new Set([
+  "id", "key", "className", "value", "type", "kind", "testId", "href", "path", "icon", "color",
+  "event", "code", "slug", "variant", "role", "tone", "mode", "errorCode", "method", "storageKey",
+  "format", "hourCycle", "locale", "language", "transform", "rootMargin", "boxShadow",
+  "transition", "fontFamily", "background", "gridTemplateColumns", "style", "data-testid", "src",
+  "target", "rel", "autoComplete", "inputMode", "pattern", "accept", "form", "htmlFor",
+  "download", "stroke", "fill", "d", "viewBox", "width", "height", "track", "name",
+]);
+const NOT_COPY_CALLS = new Set([
+  "log", "warn", "error", "info", "debug", "recordClientError", "redactDiagnostic",
+  "useMediaQuery", "matchMedia", "mediaQuery", "Error", "SocketRequestError", "ApiError",
+  "cx", "clsx", "includes", "indexOf", "has", "startsWith", "endsWith", "querySelector",
+  "setAttribute", "setItem", "getItem",
+]);
+// What goes into a crash report or an error log is read by an operator.
+const DIAGNOSTIC = ["lib/crashReport", "lib/clientErrorLog"];
+// Staff modules; the one player-facing word in lib/moderation (a category a
+// player was warned for) comes from the catalogue.
+const STAFF_LIBS = ["lib/operations", "lib/adminControls", "lib/moderation"];
+const BRAND = new Set(["Sketchy"]);
+
+function looksLikeASentence(node) {
+  const parts = ts.isTemplateExpression(node)
+    ? [node.head.text, ...node.templateSpans.map((span) => span.literal.text)]
+    : [node.text];
+  const text = parts.join("");
+  if (BRAND.has(text.trim()) || !/[A-Za-z]{2}/.test(text)) return false;
+  if (/^(https?:|\/|#|--|var\(|\.|\[)/.test(text) || /[{};]\s*$/.test(text)) return false;
+  if (/^[a-z-]+\s*:/.test(text) || /^[a-z0-9_.\/:-]*$/.test(text.trim())) return false;
+  // A class list - "chip is-active" - rather than lowercase words like "cut short".
+  const tokens = text.trim().split(/\s+/);
+  if (tokens.every((t) => /^[a-z][a-z0-9-]*$/.test(t)) && tokens.some((t) => t.includes("-"))) return false;
+  return /[A-Za-z][^\s]*\s+\S/.test(text) || /^\s*[A-Z][a-z]/.test(text);
+}
+
+function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
+  const source = ts.createSourceFile(
+    path, text, ts.ScriptTarget.Latest, true,
+    /\.tsx$/.test(path) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const found = [];
+  const callee = (call) => call.expression.getText(source).split(".").pop();
+  const marked = (node) => {
+    for (let at = node; at && !ts.isSourceFile(at); at = at.parent) {
+      const comments = ts.getLeadingCommentRanges(text, at.getFullStart()) ?? [];
+      if (comments.some((c) => /not copy:/i.test(text.slice(c.pos, c.end)))) return true;
+    }
+    return false;
+  };
+  const excused = (node) => {
+    for (let at = node.parent; at && !ts.isSourceFile(at); at = at.parent) {
+      if (ts.isJsxAttribute(at) && NOT_COPY_NAMES.has(at.name.getText(source))) return true;
+      if (ts.isPropertyAssignment(at) && NOT_COPY_NAMES.has(at.name.getText(source).replace(/["']/g, ""))) return true;
+      if ((ts.isCallExpression(at) || ts.isNewExpression(at)) && NOT_COPY_CALLS.has(callee(at))) return true;
+      // A list something is looked up in, rather than shown: `[...].includes(key)`.
+      if (ts.isPropertyAccessExpression(at) && ts.isArrayLiteralExpression(at.expression)) return true;
+    }
+    return marked(node);
+  };
+  const place = (node) => {
+    let child = node;
+    let parent = node.parent;
+    while (ts.isParenthesizedExpression(parent) || ts.isAsExpression(parent) || ts.isSatisfiesExpression(parent)) {
+      child = parent;
+      parent = parent.parent;
+    }
+    if (ts.isPropertyAssignment(parent) && parent.initializer === child) return "table";
+    if (ts.isArrayLiteralExpression(parent)) return "list";
+    if (ts.isReturnStatement(parent) || (ts.isArrowFunction(parent) && parent.body === child)) return "return";
+    if (ts.isVariableDeclaration(parent) && parent.initializer === child) return "constant";
+    if (ts.isConditionalExpression(parent) && parent.condition !== child) return "branch";
+    if (ts.isBinaryExpression(parent)) {
+      const op = parent.operatorToken.kind;
+      if ((op === ts.SyntaxKind.BarBarToken || op === ts.SyntaxKind.QuestionQuestionToken) && parent.right === child) return "fallback";
+      if (op === ts.SyntaxKind.PlusToken) return "concatenation";
+    }
+    if (ts.isJsxExpression(parent) && !ts.isJsxAttribute(parent.parent)) return "jsx";
+    const attr = ts.isJsxAttribute(parent) ? parent : ts.isJsxExpression(parent) && ts.isJsxAttribute(parent.parent) ? parent.parent : null;
+    if (attr && !SPEAKING_ATTRS.has(attr.name.getText(source))) return "prop";
+    return null;
+  };
+  const visit = (node) => {
+    if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node))
+      && looksLikeASentence(node)) {
+      const where = place(node);
+      if (where && !excused(node)) {
+        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+        found.push(`${relative(ROOT, path)}:${line} ${where} ${node.getText(source).slice(0, 50)}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+test("no table, branch or fallback holds a sentence of its own", () => {
+  const offenders = playerFacing()
+    .filter((path) => ![...DIAGNOSTIC, ...STAFF_LIBS].some((prefix) => relative(ROOT, path).startsWith(prefix)))
+    .flatMap((path) => tableLiteralsIn(path));
+  assert.deepEqual(
+    offenders,
+    [],
+    `these read as words but sit outside the catalogue - move them to it, or `
+      + `mark a genuine exception with \`// Not copy: <why>\`:\n${offenders.join("\n")}`,
+  );
+});
+
+test("the table scan would notice a sentence put back", () => {
+  // Parsed as if it were a source file, without writing one.
+  const probe = (snippet) => tableLiteralsIn(join(ROOT, "__probe__.tsx"), snippet).length > 0;
+  for (const snippet of [
+    'const LABELS = { spam: "Spam or scams" };',
+    'const x = busy ? "Saving…" : "Save";',
+    'const y = name || "A player";',
+    'function f() { return "Not in a room"; }',
+    "const z = `${count} custom prompts`;",
+  ]) {
+    assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
+  }
+  for (const plumbing of [
+    'const c = active ? "chip is-active" : "chip";',
+    'const u = "/api/rooms";',
+    'const s = "Sketchy";',
+    'const el = <div className={on ? "panel is-open" : "panel"} />;',
+    'if (["Control", "Shift"].includes(key)) skip();',
+    '// Not copy: a filename.\nconst f = "Sketchy recovery codes.txt";',
+  ]) {
+    assert.ok(!probe(plumbing), `the table scan takes plumbing for words: ${plumbing}`);
+  }
+});
+
 function* entries(node, path = []) {
   for (const [key, value] of Object.entries(node)) {
     if (typeof value === "object" && value !== null) yield* entries(value, [...path, key]);
@@ -165,6 +352,7 @@ const READ_BY_CODE = {
   refusals: "ui.refusals[errorCode]",
   announcements: "ui.announcements[code]",
   document: "catalogueFor(locale).document, before any component renders",
+  moderationCategories: "humanizeCategory(), by the category a moderator recorded",
 };
 
 test("every catalogue group is read by something", () => {

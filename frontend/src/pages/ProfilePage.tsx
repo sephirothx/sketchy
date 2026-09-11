@@ -107,9 +107,9 @@ function PlayerName({
  */
 /** Why a turn has no drawing to show, in the words the state actually means. */
 function drawingNote(turn: GameTurn): string {
-  if (turn.drawingStatus === "unavailable") return "not kept";
+  if (turn.drawingStatus === "unavailable") return ui.profilePage.notKept;
   if (turn.drawingStatus === "deleted") return "erased";
-  if (turn.strokeCount === 0) return "nothing drawn";
+  if (turn.strokeCount === 0) return ui.profilePage.nothingDrawn;
   return "—";
 }
 
@@ -159,8 +159,8 @@ function GameRow({
     } catch (error) {
       setDetailError(
         error instanceof ApiError && error.status === 404
-          ? "Only the players in this game can see its turns."
-          : "Could not load the turns for this game.",
+          ? ui.profilePage.onlyThePlayersInThis
+          : ui.profilePage.couldNotLoadTheTurns,
       );
     }
   }
@@ -193,7 +193,7 @@ function GameRow({
             })}
             {game.outcome !== "finished" && (
               <span className="profile-game-outcome">
-                {game.outcome === "abandoned" ? "abandoned" : "cut short"}
+                {game.outcome === "abandoned" ? "abandoned" : ui.profilePage.cutShort}
               </span>
             )}
             {game.visibility === "private" && (
@@ -293,11 +293,11 @@ function GameRow({
               if (outcome.outcome === "incorrect") {
                 return `${outcome.wrongGuessCount} wrong`;
               }
-              if (outcome.outcome === "no_attempt") return "no attempt";
+              if (outcome.outcome === "no_attempt") return ui.profilePage.noAttempt;
               // Only games finished before a mid-turn arrival became an
               // ordinary guesser carry this reason.
-              if (outcome.eligibilityReason === "joined_late") return "joined late";
-              return `not eligible (${outcome.eligibilityReason})`;
+              if (outcome.eligibilityReason === "joined_late") return ui.profilePage.joinedLate;
+              return ui.profilePage.notEligibleEligibilityReason({ eligibilityReason: outcome.eligibilityReason });
             };
             // Every turn is offered, not only the ones with bytes to show: a
             // gallery that quietly skipped them would misreport how the game
@@ -394,7 +394,7 @@ function GameRow({
                         ? turn.participantOutcomes.map((outcome, index) => (
                             <span key={outcome.seatId}>
                               {index > 0 && ", "}
-                              {named(outcome.seatId, "Unknown player")} ({outcomeLabel(outcome)})
+                              {named(outcome.seatId, ui.profilePage.unknownPlayer)} ({outcomeLabel(outcome)})
                             </span>
                           ))
                         : "unknown"}
@@ -424,9 +424,9 @@ export function ProfilePage() {
   if (!userId) {
     return (
       <div className="profile-page">
-        <AppHeader backLabel="Back to lobby" />
+        <AppHeader backLabel={ui.profilePage.backToLobby} />
         <p className="profile-note">
-          {hasResolved ? "There is no player with that profile." : "Loading…"}
+          {hasResolved ? ui.profilePage.noSuchProfile : ui.profilePage.loading}
         </p>
       </div>
     );
@@ -496,8 +496,8 @@ function ProfileView({ userId }: { userId: string }) {
         if (cancelled) return;
         setError(
           loadError instanceof ApiError && loadError.status === 404
-            ? "There is no player with that profile."
-            : "Could not load this profile. Please try again.",
+            ? ui.profilePage.noSuchProfile
+            : ui.profilePage.couldNotLoadProfile,
         );
       }
     })();
@@ -530,7 +530,7 @@ function ProfileView({ userId }: { userId: string }) {
 
   return (
     <div className="profile-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader backLabel={ui.profilePage.backToLobby} />
 
       {!subject && !error && <p className="profile-note">{ui.profilePage.loading}</p>}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
@@ -581,7 +581,7 @@ function ProfileView({ userId }: { userId: string }) {
                 />
               </h1>
               <p className="profile-subtitle">
-                {subject.isAnonymous ? "Guest — display name not saved" : "Registered player"}
+                {subject.isAnonymous ? ui.profilePage.guestDisplayNameNotSaved : ui.profilePage.registeredPlayer}
                 {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt, timeFormat)}`}
                 {lastSeenLabel(subject) && (
                   <>
@@ -653,20 +653,20 @@ function ProfileView({ userId }: { userId: string }) {
           <section className="panel">
             <h2>{ui.profilePage.statistics}</h2>
             <div className="profile-stats">
-              <StatTile label="Games played" value={String(stats.gamesPlayed)} />
-              <StatTile label="Games won" value={String(stats.gamesWon)} />
+              <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
+              <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
               <StatTile
-                label="Win rate"
+                label={ui.profilePage.winRate}
                 value={`${Math.round(stats.winRate * 100)}%`}
               />
-              <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
+              <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
             </div>
             <div className="profile-stats profile-stats-small">
-              <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
-              <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
-              <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
-              <StatTile label="Reactions received" value={String(stats.reactionsReceived)} />
-              <StatTile label="Total score" value={String(stats.totalScore)} />
+              <StatTile label={ui.profilePage.turnsPlayed} value={String(stats.turnsPlayed)} />
+              <StatTile label={ui.profilePage.promptsGuessed} value={String(stats.promptsGuessed)} />
+              <StatTile label={ui.profilePage.drawingsMade} value={String(stats.drawingsMade)} />
+              <StatTile label={ui.profilePage.reactionsReceived} value={String(stats.reactionsReceived)} />
+              <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
             </div>
           </section>
 
@@ -685,8 +685,8 @@ function ProfileView({ userId }: { userId: string }) {
             {games.length === 0 ? (
               <p className="profile-note">
                 {isOwnProfile
-                  ? "No finished games yet. Play one and it will show up here."
-                  : "No games to show. Games from private rooms are listed only for the players who were in them."}
+                  ? ui.profilePage.noFinishedGamesYetPlay
+                  : ui.profilePage.noGamesToShowGames}
               </p>
             ) : (
               <ul className="profile-games">
@@ -702,7 +702,7 @@ function ProfileView({ userId }: { userId: string }) {
             )}
             {hasMore && (
               <button type="button" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? "Loading…" : `Load ${HISTORY_PAGE_SIZE} more`}
+                {loadingMore ? ui.profilePage.loading : ui.profilePage.loadHistoryPageSizeMore({ HISTORY_PAGE_SIZE })}
               </button>
             )}
           </section>

@@ -1,4 +1,5 @@
 import { apiRequest } from "./api.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** What an account knows about its own way back in. */
 export type EmailState = {
@@ -68,15 +69,15 @@ export function recoveryStatusMessage(state: EmailState): string {
   // rides a banner across every screen, which is a worse place to print an
   // address in full than a pane somebody deliberately opened.
   if (state.verified && state.address) {
-    return `You can recover this account through ${maskEmail(state.address)}.`;
+    return ui.accountRecovery.youCanRecoverThisAccount({ address: maskEmail(state.address) });
   }
   if (state.pendingAddress) {
-    return `Check ${maskEmail(state.pendingAddress)} for a confirmation link. Until you follow it, this account has no way back in.`;
+    return ui.accountRecovery.checkPendingAddressForAConfirmation({ pendingAddress: maskEmail(state.pendingAddress) });
   }
   if (!state.deliveryConfigured) {
-    return "This server cannot send email, so a lost password has to be reset by whoever runs it.";
+    return ui.accountRecovery.thisServerCannotSendEmail;
   }
-  return "Add an email address so you can get back in if you forget your password.";
+  return ui.accountRecovery.addAnEmailAddressSo;
 }
 
 /** Whether the standing "no way back in" note belongs on screen right now.

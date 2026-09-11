@@ -103,8 +103,8 @@ export function SuspensionNotice() {
           <>
             <p className="modal-body suspension-evidence-label">
               {suspension.messages.length === 1
-                ? "The message this was about:"
-                : "The messages this was about:"}
+                ? ui.suspensionNotice.theMessageThisWasAbout
+                : ui.suspensionNotice.theMessagesThisWasAbout}
             </p>
             {/* Their own words, as they were when the report was made. Scrolls
                 inside the card rather than growing it off the screen. */}
@@ -126,8 +126,8 @@ export function SuspensionNotice() {
           <>
             <p className="modal-body suspension-evidence-label">
               {suspension.drawings.length === 1
-                ? "The drawing this was about:"
-                : "The drawings this was about:"}
+                ? ui.suspensionNotice.theDrawingThisWasAbout
+                : ui.suspensionNotice.theDrawingsThisWasAbout}
             </p>
             {/* Their own work, as it was when each report was made - several
                 when several reporters each caught the canvas at their own
@@ -138,7 +138,7 @@ export function SuspensionNotice() {
                 key={drawing.reportId}
                 className="suspension-drawing"
                 load={() => fetchSuspensionDrawing(drawing.reportId)}
-                label={`Your drawing of ${drawing.prompt}, as it was reported`}
+                label={ui.suspensionNotice.yourReportedDrawing({ prompt: drawing.prompt })}
                 caption={<>{ui.suspensionNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
               />
             ))}
@@ -150,7 +150,7 @@ export function SuspensionNotice() {
           disabled={busy}
           onClick={() => void signOut()}
         >
-          {busy ? "Signing out…" : "Sign out"}
+          {busy ? ui.suspensionNotice.signingOut : ui.suspensionNotice.signOut}
         </button>
       </div>
     </div>

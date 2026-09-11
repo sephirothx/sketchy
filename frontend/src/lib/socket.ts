@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
 import { isUpdateRequired, markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 // No URL: connect to the origin that served the page. The backend serves the
 // frontend in production and E2E, and the Vite dev server proxies /socket.io,
@@ -262,7 +263,7 @@ socket.on("server_full", (notice: { reason?: string } | undefined) => {
   serverFullReason =
     typeof notice?.reason === "string" && notice.reason
       ? notice.reason
-      : "Sketchy is full right now. Try again in a few minutes.";
+      : ui.socket.sketchyIsFullRightNow;
   serverFullListeners.forEach((listener) => listener(serverFullReason!));
 });
 
@@ -343,10 +344,10 @@ export class SocketRequestError extends Error {
 
 export function socketRequestErrorMessage(error: unknown, action: string): string {
   if (error instanceof SocketRequestError) {
-    if (error.code === "disconnected") return `Connection lost while trying to ${action}. Please try again.`;
-    return `The request to ${action} timed out. Please try again.`;
+    if (error.code === "disconnected") return ui.socket.connectionLostWhileTryingTo({ action });
+    return ui.socket.theRequestToActionTimed({ action });
   }
-  return `Could not ${action}. Please try again.`;
+  return ui.socket.couldNotActionPleaseTry({ action });
 }
 
 /** The slice of a Socket.IO client an acknowledged request actually uses.

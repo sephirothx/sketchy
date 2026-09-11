@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /** The socket contract version this bundle speaks.
 
 Must match `PROTOCOL_VERSION` in `backend/app/protocol.py`. Both ends deploy
@@ -79,7 +80,7 @@ export function handleProtocolHeader(
   const expected = Number(value.trim());
   if (!Number.isSafeInteger(expected) || expected === PROTOCOL_VERSION) return false;
   return handleUpgradeRequired(
-    { reason: "The server was updated.", expected, received: PROTOCOL_VERSION },
+    { reason: ui.protocol.theServerWasUpdated, expected, received: PROTOCOL_VERSION },
     environment,
   );
 }

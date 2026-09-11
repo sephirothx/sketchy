@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /** The lobby's online player list: the store, and the rules it applies.
 
 Kept out of the component on purpose. `frontend/tests` runs on bare
@@ -174,6 +175,6 @@ Without the total a cap is indistinguishable from a quiet server, which is
 the one reading that would make the panel actively misleading. */
 export function presenceSummary(state: PresenceState): string {
   const shown = state.players.length;
-  if (state.onlineCount > shown) return `Showing ${shown} of ${state.onlineCount}`;
+  if (state.onlineCount > shown) return ui.lobbyPresence.showingShownOfOnlineCount({ shown, onlineCount: state.onlineCount });
   return `${state.onlineCount} online`;
 }

@@ -7,6 +7,7 @@ import {
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { renderCanvasActions } from "../lib/canvasRenderer";
+import { ui } from "../content/ui/index.ts";
 
 interface CanvasSnapshotProps {
   actions: DecodedCanvasAction[];
@@ -38,7 +39,7 @@ export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
             height={CANVAS_HEIGHT}
             className="drawing-canvas"
             role="img"
-            aria-label={label ?? (downloadPrompt ? `Drawing of ${downloadPrompt}` : "Saved drawing")}
+            aria-label={label ?? (downloadPrompt ? ui.canvasSnapshot.drawingOfDownloadPrompt({ downloadPrompt }) : ui.canvasSnapshot.savedDrawing)}
           />
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /**
  * The recovery codes as something a person can keep.
  *
@@ -22,13 +23,12 @@ export function recoveryCodeFileBody(
   now = new Date(),
 ): string {
   return [
-    "Sketchy recovery codes",
-    `Account: ${username}`,
-    `Created: ${now.toISOString().slice(0, 10)}`,
+    ui.recoveryCodeFile.sketchyRecoveryCodes,
+    ui.recoveryCodeFile.accountUsername({ username }),
+    ui.recoveryCodeFile.createdValue({ value: now.toISOString().slice(0, 10) }),
     "",
-    "Each code signs you in once if you lose your authenticator app.",
-    "Keep this file somewhere only you can reach. Anyone holding these",
-    "codes and your password can sign in as you.",
+    ui.recoveryCodeFile.eachCodeSignsYouIn,
+    ui.recoveryCodeFile.keepThisFile,
     "",
     ...codes.map((code) => `  ${code}`),
     "",

@@ -117,9 +117,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(window.location.href);
-      notify(ui.activeGameRoom.inviteLinkCopied, ui.activeGameRoom.success, 2500);
+      notify(ui.activeGameRoom.inviteLinkCopied, "success", 2500);
     } catch {
-      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, ui.activeGameRoom.error);
+      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, "error");
     }
   }
 
@@ -129,10 +129,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
       setExitingRoom(true);
       clearSession();
       reset();
-      navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
+      navigate("/", { state: { criticalError: data?.reason || ui.activeGameRoom.youWereKickedFromThe } });
     }
     function onVotedAfk(data: { message?: string }) {
-      notify(data?.message || "You were marked AFK by room vote.", ui.activeGameRoom.warning);
+      notify(data?.message || ui.activeGameRoom.markedAfkByRoomVote, "warning");
     }
     // One seat per account per room: another tab took this one over. Say so
     // rather than leaving this tab on a board that has silently stopped.
@@ -144,7 +144,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       navigate("/", {
         state: {
           criticalError:
-            data?.reason || "This room was opened in another tab.",
+            data?.reason || ui.activeGameRoom.thisRoomWasOpenedIn,
         },
       });
     }
@@ -186,7 +186,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       const response = await emitWithAck<AckResponse>("start_game", {});
       if (!response.ok) setStartError(refusalText(response, ui.activeGameRoom.couldNotStartGamePleaseTry));
     } catch (startError) {
-      setStartError(socketRequestErrorMessage(startError, "start the game"));
+      setStartError(socketRequestErrorMessage(startError, ui.activeGameRoom.startTheGame));
     } finally {
       setStartBusy(false);
     }
@@ -198,10 +198,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("propose_restart_vote", {});
       if (!response.ok) {
-        notify(refusalText(response, ui.activeGameRoom.couldNotStartRestartVote), ui.activeGameRoom.error);
+        notify(refusalText(response, ui.activeGameRoom.couldNotStartRestartVote), "error");
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "start a restart vote"), ui.activeGameRoom.error);
+      notify(socketRequestErrorMessage(restartError, ui.activeGameRoom.startARestartVote), "error");
     } finally {
       setRestartBusy(false);
     }
@@ -213,10 +213,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("cast_restart_vote", { vote });
       if (!response.ok) {
-        notify(refusalText(response, ui.activeGameRoom.couldNotRecordYourRestartVote), ui.activeGameRoom.error);
+        notify(refusalText(response, ui.activeGameRoom.couldNotRecordYourRestartVote), "error");
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "record your restart vote"), ui.activeGameRoom.error);
+      notify(socketRequestErrorMessage(restartError, ui.activeGameRoom.recordYourRestartVote), "error");
     } finally {
       setRestartBusy(false);
     }
@@ -234,14 +234,24 @@ export function ActiveGameRoom({ code }: { code: string }) {
       );
       if (!response.ok) {
         notify(
-          refusalText(response, ui.activeGameRoom.couldNotChangeSuggestion({ action })),
-          ui.activeGameRoom.error,
+          refusalText(
+            response,
+            action === "accept"
+              ? ui.activeGameRoom.couldNotAcceptSuggestion
+              : ui.activeGameRoom.couldNotDismissSuggestion,
+          ),
+          "error",
         );
       }
     } catch (suggestionError) {
       notify(
-        socketRequestErrorMessage(suggestionError, `${action} the color suggestion`),
-        ui.activeGameRoom.error,
+        socketRequestErrorMessage(
+          suggestionError,
+          action === "accept"
+            ? ui.activeGameRoom.acceptTheColorSuggestion
+            : ui.activeGameRoom.dismissTheColorSuggestion,
+        ),
+        "error",
       );
     } finally {
       setColorSuggestionBusy(false);
@@ -312,11 +322,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
       )}
       {leaveConfirmationOpen && (
         <ConfirmationDialog
-          title={amDrawer ? "Leave during your turn?" : "Leave active game?"}
+          title={amDrawer ? ui.activeGameRoom.leaveDuringYourTurn : ui.activeGameRoom.leaveActiveGame}
           description={amDrawer
-            ? "You’re the current drawer. Leaving now will interrupt your turn and advance the game for everyone."
-            : "The game is still in progress. You’ll leave the room and give up your place in this game."}
-          confirmLabel="Leave game"
+            ? ui.activeGameRoom.youReTheCurrentDrawer
+            : ui.activeGameRoom.theGameIsStillIn}
+          confirmLabel={ui.activeGameRoom.leaveGame}
           onCancel={() => setLeaveConfirmationOpen(false)}
           onConfirm={() => {
             setLeaveConfirmationOpen(false);
@@ -383,11 +393,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 disabled={restartBusy || restartCooldownSeconds > 0}
                 onClick={() => void handleProposeRestart()}
                 aria-label={restartCooldownSeconds > 0
-                  ? `Restart vote available in ${restartCooldownSeconds} seconds`
-                  : "Propose restarting the game"}
+                  ? ui.activeGameRoom.restartVoteAvailableInRestartCooldownSeconds({ restartCooldownSeconds })
+                  : ui.activeGameRoom.proposeRestartingTheGame}
                 title={restartCooldownSeconds > 0
-                  ? `Restart vote available in ${restartCooldownSeconds}s`
-                  : "Propose a vote to restart the game"}
+                  ? ui.activeGameRoom.restartVoteAvailableInRestartCooldownSeconds2({ restartCooldownSeconds })
+                  : ui.activeGameRoom.proposeAVoteToRestart}
               >
                 <RoundsIcon size={16} />
                 {restartCooldownSeconds > 0 && (
@@ -403,8 +413,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
               className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
               aria-pressed={isAfk}
               onClick={handleToggleAfk}
-              aria-label={isAfk ? "Back from AFK" : "Go AFK"}
-              title={isAfk ? "Back from AFK" : "Go AFK"}
+              aria-label={isAfk ? ui.activeGameRoom.backFromAfk : ui.activeGameRoom.goAfk}
+              title={isAfk ? ui.activeGameRoom.backFromAfk : ui.activeGameRoom.goAfk}
             >
               <MoonIcon size={14} />
               <span className="header-action-label">{ui.activeGameRoom.afk}</span>
@@ -470,7 +480,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           height="55%"
           className="players-sheet"
           testId="players-drawer"
-          closeLabel="Close players"
+          closeLabel={ui.activeGameRoom.closePlayers}
           onDismiss={() => setPlayersSheetOpen(false)}
         >
           <ConnectedRoomPlayersPanel mode={roomView} />

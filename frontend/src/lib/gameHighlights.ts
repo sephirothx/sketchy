@@ -33,14 +33,14 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
     case "hardest_prompt":
       return {
         kind: highlight.kind,
-        label: "Hardest prompt",
+        label: ui.gameHighlights.hardestPrompt,
         value: `${highlight.correctGuessCount} of ${highlight.totalGuesserCount} guessed it`,
         prompt: highlight.prompt,
       };
     case "fastest_guess":
       return {
         kind: highlight.kind,
-        label: "Fastest guess",
+        label: ui.gameHighlights.fastestGuess,
         value: seconds(highlight.seconds),
         prompt: highlight.prompt,
         name: highlight,
@@ -48,21 +48,21 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
     case "best_drawer":
       return {
         kind: highlight.kind,
-        label: "Best drawer",
+        label: ui.gameHighlights.bestDrawer,
         value: `${percent(highlight.guessRatio)} guessed`,
         name: highlight,
       };
     case "quickest_average":
       return {
         kind: highlight.kind,
-        label: "Quickest on average",
+        label: ui.gameHighlights.quickestOnAverage,
         value: seconds(highlight.seconds),
         name: highlight,
       };
     case "most_reacted_drawing":
       return {
         kind: highlight.kind,
-        label: "Most reacted drawing",
+        label: ui.gameHighlights.mostReactedDrawing,
         value: ui.gameHighlights.reactionCount({ count: highlight.reactionCount }),
         prompt: highlight.prompt,
         name: highlight,

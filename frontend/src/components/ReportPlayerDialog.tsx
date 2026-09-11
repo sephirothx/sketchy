@@ -5,6 +5,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 /** What went with the report, in one sentence.
 
@@ -22,24 +23,24 @@ function sentSummary(sent: {
       : null;
   if (sent.drawing) {
     return messages
-      ? `Sent, with their drawing and ${messages} attached.`
-      : "Sent, with their drawing attached.";
+      ? ui.reportPlayerDialog.sentWithTheirDrawingAnd({ messages })
+      : ui.reportPlayerDialog.sentWithTheirDrawingAttached;
   }
   const base = messages
-    ? `Sent, with ${messages} attached.`
-    : "Sent. They had said nothing in this room, so there are no messages attached.";
+    ? ui.reportPlayerDialog.sentWithMessagesAttached({ messages })
+    : ui.reportPlayerDialog.sentTheyHadSaidNothing;
   return sent.drawingRequested
-    ? `${base} The turn had ended, so the drawing could not be attached.`
+    ? ui.reportPlayerDialog.baseTheTurnHadEnded({ base })
     : base;
 }
 
 const REASONS: { value: ReportReason; label: string }[] = [
-  { value: "harassment", label: "Harassment or abuse" },
-  { value: "offensive_drawing", label: "Offensive drawing" },
-  { value: "inappropriate_name", label: "Inappropriate name" },
-  { value: "cheating", label: "Cheating" },
-  { value: "spam", label: "Spam" },
-  { value: "inappropriate_avatar", label: "Inappropriate picture" },
+  { value: "harassment", get label() { return ui.reportPlayerDialog.harassmentOrAbuse; } },
+  { value: "offensive_drawing", get label() { return ui.reportPlayerDialog.offensiveDrawing; } },
+  { value: "inappropriate_name", get label() { return ui.reportPlayerDialog.inappropriateName; } },
+  { value: "cheating", get label() { return ui.reportPlayerDialog.cheating; } },
+  { value: "spam", get label() { return ui.reportPlayerDialog.spam; } },
+  { value: "inappropriate_avatar", get label() { return ui.reportPlayerDialog.inappropriatePicture; } },
 ];
 
 /** Report somebody in this room.
@@ -105,7 +106,7 @@ export function ReportPlayerDialog({
         includeDrawing: drawingRequested,
       });
       if (!result.ok) {
-        setError(result.error ?? "That report could not be sent.");
+        setError(refusalText(result, ui.reportPlayerDialog.reportCouldNotBeSent));
         return;
       }
       setSent({
@@ -114,7 +115,7 @@ export function ReportPlayerDialog({
         drawingRequested,
       });
     } catch (problem) {
-      setError(socketRequestErrorMessage(problem, "send that report"));
+      setError(socketRequestErrorMessage(problem, ui.reportPlayerDialog.sendThatReport));
     } finally {
       setBusy(false);
     }
@@ -140,7 +141,7 @@ export function ReportPlayerDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          {sent === null ? `Report ${nickname}` : "Report sent"}
+          {sent === null ? ui.reportPlayerDialog.reportNickname({ nickname }) : ui.reportPlayerDialog.reportSent}
         </h3>
 
         {sent === null ? (
@@ -202,7 +203,7 @@ export function ReportPlayerDialog({
                 </p>
               )}
               <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? "Sending…" : "Send report"}
+                {busy ? ui.reportPlayerDialog.sending : ui.reportPlayerDialog.sendReport}
               </button>
             </form>
           </>
@@ -216,7 +217,7 @@ export function ReportPlayerDialog({
         )}
 
         <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent === null ? "Cancel" : "Close"}
+          {sent === null ? ui.reportPlayerDialog.cancel : ui.reportPlayerDialog.close}
         </button>
       </div>
     </div>,

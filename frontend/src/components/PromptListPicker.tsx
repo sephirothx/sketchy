@@ -106,8 +106,10 @@ export function PromptListPicker({
       );
       if (!selection.ok) {
         setShareError(
-          `That list is in ${promptLanguageLabel(selection.language)}; this room is in `
-          + `${promptLanguageLabel(language)}.`,
+          ui.promptListPicker.languageMismatch({
+            listLanguage: promptLanguageLabel(selection.language),
+            roomLanguage: promptLanguageLabel(language),
+          }),
         );
         return;
       }
@@ -186,7 +188,7 @@ export function PromptListPicker({
                 className={`toggle-chip ${isSelected ? "is-selected" : ""}`}
                 aria-pressed={isSelected}
                 disabled={disabled || (isSelected && isOnlySelected)}
-                title={wl.description || `${wl.name} (${wl.promptCount} prompts)`}
+                title={wl.description || ui.promptListPicker.namePromptCountPrompts({ name: wl.name, promptCount: wl.promptCount })}
                 onClick={() => handleToggle(wl.slug)}
               >
                 <span className="toggle-chip-status" aria-hidden="true">
@@ -222,7 +224,7 @@ export function PromptListPicker({
       </div>
       <form className="prompt-list-share-form" onSubmit={(event) => void addSharedList(event)}>
         <label htmlFor="prompt-list-share-code">{ui.promptListPicker.addUnlistedListByCode}</label>
-        <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" className="btn btn-primary btn-compact" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? "Adding…" : "Add"}</button></div>
+        <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" className="btn btn-primary btn-compact" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? ui.promptListPicker.adding : ui.promptListPicker.add}</button></div>
         {shareError && <p className="prompt-list-fallback-note" role="alert">{shareError}</p>}
       </form>
       {reportNotice && <p className="prompt-list-manager-notice" role="status">{reportNotice}</p>}
@@ -232,7 +234,7 @@ export function PromptListPicker({
         onClose={() => setReportingSlug(null)}
         onSubmitted={() => {
           setReportingSlug(null);
-          setReportNotice("Report sent for moderator review.");
+          setReportNotice(ui.promptListPicker.reportSentForModeratorReview);
         }}
       />}
     </fieldset>

@@ -72,7 +72,7 @@ export function DeleteAccountDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          {isGuest ? "Delete this guest" : "Delete your account"}
+          {isGuest ? ui.deleteAccountDialog.deleteThisGuest : ui.deleteAccountDialog.deleteYourAccount}
         </h3>
         <p className="modal-body">
           {ui.deleteAccountDialog.whatIsRemoved({ isGuest })}
@@ -120,11 +120,11 @@ export function DeleteAccountDialog({
             className="modal-button account-delete-confirm"
             disabled={confirmation !== CONFIRMATION || deleting}
           >
-            {deleting ? "Deleting…" : "Delete for good"}
+            {deleting ? ui.deleteAccountDialog.deleting : ui.deleteAccountDialog.deleteForGood}
           </button>
         </form>
         <button type="button" className="modal-dismiss" onClick={onClose} disabled={deleting}>
-          {isGuest ? "Keep playing" : "Keep my account"}
+          {isGuest ? ui.deleteAccountDialog.keepPlaying : ui.deleteAccountDialog.keepMyAccount}
         </button>
       </div>
     </div>

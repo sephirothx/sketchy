@@ -258,7 +258,7 @@ export function RoomChatPanel({
       setDeliveryError(null);
       sendGuess(trimmed, {
         onUndelivered: () =>
-          setDeliveryError(`Your guess "${trimmed}" did not reach the server. Send it again.`),
+          setDeliveryError(ui.roomChatPanel.yourGuessTrimmedDidNot({ trimmed })),
       });
       setHistory((current) =>
         current.length === 0 || current[current.length - 1] !== trimmed
@@ -283,7 +283,7 @@ export function RoomChatPanel({
         setError(refusalText(response, ui.roomChatPanel.couldNotSendMessage));
       }
     } catch (sendError) {
-      setError(socketRequestErrorMessage(sendError, "send the message"));
+      setError(socketRequestErrorMessage(sendError, ui.roomChatPanel.sendTheMessage));
     } finally {
       setSending(false);
     }
@@ -313,10 +313,10 @@ export function RoomChatPanel({
       <div className="room-panel-heading room-chat-heading">
         <h2 id="room-chat-title">
           {mode === "waiting"
-            ? "Chat while you wait"
+            ? ui.roomChatPanel.chatWhileYouWait
             : mode === "game-end"
-              ? "Game chat"
-              : "Guess and chat"}
+              ? ui.roomChatPanel.gameChat
+              : ui.roomChatPanel.guessAndChat}
         </h2>
       </div>
 
@@ -331,11 +331,11 @@ export function RoomChatPanel({
           onScroll={handleScroll}
           tabIndex={0}
           role="log"
-          aria-label={mode === "playing" ? "Guesses and chat" : "Room chat"}
+          aria-label={mode === "playing" ? ui.roomChatPanel.guessesAndChat : ui.roomChatPanel.roomChat}
         >
           {messages.length === 0 ? (
             <p className="waiting-chat-empty">
-              {mode === "waiting" ? "Say hello before the game starts." : "No messages yet."}
+              {mode === "waiting" ? ui.roomChatPanel.sayHelloBeforeTheGame : ui.roomChatPanel.noMessagesYet}
             </p>
           ) : (
             messages.map((message) => (
@@ -459,7 +459,7 @@ export function RoomChatPanel({
                   }, 150);
                 }}
                 placeholder={
-                  mode === "playing" && canGuess ? "Type your guess..." : "Type a message..."
+                  mode === "playing" && canGuess ? ui.roomChatPanel.typeYourGuess : ui.roomChatPanel.typeAMessage
                 }
                 maxLength={500}
                 autoComplete="off"

@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /**
  * The reaction set and the rules around it (#520), free of runtime imports so
  * `frontend/tests` can load it under bare `node --test`.
@@ -24,16 +25,16 @@ export interface ReactionEmoji {
 
 /** Every code this build knows, in the order a picker shows them. */
 export const REACTION_GLYPHS: readonly ReactionEmoji[] = [
-  { code: "heart", glyph: "\u2764\uFE0F", label: "Love it" },
-  { code: "laugh", glyph: "\uD83D\uDE02", label: "Funny" },
-  { code: "wow", glyph: "\uD83D\uDE2E", label: "Wow" },
-  { code: "fire", glyph: "\uD83D\uDD25", label: "Fire" },
+  { code: "heart", glyph: "\u2764\uFE0F", get label() { return ui.reactions.loveIt; } },
+  { code: "laugh", glyph: "\uD83D\uDE02", get label() { return ui.reactions.funny; } },
+  { code: "wow", glyph: "\uD83D\uDE2E", get label() { return ui.reactions.wow; } },
+  { code: "fire", glyph: "\uD83D\uDD25", get label() { return ui.reactions.fire; } },
 ];
 
 export const RETIRED_REACTION_CODES: ReadonlySet<string> = new Set();
 
 /** A code the server added after this build shipped still needs a face. */
-const UNKNOWN_REACTION: ReactionEmoji = { code: "", glyph: "\u2B50", label: "Reaction" };
+const UNKNOWN_REACTION: ReactionEmoji = { code: "", glyph: "\u2B50", get label() { return ui.reactions.reaction; } };
 
 export function offeredReactions(): ReactionEmoji[] {
   return REACTION_GLYPHS.filter((emoji) => !RETIRED_REACTION_CODES.has(emoji.code));

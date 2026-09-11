@@ -226,7 +226,7 @@ export function LanguageFace({
 }
 
 function accessibleName(value: LanguageChoice): string {
-  if (value === ANY_LANGUAGE) return "Every language";
+  if (value === ANY_LANGUAGE) return ui.languagePicker.everyLanguage;
   const endonym = promptLanguageEndonym(value);
   const english = promptLanguageLabel(value);
   return english === endonym ? endonym : `${endonym} (${english})`;

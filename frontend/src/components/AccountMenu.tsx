@@ -28,7 +28,7 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { BugReportDialog } from "./BugReportDialog";
-import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
+import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import {
   BugIcon,
   BulbIcon,
@@ -183,10 +183,10 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         }
         aria-label={
           isGuest
-            ? `${shownName}. Your display name is not saved.`
+            ? ui.accountMenu.guestIdentity({ name: shownName })
             : waiting > 0
-              ? `Signed in as ${shownName}. ${waiting} friend request${waiting === 1 ? "" : "s"} waiting.`
-              : `Signed in as ${shownName}`
+              ? ui.accountMenu.signedInWithRequests({ name: shownName, waiting })
+              : ui.accountMenu.signedInAs({ name: shownName })
         }
       >
         <span
@@ -447,7 +447,7 @@ export function AuthDialog({
         return;
       }
       if (password.length < MIN_PASSWORD_LENGTH) {
-        setError(PASSWORD_TOO_SHORT);
+        setError(passwordTooShort());
         return;
       }
       // Optional, so an empty field is fine; a filled-in one that cannot work
@@ -497,7 +497,7 @@ export function AuthDialog({
     } catch (passkeyError) {
       setError(
         passkeyError instanceof DOMException
-          ? "No passkey was used. You can sign in with your password instead."
+          ? ui.accountMenu.noPasskeyWasUsed
           : refusalText(passkeyError, ui.accountMenu.thatPasskeyWasNotAccepted),
       );
       setBusy(false);
@@ -520,13 +520,13 @@ export function AuthDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          {isClaim ? "Create your account" : "Log in"}
+          {isClaim ? ui.accountMenu.createYourAccount : ui.accountMenu.logIn}
         </h3>
         {isClaim && (
           <p className="modal-body">
             {suggestedUsername
-              ? `Create an account to keep ${suggestedUsername} as your username and save your stats on every device.`
-              : "Keep your username and your stats on every device."}
+              ? ui.accountMenu.createAnAccountToKeep({ suggestedUsername })
+              : ui.accountMenu.keepYourUsernameAndYour}
           </p>
         )}
 
@@ -542,7 +542,7 @@ export function AuthDialog({
               onClick={() => void signInWithPasskey()}
               disabled={busy}
             >
-              {busy ? "Waiting for your device…" : "Sign in with a passkey"}
+              {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.signInWithAPasskey}
             </button>
             {passkeyOnly ? (
               <p className="modal-hint">
@@ -650,7 +650,7 @@ export function AuthDialog({
           {error && <p className="auth-error" role="alert">{error}</p>}
 
           <button type="submit" className="modal-button" disabled={busy}>
-            {busy ? "Please wait…" : isClaim ? "Create account" : "Log in"}
+            {busy ? ui.accountMenu.pleaseWait : isClaim ? ui.accountMenu.createAccount : ui.accountMenu.logIn}
           </button>
           {/* Only when creating one: this is the moment an account starts,
               and the expectation is worth setting before anybody plays
@@ -679,7 +679,7 @@ export function AuthDialog({
         )}
 
         <p className="auth-switch">
-          {isClaim ? "Already registered? " : "New here? "}
+          {isClaim ? ui.accountMenu.alreadyRegistered : ui.accountMenu.newHere}
           <button
             type="button"
             className="auth-link"
@@ -696,7 +696,7 @@ export function AuthDialog({
               onSwitchMode(isClaim ? "login" : "claim");
             }}
           >
-            {isClaim ? "Log in" : "Create an account"}
+            {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAnAccount}
           </button>
         </p>
 

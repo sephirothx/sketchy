@@ -24,6 +24,7 @@ import { useAuthStore } from "../store/authStore";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import type { DrawingReaction } from "../types";
 import type { RoomShellMode } from "./RoomShell";
+import { ui } from "../content/ui/index.ts";
 
 const NO_REACTIONS: DrawingReaction[] = [];
 
@@ -255,7 +256,7 @@ function CanvasOverlay() {
     <>
       {phase === "choosing_prompt" && !amDrawer ? (
         <ChoosingPromptOverlay
-          drawerNickname={drawerNickname || "The next player"}
+          drawerNickname={drawerNickname || ui.gameRoomRegions.theNextPlayer}
           drawerNameColor={drawerNameColor}
         />
       ) : null}
@@ -340,15 +341,15 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
   } = useToolbarState(amDrawer);
 
   const canvasLabel = canDrawNow
-    ? "Drawing canvas. You are drawing."
+    ? ui.gameRoomRegions.drawingCanvasYouAreDrawing
     : me?.isSpectator
-      ? `Drawing canvas. Spectating ${drawerNickname || "the drawer"}.`
-      : `Drawing canvas. ${drawerNickname || "A player"} is drawing.`;
+      ? ui.gameRoomRegions.canvasSpectating({ drawer: drawerNickname || ui.gameRoomRegions.theDrawer })
+      : ui.gameRoomRegions.canvasSomeoneDrawing({ drawer: drawerNickname || ui.gameRoomRegions.aPlayer });
 
   const phaseAnnouncement = phase === "drawing"
     ? (canDrawNow
-      ? "Your turn to draw."
-      : `${drawerNickname || "A player"} is drawing.`)
+      ? ui.gameRoomRegions.yourTurnToDraw
+      : ui.gameRoomRegions.someoneIsDrawing({ drawer: drawerNickname || ui.gameRoomRegions.aPlayer }))
     : "";
 
   return (

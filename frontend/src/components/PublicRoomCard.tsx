@@ -58,10 +58,10 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
       if (ack?.ok && Array.isArray(ack.players)) {
         setRoster(ack.players);
       } else {
-        setRosterError("Could not read who is in this room.");
+        setRosterError(ui.publicRoomCard.couldNotReadWhoIs);
       }
     } catch {
-      setRosterError("Could not read who is in this room.");
+      setRosterError(ui.publicRoomCard.couldNotReadWhoIs);
     }
   }
 
@@ -149,7 +149,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
             disabled={busy}
             onClick={() => onJoin(false)}
           >
-            {pendingMode === "join" ? "Joining…" : "Join"}
+            {pendingMode === "join" ? ui.publicRoomCard.joining : ui.publicRoomCard.join}
           </button>
         )}
         <button
@@ -159,7 +159,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin }: PublicRoomCa
           onClick={() => onJoin(true)}
         >
           <EyeIcon size={14} />
-          {pendingMode === "spectate" ? "Joining…" : "Spectate"}
+          {pendingMode === "spectate" ? ui.publicRoomCard.joining : ui.publicRoomCard.spectate}
         </button>
       </div>
     </article>

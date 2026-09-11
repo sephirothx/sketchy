@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /** Which staff surfaces an account is offered, and under what name.
 
 This decides what to *show*, never what to allow. Every endpoint behind these
@@ -12,14 +13,17 @@ export type OperatorEntry = {
   path: string;
 };
 
+// Not copy: the staff entries are named in English, like the pages they open
+// (R-I18N-01).
 const MODERATION: OperatorEntry = { label: "Moderation", path: "/moderation" };
+// Not copy: a staff page's name (R-I18N-01).
 const OPERATIONS: OperatorEntry = {
   label: "Server operations",
   path: "/admin/operations",
 };
 // Administrators only, and deliberately not beside Moderation: bug reports are
 // about the software, carry build and diagnostic data, and have a different
-// audience from anything in the safety queue.
+// audience from anything in the safety queue. Not copy: a staff page's name.
 const BUG_REPORTS: OperatorEntry = {
   label: "Bug reports",
   path: "/admin/bug-reports",
@@ -95,7 +99,8 @@ export function pendingRoleFromPayload(payload: unknown): "moderator" | null {
 
 /** A role as it is said to the person holding it, not as it is stored. */
 export function roleName(role: string): string {
-  return role === "admin" ? "administrator" : role;
+  if (role === "admin") return ui.operatorAccess.administrator;
+  return role === "moderator" ? ui.operatorAccess.moderator : role;
 }
 
 /** What the account is told, in its own words rather than the ledger's.
@@ -111,31 +116,10 @@ export function roleNoticeText(
   body: string;
 } {
   if (pending) {
-    return {
-      title: "The moderator role is waiting for you",
-      body:
-        "An administrator has offered you the moderator role. It takes effect " +
-        "once you set up two-factor authentication: moderators sign in with a " +
-        "code from an authenticator app, and the role starts the moment that " +
-        "is in place. Your other devices are signed out when it does. Nothing " +
-        "changes until you set it up, and the offer waits in Settings if now " +
-        "is not the time.",
-    };
+    return { title: ui.operatorAccess.pendingTitle, body: ui.operatorAccess.pendingBody };
   }
   if (role === "moderator") {
-    return {
-      title: "You are now a moderator",
-      body:
-        "An administrator gave you the moderator role. A Moderation entry has " +
-        "appeared in your account menu: it is where reports about players and " +
-        "prompts are reviewed. Nothing about how you play changes.",
-    };
+    return { title: ui.operatorAccess.grantedTitle, body: ui.operatorAccess.grantedBody };
   }
-  return {
-    title: "You are no longer a moderator",
-    body:
-      "An administrator removed the moderator role from your account. The " +
-      "Moderation entry has gone from your menu. Nothing else about your " +
-      "account or your games is affected.",
-  };
+  return { title: ui.operatorAccess.removedTitle, body: ui.operatorAccess.removedBody };
 }

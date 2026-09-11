@@ -10,7 +10,7 @@ import {
   requestPasswordReset,
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
-import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
+import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -47,7 +47,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     void confirmEmailToken(token)
       .then(({ address }) => {
         if (cancelled) return;
-        setDone(`${address} is confirmed. You can now recover this account.`);
+        setDone(ui.accountRecoveryPage.addressIsConfirmedYouCan({ address }));
         // The account gained an address; anything showing its state should say so.
         void fetchMe();
       })
@@ -103,7 +103,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     event.preventDefault();
     if (busy) return;
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(PASSWORD_TOO_SHORT);
+      setError(passwordTooShort());
       return;
     }
     setBusy(true);
@@ -111,7 +111,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     try {
       await completePasswordReset(token, password);
       await fetchMe();
-      setDone("Your password is set and you are signed in again.");
+      setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
     } catch (resetError) {
       setError(
         refusalText(resetError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),
@@ -123,14 +123,14 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
 
   const heading =
     mode === "forgot"
-      ? "Reset your password"
+      ? ui.accountRecoveryPage.resetYourPassword
       : mode === "reset"
         ? // Nothing is being chosen when the link is dead, and a heading that
           // says otherwise is the page arguing with its own message.
           linkUsable === false
-          ? "That link no longer works"
-          : "Choose a new password"
-        : "Confirming your email";
+          ? ui.accountRecoveryPage.thatLinkNoLongerWorks
+          : ui.accountRecoveryPage.chooseANewPassword
+        : ui.accountRecoveryPage.confirmingYourEmail;
 
   return (
     <main className="recovery-page">
@@ -181,7 +181,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
               </p>
             )}
             <button type="submit" className="modal-button" disabled={busy}>
-              {busy ? "Please wait…" : "Send a reset link"}
+              {busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.sendAResetLink}
             </button>
           </form>
         ) : mode === "reset" && linkUsable === false ? (
@@ -218,13 +218,13 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
               </p>
             )}
             <button type="submit" className="modal-button" disabled={busy || !token}>
-              {busy ? "Please wait…" : "Set password"}
+              {busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.setPassword}
             </button>
           </form>
         ) : (
           <>
             <p className="recovery-body">
-              {error ?? (busy ? "One moment…" : "Nothing to confirm.")}
+              {error ?? (busy ? ui.accountRecoveryPage.oneMoment : ui.accountRecoveryPage.nothingToConfirm)}
             </p>
             <Link className="modal-button" to="/">
               {ui.accountRecoveryPage.backLobby}

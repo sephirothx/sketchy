@@ -54,7 +54,7 @@ export function ReportedDrawing({
         <CanvasSnapshot actions={actions} label={label} />
       ) : (
         <p className="reported-drawing-status" role={error ? "alert" : "status"}>
-          {error ?? "Loading the drawing…"}
+          {error ?? ui.reportedDrawing.loadingTheDrawing}
         </p>
       )}
       {caption && <figcaption className="reported-drawing-caption">{caption}</figcaption>}
