@@ -3,7 +3,7 @@
 // the explorer build read this, so they cannot drift apart.
 import { MainPage, CreateRoomPage, AccountRecoveryPage, SettingsPage, NotFoundPage, CrashPage } from './pages-entry.mjs';
 import { WaitingRoomPage, PromptChoicePage, DrawingPage, GuessingPage, TurnResultsPage, GameOverPage, HighlightsPage, RecapPage } from './pages-room.mjs';
-import { PromptStatsPage, MyPromptListsPage, ProfilePage, AdminOpsPage, AdminOpsTuningPage, AdminOpsAuditPage, ModerationPage } from './pages-library.mjs';
+import { PromptStatsPage, CommunityCataloguePage, MyPromptListsPage, ProfilePage, AdminOpsPage, AdminOpsTuningPage, AdminOpsAuditPage, ModerationPage } from './pages-library.mjs';
 import { BugReportMenuPage, BugReportDialogPage, BugReportsQueuePage } from './pages-support.mjs';
 
 export const SCREENS = [
@@ -28,6 +28,7 @@ export const SCREENS = [
   { name: 'PromptStats', page: PromptStatsPage, w: 920, h: 980, x: 0, y: 4180, title: 'Prompt stats', group: 'Library and profile' },
   { name: 'MyPromptLists', page: MyPromptListsPage, w: 1020, h: 1080, x: 1010, y: 4180, title: 'My prompt lists', group: 'Library and profile' },
   { name: 'Profile', page: ProfilePage, w: 920, h: 1220, x: 2120, y: 4180, title: 'Profile', group: 'Library and profile' },
+  { name: 'CommunityCatalogue', page: CommunityCataloguePage, w: 1100, h: 1080, x: 3130, y: 4180, title: 'Community catalogue', group: 'Library and profile' },
   // Row 5 — operator pages
   { name: 'AdminOps', page: AdminOpsPage, w: 1100, h: 1860, x: 0, y: 5620, title: 'Server operations — overview', group: 'Operator pages' },
   { name: 'AdminOpsTuning', page: AdminOpsTuningPage, w: 1100, h: 1000, x: 1190, y: 5620, title: 'Server operations — tuning', group: 'Operator pages' },

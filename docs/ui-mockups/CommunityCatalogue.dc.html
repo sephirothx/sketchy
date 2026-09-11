@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+
+    [data-theme="light"] { --paper: #FAF6EF; --well: #FAF6EF; --card: #FFFFFF; --field: #FFFFFF; --ink: #292520; --muted: #6F6759; --faint: #A29883; --line: #E7DFD2; --lineStrong: #D3C8B4; --flagEdge: rgba(41, 37, 32, 0.18); --track: #F1EBE0; --guestBg: #F0EADD; --avatarInk: #FFFFFF; --avMarta: #0F766E; --avBruno: #C2410C; --avYuki: #7E22CE; --avInes: #0369A1; --avGuest: #5B6472; --primaryEdgeSoft: #C9CCF4; --scrim: rgba(30, 27, 22, 0.5); --primary: #5157D8; --primarySoft: #EEEFFB; --primaryInk: #3B41B5; --primaryEdge: #3B41B5; --warm: #E8703A; --warmSoft: #FBEADF; --warmInk: #B5541F; --warmEdge: #C1521F; --brandWordmark: #3D2B1F; --brandFerrule: #75726D; --success: #2F9E44; --successSoft: #E7F5EA; --successInk: #1F7A33; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #B45309; --warningSoft: #FDF1DC; --warningEdge: #EBC98A; --danger: #C92A2A; --dangerSoft: #FBECEC; --gold: #8A6D0B; --silver: #5A6472; --bronze: #8A5A2E; --pcMarta: #0F766E; --pcBruno: #C2410C; --pcYuki: #7E22CE; --pcInes: #0369A1; --pcSparrow: #8A8272; }
+    [data-theme="dark"] { --paper: #0F172A; --well: rgba(2, 6, 23, 0.35); --card: #1E293B; --field: #0F172A; --ink: #F8FAFC; --muted: #94A3B8; --faint: #64748B; --line: #334155; --lineStrong: #475569; --flagEdge: rgba(226, 232, 240, 0.32); --track: rgba(2, 6, 23, 0.45); --guestBg: rgba(148, 163, 184, 0.18); --avatarInk: #132036; --avMarta: #5EE0C2; --avBruno: #F5B26B; --avYuki: #D9B8F5; --avInes: #82AACB; --avGuest: #C3CBD8; --primaryEdgeSoft: rgba(102, 108, 228, 0.5); --scrim: rgba(2, 6, 23, 0.6); --primary: #666CE4; --primarySoft: rgba(102, 108, 228, 0.17); --primaryInk: #C7CBFA; --primaryEdge: #3B41B5; --warm: #EE7E48; --warmSoft: rgba(238, 126, 72, 0.15); --warmInk: #FDBA74; --warmEdge: #9A3412; --brandWordmark: #F8FAFC; --brandFerrule: #94A3B8; --success: #4ADE80; --successSoft: rgba(74, 222, 128, 0.13); --successInk: #86EFAC; --successButton: #2F9E44; --successButtonEdge: #247C34; --warning: #FBBF24; --warningSoft: rgba(251, 191, 36, 0.13); --warningEdge: rgba(251, 191, 36, 0.4); --danger: #F87171; --dangerSoft: rgba(248, 113, 113, 0.14); --gold: #F5CE62; --silver: #B9C4D4; --bronze: #DFA878; --pcMarta: #2BB3A0; --pcBruno: #F08A54; --pcYuki: #BF87ED; --pcInes: #4FA8E0; --pcSparrow: #A0A5B2; }
+    [data-theme] input::placeholder, [data-theme] textarea::placeholder { color: var(--faint); }
+    [data-theme] a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    [data-theme] a:hover { color: var(--primaryInk); }
+    [data-tab="general"] [data-pref-panel]:not([data-pref-panel="general"]) { display: none; }
+    [data-tab="game"] [data-pref-panel]:not([data-pref-panel="game"]) { display: none; }
+    [data-tab="shortcuts"] [data-pref-panel]:not([data-pref-panel="shortcuts"]) { display: none; }
+    [data-pref-tab][aria-current="true"] { background: var(--primarySoft) !important; border-color: var(--primary) !important; }
+    [data-pref-tab][aria-current="true"] strong { color: var(--primaryInk) !important; }
+    [data-pref-tab][aria-current="true"] > span:first-child { color: var(--primary) !important; }
+    h1, h2, h3, h4, p, ul, ol, fieldset, legend { margin: 0; }
+    button { cursor: pointer; }
+    summary { cursor: pointer; }
+    summary.plain { list-style: none; }
+    summary.plain::-webkit-details-marker { display: none; }
+  </style>
+</helmet>
+<div data-theme="{{theme}}" style="min-height: 100vh; background: var(--paper); color: var(--ink); font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif">
+
+<div style="width: 1100px; min-height: 1080px; margin: 0 auto; padding: 26px 24px 48px">
+  
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
+  <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px; padding-left: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Back to lobby</button>
+  <button type="button" style="display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px 5px 5px; min-height: 44px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06)">
+    <span aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--avMarta); color: var(--avatarInk); font-weight: 800; font-size: 14px; flex: none">M</span>
+    <span style="font-weight: 800; font-size: 14px; color: var(--ink)">Marta</span>
+  </button>
+</div>
+  <header style="margin-bottom: 16px">
+    <p style="color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: 0.09em; margin: 0; text-transform: uppercase">Published by players</p>
+    <h1 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 28px; color: var(--ink); margin-top: 4px">Community catalogue</h1>
+    <p style="color: var(--muted); font-size: 14px; margin-top: 6px">Lists players published for anyone to play. Open one to read every prompt in it before you start.</p>
+  </header>
+
+  <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px">
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Every language<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--field); border: 1.5px solid var(--lineStrong); border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 42px">Most starred<span style="color: var(--faint); display: inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="m6 9 6 6 6-6"/></svg></span></span>
+    <label style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: var(--ink)">
+      <span style="display: inline-block; width: 15px; height: 15px; border: 1.5px solid var(--line); border-radius: 4px; background: var(--well)"></span>
+      Only ones I starred
+    </label>
+    <span style="display: inline-flex; gap: 6px; flex-wrap: wrap">
+      <span style="border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 11px; font-size: 13px; color: var(--ink)">Animals</span>
+      <span style="border: 1.5px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 13px; color: var(--muted)">Food and drink</span>
+      <span style="border: 1.5px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 13px; color: var(--muted)">Nature</span>
+      <span style="border: 1.5px solid var(--line); border-radius: 999px; padding: 3px 11px; font-size: 13px; color: var(--muted)">Places</span>
+    </span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px">
+    <ul style="margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+      
+<li style="display: flex; align-items: center; gap: 8px; list-style: none">
+  <div style="flex: 1; display: grid; gap: 2px; border: 1.5px solid var(--ink); border-radius: 10px; padding: 10px 12px; background: var(--card)">
+    <strong style="font-size: 15px; color: var(--ink)">Creatures of the deep</strong>
+    <span style="font-size: 13px; color: var(--muted)">by Marta</span>
+    <span style="font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums">48 prompts · 12 stars</span>
+    <span style="font-size: 13px; color: var(--faint)">Animals · Nature</span>
+  </div>
+  <span style="display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--ink); color: var(--ink)">★</span>
+</li>
+      
+<li style="display: flex; align-items: center; gap: 8px; list-style: none">
+  <div style="flex: 1; display: grid; gap: 2px; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card)">
+    <strong style="font-size: 15px; color: var(--ink)">Kitchen things</strong>
+    <span style="font-size: 13px; color: var(--muted)">by Jonas</span>
+    <span style="font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums">120 prompts · 9 stars</span>
+    <span style="font-size: 13px; color: var(--faint)">Food and drink</span>
+  </div>
+  <span style="display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--line); color: var(--faint)">★</span>
+</li>
+      
+<li style="display: flex; align-items: center; gap: 8px; list-style: none">
+  <div style="flex: 1; display: grid; gap: 2px; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card)">
+    <strong style="font-size: 15px; color: var(--ink)">Landmarks</strong>
+    <span style="font-size: 13px; color: var(--muted)">by Priya</span>
+    <span style="font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums">64 prompts · 7 stars</span>
+    <span style="font-size: 13px; color: var(--faint)">Places</span>
+  </div>
+  <span style="display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--line); color: var(--faint)">★</span>
+</li>
+      
+<li style="display: flex; align-items: center; gap: 8px; list-style: none">
+  <div style="flex: 1; display: grid; gap: 2px; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card)">
+    <strong style="font-size: 15px; color: var(--ink)">Very hard nouns</strong>
+    <span style="font-size: 13px; color: var(--muted)">by Sam</span>
+    <span style="font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums">200 prompts · 3 stars</span>
+    <span style="font-size: 13px; color: var(--faint)">Abstract</span>
+  </div>
+  <span style="display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid var(--line); color: var(--faint)">★</span>
+</li>
+    </ul>
+
+    <div style="background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(20, 16, 10, 0.06); padding: 16px 18px">
+      <h2 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 21px; color: var(--ink); margin: 0">Creatures of the deep</h2>
+      <p style="color: var(--muted); font-size: 13.5px; margin: 4px 0 0">by Marta</p>
+      <p style="color: var(--muted); font-size: 14px; margin: 10px 0 0">Things that live where the light stops.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0">
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Unstar</button>
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Make a copy</button>
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; color: var(--muted); border: 0; border-radius: 10px; padding: 10px 12px; font-family: 'Nunito Sans', 'Segoe UI', system-ui, sans-serif; font-size: 14px; font-weight: 800; min-height: 44px">Report</button>
+      </div>
+      <h3 style="font-family: 'Fredoka', 'Trebuchet MS', system-ui, sans-serif; font-weight: 600; font-size: 16px; color: var(--ink); margin: 14px 0 8px">What is in it</h3>
+      <ol style="columns: 2; margin: 0; padding-left: 20px; color: var(--ink); font-size: 14px; line-height: 1.9">
+        <li>anglerfish</li><li>nautilus</li><li>giant squid</li><li>lanternfish</li>
+        <li>hagfish</li><li>sea urchin</li><li>coelacanth</li><li>oarfish</li>
+      </ol>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"theme": {"editor": "enum", "options": ["light", "dark"], "default": "light"}, "$preview": {"width": 1100, "height": 1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const defaults = { theme: 'light' };
+    return Object.assign({}, defaults, this.props);
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,397 @@
+/* The way into the catalogue from the lobby: a link, not a third header
+   button - the header already packs tightly at 390px. */
+.lobby-catalogue-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------- page
+
+   The catalogue is a shelf: rows of lists to choose between, with the one
+   being read beside them rather than over them, so comparing two does not
+   mean closing one. It follows the lobby's room browser deliberately - that
+   is the screen players arrive from, and a stranger's list and a stranger's
+   room are the same kind of thing to choose between. */
+.community-catalogue-page {
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 24px 16px 64px;
+}
+
+/* A heading block, not a card. Three stacked panels - title, filters,
+   results - read as three empty boxes before they read as a page. */
+.community-catalogue-head { margin-bottom: 18px; }
+
+.community-catalogue-head h1 {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  margin: 4px 0 3px;
+}
+
+.community-catalogue-head p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 58ch;
+}
+
+/* ---------------------------------------------------------------- filters */
+
+.community-catalogue-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* The icon, the select and the chevron are one control, so the wrapper wears
+   the field and the select inside it is bare - the same construction the
+   lobby's search field uses. */
+.community-catalogue-field {
+  align-items: center;
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  display: inline-flex;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.community-catalogue-field:focus-within { border-color: var(--primary); }
+
+.community-catalogue-field select {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  outline: none;
+  padding: 0 2px 0 0;
+}
+
+/* Two orders, both on screen: the segmented control the room form already
+   uses for a choice of two, at the filter bar's height. */
+.community-catalogue-sort {
+  background: var(--track);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.community-catalogue-sort button {
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 6px 14px;
+}
+
+.community-catalogue-sort button[aria-pressed="true"] {
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.community-catalogue-pill {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 42px;
+  padding: 9px 15px;
+}
+
+.community-catalogue-pill[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+/* How many tags are on, on the control that hides them. */
+.community-catalogue-pill-count {
+  background: var(--primary);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 7px;
+}
+
+/* The vocabulary, folded out of the bar into a well of its own: fifteen
+   chips in the bar itself would outweigh every other filter on it. */
+.community-catalogue-tags {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 14px;
+  padding: 11px 12px;
+}
+
+.community-catalogue-tags .toggle-chip {
+  font-size: 13px;
+  min-height: 34px;
+  padding: 5px 12px;
+}
+
+/* ---------------------------------------------------------------- results */
+
+.community-catalogue-body {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 370px);
+}
+
+/* One column until there is room for two: a reading pane squeezed beside a
+   list of cards is unreadable long before the viewport is actually narrow. */
+@media (max-width: 900px) {
+  .community-catalogue-body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.community-catalogue-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The card opens the list; the star is the one thing you can do without
+   opening it, so it is the one control that sits outside the card. */
+.community-catalogue-list li {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.community-catalogue-row {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  padding: 14px 16px;
+  text-align: left;
+}
+
+.community-catalogue-row:hover { border-color: var(--line-strong); }
+
+.community-catalogue-row.is-selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.community-catalogue-row:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+.community-catalogue-row-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.community-catalogue-row-name {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.community-catalogue-by {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Facts rather than a sentence: one icon each, so the numbers can be compared
+   down the column instead of read a row at a time. */
+.community-catalogue-facts {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 4px 15px;
+}
+
+.community-catalogue-facts > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* Your own star, in the one place a list's own numbers are read. */
+.community-catalogue-facts .is-starred { color: var(--warm-ink); }
+
+.community-catalogue-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.star-button {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  color: var(--faint);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+}
+
+.star-button:hover:not(:disabled) { border-color: var(--line-strong); color: var(--muted); }
+
+/* Filled, not merely tinted: whether this list is one of yours is the whole
+   question the control answers, and an outline against an outline is not an
+   answer you can read down a column. */
+.star-button.is-on {
+  background: var(--warm-soft);
+  border-color: var(--warm);
+  color: var(--warm);
+}
+
+.star-button.is-on svg { fill: var(--warm); }
+
+.star-button:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+.star-button:disabled { cursor: default; opacity: 0.6; }
+
+.community-catalogue-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+}
+
+.community-catalogue-empty {
+  color: var(--muted);
+  font-style: italic;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.community-catalogue-notice {
+  background: var(--success-soft);
+  border: 1px solid var(--success);
+  border-radius: var(--radius-sm);
+  color: var(--success-ink);
+  font-weight: 700;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+}
+
+/* ----------------------------------------------------------- reading pane
+
+   Sticky on a wide screen: choosing between two lists should not mean
+   scrolling back up to the one you just left. */
+.community-catalogue-preview { position: sticky; top: 16px; }
+
+@media (max-width: 900px) {
+  .community-catalogue-preview { position: static; }
+}
+
+.community-catalogue-preview .panel { margin-bottom: 0; }
+
+.community-catalogue-preview-head { display: grid; gap: 3px; }
+
+.community-catalogue-preview-head h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.community-catalogue-description {
+  color: var(--ink);
+  font-size: 14px;
+  margin: 10px 0 0;
+}
+
+.community-catalogue-actions {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+  padding-bottom: 14px;
+}
+
+/* Reporting is the one action here that is about the list being wrong rather
+   than about wanting it, so it sits apart from the other three: at the far
+   right of the row where they fit, and alone on the next line where they do
+   not - deliberate either way, rather than an orphan. */
+.community-catalogue-actions .btn-ghost { margin-left: auto; }
+
+.community-catalogue-signed-out {
+  color: var(--muted);
+  font-size: 13.5px;
+  margin: 0;
+}
+
+/* Prompts are words, so they are drawn as words. Two dozen one-word rows in
+   a numbered list is a column of bullets that says nothing about the list;
+   the same words laid out as words can be read at a glance, which is the
+   whole reason the contents are on show (R-LIST-19). */
+.community-catalogue-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.community-catalogue-prompt {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  padding: 4px 10px;
+}
