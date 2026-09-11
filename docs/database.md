@@ -692,7 +692,16 @@ pinned by [`fixtures/account_data_export_v7_fields.json`](../fixtures/account_da
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
 `state` (`pending \| sent \| failed`) · `attempts` · `last_error` · `next_attempt_at` ·
-`created_at` · `sent_at`. `ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
+`locale` (the interface locales, `en` by default) · `created_at` · `sent_at`.
+`ck_email_outbox_sent_at` enforces `(state='sent') = (sent_at IS NOT NULL)`.
+
+`locale` is **frozen when the row is written**, not read when the sweep sends
+(R-I18N-08). Mail is the one place the server writes prose for a player, because
+there is no client at the other end to write it — and the outbox is a durable
+queue, so a send can happen hours after the queue. Resolving the language late
+would mean a preference changed in between re-languages a message that was
+already composed, including the one about the security event that prompted the
+change. `en` for an account with no settings row of its own. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 

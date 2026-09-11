@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 
-from app.auth.mail import queue_email
+from app.auth.mail import queue_email, recipient_locale
 from app.auth.password import PasswordPolicyError, hash_password, validate_password
 from app.auth.sessions import revoke_sessions
 from app.db import init_db, maintenance_engine
@@ -84,6 +84,7 @@ async def reset_password_as_operator(
                     template=EmailTemplate.PASSWORD_CHANGED,
                     payload={"displayName": user.display_name},
                     user_id=user.id,
+                    locale=await recipient_locale(session, user.id),
                     now=changed_at,
                 )
             session.add(

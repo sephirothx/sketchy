@@ -708,6 +708,7 @@ class EmailOutboxEntry(Base):
     __table_args__ = (
         _values_check("state", EMAIL_OUTBOX_STATES, "ck_email_outbox_state"),
         _values_check("template", EMAIL_TEMPLATES, "ck_email_outbox_template"),
+        _values_check("locale", INTERFACE_LOCALES, "ck_email_outbox_locale"),
         CheckConstraint(
             "(state = 'sent') = (sent_at IS NOT NULL)",
             name="ck_email_outbox_sent_at",
@@ -748,6 +749,18 @@ class EmailOutboxEntry(Base):
         index=True,
     )
     template: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The language to write this message in, **frozen when it was queued**
+    # (R-I18N-08). The outbox is a durable queue swept by a loop, so a send
+    # can happen well after the queue; resolving late would let a preference
+    # changed in the meantime silently re-language a message that was already
+    # composed - including one about the security event that prompted the
+    # change. English for an account that has no locale of its own.
+    locale: Mapped[str] = mapped_column(
+        String(8),
+        default=InterfaceLocale.ENGLISH.value,
+        server_default=InterfaceLocale.ENGLISH.value,
+        nullable=False,
+    )
     payload: Mapped[dict] = mapped_column(PortableJSON, default=dict, nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False)
     attempts: Mapped[int] = mapped_column(

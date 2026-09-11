@@ -1541,6 +1541,7 @@ backend/
       bug_report_retention.py A ceiling on how long an undecided bug report keeps its screenshot
     presenters.py Pure construction of room, turn, round, and session payloads
     refusals.py   The one refusal vocabulary (`ErrorCode`), shared by REST and the socket
+    auth/mail_copy.py The five outgoing messages, in each of the seven languages
     announcements.py What the room says about itself, as codes rather than sentences
     game.py       Pure game state machine (turns, prompt choice, scoring) - no I/O, unit-testable
     rooms.py      In-memory Room/Player/RoomManager domain model

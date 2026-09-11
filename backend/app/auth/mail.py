@@ -48,8 +48,9 @@ from app.services.sweeps import (
     overdue_probe,
     sweep_budget_from_env,
 )
-from app.db.models import EmailOutboxEntry, generate_uuid
-from app.domain_values import EmailOutboxState, EmailTemplate
+from app.db.models import EmailOutboxEntry, UserSettings, generate_uuid
+from app.auth.mail_copy import copy_for
+from app.domain_values import EmailOutboxState, EmailTemplate, InterfaceLocale
 
 
 logger = logging.getLogger(__name__)
@@ -99,52 +100,60 @@ def sender_address(environ: Mapping[str, str] | None = None) -> str:
 
 # Rendering lives here rather than in templates on disk because there are five
 # messages and they are all four lines long. A template engine would be more
-# machinery than content.
-def render(template: str, payload: Mapping[str, object], base_url: str) -> tuple[str, str]:
-    name = payload.get("displayName") or "there"
+# machinery than content. The *words* moved to `mail_copy.py` when there
+# became seven languages of them (#766); the assembly stayed here, so a
+# locale supplies sentences and never has to know how they are put together.
+def render(
+    template: str,
+    payload: Mapping[str, object],
+    base_url: str,
+    locale: str | None = None,
+) -> tuple[str, str]:
+    """The subject and body for one message, in the language it was queued in.
+
+    `locale` is the row's, frozen when the message was queued rather than
+    resolved now: the sweep can run hours later, and a preference changed in
+    between must not re-language a message that was already composed - least
+    of all the one about the security event that prompted the change
+    (R-I18N-08).
+    """
+    words = copy_for(locale)
+    name = payload.get("displayName")
+    greeting = words.greeting.format(name=name) if name else words.greeting_unnamed
     if template == EmailTemplate.VERIFY_EMAIL.value:
         link = f"{base_url}/verify-email?token={payload.get('token')}"
         return (
-            "Confirm your Sketchy email address",
-            f"Hi {name},\n\n"
-            f"Confirm this address so you can recover your account if you ever "
-            f"lose your password:\n\n{link}\n\n"
-            f"The link works for one day. If you did not ask for this, nothing "
-            f"has changed and you can ignore this message.\n",
+            words.verify_subject,
+            f"{greeting}\n\n{words.verify_body.format(link=link)}\n",
         )
     if template == EmailTemplate.RESET_PASSWORD.value:
         link = f"{base_url}/reset-password?token={payload.get('token')}"
         return (
-            "Reset your Sketchy password",
-            f"Hi {name},\n\n"
-            f"Choose a new password here:\n\n{link}\n\n"
-            f"The link works for one hour and can be used once. If you did not "
-            f"ask for it, your password has not changed and you can ignore "
-            f"this message.\n",
+            words.reset_subject,
+            f"{greeting}\n\n{words.reset_body.format(link=link)}\n",
         )
     if template == EmailTemplate.PASSWORD_CHANGED.value:
         return (
-            "Your Sketchy password was changed",
-            f"Hi {name},\n\n"
-            f"Your password has just been changed and every signed-in device "
-            f"has been signed out.\n\n"
-            f"If this was not you, reset your password immediately at "
-            f"{base_url}/forgot-password.\n",
+            words.changed_subject,
+            f"{greeting}\n\n"
+            f"{words.changed_body.format(link=f'{base_url}/forgot-password')}\n",
         )
     if template == EmailTemplate.ACCOUNT_BANNED.value:
-        reason = payload.get("reason") or "a breach of the rules"
+        reason = payload.get("reason") or words.banned_default_reason
         # The one thing a suspended account most needs, and the only message
         # that reaches it once it cannot sign in: whether this ends. Without
         # it, "suspended for spam" reads as permanent when it is usually a day.
+        # Both clauses are built from the locale's own words rather than
+        # handed to it in English (R-I18N-02).
         expires_at = payload.get("expiresAt")
         when = (
-            f"It lifts on {_readable_date(expires_at)}."
+            words.banned_until.format(date=_readable_date(expires_at))
             if expires_at
-            else "This suspension does not expire on its own."
+            else words.banned_forever
         )
         category = payload.get("category")
         about = (
-            f" It was recorded as {str(category).replace('_', ' ')}."
+            words.banned_about.format(category=str(category).replace("_", " "))
             if category
             else ""
         )
@@ -152,15 +161,23 @@ def render(template: str, payload: Mapping[str, object], base_url: str) -> tuple
         # where the notice shows them, rather than in an inbox we do not
         # control and an outbox row that keeps them for thirty days.
         return (
-            "Your Sketchy account has been suspended",
-            f"Hi {name},\n\nYour account has been suspended for {reason}.{about}\n"
-            f"{when}\n\nSigning in will show you what it was about.\n",
+            words.banned_subject,
+            f"{greeting}\n\n"
+            f"{words.banned_body.format(reason=reason, about=about, when=when)}\n",
         )
     if template == EmailTemplate.CONTENT_HIDDEN.value:
-        what = payload.get("what") or "some content you shared"
+        # A kind, not a phrase: older rows queued before #766 carry the
+        # English sentence itself, and are rendered as they were written
+        # rather than mangled into a category that did not exist yet.
+        kinds = {
+            "prompt": words.hidden_prompt,
+            "prompt_list": words.hidden_prompt_list,
+        }
+        raw = payload.get("what")
+        what = kinds.get(str(raw), str(raw)) if raw else words.hidden_default_what
         return (
-            "Content of yours was hidden",
-            f"Hi {name},\n\n{what} has been hidden after a moderation review.\n",
+            words.hidden_subject,
+            f"{greeting}\n\n{words.hidden_body.format(what=what)}\n",
         )
     raise ValueError(f"no renderer for email template {template!r}")
 
@@ -283,6 +300,22 @@ def mail_is_configured(environ: Mapping[str, str] | None = None) -> bool:
     return bool(values.get("SMTP_HOST", "").strip())
 
 
+async def recipient_locale(session: AsyncSession, user_id: UUID | None) -> str:
+    """The language this account reads in, for a message about to be queued.
+
+    Read once, here, and written onto the row: everything after that point
+    uses the frozen value (R-I18N-08). English for an account with no
+    settings row - a guest being told something, or one that never opened
+    Settings - which is what it would have been written in anyway.
+    """
+    if user_id is None:
+        return InterfaceLocale.ENGLISH.value
+    locale = await session.scalar(
+        select(UserSettings.locale).where(UserSettings.user_id == user_id)
+    )
+    return locale or InterfaceLocale.ENGLISH.value
+
+
 def queue_email(
     session: AsyncSession,
     *,
@@ -290,14 +323,23 @@ def queue_email(
     template: EmailTemplate,
     payload: Mapping[str, object],
     user_id: UUID | None = None,
+    locale: str | None = None,
     now: datetime | None = None,
 ) -> EmailOutboxEntry:
-    """Record a message to send, in the caller's transaction."""
+    """Record a message to send, in the caller's transaction.
+
+    `locale` is **frozen here**, not read when the sweep sends: the outbox is
+    a durable queue and a send can happen hours later, so resolving late
+    would let a preference changed in between re-language a message that was
+    already composed (R-I18N-08). A caller with no locale to hand leaves it
+    out and the message is written in English.
+    """
     entry = EmailOutboxEntry(
         id=generate_uuid(),
         to_address=to_address,
         user_id=user_id,
         template=template.value,
+        locale=(locale or InterfaceLocale.ENGLISH.value),
         payload=dict(payload),
         state=EmailOutboxState.PENDING.value,
         next_attempt_at=now or datetime.now(timezone.utc),
@@ -321,6 +363,10 @@ class _Claim:
     id: UUID
     to_address: str
     template: str
+    # The language the row was queued in. Carried on the claim so the sweep
+    # never has to ask the account again - which is the whole point of
+    # freezing it (R-I18N-08).
+    locale: str
     payload: dict
     attempts: int
 
@@ -394,6 +440,7 @@ async def _claim_due(
                             id=entry.id,
                             to_address=entry.to_address,
                             template=entry.template,
+                            locale=entry.locale,
                             payload=dict(entry.payload),
                             attempts=entry.attempts + 1,
                         )
@@ -438,10 +485,17 @@ def _without_recipient(text: str, address: str) -> str:
 
 
 def _readable_date(value: object) -> str:
-    """An ISO timestamp as a date somebody can read, or as itself when it is
-    not one - a mail that renders the raw string beats one that fails."""
+    """A date somebody can read, in any language, or the raw string.
+
+    ISO - `2026-09-11` - rather than `11 Sep 2026`, because the month name is
+    the one part of a date that needs a locale database, and this project
+    carries none. A date nobody can misread beats one that is charming in
+    English and wrong in six other languages (R-I18N-08). A value that is not
+    a timestamp renders as itself: a mail showing the raw string beats one
+    that fails to send.
+    """
     try:
-        return datetime.fromisoformat(str(value)).strftime("%d %b %Y")
+        return datetime.fromisoformat(str(value)).date().isoformat()
     except (TypeError, ValueError):
         return str(value)
 
@@ -544,7 +598,9 @@ async def deliver_pending(
     async def attempt(claim: _Claim) -> tuple[_Claim, str | None]:
         async with at_once:
             try:
-                subject, body = render(claim.template, claim.payload, links_from)
+                subject, body = render(
+                    claim.template, claim.payload, links_from, claim.locale
+                )
                 await carrier.send(
                     OutgoingMessage(
                         to_address=claim.to_address,

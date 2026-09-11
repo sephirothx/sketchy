@@ -25,14 +25,15 @@ from app.auth.mail import (
     EmailTemplate,
     OutgoingMessage,
     deliver_pending,
+    recipient_locale,
     render,
     OUTBOX_RETENTION,
     purge_expired_outbox_entries,
     message_id_for,
     queue_email,
 )
-from app.db.models import Base, EmailOutboxEntry, generate_uuid
-from app.domain_values import EmailOutboxState
+from app.db.models import Base, EmailOutboxEntry, User, UserSettings, generate_uuid
+from app.domain_values import AccountState, EmailOutboxState, INTERFACE_LOCALES
 
 
 class TrackingFactory:
@@ -671,7 +672,10 @@ def test_a_suspension_mail_says_what_it_was_and_when_it_lifts():
     assert "Repeated abuse in chat." in body
     assert "harassment" in body
     # The thing a suspended player most needs.
-    assert "16 Sep 2026" in body
+    # ISO rather than "16 Sep 2026": a month name needs a locale database
+    # this project does not carry, and the same mail goes out in seven
+    # languages (R-I18N-08).
+    assert "2026-09-16" in body
     assert "Signing in will show you what it was about." in body
 
 
@@ -694,3 +698,132 @@ def test_a_suspension_mail_survives_a_timestamp_it_cannot_read():
         "https://example.test",
     )
     assert "not a date" in body
+
+
+def test_every_message_renders_in_every_language():
+    """Five templates, seven languages, and none of them empty.
+
+    A locale that lost a field would render a message with a hole in it, to
+    somebody who cannot sign in to ask what happened (R-I18N-08).
+    """
+    payload = {
+        "displayName": "Ada",
+        "token": "t",
+        "reason": "spam",
+        "category": "spam",
+        "expiresAt": "2026-09-16T12:00:00+00:00",
+        "what": "prompt_list",
+    }
+    english = {}
+    for locale in INTERFACE_LOCALES:
+        for template in EmailTemplate:
+            subject, body = render(
+                template.value, payload, "https://example.test", locale
+            )
+            assert subject.strip(), f"{locale}/{template.value} has no subject"
+            assert body.strip(), f"{locale}/{template.value} has no body"
+            assert "{" not in body, f"{locale}/{template.value} left a placeholder"
+            assert "Ada" in body, f"{locale}/{template.value} dropped the name"
+            if locale == "en":
+                english[template] = (subject, body)
+            else:
+                assert (subject, body) != english[template], (
+                    f"{locale}/{template.value} is still the English text"
+                )
+
+
+def test_a_language_this_build_does_not_speak_is_written_in_english():
+    """Better a message they can probably read than none at all."""
+    subject, _ = render(
+        EmailTemplate.RESET_PASSWORD.value, {}, "https://example.test", "kl"
+    )
+    english, _ = render(EmailTemplate.RESET_PASSWORD.value, {}, "https://example.test")
+    assert subject == english
+
+
+def test_a_message_with_no_name_still_greets_somebody():
+    """An account that never set a display name, in every language."""
+    for locale in INTERFACE_LOCALES:
+        _, body = render(
+            EmailTemplate.VERIFY_EMAIL.value, {}, "https://example.test", locale
+        )
+        assert body.splitlines()[0].strip(), f"{locale} opens with a blank line"
+
+
+async def test_the_language_is_frozen_when_the_message_is_queued(tmp_path):
+    """Changing the setting after the fact does not re-language the mail.
+
+    The outbox is a durable queue swept by a loop, so a send can happen hours
+    after the queue. Resolving the locale late would mean a preference
+    changed in between rewrites a message that was already composed -
+    including the one about the security event that prompted the change
+    (R-I18N-08).
+    """
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'frozen.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        user_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    User(
+                        id=user_id,
+                        display_name="Ada",
+                        username="ada",
+                        password_hash="$argon2id$not-a-real-hash",
+                        is_anonymous=False,
+                        state=AccountState.REGISTERED.value,
+                    )
+                )
+                session.add(UserSettings(user_id=user_id, locale="de"))
+
+        async with factory() as session:
+            async with session.begin():
+                queue_email(
+                    session,
+                    to_address="ada@example.test",
+                    template=EmailTemplate.PASSWORD_CHANGED,
+                    payload={"displayName": "Ada"},
+                    user_id=user_id,
+                    locale=await recipient_locale(session, user_id),
+                )
+
+        # The reader switches to Portuguese before the sweep runs.
+        async with factory() as session:
+            async with session.begin():
+                settings = await session.get(UserSettings, user_id)
+                settings.locale = "pt"
+
+        sent: list[OutgoingMessage] = []
+
+        class Collecting:
+            async def send(self, message: OutgoingMessage) -> None:
+                sent.append(message)
+
+        await deliver_pending(factory, transport=Collecting())
+        assert len(sent) == 1
+        german, _ = render(
+            EmailTemplate.PASSWORD_CHANGED.value,
+            {"displayName": "Ada"},
+            "https://example.test",
+            "de",
+        )
+        assert sent[0].subject == german, "the message was re-languaged after queueing"
+    finally:
+        await engine.dispose()
+
+
+async def test_an_account_with_no_settings_is_written_to_in_english(tmp_path):
+    """A guest being told something, or an account that never opened Settings."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'nosettings.db'}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            assert await recipient_locale(session, generate_uuid()) == "en"
+            assert await recipient_locale(session, None) == "en"
+    finally:
+        await engine.dispose()
