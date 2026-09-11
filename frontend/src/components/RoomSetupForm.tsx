@@ -140,7 +140,7 @@ export function RoomSetupForm({
       if (total > 0) parts.push(ui.roomSetupForm.promptTotal({ count: total }));
     }
     if (customPrompts.analysis.usableCount > 0) {
-      parts.push(`${customPrompts.analysis.usableCount} custom`);
+      parts.push(ui.roomSetupForm.customCount({ count: customPrompts.analysis.usableCount }));
     }
     return parts.join(" · ");
   })();

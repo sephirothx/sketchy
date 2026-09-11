@@ -427,6 +427,10 @@ export const ES: Catalogue = {
     bestDrawer: "Mejor dibujante",
     quickestOnAverage: "Más rápido de media",
     mostReactedDrawing: "Dibujo con más reacciones",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      plural(p.correct, { one: `${p.correct} de ${p.total} la adivinó`, other: `${p.correct} de ${p.total} la adivinaron` }),
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} adivinado`,
   },
 
   versionBadge: {
@@ -1237,6 +1241,8 @@ export const ES: Catalogue = {
       `Votos de ${p.kind} para ${p.nickname}, ${p.count} de ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `Votos de ${p.kind} para ${p.nickname}, ${p.count} de ${p.required}, incluido el tuyo`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (invitado)`,
   },
 
   profilePage: {
@@ -1668,6 +1674,8 @@ export const ES: Catalogue = {
     noScoring: "Sin puntuación",
     listedInTheLobbyAnyone: "Aparece en el vestíbulo: cualquiera puede entrar.",
     joinableOnlyWithTheCode: "Solo se entra con el código o el enlace de invitación.",
+    customCount: (p: { count: number }) =>
+      counted(p.count, { one: "propia", other: "propias" }),
   },
 
   rulesPage: {

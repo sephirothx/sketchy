@@ -437,6 +437,10 @@ export const EN = {
     bestDrawer: "Best drawer",
     quickestOnAverage: "Quickest on average",
     mostReactedDrawing: "Most reacted drawing",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      `${p.correct} of ${p.total} guessed it`,
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} guessed`,
   },
 
   versionBadge: {
@@ -1249,6 +1253,8 @@ export const EN = {
       `${p.kind} votes for ${p.nickname}, ${p.count} of ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `${p.kind} votes for ${p.nickname}, ${p.count} of ${p.required}, including yours`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (guest)`,
   },
 
   profilePage: {
@@ -1678,6 +1684,8 @@ export const EN = {
     noScoring: "No scoring",
     listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in.",
     joinableOnlyWithTheCode: "Joinable only with the code or invite link.",
+    customCount: (p: { count: number }) =>
+      `${number(p.count)} custom`,
   },
 
   rulesPage: {

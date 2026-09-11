@@ -316,7 +316,7 @@ function FittedPlayerName({
       style={playerNameStyle(nameColor, isAnonymous)}
       // Guests are visually distinct, so state it for screen readers too
       // rather than relying on the italics alone.
-      title={isAnonymous ? `${nickname} (guest)` : undefined}
+      title={isAnonymous ? ui.playerList.guestName({ nickname }) : undefined}
     >
       {nickname}
     </span>

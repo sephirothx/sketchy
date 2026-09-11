@@ -427,6 +427,10 @@ export const DE: Catalogue = {
     bestDrawer: "Beste Zeichnung",
     quickestOnAverage: "Im Schnitt am schnellsten",
     mostReactedDrawing: "Meiste Reaktionen",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      plural(p.correct, { one: `${p.correct} von ${p.total} hat es erraten`, other: `${p.correct} von ${p.total} haben es erraten` }),
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} erraten`,
   },
 
   versionBadge: {
@@ -1237,6 +1241,8 @@ export const DE: Catalogue = {
       `${p.kind}-Stimmen für ${p.nickname}, ${p.count} von ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `${p.kind}-Stimmen für ${p.nickname}, ${p.count} von ${p.required}, deine eingeschlossen`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (Gast)`,
   },
 
   profilePage: {
@@ -1669,6 +1675,8 @@ export const DE: Catalogue = {
     noScoring: "Ohne Punkte",
     listedInTheLobbyAnyone: "In der Lobby gelistet – jeder kann hereinschauen.",
     joinableOnlyWithTheCode: "Nur mit dem Code oder Einladungslink zugänglich.",
+    customCount: (p: { count: number }) =>
+      `${number(p.count)} eigene`,
   },
 
   rulesPage: {

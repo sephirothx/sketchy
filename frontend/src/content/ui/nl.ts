@@ -427,6 +427,10 @@ export const NL: Catalogue = {
     bestDrawer: "Beste tekenaar",
     quickestOnAverage: "Gemiddeld het snelst",
     mostReactedDrawing: "Tekening met de meeste reacties",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      plural(p.correct, { one: `${p.correct} van ${p.total} raadde het`, other: `${p.correct} van ${p.total} raadden het` }),
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} geraden`,
   },
 
   versionBadge: {
@@ -1237,6 +1241,8 @@ export const NL: Catalogue = {
       `Stemmen ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `Stemmen ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}, inclusief die van jou`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (gast)`,
   },
 
   profilePage: {
@@ -1669,6 +1675,8 @@ export const NL: Catalogue = {
     noScoring: "Zonder punten",
     listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen.",
     joinableOnlyWithTheCode: "Alleen toegankelijk met de code of de uitnodigingslink.",
+    customCount: (p: { count: number }) =>
+      `${number(p.count)} eigen`,
   },
 
   rulesPage: {

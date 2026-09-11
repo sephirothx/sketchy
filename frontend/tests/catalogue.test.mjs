@@ -192,7 +192,7 @@ test("the scan would notice a literal put back", () => {
 // unless it says otherwise: a `// Not copy: <why>` comment above it, a key or
 // attribute that is plumbing by name, or a call that is styling or a log.
 const NOT_COPY_NAMES = new Set([
-  "id", "key", "className", "value", "type", "kind", "testId", "href", "path", "icon", "color",
+  "id", "key", "className", "type", "kind", "testId", "href", "path", "icon", "color",
   "event", "code", "slug", "variant", "role", "tone", "mode", "errorCode", "method", "storageKey",
   "format", "hourCycle", "locale", "language", "transform", "rootMargin", "boxShadow",
   "transition", "fontFamily", "background", "gridTemplateColumns", "style", "data-testid", "src",
@@ -230,7 +230,7 @@ function looksLikeASentence(node) {
     if (parts.some((part) => /\w\(/.test(part))) return false;
     const UNITS = /^(px|em|rem|ms|vh|vw|fr|deg)\b/;
     if (parts.some((part) =>
-      /(^|[\s:;,!?·—–])[A-Za-z]{2,}(?=[\s:;,.!?)·—–]|$)/.test(part) && !UNITS.test(part.trim()))) {
+      /(^|[\s:;,!?(·—–])[A-Za-z]{2,}(?=[\s:;,.!?)·—–]|$)/.test(part) && !UNITS.test(part.trim()))) {
       return true;
     }
   }
@@ -277,6 +277,10 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
     }
     if (ts.isPropertyAssignment(parent) && parent.initializer === child) return "table";
     if (ts.isArrayLiteralExpression(parent)) return "list";
+    // `parts.push(`${n} custom`)`, then `parts.join(" · ")`: a list built a
+    // piece at a time is a list all the same.
+    if (ts.isCallExpression(parent) && parent.arguments.includes(child)
+      && ["push", "unshift", "concat"].includes(parent.expression.getText(source).split(".").pop())) return "list";
     if (ts.isReturnStatement(parent) || (ts.isArrowFunction(parent) && parent.body === child)) return "return";
     if (ts.isVariableDeclaration(parent) && parent.initializer === child) return "constant";
     if (ts.isConditionalExpression(parent) && parent.condition !== child) return "branch";
@@ -354,6 +358,10 @@ test("the table scan would notice a sentence put back", () => {
     "const footer = [`${maxPlayers} players`, `${drawingSeconds}s`].join(\" · \");",
     "const scoring = `${scoringLabelFor(mode)} scoring`;",
     'const rounds = count === 1 ? "round" : "rounds";',
+    // The three #786's review found.
+    "parts.push(`${customPrompts.analysis.usableCount} custom`);",
+    "const el = <span title={isAnonymous ? `${nickname} (guest)` : undefined} />;",
+    "const highlight = { label: ui.x.y, value: `${correct} of ${total} guessed it` };",
   ]) {
     assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
   }
