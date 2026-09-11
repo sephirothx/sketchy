@@ -44,6 +44,7 @@ import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { kickedText, supersededText } from "../lib/roomNotices.ts";
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -124,27 +125,28 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }
 
   useEffect(() => {
-    function onKicked(data: { reason?: string }) {
+    function onKicked(data: { code?: string }) {
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();
       reset();
-      navigate("/", { state: { criticalError: data?.reason || ui.activeGameRoom.youWereKickedFromThe } });
+      navigate("/", { state: { criticalError: kickedText(data?.code) } });
     }
-    function onVotedAfk(data: { message?: string }) {
-      notify(data?.message || ui.activeGameRoom.markedAfkByRoomVote, "warning");
+    // One meaning, so nothing to read from the payload: its `message` is
+    // English for a log.
+    function onVotedAfk() {
+      notify(ui.activeGameRoom.markedAfkByRoomVote, "warning");
     }
     // One seat per account per room: another tab took this one over. Say so
     // rather than leaving this tab on a board that has silently stopped.
-    function onSuperseded(data: { reason?: string }) {
+    function onSuperseded(data: { code?: string }) {
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();
       reset();
       navigate("/", {
         state: {
-          criticalError:
-            data?.reason || ui.activeGameRoom.thisRoomWasOpenedIn,
+          criticalError: supersededText(data?.code),
         },
       });
     }

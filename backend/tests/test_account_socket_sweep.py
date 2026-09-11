@@ -56,7 +56,7 @@ async def test_every_socket_of_the_account_is_told_and_then_closed(
     monkeypatch.setattr(main, "sio", server)
     monkeypatch.setattr(main.block_service, "clear", lambda: None)
 
-    async def no_seats(user_id, *, reason, suspension=None):
+    async def no_seats(user_id, *, code, reason, suspension=None):
         return None
 
     monkeypatch.setattr(main, "_remove_account_from_live_rooms", no_seats)
@@ -69,7 +69,7 @@ async def test_every_socket_of_the_account_is_told_and_then_closed(
         monkeypatch.setattr(main, "suspension_payload", suspension_payload)
         await main.remove_banned_account_from_live_rooms("doomed")
     else:
-        payload = {"reason": "Your account was deleted."}
+        payload = {"code": "account_deleted", "reason": "Your account was deleted."}
         await main.remove_deleted_account_from_live_rooms("doomed")
 
     assert server.emitted == [(event, payload, "user:doomed")]
@@ -84,7 +84,7 @@ async def test_deleting_an_account_closes_its_sockets_too(monkeypatch):
     monkeypatch.setattr(main, "sio", server)
     monkeypatch.setattr(main.block_service, "clear", lambda: None)
 
-    async def no_seats(user_id, *, reason, suspension=None):
+    async def no_seats(user_id, *, code, reason, suspension=None):
         return None
 
     monkeypatch.setattr(main, "_remove_account_from_live_rooms", no_seats)
@@ -124,7 +124,7 @@ async def test_the_mark_is_taken_before_the_sweep_awaits_anything(monkeypatch):
         record("reading the suspension")
         return {"reason": "suspended"}
 
-    async def walk_the_rooms(user_id, *, reason, suspension=None):
+    async def walk_the_rooms(user_id, *, code, reason, suspension=None):
         record("walking the rooms")
 
     monkeypatch.setattr(main, "suspension_payload", suspension_payload)

@@ -14,6 +14,9 @@ still cross the wire - a log line, a bug report and an operator reading a
 response by hand all want them - and nothing renders them. That is the half a
 type checker cannot see: `error.message` is a perfectly good string, and
 printing it is how the server became the author of text a player reads.
+That half is checked where the tree can be parsed:
+`frontend/tests/serverProse.test.mjs` accounts for every read of the server's
+prose on a player-facing screen.
 
 The staff allowlist below is the split itself, written down. A new
 `HTTPException` in a player-facing route fails here, and the fix is either to
@@ -22,7 +25,6 @@ raise `Refusal` or to add the route to the list on purpose.
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -127,32 +129,6 @@ def _player_facing_sources() -> list[tuple[Path, str]]:
         if not any(str(path.relative_to(FRONTEND_SRC)).startswith(s) for s in STAFF_SCREENS)
     ]
 
-
-# `x.message` where x is an error, and `something.error || "fallback"`: the two
-# shapes that put the server's English on the screen.
-RENDERS_PROSE = (
-    re.compile(r"\b\w+ instanceof (?:ApiError|Error)\s*\?\s*\w+\.message"),
-    re.compile(r"\w+\??\.error\s*\|\|\s*[\"'`]"),
-)
-
-
-def test_no_player_facing_screen_renders_the_server_s_sentence():
-    """The reader's language is known on the client, so the sentence is written there.
-
-    `refusalText(problem, fallback)` is the one way to turn a refusal into
-    words. A `catch` that reaches for `.message` instead is how a screen ends
-    up in English no matter what the player chose.
-    """
-    offenders = []
-    for path, source in _player_facing_sources():
-        for pattern in RENDERS_PROSE:
-            for match in pattern.finditer(source):
-                line = source[: match.start()].count("\n") + 1
-                offenders.append(f"{path.relative_to(FRONTEND_SRC)}:{line}")
-    assert not offenders, (
-        "these render the server's prose to a player: "
-        f"{sorted(offenders)}. Use `refusalText(problem, fallback)`."
-    )
 
 
 def test_the_client_has_a_sentence_for_every_code():

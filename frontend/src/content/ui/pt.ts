@@ -551,6 +551,8 @@ export const PT: Catalogue = {
     setPassword: "Definir palavra-passe",
     oneMoment: "Um momento…",
     nothingToConfirm: "Nada para confirmar.",
+    resetLinkOnItsWay:
+      "Se essa conta existir e tiver um endereço de e-mail confirmado, vai chegar uma ligação para repor a palavra-passe.",
   },
 
   activeGameRoom: {
@@ -2288,5 +2290,12 @@ export const PT: Catalogue = {
     cheating: "batota",
     spam: "spam",
     inappropriate_avatar: "uma imagem imprópria",
+  },
+  roomNotices: {
+    kickedByVote: "Foste expulso da sala por votação.",
+    roomClosed: "Um administrador fechou esta sala.",
+    removedByAdmin: "Um administrador removeu-te.",
+    accountDeleted: "A tua conta foi eliminada.",
+    accountSuspended: "A tua conta foi suspensa.",
   },
 };

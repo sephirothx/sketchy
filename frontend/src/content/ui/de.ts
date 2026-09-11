@@ -551,6 +551,8 @@ export const DE: Catalogue = {
     setPassword: "Passwort setzen",
     oneMoment: "Einen Moment …",
     nothingToConfirm: "Nichts zu bestätigen.",
+    resetLinkOnItsWay:
+      "Falls dieses Konto existiert und eine bestätigte E-Mail-Adresse hat, ist ein Link zum Zurücksetzen unterwegs.",
   },
 
   activeGameRoom: {
@@ -2289,5 +2291,12 @@ export const DE: Catalogue = {
     cheating: "Schummeln",
     spam: "Spam",
     inappropriate_avatar: "ein unangemessenes Bild",
+  },
+  roomNotices: {
+    kickedByVote: "Du wurdest per Abstimmung aus dem Raum geworfen.",
+    roomClosed: "Ein Administrator hat diesen Raum geschlossen.",
+    removedByAdmin: "Ein Administrator hat dich entfernt.",
+    accountDeleted: "Dein Konto wurde gelöscht.",
+    accountSuspended: "Dein Konto wurde gesperrt.",
   },
 };

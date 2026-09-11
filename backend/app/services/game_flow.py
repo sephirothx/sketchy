@@ -888,7 +888,7 @@ class GameFlowService:
             # just freezes on a board that no longer updates.
             await self._sio.emit(
                 "session_superseded",
-                {"reason": "This room was opened in another tab."},
+                {"code": "opened_elsewhere", "reason": "This room was opened in another tab."},
                 to=superseded_sid,
             )
             # Its disconnect handler runs inline from here, and must not wait

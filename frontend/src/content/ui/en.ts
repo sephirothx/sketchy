@@ -559,6 +559,8 @@ export const EN = {
     setPassword: "Set password",
     oneMoment: "One moment…",
     nothingToConfirm: "Nothing to confirm.",
+    resetLinkOnItsWay:
+      "If that account exists and has a confirmed email address, a reset link is on its way.",
   },
 
   activeGameRoom: {
@@ -2301,5 +2303,12 @@ export const EN = {
     cheating: "cheating",
     spam: "spam",
     inappropriate_avatar: "an inappropriate picture",
+  },
+  roomNotices: {
+    kickedByVote: "You were kicked from the room by vote.",
+    roomClosed: "An administrator closed this room.",
+    removedByAdmin: "An administrator removed you.",
+    accountDeleted: "Your account was deleted.",
+    accountSuspended: "Your account was suspended.",
   },
 };

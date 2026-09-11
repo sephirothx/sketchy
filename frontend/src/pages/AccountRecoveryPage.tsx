@@ -88,8 +88,10 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     setBusy(true);
     setError(null);
     try {
-      const { detail } = await requestPasswordReset(identifier.trim());
-      setDone(detail);
+      // The same answer whether or not the account exists (R-AUTH-09), so it
+      // is written here rather than read from the server's English.
+      await requestPasswordReset(identifier.trim());
+      setDone(ui.accountRecoveryPage.resetLinkOnItsWay);
     } catch (requestError) {
       setError(
         refusalText(requestError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),

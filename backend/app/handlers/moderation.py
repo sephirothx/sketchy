@@ -100,7 +100,7 @@ async def vote_player(ctx: HandlerContext, sid, data):
             ctx.timers.cancel_disconnect_timer(target.id)
             ctx.room_manager.remove_player(room, target.id)
             if target_sid:
-                await ctx.sio.emit("kicked", {"reason": "You were kicked from the room by vote."}, to=target_sid)
+                await ctx.sio.emit("kicked", {"code": "kicked_by_vote", "reason": "You were kicked from the room by vote."}, to=target_sid)
                 await ctx.sio.leave_room(target_sid, room.id)
             await ctx.game_flow.announce(
                 room, Announcement.KICKED_BY_VOTE, {"nickname": target.nickname}

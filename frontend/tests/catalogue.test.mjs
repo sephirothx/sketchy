@@ -90,8 +90,7 @@ function playerFacing() {
   });
 }
 
-function literalsIn(path) {
-  const text = readFileSync(path, "utf8");
+function literalsIn(path, text = readFileSync(path, "utf8")) {
   const source = ts.createSourceFile(
     path, text, ts.ScriptTarget.Latest, true,
     /\.tsx$/.test(path) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
@@ -157,7 +156,7 @@ function literalsIn(path) {
 }
 
 test("no player-facing screen holds a sentence of its own", () => {
-  const offenders = playerFacing().flatMap(literalsIn);
+  const offenders = playerFacing().flatMap((path) => literalsIn(path));
   assert.deepEqual(
     offenders,
     [],
@@ -167,31 +166,22 @@ test("no player-facing screen holds a sentence of its own", () => {
 });
 
 test("the scan would notice a literal put back", () => {
-  // A test that can only pass is not a test. This proves the parser really is
-  // looking at the three places, rather than at a tree it failed to read.
-  const cases = [
-    ['const x = <p>Hello there</p>;', "text"],
-    ['const x = <button aria-label="Close the dialog" />;', "aria-label"],
-    ['notify("Saved.");', "notify()"],
-  ];
-  for (const [snippet, expected] of cases) {
-    const source = ts.createSourceFile(
-      "probe.tsx", snippet, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX,
-    );
-    let seen = false;
-    const visit = (node) => {
-      if (ts.isJsxText(node) && /[A-Za-z]{2}/.test(node.text)) seen ||= expected === "text";
-      if (ts.isJsxAttribute(node) && node.name.getText(source) === "aria-label") {
-        seen ||= expected === "aria-label";
-      }
-      if (ts.isCallExpression(node) && node.expression.getText(source) === "notify") {
-        seen ||= expected === "notify()";
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-    assert.ok(seen, `the scan cannot see a ${expected} literal`);
+  // A test that can only pass is not a test. The snippets go through the scan
+  // itself, parsed as if they were a source file, so this proves the scan and
+  // not a copy of it.
+  const probe = (snippet) => literalsIn(join(ROOT, "__probe__.tsx"), snippet).length > 0;
+  for (const snippet of [
+    "const x = <p>Hello there</p>;",
+    'const x = <button aria-label="Close the dialog" />;',
+    'const x = <AppHeader backLabel="Back to lobby" />;',
+    "const x = <AppHeader backLabel={`Back to ${place}`} />;",
+    'notify("Saved.");',
+    'setError(action === "accept" ? "Could not accept." : "Could not dismiss.");',
+  ]) {
+    assert.ok(probe(snippet), `the scan cannot see: ${snippet}`);
   }
+  assert.ok(!probe('notify(action === "accept" ? ui.a.b : ui.a.c);'),
+    "a value compared against picks the message; it is not part of it");
 });
 
 // Where a sentence hides once it is out of the markup: a table of labels, a
@@ -276,6 +266,8 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
       const op = parent.operatorToken.kind;
       if ((op === ts.SyntaxKind.BarBarToken || op === ts.SyntaxKind.QuestionQuestionToken) && parent.right === child) return "fallback";
       if (op === ts.SyntaxKind.PlusToken) return "concatenation";
+      // `{signedOut && "You signed out everywhere."}` renders the right side.
+      if (op === ts.SyntaxKind.AmpersandAmpersandToken && parent.right === child) return "condition";
     }
     if (ts.isJsxExpression(parent) && !ts.isJsxAttribute(parent.parent)) return "jsx";
     const attr = ts.isJsxAttribute(parent) ? parent : ts.isJsxExpression(parent) && ts.isJsxAttribute(parent.parent) ? parent.parent : null;
@@ -318,6 +310,12 @@ test("the table scan would notice a sentence put back", () => {
     'const y = name || "A player";',
     'function f() { return "Not in a room"; }',
     "const z = `${count} custom prompts`;",
+    // Inside JSX and inside a speaking attribute, where WarningNotice and
+    // SuspensionNotice kept theirs.
+    'const el = <p>{several ? "The messages this was about:" : "The message this was about:"}</p>;',
+    'const el = <p>{signedOut && "You signed out everywhere."}</p>;',
+    'const el = <button aria-label={open ? "Close the menu" : "Open the menu"} />;',
+    'const el = <Header title={name || "A player"} />;',
   ]) {
     assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
   }

@@ -153,7 +153,9 @@ def render(
         )
         category = payload.get("category")
         about = (
-            words.banned_about.format(category=str(category).replace("_", " "))
+            words.banned_about.format(
+                category=words.categories.get(str(category), str(category).replace("_", " "))
+            )
             if category
             else ""
         )

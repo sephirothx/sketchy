@@ -193,7 +193,7 @@ budget. Details of all of this are in [`wire-protocol.md`](wire-protocol.md).
 
 ```
 frontend/src/
-├── main.tsx, App.tsx      Router, identity bootstrap, socket connection
+├── main.tsx, App.tsx      Router, identity bootstrap (the first paint waits for the account, bounded), socket connection
 ├── pages/                 One component per route
 ├── components/            Canvas, toolbar, player list, dialogs, overlays
 ├── content/ui/            The interface's words, one typed module per locale

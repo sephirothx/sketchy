@@ -258,12 +258,11 @@ const serverFullListeners = new Set<(reason: string) => void>();
 // is not scoped to a screen, and the socket is closed immediately afterwards,
 // so this has to be read where the socket lives rather than in a component
 // that may not be mounted.
-socket.on("server_full", (notice: { reason?: string } | undefined) => {
+// One meaning, so the sentence is written here: the payload's `reason` is
+// English, for a log (R-I18N-01).
+socket.on("server_full", () => {
   recordClientError("socket", "server_full");
-  serverFullReason =
-    typeof notice?.reason === "string" && notice.reason
-      ? notice.reason
-      : ui.socket.sketchyIsFullRightNow;
+  serverFullReason = ui.socket.sketchyIsFullRightNow;
   serverFullListeners.forEach((listener) => listener(serverFullReason!));
 });
 

@@ -6,7 +6,6 @@ import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
-import { ApiError } from "../lib/api";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
@@ -142,10 +141,10 @@ function RoomCodeInput({
  * the one thing that will not work.
  */
 function identityMessage(error: unknown): string {
-  if (error instanceof IdentityRequiredError || error instanceof ApiError) {
-    return error.message;
-  }
-  return ui.lobbyBrowserPage.couldNotSaveThatName;
+  // Only the name check's own words are ours to show; an ApiError's message
+  // is the server's English, for a log (R-I18N-01).
+  if (error instanceof IdentityRequiredError) return error.message;
+  return refusalText(error, ui.lobbyBrowserPage.couldNotSaveThatName);
 }
 
 export function LobbyBrowserPage() {

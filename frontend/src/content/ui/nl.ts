@@ -551,6 +551,8 @@ export const NL: Catalogue = {
     setPassword: "Wachtwoord instellen",
     oneMoment: "Een moment…",
     nothingToConfirm: "Niets te bevestigen.",
+    resetLinkOnItsWay:
+      "Als dat account bestaat en een bevestigd e-mailadres heeft, is er een herstellink onderweg.",
   },
 
   activeGameRoom: {
@@ -2289,5 +2291,12 @@ export const NL: Catalogue = {
     cheating: "valsspelen",
     spam: "spam",
     inappropriate_avatar: "een ongepaste afbeelding",
+  },
+  roomNotices: {
+    kickedByVote: "Je bent per stemming uit de kamer gezet.",
+    roomClosed: "Een beheerder heeft deze kamer gesloten.",
+    removedByAdmin: "Een beheerder heeft je verwijderd.",
+    accountDeleted: "Je account is verwijderd.",
+    accountSuspended: "Je account is geschorst.",
   },
 };

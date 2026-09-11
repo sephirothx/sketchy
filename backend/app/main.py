@@ -267,7 +267,7 @@ async def announce_client_config(changed) -> None:
 
 
 async def _remove_account_from_live_rooms(
-    user_id: str, *, reason: str, suspension: dict | None = None
+    user_id: str, *, code: str, reason: str, suspension: dict | None = None
 ) -> None:
     """End live seats immediately after an account loses access.
 
@@ -283,7 +283,7 @@ async def _remove_account_from_live_rooms(
         notice = (
             ("account_suspended", suspension)
             if suspension is not None
-            else ("session_superseded", {"reason": reason})
+            else ("session_superseded", {"code": code, "reason": reason})
         )
         await handler_context.evict_player(room, player.id, notice=notice)
 
@@ -354,13 +354,16 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     # account this sweep is in the middle of ending.
     with handler_context.ending(_sockets_of(user_id)) as sids:
         await _remove_account_from_live_rooms(
-            user_id, reason="Your account was deleted."
+            user_id, code="account_deleted", reason="Your account was deleted."
         )
         # Deletion ends the account as thoroughly as a suspension does, so it
         # ends the sockets the same way. This half was only ever done for bans.
         await _close_every_socket_of(
             user_id,
-            ("session_superseded", {"reason": "Your account was deleted."}),
+            (
+                "session_superseded",
+                {"code": "account_deleted", "reason": "Your account was deleted."},
+            ),
             sids,
         )
 
@@ -375,6 +378,7 @@ async def remove_banned_account_from_live_rooms(user_id: str) -> None:
         suspension = await suspension_payload(async_session_factory, user_id)
         await _remove_account_from_live_rooms(
             user_id,
+            code="account_suspended",
             reason="Your account was suspended.",
             suspension=suspension,
         )
