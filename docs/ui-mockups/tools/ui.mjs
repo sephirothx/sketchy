@@ -136,6 +136,10 @@ const stroke = (paths, size = 16, sw = 2) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none">${paths}</svg>`;
 
 export const icon = {
+  star: (s, filled = false) => stroke(`<path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3Z"${filled ? ' fill="currentColor"' : ''}/>`, s),
+  // A prompt list's size, as DeckIcon draws it: two fanned cards, the back one
+  // masked where the front one lies. `id` keeps the mask unique per artboard.
+  deck: (s, id = 'deck') => stroke(`<mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect width="24" height="24" fill="white" stroke="none"/><rect x="3.8" y="6" width="10.2" height="14" rx="2" transform="rotate(-13 8.9 13)" fill="black" stroke="black" stroke-width="4"/></mask><rect x="9.2" y="2.6" width="10.2" height="14" rx="2" transform="rotate(18 14.3 9.6)" mask="url(#${id})"/><rect x="3.8" y="6" width="10.2" height="14" rx="2" transform="rotate(-13 8.9 13)"/>`, s),
   copy: (s) => stroke('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>', s),
   link: (s) => stroke('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>', s),
   eye: (s) => stroke('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>', s),
@@ -216,6 +220,8 @@ export const flag = {
   de: flagWrap(FLAG_ART.de),
   /** The create form's control: the flag alone, nearly filling its button. */
   big: (language) => flagWrap(FLAG_ART[language] ?? FLAG_ART.en, 36),
+  /** Any width, at the app's 18:13 and corner rule. */
+  sized: (language, width) => flagWrap(FLAG_ART[language] ?? FLAG_ART.en, width),
 };
 
 // A small squiggle underline used under the wordmark and section moments.

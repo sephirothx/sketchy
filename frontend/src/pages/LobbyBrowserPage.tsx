@@ -349,6 +349,13 @@ export function LobbyBrowserPage() {
           <span className="lobby-rooms-count">
             {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
           </span>
+          <button
+            type="button"
+            className="lobby-catalogue-link"
+            onClick={() => navigate("/community-lists")}
+          >
+            {ui.communityCataloguePage.communityCatalogue}
+          </button>
         </div>
 
         {roomsState.loaded && rooms.length > 0 && (

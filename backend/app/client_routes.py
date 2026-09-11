@@ -27,6 +27,8 @@ CLIENT_ROUTES: tuple[str, ...] = (
     "/rules",
     "/prompt-lists",
     "/prompt-lists/:slug",
+    "/community-lists",
+    "/community-lists/:listId",
     "/my-prompt-lists",
     "/profile",
     "/profile/:userId",
