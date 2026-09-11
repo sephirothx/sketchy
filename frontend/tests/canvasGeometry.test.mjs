@@ -44,30 +44,25 @@ test("rectangle and ellipse outlines are direction-independent", () => {
   assert.equal(ellipse[24].y, 240);
 });
 
-test("a triangle dragged upwards stands on the start's row with the start as a corner", () => {
-  // Bottom-left to top-right, then bottom-right to top-left: the same triangle.
-  const upright = [
-    { x: 80, y: 240 },
-    { x: 160, y: 120 },
-    { x: 240, y: 240 },
-  ];
-  assert.deepEqual(shapeOutlinePoints({ x: 0.1, y: 0.4 }, { x: 0.3, y: 0.2 }, "triangle"), upright);
-  assert.deepEqual(
-    shapeOutlinePoints({ x: 0.3, y: 0.4 }, { x: 0.1, y: 0.2 }, "triangle"),
-    [...upright].reverse(),
-  );
-});
-
-test("a triangle dragged downwards is drawn upside down, the start still a corner", () => {
-  // Top-left to bottom-right, then top-right to bottom-left (#787).
-  const inverted = [
-    { x: 80, y: 120 },
+test("a triangle dragged upwards has the start as a base corner and the end as its apex", () => {
+  assert.deepEqual(shapeOutlinePoints({ x: 0.2, y: 0.4 }, { x: 0.3, y: 0.2 }, "triangle"), [
     { x: 160, y: 240 },
     { x: 240, y: 120 },
-  ];
-  assert.deepEqual(shapeOutlinePoints({ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.4 }, "triangle"), inverted);
-  assert.deepEqual(
-    shapeOutlinePoints({ x: 0.3, y: 0.2 }, { x: 0.1, y: 0.4 }, "triangle"),
-    [...inverted].reverse(),
-  );
+    { x: 320, y: 240 },
+  ]);
+  // Leftwards: the base runs the other way from the start.
+  assert.deepEqual(shapeOutlinePoints({ x: 0.3, y: 0.4 }, { x: 0.2, y: 0.2 }, "triangle"), [
+    { x: 240, y: 240 },
+    { x: 160, y: 120 },
+    { x: 80, y: 240 },
+  ]);
+});
+
+test("a triangle dragged downwards is drawn upside down, its apex still the end", () => {
+  // #787: the start and the end of the drag are always two of the corners.
+  assert.deepEqual(shapeOutlinePoints({ x: 0.2, y: 0.2 }, { x: 0.3, y: 0.4 }, "triangle"), [
+    { x: 160, y: 120 },
+    { x: 240, y: 240 },
+    { x: 320, y: 120 },
+  ]);
 });
