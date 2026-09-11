@@ -14,13 +14,18 @@ import {
   fetchReportDrawing,
   listClosedCases,
   listModerationReports,
+  listHeldPublications,
   listPromptContentReports,
   listUserBans,
   revokeUserBan,
   removeReportedAvatar,
   reviewModerationReport,
+  readHeldPublication,
+  reviewHeldPublication,
   reviewPromptContentReport,
   type ContentIncident,
+  type HeldPublication,
+  type HeldPublicationDetail,
   type IncidentEvidence,
   type PlayerReportDrawing,
   composeRepeatNote,
@@ -39,8 +44,8 @@ import { canModerate } from "../lib/operatorAccess";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 
-type Filter = "open" | "players" | "content" | "bans" | "closed";
-type CaseKind = "incident" | "content" | "ban";
+type Filter = "open" | "players" | "content" | "held" | "bans" | "closed";
+type CaseKind = "incident" | "content" | "held" | "ban";
 type Selection = { kind: CaseKind; id: string };
 
 type QueueEntry = {
@@ -107,6 +112,7 @@ const FILTERS: { name: Filter; label: string }[] = [
   { name: "open", label: "All open" },
   { name: "players", label: "Player reports" },
   { name: "content", label: "Prompt content" },
+  { name: "held", label: "Held publications" },
   { name: "bans", label: "Suspensions" },
   { name: "closed", label: "Closed" },
 ];
@@ -416,6 +422,11 @@ export function ModerationPage() {
   const [incidents, setIncidents] = useState<ModerationIncident[]>([]);
   const [content, setContent] = useState<ContentIncident[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
+  // Publications the switch is holding (R-LIST-13). Not a report queue:
+  // nothing was complained about, so there is no reporter and no reason -
+  // only a list waiting for somebody to read it.
+  const [held, setHeld] = useState<HeldPublication[]>([]);
+  const [heldDetail, setHeldDetail] = useState<HeldPublicationDetail | null>(null);
   const [openCount, setOpenCount] = useState(0);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
@@ -467,16 +478,22 @@ export function ModerationPage() {
       // lifted or has expired is part of the record of what was done.
       listUserBans(),
       pending,
+      listHeldPublications(),
     ])
-      .then(([caseResult, banResult, pendingResult]) => {
+      .then(([caseResult, banResult, pendingResult, heldResult]) => {
         setIncidents(caseResult.players);
         setContent(caseResult.content);
         setHasMore(caseResult.hasMore);
         setBans(banResult.bans);
         // Incidents, not reports: the chip counts the work waiting, and
         // five complaints about one thing are one thing to look at.
+        setHeld(heldResult.lists);
         setOpenCount(
-          pendingResult[0].incidents.length + pendingResult[1].incidents.length,
+          pendingResult[0].incidents.length
+            + pendingResult[1].incidents.length
+            // A held list is work waiting too: nobody else is going to
+            // complain about it, because it is out of everyone's reach.
+            + heldResult.waiting,
         );
         setError(null);
       })
@@ -521,6 +538,14 @@ export function ModerationPage() {
       outcome: showingClosed ? incident.outcome : undefined,
       reporterCount: incident.reporterCount,
     }));
+    const heldEntries: QueueEntry[] = held.map((publication) => ({
+      kind: "held",
+      id: publication.id,
+      title: `List “${publication.name}”`,
+      snippet: `by ${publication.ownerDisplayName ?? "Deleted player"} · ${publication.promptCount} prompts`,
+      at: publication.publishedAt ?? "",
+      dot: "warning",
+    }));
     const banEntries: QueueEntry[] = bans.map((ban) => ({
       kind: "ban",
       id: ban.id,
@@ -534,11 +559,17 @@ export function ModerationPage() {
         ? playerEntries
         : filter === "content"
           ? contentEntries
-          : filter === "bans"
-            ? banEntries
-            : [...playerEntries, ...contentEntries];
+          : filter === "held"
+            ? heldEntries
+            : filter === "bans"
+              ? banEntries
+              // Nothing held is decided yet, so it belongs to "All open" and
+              // never to the archive of what was settled.
+              : showingClosed
+                ? [...playerEntries, ...contentEntries]
+                : [...playerEntries, ...contentEntries, ...heldEntries];
     return entries.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [filter, showingClosed, incidents, content, bans]);
+  }, [filter, showingClosed, incidents, content, bans, held]);
 
   // Derived rather than synced by an effect: whatever is clicked wins while
   // it is still in the queue, and the newest entry stands in otherwise.
@@ -551,6 +582,51 @@ export function ModerationPage() {
     }
     return queue.length > 0 ? { kind: queue[0].kind, id: queue[0].id } : null;
   }, [queue, selected]);
+
+  // Up here rather than beside the other cases below, because the effect that
+  // reads the list needs it and hooks may not sit under the early return.
+  const heldCase = useMemo(
+    () =>
+      active?.kind === "held"
+        ? held.find((publication) => publication.id === active.id) ?? null
+        : null,
+    [active, held],
+  );
+
+  // The revision actually on screen, which is the one a decision is taken on:
+  // every decision below names `heldRead.version` rather than the version the
+  // queue summary happens to carry. The two can differ for a moment after an
+  // owner edits a list that is already open, and naming the summary's version
+  // there would release a revision nobody had read (R-LIST-05). Naming what
+  // was read instead means the worst case is the server refusing it.
+  const heldRead =
+    heldDetail && heldCase && heldDetail.id === heldCase.id ? heldDetail : null;
+
+  // Everything about the list comes from that one response once it is here -
+  // name, description, prompts, version - so no field on screen can belong to
+  // a revision the decision does not name. The queue summary stands in only
+  // while the read is in flight, which is also while there is nothing to
+  // decide with.
+  const heldShown = heldRead ?? heldCase;
+
+  // Keyed on the version as well as the list: an owner may edit a list while
+  // it waits, and re-reading only when the selection changes would leave the
+  // old prompts on screen beside a decision that now names the new revision.
+  const heldId = heldCase?.id;
+  const heldVersion = heldCase?.version;
+  // Bumped when a decision is refused, because the reason may be a version
+  // the queue has not caught up with yet: the id and the version can both
+  // come back unchanged, and then nothing above would ask for the list again.
+  const [heldStale, setHeldStale] = useState(0);
+  useEffect(() => {
+    if (heldId === undefined) return;
+    let cancelled = false;
+    // The queue carries a name and a count; a decision needs the words.
+    void readHeldPublication(heldId)
+      .then((detail) => { if (!cancelled) setHeldDetail(detail); })
+      .catch(fail);
+    return () => { cancelled = true; };
+  }, [heldId, heldVersion, heldStale, fail]);
 
   if (hasResolved && !allowed) {
     // The same answer the API gives this account. A page that names the
@@ -671,6 +747,33 @@ export function ModerationPage() {
         under one note.
       </p>
     );
+
+  /**
+   * One held decision, with the resync a refusal needs.
+   *
+   * A 409 here is the version check: the owner edited the list after it was
+   * read, so the revision this names no longer exists to decide on. Dropping
+   * what was read and pulling the queue again is the whole remedy - without
+   * it every retry resubmits the same stale version and is refused the same
+   * way, and the only way out is reloading the browser.
+   */
+  const decideHeld =
+    (id: string, version: number, state: "active" | "hidden") => async () => {
+      try {
+        return await reviewHeldPublication(id, state, note[id], version);
+      } catch (problem) {
+        if (problem instanceof ApiError && problem.status === 409) {
+          // This list's read is the one that went stale, so only it is
+          // dropped: the reviewer may have moved on to another case while
+          // this decision was in flight, and that one is still what they
+          // are reading.
+          setHeldDetail((current) => (current?.id === id ? null : current));
+          setHeldStale((count) => count + 1);
+          load();
+        }
+        throw problem;
+      }
+    };
 
   return (
     <main className="ops-page">
@@ -1242,6 +1345,114 @@ export function ModerationPage() {
             </>
           )}
 
+          {heldCase && heldShown && (
+            <>
+              <div className="mod-case-head">
+                <div>
+                  <SectionLabel>Held publication</SectionLabel>
+                  <h1>{heldShown.name}</h1>
+                  <p className="mod-case-meta">
+                    {heldShown.ownerDisplayName ?? "A deleted player"}
+                    {` · ${heldRead ? heldRead.prompts.length : heldCase.promptCount} prompts`}
+                    {heldShown.publishedAt
+                      ? ` · sent ${formatWhen(heldShown.publishedAt, dateTime)}`
+                      : ""}
+                  </p>
+                </div>
+                <Chip kind="warning">Waiting</Chip>
+              </div>
+
+              {heldShown.description && (
+                <p className="mod-held-description">{heldShown.description}</p>
+              )}
+
+              <section className="ops-card" aria-label="The prompts">
+                <h2>The prompts</h2>
+                {/* Nobody complained about this list, so there is no evidence
+                    panel and nothing to compare against: the prompts are the
+                    whole of what is being decided. */}
+                {heldRead ? (
+                  <ol className="mod-held-prompts">
+                    {heldRead.prompts.map((entry, index) => (
+                      <li key={index}>
+                        <span className="mod-held-prompt">{entry.prompt}</span>
+                        {entry.moderationState !== "active" && (
+                          <Chip kind="danger">
+                            {humanize(entry.moderationState)}
+                          </Chip>
+                        )}
+                        {entry.aliases.length > 0 && (
+                          <span className="mod-held-aliases">
+                            also {entry.aliases.join(", ")}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="ops-empty">Reading the list…</p>
+                )}
+              </section>
+
+              {heldRead && <>
+                {/* A decision names the version it was taken on, so an edit
+                    made while the list sat here cannot be released unread. */}
+                <p className="mod-decision-scope">
+                  This decides version {heldRead.version}. If the owner changes
+                  the list first, the decision is refused and the list comes
+                  back here.
+                </p>
+                <label className="mod-note">
+                  Decision note
+                  <textarea
+                    placeholder="Why, in one line — required to decide"
+                    value={note[heldCase.id] ?? ""}
+                    onChange={(change) =>
+                      setNote((current) => ({
+                        ...current,
+                        [heldCase.id]: change.target.value,
+                      }))
+                    }
+                  />
+                  <span className="mod-note-hint">
+                    Kept in the append-only audit ledger. Hiding tells the owner
+                    if they have a confirmed address.
+                  </span>
+                </label>
+                <div className="mod-actions">
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    disabled={busy === heldCase.id}
+                    onClick={() =>
+                      act(
+                        heldCase.id,
+                        decideHeld(heldCase.id, heldRead.version, "active"),
+                        "Released into the community catalogue.",
+                      )
+                    }
+                  >
+                    Release
+                  </button>
+                  <button
+                    type="button"
+                    className="mod-danger-button"
+                    disabled={busy === heldCase.id}
+                    onClick={() =>
+                      act(
+                        heldCase.id,
+                        decideHeld(heldCase.id, heldRead.version, "hidden"),
+                        "Hidden, and the owner is told if they have a confirmed address.",
+                      )
+                    }
+                  >
+                    Hide it
+                  </button>
+                </div>
+              </>}
+            </>
+          )}
+
           {banCase && (
             <>
               <div className="mod-case-head">
@@ -1314,7 +1525,7 @@ export function ModerationPage() {
             </>
           )}
 
-          {!playerCase && !contentCase && !banCase && (
+          {!playerCase && !contentCase && !banCase && !heldCase && (
             <p className="ops-empty">Nothing selected. The queue is clear.</p>
           )}
         </div>

@@ -79,6 +79,26 @@ export function changeTunables(changes: {
   return apiRequest("/api/admin/tunables", { method: "PATCH", body: changes });
 }
 
+/** Whether a list published from now on waits for a moderator (R-LIST-13).
+ *
+ * The lever that keeps post-hoc moderation a reversible decision: community
+ * content is reviewed after a report, and this turns that into review before
+ * publication without a release. Not retroactive — lists already published
+ * were published under the posture in force at the time. */
+export function readPromptListReview(): Promise<{ review: boolean }> {
+  return apiRequest("/api/admin/prompt-list-review");
+}
+
+export function setPromptListReview(
+  review: boolean,
+  reason: string,
+): Promise<{ review: boolean }> {
+  return apiRequest("/api/admin/prompt-list-review", {
+    method: "POST",
+    body: { review, reason },
+  });
+}
+
 export function readMaintenance(): Promise<MaintenanceState> {
   return apiRequest("/api/admin/maintenance");
 }
