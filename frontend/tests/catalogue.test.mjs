@@ -160,11 +160,22 @@ test("no catalogue entry is blank", () => {
   assert.deepEqual(blank, [], `blank entries render as nothing at all: ${blank}`);
 });
 
+// Groups nobody names directly, each for a stated reason.
+const READ_BY_CODE = {
+  refusals: "ui.refusals[errorCode]",
+  announcements: "ui.announcements[code]",
+  document: "catalogueFor(locale).document, before any component renders",
+};
+
 test("every catalogue group is read by something", () => {
   // A group nobody reads is copy that has outlived its screen, and the next
   // translator pays for it in full.
   const sources = playerFacing().map((path) => readFileSync(path, "utf8")).join("\n");
   const unused = Object.keys(EN).filter((group) => !sources.includes(`ui.${group}.`));
-  // These two are addressed by code rather than by name (`ui.refusals[code]`).
-  assert.deepEqual(unused.sort(), ["announcements", "refusals"]);
+  assert.deepEqual(
+    unused.sort(),
+    Object.keys(READ_BY_CODE).sort(),
+    "a group nobody names is either dead copy or reached by code - and if it "
+      + "is reached by code, say so in READ_BY_CODE with how.",
+  );
 });

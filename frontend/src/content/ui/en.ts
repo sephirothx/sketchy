@@ -392,6 +392,14 @@ export const EN = {
   refusals: REFUSALS,
   announcements: ANNOUNCEMENTS,
 
+  /** What the document itself says: the tab, and what a link preview shows.
+
+      Rendered into `index.html` for a crawler, which arrives before any
+      script, and rewritten here for the reader once their locale is known. */
+  document: {
+    description: "Draw, guess and laugh with friends!",
+  },
+
   /** Shapes that belong to the language rather than to any one screen. */
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */

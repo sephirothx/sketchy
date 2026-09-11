@@ -74,6 +74,11 @@ class UserSettingsSeed(BaseModel):
     prompt_language: Literal["en", "de", "es", "fr", "it", "nl", "pt"] = Field(
         default="en", alias="promptLanguage"
     )
+    # Which language the interface is read in. Seeded from the browser at
+    # registration like the one above, and separate from it for the reason
+    # `InterfaceLocale` gives: playing in English and reading in Dutch is
+    # ordinary (R-I18N-06).
+    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt"] = Field(default="en", alias="locale")
 
     @field_validator("key_bindings")
     @classmethod
@@ -105,6 +110,7 @@ class UserSettingsPatch(BaseModel):
     prompt_language: Literal["en", "de", "es", "fr", "it", "nl", "pt"] | None = Field(
         default=None, alias="promptLanguage"
     )
+    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt"] | None = Field(default=None, alias="locale")
 
     @field_validator("key_bindings")
     @classmethod
@@ -129,6 +135,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "colorblindSafeColors": settings.colorblind_safe_colors,
         "timeFormat": settings.time_format,
         "promptLanguage": settings.prompt_language,
+        "locale": settings.locale,
         "createdAt": settings.created_at.isoformat(),
         "updatedAt": settings.updated_at.isoformat(),
     }

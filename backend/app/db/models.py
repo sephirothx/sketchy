@@ -63,6 +63,7 @@ from app.domain_values import (
     PROMPT_CONTENT_REPORT_REASONS,
     PROMPT_CONTENT_RATINGS,
     PROMPT_EDITORIAL_DIFFICULTIES,
+    INTERFACE_LOCALES,
     PROMPT_LANGUAGES,
     PROMPT_LIST_VISIBILITIES,
     PROMPT_OFFER_SOURCE_KINDS,
@@ -93,6 +94,7 @@ from app.domain_values import (
     PromptContentModerationState,
     PromptContentReportReason,
     PromptEditorialDifficulty,
+    InterfaceLocale,
     PromptLanguage,
     PromptListVisibility,
     ReportReason,
@@ -484,6 +486,7 @@ class UserSettings(Base):
         _values_check(
             "prompt_language", PROMPT_LANGUAGES, "ck_user_settings_prompt_language"
         ),
+        _values_check("locale", INTERFACE_LOCALES, "ck_user_settings_locale"),
         CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
             name="ck_user_settings_volume",
@@ -549,6 +552,17 @@ class UserSettings(Base):
         String(8),
         default=PromptLanguage.ENGLISH.value,
         server_default=PromptLanguage.ENGLISH.value,
+        nullable=False,
+    )
+    # Which language this player reads the interface in (R-I18N-06). Distinct
+    # from `prompt_language`: a Dutch speaker playing an English room is
+    # ordinary, and the two registries are allowed to diverge. Stored per
+    # account so the choice follows a player to their other devices;
+    # registration seeds it from the browser, and it is a setting afterwards.
+    locale: Mapped[str] = mapped_column(
+        String(8),
+        default=InterfaceLocale.ENGLISH.value,
+        server_default=InterfaceLocale.ENGLISH.value,
         nullable=False,
     )
     # When the account was last told it has no way back in. Stored per account

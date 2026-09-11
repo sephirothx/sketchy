@@ -96,6 +96,29 @@ class PromptLanguage(StrEnum):
     PORTUGUESE = "pt"
 
 
+class InterfaceLocale(StrEnum):
+    """The languages the interface itself is written in.
+
+    Deliberately its own registry rather than a reuse of `PromptLanguage`,
+    even though the members are the same seven today. The two answer
+    different questions and are bound by different things: a **prompt
+    language** needs matching semantics before it can be added at all (N-09,
+    R-PROMPT-09), while an **interface locale** needs only somebody to have
+    written the words. The sets are free to diverge - a language nobody can
+    play in could still be one the buttons are readable in - and conflating
+    them would make a Dutch speaker in an English room impossible to
+    describe (R-I18N-06).
+    """
+
+    ENGLISH = "en"
+    GERMAN = "de"
+    SPANISH = "es"
+    FRENCH = "fr"
+    ITALIAN = "it"
+    DUTCH = "nl"
+    PORTUGUESE = "pt"
+
+
 class PromptEditorialDifficulty(StrEnum):
     UNSPECIFIED = "unspecified"
     EASY = "easy"
@@ -503,6 +526,7 @@ RETAINED_MESSAGE_AUDIENCES = tuple(
 )
 NEAR_MISS_KINDS = tuple(kind.value for kind in NearMissKind)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
+INTERFACE_LOCALES = tuple(locale.value for locale in InterfaceLocale)
 PROMPT_EDITORIAL_DIFFICULTIES = tuple(
     difficulty.value for difficulty in PromptEditorialDifficulty
 )

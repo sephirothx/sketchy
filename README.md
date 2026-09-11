@@ -1563,6 +1563,7 @@ frontend/
     lib/socket.ts socket.io-client singleton + REST base URL
     lib/refusals.ts What a refusal says to the player: the sentence per `errorCode`
     lib/announcements.ts The room's own lines, rendered per reader from a code
+    lib/interfaceLocale.ts Which language the interface is read in, and from where
     lib/drawingRules.ts The client's copy of the room's tool and color rules
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry

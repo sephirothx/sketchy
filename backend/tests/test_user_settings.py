@@ -65,6 +65,10 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         "keyBindings": {**DEFAULT_KEY_BINDINGS, "brush": ["b"]},
         "colorblindSafeColors": True,
         "timeFormat": "24h",
+        # Two languages, and they are not the same one: this account plays in
+        # English and reads in German (R-I18N-06).
+        "promptLanguage": "en",
+        "locale": "de",
     }
     registered = await http.post(
         "/api/auth/register",
@@ -125,6 +129,8 @@ async def test_registration_seed_never_overwrites_existing_settings(env):
         {"volume": 1.01},
         {"brushCursor": "dot"},
         {"timeFormat": "13h"},
+        {"locale": "kl"},
+        {"locale": "en-GB"},
         {"keyBindings": {"brush": ["b"]}},
     ],
 )
@@ -138,6 +144,39 @@ async def test_patch_rejects_invalid_or_unbounded_values(env, body):
     ).status_code == 200
     response = await http.patch("/api/users/me/settings", json=body)
     assert response.status_code == 422
+
+
+async def test_the_two_languages_are_kept_apart(env):
+    """Playing in one language and reading in another is ordinary.
+
+    One column could not describe it, and a change to either must leave the
+    other exactly where it was (R-I18N-06).
+    """
+    http, factory = env
+    assert (
+        await http.post(
+            "/api/auth/register",
+            json={
+                "username": "TwoLanguages",
+                "password": PASSWORD,
+                "settings": {"promptLanguage": "en", "locale": "nl"},
+            },
+        )
+    ).status_code == 200
+
+    changed = await http.patch("/api/users/me/settings", json={"locale": "de"})
+    assert changed.status_code == 200
+    assert changed.json() == {**changed.json(), "locale": "de", "promptLanguage": "en"}
+
+    changed = await http.patch("/api/users/me/settings", json={"promptLanguage": "fr"})
+    assert changed.status_code == 200
+    assert changed.json()["locale"] == "de", "the room language moved the interface"
+    assert changed.json()["promptLanguage"] == "fr"
+
+    async with factory() as session:
+        row = await session.scalar(select(UserSettings))
+        assert row is not None
+        assert (row.locale, row.prompt_language) == ("de", "fr")
 
 
 async def test_database_checks_reject_invalid_theme_and_volume(env):
