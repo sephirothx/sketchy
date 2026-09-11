@@ -170,9 +170,13 @@ const paletteColors = ['#ffffff', '#000000', '#c1c1c1', '#4c4c4c', '#ed1c24', '#
 const swatch = (c, active = false) =>
   `<button type="button" aria-label="${c}" style="width: 26px; height: 26px; border-radius: 6px; padding: 0; background-color: ${c}; border: 1px solid rgba(0, 0, 0, 0.15)${active ? `; box-shadow: 0 0 0 2.5px ${T.primary}; transform: scale(1.12)` : ''}"></button>`;
 
+// Two lines, the arrangement the app gives a 624px column in English: what is
+// pressed on the first, the palette under it. The column never fits all four
+// groups on one line; frontend/src/lib/toolbarLayout.ts has the arrangements
+// and the order they are tried in.
 const toolbar = `
 <div style="width: fit-content; max-width: 100%; background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: 16px; padding: 10px 14px; box-shadow: ${T.shadowRaised}">
-  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center">
+  <div style="display: flex; align-items: center; column-gap: 12px; flex-wrap: wrap; justify-content: center">
     <div style="display: flex; align-items: center; gap: 4px">
       ${toolBtn(icon.brush(19), 'Brush', 'P', true)}
       ${toolBtn(icon.fill(19), 'Fill', 'F')}
@@ -188,14 +192,14 @@ const toolbar = `
       <span style="display: inline-flex; color: ${T.faint}">${icon.chevD(13)}</span>
     </button>
     <span style="width: 1.5px; height: 32px; background: ${T.line}"></span>
+    <div style="display: flex; gap: 6px">
+      ${btn.secondary('Undo', { iconL: icon.undo(15), style: 'min-height: 44px; padding: 8px 13px; font-size: 13px' })}
+      ${btn.secondary('Clear', { iconL: icon.trash(15), style: `min-height: 44px; padding: 8px 13px; font-size: 13px; color: ${T.danger}` })}
+    </div>
+    <span style="flex-basis: 100%; height: 10px"></span>
     <div style="display: grid; grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; gap: 3px">
       ${paletteColors.map((c, i) => swatch(c, i === 1)).join('')}
       <label aria-label="Custom color" style="grid-row: span 2; width: 26px; height: 55px; border-radius: 6px; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); display: block"></label>
-    </div>
-    <span style="width: 1.5px; height: 32px; background: ${T.line}"></span>
-    <div style="display: flex; gap: 6px">
-      ${btn.secondary('Undo', { iconL: icon.undo(15), style: 'min-height: 44px; padding: 8px 13px; font-size: 13px' })}
-      ${btn.dangerGhost('Clear', { iconL: icon.trash(15), style: 'min-height: 44px; padding: 8px 10px; font-size: 13px' })}
     </div>
   </div>
 </div>`;

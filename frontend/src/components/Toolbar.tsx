@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
+import { useToolbarLayout } from "../hooks/useToolbarLayout";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
+import { ARRANGEMENTS, arrangementOf, type ToolbarGroup } from "../lib/toolbarLayout";
 import {
   DEFAULT_ALLOWED_TOOLS,
   DEFAULT_COLOR_MODE,
@@ -130,7 +132,17 @@ export function Toolbar({
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
   const sizePickerRef = useRef<HTMLDivElement | null>(null);
   const mobileToolbarRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const keyBindings = useSettingsStore((s) => s.keyBindings);
+  // Above the breakpoint the column decides: the full toolbar in whichever
+  // arrangement fits, or the phone's strip where not even the palette does.
+  const layout = useToolbarLayout(!isMobile, cardRef, mobileToolbarRef);
+  const compact = isMobile || layout === "compact";
+
+  // Each form has its own popovers. One left open while the other is on
+  // screen would be invisible, and still holding Escape.
+  if (!compact && mobilePanel !== null) setMobilePanel(null);
+  if (compact && sizePickerOpen) setSizePickerOpen(false);
 
   const handleSelectColor = useCallback(
     (newColor: string) => {
@@ -288,15 +300,20 @@ export function Toolbar({
     </div>
   );
 
-  if (isMobile) {
-    const dock = typeof document !== "undefined"
+  if (compact) {
+    const dock = isMobile && typeof document !== "undefined"
       ? document.getElementById("room-shell-dock")
       : null;
     // Collapsed controls, as before: one chip opens the tools, one the
-    // colours, one the size. The dock still renders after the chat region,
-    // so the strip sits at the bottom of the screen under the thumb.
+    // colours, one the size. On a phone the dock still renders after the chat
+    // region, so the strip sits at the bottom of the screen under the thumb;
+    // in a desktop column too narrow for the palette it stays under the canvas.
     const mobileToolbar = (
-      <div className="toolbar-container toolbar-mobile" ref={mobileToolbarRef} data-testid="toolbar-mobile">
+      <div
+        className={`toolbar-container toolbar-mobile${isMobile ? "" : " toolbar-compact"}`}
+        ref={mobileToolbarRef}
+        data-testid="toolbar-mobile"
+      >
           <div className="toolbar toolbar-mobile-strip" role="toolbar" aria-label={ui.toolbar.drawingTools}>
             <button
               type="button"
@@ -430,99 +447,116 @@ export function Toolbar({
     return dock ? createPortal(mobileToolbar, dock) : mobileToolbar;
   }
 
-  return (
-    <div className="toolbar-container">
-        <div className="toolbar">
-          <div className="toolbar-group toolbar-tools" aria-label={ui.toolbar.drawingTools}>
-            {tools.map((t) => {
-              const unavailable = disabledReason(t.value);
-              const label = unavailable ?? getToolLabel(t.value, t.name);
-              const badge = getToolBadge(t.value);
-              return (
-                <button
-                  key={t.value}
-                  className={`tool-button${t.value === tool ? " selected" : ""}`}
-                  onClick={() => onToolChange(t.value)}
-                  disabled={unavailable !== null}
-                  aria-label={label}
-                  title={label}
-                >
-                  <span className="tool-glyph">{t.glyph}</span>
-                  {badge && <span className="shortcut-badge">{badge}</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="toolbar-divider" />
-
-          <div className="toolbar-group brush-size-dropdown" ref={sizePickerRef}>
+  const arrangement = arrangementOf(layout) ?? ARRANGEMENTS[0];
+  const groups: Record<ToolbarGroup, React.ReactNode> = {
+    tools: (
+      <div key="tools" className="toolbar-group toolbar-tools" aria-label={ui.toolbar.drawingTools}>
+        {tools.map((t) => {
+          const unavailable = disabledReason(t.value);
+          const label = unavailable ?? getToolLabel(t.value, t.name);
+          const badge = getToolBadge(t.value);
+          return (
             <button
-              type="button"
-              className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
-              onClick={() => setSizePickerOpen((prev) => !prev)}
-              aria-label={ui.toolbar.sizeWithWidth({ tool: labelPrefix, width: brushWidth })}
-              aria-expanded={sizePickerOpen}
-              aria-haspopup="true"
-              aria-controls={sizePickerId}
-              title={ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth })}
+              key={t.value}
+              className={`tool-button${t.value === tool ? " selected" : ""}`}
+              onClick={() => onToolChange(t.value)}
+              disabled={unavailable !== null}
+              aria-label={label}
+              title={label}
             >
-              {sizePreview}
-              <span className="size-text-readout">{ui.toolbar.widthReadout({ width: brushWidth })}</span>
+              <span className="tool-glyph">{t.glyph}</span>
+              {badge && <span className="shortcut-badge">{badge}</span>}
             </button>
-            {sizePickerOpen && sizeSlider}
-          </div>
-
-          <div className="toolbar-divider" />
-
-          <div className={`toolbar-group toolbar-colors${paletteClass}`} aria-label={ui.toolbar.colorPalette}>
-            {colors.map((c) => (
-              <ColorSwatch
-                key={c}
-                color={c}
-                selected={isSelectedColor(c)}
-                label={ui.toolbar.colorOption({ color: c })}
-                title={ui.toolbar.colorSwatch({ color: c })}
-                onSelect={() => handleSelectColor(c)}
-              />
-            ))}
-            {customColorsAllowed && (
-              <label
-                className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
-                style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-                title={ui.toolbar.chooseCustomColor}
-              >
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => handleSelectColor(e.target.value)}
-                  aria-label={ui.toolbar.chooseCustomColor}
-                />
-              </label>
-            )}
-          </div>
-
-          <div className="toolbar-divider" />
-
-          <div className="toolbar-group toolbar-actions" aria-label={ui.toolbar.canvasActions}>
-            <button
-              className="toolbar-action-button undo-button"
-              onClick={requestCanvasUndo}
-              title={ui.toolbar.undoLastStrokeCtrlZ}
-            >
-              <UndoIcon size={18} />
-              <span>{ui.toolbar.undo}</span>
-            </button>
-            <button
-              className="toolbar-action-button clear-button"
-              onClick={requestCanvasClear}
-              title={ui.toolbar.clearCanvas}
-            >
-              <TrashIcon size={18} />
-              <span>{ui.toolbar.clear}</span>
-            </button>
-          </div>
-        </div>
+          );
+        })}
       </div>
+    ),
+    size: (
+      <div key="size" className="toolbar-group brush-size-dropdown" ref={sizePickerRef}>
+        <button
+          type="button"
+          className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
+          onClick={() => setSizePickerOpen((prev) => !prev)}
+          aria-label={ui.toolbar.sizeWithWidth({ tool: labelPrefix, width: brushWidth })}
+          aria-expanded={sizePickerOpen}
+          aria-haspopup="true"
+          aria-controls={sizePickerId}
+          title={ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth })}
+        >
+          {sizePreview}
+          <span className="size-text-readout">{ui.toolbar.widthReadout({ width: brushWidth })}</span>
+        </button>
+        {sizePickerOpen && sizeSlider}
+      </div>
+    ),
+    palette: (
+      <div key="palette" className={`toolbar-group toolbar-colors${paletteClass}`} aria-label={ui.toolbar.colorPalette}>
+        {colors.map((c) => (
+          <ColorSwatch
+            key={c}
+            color={c}
+            selected={isSelectedColor(c)}
+            label={ui.toolbar.colorOption({ color: c })}
+            title={ui.toolbar.colorSwatch({ color: c })}
+            onSelect={() => handleSelectColor(c)}
+          />
+        ))}
+        {customColorsAllowed && (
+          <label
+            className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
+            style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
+            title={ui.toolbar.chooseCustomColor}
+          >
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => handleSelectColor(e.target.value)}
+              aria-label={ui.toolbar.chooseCustomColor}
+            />
+          </label>
+        )}
+      </div>
+    ),
+    // Named by aria-label as well as by their text, because the icon-only
+    // arrangement hides the text.
+    actions: (
+      <div key="actions" className="toolbar-group toolbar-actions" aria-label={ui.toolbar.canvasActions}>
+        <button
+          className="toolbar-action-button undo-button"
+          onClick={requestCanvasUndo}
+          title={ui.toolbar.undoLastStrokeCtrlZ}
+          aria-label={ui.toolbar.undo}
+        >
+          <UndoIcon size={18} />
+          <span className="toolbar-action-label">{ui.toolbar.undo}</span>
+        </button>
+        <button
+          className="toolbar-action-button clear-button"
+          onClick={requestCanvasClear}
+          title={ui.toolbar.clearCanvas}
+          aria-label={ui.toolbar.clear}
+        >
+          <TrashIcon size={18} />
+          <span className="toolbar-action-label">{ui.toolbar.clear}</span>
+        </button>
+      </div>
+    ),
+  };
+
+  // Line after line, with a divider only between two groups on the same one.
+  // One flat keyed list, so a new arrangement moves these elements rather
+  // than mounting fresh ones.
+  return (
+    <div className="toolbar-container" ref={cardRef}>
+      <div className="toolbar" data-layout={arrangement.layout}>
+        {arrangement.rows.flatMap((row, line) => [
+          ...(line > 0 ? [<div key={`break-${row[0]}`} className="toolbar-break" />] : []),
+          ...row.flatMap((group, index) => [
+            ...(index > 0 ? [<div key={`divider-${group}`} className="toolbar-divider" />] : []),
+            groups[group],
+          ]),
+        ])}
+      </div>
+    </div>
   );
 }
