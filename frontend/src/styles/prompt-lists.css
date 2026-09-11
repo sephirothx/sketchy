@@ -159,6 +159,15 @@
   width: 100%;
 }
 
+/* The shortlist is a second group under the catalogue's own, labelled so it
+   is clear these came from somewhere else. */
+.prompt-list-starred-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+
 .prompt-list-manager-meta {
   display: grid;
   gap: 12px;

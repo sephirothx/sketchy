@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { apiRequest } from "../lib/api";
 import { promptLanguageLabel } from "../lib/promptLanguages";
-import { listOwnedPromptLists, resolveSharedPromptList } from "../lib/promptLists";
+import {
+  listCommunityPromptLists,
+  listOwnedPromptLists,
+  resolveSharedPromptList,
+} from "../lib/promptLists";
 import { addSharedPromptSelection } from "../lib/promptListDrafts";
 import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary, SharedPromptList } from "../types";
@@ -21,7 +25,15 @@ interface PromptListPickerProps {
   disabled?: boolean;
   /** Reports the loaded lists so the host page can summarize the selection. */
   onListsLoaded?: (lists: PromptListSummary[]) => void;
+  /** Lists the host page already knows about — a community list carried in
+  from the catalogue. Without them the selection would be reconciled against
+  a catalogue that has never heard of the list, and quietly dropped. */
+  extraLists?: PromptListSummary[];
 }
+
+/** Stable identity, so nothing that reports lists back fires on every
+render just because it had nothing to report. */
+const NO_LISTS: PromptListSummary[] = [];
 
 export function PromptListPicker({
   language,
@@ -31,11 +43,20 @@ export function PromptListPicker({
   onShareCodesChange,
   disabled = false,
   onListsLoaded,
+  extraLists = NO_LISTS,
 }: PromptListPickerProps) {
   const user = useAuthStore((state) => state.user);
   const userId = user?.id;
   const isAnonymous = user?.isAnonymous;
   const [promptLists, setPromptLists] = useState<PromptListSummary[]>([]);
+  // Community lists this account starred: its shortlist, which is what the
+  // catalogue's stars are for beyond a public count (R-LIST-16). Tagged with
+  // the account it was read for, because a shortlist is personal data: an
+  // account signing out here does not unmount the picker, so anything keyed
+  // only by "loaded" would stay on screen for whoever holds the browser next.
+  const [starred, setStarred] = useState<
+    { owner: string; lists: PromptListSummary[] } | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [shareCode, setShareCode] = useState("");
@@ -46,13 +67,19 @@ export function PromptListPicker({
   const [reportNotice, setReportNotice] = useState<string | null>(null);
   const onListsLoadedRef = useRef(onListsLoaded);
 
+  // Read only while it still belongs to whoever is signed in now. A pending
+  // reply for a new account does not keep the old one's shortlist on screen
+  // in the meantime, and a request that never answers leaves nothing behind.
+  const shortlist =
+    starred && !isAnonymous && starred.owner === userId ? starred.lists : NO_LISTS;
+
   useEffect(() => {
     onListsLoadedRef.current = onListsLoaded;
   }, [onListsLoaded]);
 
   useEffect(() => {
-    onListsLoadedRef.current?.(promptLists);
-  }, [promptLists]);
+    onListsLoadedRef.current?.([...promptLists, ...extraLists, ...shortlist]);
+  }, [promptLists, extraLists, shortlist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +107,23 @@ export function PromptListPicker({
       cancelled = true;
     };
   }, [userId, isAnonymous]);
+
+  useEffect(() => {
+    if (!userId || isAnonymous) return;
+    let cancelled = false;
+    // Optional: a failure leaves the shortlist out rather than taking the
+    // picker down with it.
+    void listCommunityPromptLists({ starred: true, language, limit: 24 })
+      .then((page) => {
+        if (cancelled) return;
+        setStarred({
+          owner: userId,
+          lists: page.lists.map((list) => ({ ...list, isBundled: false })),
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId, isAnonymous, language]);
 
   async function addSharedList(event: FormEvent) {
     event.preventDefault();
@@ -143,7 +187,16 @@ export function PromptListPicker({
     }
   }
 
-  const visibleLists = promptLists.filter((list) => list.language === language);
+  // Everything the picker can offer, so the host page reconciles its
+  // selection against the same set the player is looking at.
+  const known = [
+    ...promptLists,
+    ...extraLists.filter((extra) => !promptLists.some((list) => list.slug === extra.slug)),
+  ];
+  const visibleLists = known.filter((list) => list.language === language);
+  const visibleStarred = shortlist.filter(
+    (list) => list.language === language && !visibleLists.some((shown) => shown.slug === list.slug),
+  );
 
   if (loading) {
     return (
@@ -163,18 +216,9 @@ export function PromptListPicker({
     );
   }
 
-  return (
-    <fieldset className="room-choice-group prompt-list-picker-group">
-      <legend>{ui.promptListPicker.promptLists}</legend>
-      {visibleLists.length === 0 && (
-        <p className="prompt-list-fallback-note">
-          {ui.promptListPicker.noListsInLanguage({
-            language: promptLanguageLabel(language),
-          })}
-        </p>
-      )}
-      <div className="toggle-chips" role="group" aria-label={ui.promptListPicker.promptLists}>
-        {visibleLists.map((wl) => {
+  // One chip, rendered for the catalogue's lists and for the shortlist
+  // below it. Extracted rather than duplicated: two copies of this drift.
+  function renderChip(wl: PromptListSummary) {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
 
@@ -220,8 +264,27 @@ export function PromptListPicker({
               ><AlertIcon size={13} /></button>}
             </span>
           );
-        })}
+  }
+
+  return (
+    <fieldset className="room-choice-group prompt-list-picker-group">
+      <legend>{ui.promptListPicker.promptLists}</legend>
+      {visibleLists.length === 0 && (
+        <p className="prompt-list-fallback-note">
+          {ui.promptListPicker.noListsInLanguage({
+            language: promptLanguageLabel(language),
+          })}
+        </p>
+      )}
+      <div className="toggle-chips" role="group" aria-label={ui.promptListPicker.promptLists}>
+        {visibleLists.map(renderChip)}
       </div>
+      {visibleStarred.length > 0 && <>
+        <p className="prompt-list-starred-label">{ui.promptListPicker.listsYouStarred}</p>
+        <div className="toggle-chips" role="group" aria-label={ui.promptListPicker.listsYouStarred}>
+          {visibleStarred.map(renderChip)}
+        </div>
+      </>}
       <form className="prompt-list-share-form" onSubmit={(event) => void addSharedList(event)}>
         <label htmlFor="prompt-list-share-code">{ui.promptListPicker.addUnlistedListByCode}</label>
         <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" className="btn btn-primary btn-compact" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? ui.promptListPicker.adding : ui.promptListPicker.add}</button></div>

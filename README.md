@@ -525,7 +525,10 @@ not an accusation. Players browse published lists at **Community catalogue**, re
 lobby and from the account menu, and open one to read every prompt in it before
 playing or copying it — filtered by language and tag, sorted by stars or by
 recency, and narrowed to the lists that account starred. Browsing works without
-an account; starring, copying and reporting need one. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
+an account; starring, copying and reporting need one. **Play** opens the room form
+with that list chosen and the room's language set to the list's, since a room
+declares one language and its lists must agree. The picker also offers the lists
+an account starred, so a shortlist replaces hunting for one twice. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
 by language and tag and sorted by stars or by recency; it is a route of its own
 rather than a filter on the official one, so official content and player content
 are never in the same listing. A host can pick a published list for a room
