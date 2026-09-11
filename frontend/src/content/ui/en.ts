@@ -1187,6 +1187,7 @@ export const EN = {
     "abstract": "Abstract",
   },
   communityCataloguePage: {
+    playThisList: "Play this list",
     backToLobby: "Back to lobby",
     loading: "Loading…",
     communityCatalogue: "Community catalogue",
@@ -1486,6 +1487,8 @@ export const EN = {
   },
 
   promptListPicker: {
+    listsYouStarred: "Lists you starred",
+    starredNotAllShown: (p: { shown: number }) => `Showing the first ${number(p.shown)} lists you starred.`,
     languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
       `That list is in ${p.listLanguage}; this room is in ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>

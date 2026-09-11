@@ -6,6 +6,7 @@ import {
   filtersFromParams,
   findInPrompt,
   groupAlphabetically,
+  readEveryPage,
   isFiltered,
   paramsFromFilters,
   queryFromFilters,
@@ -100,4 +101,39 @@ test("a prompt that does not start with a letter files under #", () => {
   const groups = groupAlphabetically(["7 dwarfs", "anchor"], (text) => text, "en");
 
   assert.deepEqual(groups.map((group) => group.initial), ["#", "A"]);
+});
+
+test("a paged read is followed to its last page", async () => {
+  const pages = { "": ["a", "b"], two: ["c", "d"], three: ["e"] };
+  const next = { "": "two", two: "three", three: null };
+  const asked = [];
+
+  const everything = await readEveryPage(async (cursor) => {
+    asked.push(cursor);
+    return { lists: pages[cursor ?? ""], nextCursor: next[cursor ?? ""] };
+  }, 10);
+
+  assert.deepEqual(everything, { lists: ["a", "b", "c", "d", "e"], complete: true });
+  assert.deepEqual(asked, [null, "two", "three"], "each cursor is asked for once, the first with none");
+});
+
+test("a cursor that never ends stops at the guard, and says it stopped", async () => {
+  let reads = 0;
+  const everything = await readEveryPage(async () => {
+    reads += 1;
+    return { lists: [reads], nextCursor: "again" };
+  }, 3);
+
+  assert.equal(reads, 3);
+  // Not handed back as if it were everything: that is the silent truncation
+  // the reader exists to prevent.
+  assert.deepEqual(everything, { lists: [1, 2, 3], complete: false });
+});
+
+test("a read that ends exactly at the guard is complete", async () => {
+  const everything = await readEveryPage(async (cursor) => (
+    cursor ? { lists: ["b"], nextCursor: null } : { lists: ["a"], nextCursor: "two" }
+  ), 2);
+
+  assert.deepEqual(everything, { lists: ["a", "b"], complete: true });
 });

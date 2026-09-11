@@ -136,6 +136,7 @@ export const CommunityCataloguePage = `
       <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px">${chip('Animals', 'primary')}${chip('Nature', 'primary')}${chip('Places', 'primary')}</div>
       <p style="color: ${T.ink}; font-size: 14.5px; margin: 12px 0 0">Everything that swims, drifts or lurks where the light stops.</p>
       <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; padding-bottom: 16px; border-bottom: 1px solid ${T.line}">
+        ${btn.primary('Play this list')}
         ${btn.secondary('Make a copy')}
         <span style="margin-left: auto">${btn.ghost('Report')}</span>
       </div>
