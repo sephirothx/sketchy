@@ -56,9 +56,11 @@ export function drawShapeOutline(
       Math.PI * 2,
     );
   } else {
-    context.moveTo(x + width / 2, y);
-    context.lineTo(x, y + height);
-    context.lineTo(x + width, y + height);
+    // The triangle depends on which way the drag went, so the preview takes
+    // its corners from the same place the committed shape does.
+    const [first, ...rest] = shapeOutlinePoints(from, to, shape);
+    context.moveTo(first.x, first.y);
+    for (const point of rest) context.lineTo(point.x, point.y);
     context.closePath();
   }
   context.stroke();
