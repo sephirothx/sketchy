@@ -1,4 +1,10 @@
+import { RULES_DE } from "./de.ts";
 import { RULES_EN } from "./en.ts";
+import { RULES_ES } from "./es.ts";
+import { RULES_FR } from "./fr.ts";
+import { RULES_IT } from "./it.ts";
+import { RULES_NL } from "./nl.ts";
+import { RULES_PT } from "./pt.ts";
 import type { RulesDocument } from "./types.ts";
 
 export type { Rule, RuleSection, RulesDocument } from "./types.ts";
@@ -11,12 +17,24 @@ anybody reads whose language is not here yet. Adding a language is one module
 and one line - a content pull request, reviewed like the rest of the
 repository, which is also how the wiki this is modelled on does it.
 
-There is no framework behind this on purpose. The app translates nothing else
-yet, and inventing a translation system for one page would leave the rules
-using a mechanism nothing else uses. What this does is keep them in the shape
-the eventual one will want. */
+All seven interface locales are here (#765). They are kept **separate from
+`content/ui/`** on purpose, though both are catalogues and both are complete:
+the rules are read by somebody who has just been told they broke one, a
+mistranslated prohibition is a decision they cannot check, and that wants a
+different review bar from a button label. The typed shape is what enforces
+completeness either way - a locale that omits a section fails the build
+rather than rendering a page with a hole where a rule used to be.
+
+The fallback below stays, and is not a licence to leave a locale half
+written: it is for a language nobody has written *at all* yet. */
 const DOCUMENTS: Record<string, RulesDocument> = {
+  de: RULES_DE,
   en: RULES_EN,
+  es: RULES_ES,
+  fr: RULES_FR,
+  it: RULES_IT,
+  nl: RULES_NL,
+  pt: RULES_PT,
 };
 
 export const RULES_FALLBACK_LOCALE = "en";

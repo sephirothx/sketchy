@@ -1556,7 +1556,7 @@ frontend/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
                   SettingsOverlay, FriendsOverlay
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
-    content/rules/ The published rules, one typed module per language
+    content/rules/ The published rules, one typed module per language (all seven)
     content/ui/   Every word the interface says, one typed module per language
                   (en.ts is the reference; format.ts holds the Intl formatters)
     store/        zustand global game state store

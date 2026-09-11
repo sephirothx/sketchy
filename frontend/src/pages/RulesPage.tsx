@@ -5,6 +5,7 @@ import { AppHeader } from "../components/AppHeader";
 import { Card, SectionLabel } from "../components/ui/Card";
 import { rulesFor } from "../content/rules";
 import { ui } from "../content/ui/index.ts";
+import { useSettingsStore } from "../store/settingsStore.ts";
 
 /** The rules, on one page.
 
@@ -25,12 +26,12 @@ export function RulesPage() {
   const [reading, setReading] = useState<string | null>(() =>
     typeof window === "undefined" ? null : window.location.hash.slice(1) || null,
   );
-  // The language the rules are read in is the browser's, until the app has one
-  // of its own to ask (there is no i18n yet, so this is English for everybody
-  // today and is written to stop being so without changing here).
-  const rules = rulesFor(
-    typeof navigator === "undefined" ? null : navigator.language,
-  );
+  // The rules are read in the language the rest of the interface is read in
+  // (R-I18N-06). Asking the browser directly would ignore an account's own
+  // choice, and hand somebody who reads Sketchy in German the English rules
+  // they are held to.
+  const locale = useSettingsStore((state) => state.locale);
+  const rules = rulesFor(locale);
 
   useEffect(() => {
     if (!hash) return;
