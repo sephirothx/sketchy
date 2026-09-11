@@ -1466,6 +1466,7 @@ older build is still found and still becomes disconnected.
 | Benchmarks | `benchmarks/`, `frontend/benchmarks/` | Diagnostic baselines, deliberately **not** CI thresholds |
 | Repository hygiene | `backend/tests/test_repo_artifacts.py` | No database, env file, or private key is tracked - by name or by bytes |
 | Document invariants | `backend/tests/test_doc_invariants.py` | Every requirement and non-goal ID names one thing, every ID cited anywhere in the tree is declared by a row, every glossary term is defined once |
+| Import cycles | `backend/tests/test_import_cycles.py` | Every module under `backend/app/` imports in a process that imported nothing first, so no cycle can hide behind collection order |
 
 Two rules keep the E2E suite fast: a test waits on the condition it actually cares
 about (never a fixed sleep sized to outlast it), and where it genuinely must sit out a
