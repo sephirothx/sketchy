@@ -26,7 +26,7 @@ from app.auth.rate_limit import (
 )
 from app.auth.audit import audit_coordinates
 from app.auth.bans import active_ban_filter, active_ban_for_user
-from app.auth.mail import queue_email
+from app.auth.mail import queue_email, recipient_locale
 from app.canvas_storage import (
     CorruptStoredDrawingError,
     UnsupportedStoredDrawingError,
@@ -1977,12 +1977,16 @@ def create_moderation_router(
                                 session,
                                 to_address=owner.email,
                                 template=EmailTemplate.CONTENT_HIDDEN,
+                                locale=await recipient_locale(session, owner.id),
                                 payload={
                                     "displayName": owner.display_name,
+                                    # The *kind* of thing, not a phrase: the
+                                    # sentence around it is written in the
+                                    # recipient's language (R-I18N-02).
                                     "what": (
-                                        "A prompt you shared"
+                                        "prompt"
                                         if report.prompt_version_id
-                                        else "A prompt list you shared"
+                                        else "prompt_list"
                                     ),
                                 },
                                 user_id=owner.id,
@@ -2179,6 +2183,7 @@ def create_moderation_router(
                         session,
                         to_address=target.email,
                         template=EmailTemplate.ACCOUNT_BANNED,
+                        locale=await recipient_locale(session, target.id),
                         payload={
                             "displayName": target.display_name,
                             "reason": body.reason,

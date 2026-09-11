@@ -28,7 +28,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.email import EmailAddressError, normalize_email
-from app.auth.mail import queue_email
+from app.auth.mail import queue_email, recipient_locale
 from app.auth.sessions import revoke_sessions
 from app.auth.tokens import (
     AuthTokenPurpose,
@@ -180,6 +180,7 @@ async def request_email_verification(
                 template=EmailTemplate.VERIFY_EMAIL,
                 payload={"token": issued.token, "displayName": user.display_name},
                 user_id=user_id,
+                locale=await recipient_locale(session, user_id),
                 now=now,
             )
             session.add(
@@ -286,6 +287,7 @@ async def request_password_reset(
                 template=EmailTemplate.RESET_PASSWORD,
                 payload={"token": issued.token, "displayName": user.display_name},
                 user_id=user.id,
+                locale=await recipient_locale(session, user.id),
                 now=now,
             )
             session.add(
@@ -399,6 +401,7 @@ async def change_password(
                     template=EmailTemplate.PASSWORD_CHANGED,
                     payload={"displayName": user.display_name},
                     user_id=user.id,
+                    locale=await recipient_locale(session, user.id),
                     now=changed_at,
                 )
             session.add(
@@ -456,6 +459,7 @@ async def reset_password(
                     template=EmailTemplate.PASSWORD_CHANGED,
                     payload={"displayName": user.display_name},
                     user_id=user.id,
+                    locale=await recipient_locale(session, user.id),
                     now=changed_at,
                 )
             session.add(
