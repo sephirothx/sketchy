@@ -7,6 +7,7 @@ reachable only by the Playwright suite. The calls themselves live in
 `friendsApi.ts`. */
 
 import type { OnlinePlayer } from "./lobbyPresence";
+import { ui } from "../content/ui/index.ts";
 
 /** Mirrors `FriendshipState` in `backend/app/domain_values.py`.
 
@@ -128,7 +129,7 @@ export function parseFriendInvite(payload: unknown): FriendInvite | null {
     displayName:
       typeof body.displayName === "string" && body.displayName
         ? body.displayName
-        : "A friend",
+        : ui.friends.aFriend,
     inviteToken: body.inviteToken,
     expiresIn,
   };

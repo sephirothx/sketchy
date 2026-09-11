@@ -78,7 +78,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // The button says how many are missing; the tooltip says what counts, which
   // is the part nobody needs until they wonder why a spectator is not enough.
   const startBlockedReason =
-    "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.";
+    ui.waitingRoomPanel.spectatorsAfkAndDisconnectedPlayers;
   const rematch = Boolean(finalScores);
 
   async function copyToClipboard(value: string, what: string) {
@@ -101,7 +101,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     const url = window.location.href;
     if (navigator.share) {
       try {
-        await navigator.share({ title: props.name, text: `Join my Sketchy room: ${code ?? ""}`, url });
+        await navigator.share({ title: props.name, text: ui.waitingRoomPanel.joinMySketchyRoomCode({ code: code ?? "" }), url });
         return;
       } catch (error) {
         // A cancelled share is not a failure, and must not fall through to a
@@ -109,24 +109,24 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         if ((error as DOMException)?.name === "AbortError") return;
       }
     }
-    await copyToClipboard(url, "Invite link");
+    await copyToClipboard(url, ui.waitingRoomPanel.inviteLink);
   }
 
   const promptsValue = props.customPromptsOnly
-    ? `Custom prompts only (${props.customPromptCount})`
+    ? ui.waitingRoomPanel.customPromptsOnlyCustomPromptCount({ customPromptCount: props.customPromptCount })
     : props.customPromptCount > 0
-      ? `${props.customPromptCount} custom prompts + curated lists`
+      ? ui.waitingRoomPanel.customPromptCountCustomPromptsCuratedLists({ customPromptCount: props.customPromptCount })
       : props.promptListSlugs && props.promptListSlugs.length > 1
-        ? `${props.promptListSlugs.length} curated prompt lists`
+        ? ui.waitingRoomPanel.promptListSlugsCountCuratedPromptLists({ promptListSlugsCount: props.promptListSlugs.length })
         : null;
   const settingsFacts = [
     ui.waitingRoomPanel.roundCount({ count: props.rounds }),
     `${props.drawingSeconds}s`,
     hintLabelFor(props.hintMode, props.hideMaskedPrompt),
-    props.scoringMode === "none" ? "No scoring" : null,
+    props.scoringMode === "none" ? ui.waitingRoomPanel.noScoring : null,
     promptsValue,
     describeDrawingRules(props.allowedTools, props.colorMode),
-    props.spectatorsSeePrompt ? "Spectators see the prompt" : null,
+    props.spectatorsSeePrompt ? ui.waitingRoomPanel.spectatorsSeeThePrompt : null,
   ].filter((fact): fact is string => Boolean(fact));
 
 
@@ -137,7 +137,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       <header className="waiting-room-head">
         <h1>{props.name}</h1>
         <p className="section-label">
-          {props.isPublic ? "Public room" : "Private room"} · {rematch ? "between games" : "waiting for players"}
+          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom} · {rematch ? ui.waitingRoomPanel.betweenGames : ui.waitingRoomPanel.waitingForPlayers}
         </p>
       </header>
 
@@ -158,7 +158,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <Button
             variant="secondary"
             iconLeft={<CopyIcon size={15} />}
-            onClick={() => code && void copyToClipboard(code, "Room code")}
+            onClick={() => code && void copyToClipboard(code, ui.waitingRoomPanel.roomCode)}
           >
             {ui.waitingRoomPanel.copyCode}
           </Button>
@@ -294,9 +294,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               title={canStart ? undefined : startBlockedReason}
             >
               {props.startBusy
-                ? "Starting…"
+                ? ui.waitingRoomPanel.starting
                 : canStart
-                  ? rematch ? "Rematch" : "Start game"
+                  ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
                   : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
             </button>
           </>
@@ -313,7 +313,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 </span>
               ),
             })}</>
-              : "Waiting for a host"}
+              : ui.waitingRoomPanel.waitingForAHost}
           </p>
         )}
       </section>

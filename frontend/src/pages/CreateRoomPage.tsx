@@ -177,7 +177,7 @@ export function CreateRoomPage() {
   /** Quick prompts and borrowed share codes are room input, never stored settings. */
   function presetBlocker(): string | null {
     if (customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0) {
-      return "Save quick prompts as a list, and remove shared codes, before storing a preset.";
+      return ui.createRoomPage.saveQuickPromptsAsA;
     }
     return null;
   }
@@ -213,7 +213,7 @@ export function CreateRoomPage() {
       const preset = await getRoomPreset(id);
       applySettings(preset.settings);
       setPresetName(preset.name);
-      setPresetStatus({ text: `Applied “${preset.name}”.`, undo: before });
+      setPresetStatus({ text: ui.createRoomPage.appliedName({ name: preset.name }), undo: before });
     } catch (presetError) {
       setError(refusalText(presetError, ui.createRoomPage.couldNotApplyThatPreset));
     } finally {
@@ -233,7 +233,7 @@ export function CreateRoomPage() {
       await refreshPresets(created.id);
       setPresetName(created.name);
       setNamingPreset(false);
-      setPresetStatus({ text: `Saved “${created.name}”.` });
+      setPresetStatus({ text: ui.createRoomPage.savedName({ name: created.name }) });
     } catch (presetError) {
       setError(refusalText(presetError, ui.createRoomPage.couldNotSaveThatPreset));
     } finally {
@@ -259,7 +259,7 @@ export function CreateRoomPage() {
         currentPresetSettings(),
       );
       await refreshPresets(updated.id);
-      setPresetStatus({ text: `Updated “${updated.name}”.` });
+      setPresetStatus({ text: ui.createRoomPage.updatedName({ name: updated.name }) });
       setPresetName(updated.name);
     } catch (presetError) {
       setError(refusalText(presetError, ui.createRoomPage.couldNotUpdateThatPreset));
@@ -270,7 +270,7 @@ export function CreateRoomPage() {
 
   async function handleDeletePreset() {
     if (!selectedPresetId) return;
-    if (!window.confirm("Delete this room-setting preset?")) return;
+    if (!window.confirm(ui.createRoomPage.deleteThisRoomSettingPreset)) return;
     setPresetBusy(true);
     setError(null);
     try {
@@ -307,7 +307,7 @@ export function CreateRoomPage() {
       }
       setError(refusalText(response, ui.createRoomPage.failedCreateRoom));
     } catch (createError) {
-      setError(socketRequestErrorMessage(createError, "create the room"));
+      setError(socketRequestErrorMessage(createError, ui.createRoomPage.createTheRoom));
     } finally {
       setBusy(false);
     }
@@ -315,9 +315,9 @@ export function CreateRoomPage() {
 
   // The form's own collapsed summaries live with the form. What is left here
   // is the one the dock carries, which is about the room as a whole.
-  const scoringSummary = `${scoringMode === "none" ? "No scoring" : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
+  const scoringSummary = `${scoringMode === "none" ? ui.createRoomPage.noScoring : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const footerSummary = [
-    isPublic ? "Public" : "Private",
+    isPublic ? ui.createRoomPage.public : ui.createRoomPage.private,
     `${maxPlayers} players`,
     `${rounds} ${rounds === 1 ? "round" : "rounds"}`,
     `${drawingSeconds}s`,
@@ -333,7 +333,7 @@ export function CreateRoomPage() {
   const halfMinutes = estimateMinutes(halfPlayers);
 
   return <main className="create-room-page">
-    <AppHeader backLabel="Back to lobby" />
+    <AppHeader backLabel={ui.createRoomPage.backToLobby} />
     <div className="create-room-heading-row">
       <div className="create-room-heading">
         <SectionLabel>{ui.createRoomPage.roomSetup}</SectionLabel>
@@ -419,7 +419,7 @@ export function CreateRoomPage() {
       }}
       customPrompts={customPrompts}
       dispatchCustomPrompts={dispatchCustomPrompts}
-      namePlaceholder="Leave blank for a random name!"
+      namePlaceholder={ui.createRoomPage.leaveBlankForARandom}
       onListsLoaded={handleListsLoaded}
       loadedLists={loadedLists}
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
@@ -458,7 +458,7 @@ export function CreateRoomPage() {
       <div className="create-room-footer-info">
         <span className="create-room-footer-summary">{footerSummary}</span>
       </div>
-      <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? "Creating…" : "Create room"}</button>
+      <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
     </div>
   </main>;
 }

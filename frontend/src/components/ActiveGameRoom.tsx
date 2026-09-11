@@ -129,7 +129,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       setExitingRoom(true);
       clearSession();
       reset();
-      navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
+      navigate("/", { state: { criticalError: data?.reason || ui.activeGameRoom.youWereKickedFromThe } });
     }
     function onVotedAfk(data: { message?: string }) {
       notify(data?.message || ui.activeGameRoom.markedAfkByRoomVote, "warning");
@@ -144,7 +144,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       navigate("/", {
         state: {
           criticalError:
-            data?.reason || "This room was opened in another tab.",
+            data?.reason || ui.activeGameRoom.thisRoomWasOpenedIn,
         },
       });
     }
@@ -186,7 +186,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       const response = await emitWithAck<AckResponse>("start_game", {});
       if (!response.ok) setStartError(refusalText(response, ui.activeGameRoom.couldNotStartGamePleaseTry));
     } catch (startError) {
-      setStartError(socketRequestErrorMessage(startError, "start the game"));
+      setStartError(socketRequestErrorMessage(startError, ui.activeGameRoom.startTheGame));
     } finally {
       setStartBusy(false);
     }
@@ -201,7 +201,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         notify(refusalText(response, ui.activeGameRoom.couldNotStartRestartVote), "error");
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "start a restart vote"), "error");
+      notify(socketRequestErrorMessage(restartError, ui.activeGameRoom.startARestartVote), "error");
     } finally {
       setRestartBusy(false);
     }
@@ -216,7 +216,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         notify(refusalText(response, ui.activeGameRoom.couldNotRecordYourRestartVote), "error");
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "record your restart vote"), "error");
+      notify(socketRequestErrorMessage(restartError, ui.activeGameRoom.recordYourRestartVote), "error");
     } finally {
       setRestartBusy(false);
     }
@@ -234,13 +234,23 @@ export function ActiveGameRoom({ code }: { code: string }) {
       );
       if (!response.ok) {
         notify(
-          refusalText(response, ui.activeGameRoom.couldNotChangeSuggestion({ action })),
+          refusalText(
+            response,
+            action === "accept"
+              ? ui.activeGameRoom.couldNotAcceptSuggestion
+              : ui.activeGameRoom.couldNotDismissSuggestion,
+          ),
           "error",
         );
       }
     } catch (suggestionError) {
       notify(
-        socketRequestErrorMessage(suggestionError, `${action} the color suggestion`),
+        socketRequestErrorMessage(
+          suggestionError,
+          action === "accept"
+            ? ui.activeGameRoom.acceptTheColorSuggestion
+            : ui.activeGameRoom.dismissTheColorSuggestion,
+        ),
         "error",
       );
     } finally {
@@ -312,10 +322,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
       )}
       {leaveConfirmationOpen && (
         <ConfirmationDialog
-          title={amDrawer ? "Leave during your turn?" : "Leave active game?"}
+          title={amDrawer ? ui.activeGameRoom.leaveDuringYourTurn : ui.activeGameRoom.leaveActiveGame}
           description={amDrawer
-            ? "You’re the current drawer. Leaving now will interrupt your turn and advance the game for everyone."
-            : "The game is still in progress. You’ll leave the room and give up your place in this game."}
+            ? ui.activeGameRoom.youReTheCurrentDrawer
+            : ui.activeGameRoom.theGameIsStillIn}
           confirmLabel={ui.activeGameRoom.leaveGame}
           onCancel={() => setLeaveConfirmationOpen(false)}
           onConfirm={() => {
@@ -383,11 +393,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 disabled={restartBusy || restartCooldownSeconds > 0}
                 onClick={() => void handleProposeRestart()}
                 aria-label={restartCooldownSeconds > 0
-                  ? `Restart vote available in ${restartCooldownSeconds} seconds`
-                  : "Propose restarting the game"}
+                  ? ui.activeGameRoom.restartVoteAvailableInRestartCooldownSeconds({ restartCooldownSeconds })
+                  : ui.activeGameRoom.proposeRestartingTheGame}
                 title={restartCooldownSeconds > 0
-                  ? `Restart vote available in ${restartCooldownSeconds}s`
-                  : "Propose a vote to restart the game"}
+                  ? ui.activeGameRoom.restartVoteAvailableInRestartCooldownSeconds2({ restartCooldownSeconds })
+                  : ui.activeGameRoom.proposeAVoteToRestart}
               >
                 <RoundsIcon size={16} />
                 {restartCooldownSeconds > 0 && (
@@ -403,8 +413,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
               className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
               aria-pressed={isAfk}
               onClick={handleToggleAfk}
-              aria-label={isAfk ? "Back from AFK" : "Go AFK"}
-              title={isAfk ? "Back from AFK" : "Go AFK"}
+              aria-label={isAfk ? ui.activeGameRoom.backFromAfk : ui.activeGameRoom.goAfk}
+              title={isAfk ? ui.activeGameRoom.backFromAfk : ui.activeGameRoom.goAfk}
             >
               <MoonIcon size={14} />
               <span className="header-action-label">{ui.activeGameRoom.afk}</span>
@@ -470,7 +480,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           height="55%"
           className="players-sheet"
           testId="players-drawer"
-          closeLabel="Close players"
+          closeLabel={ui.activeGameRoom.closePlayers}
           onDismiss={() => setPlayersSheetOpen(false)}
         >
           <ConnectedRoomPlayersPanel mode={roomView} />

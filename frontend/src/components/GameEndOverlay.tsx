@@ -101,11 +101,11 @@ export function GameEndOverlay({
           </span>
         )}
         {scoringMode === "none"
-          ? "A great game of drawing"
+          ? ui.gameEndOverlay.aGreatGameOfDrawing
           : crown === "room"
-            ? "The room takes the crown!"
+            ? ui.gameEndOverlay.theRoomTakesTheCrown
             : crown === "many"
-              ? `${winners.length} players share the crown!`
+              ? ui.gameEndOverlay.winnersCountPlayersShareTheCrown({ winnersCount: winners.length })
               : <>
                   {winners.map((winner, index) => (
                     <span key={winner.playerId}>
@@ -118,7 +118,7 @@ export function GameEndOverlay({
                       </span>
                     </span>
                   ))}
-                  {crown === "one" ? " takes the crown!" : " share the crown!"}
+                  {crown === "one" ? ui.gameEndOverlay.takesTheCrown : ui.gameEndOverlay.shareTheCrown}
                 </>}
       </h1>
       {scoringMode !== "none" ? (

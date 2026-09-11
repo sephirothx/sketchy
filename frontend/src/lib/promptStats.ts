@@ -1,9 +1,10 @@
 import type { PromptStats, PromptStatsSort } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 export const PROMPT_STATS_SORTS: { value: PromptStatsSort; label: string }[] = [
-  { value: "hardest", label: "Hardest first" },
-  { value: "easiest", label: "Easiest first" },
-  { value: "most-picked", label: "Most picked" },
+  { value: "hardest", get label() { return ui.promptStats.hardestFirst; } },
+  { value: "easiest", get label() { return ui.promptStats.easiestFirst; } },
+  { value: "most-picked", get label() { return ui.promptStats.mostPicked; } },
 ];
 
 export function isPromptStatsSort(value: string): value is PromptStatsSort {
@@ -23,11 +24,11 @@ export function ratioLabel(ratio: number): string {
  * a band and keeps the number beside it.
  */
 export function difficultyBand(ratio: number): string {
-  if (ratio >= 0.85) return "Gets guessed";
-  if (ratio >= 0.6) return "Usually guessed";
-  if (ratio >= 0.35) return "Even odds";
-  if (ratio >= 0.15) return "Often missed";
-  return "Rarely guessed";
+  if (ratio >= 0.85) return ui.promptStats.getsGuessed;
+  if (ratio >= 0.6) return ui.promptStats.usuallyGuessed;
+  if (ratio >= 0.35) return ui.promptStats.evenOdds;
+  if (ratio >= 0.15) return ui.promptStats.oftenMissed;
+  return ui.promptStats.rarelyGuessed;
 }
 
 /** What the table is showing, and what it is still waiting on. */
@@ -38,20 +39,16 @@ export function coverageNote(
 ): string | null {
   if (ratedCount === 0 && unratedCount === 0) return null;
   if (unratedCount === 0) {
-    return `All ${ratedCount} prompts have been played enough to rank.`;
+    return ui.promptStats.allRanked({ count: ratedCount });
   }
   if (ratedCount === 0) {
-    return (
-      `None of these ${unratedCount} prompts has faced ${minRatedGuessers} guessers `
-      + "yet, so none of them is ranked. Play some games and their difficulty will "
-      + "show up here."
-    );
+    return ui.promptStats.noneRanked({ unrated: unratedCount, guessers: minRatedGuessers });
   }
-  const prompts = unratedCount === 1 ? "prompt is" : "prompts are";
-  return (
-    `${ratedCount} ranked. ${unratedCount} more ${prompts} unranked: fewer than `
-    + `${minRatedGuessers} guessers have seen them.`
-  );
+  return ui.promptStats.someRanked({
+    rated: ratedCount,
+    unrated: unratedCount,
+    guessers: minRatedGuessers,
+  });
 }
 
 /** Prompts whose text contains the query, case- and space-insensitively. */
@@ -66,8 +63,8 @@ export function matchingPrompts(
 
 export function searchNote(query: string, matches: number): string | null {
   if (!query.trim()) return null;
-  if (matches === 0) return `No prompt matches “${query.trim()}”.`;
-  return `${matches} prompt${matches === 1 ? "" : "s"} matching “${query.trim()}”.`;
+  if (matches === 0) return ui.promptStats.noMatch({ query: query.trim() });
+  return ui.promptStats.matching({ count: matches, query: query.trim() });
 }
 
 /**
@@ -82,7 +79,7 @@ export function statsRows(prompts: PromptStats[]) {
   return prompts.map((prompt) => ({
     ...prompt,
     guessedLabel: prompt.isRated ? ratioLabel(prompt.correctGuessRatio) : "—",
-    band: prompt.isRated ? difficultyBand(prompt.correctGuessRatio) : "Not played enough",
+    band: prompt.isRated ? difficultyBand(prompt.correctGuessRatio) : ui.promptStats.notPlayedEnough,
     pickedLabel: prompt.isRated ? ratioLabel(prompt.pickRate) : "—",
     drawnLabel: String(prompt.pickCount),
   }));

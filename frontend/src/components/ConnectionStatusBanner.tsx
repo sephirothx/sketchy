@@ -6,6 +6,7 @@ import {
   resolveConnectionStatus,
   type ConnectionStatus,
 } from "../lib/connectionStatus";
+import { ui } from "../content/ui/index.ts";
 
 function currentStatus(): ConnectionStatus {
   return resolveConnectionStatus({
@@ -82,10 +83,10 @@ export function ConnectionStatusBanner() {
   return (
     <div className={`connection-status-banner ${status === "failed" ? "reconnecting" : status}`} role="status" aria-live="polite">
       {status === "offline"
-        ? "You’re disconnected. Check your connection; Sketchy will reconnect automatically."
+        ? ui.connectionStatusBanner.youReDisconnectedCheckYour
         : status === "failed"
-          ? "Couldn’t reconnect to your room. Reload the page to try again."
-          : "Connection lost — reconnecting…"}
+          ? ui.connectionStatusBanner.couldnTReconnectToYour
+          : ui.connectionStatusBanner.connectionLostReconnecting}
     </div>
   );
 }

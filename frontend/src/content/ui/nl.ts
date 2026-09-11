@@ -396,6 +396,14 @@ export const NL: Catalogue = {
   promptListDrafts: {
     promptsAdded: (p: { count: number }) =>
       `${counted(p.count, { one: "woord", other: "woorden" })} toegevoegd`,
+    duplicatesAlreadyInTheList: (p: { duplicates: number }) =>
+      `${p.duplicates} al in de lijst`,
+    tooLongCountOverMaxListPrompt: (p: { tooLongCount: number; MAX_LIST_PROMPT_LENGTH: number }) =>
+      `${p.tooLongCount} langer dan ${p.MAX_LIST_PROMPT_LENGTH} tekens`,
+    overLimitPastTheMaxList: (p: { overLimit: number; MAX_LIST_PROMPTS: number }) =>
+      `${p.overLimit} boven de limiet van ${p.MAX_LIST_PROMPTS}`,
+    keptSkippedSkipped: (p: { kept: string; skipped: string }) =>
+      `${p.kept}; overgeslagen: ${p.skipped}.`,
   },
 
   lastSeen: {
@@ -414,6 +422,11 @@ export const NL: Catalogue = {
   gameHighlights: {
     reactionCount: (p: { count: number }) =>
       counted(p.count, { one: "reactie", other: "reacties" }),
+    hardestPrompt: "Moeilijkste woord",
+    fastestGuess: "Snelste gok",
+    bestDrawer: "Beste tekenaar",
+    quickestOnAverage: "Gemiddeld het snelst",
+    mostReactedDrawing: "Tekening met de meeste reacties",
   },
 
   versionBadge: {
@@ -434,6 +447,10 @@ export const NL: Catalogue = {
   guessPips: {
     playerGuessState: (p: { nickname: string; isFriend: boolean; guessed: boolean }) =>
       `${p.nickname}${p.isFriend ? " (vriend)" : ""} ${p.guessed ? "heeft het geraden" : "is nog aan het raden"}`,
+    gotOfGuessersCountGuessed: (p: { got: number; guessersCount: number }) =>
+      `${p.got} van ${p.guessersCount} geraden`,
+    summaryOpenPlayersAndScores: (p: { summary: string }) =>
+      `${p.summary}. Spelers en scores openen.`,
   },
 
   accountDataDialog: {
@@ -452,6 +469,8 @@ export const NL: Catalogue = {
     youHaveNotRequestedExportYet: "Je hebt nog geen export aangevraagd.",
     download: "Downloaden",
     close: "Sluiten",
+    requesting: "Aanvragen…",
+    requestExport: "Export aanvragen",
   },
 
   accountMenu: {
@@ -490,6 +509,20 @@ export const NL: Catalogue = {
     rules2: "regels",
     forgotYourPassword: "Wachtwoord vergeten?",
     notNow: "Nu niet",
+    createYourAccount: "Maak je account",
+    createAnAccountToKeep: (p: { suggestedUsername: string }) =>
+      `Maak een account om ${p.suggestedUsername} als gebruikersnaam te houden en je statistieken op elk apparaat te bewaren.`,
+    keepYourUsernameAndYour: "Houd je gebruikersnaam en je statistieken op elk apparaat.",
+    waitingForYourDevice: "Wachten op je apparaat…",
+    signInWithAPasskey: "Inloggen met een passkey",
+    pleaseWait: "Even geduld…",
+    alreadyRegistered: "Al geregistreerd? ",
+    newHere: "Nieuw hier? ",
+    createAnAccount: "Account maken",
+    guestIdentity: (p: { name: string }) =>
+      `${p.name}. Je weergavenaam is niet opgeslagen.`,
+    signedInAs: (p: { name: string }) =>
+      `Ingelogd als ${p.name}`,
   },
 
   accountRecoveryPage: {
@@ -506,13 +539,23 @@ export const NL: Catalogue = {
     checkingThatLink: "Link controleren…",
     everySignedDeviceWillBeSigned: "Elk ingelogd apparaat wordt uitgelogd, ook de apparaten die je niet\n              herkende.",
     newPassword: "Nieuw wachtwoord",
+    addressIsConfirmedYouCan: (p: { address: string }) =>
+      `${p.address} is bevestigd. Je kunt dit account nu herstellen.`,
+    yourPasswordIsSetAnd: "Je wachtwoord is ingesteld en je bent weer ingelogd.",
+    resetYourPassword: "Wachtwoord opnieuw instellen",
+    thatLinkNoLongerWorks: "Die link werkt niet meer",
+    chooseANewPassword: "Kies een nieuw wachtwoord",
+    confirmingYourEmail: "Je e-mail wordt bevestigd",
+    pleaseWait: "Even geduld…",
+    sendAResetLink: "Herstellink sturen",
+    setPassword: "Wachtwoord instellen",
+    oneMoment: "Een moment…",
+    nothingToConfirm: "Niets te bevestigen.",
   },
 
   activeGameRoom: {
     leaveGame: "Spel verlaten",
     markedAfkByRoomVote: "De kamer heeft je door een stemming als afwezig gemarkeerd.",
-    couldNotChangeSuggestion: (p: { action: string }) =>
-      `Kon de kleursuggestie niet ${p.action}.`,
     inviteLinkCopied: "Uitnodigingslink gekopieerd.",
     couldnTCopyLinkCopyFrom: "De link kon niet gekopieerd worden. Kopieer hem uit de adresbalk.",
     couldNotStartGamePleaseTry: "Het spel kon niet gestart worden. Probeer het nog eens.",
@@ -528,6 +571,28 @@ export const NL: Catalogue = {
     leaveRoom: "Kamer verlaten",
     leave: "Verlaten",
     players: "Spelers",
+    youWereKickedFromThe: "Je bent uit de kamer gezet.",
+    thisRoomWasOpenedIn: "Deze kamer is in een ander tabblad geopend.",
+    startTheGame: "het spel starten",
+    startARestartVote: "een herstartstemming beginnen",
+    recordYourRestartVote: "je herstartstem uitbrengen",
+    leaveDuringYourTurn: "Weggaan tijdens je beurt?",
+    leaveActiveGame: "Lopend spel verlaten?",
+    youReTheCurrentDrawer: "Jij tekent nu. Als je nu weggaat, wordt je beurt onderbroken en gaat het spel voor iedereen verder.",
+    theGameIsStillIn: "Het spel is nog bezig. Je verlaat de kamer en geeft je plek in dit spel op.",
+    restartVoteAvailableInRestartCooldownSeconds: (p: { restartCooldownSeconds: number }) =>
+      `Herstartstemming mogelijk over ${p.restartCooldownSeconds} seconden`,
+    proposeRestartingTheGame: "Voorstellen het spel te herstarten",
+    restartVoteAvailableInRestartCooldownSeconds2: (p: { restartCooldownSeconds: number }) =>
+      `Herstartstemming over ${p.restartCooldownSeconds} s`,
+    proposeAVoteToRestart: "Een stemming voorstellen om het spel te herstarten",
+    backFromAfk: "Terug van afwezig",
+    goAfk: "Afwezig melden",
+    closePlayers: "Spelers sluiten",
+    acceptTheColorSuggestion: "de kleursuggestie accepteren",
+    dismissTheColorSuggestion: "de kleursuggestie negeren",
+    couldNotAcceptSuggestion: "De kleursuggestie kon niet worden geaccepteerd.",
+    couldNotDismissSuggestion: "De kleursuggestie kon niet worden genegeerd.",
   },
 
   addEmailDialog: {
@@ -539,6 +604,15 @@ export const NL: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Er ging iets mis. Probeer het nog eens.",
     done: "Klaar",
     usedOnlyResetYourPasswordTell: "Wordt alleen gebruikt om je wachtwoord te herstellen en om je te laten\n              weten of er iets met je account of met iets dat je deelde gebeurt.\n              Verder gaat hier nooit iets heen.",
+    checkYourInbox: "Kijk in je inbox",
+    changeYourEmailAddress: "Wijzig je e-mailadres",
+    addAnEmailAddress: "Voeg een e-mailadres toe",
+    newEmail: "Nieuw e-mailadres",
+    email: "E-mail",
+    pleaseWait: "Even geduld…",
+    sendConfirmation: "Bevestiging sturen",
+    close: "Sluiten",
+    notNow: "Niet nu",
   },
 
   afkCheckDialog: {
@@ -594,6 +668,20 @@ export const NL: Catalogue = {
     sendMyDescriptionOnly: "Alleen mijn beschrijving sturen",
     dropsDetailsAboveAnyScreenshotWe: "Laat de details hierboven en elke schermafbeelding vallen. We lezen het alsnog, maar de bug is dan veel lastiger na te doen.",
     cancel: "Annuleren",
+    build: "Build",
+    page: "Pagina",
+    room: "Kamer",
+    screen: "Scherm",
+    browser: "Browser",
+    connection: "Verbinding",
+    waitingForThePicker: "Wachten op de kiezer…",
+    attachAScreenshot: "Screenshot bijvoegen",
+    whatWeAreLeavingOut: "Wat we weglaten",
+    whatWeSendWithThis: "Wat we meesturen",
+    noneOfThisIsBeing: "Niets hiervan wordt verstuurd — alleen je beschrijving hierboven.",
+    theLast20ErrorsYour: "De laatste 20 fouten die je browser heeft vastgelegd. Geen paginaadressen verder dan het pad, niets wat je in de chat hebt getypt en nooit het woord dat in het spel is.",
+    sending: "Versturen…",
+    sendReport: "Melding versturen",
   },
 
   changePasswordDialog: {
@@ -608,6 +696,12 @@ export const NL: Catalogue = {
     newPassword: "Nieuw wachtwoord",
     newPasswordAgain: "Nieuw wachtwoord nogmaals",
     emailMeLinkInstead: "Stuur me liever een link",
+    checkYourInbox: "Kijk in je inbox",
+    changeYourPassword: "Wijzig je wachtwoord",
+    pleaseWait: "Even geduld…",
+    changePassword: "Wachtwoord wijzigen",
+    close: "Sluiten",
+    cancel: "Annuleren",
   },
 
   choosingPromptOverlay: {
@@ -642,6 +736,23 @@ export const NL: Catalogue = {
     thanksYourReportWithPeopleWho: "Bedankt — je melding ligt bij de mensen die Sketchy draaien.",
     reload: "Herladen",
     backLobby: "Terug naar de lobby",
+    summary: "Samenvatting",
+    build: "Build",
+    page: "Pagina",
+    room: "Kamer",
+    screen: "Scherm",
+    browser: "Browser",
+    connection: "Verbinding",
+    thisRoomSScreenHit: "Het scherm van deze kamer liep tegen een fout aan en moest stoppen. Je plek blijft even vrijgehouden: stuur de melding hieronder en herlaad dan om verder te gaan, of ga terug naar de lobby.",
+    thisScreenHitAnError: "Dit scherm liep tegen een fout aan en moest stoppen. Je account en instellingen zijn veilig. Stuur de melding hieronder, dan kun je verder.",
+    whatWeAreLeavingOut: "Wat we weglaten",
+    whatWeSendWithThis: "Wat we meesturen",
+    noneOfThisIsBeing: "Niets hiervan wordt verstuurd — alleen je beschrijving hierboven.",
+    theCrashTheLast20: "De crash, de laatste 20 fouten die je browser heeft vastgelegd en waar op de pagina het gebeurde. Geen paginaadressen verder dan het pad, niets wat je in de chat hebt getypt en nooit het woord dat in het spel is.",
+    sendingAgain: "Opnieuw versturen…",
+    sending: "Versturen…",
+    trySendingAgain: "Opnieuw proberen te versturen",
+    sendReport: "Melding versturen",
   },
 
   createRoomPage: {
@@ -669,6 +780,22 @@ export const NL: Catalogue = {
     delete: "Verwijderen",
     undo: "Ongedaan maken",
     saveAsReusableList: "Opslaan als herbruikbare lijst",
+    saveQuickPromptsAsA: "Bewaar snelle woorden als lijst en verwijder gedeelde codes voordat je een voorinstelling opslaat.",
+    appliedName: (p: { name: string }) =>
+      `‘${p.name}’ toegepast.`,
+    savedName: (p: { name: string }) =>
+      `‘${p.name}’ opgeslagen.`,
+    updatedName: (p: { name: string }) =>
+      `‘${p.name}’ bijgewerkt.`,
+    deleteThisRoomSettingPreset: "Deze kamervoorinstelling verwijderen?",
+    createTheRoom: "de kamer maken",
+    noScoring: "Zonder punten",
+    public: "Openbaar",
+    private: "Privé",
+    backToLobby: "Terug naar de lobby",
+    leaveBlankForARandom: "Laat leeg voor een willekeurige naam!",
+    creating: "Maken…",
+    createRoom2: "Kamer maken",
   },
 
   customPromptsEditor: {
@@ -701,6 +828,15 @@ export const NL: Catalogue = {
     searchCustomPrompts: "Zoek in de eigen woorden…",
     filterPromptsByLength: "Woorden filteren op lengte",
     noCustomPromptsMatchTheseFilters: "Geen eigen woorden passen bij deze filters.",
+    all: "Alle",
+    allPromptLengths: "Alle woordlengtes",
+    short: "Kort",
+    n5CharactersOrFewer: "5 tekens of minder",
+    medium: "Middel",
+    n6To10Characters: "6 tot 10 tekens",
+    long: "Lang",
+    n11CharactersOrMore: "11 tekens of meer",
+    loadTheCustomPrompts: "de eigen woorden laden",
   },
 
   deleteAccountDialog: {
@@ -713,6 +849,12 @@ export const NL: Catalogue = {
     typeToConfirm: (p: { word: string }) => `Typ ${p.word} om te bevestigen`,
     couldNotDeleteAccount: "Het account kon niet verwijderd worden.",
     password: "Wachtwoord",
+    deleteThisGuest: "Deze gast verwijderen",
+    deleteYourAccount: "Je account verwijderen",
+    deleting: "Verwijderen…",
+    deleteForGood: "Voorgoed verwijderen",
+    keepPlaying: "Blijven spelen",
+    keepMyAccount: "Mijn account houden",
   },
 
   drawingReactionControl: {
@@ -723,6 +865,11 @@ export const NL: Catalogue = {
     reactions: "Reacties",
     createAccountReact: "Maak een account om te reageren.",
     createAccount: "Account maken",
+    noReactionsYet: "Nog geen reacties",
+    reactToThisDrawingSummary: (p: { summary: string }) =>
+      `Reageer op deze tekening. ${p.summary}`,
+    labelYourReactionPressTo: (p: { label: string }) =>
+      `${p.label}, jouw reactie. Druk om hem te verwijderen`,
   },
 
   drawingRecapGallery: {
@@ -742,11 +889,15 @@ export const NL: Catalogue = {
     drawingRecapNavigation: "Navigatie van het tekeningenoverzicht",
     previous: "Vorige",
     next: "Volgende",
+    loadThisDrawing: "deze tekening laden",
   },
 
   emailRecoveryReminder: {
     addEmail: "Een e-mailadres toevoegen",
     dismiss: "Sluiten",
+    confirmPendingAddressToFinishSetting: (p: { pendingAddress: string }) =>
+      `Bevestig ${p.pendingAddress} om accountherstel af te ronden.`,
+    thisAccountHasNoEmail: "Dit account heeft geen e-mailadres, dus een vergeten wachtwoord kan niet opnieuw worden ingesteld.",
   },
 
   firstRunIdentity: {
@@ -756,6 +907,12 @@ export const NL: Catalogue = {
     logIn: "Inloggen",
     or: "of",
     displayName: "Weergavenaam",
+    beenHereBefore: "Al eens hier geweest?",
+    playAsYourself: "Speel als jezelf",
+    whatShouldWeCallYou: "Hoe mogen we je noemen?",
+    justPlayingOncePickA: "Speel je maar één keer? Kies een weergavenaam",
+    play: "Spelen",
+    playAsGuest: "Spelen als gast",
   },
 
   friendButton: {
@@ -813,6 +970,12 @@ export const NL: Catalogue = {
     highlights: "Hoogtepunten",
     drawings: "Tekeningen",
     stayHere: "Hier blijven",
+    aGreatGameOfDrawing: "Een geweldig tekenspel",
+    theRoomTakesTheCrown: "De hele kamer pakt de kroon!",
+    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
+      `${p.winnersCount} spelers delen de kroon!`,
+    takesTheCrown: " pakt de kroon!",
+    shareTheCrown: " delen de kroon!",
   },
 
   gameHighlightsPanel: {
@@ -841,6 +1004,32 @@ export const NL: Catalogue = {
     roomRules: "Kamerregels",
     thisGameAlreadyProgressJoiningAs: "Dit spel is al bezig. Als speler kom je in een latere beurt aan de beurt.",
     playerSlotsAreFullSpectatingStill: "De spelersplekken zijn vol. Toekijken kan nog wel.",
+    promptDetailsHidden: "Woorddetails verborgen",
+    timedHints: "Hints op tijd",
+    buyableLetterHints: "Letterhints om te kopen",
+    wheelOfFortune: "Rad van fortuin",
+    noLetterHints: "Geen letterhints",
+    publicRoom: "Openbare kamer",
+    privateInvite: "Privé-uitnodiging",
+    inProgress: "Bezig",
+    waiting: "Wachten",
+    full: " · Vol",
+    noScoring: "Zonder punten",
+    pressure: "Druk",
+    default: "Standaard",
+    everyToolAndColor: "Alle gereedschappen en kleuren",
+    spectatorsCanSeeThePrompt: "Toeschouwers zien het woord",
+    spectatorsGuessAlong: "Toeschouwers raden mee",
+    defaultPromptList: "Standaard woordenlijst",
+    roomFull: "Kamer vol",
+    joining: "Deelnemen…",
+    joinGameInProgress: "Meedoen aan lopend spel",
+    joinGame: "Meedoen",
+    spectate: "Kijken",
+    customPromptsOnly: (p: { count: number }) =>
+      `alleen ${counted(p.count, { one: "eigen woord", other: "eigen woorden" })}`,
+    customPromptsPlusDefaults: (p: { count: number }) =>
+      `${counted(p.count, { one: "eigen woord", other: "eigen woorden" })} plus standaardwoorden`,
   },
 
   inviteFriendsList: {
@@ -888,6 +1077,18 @@ export const NL: Catalogue = {
     createRoom2: "Een kamer maken",
     joinWithCode: "Meedoen met een code",
     paste: "Plakken",
+    couldNotSaveThatName: "Die naam kon niet worden opgeslagen. Probeer het nog eens.",
+    joinAsASpectator: "als toeschouwer meedoen",
+    joinTheRoom: "de kamer in gaan",
+    loading: "Laden…",
+    showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
+      `${p.filteredRoomsCount} van ${p.roomsCount} getoond`,
+    n0Rooms: "0 kamers",
+    close: "Sluiten",
+    joining: "Deelnemen…",
+    joinTheRoom2: "De kamer in gaan",
+    joiningAsSpectator: "Meedoen als toeschouwer…",
+    watchWithoutPlaying: "Kijken zonder te spelen",
   },
 
   lobbyChatPanel: {
@@ -900,6 +1101,8 @@ export const NL: Catalogue = {
     saySomethingLobby: "Zeg iets tegen de lobby…",
     lobbyChatMessage: "Lobbychatbericht",
     send: "Versturen",
+    couldNotSaveThatName: "Die naam kon niet worden opgeslagen. Probeer het nog eens.",
+    sendTheMessage: "het bericht versturen",
   },
 
   lobbyPlayerMenu: {
@@ -947,6 +1150,14 @@ export const NL: Catalogue = {
     searchPrompts: "Woorden zoeken",
     nothingMatchesThatSearch: "Niets past bij die zoekopdracht.",
     deleteList: "Lijst verwijderen…",
+    promptListSaved: "Woordenlijst opgeslagen.",
+    deleteThisPromptListAnd: "Deze woordenlijst en al haar versies verwijderen?",
+    promptListDeleted: "Woordenlijst verwijderd.",
+    backToLobby: "Terug naar de lobby",
+    promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>
+      `${p.promptsCount} van ${p.MAX_LIST_PROMPTS} woorden in deze lijst`,
+    saving: "Opslaan…",
+    saveList: "Lijst opslaan",
   },
 
   notFoundPage: {
@@ -961,6 +1172,8 @@ export const NL: Catalogue = {
     nobodyElseHereRightNow: "Er is op dit moment niemand anders.",
     friend: "Vriend",
     join: "Meedoen",
+    inAGame: "In een spel",
+    inTheLobby: "In de lobby",
   },
 
   pictureCropDialog: {
@@ -971,6 +1184,8 @@ export const NL: Catalogue = {
     pictureFramedArrowKeysMovePlus: "De uitgesneden afbeelding. Pijltjestoetsen verplaatsen; plus en min zoomen.",
     zoom: "Zoom",
     cancel: "Annuleren",
+    uploading: "Uploaden…",
+    usePicture: "Afbeelding gebruiken",
   },
 
   playerList: {
@@ -994,6 +1209,20 @@ export const NL: Catalogue = {
     sendRequest: "Een verzoek sturen",
     report: "Melden",
     toAModerator: "Naar een moderator",
+    voteAfkOrKickOr: "Stem afwezig of eruit, of meld",
+    reportThisPlayer: "Deze speler melden",
+    undoVote: "Stem intrekken",
+    vote: "Stemmen",
+    voteKindAfk: "Afwezig",
+    voteKindKick: "Eruit",
+    undoVoteFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Stem ${p.kind} voor ${p.nickname} intrekken, ${p.count} van ${p.required}`,
+    voteFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Stem ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}`,
+    votesFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Stemmen ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}`,
+    votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Stemmen ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}, inclusief die van jou`,
   },
 
   profilePage: {
@@ -1043,6 +1272,23 @@ export const NL: Catalogue = {
     statistics: "Statistieken",
     gameHistory: "Spelgeschiedenis",
     includeGamesThatFellApart: "Ook spellen die uiteenvielen",
+    notKept: "niet bewaard",
+    nothingDrawn: "niets getekend",
+    onlyThePlayersInThis: "Alleen de spelers van dit spel kunnen de beurten zien.",
+    couldNotLoadTheTurns: "De beurten van dit spel konden niet worden geladen.",
+    cutShort: "afgebroken",
+    noAttempt: "geen poging",
+    joinedLate: "later ingestapt",
+    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
+      `telt niet mee (${p.eligibilityReason})`,
+    unknownPlayer: "Onbekende speler",
+    backToLobby: "Terug naar de lobby",
+    guestDisplayNameNotSaved: "Gast — weergavenaam niet opgeslagen",
+    registeredPlayer: "Geregistreerde speler",
+    noFinishedGamesYetPlay: "Nog geen afgeronde spellen. Speel er een en hij verschijnt hier.",
+    noGamesToShowGames: "Geen spellen om te tonen. Spellen uit privékamers zijn alleen zichtbaar voor wie erbij was.",
+    loadHistoryPageSizeMore: (p: { HISTORY_PAGE_SIZE: number }) =>
+      `Nog ${p.HISTORY_PAGE_SIZE} laden`,
   },
 
   promptContentReportDialog: {
@@ -1054,10 +1300,19 @@ export const NL: Catalogue = {
     reason: "Reden",
     whatShouldModeratorKnow: "Wat moet de moderator weten?",
     cancel: "Annuleren",
+    inappropriateContent: "Ongepaste inhoud",
+    hatefulOrAbusiveContent: "Haatdragende of kwetsende inhoud",
+    sexualContent: "Seksuele inhoud",
+    violence: "Geweld",
+    spam: "Spam",
+    other: "Anders",
+    sending: "Versturen…",
+    sendReport: "Melding versturen",
   },
 
   promptDisplay: {
-    couldNotDoAction: (p: { action: string }) => `Kon niet ${p.action}.`,
+    couldNotDoAction: (p: { action: string }) =>
+      `Dat is niet gelukt: ${p.action}.`,
     nextHintCost: (p: { cost: number }) => `Volgende hint: ${p.cost}`,
     hintSpendTotal: (p: { spent: number }) => `Totaal: ${p.spent}`,
     buyLetter: (p: { letter: string; price: number }) =>
@@ -1073,6 +1328,10 @@ export const NL: Catalogue = {
     hintSpendLimitReached: "Hintlimiet bereikt",
     deductedFromYourScoreIfYou: "Wordt van je punten afgetrokken als je het woord raadt",
     buyLetterRevealsEveryMatch: "Koop een letter — laat elke plek zien",
+    selectThePrompt: "het woord kiezen",
+    choosing: "Kiezen…",
+    buyTheHint: "de hint kopen",
+    buyTheLetterHint: "de letterhint kopen",
   },
 
   promptListPicker: {
@@ -1089,6 +1348,11 @@ export const NL: Catalogue = {
     loadingCuratedPromptLists: "Woordenlijsten laden…",
     promptLists: "Woordenlijsten",
     addUnlistedListByCode: "Een niet-vermelde lijst toevoegen met een code",
+    namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
+      `${p.name} (${p.promptCount} woorden)`,
+    adding: "Toevoegen…",
+    add: "Toevoegen",
+    reportSentForModeratorReview: "Melding naar de moderators gestuurd.",
   },
 
   promptStatsPage: {
@@ -1113,6 +1377,19 @@ export const NL: Catalogue = {
     guessed: "Geraden",
     picked: "Gekozen",
     drawn: "Getekend",
+    allTime: "Altijd",
+    last30Days: "Laatste 30 dagen",
+    last90Days: "Laatste 90 dagen",
+    allScoringModes: "Alle puntenmodi",
+    noScoring: "Zonder punten",
+    defaultScoring: "Standaardpunten",
+    pressureScoring: "Drukpunten",
+    allHintModes: "Alle hintmodi",
+    noHints: "Geen hints",
+    checkpointHints: "Hints op tijd",
+    purchasedHints: "Gekochte hints",
+    letterWheel: "Letterrad",
+    backToLobby: "Terug naar de lobby",
   },
 
   publicRoomCard: {
@@ -1127,6 +1404,10 @@ export const NL: Catalogue = {
     looking: "Zoeken…",
     nobodySeatedYet: "Er zit nog niemand.",
     host: "Gastheer",
+    couldNotReadWhoIs: "Kon niet lezen wie er in deze kamer zit.",
+    joining: "Deelnemen…",
+    join: "Meedoen",
+    spectate: "Kijken",
   },
 
   reactionRequests: {
@@ -1148,11 +1429,23 @@ export const NL: Catalogue = {
     anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
     sentWithWhatAboutAttached: "Verstuurd, met het onderwerp erbij.",
     done: "Klaar",
+    inappropriateName: "Ongepaste naam",
+    inappropriatePicture: "Ongepaste afbeelding",
+    reportSent: "Melding verstuurd",
+    reportDisplayName: (p: { displayName: string }) =>
+      `${p.displayName} melden`,
+    thePictureOnTheAccount: "De afbeelding van het account wordt bijgevoegd zoals die nu is.",
+    theNameOnTheAccount: "De naam van het account wordt bijgevoegd zoals die nu is.",
+    sending: "Versturen…",
+    sendReport: "Melding versturen",
+    close: "Sluiten",
+    cancel: "Annuleren",
   },
 
   reportedDrawing: {
     thisDrawingCouldNotBeDecoded: "Deze tekening kon niet gedecodeerd worden.",
     drawingCouldNotBeLoaded: "De tekening kon niet geladen worden.",
+    loadingTheDrawing: "Tekening laden…",
   },
 
   reportLobbyLineDialog: {
@@ -1165,6 +1458,16 @@ export const NL: Catalogue = {
     thisLineAttachedWithWhatLobby: "Deze regel zit erbij, met wat de lobby eromheen zei.",
     sentWithLineWhatWasSaid: "Verstuurd, met de regel en wat eromheen gezegd is.",
     done: "Klaar",
+    harassmentOrAbuse: "Intimidatie of misbruik",
+    spam: "Spam",
+    inappropriateName: "Ongepaste naam",
+    reportSent: "Melding verstuurd",
+    reportDisplayName: (p: { displayName: string }) =>
+      `${p.displayName} melden`,
+    sending: "Versturen…",
+    sendReport: "Melding versturen",
+    close: "Sluiten",
+    cancel: "Annuleren",
   },
 
   reportPlayerDialog: {
@@ -1180,6 +1483,28 @@ export const NL: Catalogue = {
     includeTheirDrawing: "Hun tekening meesturen",
     canvasAsRightNowSoModerator: "Het canvas zoals het nu is, zodat een moderator ziet wat\n                      jij zag.",
     done: "Klaar",
+    sentWithTheirDrawingAnd: (p: { messages: string }) =>
+      `Verstuurd, met hun tekening en ${p.messages} bijgevoegd.`,
+    sentWithTheirDrawingAttached: "Verstuurd, met hun tekening bijgevoegd.",
+    sentWithMessagesAttached: (p: { messages: string }) =>
+      `Verstuurd, met ${p.messages} bijgevoegd.`,
+    sentTheyHadSaidNothing: "Verstuurd. Deze speler had niets gezegd in deze kamer, dus er zijn geen berichten bijgevoegd.",
+    baseTheTurnHadEnded: (p: { base: string }) =>
+      `${p.base} De beurt was voorbij, dus de tekening kon niet worden bijgevoegd.`,
+    harassmentOrAbuse: "Intimidatie of misbruik",
+    offensiveDrawing: "Aanstootgevende tekening",
+    inappropriateName: "Ongepaste naam",
+    cheating: "Valsspelen",
+    spam: "Spam",
+    inappropriatePicture: "Ongepaste afbeelding",
+    sendThatReport: "die melding versturen",
+    reportNickname: (p: { nickname: string }) =>
+      `${p.nickname} melden`,
+    reportSent: "Melding verstuurd",
+    sending: "Versturen…",
+    sendReport: "Melding versturen",
+    cancel: "Annuleren",
+    close: "Sluiten",
   },
 
   reportsReviewedNotice: {
@@ -1198,12 +1523,20 @@ export const NL: Catalogue = {
     restart: "Herstarten",
     keepPlaying: "Doorspelen",
     onlyEligiblePlayersPresentWhenVote: "Alleen stemgerechtigde spelers die er waren toen de stemming begon, kunnen stemmen.",
+    proposerNicknameProposedRestartingRemainingS: (p: { proposerNickname: string; remaining: number }) =>
+      `${p.proposerNickname} stelt een herstart voor · ${p.remaining} s`,
+    theCurrentGameIsRestarting: "Het spel wordt nu herstart.",
+    yesYesNoNoPending: (p: { yes: number; no: number; pending: number; requiredVotes: number }) =>
+      `${p.yes} ja · ${p.no} nee · ${p.pending} open · ${p.requiredVotes} nodig`,
   },
 
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Je bent op elk apparaat uitgelogd zodat de wijziging effect heeft.\n            Log opnieuw in om verder te gaan.",
     setUpNow: "Nu instellen",
     later: "Later",
+    oneMoment: "Een moment…",
+    signInAgain: "Opnieuw inloggen",
+    understood: "Begrepen",
   },
 
   roomChatPanel: {
@@ -1215,11 +1548,31 @@ export const NL: Catalogue = {
     sent: "Verstuurd:",
     send: "Versturen",
     youReDrawingWatchGuessesCome: "Jij tekent — kijk hoe de gokken binnenkomen.",
+    yourGuessTrimmedDidNot: (p: { trimmed: string }) =>
+      `Je gok ‘${p.trimmed}’ heeft de server niet bereikt. Stuur hem opnieuw.`,
+    sendTheMessage: "het bericht versturen",
+    chatWhileYouWait: "Chat terwijl je wacht",
+    gameChat: "Spelchat",
+    guessAndChat: "Raden en chatten",
+    guessesAndChat: "Gokken en chat",
+    roomChat: "Kamerchat",
+    sayHelloBeforeTheGame: "Zeg hallo voordat het spel begint.",
+    noMessagesYet: "Nog geen berichten.",
+    typeYourGuess: "Typ je gok...",
+    typeAMessage: "Typ een bericht...",
   },
 
   roomEntryState: {
     thisRoomNoLongerAvailable: "Deze kamer is niet meer beschikbaar",
     couldNotJoinThisRoom: "Deelnemen aan deze kamer lukte niet",
+    thatNameIsReservedPlease: "Die naam is gereserveerd. Kies een andere.",
+    thisRoomHasEndedAsk: "Deze kamer is afgelopen. Vraag de gastheer om een nieuwe uitnodiging.",
+    loadThisRoom: "deze kamer laden",
+    enterANicknameToContinue: "Vul een bijnaam in om verder te gaan.",
+    thePlayerSlotsJustFilled: "De spelersplekken zijn net vol, maar je kunt nog kijken.",
+    joinAsASpectator: "als toeschouwer meedoen",
+    joinThisRoom: "deze kamer in gaan",
+    nicknameRule: "Gebruik 3–16 tekens: letters, cijfers, streepjes of lage streepjes. Geen spaties.",
   },
 
   roomMenuSheet: {
@@ -1231,6 +1584,8 @@ export const NL: Catalogue = {
     saveThisDrawing: "Deze tekening opslaan",
     settings: "Instellingen",
     leaveRoom: "De kamer verlaten",
+    iMBack: "Ik ben terug",
+    goAwayForABit: "Even weg",
   },
 
   roomPlayersPanel: {
@@ -1243,6 +1598,11 @@ export const NL: Catalogue = {
     couldNotJoinAsPlayer: "Meedoen als speler lukte niet",
     finalStandings: "Eindstand",
     players: "Spelers",
+    joinAsAPlayer: "als speler meedoen",
+    aPlayerSlotIsAvailable: "Er is een spelersplek vrij.",
+    playerSlotsAreCurrentlyFull: "De spelersplekken zijn nu vol.",
+    joining: "Deelnemen…",
+    joinAsPlayer: "Meedoen als speler",
   },
 
   roomSettingsEditor: {
@@ -1252,6 +1612,11 @@ export const NL: Catalogue = {
     editRoomRules: "Kamerregels bewerken",
     loadingSettings: "Instellingen laden…",
     cancel: "Annuleren",
+    loadRoomRules: "de kamerregels laden",
+    saveRoomRules: "de kamerregels opslaan",
+    saving: "Opslaan…",
+    saveSettings: "Instellingen opslaan",
+    saved: "Opgeslagen",
   },
 
   roomSetupForm: {
@@ -1280,6 +1645,10 @@ export const NL: Catalogue = {
     scoringHints: "Punten en hints",
     hintsAreOffBecauseBlanksAre: "Hints staan uit omdat de lege plekken verborgen zijn.",
     pointPurchaseHintModesRequireScoring: "Hintmodi met punten kosten vereisen puntentelling.",
+    allColors: "Alle kleuren",
+    noScoring: "Zonder punten",
+    listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen.",
+    joinableOnlyWithTheCode: "Alleen toegankelijk met de code of de uitnodigingslink.",
   },
 
   rulesPage: {
@@ -1287,6 +1656,7 @@ export const NL: Catalogue = {
     theRules: "De regels",
     thisPage: "Op deze pagina",
     forExample: "Bijvoorbeeld",
+    backToLobby: "Terug naar de lobby",
   },
 
   sessionManagerDialog: {
@@ -1302,6 +1672,10 @@ export const NL: Catalogue = {
     loadingDevices: "Apparaten laden…",
     currentDevice: "Huidig apparaat",
     close: "Sluiten",
+    revoking: "Intrekken…",
+    revoke: "Intrekken",
+    loggingOut: "Uitloggen…",
+    logOutEverywhere: "Overal uitloggen",
   },
 
   settingsOverlay: {
@@ -1373,6 +1747,59 @@ export const NL: Catalogue = {
     close: "Sluiten",
     closeSettings: "Instellingen sluiten",
     settingsSections: "Onderdelen van de instellingen",
+    account: "Account",
+    appearance: "Weergave",
+    soundEffects2: "Geluid en effecten",
+    shortcuts: "Sneltoetsen",
+    red: "Rood",
+    orange: "Oranje",
+    yellow: "Geel",
+    lime: "Limoen",
+    green: "Groen",
+    teal: "Blauwgroen",
+    sky: "Hemelsblauw",
+    blue: "Blauw",
+    indigo: "Indigo",
+    purple: "Paars",
+    magenta: "Magenta",
+    pink: "Roze",
+    brown: "Bruin",
+    light: "Licht",
+    dark: "Donker",
+    system: "Systeem",
+    crosshair: "Vizier",
+    outline: "Omtrek",
+    space: "Spatie",
+    hideTheFullAddress: "Volledig adres verbergen",
+    showTheFullAddress: "Volledig adres tonen",
+    hide: "Verbergen",
+    showInFull: "Volledig tonen",
+    verified: "Bevestigd",
+    notVerified: "Niet bevestigd",
+    saving: "Opslaan…",
+    save: "Opslaan",
+    aGuestHasNothingTo: "Een gast heeft niets te herstellen: er is geen wachtwoord om te vergeten.",
+    withoutOneThereIsNo: "Zonder e-mailadres is er geen weg terug in dit account als het wachtwoord vergeten is.",
+    addAnEmail: "E-mail toevoegen",
+    guestsHaveNoPassword: "Gasten hebben geen wachtwoord.",
+    changingItSignsEveryOther: "Wijzigen logt alle andere apparaten uit.",
+    setThisUpAndThe: (p: { pendingRole: string }) =>
+      `Stel dit in en de rol van ${p.pendingRole} die je is aangeboden gaat in.`,
+    anAuthenticatorAppSCode: "Een code uit een authenticatie-app, bovenop je wachtwoord. Moderators en beheerders moeten er een hebben.",
+    setUp: "Instellen",
+    thisBrowserIsTheOnly: "Deze browser is de enige plek waar je bestaat.",
+    everyBrowserStillHoldingA: "Elke browser die nog een sessie heeft, en een manier om er een te beëindigen.",
+    worksForAGuestToo: "Werkt ook voor gasten: de spellen die je hebt gespeeld zijn van jou.",
+    everyGameListAndSetting: "Elk spel, elke lijst en elke instelling die Sketchy over je bewaart, als één JSON-bestand.",
+    deleteThisGuest: "Deze gast verwijderen",
+    deleteYourAccount: "Je account verwijderen",
+    removesTheNameThePoints: "Verwijdert de naam, de punten en de geschiedenis die bij deze browser horen.",
+    gamesYouPlayedStayIn: "Spellen die je speelde blijven in de geschiedenis van anderen, zonder je naam.",
+    clickToRebindTheSecond: "Klik om de tweede toets opnieuw toe te wijzen",
+    clickToRebind: "Klik om opnieuw toe te wijzen",
+    pressKey: "Druk op een toets…",
+    key: "+ toets",
+    none: "Geen",
   },
 
   stepUpDialog: {
@@ -1384,6 +1811,12 @@ export const NL: Catalogue = {
     recoveryCode: "Herstelcode",
     codeFromYourAuthenticatorApp: "Code uit je authenticatie-app",
     cancel: "Annuleren",
+    waitingForYourDevice: "Wachten op je apparaat…",
+    useYourPasskey: "Je passkey gebruiken",
+    useYourAuthenticatorApp: "Je authenticatie-app gebruiken",
+    useARecoveryCode: "Een herstelcode gebruiken",
+    checking: "Controleren…",
+    confirm: "Bevestigen",
   },
 
   suspensionNotice: {
@@ -1392,6 +1825,12 @@ export const NL: Catalogue = {
     recordedAs: "Vastgelegd als {category}",
     yourAccountSuspended: "Je account is geschorst",
     youWereAskedDraw: "Jij moest tekenen",
+    theMessageThisWasAbout: "Het bericht waar het om ging:",
+    theMessagesThisWasAbout: "De berichten waar het om ging:",
+    theDrawingThisWasAbout: "De tekening waar het om ging:",
+    theDrawingsThisWasAbout: "De tekeningen waar het om ging:",
+    signingOut: "Uitloggen…",
+    signOut: "Uitloggen",
   },
 
   toastProvider: {
@@ -1421,6 +1860,14 @@ export const NL: Catalogue = {
     canvasActions: "Canvasacties",
     undoLastStrokeCtrlZ: "Laatste streek ongedaan maken (Ctrl+Z)",
     clear: "Leegmaken",
+    brush: "Penseel",
+    fill: "Vullen",
+    eraser: "Gum",
+    rectangle: "Rechthoek",
+    triangle: "Driehoek",
+    ellipse: "Ellips",
+    fillIsUnavailableForThe: "Vullen is de rest van deze beurt niet beschikbaar",
+    drawingByHandIsUnavailable: "Uit de vrije hand tekenen is de rest van deze beurt niet beschikbaar",
   },
 
   turnResultsOverlay: {
@@ -1435,6 +1882,8 @@ export const NL: Catalogue = {
     you: "(jij)",
     drewThisTurn: "Tekende deze beurt",
     nextTurn: "Volgende beurt",
+    turnResults: "Resultaten van de beurt",
+    turnComplete: "Beurt voorbij",
   },
 
   twoFactorDialog: {
@@ -1505,6 +1954,19 @@ export const NL: Catalogue = {
     turnOff: "Uitschakelen",
     addAuthenticatorApp: "Een authenticatie-app toevoegen",
     close: "Sluiten",
+    couldNotStartSettingThis: "Het instellen kon niet beginnen.",
+    thatCodeWasNotAccepted: "Die code werd niet geaccepteerd.",
+    couldNotAddThatPasskey: "Die passkey kon niet worden toegevoegd.",
+    couldNotRemoveThatPasskey: "Die passkey kon niet worden verwijderd.",
+    couldNotConfirmIt: "Het kon niet worden bevestigd.",
+    couldNotReplaceYourRecovery: "Je herstelcodes konden niet worden vervangen.",
+    couldNotTurnThisOff: "Dit kon niet worden uitgezet.",
+    waitingForYourDevice: "Wachten op je apparaat…",
+    setUpAPasskey: "Een passkey instellen",
+    noPasskeyOnThisDevice: "Geen passkey op dit apparaat? ",
+    thisBrowserCannotMakeA: "Deze browser kan geen passkey maken. ",
+    checking: "Controleren…",
+    confirm: "Bevestigen",
   },
 
   useFriendArrivalNotices: {
@@ -1512,6 +1974,10 @@ export const NL: Catalogue = {
     acceptedYourRequest: (p: { name: string }) => `${p.name} heeft je vriendschapsverzoek geaccepteerd.`,
     severalAccepted: (p: { count: number }) =>
       `${counted(p.count, { one: "persoon heeft", other: "personen hebben" })} je vriendschapsverzoeken geaccepteerd.`,
+    accept: "Accepteren",
+    open: "Openen",
+    manyArrived: (p: { name: string; others: number }) =>
+      `${p.name} en ${counted(p.others, { one: "iemand anders", other: "anderen" })} willen vrienden worden.`,
   },
 
   useRoomSessionReconnect: {
@@ -1541,6 +2007,27 @@ export const NL: Catalogue = {
     edit: "Bewerken",
     viewHighlights: "Hoogtepunten bekijken",
     viewDrawings: "Tekeningen bekijken",
+    spectatorsAfkAndDisconnectedPlayers: "Toeschouwers, afwezige en losgekoppelde spelers tellen niet mee voor de twee actieve spelers die een spel nodig heeft.",
+    joinMySketchyRoomCode: (p: { code: string }) =>
+      `Kom in mijn Sketchy-kamer: ${p.code}`,
+    inviteLink: "Uitnodigingslink",
+    customPromptsOnlyCustomPromptCount: (p: { customPromptCount: number }) =>
+      `Alleen eigen woorden (${p.customPromptCount})`,
+    customPromptCountCustomPromptsCuratedLists: (p: { customPromptCount: number }) =>
+      `${p.customPromptCount} eigen woorden + samengestelde lijsten`,
+    promptListSlugsCountCuratedPromptLists: (p: { promptListSlugsCount: number }) =>
+      `${p.promptListSlugsCount} samengestelde woordenlijsten`,
+    noScoring: "Zonder punten",
+    spectatorsSeeThePrompt: "Toeschouwers zien het woord",
+    publicRoom: "Openbare kamer",
+    privateRoom: "Privékamer",
+    betweenGames: "tussen spellen door",
+    waitingForPlayers: "wacht op spelers",
+    roomCode: "Kamercode",
+    starting: "Starten…",
+    rematch: "Revanche",
+    startGame: "Spel starten",
+    waitingForAHost: "Wacht op een gastheer",
   },
 
   warningNotice: {
@@ -1550,5 +2037,257 @@ export const NL: Catalogue = {
     whatAWarningMeans:
       "Een melding over je gedrag is bekeken, en dit is de uitkomst. Er is niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
     youWereAskedDraw: "Jij moest tekenen",
+    yourPictureWasRemoved: "Je afbeelding is verwijderd",
+    aModeratorWarning: "Een waarschuwing van de moderatie",
+    aReportAboutYourPicture: "Een melding over je afbeelding is bekeken, en dit is de uitkomst. Verder is er niets aan je account veranderd.",
+    theMessageThisWasAbout: "Het bericht waar het om ging:",
+    theMessagesThisWasAbout: "De berichten waar het om ging:",
+    theDrawingThisWasAbout: "De tekening waar het om ging:",
+    theDrawingsThisWasAbout: "De tekeningen waar het om ging:",
+    oneMoment: "Een moment…",
+    understood: "Begrepen",
+  },
+  connectionStatusBanner: {
+    youReDisconnectedCheckYour: "Je verbinding is verbroken. Controleer je verbinding; Sketchy maakt vanzelf opnieuw verbinding.",
+    couldnTReconnectToYour: "Kon niet opnieuw verbinden met je kamer. Herlaad de pagina om het nog eens te proberen.",
+    connectionLostReconnecting: "Verbinding verbroken — opnieuw verbinden…",
+  },
+  accountData: {
+    queued: "In de wachtrij",
+    preparing: "Voorbereiden…",
+    ready: "Klaar",
+    tooLargeToPrepareHere: "Te groot om hier voor te bereiden",
+    couldNotPrepare: "Kon niet worden voorbereid",
+    yourDataIsLargerThan: "Je gegevens zijn groter dan deze server in één document voorbereidt. Vraag de beheerder de limiet te verhogen.",
+    somethingWentWrongWhilePreparing: "Er ging iets mis bij het voorbereiden. Je kunt een nieuwe export aanvragen.",
+  },
+  recoveryCodeFile: {
+    sketchyRecoveryCodes: "Sketchy-herstelcodes",
+    accountUsername: (p: { username: string }) =>
+      `Account: ${p.username}`,
+    createdValue: (p: { value: string }) =>
+      `Aangemaakt: ${p.value}`,
+    eachCodeSignsYouIn: "Elke code logt je één keer in als je je authenticatie-app kwijtraakt.",
+    keepThisFile: "Bewaar dit bestand ergens waar alleen jij bij kunt. Wie deze codes\nen je wachtwoord heeft, kan als jou inloggen.",
+  },
+  avatars: {
+    chooseAPngJpegWebP: "Kies een PNG-, JPEG-, WebP- of GIF-afbeelding.",
+    thatPictureIsTooLarge: "Die afbeelding is te groot om in te lezen: hoogstens 10 MB.",
+    thatFileCouldNotBe: "Dat bestand kon niet als afbeelding worden gelezen.",
+    thatPictureIsTooSmall: "Die afbeelding is te klein om iets mee te doen.",
+    thisBrowserCannotResizePictures: "Deze browser kan geen afbeeldingen verkleinen.",
+    thatPictureIsTooDetailed: "Die afbeelding is te gedetailleerd. Probeer een eenvoudigere of zoom in op een deel ervan.",
+  },
+  settingsSync: {
+    thatChangeAppliesHereBut: "Die wijziging geldt hier, maar kon niet in je account worden opgeslagen. Je andere apparaten zien hem niet.",
+  },
+  promptStats: {
+    hardestFirst: "Moeilijkste eerst",
+    easiestFirst: "Makkelijkste eerst",
+    mostPicked: "Vaakst gekozen",
+    getsGuessed: "Wordt geraden",
+    usuallyGuessed: "Meestal geraden",
+    evenOdds: "Fifty-fifty",
+    oftenMissed: "Vaak gemist",
+    rarelyGuessed: "Zelden geraden",
+    notPlayedEnough: "Te weinig gespeeld",
+    allRanked: (p: { count: number }) =>
+      `Alle ${p.count} woorden zijn vaak genoeg gespeeld om ze te rangschikken.`,
+    noneRanked: (p: { unrated: number; guessers: number }) =>
+      `Geen van deze ${p.unrated} woorden heeft al ${p.guessers} raders gehad, dus geen enkel woord is gerangschikt. Speel een paar spellen en hun moeilijkheid verschijnt hier.`,
+    someRanked: (p: { rated: number; unrated: number; guessers: number }) =>
+      `${p.rated} gerangschikt. ${plural(p.unrated, { one: `Nog ${p.unrated} woord is niet gerangschikt`, other: `Nog ${p.unrated} woorden zijn niet gerangschikt` })}: minder dan ${p.guessers} raders hebben ze gezien.`,
+    noMatch: (p: { query: string }) =>
+      `Geen woord past bij ‘${p.query}’.`,
+    matching: (p: { count: number; query: string }) =>
+      `${counted(p.count, { one: "woord past", other: "woorden passen" })} bij ‘${p.query}’.`,
+  },
+  gameHeaderStatus: {
+    roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
+      `Ronde ${p.roundNumber} van ${p.totalRounds}`,
+  },
+  gameRoomRegions: {
+    theNextPlayer: "De volgende speler",
+    drawingCanvasYouAreDrawing: "Tekenvlak. Jij tekent.",
+    yourTurnToDraw: "Jij bent aan de beurt om te tekenen.",
+    canvasSpectating: (p: { drawer: string }) =>
+      `Tekenvlak. Je kijkt naar ${p.drawer}.`,
+    canvasSomeoneDrawing: (p: { drawer: string }) =>
+      `Tekenvlak. ${p.drawer} tekent.`,
+    someoneIsDrawing: (p: { drawer: string }) =>
+      `${p.drawer} tekent.`,
+    theDrawer: "degene die tekent",
+    aPlayer: "Iemand",
+  },
+  useToolbarState: {
+    fillIsUnavailableForThe: "Vullen is de rest van deze beurt niet beschikbaar.",
+    drawingByHandIsUnavailable: "Uit de vrije hand tekenen is de rest van deze beurt niet beschikbaar. Vormen werken nog wel.",
+  },
+  timer: {
+    n10SecondsRemaining: "Nog 10 seconden",
+    timeIsUp: "De tijd is om",
+  },
+  chatAnnouncements: {
+    nicknameGuessedThePrompt: (p: { nickname: string }) =>
+      `${p.nickname} heeft het woord geraden.`,
+  },
+  canvasSnapshot: {
+    drawingOfDownloadPrompt: (p: { downloadPrompt: string }) =>
+      `Tekening van ${p.downloadPrompt}`,
+    savedDrawing: "Opgeslagen tekening",
+  },
+  roomSetup: {
+    default: "Standaard",
+    fasterGuessesEarnMore100: "Sneller raden levert meer op, 100–300 punten.",
+    pressure: "Druk",
+    pointsDecayEverySecondTwice: "Punten zakken elke seconde — twee keer zo snel zodra iemand het raadt.",
+    noScoring: "Zonder punten",
+    justDrawAndGuessNo: "Gewoon tekenen en raden. Geen stand.",
+    timedHints: "Hints op tijd",
+    lettersRevealToEveryoneAt: "Letters worden op vaste momenten voor iedereen onthuld.",
+    noHints: "Geen hints",
+    blanksOnlyAllTurnLong: "Alleen streepjes, de hele beurt lang.",
+    buyLetters: "Letters kopen",
+    revealALetterSlotJust: "Onthul een letter alleen voor jou — betaald met de punten van die beurt.",
+    wheelOfFortune: "Rad van fortuin",
+    pickALetterPayIts: "Kies een letter, betaal de prijs — klinkers kosten extra.",
+    hiddenPrompt: "Verborgen woord",
+  },
+  screenCapture: {
+    thisBrowserCouldNotEncode: "Deze browser kon de screenshot niet coderen.",
+    theCaptureWasEmpty: "De opname was leeg.",
+    thisBrowserCouldNotRead: "Deze browser kon de screenshot niet lezen.",
+    thatScreenshotIsTooLarge: "Die screenshot is te groot om te versturen.",
+  },
+  accountRecovery: {
+    youCanRecoverThisAccount: (p: { address: string }) =>
+      `Je kunt dit account herstellen via ${p.address}.`,
+    checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
+      `Zoek in ${p.pendingAddress} naar een bevestigingslink. Tot je die volgt, is er geen weg terug in dit account.`,
+    thisServerCannotSendEmail: "Deze server kan geen e-mail versturen, dus een kwijtgeraakt wachtwoord moet worden hersteld door wie de server beheert.",
+    addAnEmailAddressSo: "Voeg een e-mailadres toe zodat je weer binnenkomt als je je wachtwoord vergeet.",
+  },
+  friends: {
+    aFriend: "Een vriend",
+  },
+  lobbyPresence: {
+    showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
+      `${p.shown} van ${p.onlineCount} getoond`,
+  },
+  authStore: {
+    chooseANameToPlay: "Kies een naam om onder te spelen.",
+  },
+  passkeys: {
+    noPasskeyWasCreated: "Er is geen passkey gemaakt.",
+    noPasskeyWasUsed: "Er is geen passkey gebruikt.",
+  },
+  useGameSocketListeners: {
+    nicknameJoinedTheRoom: (p: { nickname: string }) =>
+      `${p.nickname} is de kamer binnengekomen`,
+    gameStarted: "Het spel is begonnen!",
+    drawerNicknameIsChoosingAPrompt: (p: { drawerNickname: string }) =>
+      `${p.drawerNickname} kiest een woord...`,
+    thePromptWasPrompt: (p: { prompt: string }) =>
+      `Het woord was ‘${p.prompt}’`,
+    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
+      `${p.nickname} heeft het geraden${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+  },
+  settingsStore: {
+    brushTool: "Penseel",
+    fillTool: "Vullen",
+    eraserTool: "Gum",
+    rectangleTool: "Rechthoek",
+    triangleTool: "Driehoek",
+    ellipseTool: "Ellips",
+    decreaseBrushSize: "Penseel kleiner",
+    increaseBrushSize: "Penseel groter",
+    undoStroke: "Streek ongedaan maken",
+  },
+  reactions: {
+    loveIt: "Geweldig",
+    funny: "Grappig",
+    wow: "Wauw",
+    fire: "Vuur",
+    reaction: "Reactie",
+  },
+  drawingRules: {
+    brush: "Penseel",
+    theBrushAndTheEraser: "Het penseel en de gum.",
+    fill: "Vullen",
+    theFillTool: "Het vulgereedschap.",
+    shapes: "Vormen",
+    rectangleEllipseAndTriangle: "Rechthoek, ellips en driehoek.",
+    allColors: "Alle kleuren",
+    thePaletteAndTheCustom: "Het palet en de vrije kleurkiezer.",
+    paletteOnly: "Alleen palet",
+    theBuiltInSwatchesNo: "De vaste kleurstalen; geen eigen kleuren.",
+    colorblindSafe: "Kleurenblindvriendelijk",
+    colorsThatStayApartFor: "Kleuren die voor kleurenblinde spelers goed te onderscheiden blijven.",
+    blackAndWhite: "Zwart-wit",
+    blackAndWhiteOnly: "Alleen zwart en wit.",
+    allTools: "Alle gereedschappen",
+  },
+  socket: {
+    sketchyIsFullRightNow: "Sketchy zit nu vol. Probeer het over een paar minuten nog eens.",
+    connectionLostWhileTryingTo: (p: { action: string }) =>
+      `Verbinding verbroken bij: ${p.action}. Probeer het nog eens.`,
+    theRequestToActionTimed: (p: { action: string }) =>
+      `Time-out bij: ${p.action}. Probeer het nog eens.`,
+    couldNotActionPleaseTry: (p: { action: string }) =>
+      `Dat is niet gelukt: ${p.action}. Probeer het nog eens.`,
+  },
+  bugReports: {
+    drawingAndCanvas: "Tekenen en tekenvlak",
+    guessingAndChat: "Raden en chat",
+    roundsScoringAndResults: "Rondes, punten en uitslagen",
+    roomsAndLobby: "Kamers en lobby",
+    promptLists: "Woordenlijsten",
+    accountAndSettings: "Account en instellingen",
+    connectionAndSync: "Verbinding en synchronisatie",
+    performance: "Prestaties",
+    accessibility: "Toegankelijkheid",
+    somethingElse: "Iets anders",
+    blocksPlayICouldNot: "Blokkeert het spel — ik kon niet verder",
+    majorHardToPlayAround: "Ernstig — lastig omheen te spelen",
+    minorWorthFixingOneDay: "Klein — ooit de moeite waard",
+    notInARoom: "Niet in een kamer",
+    codeNotInARound: (p: { code: string }) =>
+      `${p.code} · niet in een ronde`,
+    codeRoundRoundOfTotal: (p: { code: string; round: number; total: number }) =>
+      `${p.code} · ronde ${p.round} van ${p.total}`,
+  },
+  suspension: {
+    thisSuspensionHasNoEnd: "Deze schorsing heeft geen einddatum.",
+    thisSuspensionHasEndedTry: "Deze schorsing is afgelopen; probeer opnieuw in te loggen.",
+    thisSuspensionLastsUntilEnds: (p: { ends: string }) =>
+      `Deze schorsing duurt tot ${p.ends}.`,
+  },
+  clock: {
+    unknown: "Onbekend",
+  },
+  protocol: {
+    theServerWasUpdated: "De server is bijgewerkt.",
+  },
+  passwordPolicy: {
+    tooShort: (p: { count: number }) =>
+      `Een wachtwoord heeft minstens ${p.count} tekens nodig.`,
+  },
+  operatorAccess: {
+    administrator: "beheerder",
+    moderator: "moderator",
+    pendingTitle: "De moderatorrol wacht op je",
+    pendingBody: "Een beheerder heeft je de moderatorrol aangeboden. Die gaat in zodra je tweestapsverificatie instelt: moderators loggen in met een code uit een authenticatie-app, en de rol begint zodra dat geregeld is. Je andere apparaten worden dan uitgelogd. Tot je het instelt verandert er niets, en het aanbod wacht in Instellingen als het nu niet uitkomt.",
+    grantedTitle: "Je bent nu moderator",
+    grantedBody: "Een beheerder heeft je de moderatorrol gegeven. In je accountmenu staat nu een onderdeel Moderatie: daar worden meldingen over spelers en woorden beoordeeld. Aan hoe je speelt verandert niets.",
+    removedTitle: "Je bent geen moderator meer",
+    removedBody: "Een beheerder heeft de moderatorrol van je account gehaald. Het onderdeel Moderatie is uit je menu verdwenen. Verder verandert er niets aan je account of je spellen.",
+  },
+  moderationCategories: {
+    harassment: "intimidatie",
+    offensive_drawing: "een aanstootgevende tekening",
+    inappropriate_name: "een ongepaste naam",
+    cheating: "valsspelen",
+    spam: "spam",
+    inappropriate_avatar: "een ongepaste afbeelding",
   },
 };

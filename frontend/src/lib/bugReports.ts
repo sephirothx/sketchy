@@ -8,6 +8,7 @@ treat as fact. Both come back on the queue payload, labelled. */
 import { apiRequest } from "./api.ts";
 import { recentClientErrors, type ClientErrorEntry } from "./clientErrorLog.ts";
 import { connectionTelemetry } from "./socket.ts";
+import { ui } from "../content/ui/index.ts";
 
 export type BugReportArea =
   | "drawing_and_canvas"
@@ -31,24 +32,24 @@ export type ScreenshotStatus = "none" | "ready" | "erased" | "expired";
 /** Offered in this order: where a player thinks they were, in the words they
     would use, ending in the honest escape hatch. */
 export const BUG_AREAS: { value: BugReportArea; label: string }[] = [
-  { value: "drawing_and_canvas", label: "Drawing and canvas" },
-  { value: "guessing_and_chat", label: "Guessing and chat" },
-  { value: "rounds_and_scoring", label: "Rounds, scoring and results" },
-  { value: "rooms_and_lobby", label: "Rooms and lobby" },
-  { value: "prompt_lists", label: "Prompt lists" },
-  { value: "account_and_settings", label: "Account and settings" },
-  { value: "connection_and_sync", label: "Connection and sync" },
-  { value: "performance", label: "Performance" },
-  { value: "accessibility", label: "Accessibility" },
-  { value: "other", label: "Something else" },
+  { value: "drawing_and_canvas", get label() { return ui.bugReports.drawingAndCanvas; } },
+  { value: "guessing_and_chat", get label() { return ui.bugReports.guessingAndChat; } },
+  { value: "rounds_and_scoring", get label() { return ui.bugReports.roundsScoringAndResults; } },
+  { value: "rooms_and_lobby", get label() { return ui.bugReports.roomsAndLobby; } },
+  { value: "prompt_lists", get label() { return ui.bugReports.promptLists; } },
+  { value: "account_and_settings", get label() { return ui.bugReports.accountAndSettings; } },
+  { value: "connection_and_sync", get label() { return ui.bugReports.connectionAndSync; } },
+  { value: "performance", get label() { return ui.bugReports.performance; } },
+  { value: "accessibility", get label() { return ui.bugReports.accessibility; } },
+  { value: "other", get label() { return ui.bugReports.somethingElse; } },
 ];
 
 /** Three, because a fourth would be a priority scheme and this is a question
     the reporter can actually answer about their own experience. */
 export const BUG_SEVERITIES: { value: BugReportSeverity; label: string }[] = [
-  { value: "blocks_play", label: "Blocks play — I could not carry on" },
-  { value: "major", label: "Major — hard to play around" },
-  { value: "minor", label: "Minor — worth fixing one day" },
+  { value: "blocks_play", get label() { return ui.bugReports.blocksPlayICouldNot; } },
+  { value: "major", get label() { return ui.bugReports.majorHardToPlayAround; } },
+  { value: "minor", get label() { return ui.bugReports.minorWorthFixingOneDay; } },
 ];
 
 export interface BugReportScreenshot {
@@ -301,9 +302,9 @@ export function roomSummary(
   round: number | null | undefined,
   total: number | null | undefined,
 ): string {
-  if (!code) return "Not in a room";
-  if (!round || !total || round < 1 || total < 1) return `${code} · not in a round`;
-  return `${code} · round ${round} of ${total}`;
+  if (!code) return ui.bugReports.notInARoom;
+  if (!round || !total || round < 1 || total < 1) return ui.bugReports.codeNotInARound({ code });
+  return ui.bugReports.codeRoundRoundOfTotal({ code, round, total });
 }
 
 export function humanizeBugValue(value: string): string {
@@ -337,6 +338,9 @@ function flatten(value: unknown, prefix: string, into: string[]): void {
  *
  * Pure so that the format itself can be tested, which is the only way a format
  * anyone depends on stays stable.
+ *
+ * Not copy: read by an operator and pasted into an issue, in English
+ * (R-I18N-01).
  */
 export function bugReportTriageText(report: BugReport): string {
   const lines: string[] = [

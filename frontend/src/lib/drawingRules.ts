@@ -1,4 +1,5 @@
 import type { ColorMode, DrawTool, DrawingToolGroup } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * The room's drawing rules, mirroring `backend/app/drawing_rules.py`.
@@ -35,9 +36,9 @@ export const TOOL_GROUP_OPTIONS: {
   label: string;
   description: string;
 }[] = [
-  { value: "brush", label: "Brush", description: "The brush and the eraser." },
-  { value: "fill", label: "Fill", description: "The fill tool." },
-  { value: "shapes", label: "Shapes", description: "Rectangle, ellipse, and triangle." },
+  { value: "brush", get label() { return ui.drawingRules.brush; }, get description() { return ui.drawingRules.theBrushAndTheEraser; } },
+  { value: "fill", get label() { return ui.drawingRules.fill; }, get description() { return ui.drawingRules.theFillTool; } },
+  { value: "shapes", get label() { return ui.drawingRules.shapes; }, get description() { return ui.drawingRules.rectangleEllipseAndTriangle; } },
 ];
 
 /**
@@ -100,14 +101,14 @@ export const COLOR_MODE_OPTIONS: {
   label: string;
   description: string;
 }[] = [
-  { value: "all", label: "All colors", description: "The palette and the custom color picker." },
-  { value: "palette", label: "Palette only", description: "The built-in swatches; no custom colors." },
+  { value: "all", get label() { return ui.drawingRules.allColors; }, get description() { return ui.drawingRules.thePaletteAndTheCustom; } },
+  { value: "palette", get label() { return ui.drawingRules.paletteOnly; }, get description() { return ui.drawingRules.theBuiltInSwatchesNo; } },
   {
     value: "colorblind_safe",
-    label: "Colorblind-safe",
-    description: "Colors that stay apart for colorblind players.",
+    get label() { return ui.drawingRules.colorblindSafe; },
+    get description() { return ui.drawingRules.colorsThatStayApartFor; },
   },
-  { value: "black_and_white", label: "Black and white", description: "Black and white only." },
+  { value: "black_and_white", get label() { return ui.drawingRules.blackAndWhite; }, get description() { return ui.drawingRules.blackAndWhiteOnly; } },
 ];
 
 /** The swatches a mode offers. Every mode keeps white: it is the eraser. */
@@ -180,7 +181,7 @@ export function describeAllowedTools(allowedTools?: readonly DrawingToolGroup[])
   const selected = DRAWING_TOOL_GROUPS.filter(
     (group) => (allowedTools ?? DEFAULT_ALLOWED_TOOLS).includes(group),
   );
-  if (selected.length === DRAWING_TOOL_GROUPS.length) return "All tools";
+  if (selected.length === DRAWING_TOOL_GROUPS.length) return ui.drawingRules.allTools;
   const labels = selected.map(
     (group) => TOOL_GROUP_OPTIONS.find((option) => option.value === group)!.label,
   );
@@ -189,7 +190,7 @@ export function describeAllowedTools(allowedTools?: readonly DrawingToolGroup[])
 }
 
 export function describeColorMode(mode?: ColorMode): string {
-  return COLOR_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "All colors";
+  return COLOR_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? ui.drawingRules.allColors;
 }
 
 /**

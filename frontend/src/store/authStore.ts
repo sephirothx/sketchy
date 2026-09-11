@@ -10,6 +10,7 @@ import {
   currentSettingsPayload,
   fetchUserSettings,
 } from "../lib/userSettings";
+import { ui } from "../content/ui/index.ts";
 
 export interface AuthUser {
   id: string;
@@ -278,7 +279,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     const existing = get().user;
     if (existing && !needsIdentity(existing)) return existing;
     const chosen = get().nameDraft.trim();
-    const invalid = chosen ? nicknameError(chosen) : "Choose a name to play under.";
+    const invalid = chosen ? nicknameError(chosen) : ui.authStore.chooseANameToPlay;
     if (invalid) throw new IdentityRequiredError(invalid);
     return get().setDisplayName(chosen);
   },

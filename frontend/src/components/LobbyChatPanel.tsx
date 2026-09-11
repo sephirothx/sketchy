@@ -21,7 +21,7 @@ const MAX_LINE_LENGTH = 500;
 function identityMessage(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
-    : "Could not save that name. Please try again.";
+    : ui.lobbyChatPanel.couldNotSaveThatName;
 }
 
 /** The lobby's chat: the recent lines, and a way to add one.
@@ -87,7 +87,7 @@ export function LobbyChatPanel() {
         setError(refusalText(response, ui.lobbyChatPanel.couldNotSendThat));
       }
     } catch (sendError) {
-      setError(socketRequestErrorMessage(sendError, "send the message"));
+      setError(socketRequestErrorMessage(sendError, ui.lobbyChatPanel.sendTheMessage));
     } finally {
       setSending(false);
       inputRef.current?.focus();

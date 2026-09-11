@@ -105,7 +105,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     try {
       setOffer(await beginEnrolment());
     } catch (problem) {
-      failed(problem, "Could not start setting this up.");
+      failed(problem, ui.twoFactorDialog.couldNotStartSettingThis);
     } finally {
       setBusy(false);
     }
@@ -149,7 +149,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       // wants is on the other side of signing back in.
       if (!result.roleGranted) setState(await fetchSecondFactor());
     } catch (problem) {
-      failed(problem, "That code was not accepted.");
+      failed(problem, ui.twoFactorDialog.thatCodeWasNotAccepted);
     } finally {
       setBusy(false);
     }
@@ -179,7 +179,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       if (problem instanceof DOMException) {
         setError(ui.twoFactorDialog.thatPasskeyWasNotCreatedYou);
       } else {
-        failed(problem, "Could not add that passkey.");
+        failed(problem, ui.twoFactorDialog.couldNotAddThatPasskey);
       }
     } finally {
       setBusy(false);
@@ -198,7 +198,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setPassword("");
       setPasskeys((current) => (current ?? []).filter((one) => one.id !== passkeyId));
     } catch (problem) {
-      failed(problem, "Could not remove that passkey.");
+      failed(problem, ui.twoFactorDialog.couldNotRemoveThatPasskey);
     } finally {
       setBusy(false);
     }
@@ -217,7 +217,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       notify(ui.twoFactorDialog.confirmedThisAccountCanNowBe, "success");
     } catch (problem) {
       setCode("");
-      failed(problem, "Could not confirm it.");
+      failed(problem, ui.twoFactorDialog.couldNotConfirmIt);
     } finally {
       setBusy(false);
     }
@@ -233,7 +233,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setPassword("");
       setState(await fetchSecondFactor());
     } catch (problem) {
-      failed(problem, "Could not replace your recovery codes.");
+      failed(problem, ui.twoFactorDialog.couldNotReplaceYourRecovery);
     } finally {
       setBusy(false);
     }
@@ -248,7 +248,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setCodes(null);
       setState(await fetchSecondFactor());
     } catch (problem) {
-      failed(problem, "Could not turn this off.");
+      failed(problem, ui.twoFactorDialog.couldNotTurnThisOff);
     } finally {
       setBusy(false);
     }
@@ -295,7 +295,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 className="btn btn-secondary btn-compact"
-                onClick={() => void copy(codes.join("\n"), "Recovery codes")}
+                onClick={() => void copy(codes.join("\n"), ui.twoFactorDialog.recoveryCodes)}
               >
                 <CopyIcon size={15} />
                 {ui.twoFactorDialog.copyAll}
@@ -355,12 +355,12 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               onClick={() => void addPasskey()}
               disabled={busy || !password || !canUsePasskeys}
             >
-              {busy ? "Waiting for your device…" : "Set up a passkey"}
+              {busy ? ui.twoFactorDialog.waitingForYourDevice : ui.twoFactorDialog.setUpAPasskey}
             </button>
             <p className="modal-hint two-factor-fallback">
               {canUsePasskeys
-                ? "No passkey on this device? "
-                : "This browser cannot make a passkey. "}
+                ? ui.twoFactorDialog.noPasskeyOnThisDevice
+                : ui.twoFactorDialog.thisBrowserCannotMakeA}
               <button type="button" className="auth-link" onClick={() => void start()}>
                 {ui.twoFactorDialog.useAuthenticatorAppInstead}
               </button>
@@ -392,7 +392,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   className="btn btn-ghost btn-compact"
-                  onClick={() => void copy(offer.secret, "Setup key")}
+                  onClick={() => void copy(offer.secret, ui.twoFactorDialog.setupKey)}
                   aria-label={ui.twoFactorDialog.copySetupKey}
                 >
                   <CopyIcon size={15} />
@@ -433,7 +433,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 className="modal-button"
                 disabled={busy || !password || code.length < 6}
               >
-                {busy ? "Checking…" : "Confirm"}
+                {busy ? ui.twoFactorDialog.checking : ui.twoFactorDialog.confirm}
               </button>
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 {ui.twoFactorDialog.cancel}

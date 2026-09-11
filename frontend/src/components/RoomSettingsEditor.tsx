@@ -120,7 +120,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         }
         else setError(refusalText(response, ui.roomSettingsEditor.couldNotLoadRoomRules));
       } catch (loadError) {
-        if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room rules"));
+        if (!cancelled) setError(socketRequestErrorMessage(loadError, ui.roomSettingsEditor.loadRoomRules));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -174,7 +174,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
       setPromptsBaseline({ value: customPrompts.value, only: customPrompts.only });
       onSaved?.();
     } catch (saveError) {
-      const message = socketRequestErrorMessage(saveError, "save room rules");
+      const message = socketRequestErrorMessage(saveError, ui.roomSettingsEditor.saveRoomRules);
       setError(message);
       notify(message, "error");
     } finally {
@@ -216,7 +216,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         disabled={!dirty || saving || promptsError || loading}
         onClick={() => void save()}
       >
-        {saving ? "Saving…" : dirty ? "Save settings" : "Saved"}
+        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveSettings : ui.roomSettingsEditor.saved}
       </button>
     </div>
   </section>;

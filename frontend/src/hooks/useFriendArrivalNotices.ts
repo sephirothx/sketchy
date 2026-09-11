@@ -58,12 +58,12 @@ export function useFriendArrivalNotices(): void {
     if (arrived.length === 1) {
       const asker = arrived[0];
       notify(ui.useFriendArrivalNotices.wantsToBeFriends({ name: asker.displayName }), "info", ACTIONABLE_MS, {
-        label: "Accept",
+        label: ui.useFriendArrivalNotices.accept,
         onClick: () => void accept(asker.userId),
       });
     } else if (arrived.length > 1) {
       notify(manyArrived(arrived), "info", ACTIONABLE_MS, {
-        label: "Open",
+        label: ui.useFriendArrivalNotices.open,
         onClick: () => openOverlay(FRIENDS_PATH),
       });
     }
@@ -90,6 +90,8 @@ export function useFriendArrivalNotices(): void {
 }
 
 function manyArrived(arrived: FriendEntry[]): string {
-  const others = arrived.length - 1;
-  return `${arrived[0].displayName} and ${others} other${others > 1 ? "s" : ""} want to be friends.`;
+  return ui.useFriendArrivalNotices.manyArrived({
+    name: arrived[0].displayName,
+    others: arrived.length - 1,
+  });
 }

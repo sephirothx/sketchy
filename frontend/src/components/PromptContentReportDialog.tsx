@@ -9,12 +9,12 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
 const REASONS: Array<{ value: PromptContentReportReason; label: string }> = [
-  { value: "inappropriate", label: "Inappropriate content" },
-  { value: "hateful_or_abusive", label: "Hateful or abusive content" },
-  { value: "sexual_content", label: "Sexual content" },
-  { value: "violence", label: "Violence" },
-  { value: "spam", label: "Spam" },
-  { value: "other", label: "Other" },
+  { value: "inappropriate", get label() { return ui.promptContentReportDialog.inappropriateContent; } },
+  { value: "hateful_or_abusive", get label() { return ui.promptContentReportDialog.hatefulOrAbusiveContent; } },
+  { value: "sexual_content", get label() { return ui.promptContentReportDialog.sexualContent; } },
+  { value: "violence", get label() { return ui.promptContentReportDialog.violence; } },
+  { value: "spam", get label() { return ui.promptContentReportDialog.spam; } },
+  { value: "other", get label() { return ui.promptContentReportDialog.other; } },
 ];
 
 interface PromptContentReportDialogProps {
@@ -86,7 +86,7 @@ export function PromptContentReportDialog({
         {error && <p className="auth-error" role="alert">{error}</p>}
         <div className="confirmation-dialog-actions">
           <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.promptContentReportDialog.cancel}</button>
-          <button type="submit" className="confirmation-danger-button" disabled={busy || !details.trim()}>{busy ? "Sending…" : "Send report"}</button>
+          <button type="submit" className="confirmation-danger-button" disabled={busy || !details.trim()}>{busy ? ui.promptContentReportDialog.sending : ui.promptContentReportDialog.sendReport}</button>
         </div>
       </form>
     </div>

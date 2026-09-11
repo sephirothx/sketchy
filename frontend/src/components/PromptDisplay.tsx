@@ -134,8 +134,8 @@ export function PromptDisplay({
           <p className="prompt-choice-hint">{ui.promptDisplay.autoPicksWhenTimeRunsOut}</p>
           <div className="prompt-choices">
             {promptChoices.map((prompt) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, "select the prompt")}>
-                {pendingAction === `prompt:${prompt}` ? "Choosing…" : prompt}
+              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, ui.promptDisplay.selectThePrompt)}>
+                {pendingAction === `prompt:${prompt}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}
           </div>
@@ -187,7 +187,7 @@ export function PromptDisplay({
               canAfford: nextHintCost <= remaining,
               cost: nextHintCost,
               busy: pendingAction !== null,
-              onBuy: (slot) => void runAction(`hint:${slot}`, "buy_hint", { slot }, "buy the hint"),
+              onBuy: (slot) => void runAction(`hint:${slot}`, "buy_hint", { slot }, ui.promptDisplay.buyTheHint),
             } : undefined,
           )}
         </span>
@@ -205,7 +205,7 @@ export function PromptDisplay({
                   className="wheel-letter-btn"
                   disabled={price > remaining || pendingAction !== null}
                   title={ui.promptDisplay.buyLetter({ letter: letter.toUpperCase(), price })}
-                  onClick={() => void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, "buy the letter hint")}
+                  onClick={() => void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, ui.promptDisplay.buyTheLetterHint)}
                 >
                   {letter.toUpperCase()}
                   <sub>{price}</sub>

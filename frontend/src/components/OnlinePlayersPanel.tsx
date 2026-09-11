@@ -179,7 +179,7 @@ export function OnlinePlayersPanel() {
                     </Button>
                   ) : (
                     <span className={`online-player-status is-${player.status}`}>
-                      {player.status === "playing" ? "In a game" : "In the lobby"}
+                      {player.status === "playing" ? ui.onlinePlayersPanel.inAGame : ui.onlinePlayersPanel.inTheLobby}
                     </span>
                   )}
                 </span>

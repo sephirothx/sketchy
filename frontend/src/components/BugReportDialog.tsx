@@ -126,13 +126,13 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
   });
 
   const rows: [string, string][] = [
-    ["Build", `${context.buildSha} · ${String(context.commitDate)}`],
-    ["Page", context.route],
-    ["Room", roomSummary(roomCode, roundNumber, totalRounds)],
-    ["Screen", `${window.innerWidth} × ${window.innerHeight} · ${window.devicePixelRatio}×`],
-    ["Browser", navigator.userAgent],
+    [ui.bugReportDialog.build, `${context.buildSha} · ${String(context.commitDate)}`],
+    [ui.bugReportDialog.page, context.route],
+    [ui.bugReportDialog.room, roomSummary(roomCode, roundNumber, totalRounds)],
+    [ui.bugReportDialog.screen, `${window.innerWidth} × ${window.innerHeight} · ${window.devicePixelRatio}×`],
+    [ui.bugReportDialog.browser, navigator.userAgent],
     [
-      "Connection",
+      ui.bugReportDialog.connection,
       (() => {
         const connection = context.connection as { connected: boolean; reconnects: number };
         return ui.bugReportDialog.connectionSummary(connection);
@@ -229,7 +229,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
             ) : (
               <>
                 <button type="button" className="bug-report-attach" onClick={() => void attach()} disabled={capturing}>
-                  {capturing ? "Waiting for the picker…" : "Attach a screenshot"}
+                  {capturing ? ui.bugReportDialog.waitingForThePicker : ui.bugReportDialog.attachAScreenshot}
                 </button>
                 <p className="auth-hint">{ui.bugReportDialog.opensYourBrowserSOwnPicker}</p>
               </>
@@ -238,7 +238,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <details className="bug-report-context">
-          <summary>{descriptionOnly ? "What we are leaving out" : "What we send with this"}</summary>
+          <summary>{descriptionOnly ? ui.bugReportDialog.whatWeAreLeavingOut : ui.bugReportDialog.whatWeSendWithThis}</summary>
           <dl className="bug-context">
             {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
@@ -254,8 +254,8 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
           )}
           <p className="auth-hint">
             {descriptionOnly
-              ? "None of this is being sent — only your description above."
-              : "The last 20 errors your browser recorded. No page addresses beyond the path, nothing you typed into chat, and never the prompt in play."}
+              ? ui.bugReportDialog.noneOfThisIsBeing
+              : ui.bugReportDialog.theLast20ErrorsYour}
           </p>
         </details>
 
@@ -271,7 +271,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
 
         <div className="confirmation-dialog-actions">
           <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.bugReportDialog.cancel}</button>
-          <button type="submit" className="modal-button" disabled={busy || !summary.trim() || !details.trim()}>{busy ? "Sending…" : "Send report"}</button>
+          <button type="submit" className="modal-button" disabled={busy || !summary.trim() || !details.trim()}>{busy ? ui.bugReportDialog.sending : ui.bugReportDialog.sendReport}</button>
         </div>
       </form>
     </div>

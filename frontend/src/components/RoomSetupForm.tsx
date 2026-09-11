@@ -149,10 +149,10 @@ export function RoomSetupForm({
     TOOL_GROUP_OPTIONS.filter((option) => allowedTools.includes(option.value))
       .map((option) => option.label)
       .join(", "),
-    COLOR_MODE_OPTIONS.find((option) => option.value === colorMode)?.label ?? "All colors",
+    COLOR_MODE_OPTIONS.find((option) => option.value === colorMode)?.label ?? ui.roomSetupForm.allColors,
   ].filter(Boolean).join(" · ");
 
-  const scoringSummary = `${scoringMode === "none" ? "No scoring" : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
+  const scoringSummary = `${scoringMode === "none" ? ui.roomSetupForm.noScoring : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
 
   return (
@@ -211,8 +211,8 @@ export function RoomSetupForm({
             <div
               className="visibility-field"
               title={isPublic
-                ? "Listed in the lobby — anyone can wander in."
-                : "Joinable only with the code or invite link."}
+                ? ui.roomSetupForm.listedInTheLobbyAnyone
+                : ui.roomSetupForm.joinableOnlyWithTheCode}
             >
               <SegmentedControl
                 label={ui.roomSetupForm.visibility}

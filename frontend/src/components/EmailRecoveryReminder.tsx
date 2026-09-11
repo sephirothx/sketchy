@@ -66,8 +66,8 @@ export function EmailRecoveryReminder() {
         <span>
           {state.pendingAddress
             /* Masked (R-SET-08): this banner sits across every screen. */
-            ? `Confirm ${maskEmail(state.pendingAddress)} to finish setting up account recovery.`
-            : "This account has no email address, so a forgotten password cannot be reset."}
+            ? ui.emailRecoveryReminder.confirmPendingAddressToFinishSetting({ pendingAddress: maskEmail(state.pendingAddress) })
+            : ui.emailRecoveryReminder.thisAccountHasNoEmail}
         </span>
         {!state.pendingAddress && (
           <button type="button" onClick={() => setAdding(true)}>

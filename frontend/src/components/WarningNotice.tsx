@@ -121,7 +121,7 @@ export function WarningNotice() {
         aria-labelledby="warning-title"
       >
         <h3 className="modal-title" id="warning-title">
-          {isRemoval ? "Your picture was removed" : "A moderator warning"}
+          {isRemoval ? ui.warningNotice.yourPictureWasRemoved : ui.warningNotice.aModeratorWarning}
         </h3>
         {warning.category && (
           <p className="modal-body notice-category" data-testid="warning-category">
@@ -144,7 +144,7 @@ export function WarningNotice() {
             which its own words above already carry, and stops there. */}
         <p className="modal-body">
           {isRemoval ? (
-            "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected."
+            ui.warningNotice.aReportAboutYourPicture
           ) : (
             <>
               {/* What a warning is *for* - the step between nothing and a
@@ -158,8 +158,8 @@ export function WarningNotice() {
           <>
             <p className="modal-body suspension-evidence-label">
               {warning.messages.length === 1
-                ? "The message this was about:"
-                : "The messages this was about:"}
+                ? ui.warningNotice.theMessageThisWasAbout
+                : ui.warningNotice.theMessagesThisWasAbout}
             </p>
             {/* Reuses the suspension notice's evidence styling: both lists
                 are "your own words, as reported". */}
@@ -181,8 +181,8 @@ export function WarningNotice() {
           <>
             <p className="modal-body suspension-evidence-label">
               {warning.drawings.length === 1
-                ? "The drawing this was about:"
-                : "The drawings this was about:"}
+                ? ui.warningNotice.theDrawingThisWasAbout
+                : ui.warningNotice.theDrawingsThisWasAbout}
             </p>
             {warning.drawings.map((drawing) => (
               <ReportedDrawing
@@ -201,7 +201,7 @@ export function WarningNotice() {
           disabled={busy}
           onClick={() => void dismiss()}
         >
-          {busy ? "One moment…" : "Understood"}
+          {busy ? ui.warningNotice.oneMoment : ui.warningNotice.understood}
         </button>
       </div>
     </div>

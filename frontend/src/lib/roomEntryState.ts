@@ -7,16 +7,14 @@ import { ui } from "../content/ui/index.ts";
 export const MAX_NICKNAME_LENGTH = 16;
 export const MIN_NICKNAME_LENGTH = 3;
 export const NICKNAME_PATTERN = /^[a-zA-Z0-9_-]{3,16}$/;
-export const NICKNAME_RULE_MESSAGE =
-  "Use 3-16 characters: letters, numbers, hyphens or underscores. No spaces.";
 const RESERVED_NICKNAMES = new Set(["guest", "system", "admin", "sketchy", "server", "you"]);
 
 /** Mirrors the server rule so the form can object before a round trip. */
 export function nicknameError(value: string): string | null {
   const trimmed = value.trim();
-  if (!NICKNAME_PATTERN.test(trimmed)) return NICKNAME_RULE_MESSAGE;
+  if (!NICKNAME_PATTERN.test(trimmed)) return ui.roomEntryState.nicknameRule;
   if (RESERVED_NICKNAMES.has(trimmed.toLowerCase())) {
-    return "That name is reserved. Please choose another.";
+    return ui.roomEntryState.thatNameIsReservedPlease;
   }
   return null;
 }
@@ -131,7 +129,7 @@ export class RoomEntryMachine {
           state: {
             status: "error",
             message: response.errorCode === "room_ended"
-              ? "This room has ended. Ask the host for a new invite."
+              ? ui.roomEntryState.thisRoomHasEndedAsk
               : refusalText(response, ui.roomEntryState.thisRoomNoLongerAvailable),
           },
         });
@@ -140,7 +138,7 @@ export class RoomEntryMachine {
       if (!this.isCurrent(version)) return;
       this.publish({
         ...this.snapshot,
-        state: { status: "error", message: this.dependencies.requestErrorMessage(error, "load this room") },
+        state: { status: "error", message: this.dependencies.requestErrorMessage(error, ui.roomEntryState.loadThisRoom) },
       });
     }
   }
@@ -150,7 +148,7 @@ export class RoomEntryMachine {
     if (current.status !== "preview") return;
 
     const nickname = this.snapshot.nicknameInput.trim();
-    const invalid = nickname ? nicknameError(nickname) : "Enter a nickname to continue.";
+    const invalid = nickname ? nicknameError(nickname) : ui.roomEntryState.enterANicknameToContinue;
     if (invalid) {
       this.publish({
         ...this.snapshot,
@@ -177,7 +175,7 @@ export class RoomEntryMachine {
       const justFilled = mode === "player" && response.errorCode === "room_full";
       const room = justFilled ? { ...current.room, isFull: true } : current.room;
       const error = justFilled
-        ? "The player slots just filled up, but you can still spectate."
+        ? ui.roomEntryState.thePlayerSlotsJustFilled
         : refusalText(response, ui.roomEntryState.couldNotJoinThisRoom);
       this.publish({
         ...this.snapshot,
@@ -185,7 +183,7 @@ export class RoomEntryMachine {
       });
     } catch (error) {
       if (!this.isCurrent(version)) return;
-      const action = mode === "spectator" ? "join as a spectator" : "join this room";
+      const action = mode === "spectator" ? ui.roomEntryState.joinAsASpectator : ui.roomEntryState.joinThisRoom;
       this.publish({
         ...this.snapshot,
         state: {

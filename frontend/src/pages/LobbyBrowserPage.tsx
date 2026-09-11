@@ -145,7 +145,7 @@ function identityMessage(error: unknown): string {
   if (error instanceof IdentityRequiredError || error instanceof ApiError) {
     return error.message;
   }
-  return "Could not save that name. Please try again.";
+  return ui.lobbyBrowserPage.couldNotSaveThatName;
 }
 
 export function LobbyBrowserPage() {
@@ -300,7 +300,7 @@ export function LobbyBrowserPage() {
         setError(refusalText(res, ui.lobbyBrowserPage.failedJoinRoom));
       }
     } catch (joinError) {
-      setError(socketRequestErrorMessage(joinError, asSpectator ? "join as a spectator" : "join the room"));
+      setError(socketRequestErrorMessage(joinError, asSpectator ? ui.lobbyBrowserPage.joinAsASpectator : ui.lobbyBrowserPage.joinTheRoom));
     } finally {
       setPendingJoin(null);
     }
@@ -347,7 +347,7 @@ export function LobbyBrowserPage() {
         <div className="lobby-rooms-heading">
           <h2>{ui.lobbyBrowserPage.publicRooms}</h2>
           <span className="lobby-rooms-count">
-            {!roomsState.loaded ? "Loading…" : rooms.length > 0 ? `Showing ${filteredRooms.length} of ${rooms.length}` : "0 rooms"}
+            {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
           </span>
         </div>
 
@@ -531,7 +531,7 @@ export function LobbyBrowserPage() {
         <BottomSheet
           title={ui.lobbyBrowserPage.joinWithCode}
           testId="lobby-code-sheet"
-          closeLabel="Close"
+          closeLabel={ui.lobbyBrowserPage.close}
           onDismiss={() => setCodeSheetOpen(false)}
           initialFocusRef={codeFieldRef}
           headerAction={
@@ -551,7 +551,7 @@ export function LobbyBrowserPage() {
                 disabled={Boolean(pendingJoin)}
                 onClick={() => void handleJoinByCode(false)}
               >
-                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? "Joining…" : "Join the room"}
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? ui.lobbyBrowserPage.joining : ui.lobbyBrowserPage.joinTheRoom2}
               </Button>
               <button
                 type="button"
@@ -560,8 +560,8 @@ export function LobbyBrowserPage() {
                 onClick={() => void handleJoinByCode(true)}
               >
                 {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate"
-                  ? "Joining as spectator…"
-                  : "Watch without playing"}
+                  ? ui.lobbyBrowserPage.joiningAsSpectator
+                  : ui.lobbyBrowserPage.watchWithoutPlaying}
               </button>
             </>
           }

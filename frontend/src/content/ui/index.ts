@@ -64,6 +64,13 @@ export const FALLBACK_LOCALE: Locale = "en";
 
 /** The catalogue the interface reads. Reassigned by `setCatalogue`. */
 export let ui: Catalogue = CATALOGUES[FALLBACK_LOCALE];
+let current: Locale = FALLBACK_LOCALE;
+
+/** The locale `ui` is in - for the few words the platform already knows in
+every language, such as a language's own name (`Intl.DisplayNames`). */
+export function interfaceLocale(): Locale {
+  return current;
+}
 
 /** Read the interface in `locale` from here on.
 
@@ -73,6 +80,7 @@ than this one does, say. */
 export function setCatalogue(locale: string): Locale {
   const chosen = (locale in CATALOGUES ? locale : FALLBACK_LOCALE) as Locale;
   ui = CATALOGUES[chosen];
+  current = chosen;
   return chosen;
 }
 

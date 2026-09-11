@@ -125,7 +125,7 @@ export function TurnResultsOverlay({
       data-testid="turn-results-overlay"
     >
       <div className="turn-results-panel">
-        <h3 id="turn-results-title">{showScores ? "Turn results" : "Turn complete"}</h3>
+        <h3 id="turn-results-title">{showScores ? ui.turnResultsOverlay.turnResults : ui.turnResultsOverlay.turnComplete}</h3>
         <p className="turn-results-prompt">
           {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>

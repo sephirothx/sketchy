@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
 import type { DrawTool } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 export function useToolbarState(isDrawer: boolean) {
   const [color, setColor] = useState("#000000");
@@ -36,7 +37,7 @@ export function useToolbarState(isDrawer: boolean) {
     useGameStore.getState().addMessage({
       id: `${Date.now()}-fill-budget`,
       nickname: "",
-      text: "Fill is unavailable for the rest of this turn.",
+      text: ui.useToolbarState.fillIsUnavailableForThe,
       correct: false,
       system: true,
     });
@@ -47,7 +48,7 @@ export function useToolbarState(isDrawer: boolean) {
     useGameStore.getState().addMessage({
       id: `${Date.now()}-stroke-budget`,
       nickname: "",
-      text: "Drawing by hand is unavailable for the rest of this turn. Shapes still work.",
+      text: ui.useToolbarState.drawingByHandIsUnavailable,
       correct: false,
       system: true,
     });

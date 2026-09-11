@@ -131,7 +131,7 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
           <div className="account-data-heading-row">
             <h4 id={`${titleId}-exports`}>{ui.accountDataDialog.dataExports}</h4>
             <button type="button" onClick={() => void startExport()} disabled={!canRequest}>
-              {requesting ? "Requesting…" : "Request export"}
+              {requesting ? ui.accountDataDialog.requesting : ui.accountDataDialog.requestExport}
             </button>
           </div>
           {loading && <p role="status">{ui.accountDataDialog.loadingExports}</p>}

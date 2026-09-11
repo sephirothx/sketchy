@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /** One frame of the player's screen, for a bug report that needs a picture.
 
 `getDisplayMedia` rather than rasterizing the DOM: the game is a canvas, and a
@@ -60,7 +61,7 @@ async function encode(canvas: HTMLCanvasElement): Promise<{ blob: Blob; contentT
   // asked for, so the blob's own type is what decides - not the request.
   if (webp && webp.type === "image/webp") return { blob: webp, contentType: "image/webp" };
   const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!png) throw new Error("This browser could not encode the screenshot.");
+  if (!png) throw new Error(ui.screenCapture.thisBrowserCouldNotEncode);
   return { blob: png, contentType: "image/png" };
 }
 
@@ -163,20 +164,20 @@ export async function captureScreenshot(
     if (restore) await settleFrames(video);
 
     const source = { width: video.videoWidth, height: video.videoHeight };
-    if (!source.width || !source.height) throw new Error("The capture was empty.");
+    if (!source.width || !source.height) throw new Error(ui.screenCapture.theCaptureWasEmpty);
     const size = scaled(source.width, source.height);
 
     const canvas = document.createElement("canvas");
     canvas.width = size.width;
     canvas.height = size.height;
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("This browser could not read the screenshot.");
+    if (!context) throw new Error(ui.screenCapture.thisBrowserCouldNotRead);
     context.drawImage(video, 0, 0, size.width, size.height);
     video.pause();
     video.srcObject = null;
 
     const { blob, contentType } = await encode(canvas);
-    if (blob.size > MAX_BYTES) throw new Error("That screenshot is too large to send.");
+    if (blob.size > MAX_BYTES) throw new Error(ui.screenCapture.thatScreenshotIsTooLarge);
 
     return {
       base64: await toBase64(blob),

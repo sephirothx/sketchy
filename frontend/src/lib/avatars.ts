@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import { AVATAR_SIZE, MAX_AVATAR_BYTES, type CropRect } from "./avatarCrop.ts";
+import { ui } from "../content/ui/index.ts";
 
 export { AVATAR_SIZE, MAX_AVATAR_BYTES };
 
@@ -31,10 +32,10 @@ export interface LoadedPicture {
 /** Read the chosen file into an image the crop dialog can show, or say why not. */
 export async function loadPicture(file: File): Promise<LoadedPicture> {
   if (!ACCEPTED_INPUT_TYPES.includes(file.type)) {
-    throw new AvatarInputError("Choose a PNG, JPEG, WebP or GIF picture.");
+    throw new AvatarInputError(ui.avatars.chooseAPngJpegWebP);
   }
   if (file.size > MAX_INPUT_BYTES) {
-    throw new AvatarInputError("That picture is too large to read: 10 MB at most.");
+    throw new AvatarInputError(ui.avatars.thatPictureIsTooLarge);
   }
   const url = URL.createObjectURL(file);
   const release = () => URL.revokeObjectURL(url);
@@ -43,13 +44,13 @@ export async function loadPicture(file: File): Promise<LoadedPicture> {
     element.onload = () => resolve(element);
     element.onerror = () => {
       release();
-      reject(new AvatarInputError("That file could not be read as a picture."));
+      reject(new AvatarInputError(ui.avatars.thatFileCouldNotBe));
     };
     element.src = url;
   });
   if (Math.min(image.naturalWidth, image.naturalHeight) < 32) {
     release();
-    throw new AvatarInputError("That picture is too small to make anything of.");
+    throw new AvatarInputError(ui.avatars.thatPictureIsTooSmall);
   }
   return { image, width: image.naturalWidth, height: image.naturalHeight, release };
 }
@@ -71,7 +72,7 @@ export function encodePicture(
   canvas.width = AVATAR_SIZE;
   canvas.height = AVATAR_SIZE;
   const context = canvas.getContext("2d");
-  if (!context) throw new AvatarInputError("This browser cannot resize pictures.");
+  if (!context) throw new AvatarInputError(ui.avatars.thisBrowserCannotResizePictures);
   context.imageSmoothingQuality = "high";
   context.drawImage(image, crop.x, crop.y, crop.side, crop.side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
   const dataUrl = canvas.toDataURL("image/webp", WEBP_QUALITY);
@@ -79,7 +80,7 @@ export function encodePicture(
   const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
   if (Math.ceil((base64.length * 3) / 4) > MAX_AVATAR_BYTES) {
     throw new AvatarInputError(
-      "That picture is too detailed to fit. Try a simpler one, or zoom in on part of it.",
+      ui.avatars.thatPictureIsTooDetailed,
     );
   }
   return { base64, previewUrl: dataUrl, contentType };

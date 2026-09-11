@@ -199,10 +199,10 @@ export function RoleChangeNotice() {
             onClick={() => void dismiss()}
           >
             {busy
-              ? "One moment…"
+              ? ui.roleChangeNotice.oneMoment
               : signedOutByTheChange
-                ? "Sign in again"
-                : "Understood"}
+                ? ui.roleChangeNotice.signInAgain
+                : ui.roleChangeNotice.understood}
           </button>
         )}
       </div>

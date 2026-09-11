@@ -1,4 +1,5 @@
 import { apiRequest } from "./api.ts";
+import { ui } from "../content/ui/index.ts";
 
 export type DataExportStatus = "pending" | "processing" | "ready" | "failed";
 
@@ -23,11 +24,11 @@ export interface DataExportJob {
 
 /** The row's one-word state as the dialog shows it. */
 export function exportLabel(job: Pick<DataExportJob, "status" | "failureCode">): string {
-  if (job.status === "pending") return "Queued";
-  if (job.status === "processing") return "Preparing…";
-  if (job.status === "ready") return "Ready";
-  if (job.failureCode === "too_large") return "Too large to prepare here";
-  return "Could not prepare";
+  if (job.status === "pending") return ui.accountData.queued;
+  if (job.status === "processing") return ui.accountData.preparing;
+  if (job.status === "ready") return ui.accountData.ready;
+  if (job.failureCode === "too_large") return ui.accountData.tooLargeToPrepareHere;
+  return ui.accountData.couldNotPrepare;
 }
 
 /** A sentence under a failed row, when the failure is one the player can act on. */
@@ -36,9 +37,9 @@ export function exportFailureNote(
 ): string | null {
   if (job.status !== "failed") return null;
   if (job.failureCode === "too_large") {
-    return "Your data is larger than this server prepares in one document. Ask the operator to raise the limit.";
+    return ui.accountData.yourDataIsLargerThan;
   }
-  return "Something went wrong while preparing it. You can request another export.";
+  return ui.accountData.somethingWentWrongWhilePreparing;
 }
 
 /**

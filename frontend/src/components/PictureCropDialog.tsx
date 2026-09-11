@@ -254,7 +254,7 @@ export function PictureCropDialog({
           disabled={!loaded || busy}
           onClick={() => void use()}
         >
-          {busy ? "Uploading…" : "Use picture"}
+          {busy ? ui.pictureCropDialog.uploading : ui.pictureCropDialog.usePicture}
         </button>
         <button type="button" className="modal-dismiss" disabled={busy} onClick={onCancel}>
           {ui.pictureCropDialog.cancel}

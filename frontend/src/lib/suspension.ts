@@ -10,6 +10,7 @@ Both feed one notice, kept here rather than in a component so that `api.ts` can
 raise it without importing React. */
 import { formatDateTime, type TimeFormat } from "./clock.ts";
 import { reportedDrawing, type PlayerReportDrawing } from "./moderation.ts";
+import { ui } from "../content/ui/index.ts";
 
 
 export type ReportedMessage = {
@@ -102,9 +103,9 @@ export function suspensionDuration(
   now: Date = new Date(),
   timeFormat: TimeFormat = "system",
 ): string {
-  if (!suspension.expiresAt) return "This suspension has no end date.";
+  if (!suspension.expiresAt) return ui.suspension.thisSuspensionHasNoEnd;
   const ends = new Date(suspension.expiresAt);
-  if (Number.isNaN(ends.getTime())) return "This suspension has no end date.";
-  if (ends <= now) return "This suspension has ended; try signing in again.";
-  return `This suspension lasts until ${formatDateTime(ends, timeFormat)}.`;
+  if (Number.isNaN(ends.getTime())) return ui.suspension.thisSuspensionHasNoEnd;
+  if (ends <= now) return ui.suspension.thisSuspensionHasEndedTry;
+  return ui.suspension.thisSuspensionLastsUntilEnds({ ends: formatDateTime(ends, timeFormat) });
 }

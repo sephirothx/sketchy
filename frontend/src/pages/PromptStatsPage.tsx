@@ -27,22 +27,22 @@ import { ui } from "../content/ui/index.ts";
 const PAGE_SIZE = 40;
 
 const WINDOWS = [
-  { value: "all", label: "All time", days: null },
-  { value: "30d", label: "Last 30 days", days: 30 },
-  { value: "90d", label: "Last 90 days", days: 90 },
+  { value: "all", get label() { return ui.promptStatsPage.allTime; }, days: null },
+  { value: "30d", get label() { return ui.promptStatsPage.last30Days; }, days: 30 },
+  { value: "90d", get label() { return ui.promptStatsPage.last90Days; }, days: 90 },
 ] as const;
 const SCORING_FILTERS: Array<{ value: "all" | ScoringMode; label: string }> = [
-  { value: "all", label: "All scoring modes" },
-  { value: "none", label: "No scoring" },
-  { value: "default", label: "Default scoring" },
-  { value: "pressure", label: "Pressure scoring" },
+  { value: "all", get label() { return ui.promptStatsPage.allScoringModes; } },
+  { value: "none", get label() { return ui.promptStatsPage.noScoring; } },
+  { value: "default", get label() { return ui.promptStatsPage.defaultScoring; } },
+  { value: "pressure", get label() { return ui.promptStatsPage.pressureScoring; } },
 ];
 const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
-  { value: "all", label: "All hint modes" },
-  { value: "none", label: "No hints" },
-  { value: "checkpoints", label: "Checkpoint hints" },
-  { value: "purchase", label: "Purchased hints" },
-  { value: "wheel", label: "Letter wheel" },
+  { value: "all", get label() { return ui.promptStatsPage.allHintModes; } },
+  { value: "none", get label() { return ui.promptStatsPage.noHints; } },
+  { value: "checkpoints", get label() { return ui.promptStatsPage.checkpointHints; } },
+  { value: "purchase", get label() { return ui.promptStatsPage.purchasedHints; } },
+  { value: "wheel", get label() { return ui.promptStatsPage.letterWheel; } },
 ];
 
 export function PromptStatsPage() {
@@ -169,7 +169,7 @@ export function PromptStatsPage() {
 
   return (
     <div className="prompt-stats-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader backLabel={ui.promptStatsPage.backToLobby} />
 
       <header className="prompt-stats-header">
         <SectionLabel>{ui.promptStatsPage.serverWide}</SectionLabel>
@@ -281,9 +281,9 @@ export function PromptStatsPage() {
                       )}
                     </span>
                   </td>
-                  <td data-label="Guessed">{row.guessedLabel}</td>
-                  <td data-label="Picked">{row.pickedLabel}</td>
-                  <td data-label="Drawn">{row.drawnLabel}</td>
+                  <td data-label={ui.promptStatsPage.guessed}>{row.guessedLabel}</td>
+                  <td data-label={ui.promptStatsPage.picked}>{row.pickedLabel}</td>
+                  <td data-label={ui.promptStatsPage.drawn}>{row.drawnLabel}</td>
                 </tr>
               ))}
             </tbody>

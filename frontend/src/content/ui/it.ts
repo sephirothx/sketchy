@@ -396,6 +396,14 @@ export const IT: Catalogue = {
   promptListDrafts: {
     promptsAdded: (p: { count: number }) =>
       `${counted(p.count, { one: "parola aggiunta", other: "parole aggiunte" })}`,
+    duplicatesAlreadyInTheList: (p: { duplicates: number }) =>
+      `${p.duplicates} già nella lista`,
+    tooLongCountOverMaxListPrompt: (p: { tooLongCount: number; MAX_LIST_PROMPT_LENGTH: number }) =>
+      `${p.tooLongCount} oltre i ${p.MAX_LIST_PROMPT_LENGTH} caratteri`,
+    overLimitPastTheMaxList: (p: { overLimit: number; MAX_LIST_PROMPTS: number }) =>
+      `${p.overLimit} oltre il limite di ${p.MAX_LIST_PROMPTS}`,
+    keptSkippedSkipped: (p: { kept: string; skipped: string }) =>
+      `${p.kept}; saltate: ${p.skipped}.`,
   },
 
   lastSeen: {
@@ -414,6 +422,11 @@ export const IT: Catalogue = {
   gameHighlights: {
     reactionCount: (p: { count: number }) =>
       counted(p.count, { one: "reazione", other: "reazioni" }),
+    hardestPrompt: "Parola più difficile",
+    fastestGuess: "Risposta più veloce",
+    bestDrawer: "Miglior disegnatore",
+    quickestOnAverage: "Più veloce in media",
+    mostReactedDrawing: "Disegno con più reazioni",
   },
 
   versionBadge: {
@@ -434,6 +447,10 @@ export const IT: Catalogue = {
   guessPips: {
     playerGuessState: (p: { nickname: string; isFriend: boolean; guessed: boolean }) =>
       `${p.nickname}${p.isFriend ? " (amico)" : ""} ${p.guessed ? "ha indovinato" : "sta ancora provando"}`,
+    gotOfGuessersCountGuessed: (p: { got: number; guessersCount: number }) =>
+      `${p.got} su ${p.guessersCount} hanno indovinato`,
+    summaryOpenPlayersAndScores: (p: { summary: string }) =>
+      `${p.summary}. Apri giocatori e punteggi.`,
   },
 
   accountDataDialog: {
@@ -452,6 +469,8 @@ export const IT: Catalogue = {
     youHaveNotRequestedExportYet: "Non hai ancora chiesto nessuna esportazione.",
     download: "Scarica",
     close: "Chiudi",
+    requesting: "Richiesta in corso…",
+    requestExport: "Richiedi l’esportazione",
   },
 
   accountMenu: {
@@ -490,6 +509,20 @@ export const IT: Catalogue = {
     rules2: "regole",
     forgotYourPassword: "Password dimenticata?",
     notNow: "Non ora",
+    createYourAccount: "Crea il tuo account",
+    createAnAccountToKeep: (p: { suggestedUsername: string }) =>
+      `Crea un account per tenere ${p.suggestedUsername} come nome utente e salvare le tue statistiche su ogni dispositivo.`,
+    keepYourUsernameAndYour: "Tieni il tuo nome utente e le tue statistiche su ogni dispositivo.",
+    waitingForYourDevice: "In attesa del tuo dispositivo…",
+    signInWithAPasskey: "Accedi con una passkey",
+    pleaseWait: "Attendi…",
+    alreadyRegistered: "Già registrato? ",
+    newHere: "Nuovo qui? ",
+    createAnAccount: "Crea un account",
+    guestIdentity: (p: { name: string }) =>
+      `${p.name}. Il tuo nome visualizzato non è salvato.`,
+    signedInAs: (p: { name: string }) =>
+      `Accesso come ${p.name}`,
   },
 
   accountRecoveryPage: {
@@ -506,13 +539,23 @@ export const IT: Catalogue = {
     checkingThatLink: "Controllo del link…",
     everySignedDeviceWillBeSigned: "Tutti i dispositivi connessi verranno disconnessi, compresi quelli\n              che non hai riconosciuto.",
     newPassword: "Nuova password",
+    addressIsConfirmedYouCan: (p: { address: string }) =>
+      `${p.address} è confermato. Ora puoi recuperare questo account.`,
+    yourPasswordIsSetAnd: "La tua password è impostata e hai di nuovo effettuato l’accesso.",
+    resetYourPassword: "Reimposta la password",
+    thatLinkNoLongerWorks: "Questo link non funziona più",
+    chooseANewPassword: "Scegli una nuova password",
+    confirmingYourEmail: "Conferma della tua email",
+    pleaseWait: "Attendi…",
+    sendAResetLink: "Invia un link di reimpostazione",
+    setPassword: "Imposta la password",
+    oneMoment: "Un momento…",
+    nothingToConfirm: "Niente da confermare.",
   },
 
   activeGameRoom: {
     leaveGame: "Esci dalla partita",
     markedAfkByRoomVote: "La stanza ti ha segnato come assente per votazione.",
-    couldNotChangeSuggestion: (p: { action: string }) =>
-      `Non è stato possibile ${p.action} il suggerimento sui colori.`,
     inviteLinkCopied: "Link d’invito copiato.",
     couldnTCopyLinkCopyFrom: "Non è stato possibile copiare il link. Copialo dalla barra degli indirizzi.",
     couldNotStartGamePleaseTry: "Non è stato possibile iniziare la partita. Riprova.",
@@ -528,6 +571,28 @@ export const IT: Catalogue = {
     leaveRoom: "Esci dalla stanza",
     leave: "Esci",
     players: "Giocatori",
+    youWereKickedFromThe: "Sei stato espulso dalla stanza.",
+    thisRoomWasOpenedIn: "Questa stanza è stata aperta in un’altra scheda.",
+    startTheGame: "avviare la partita",
+    startARestartVote: "avviare una votazione per ricominciare",
+    recordYourRestartVote: "registrare il tuo voto per ricominciare",
+    leaveDuringYourTurn: "Uscire durante il tuo turno?",
+    leaveActiveGame: "Uscire dalla partita in corso?",
+    youReTheCurrentDrawer: "Stai disegnando tu. Se esci ora interromperai il tuo turno e la partita andrà avanti per tutti.",
+    theGameIsStillIn: "La partita è ancora in corso. Uscirai dalla stanza e perderai il tuo posto in questa partita.",
+    restartVoteAvailableInRestartCooldownSeconds: (p: { restartCooldownSeconds: number }) =>
+      `Votazione per ricominciare disponibile tra ${p.restartCooldownSeconds} secondi`,
+    proposeRestartingTheGame: "Proponi di ricominciare la partita",
+    restartVoteAvailableInRestartCooldownSeconds2: (p: { restartCooldownSeconds: number }) =>
+      `Votazione per ricominciare tra ${p.restartCooldownSeconds} s`,
+    proposeAVoteToRestart: "Proponi una votazione per ricominciare la partita",
+    backFromAfk: "Sono tornato",
+    goAfk: "Segnami assente",
+    closePlayers: "Chiudi giocatori",
+    acceptTheColorSuggestion: "accettare il suggerimento sui colori",
+    dismissTheColorSuggestion: "ignorare il suggerimento sui colori",
+    couldNotAcceptSuggestion: "Impossibile accettare il suggerimento sui colori.",
+    couldNotDismissSuggestion: "Impossibile ignorare il suggerimento sui colori.",
   },
 
   addEmailDialog: {
@@ -539,6 +604,15 @@ export const IT: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Qualcosa è andato storto. Riprova.",
     done: "Fatto",
     usedOnlyResetYourPasswordTell: "Serve solo a reimpostare la password e ad avvisarti se sul tuo account\n              o su qualcosa che hai condiviso viene presa una decisione. Qui non\n              arriva mai nient’altro.",
+    checkYourInbox: "Controlla la tua casella di posta",
+    changeYourEmailAddress: "Cambia il tuo indirizzo email",
+    addAnEmailAddress: "Aggiungi un indirizzo email",
+    newEmail: "Nuova email",
+    email: "Email",
+    pleaseWait: "Attendi…",
+    sendConfirmation: "Invia conferma",
+    close: "Chiudi",
+    notNow: "Non ora",
   },
 
   afkCheckDialog: {
@@ -594,6 +668,20 @@ export const IT: Catalogue = {
     sendMyDescriptionOnly: "Invia solo la mia descrizione",
     dropsDetailsAboveAnyScreenshotWe: "Scarta i dettagli qui sopra e ogni screenshot. Lo leggeremo comunque, ma il bug sarà molto più difficile da riprodurre.",
     cancel: "Annulla",
+    build: "Versione",
+    page: "Pagina",
+    room: "Stanza",
+    screen: "Schermo",
+    browser: "Browser",
+    connection: "Connessione",
+    waitingForThePicker: "In attesa del selettore…",
+    attachAScreenshot: "Allega uno screenshot",
+    whatWeAreLeavingOut: "Cosa lasciamo fuori",
+    whatWeSendWithThis: "Cosa inviamo insieme",
+    noneOfThisIsBeing: "Niente di tutto questo viene inviato: solo la tua descrizione qui sopra.",
+    theLast20ErrorsYour: "Gli ultimi 20 errori registrati dal tuo browser. Nessun indirizzo di pagina oltre il percorso, niente di ciò che hai scritto in chat e mai la parola in gioco.",
+    sending: "Invio…",
+    sendReport: "Invia segnalazione",
   },
 
   changePasswordDialog: {
@@ -608,6 +696,12 @@ export const IT: Catalogue = {
     newPassword: "Nuova password",
     newPasswordAgain: "Ripeti la nuova password",
     emailMeLinkInstead: "Mandami invece un link",
+    checkYourInbox: "Controlla la tua casella di posta",
+    changeYourPassword: "Cambia la tua password",
+    pleaseWait: "Attendi…",
+    changePassword: "Cambia password",
+    close: "Chiudi",
+    cancel: "Annulla",
   },
 
   choosingPromptOverlay: {
@@ -642,6 +736,23 @@ export const IT: Catalogue = {
     thanksYourReportWithPeopleWho: "Grazie — la tua segnalazione è arrivata a chi gestisce Sketchy.",
     reload: "Ricarica",
     backLobby: "Torna alla lobby",
+    summary: "Riepilogo",
+    build: "Versione",
+    page: "Pagina",
+    room: "Stanza",
+    screen: "Schermo",
+    browser: "Browser",
+    connection: "Connessione",
+    thisRoomSScreenHit: "La schermata di questa stanza ha avuto un errore e si è dovuta fermare. Il tuo posto resta riservato per un momento: invia la segnalazione qui sotto, poi ricarica per riprenderlo o torna alla lobby.",
+    thisScreenHitAnError: "Questa schermata ha avuto un errore e si è dovuta fermare. Il tuo account e le impostazioni sono al sicuro. Invia la segnalazione qui sotto e potrai proseguire.",
+    whatWeAreLeavingOut: "Cosa lasciamo fuori",
+    whatWeSendWithThis: "Cosa inviamo insieme",
+    noneOfThisIsBeing: "Niente di tutto questo viene inviato: solo la tua descrizione qui sopra.",
+    theCrashTheLast20: "Il crash, gli ultimi 20 errori registrati dal tuo browser e il punto della pagina in cui è successo. Nessun indirizzo di pagina oltre il percorso, niente di ciò che hai scritto in chat e mai la parola in gioco.",
+    sendingAgain: "Nuovo invio…",
+    sending: "Invio…",
+    trySendingAgain: "Riprova a inviare",
+    sendReport: "Invia segnalazione",
   },
 
   createRoomPage: {
@@ -669,6 +780,22 @@ export const IT: Catalogue = {
     delete: "Elimina",
     undo: "Annulla",
     saveAsReusableList: "Salva come lista riutilizzabile",
+    saveQuickPromptsAsA: "Salva le parole rapide come lista e rimuovi i codici condivisi prima di salvare un’impostazione predefinita.",
+    appliedName: (p: { name: string }) =>
+      `«${p.name}» applicato.`,
+    savedName: (p: { name: string }) =>
+      `«${p.name}» salvato.`,
+    updatedName: (p: { name: string }) =>
+      `«${p.name}» aggiornato.`,
+    deleteThisRoomSettingPreset: "Eliminare questa impostazione predefinita della stanza?",
+    createTheRoom: "creare la stanza",
+    noScoring: "Senza punteggio",
+    public: "Pubblica",
+    private: "Privata",
+    backToLobby: "Torna alla lobby",
+    leaveBlankForARandom: "Lascia vuoto per un nome a caso!",
+    creating: "Creazione…",
+    createRoom2: "Crea stanza",
   },
 
   customPromptsEditor: {
@@ -701,6 +828,15 @@ export const IT: Catalogue = {
     searchCustomPrompts: "Cerca fra le parole personalizzate…",
     filterPromptsByLength: "Filtra le parole per lunghezza",
     noCustomPromptsMatchTheseFilters: "Nessuna parola personalizzata corrisponde a questi filtri.",
+    all: "Tutte",
+    allPromptLengths: "Tutte le lunghezze",
+    short: "Corte",
+    n5CharactersOrFewer: "5 caratteri o meno",
+    medium: "Medie",
+    n6To10Characters: "Da 6 a 10 caratteri",
+    long: "Lunghe",
+    n11CharactersOrMore: "11 caratteri o più",
+    loadTheCustomPrompts: "caricare le parole personalizzate",
   },
 
   deleteAccountDialog: {
@@ -713,6 +849,12 @@ export const IT: Catalogue = {
     typeToConfirm: (p: { word: string }) => `Scrivi ${p.word} per confermare`,
     couldNotDeleteAccount: "Non è stato possibile eliminare l’account.",
     password: "Password",
+    deleteThisGuest: "Elimina questo ospite",
+    deleteYourAccount: "Elimina il tuo account",
+    deleting: "Eliminazione…",
+    deleteForGood: "Elimina per sempre",
+    keepPlaying: "Continua a giocare",
+    keepMyAccount: "Tieni il mio account",
   },
 
   drawingReactionControl: {
@@ -723,6 +865,11 @@ export const IT: Catalogue = {
     reactions: "Reazioni",
     createAccountReact: "Crea un account per reagire.",
     createAccount: "Crea account",
+    noReactionsYet: "Ancora nessuna reazione",
+    reactToThisDrawingSummary: (p: { summary: string }) =>
+      `Reagisci a questo disegno. ${p.summary}`,
+    labelYourReactionPressTo: (p: { label: string }) =>
+      `${p.label}, la tua reazione. Premi per toglierla`,
   },
 
   drawingRecapGallery: {
@@ -742,11 +889,15 @@ export const IT: Catalogue = {
     drawingRecapNavigation: "Navigazione del riepilogo dei disegni",
     previous: "Precedente",
     next: "Successivo",
+    loadThisDrawing: "caricare questo disegno",
   },
 
   emailRecoveryReminder: {
     addEmail: "Aggiungi un’email",
     dismiss: "Chiudi",
+    confirmPendingAddressToFinishSetting: (p: { pendingAddress: string }) =>
+      `Conferma ${p.pendingAddress} per completare il recupero dell’account.`,
+    thisAccountHasNoEmail: "Questo account non ha un indirizzo email, quindi una password dimenticata non si può reimpostare.",
   },
 
   firstRunIdentity: {
@@ -756,6 +907,12 @@ export const IT: Catalogue = {
     logIn: "Accedi",
     or: "oppure",
     displayName: "Nome visualizzato",
+    beenHereBefore: "Sei già stato qui?",
+    playAsYourself: "Gioca come te stesso",
+    whatShouldWeCallYou: "Come ti chiamiamo?",
+    justPlayingOncePickA: "Solo una partita? Scegli un nome visualizzato",
+    play: "Gioca",
+    playAsGuest: "Gioca come ospite",
   },
 
   friendButton: {
@@ -813,6 +970,12 @@ export const IT: Catalogue = {
     highlights: "Momenti migliori",
     drawings: "Disegni",
     stayHere: "Resto qui",
+    aGreatGameOfDrawing: "Una bella partita di disegno",
+    theRoomTakesTheCrown: "L’intera stanza si prende la corona!",
+    winnersCountPlayersShareTheCrown: (p: { winnersCount: number }) =>
+      `${p.winnersCount} giocatori si dividono la corona!`,
+    takesTheCrown: " si prende la corona!",
+    shareTheCrown: " si dividono la corona!",
   },
 
   gameHighlightsPanel: {
@@ -841,6 +1004,32 @@ export const IT: Catalogue = {
     roomRules: "Regole della stanza",
     thisGameAlreadyProgressJoiningAs: "Questa partita è già in corso. Entrando come giocatore ti tocca un turno successivo.",
     playerSlotsAreFullSpectatingStill: "I posti da giocatore sono pieni. Puoi ancora guardare.",
+    promptDetailsHidden: "Dettagli della parola nascosti",
+    timedHints: "Indizi a tempo",
+    buyableLetterHints: "Indizi di lettere acquistabili",
+    wheelOfFortune: "Ruota della fortuna",
+    noLetterHints: "Nessun indizio di lettere",
+    publicRoom: "Stanza pubblica",
+    privateInvite: "Invito privato",
+    inProgress: "In corso",
+    waiting: "In attesa",
+    full: " · Piena",
+    noScoring: "Senza punteggio",
+    pressure: "Pressione",
+    default: "Standard",
+    everyToolAndColor: "Tutti gli strumenti e i colori",
+    spectatorsCanSeeThePrompt: "Gli spettatori vedono la parola",
+    spectatorsGuessAlong: "Anche gli spettatori indovinano",
+    defaultPromptList: "Lista di parole standard",
+    roomFull: "Stanza piena",
+    joining: "Ingresso…",
+    joinGameInProgress: "Entra nella partita in corso",
+    joinGame: "Entra nella partita",
+    spectate: "Guarda",
+    customPromptsOnly: (p: { count: number }) =>
+      `solo ${counted(p.count, { one: "parola personalizzata", other: "parole personalizzate" })}`,
+    customPromptsPlusDefaults: (p: { count: number }) =>
+      `${counted(p.count, { one: "parola personalizzata", other: "parole personalizzate" })} più quelle standard`,
   },
 
   inviteFriendsList: {
@@ -888,6 +1077,18 @@ export const IT: Catalogue = {
     createRoom2: "Crea una stanza",
     joinWithCode: "Entra con un codice",
     paste: "Incolla",
+    couldNotSaveThatName: "Impossibile salvare quel nome. Riprova.",
+    joinAsASpectator: "entrare come spettatore",
+    joinTheRoom: "entrare nella stanza",
+    loading: "Caricamento…",
+    showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
+      `${p.filteredRoomsCount} su ${p.roomsCount} mostrate`,
+    n0Rooms: "0 stanze",
+    close: "Chiudi",
+    joining: "Ingresso…",
+    joinTheRoom2: "Entra nella stanza",
+    joiningAsSpectator: "Ingresso come spettatore…",
+    watchWithoutPlaying: "Guarda senza giocare",
   },
 
   lobbyChatPanel: {
@@ -900,6 +1101,8 @@ export const IT: Catalogue = {
     saySomethingLobby: "Di’ qualcosa alla lobby…",
     lobbyChatMessage: "Messaggio della chat della lobby",
     send: "Invia",
+    couldNotSaveThatName: "Impossibile salvare quel nome. Riprova.",
+    sendTheMessage: "inviare il messaggio",
   },
 
   lobbyPlayerMenu: {
@@ -947,6 +1150,14 @@ export const IT: Catalogue = {
     searchPrompts: "Cerca parole",
     nothingMatchesThatSearch: "Niente corrisponde a questa ricerca.",
     deleteList: "Elimina lista…",
+    promptListSaved: "Lista di parole salvata.",
+    deleteThisPromptListAnd: "Eliminare questa lista di parole e tutte le sue revisioni?",
+    promptListDeleted: "Lista di parole eliminata.",
+    backToLobby: "Torna alla lobby",
+    promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>
+      `${p.promptsCount} parole su ${p.MAX_LIST_PROMPTS} in questa lista`,
+    saving: "Salvataggio…",
+    saveList: "Salva lista",
   },
 
   notFoundPage: {
@@ -961,6 +1172,8 @@ export const IT: Catalogue = {
     nobodyElseHereRightNow: "Al momento non c’è nessun altro qui.",
     friend: "Amico",
     join: "Entra",
+    inAGame: "In partita",
+    inTheLobby: "Nella lobby",
   },
 
   pictureCropDialog: {
@@ -971,6 +1184,8 @@ export const IT: Catalogue = {
     pictureFramedArrowKeysMovePlus: "L’immagine, inquadrata. Le frecce la spostano; più e meno fanno zoom.",
     zoom: "Zoom",
     cancel: "Annulla",
+    uploading: "Caricamento…",
+    usePicture: "Usa immagine",
   },
 
   playerList: {
@@ -994,6 +1209,20 @@ export const IT: Catalogue = {
     sendRequest: "Invia una richiesta",
     report: "Segnala",
     toAModerator: "A un moderatore",
+    voteAfkOrKickOr: "Vota assente o espulsione, oppure segnala",
+    reportThisPlayer: "Segnala questo giocatore",
+    undoVote: "Annulla voto",
+    vote: "Vota",
+    voteKindAfk: "Assente",
+    voteKindKick: "Espulsione",
+    undoVoteFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Annulla il voto ${p.kind} per ${p.nickname}, ${p.count} su ${p.required}`,
+    voteFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Vota ${p.kind} per ${p.nickname}, ${p.count} su ${p.required}`,
+    votesFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Voti ${p.kind} per ${p.nickname}, ${p.count} su ${p.required}`,
+    votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
+      `Voti ${p.kind} per ${p.nickname}, ${p.count} su ${p.required}, compreso il tuo`,
   },
 
   profilePage: {
@@ -1043,6 +1272,23 @@ export const IT: Catalogue = {
     statistics: "Statistiche",
     gameHistory: "Cronologia delle partite",
     includeGamesThatFellApart: "Includi le partite andate a monte",
+    notKept: "non conservato",
+    nothingDrawn: "niente disegnato",
+    onlyThePlayersInThis: "Solo i giocatori di questa partita possono vederne i turni.",
+    couldNotLoadTheTurns: "Impossibile caricare i turni di questa partita.",
+    cutShort: "interrotta",
+    noAttempt: "nessun tentativo",
+    joinedLate: "entrato tardi",
+    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
+      `non conteggiato (${p.eligibilityReason})`,
+    unknownPlayer: "Giocatore sconosciuto",
+    backToLobby: "Torna alla lobby",
+    guestDisplayNameNotSaved: "Ospite — nome visualizzato non salvato",
+    registeredPlayer: "Giocatore registrato",
+    noFinishedGamesYetPlay: "Ancora nessuna partita conclusa. Giocane una e comparirà qui.",
+    noGamesToShowGames: "Nessuna partita da mostrare. Le partite delle stanze private sono visibili solo a chi c’era.",
+    loadHistoryPageSizeMore: (p: { HISTORY_PAGE_SIZE: number }) =>
+      `Carica altre ${p.HISTORY_PAGE_SIZE}`,
   },
 
   promptContentReportDialog: {
@@ -1054,6 +1300,14 @@ export const IT: Catalogue = {
     reason: "Motivo",
     whatShouldModeratorKnow: "Cosa dovrebbe sapere il moderatore?",
     cancel: "Annulla",
+    inappropriateContent: "Contenuto inappropriato",
+    hatefulOrAbusiveContent: "Contenuto d’odio o offensivo",
+    sexualContent: "Contenuto sessuale",
+    violence: "Violenza",
+    spam: "Spam",
+    other: "Altro",
+    sending: "Invio…",
+    sendReport: "Invia segnalazione",
   },
 
   promptDisplay: {
@@ -1073,6 +1327,10 @@ export const IT: Catalogue = {
     hintSpendLimitReached: "Limite di spesa in indizi raggiunto",
     deductedFromYourScoreIfYou: "Viene tolto dal tuo punteggio se indovini la parola",
     buyLetterRevealsEveryMatch: "Compra una lettera: rivela tutte le sue occorrenze",
+    selectThePrompt: "scegliere la parola",
+    choosing: "Scelta…",
+    buyTheHint: "comprare l’indizio",
+    buyTheLetterHint: "comprare l’indizio di lettera",
   },
 
   promptListPicker: {
@@ -1089,6 +1347,11 @@ export const IT: Catalogue = {
     loadingCuratedPromptLists: "Caricamento delle liste di parole…",
     promptLists: "Liste di parole",
     addUnlistedListByCode: "Aggiungi una lista non elencata con un codice",
+    namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
+      `${p.name} (${p.promptCount} parole)`,
+    adding: "Aggiunta…",
+    add: "Aggiungi",
+    reportSentForModeratorReview: "Segnalazione inviata ai moderatori.",
   },
 
   promptStatsPage: {
@@ -1113,6 +1376,19 @@ export const IT: Catalogue = {
     guessed: "Indovinata",
     picked: "Scelta",
     drawn: "Disegnata",
+    allTime: "Da sempre",
+    last30Days: "Ultimi 30 giorni",
+    last90Days: "Ultimi 90 giorni",
+    allScoringModes: "Tutte le modalità di punteggio",
+    noScoring: "Senza punteggio",
+    defaultScoring: "Punteggio standard",
+    pressureScoring: "Punteggio a pressione",
+    allHintModes: "Tutte le modalità di indizi",
+    noHints: "Senza indizi",
+    checkpointHints: "Indizi a tempo",
+    purchasedHints: "Indizi acquistati",
+    letterWheel: "Ruota delle lettere",
+    backToLobby: "Torna alla lobby",
   },
 
   publicRoomCard: {
@@ -1127,6 +1403,10 @@ export const IT: Catalogue = {
     looking: "Ricerca…",
     nobodySeatedYet: "Non si è ancora seduto nessuno.",
     host: "Host",
+    couldNotReadWhoIs: "Impossibile sapere chi c’è in questa stanza.",
+    joining: "Ingresso…",
+    join: "Entra",
+    spectate: "Guarda",
   },
 
   reactionRequests: {
@@ -1148,11 +1428,23 @@ export const IT: Catalogue = {
     anythingModeratorShouldKnow: "Tutto ciò che un moderatore dovrebbe sapere",
     sentWithWhatAboutAttached: "Inviata, con allegato ciò a cui si riferisce.",
     done: "Fatto",
+    inappropriateName: "Nome inappropriato",
+    inappropriatePicture: "Immagine inappropriata",
+    reportSent: "Segnalazione inviata",
+    reportDisplayName: (p: { displayName: string }) =>
+      `Segnala ${p.displayName}`,
+    thePictureOnTheAccount: "L’immagine dell’account viene allegata così com’è ora.",
+    theNameOnTheAccount: "Il nome dell’account viene allegato così com’è ora.",
+    sending: "Invio…",
+    sendReport: "Invia segnalazione",
+    close: "Chiudi",
+    cancel: "Annulla",
   },
 
   reportedDrawing: {
     thisDrawingCouldNotBeDecoded: "Non è stato possibile decodificare questo disegno.",
     drawingCouldNotBeLoaded: "Non è stato possibile caricare il disegno.",
+    loadingTheDrawing: "Caricamento del disegno…",
   },
 
   reportLobbyLineDialog: {
@@ -1165,6 +1457,16 @@ export const IT: Catalogue = {
     thisLineAttachedWithWhatLobby: "Questa riga è allegata, insieme a ciò che la lobby ha detto intorno.",
     sentWithLineWhatWasSaid: "Inviata, con allegata la riga e ciò che si è detto intorno.",
     done: "Fatto",
+    harassmentOrAbuse: "Molestie o insulti",
+    spam: "Spam",
+    inappropriateName: "Nome inappropriato",
+    reportSent: "Segnalazione inviata",
+    reportDisplayName: (p: { displayName: string }) =>
+      `Segnala ${p.displayName}`,
+    sending: "Invio…",
+    sendReport: "Invia segnalazione",
+    close: "Chiudi",
+    cancel: "Annulla",
   },
 
   reportPlayerDialog: {
@@ -1180,6 +1482,28 @@ export const IT: Catalogue = {
     includeTheirDrawing: "Includi il suo disegno",
     canvasAsRightNowSoModerator: "La tela com’è adesso, così un moderatore vede quello che\n                      hai visto tu.",
     done: "Fatto",
+    sentWithTheirDrawingAnd: (p: { messages: string }) =>
+      `Inviata, con il suo disegno e ${p.messages} allegati.`,
+    sentWithTheirDrawingAttached: "Inviata, con il suo disegno allegato.",
+    sentWithMessagesAttached: (p: { messages: string }) =>
+      `Inviata, con ${p.messages} allegati.`,
+    sentTheyHadSaidNothing: "Inviata. Non aveva scritto nulla in questa stanza, quindi non ci sono messaggi allegati.",
+    baseTheTurnHadEnded: (p: { base: string }) =>
+      `${p.base} Il turno era finito, quindi non è stato possibile allegare il disegno.`,
+    harassmentOrAbuse: "Molestie o insulti",
+    offensiveDrawing: "Disegno offensivo",
+    inappropriateName: "Nome inappropriato",
+    cheating: "Imbrogli",
+    spam: "Spam",
+    inappropriatePicture: "Immagine inappropriata",
+    sendThatReport: "inviare la segnalazione",
+    reportNickname: (p: { nickname: string }) =>
+      `Segnala ${p.nickname}`,
+    reportSent: "Segnalazione inviata",
+    sending: "Invio…",
+    sendReport: "Invia segnalazione",
+    cancel: "Annulla",
+    close: "Chiudi",
   },
 
   reportsReviewedNotice: {
@@ -1198,12 +1522,20 @@ export const IT: Catalogue = {
     restart: "Riavvia",
     keepPlaying: "Continua a giocare",
     onlyEligiblePlayersPresentWhenVote: "Possono votare solo i giocatori idonei presenti quando è iniziata la votazione.",
+    proposerNicknameProposedRestartingRemainingS: (p: { proposerNickname: string; remaining: number }) =>
+      `${p.proposerNickname} propone di ricominciare · ${p.remaining} s`,
+    theCurrentGameIsRestarting: "La partita sta ricominciando ora.",
+    yesYesNoNoPending: (p: { yes: number; no: number; pending: number; requiredVotes: number }) =>
+      `${p.yes} sì · ${p.no} no · ${p.pending} in attesa · ${p.requiredVotes} necessari`,
   },
 
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Sei stato disconnesso da ogni dispositivo perché la modifica abbia\n            effetto. Accedi di nuovo per continuare.",
     setUpNow: "Attivalo adesso",
     later: "Più tardi",
+    oneMoment: "Un momento…",
+    signInAgain: "Accedi di nuovo",
+    understood: "Capito",
   },
 
   roomChatPanel: {
@@ -1215,11 +1547,31 @@ export const IT: Catalogue = {
     sent: "Inviato:",
     send: "Invia",
     youReDrawingWatchGuessesCome: "Stai disegnando: guarda arrivare i tentativi.",
+    yourGuessTrimmedDidNot: (p: { trimmed: string }) =>
+      `La tua risposta «${p.trimmed}» non è arrivata al server. Inviala di nuovo.`,
+    sendTheMessage: "inviare il messaggio",
+    chatWhileYouWait: "Chatta mentre aspetti",
+    gameChat: "Chat della partita",
+    guessAndChat: "Indovina e chatta",
+    guessesAndChat: "Risposte e chat",
+    roomChat: "Chat della stanza",
+    sayHelloBeforeTheGame: "Saluta prima che inizi la partita.",
+    noMessagesYet: "Ancora nessun messaggio.",
+    typeYourGuess: "Scrivi la tua risposta...",
+    typeAMessage: "Scrivi un messaggio...",
   },
 
   roomEntryState: {
     thisRoomNoLongerAvailable: "Questa stanza non è più disponibile",
     couldNotJoinThisRoom: "Non è stato possibile entrare in questa stanza",
+    thatNameIsReservedPlease: "Quel nome è riservato. Scegline un altro.",
+    thisRoomHasEndedAsk: "Questa stanza è chiusa. Chiedi all’host un nuovo invito.",
+    loadThisRoom: "caricare questa stanza",
+    enterANicknameToContinue: "Inserisci un soprannome per continuare.",
+    thePlayerSlotsJustFilled: "I posti da giocatore si sono appena riempiti, ma puoi ancora guardare.",
+    joinAsASpectator: "entrare come spettatore",
+    joinThisRoom: "entrare in questa stanza",
+    nicknameRule: "Usa da 3 a 16 caratteri: lettere, numeri, trattini o trattini bassi. Niente spazi.",
   },
 
   roomMenuSheet: {
@@ -1231,6 +1583,8 @@ export const IT: Catalogue = {
     saveThisDrawing: "Salva questo disegno",
     settings: "Impostazioni",
     leaveRoom: "Esci dalla stanza",
+    iMBack: "Sono tornato",
+    goAwayForABit: "Assentati un attimo",
   },
 
   roomPlayersPanel: {
@@ -1243,6 +1597,11 @@ export const IT: Catalogue = {
     couldNotJoinAsPlayer: "Non è stato possibile entrare come giocatore",
     finalStandings: "Classifica finale",
     players: "Giocatori",
+    joinAsAPlayer: "entrare come giocatore",
+    aPlayerSlotIsAvailable: "C’è un posto da giocatore libero.",
+    playerSlotsAreCurrentlyFull: "I posti da giocatore sono tutti occupati.",
+    joining: "Ingresso…",
+    joinAsPlayer: "Entra come giocatore",
   },
 
   roomSettingsEditor: {
@@ -1252,6 +1611,11 @@ export const IT: Catalogue = {
     editRoomRules: "Modifica le regole della stanza",
     loadingSettings: "Caricamento delle impostazioni…",
     cancel: "Annulla",
+    loadRoomRules: "caricare le regole della stanza",
+    saveRoomRules: "salvare le regole della stanza",
+    saving: "Salvataggio…",
+    saveSettings: "Salva impostazioni",
+    saved: "Salvato",
   },
 
   roomSetupForm: {
@@ -1280,6 +1644,10 @@ export const IT: Catalogue = {
     scoringHints: "Punteggio e indizi",
     hintsAreOffBecauseBlanksAre: "Gli indizi sono spenti perché gli spazi sono nascosti.",
     pointPurchaseHintModesRequireScoring: "Le modalità di indizio a pagamento richiedono il punteggio.",
+    allColors: "Tutti i colori",
+    noScoring: "Senza punteggio",
+    listedInTheLobbyAnyone: "Elencata nella lobby: chiunque può entrare.",
+    joinableOnlyWithTheCode: "Accessibile solo con il codice o il link d’invito.",
   },
 
   rulesPage: {
@@ -1287,6 +1655,7 @@ export const IT: Catalogue = {
     theRules: "Le regole",
     thisPage: "In questa pagina",
     forExample: "Per esempio",
+    backToLobby: "Torna alla lobby",
   },
 
   sessionManagerDialog: {
@@ -1302,6 +1671,10 @@ export const IT: Catalogue = {
     loadingDevices: "Caricamento dei dispositivi…",
     currentDevice: "Dispositivo attuale",
     close: "Chiudi",
+    revoking: "Revoca…",
+    revoke: "Revoca",
+    loggingOut: "Uscita…",
+    logOutEverywhere: "Esci ovunque",
   },
 
   settingsOverlay: {
@@ -1373,6 +1746,59 @@ export const IT: Catalogue = {
     close: "Chiudi",
     closeSettings: "Chiudi le impostazioni",
     settingsSections: "Sezioni delle impostazioni",
+    account: "Account",
+    appearance: "Aspetto",
+    soundEffects2: "Suoni ed effetti",
+    shortcuts: "Scorciatoie",
+    red: "Rosso",
+    orange: "Arancione",
+    yellow: "Giallo",
+    lime: "Lime",
+    green: "Verde",
+    teal: "Verde acqua",
+    sky: "Celeste",
+    blue: "Blu",
+    indigo: "Indaco",
+    purple: "Viola",
+    magenta: "Magenta",
+    pink: "Rosa",
+    brown: "Marrone",
+    light: "Chiaro",
+    dark: "Scuro",
+    system: "Sistema",
+    crosshair: "Mirino",
+    outline: "Contorno",
+    space: "Spazio",
+    hideTheFullAddress: "Nascondi l’indirizzo completo",
+    showTheFullAddress: "Mostra l’indirizzo completo",
+    hide: "Nascondi",
+    showInFull: "Mostra per intero",
+    verified: "Verificato",
+    notVerified: "Non verificato",
+    saving: "Salvataggio…",
+    save: "Salva",
+    aGuestHasNothingTo: "Un ospite non ha nulla da recuperare: non c’è una password da dimenticare.",
+    withoutOneThereIsNo: "Senza, non c’è modo di rientrare in questo account se dimentichi la password.",
+    addAnEmail: "Aggiungi un’email",
+    guestsHaveNoPassword: "Gli ospiti non hanno password.",
+    changingItSignsEveryOther: "Cambiarla disconnette tutti gli altri dispositivi.",
+    setThisUpAndThe: (p: { pendingRole: string }) =>
+      `Configurala e il ruolo di ${p.pendingRole} che ti è stato offerto diventerà effettivo.`,
+    anAuthenticatorAppSCode: "Il codice di un’app di autenticazione, oltre alla password. Moderatori e amministratori devono averla.",
+    setUp: "Configura",
+    thisBrowserIsTheOnly: "Questo browser è l’unico posto in cui esisti.",
+    everyBrowserStillHoldingA: "Ogni browser che ha ancora una sessione, e un modo per chiuderne una qualsiasi.",
+    worksForAGuestToo: "Funziona anche per gli ospiti: le partite che hai giocato sono tue.",
+    everyGameListAndSetting: "Ogni partita, lista e impostazione che Sketchy conserva su di te, in un unico file JSON.",
+    deleteThisGuest: "Elimina questo ospite",
+    deleteYourAccount: "Elimina il tuo account",
+    removesTheNameThePoints: "Rimuove il nome, i punti e la cronologia legati a questo browser.",
+    gamesYouPlayedStayIn: "Le partite che hai giocato restano nella cronologia degli altri, senza il tuo nome.",
+    clickToRebindTheSecond: "Fai clic per riassegnare il secondo tasto",
+    clickToRebind: "Fai clic per riassegnare",
+    pressKey: "Premi un tasto…",
+    key: "+ tasto",
+    none: "Nessuno",
   },
 
   stepUpDialog: {
@@ -1384,6 +1810,12 @@ export const IT: Catalogue = {
     recoveryCode: "Codice di recupero",
     codeFromYourAuthenticatorApp: "Codice dalla tua app di autenticazione",
     cancel: "Annulla",
+    waitingForYourDevice: "In attesa del tuo dispositivo…",
+    useYourPasskey: "Usa la tua passkey",
+    useYourAuthenticatorApp: "Usa la tua app di autenticazione",
+    useARecoveryCode: "Usa un codice di recupero",
+    checking: "Verifica…",
+    confirm: "Conferma",
   },
 
   suspensionNotice: {
@@ -1392,6 +1824,12 @@ export const IT: Catalogue = {
     recordedAs: "Registrato come {category}",
     yourAccountSuspended: "Il tuo account è sospeso",
     youWereAskedDraw: "Toccava a te disegnare",
+    theMessageThisWasAbout: "Il messaggio in questione:",
+    theMessagesThisWasAbout: "I messaggi in questione:",
+    theDrawingThisWasAbout: "Il disegno in questione:",
+    theDrawingsThisWasAbout: "I disegni in questione:",
+    signingOut: "Uscita…",
+    signOut: "Esci",
   },
 
   toastProvider: {
@@ -1421,6 +1859,14 @@ export const IT: Catalogue = {
     canvasActions: "Azioni sulla tela",
     undoLastStrokeCtrlZ: "Annulla l’ultimo tratto (Ctrl+Z)",
     clear: "Svuota",
+    brush: "Pennello",
+    fill: "Riempimento",
+    eraser: "Gomma",
+    rectangle: "Rettangolo",
+    triangle: "Triangolo",
+    ellipse: "Ellisse",
+    fillIsUnavailableForThe: "Il riempimento non è disponibile per il resto del turno",
+    drawingByHandIsUnavailable: "Il disegno a mano libera non è disponibile per il resto del turno",
   },
 
   turnResultsOverlay: {
@@ -1435,6 +1881,8 @@ export const IT: Catalogue = {
     you: "(tu)",
     drewThisTurn: "Ha disegnato in questo turno",
     nextTurn: "Turno successivo",
+    turnResults: "Risultati del turno",
+    turnComplete: "Turno concluso",
   },
 
   twoFactorDialog: {
@@ -1505,6 +1953,19 @@ export const IT: Catalogue = {
     turnOff: "Disattiva",
     addAuthenticatorApp: "Aggiungi un’app di autenticazione",
     close: "Chiudi",
+    couldNotStartSettingThis: "Impossibile avviare la configurazione.",
+    thatCodeWasNotAccepted: "Quel codice non è stato accettato.",
+    couldNotAddThatPasskey: "Impossibile aggiungere quella passkey.",
+    couldNotRemoveThatPasskey: "Impossibile rimuovere quella passkey.",
+    couldNotConfirmIt: "Impossibile confermare.",
+    couldNotReplaceYourRecovery: "Impossibile sostituire i tuoi codici di recupero.",
+    couldNotTurnThisOff: "Impossibile disattivarla.",
+    waitingForYourDevice: "In attesa del tuo dispositivo…",
+    setUpAPasskey: "Configura una passkey",
+    noPasskeyOnThisDevice: "Nessuna passkey su questo dispositivo? ",
+    thisBrowserCannotMakeA: "Questo browser non può creare una passkey. ",
+    checking: "Verifica…",
+    confirm: "Conferma",
   },
 
   useFriendArrivalNotices: {
@@ -1512,6 +1973,10 @@ export const IT: Catalogue = {
     acceptedYourRequest: (p: { name: string }) => `${p.name} ha accettato la tua richiesta di amicizia.`,
     severalAccepted: (p: { count: number }) =>
       `${counted(p.count, { one: "persona ha accettato", other: "persone hanno accettato" })} le tue richieste di amicizia.`,
+    accept: "Accetta",
+    open: "Apri",
+    manyArrived: (p: { name: string; others: number }) =>
+      `${p.name} e ${counted(p.others, { one: "un’altra persona", other: "altre persone" })} vogliono diventare tuoi amici.`,
   },
 
   useRoomSessionReconnect: {
@@ -1541,6 +2006,27 @@ export const IT: Catalogue = {
     edit: "Modifica",
     viewHighlights: "Guarda i momenti migliori",
     viewDrawings: "Guarda i disegni",
+    spectatorsAfkAndDisconnectedPlayers: "Spettatori, assenti e giocatori disconnessi non contano per i due giocatori attivi che servono a una partita.",
+    joinMySketchyRoomCode: (p: { code: string }) =>
+      `Entra nella mia stanza di Sketchy: ${p.code}`,
+    inviteLink: "Link d’invito",
+    customPromptsOnlyCustomPromptCount: (p: { customPromptCount: number }) =>
+      `Solo parole personalizzate (${p.customPromptCount})`,
+    customPromptCountCustomPromptsCuratedLists: (p: { customPromptCount: number }) =>
+      `${p.customPromptCount} parole personalizzate + liste selezionate`,
+    promptListSlugsCountCuratedPromptLists: (p: { promptListSlugsCount: number }) =>
+      `${p.promptListSlugsCount} liste di parole selezionate`,
+    noScoring: "Senza punteggio",
+    spectatorsSeeThePrompt: "Gli spettatori vedono la parola",
+    publicRoom: "Stanza pubblica",
+    privateRoom: "Stanza privata",
+    betweenGames: "tra una partita e l’altra",
+    waitingForPlayers: "in attesa di giocatori",
+    roomCode: "Codice stanza",
+    starting: "Avvio…",
+    rematch: "Rivincita",
+    startGame: "Avvia partita",
+    waitingForAHost: "In attesa di un host",
   },
 
   warningNotice: {
@@ -1550,5 +2036,257 @@ export const IT: Catalogue = {
     whatAWarningMeans:
       "Una segnalazione sul tuo comportamento è stata esaminata, e questo è l’esito. Non c’è nessuna restrizione, ma un’altra segnalazione potrebbe portare alla sospensione del tuo account.",
     youWereAskedDraw: "Toccava a te disegnare",
+    yourPictureWasRemoved: "La tua immagine è stata rimossa",
+    aModeratorWarning: "Un avvertimento della moderazione",
+    aReportAboutYourPicture: "Una segnalazione sulla tua immagine è stata esaminata, e questo è l’esito. Nient’altro nel tuo account è interessato.",
+    theMessageThisWasAbout: "Il messaggio in questione:",
+    theMessagesThisWasAbout: "I messaggi in questione:",
+    theDrawingThisWasAbout: "Il disegno in questione:",
+    theDrawingsThisWasAbout: "I disegni in questione:",
+    oneMoment: "Un momento…",
+    understood: "Capito",
+  },
+  connectionStatusBanner: {
+    youReDisconnectedCheckYour: "Sei disconnesso. Controlla la connessione; Sketchy si riconnetterà da solo.",
+    couldnTReconnectToYour: "Impossibile riconnettersi alla tua stanza. Ricarica la pagina per riprovare.",
+    connectionLostReconnecting: "Connessione persa — riconnessione…",
+  },
+  accountData: {
+    queued: "In coda",
+    preparing: "Preparazione…",
+    ready: "Pronto",
+    tooLargeToPrepareHere: "Troppo grande per prepararlo qui",
+    couldNotPrepare: "Impossibile preparare",
+    yourDataIsLargerThan: "I tuoi dati superano ciò che questo server prepara in un unico documento. Chiedi al gestore di alzare il limite.",
+    somethingWentWrongWhilePreparing: "Qualcosa è andato storto durante la preparazione. Puoi richiedere un’altra esportazione.",
+  },
+  recoveryCodeFile: {
+    sketchyRecoveryCodes: "Codici di recupero di Sketchy",
+    accountUsername: (p: { username: string }) =>
+      `Account: ${p.username}`,
+    createdValue: (p: { value: string }) =>
+      `Creato: ${p.value}`,
+    eachCodeSignsYouIn: "Ogni codice ti fa accedere una volta se perdi la tua app di autenticazione.",
+    keepThisFile: "Conserva questo file dove solo tu puoi arrivare. Chiunque abbia questi codici\ne la tua password può accedere al posto tuo.",
+  },
+  avatars: {
+    chooseAPngJpegWebP: "Scegli un’immagine PNG, JPEG, WebP o GIF.",
+    thatPictureIsTooLarge: "Quell’immagine è troppo grande da leggere: al massimo 10 MB.",
+    thatFileCouldNotBe: "Quel file non si è potuto leggere come immagine.",
+    thatPictureIsTooSmall: "Quell’immagine è troppo piccola per ricavarne qualcosa.",
+    thisBrowserCannotResizePictures: "Questo browser non può ridimensionare le immagini.",
+    thatPictureIsTooDetailed: "Quell’immagine è troppo dettagliata. Provane una più semplice, o ingrandisci una sua parte.",
+  },
+  settingsSync: {
+    thatChangeAppliesHereBut: "La modifica vale qui, ma non è stato possibile salvarla nel tuo account. Gli altri tuoi dispositivi non la vedranno.",
+  },
+  promptStats: {
+    hardestFirst: "Prima le più difficili",
+    easiestFirst: "Prima le più facili",
+    mostPicked: "Le più scelte",
+    getsGuessed: "Viene indovinata",
+    usuallyGuessed: "Di solito indovinata",
+    evenOdds: "Metà e metà",
+    oftenMissed: "Spesso mancata",
+    rarelyGuessed: "Indovinata di rado",
+    notPlayedEnough: "Giocata troppo poco",
+    allRanked: (p: { count: number }) =>
+      `Tutte le ${p.count} parole sono state giocate abbastanza da essere classificate.`,
+    noneRanked: (p: { unrated: number; guessers: number }) =>
+      `Nessuna di queste ${p.unrated} parole ha ancora avuto ${p.guessers} giocatori a indovinarla, quindi nessuna è classificata. Fate qualche partita e qui comparirà la loro difficoltà.`,
+    someRanked: (p: { rated: number; unrated: number; guessers: number }) =>
+      `${p.rated} classificate. ${plural(p.unrated, { one: `Un’altra parola non è ancora classificata`, other: `Altre ${p.unrated} parole non sono ancora classificate` })}: meno di ${p.guessers} giocatori le hanno viste.`,
+    noMatch: (p: { query: string }) =>
+      `Nessuna parola corrisponde a «${p.query}».`,
+    matching: (p: { count: number; query: string }) =>
+      `${counted(p.count, { one: "parola corrisponde", other: "parole corrispondono" })} a «${p.query}».`,
+  },
+  gameHeaderStatus: {
+    roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber} di ${p.totalRounds}`,
+  },
+  gameRoomRegions: {
+    theNextPlayer: "Il prossimo giocatore",
+    drawingCanvasYouAreDrawing: "Area di disegno. Stai disegnando tu.",
+    yourTurnToDraw: "Tocca a te disegnare.",
+    canvasSpectating: (p: { drawer: string }) =>
+      `Area di disegno. Stai guardando ${p.drawer}.`,
+    canvasSomeoneDrawing: (p: { drawer: string }) =>
+      `Area di disegno. ${p.drawer} sta disegnando.`,
+    someoneIsDrawing: (p: { drawer: string }) =>
+      `${p.drawer} sta disegnando.`,
+    theDrawer: "chi disegna",
+    aPlayer: "Qualcuno",
+  },
+  useToolbarState: {
+    fillIsUnavailableForThe: "Il riempimento non è disponibile per il resto del turno.",
+    drawingByHandIsUnavailable: "Il disegno a mano libera non è disponibile per il resto del turno. Le forme funzionano ancora.",
+  },
+  timer: {
+    n10SecondsRemaining: "Mancano 10 secondi",
+    timeIsUp: "Tempo scaduto",
+  },
+  chatAnnouncements: {
+    nicknameGuessedThePrompt: (p: { nickname: string }) =>
+      `${p.nickname} ha indovinato la parola.`,
+  },
+  canvasSnapshot: {
+    drawingOfDownloadPrompt: (p: { downloadPrompt: string }) =>
+      `Disegno di ${p.downloadPrompt}`,
+    savedDrawing: "Disegno salvato",
+  },
+  roomSetup: {
+    default: "Standard",
+    fasterGuessesEarnMore100: "Chi indovina prima guadagna di più, da 100 a 300 punti.",
+    pressure: "Pressione",
+    pointsDecayEverySecondTwice: "I punti calano ogni secondo, il doppio più in fretta appena qualcuno indovina.",
+    noScoring: "Senza punteggio",
+    justDrawAndGuessNo: "Solo disegnare e indovinare. Nessuna classifica.",
+    timedHints: "Indizi a tempo",
+    lettersRevealToEveryoneAt: "Le lettere si rivelano a tutti a tempi fissi.",
+    noHints: "Senza indizi",
+    blanksOnlyAllTurnLong: "Solo spazi vuoti, per tutto il turno.",
+    buyLetters: "Compra lettere",
+    revealALetterSlotJust: "Rivela una lettera solo per te, pagata con i punti di quel turno.",
+    wheelOfFortune: "Ruota della fortuna",
+    pickALetterPayIts: "Scegli una lettera e pagane il prezzo: le vocali costano di più.",
+    hiddenPrompt: "Parola nascosta",
+  },
+  screenCapture: {
+    thisBrowserCouldNotEncode: "Questo browser non è riuscito a codificare lo screenshot.",
+    theCaptureWasEmpty: "La cattura era vuota.",
+    thisBrowserCouldNotRead: "Questo browser non è riuscito a leggere lo screenshot.",
+    thatScreenshotIsTooLarge: "Quello screenshot è troppo grande da inviare.",
+  },
+  accountRecovery: {
+    youCanRecoverThisAccount: (p: { address: string }) =>
+      `Puoi recuperare questo account tramite ${p.address}.`,
+    checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
+      `Cerca in ${p.pendingAddress} un link di conferma. Finché non lo segui, questo account non ha modo di essere recuperato.`,
+    thisServerCannotSendEmail: "Questo server non può inviare email, quindi una password persa deve essere reimpostata da chi lo gestisce.",
+    addAnEmailAddressSo: "Aggiungi un indirizzo email per poter rientrare se dimentichi la password.",
+  },
+  friends: {
+    aFriend: "Un amico",
+  },
+  lobbyPresence: {
+    showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
+      `${p.shown} su ${p.onlineCount} mostrati`,
+  },
+  authStore: {
+    chooseANameToPlay: "Scegli un nome con cui giocare.",
+  },
+  passkeys: {
+    noPasskeyWasCreated: "Non è stata creata nessuna passkey.",
+    noPasskeyWasUsed: "Non è stata usata nessuna passkey.",
+  },
+  useGameSocketListeners: {
+    nicknameJoinedTheRoom: (p: { nickname: string }) =>
+      `${p.nickname} è entrato nella stanza`,
+    gameStarted: "La partita è iniziata!",
+    drawerNicknameIsChoosingAPrompt: (p: { drawerNickname: string }) =>
+      `${p.drawerNickname} sta scegliendo una parola...`,
+    thePromptWasPrompt: (p: { prompt: string }) =>
+      `La parola era «${p.prompt}»`,
+    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
+      `${p.nickname} ha indovinato${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+  },
+  settingsStore: {
+    brushTool: "Pennello",
+    fillTool: "Riempimento",
+    eraserTool: "Gomma",
+    rectangleTool: "Rettangolo",
+    triangleTool: "Triangolo",
+    ellipseTool: "Ellisse",
+    decreaseBrushSize: "Pennello più piccolo",
+    increaseBrushSize: "Pennello più grande",
+    undoStroke: "Annulla tratto",
+  },
+  reactions: {
+    loveIt: "Adoro",
+    funny: "Divertente",
+    wow: "Wow",
+    fire: "Fuoco",
+    reaction: "Reazione",
+  },
+  drawingRules: {
+    brush: "Pennello",
+    theBrushAndTheEraser: "Il pennello e la gomma.",
+    fill: "Riempimento",
+    theFillTool: "Lo strumento di riempimento.",
+    shapes: "Forme",
+    rectangleEllipseAndTriangle: "Rettangolo, ellisse e triangolo.",
+    allColors: "Tutti i colori",
+    thePaletteAndTheCustom: "La tavolozza e il selettore di colore libero.",
+    paletteOnly: "Solo tavolozza",
+    theBuiltInSwatchesNo: "I campioni predefiniti; niente colori liberi.",
+    colorblindSafe: "Adatti al daltonismo",
+    colorsThatStayApartFor: "Colori che restano distinguibili per chi è daltonico.",
+    blackAndWhite: "Bianco e nero",
+    blackAndWhiteOnly: "Solo bianco e nero.",
+    allTools: "Tutti gli strumenti",
+  },
+  socket: {
+    sketchyIsFullRightNow: "Sketchy è pieno in questo momento. Riprova tra qualche minuto.",
+    connectionLostWhileTryingTo: (p: { action: string }) =>
+      `Connessione persa mentre si tentava di ${p.action}. Riprova.`,
+    theRequestToActionTimed: (p: { action: string }) =>
+      `La richiesta di ${p.action} è scaduta. Riprova.`,
+    couldNotActionPleaseTry: (p: { action: string }) =>
+      `Impossibile ${p.action}. Riprova.`,
+  },
+  bugReports: {
+    drawingAndCanvas: "Disegno e area di disegno",
+    guessingAndChat: "Risposte e chat",
+    roundsScoringAndResults: "Round, punteggio e risultati",
+    roomsAndLobby: "Stanze e lobby",
+    promptLists: "Liste di parole",
+    accountAndSettings: "Account e impostazioni",
+    connectionAndSync: "Connessione e sincronizzazione",
+    performance: "Prestazioni",
+    accessibility: "Accessibilità",
+    somethingElse: "Altro",
+    blocksPlayICouldNot: "Blocca il gioco — non potevo continuare",
+    majorHardToPlayAround: "Grave — difficile da aggirare",
+    minorWorthFixingOneDay: "Lieve — da sistemare prima o poi",
+    notInARoom: "Non in una stanza",
+    codeNotInARound: (p: { code: string }) =>
+      `${p.code} · fuori dal round`,
+    codeRoundRoundOfTotal: (p: { code: string; round: number; total: number }) =>
+      `${p.code} · round ${p.round} di ${p.total}`,
+  },
+  suspension: {
+    thisSuspensionHasNoEnd: "Questa sospensione non ha una data di fine.",
+    thisSuspensionHasEndedTry: "Questa sospensione è terminata; prova ad accedere di nuovo.",
+    thisSuspensionLastsUntilEnds: (p: { ends: string }) =>
+      `Questa sospensione dura fino al ${p.ends}.`,
+  },
+  clock: {
+    unknown: "Sconosciuto",
+  },
+  protocol: {
+    theServerWasUpdated: "Il server è stato aggiornato.",
+  },
+  passwordPolicy: {
+    tooShort: (p: { count: number }) =>
+      `Una password deve avere almeno ${p.count} caratteri.`,
+  },
+  operatorAccess: {
+    administrator: "amministratore",
+    moderator: "moderatore",
+    pendingTitle: "Il ruolo di moderatore ti aspetta",
+    pendingBody: "Un amministratore ti ha offerto il ruolo di moderatore. Diventa effettivo quando configuri l’autenticazione a due fattori: i moderatori accedono con il codice di un’app di autenticazione, e il ruolo parte non appena è attiva. Gli altri tuoi dispositivi verranno disconnessi in quel momento. Non cambia nulla finché non la configuri, e l’offerta ti aspetta nelle Impostazioni se ora non è il momento.",
+    grantedTitle: "Ora sei moderatore",
+    grantedBody: "Un amministratore ti ha dato il ruolo di moderatore. Nel menu del tuo account è comparsa la voce Moderazione: lì si esaminano le segnalazioni su giocatori e parole. Il tuo modo di giocare non cambia.",
+    removedTitle: "Non sei più moderatore",
+    removedBody: "Un amministratore ha rimosso il ruolo di moderatore dal tuo account. La voce Moderazione è sparita dal tuo menu. Nient’altro del tuo account o delle tue partite è interessato.",
+  },
+  moderationCategories: {
+    harassment: "molestie",
+    offensive_drawing: "un disegno offensivo",
+    inappropriate_name: "un nome inappropriato",
+    cheating: "imbrogli",
+    spam: "spam",
+    inappropriate_avatar: "un’immagine inappropriata",
   },
 };

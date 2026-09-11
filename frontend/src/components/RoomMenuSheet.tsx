@@ -80,7 +80,7 @@ export function RoomMenuSheet({
             onClick={run(onToggleAfk)}
           >
             <MoonIcon size={19} />
-            <span>{isAfk ? "I’m back" : "Go away for a bit"}</span>
+            <span>{isAfk ? ui.roomMenuSheet.iMBack : ui.roomMenuSheet.goAwayForABit}</span>
           </button>
         </li>
         {isPlaying && (

@@ -100,7 +100,7 @@ export function StepUpDialog({
             onClick={() => void proveWithPasskey()}
             disabled={busy}
           >
-            {busy ? "Waiting for your device…" : "Use your passkey"}
+            {busy ? ui.stepUpDialog.waitingForYourDevice : ui.stepUpDialog.useYourPasskey}
           </button>
         )}
         <form onSubmit={(event) => void submit(event)}>
@@ -143,11 +143,11 @@ export function StepUpDialog({
               setError(null);
             }}
           >
-            {useRecovery ? "Use your authenticator app" : "Use a recovery code"}
+            {useRecovery ? ui.stepUpDialog.useYourAuthenticatorApp : ui.stepUpDialog.useARecoveryCode}
           </button>
           <div className="step-up-actions">
             <button type="button" onClick={onCancel} disabled={busy}>{ui.stepUpDialog.cancel}</button>
-            <button type="submit" disabled={busy}>{busy ? "Checking…" : "Confirm"}</button>
+            <button type="submit" disabled={busy}>{busy ? ui.stepUpDialog.checking : ui.stepUpDialog.confirm}</button>
           </div>
         </form>
       </div>

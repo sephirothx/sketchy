@@ -2,6 +2,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { Chip } from "./ui/Chip";
 import { Timer } from "./Timer";
 import { useGameStore } from "../store/gameStore";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * The header's center slot during play: round chip + countdown ring. Its own
@@ -29,7 +30,7 @@ export function GameHeaderStatus() {
   return (
     <div className="game-header-status">
       <Chip kind="primary">
-        {isMobile ? `R${roundNumber}/${totalRounds}` : `Round ${roundNumber} of ${totalRounds}`}
+        {isMobile ? `R${roundNumber}/${totalRounds}` : ui.gameHeaderStatus.roundRoundNumberOfTotalRounds({ roundNumber, totalRounds })}
       </Chip>
       {phase !== "turn_results" && (
         <Timer

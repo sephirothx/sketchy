@@ -130,21 +130,21 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
 
   const rows: [string, string][] = context
     ? [
-      ["Summary", prefill.summary],
-      ["Build", `${context.buildSha} · ${String(context.commitDate)}`],
-      ["Page", context.route],
-      ["Room", roomSummary(roomCode, room?.roundNumber, room?.totalRounds)],
-      ["Screen", `${window.innerWidth} × ${window.innerHeight} · ${window.devicePixelRatio}×`],
-      ["Browser", navigator.userAgent],
+      [ui.crashPage.summary, prefill.summary],
+      [ui.crashPage.build, `${context.buildSha} · ${String(context.commitDate)}`],
+      [ui.crashPage.page, context.route],
+      [ui.crashPage.room, roomSummary(roomCode, room?.roundNumber, room?.totalRounds)],
+      [ui.crashPage.screen, `${window.innerWidth} × ${window.innerHeight} · ${window.devicePixelRatio}×`],
+      [ui.crashPage.browser, navigator.userAgent],
       [
-        "Connection",
+        ui.crashPage.connection,
         (() => {
           const connection = context.connection as { connected: boolean; reconnects: number };
-          return `${connection.connected ? "connected" : "offline"} · ${connection.reconnects} reconnect${connection.reconnects === 1 ? "" : "s"} this visit`;
+          return ui.bugReportDialog.connectionSummary(connection);
         })(),
       ],
     ]
-    : [["Summary", prefill.summary]];
+    : [[ui.crashPage.summary, prefill.summary]];
   // Newest first here, unlike the dialog: the crash is the entry to read.
   const errors = [...(context?.recentErrors ?? [])].reverse();
 
@@ -190,8 +190,8 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
         <h1>{ui.crashPage.bugCrawledOntoPage}</h1>
         <p>
           {scope === "room"
-            ? "This room’s screen hit an error and had to stop. Your seat is held for a moment: send the report below, then reload to pick it back up or go back to the lobby."
-            : "This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you’ll be on your way."}
+            ? ui.crashPage.thisRoomSScreenHit
+            : ui.crashPage.thisScreenHitAnError}
         </p>
         <form className="auth-form crash-report" aria-labelledby={reportTitleId} onSubmit={(event) => void submit(event)}>
           <h2 id={reportTitleId}>{ui.crashPage.helpUsSquash}</h2>
@@ -214,7 +214,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
           />
 
           <details className="bug-report-context">
-            <summary>{descriptionOnly ? "What we are leaving out" : "What we send with this"}</summary>
+            <summary>{descriptionOnly ? ui.crashPage.whatWeAreLeavingOut : ui.crashPage.whatWeSendWithThis}</summary>
             <dl className="bug-context">
               {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
             </dl>
@@ -230,8 +230,8 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
             )}
             <p className="auth-hint">
               {descriptionOnly
-                ? "None of this is being sent — only your description above."
-                : "The crash, the last 20 errors your browser recorded, and where in the page it happened. No page addresses beyond the path, nothing you typed into chat, and never the prompt in play."}
+                ? ui.crashPage.noneOfThisIsBeing
+                : ui.crashPage.theCrashTheLast20}
             </p>
           </details>
 
@@ -252,7 +252,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
             <p className="crash-sent" role="status">{ui.crashPage.thanksYourReportWithPeopleWho}</p>
           ) : (
             <button type="submit" className="modal-button" disabled={busy || nothingToSend}>
-              {busy ? (failure ? "Sending again…" : "Sending…") : (failure ? "Try sending again" : "Send report")}
+              {busy ? (failure ? ui.crashPage.sendingAgain : ui.crashPage.sending) : (failure ? ui.crashPage.trySendingAgain : ui.crashPage.sendReport)}
             </button>
           )}
         </form>

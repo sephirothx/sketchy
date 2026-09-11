@@ -92,10 +92,10 @@ export function AddEmailDialog({
       >
         <h3 id={titleId} className="modal-title">
           {sentTo
-            ? "Check your inbox"
+            ? ui.addEmailDialog.checkYourInbox
             : replacing
-              ? "Change your email address"
-              : "Add an email address"}
+              ? ui.addEmailDialog.changeYourEmailAddress
+              : ui.addEmailDialog.addAnEmailAddress}
         </h3>
 
         {sentTo ? (
@@ -119,7 +119,7 @@ export function AddEmailDialog({
             </p>
             <form onSubmit={submit} className="auth-form">
               <label htmlFor={`${titleId}-email`}>
-                {replacing ? "New email" : "Email"}
+                {replacing ? ui.addEmailDialog.newEmail : ui.addEmailDialog.email}
               </label>
               <input
                 id={`${titleId}-email`}
@@ -143,14 +143,14 @@ export function AddEmailDialog({
                 </p>
               )}
               <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? "Please wait…" : "Send confirmation"}
+                {busy ? ui.addEmailDialog.pleaseWait : ui.addEmailDialog.sendConfirmation}
               </button>
             </form>
           </>
         )}
 
         <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sentTo ? "Close" : "Not now"}
+          {sentTo ? ui.addEmailDialog.close : ui.addEmailDialog.notNow}
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { playTimerTickSound } from "../lib/sound";
 import { TimerRing } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 interface TimerProps {
   totalSeconds: number;
@@ -38,9 +39,9 @@ export function Timer({ totalSeconds, startedAt, durationSeconds, variant = "rin
             playTimerTickSound();
           }
           if (prevRemainingRef.current > 10 && nextVal <= 10 && nextVal > 0) {
-            setAnnouncement("10 seconds remaining");
+            setAnnouncement(ui.timer.n10SecondsRemaining);
           } else if (prevRemainingRef.current > 0 && nextVal === 0) {
-            setAnnouncement("Time is up");
+            setAnnouncement(ui.timer.timeIsUp);
           }
         }
         prevRemainingRef.current = nextVal;

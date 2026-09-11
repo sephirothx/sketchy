@@ -44,9 +44,9 @@ export function ReportAccountDialog({
   const reasonRef = useRef<HTMLSelectElement | null>(null);
   const titleId = useId();
   const reasons: { value: ReportReason; label: string }[] = [
-    { value: "inappropriate_name", label: "Inappropriate name" },
+    { value: "inappropriate_name", label: ui.reportAccountDialog.inappropriateName },
     ...(avatarUrl
-      ? [{ value: "inappropriate_avatar" as ReportReason, label: "Inappropriate picture" }]
+      ? [{ value: "inappropriate_avatar" as ReportReason, label: ui.reportAccountDialog.inappropriatePicture }]
       : []),
   ];
   const [reason, setReason] = useState<ReportReason>(reasons[0].value);
@@ -101,7 +101,7 @@ export function ReportAccountDialog({
         data-testid="report-account-dialog"
       >
         <h3 id={titleId} className="modal-title">
-          {sent ? "Report sent" : `Report ${displayName}`}
+          {sent ? ui.reportAccountDialog.reportSent : ui.reportAccountDialog.reportDisplayName({ displayName })}
         </h3>
 
         {!sent ? (
@@ -162,8 +162,8 @@ export function ReportAccountDialog({
               />
               <p className="auth-hint">
                 {reason === "inappropriate_avatar"
-                  ? "The picture on the account is attached as it stands now."
-                  : "The name on the account is attached as it stands now."}
+                  ? ui.reportAccountDialog.thePictureOnTheAccount
+                  : ui.reportAccountDialog.theNameOnTheAccount}
               </p>
 
               {error && (
@@ -172,7 +172,7 @@ export function ReportAccountDialog({
                 </p>
               )}
               <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? "Sending…" : "Send report"}
+                {busy ? ui.reportAccountDialog.sending : ui.reportAccountDialog.sendReport}
               </button>
             </form>
           </>
@@ -188,7 +188,7 @@ export function ReportAccountDialog({
         )}
 
         <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent ? "Close" : "Cancel"}
+          {sent ? ui.reportAccountDialog.close : ui.reportAccountDialog.cancel}
         </button>
       </div>
     </div>,

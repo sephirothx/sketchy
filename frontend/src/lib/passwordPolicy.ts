@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 /**
  * The password floor, kept in one place on this side of the wire.
  *
@@ -10,4 +11,8 @@
  */
 export const MIN_PASSWORD_LENGTH = 12;
 
-export const PASSWORD_TOO_SHORT = `A password needs at least ${MIN_PASSWORD_LENGTH} characters.`;
+/** What the form says when it refuses a password under the floor - a function,
+so it is read in the language in force when it is shown rather than at import. */
+export function passwordTooShort(): string {
+  return ui.passwordPolicy.tooShort({ count: MIN_PASSWORD_LENGTH });
+}

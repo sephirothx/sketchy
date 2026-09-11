@@ -45,8 +45,8 @@ export function GuessPips({ onOpenPlayers }: GuessPipsProps) {
   });
   const got = ordered.filter((player) => placeOf[player.playerId] != null).length;
 
-  const summary = `${got} of ${guessers.length} guessed`;
-  const label = onOpenPlayers ? `${summary}. Open players and scores.` : summary;
+  const summary = ui.guessPips.gotOfGuessersCountGuessed({ got, guessersCount: guessers.length });
+  const label = onOpenPlayers ? ui.guessPips.summaryOpenPlayersAndScores({ summary }) : summary;
 
   const content = (
     <>

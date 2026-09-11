@@ -191,7 +191,7 @@ export function MyPromptListsPage() {
       ));
       setDraft(draftFromList(saved));
       setLists((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-      setNotice("Prompt list saved.");
+      setNotice(ui.myPromptListsPage.promptListSaved);
     } catch (saveError) {
       setError(
         refusalText(saveError, ui.myPromptListsPage.couldNotSaveThisPromptList),
@@ -203,14 +203,14 @@ export function MyPromptListsPage() {
 
   async function remove() {
     if (!selectedId || busy) return;
-    if (!window.confirm("Delete this prompt list and all of its revisions?")) return;
+    if (!window.confirm(ui.myPromptListsPage.deleteThisPromptListAnd)) return;
     setBusy(true);
     setError(null);
     try {
       await deleteOwnedPromptList(selectedId);
       setLists((current) => current.filter((item) => item.id !== selectedId));
       beginNew();
-      setNotice("Prompt list deleted.");
+      setNotice(ui.myPromptListsPage.promptListDeleted);
     } catch {
       setError(ui.myPromptListsPage.couldNotDeleteThisPromptList);
     } finally {
@@ -219,7 +219,7 @@ export function MyPromptListsPage() {
   }
 
   return <main className="prompt-list-manager-page">
-    <AppHeader backLabel="Back to lobby" />
+    <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
         <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
@@ -285,7 +285,7 @@ export function MyPromptListsPage() {
               />
               <div className="prompt-list-bulk-actions">
                 <p id="prompt-bulk-summary" className="prompt-list-bulk-summary" aria-live="polite">
-                  {mergeSummary ?? `${draft.prompts.length} of ${MAX_LIST_PROMPTS} prompts in this list`}
+                  {mergeSummary ?? ui.myPromptListsPage.promptsCountOfMaxListPrompts({ promptsCount: draft.prompts.length, MAX_LIST_PROMPTS })}
                 </p>
                 <button
                   type="button"
@@ -355,7 +355,7 @@ export function MyPromptListsPage() {
             {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
             <div className="prompt-list-manager-actions">
               {selectedId && <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
-              <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save list"}</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
             </div>
           </form>
         </div>

@@ -89,10 +89,10 @@ import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 /* ------------------------------------------------------------- vocabulary */
 
 const SECTION_LABELS: Record<SettingsSection, string> = {
-  account: "Account",
-  appearance: "Appearance",
-  sound: "Sound & effects",
-  shortcuts: "Shortcuts",
+  get account() { return ui.settingsOverlay.account; },
+  get appearance() { return ui.settingsOverlay.appearance; },
+  get sound() { return ui.settingsOverlay.soundEffects2; },
+  get shortcuts() { return ui.settingsOverlay.shortcuts; },
 };
 
 const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
@@ -104,19 +104,19 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
 
 /** The palette, with a name a screen reader can say instead of a hex. */
 const NAME_COLOR_NAMES: Record<(typeof NAME_COLOR_PALETTE)[number], string> = {
-  "#e11d48": "Red",
-  "#f97316": "Orange",
-  "#eab308": "Yellow",
-  "#84cc16": "Lime",
-  "#16a34a": "Green",
-  "#0d9488": "Teal",
-  "#38bdf8": "Sky",
-  "#2563eb": "Blue",
-  "#6366f1": "Indigo",
-  "#a855f7": "Purple",
-  "#d946ef": "Magenta",
-  "#f472b6": "Pink",
-  "#a0522d": "Brown",
+  get "#e11d48"() { return ui.settingsOverlay.red; },
+  get "#f97316"() { return ui.settingsOverlay.orange; },
+  get "#eab308"() { return ui.settingsOverlay.yellow; },
+  get "#84cc16"() { return ui.settingsOverlay.lime; },
+  get "#16a34a"() { return ui.settingsOverlay.green; },
+  get "#0d9488"() { return ui.settingsOverlay.teal; },
+  get "#38bdf8"() { return ui.settingsOverlay.sky; },
+  get "#2563eb"() { return ui.settingsOverlay.blue; },
+  get "#6366f1"() { return ui.settingsOverlay.indigo; },
+  get "#a855f7"() { return ui.settingsOverlay.purple; },
+  get "#d946ef"() { return ui.settingsOverlay.magenta; },
+  get "#f472b6"() { return ui.settingsOverlay.pink; },
+  get "#a0522d"() { return ui.settingsOverlay.brown; },
 };
 
 const ACTION_ICONS: Record<keyof KeyBindings, ReactNode> = {
@@ -132,24 +132,24 @@ const ACTION_ICONS: Record<keyof KeyBindings, ReactNode> = {
 };
 
 const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
+  { value: "light", get label() { return ui.settingsOverlay.light; } },
+  { value: "dark", get label() { return ui.settingsOverlay.dark; } },
+  { value: "system", get label() { return ui.settingsOverlay.system; } },
 ];
 
 const TIME_FORMAT_OPTIONS: { value: TimeFormat; label: string }[] = [
-  { value: "system", label: "System" },
+  { value: "system", get label() { return ui.settingsOverlay.system; } },
   { value: "12h", label: "12-hour" },
   { value: "24h", label: "24-hour" },
 ];
 
 const BRUSH_CURSOR_OPTIONS: { value: BrushCursorStyle; label: string }[] = [
-  { value: "crosshair", label: "Crosshair" },
-  { value: "circle", label: "Outline" },
+  { value: "crosshair", get label() { return ui.settingsOverlay.crosshair; } },
+  { value: "circle", get label() { return ui.settingsOverlay.outline; } },
 ];
 
 function formatKey(key: string): string {
-  if (key === " ") return "Space";
+  if (key === " ") return ui.settingsOverlay.space;
   if (key.length === 1) return key.toUpperCase();
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
@@ -289,15 +289,15 @@ function EmailAddressStatus({
         type="button"
         className="settings-email-reveal"
         aria-pressed={revealed}
-        aria-label={revealed ? "Hide the full address" : "Show the full address"}
-        title={revealed ? "Hide" : "Show in full"}
+        aria-label={revealed ? ui.settingsOverlay.hideTheFullAddress : ui.settingsOverlay.showTheFullAddress}
+        title={revealed ? ui.settingsOverlay.hide : ui.settingsOverlay.showInFull}
         onClick={() => setRevealed((shown) => !shown)}
       >
         {revealed ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
       </button>
       <span className={`settings-email-status ${verified ? "is-verified" : "is-unverified"}`}>
         {verified ? <CheckIcon size={12} /> : <ClockIcon size={12} />}
-        {verified ? "Verified" : "Not verified"}
+        {verified ? ui.settingsOverlay.verified : ui.settingsOverlay.notVerified}
       </span>
     </span>
   );
@@ -672,7 +672,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                     disabled={nameBusy || draftName.trim() === (user?.displayName ?? "")}
                     onClick={() => void saveDisplayName()}
                   >
-                    {nameBusy ? "Saving…" : "Save"}
+                    {nameBusy ? ui.settingsOverlay.saving : ui.settingsOverlay.save}
                   </button>
                   <button
                     type="button"
@@ -746,11 +746,11 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           locked={isGuest}
           hint={
             isGuest ? (
-              "A guest has nothing to recover: there is no password to forget."
+              ui.settingsOverlay.aGuestHasNothingTo
             ) : shownAddress ? (
               <EmailAddressStatus address={shownAddress} verified={shownVerified} />
             ) : (
-              "Without one there is no way back into this account if the password is forgotten."
+              ui.settingsOverlay.withoutOneThereIsNo
             )
           }
         >
@@ -763,7 +763,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               onClick={() => setEmailOpen(true)}
             >
               <MailIcon size={15} />
-              {shownAddress ? "Change" : "Add an email"}
+              {shownAddress ? ui.settingsOverlay.change : ui.settingsOverlay.addAnEmail}
             </button>
           )}
         </Row>
@@ -771,7 +771,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           label={ui.settingsOverlay.password}
           locked={isGuest}
           hint={
-            isGuest ? "Guests have no password." : "Changing it signs every other device out."
+            isGuest ? ui.settingsOverlay.guestsHaveNoPassword : ui.settingsOverlay.changingItSignsEveryOther
           }
         >
           {isGuest ? (
@@ -798,8 +798,8 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             label={ui.settingsOverlay.twoFactorAuthentication}
             hint={
               pendingRole
-                ? `Set this up and the ${roleName(pendingRole)} role you have been offered takes effect.`
-                : "An authenticator app's code, on top of your password. Moderators and administrators must have one."
+                ? ui.settingsOverlay.setThisUpAndThe({ pendingRole: roleName(pendingRole) })
+                : ui.settingsOverlay.anAuthenticatorAppSCode
             }
           >
             <button
@@ -809,8 +809,8 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             >
               <ShieldIcon size={15} />
               {twoFactorState && (twoFactorState.enrolled || twoFactorState.passkeys > 0)
-                ? "Manage"
-                : "Set up"}
+                ? ui.settingsOverlay.manage
+                : ui.settingsOverlay.setUp}
             </button>
           </Row>
         )}
@@ -819,8 +819,8 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           locked={isGuest}
           hint={
             isGuest
-              ? "This browser is the only place you exist."
-              : "Every browser still holding a session, and a way to end any of them."
+              ? ui.settingsOverlay.thisBrowserIsTheOnly
+              : ui.settingsOverlay.everyBrowserStillHoldingA
           }
         >
           {isGuest ? (
@@ -843,8 +843,8 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           label={ui.settingsOverlay.downloadEverything}
           hint={
             isGuest
-              ? "Works for a guest too: the games you have played are yours."
-              : "Every game, list and setting Sketchy holds about you, as one JSON file."
+              ? ui.settingsOverlay.worksForAGuestToo
+              : ui.settingsOverlay.everyGameListAndSetting
           }
         >
           <button
@@ -857,12 +857,12 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           </button>
         </Row>
         <Row
-          label={isGuest ? "Delete this guest" : "Delete your account"}
+          label={isGuest ? ui.settingsOverlay.deleteThisGuest : ui.settingsOverlay.deleteYourAccount}
           tone="danger"
           hint={
             isGuest
-              ? "Removes the name, the points and the history kept against this browser."
-              : "Games you played stay in other players’ histories, without your name on them."
+              ? ui.settingsOverlay.removesTheNameThePoints
+              : ui.settingsOverlay.gamesYouPlayedStayIn
           }
         >
           <button
@@ -1201,9 +1201,9 @@ function ShortcutsPane() {
                   type="button"
                   className={`kbd-badge${secondary ? " secondary" : ""}${active ? " rebinding" : ""}`}
                   onClick={() => setRebinding({ action, slotIndex })}
-                  title={secondary ? "Click to rebind the second key" : "Click to rebind"}
+                  title={secondary ? ui.settingsOverlay.clickToRebindTheSecond : ui.settingsOverlay.clickToRebind}
                 >
-                  {active ? "Press key…" : key ? formatKey(key) : secondary ? "+ key" : "None"}
+                  {active ? ui.settingsOverlay.pressKey : key ? formatKey(key) : secondary ? ui.settingsOverlay.key : ui.settingsOverlay.none}
                 </button>
               );
             };
