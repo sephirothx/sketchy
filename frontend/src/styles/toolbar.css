@@ -10,31 +10,40 @@
   box-shadow: var(--shadow-raised);
 }
 
+/* Lines are chosen, never wrapped into: useToolbarLayout picks the first
+   arrangement in lib/toolbarLayout.ts that fits whole, and the toolbar breaks
+   only where that puts a .toolbar-break. Wrap stays on because a break is a
+   full-width item; there is no row gap because the break is the space between
+   two lines, and a gap would land on either side of it. */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 0;
   flex-wrap: wrap;
   justify-content: center;
 }
 
+/* Never squeezed: the layout is chosen from these groups at their natural
+   width, so that is the width they have to keep. */
 .toolbar-group {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 5px;
 }
 
 .toolbar-divider {
+  flex: 0 0 auto;
   width: 1.5px;
   height: 32px;
   background: var(--line);
   margin: 0 1px;
 }
 
-@media (max-width: 768px) {
-  .toolbar-divider {
-    display: none;
-  }
+.toolbar-break {
+  flex-basis: 100%;
+  height: 10px;
 }
 
 .toolbar-tools {
@@ -288,22 +297,41 @@
   box-shadow: var(--shadow);
   cursor: pointer;
   transition: all 0.15s ease;
+  /* The layout is measured with each name on one line; "Ongedaan maken"
+     broken over two would be a button taller than the rest of its row. */
+  white-space: nowrap;
 }
 
 .toolbar-action-button:hover {
   border-color: var(--faint);
 }
 
+/* Undo's twin, in the danger colour: the two sit together under the canvas,
+   and a ghost button beside a bordered one read as one control and a label
+   rather than as two. What marks this one as the destructive half is the red
+   of its icon and name, not the absence of an edge. */
 .toolbar-action-button.clear-button {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
   color: var(--danger);
 }
 
 .toolbar-action-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Undo and Clear as icons alone. The name is still laid out - out of flow,
+   so it takes no room, and invisible - because its width is how the toolbar
+   knows when the named buttons fit again. The button's aria-label carries
+   the name, so a screen reader loses nothing; the tooltip carries it too. */
+.toolbar[data-layout="split-icons"] .toolbar-action-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.toolbar[data-layout="split-icons"] .toolbar-action-label {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Mobile compact drawing strip (#167) */
@@ -321,6 +349,34 @@
   gap: 8px;
   flex-wrap: nowrap;
   width: 100%;
+}
+
+/* The same strip standing in for the full toolbar in a desktop column too
+   narrow for its palette (lib/toolbarLayout.ts). A phone's dock turns it into
+   a band at the foot of the screen; here it stays a card under the canvas,
+   and a tight one - with a classic scrollbar a 901px window leaves the
+   column 278px. */
+.toolbar-compact {
+  padding: 6px;
+}
+
+.toolbar-compact .toolbar-mobile-strip {
+  gap: 4px;
+  justify-content: space-between;
+}
+
+/* 256px for the five chips, so they fit that column with room to spare: the
+   two pickers give up a little padding, and the separator goes, as it does
+   on the landscape rail - spread across the card, the canvas actions stand
+   apart from the pickers already. */
+.toolbar-compact .toolbar-mobile-tool-chip,
+.toolbar-compact .toolbar-mobile-color-chip {
+  min-width: 44px;
+  padding-inline: 6px;
+}
+
+.toolbar-compact .toolbar-mobile-sep {
+  display: none;
 }
 
 .toolbar-mobile-chip {
