@@ -102,9 +102,14 @@ export function shapeOutlinePoints(
     }
     return points;
   }
+  // Both ends of the drag are corners (#787): it runs from one base corner to
+  // the apex, and the base - on the start's row - is as long on the far side of
+  // the apex as on the near one. Dragging downwards draws the triangle upside
+  // down. The mirrored corner can fall outside the canvas, which the
+  // rasterizers clip; the wire carries only the drag's own two points.
   return [
-    { x: x + width / 2, y },
-    { x, y: y + height },
-    { x: x + width, y: y + height },
+    a,
+    b,
+    { x: 2 * b.x - a.x, y: a.y },
   ];
 }
