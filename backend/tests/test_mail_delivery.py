@@ -33,7 +33,8 @@ from app.auth.mail import (
     queue_email,
 )
 from app.db.models import Base, EmailOutboxEntry, User, UserSettings, generate_uuid
-from app.domain_values import AccountState, EmailOutboxState, INTERFACE_LOCALES
+from app.auth.mail_copy import copy_for
+from app.domain_values import AccountState, EmailOutboxState, INTERFACE_LOCALES, ReportReason
 
 
 class TrackingFactory:
@@ -827,3 +828,28 @@ async def test_an_account_with_no_settings_is_written_to_in_english(tmp_path):
             assert await recipient_locale(session, None) == "en"
     finally:
         await engine.dispose()
+
+
+def test_a_suspension_names_its_category_in_the_reader_s_language():
+    """`offensive_drawing` is a slug, not a phrase, and not one in any language.
+
+    The mail used to hand it over with its underscore swapped for a space, so a
+    German reader was told it was recorded as "offensive drawing". `spam` hid
+    that by being the same word in several of these languages, so this renders
+    the most English slug there is in every one of them (R-I18N-02).
+    """
+    for locale in INTERFACE_LOCALES:
+        words = copy_for(locale)
+        assert set(words.categories) == {reason.value for reason in ReportReason}, (
+            f"{locale} names a different set of categories from the one moderators record"
+        )
+        for slug in ("offensive_drawing", "inappropriate_avatar"):
+            _, body = render(
+                EmailTemplate.ACCOUNT_BANNED.value,
+                {"displayName": "Ada", "reason": "Enough.", "category": slug},
+                "https://example.test",
+                locale,
+            )
+            assert words.categories[slug] in body, f"{locale} dropped the {slug} phrase"
+            if locale != "en":
+                assert slug.replace("_", " ") not in body, f"{locale} still says the slug"

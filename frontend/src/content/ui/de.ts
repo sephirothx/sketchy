@@ -2290,4 +2290,11 @@ export const DE: Catalogue = {
     spam: "Spam",
     inappropriate_avatar: "ein unangemessenes Bild",
   },
+  roomNotices: {
+    kickedByVote: "Du wurdest per Abstimmung aus dem Raum geworfen.",
+    roomClosed: "Ein Administrator hat diesen Raum geschlossen.",
+    removedByAdmin: "Ein Administrator hat dich entfernt.",
+    accountDeleted: "Dein Konto wurde gelöscht.",
+    accountSuspended: "Dein Konto wurde gesperrt.",
+  },
 };

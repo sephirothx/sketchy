@@ -306,7 +306,7 @@ def create_admin_controls_router(
                 player.id,
                 notice=(
                     "kicked",
-                    {"reason": "An administrator closed this room."},
+                    {"code": "room_closed", "reason": "An administrator closed this room."},
                 ),
             )
         # Evicting the last player usually takes the room with them; this
@@ -331,7 +331,10 @@ def create_admin_controls_router(
         await context.evict_player(
             room,
             player_id,
-            notice=("kicked", {"reason": "An administrator removed you."}),
+            notice=(
+                "kicked",
+                {"code": "removed_by_admin", "reason": "An administrator removed you."},
+            ),
         )
         return {"kicked": player_id}
 

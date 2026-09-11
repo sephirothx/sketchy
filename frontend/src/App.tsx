@@ -225,7 +225,11 @@ function App() {
   // lookup still connects, so play degrades rather than stopping.
   useEffect(() => {
     let cancelled = false;
-    void fetchMe().finally(() => {
+    // main.tsx asked before the first paint, so this is usually answered
+    // already and asking again would read the account twice. Still in the
+    // air past the paint's bound, `fetchMe` hands back that same request.
+    const lookup = useAuthStore.getState().hasResolved ? Promise.resolve() : fetchMe();
+    void lookup.finally(() => {
       if (!cancelled) socket.connect();
     });
     return () => {

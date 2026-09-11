@@ -2290,4 +2290,11 @@ export const NL: Catalogue = {
     spam: "spam",
     inappropriate_avatar: "een ongepaste afbeelding",
   },
+  roomNotices: {
+    kickedByVote: "Je bent per stemming uit de kamer gezet.",
+    roomClosed: "Een beheerder heeft deze kamer gesloten.",
+    removedByAdmin: "Een beheerder heeft je verwijderd.",
+    accountDeleted: "Je account is verwijderd.",
+    accountSuspended: "Je account is geschorst.",
+  },
 };

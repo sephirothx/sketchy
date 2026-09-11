@@ -249,7 +249,7 @@ it is sent every few seconds by every seat and carries no refusal a player could
 | --- | --- | --- |
 | `ok` | `boolean` | Whether the command was accepted |
 | `errorCode` | `ErrorCode?` | **On every refusal.** Why, as one of the enumerated codes below. The only field a program reads |
-| `error` | `string?` | English prose for a **log**, a bug report, and an operator reading a response by hand. **Never rendered**: the client writes the player's sentence from `errorCode`, in the reader's language (R-I18N-01), and `test_rest_refusals.py` fails on any screen that prints this instead |
+| `error` | `string?` | English prose for a **log**, a bug report, and an operator reading a response by hand. **Never rendered**: the client writes the player's sentence from `errorCode`, in the reader's language (R-I18N-01), and [`frontend/tests/serverProse.test.mjs`](../frontend/tests/serverProse.test.mjs) fails on any screen that prints this instead |
 | `field` | `string?` | The payload field that failed validation, for form binding |
 | `params` | `object?` | The values that sentence needs - a count, a limit, a reason slug. **Values, never fragments**: a server-built noun phrase dropped into a client sentence breaks in the first language that inflects (R-I18N-02). Defined for both transports; today only HTTP refusals send one |
 | `retryAfterMs` | `number?` | When the server knows trying again could work — a command budget's window, a restart-vote cooldown |
@@ -740,10 +740,10 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
 | `canvas_stale` | `[generation, sequence, reason, retryAfterMs]` — this socket's canvas needs recovering: `stale_generation`, `refused_tool`, `unknown_sequence`, `invalid_frame`, `dropped_frame` (a frame of this socket's was throttled at the door and the open path was closed where the server's copy ends, §6), or `deferred` (a snapshot the server would have pushed is held until the resync window opens). At most one per socket per window; the client answers through its sync transaction (§7) | one socket |
 | `afk_check` | `{seconds}` — this seat has sent nothing a person sent for the inactivity window, and is being asked whether anybody is there. Answered with `toggle_afk {afk: false}`, which is what the client sends by itself when it has seen a pointer or a key inside `afkInputWindowMs`, and otherwise what the **AFK check** dialog sends. Unanswered for `seconds`, the seat is marked AFK. Never sent to a spectator, a seat already AFK, or an unseated socket | one socket |
-| `voted_afk` | `{message}` | the player who was voted AFK |
-| `kicked` | `{reason}` | one socket |
+| `voted_afk` | `{message}` — English, for a log; the client says it from the event itself (R-I18N-01) | the player who was voted AFK |
+| `kicked` | `{code, reason}` — `code` is `kicked_by_vote`, `room_closed` or `removed_by_admin`, and is what the client says; `reason` is English, for a log (R-I18N-01) | one socket |
 | `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
-| `session_superseded` | `{reason}` — then the socket is disconnected | the superseded socket |
+| `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted` or `account_suspended`, said by the client from the code; `reason` is English, for a log — then the socket is disconnected | the superseded socket |
 | `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |

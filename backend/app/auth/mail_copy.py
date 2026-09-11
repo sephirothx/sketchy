@@ -24,6 +24,7 @@ can misread beats one that is charming in English and wrong everywhere else.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -68,6 +69,12 @@ class MailCopy:
     hidden_prompt: str
     hidden_prompt_list: str
 
+    # A moderation category - `offensive_drawing` - as a phrase that fits the
+    # suspension's "recorded as …" clause. The slug with its underscores
+    # swapped for spaces is English in every language, and `spam` hid that by
+    # being the same word in several of them (R-I18N-02).
+    categories: Mapping[str, str]
+
 
 EN = MailCopy(
     greeting="Hi {name},",
@@ -105,6 +112,14 @@ EN = MailCopy(
     hidden_default_what="some content you shared",
     hidden_prompt="A prompt you shared",
     hidden_prompt_list="A prompt list you shared",
+    categories={
+        "harassment": "harassment",
+        "offensive_drawing": "an offensive drawing",
+        "inappropriate_name": "an inappropriate name",
+        "cheating": "cheating",
+        "spam": "spam",
+        "inappropriate_avatar": "an inappropriate picture",
+    },
 )
 
 DE = MailCopy(
@@ -144,6 +159,14 @@ DE = MailCopy(
     hidden_default_what="Ein von dir geteilter Inhalt",
     hidden_prompt="Ein von dir geteilter Begriff",
     hidden_prompt_list="Eine von dir geteilte Begriffsliste",
+    categories={
+        "harassment": "Belästigung",
+        "offensive_drawing": "eine anstößige Zeichnung",
+        "inappropriate_name": "ein unangemessener Name",
+        "cheating": "Schummeln",
+        "spam": "Spam",
+        "inappropriate_avatar": "ein unangemessenes Bild",
+    },
 )
 
 ES = MailCopy(
@@ -182,6 +205,14 @@ ES = MailCopy(
     hidden_default_what="Algo que compartiste",
     hidden_prompt="Una palabra que compartiste",
     hidden_prompt_list="Una lista de palabras que compartiste",
+    categories={
+        "harassment": "acoso",
+        "offensive_drawing": "un dibujo ofensivo",
+        "inappropriate_name": "un nombre inapropiado",
+        "cheating": "trampas",
+        "spam": "spam",
+        "inappropriate_avatar": "una imagen inapropiada",
+    },
 )
 
 FR = MailCopy(
@@ -221,6 +252,14 @@ FR = MailCopy(
     hidden_default_what="Un contenu que tu as partagé",
     hidden_prompt="Un mot que tu as partagé",
     hidden_prompt_list="Une liste de mots que tu as partagée",
+    categories={
+        "harassment": "harcèlement",
+        "offensive_drawing": "un dessin choquant",
+        "inappropriate_name": "un nom inapproprié",
+        "cheating": "triche",
+        "spam": "spam",
+        "inappropriate_avatar": "une photo inappropriée",
+    },
 )
 
 IT = MailCopy(
@@ -260,6 +299,14 @@ IT = MailCopy(
     hidden_default_what="Un contenuto che hai condiviso",
     hidden_prompt="Una parola che hai condiviso",
     hidden_prompt_list="Una lista di parole che hai condiviso",
+    categories={
+        "harassment": "molestie",
+        "offensive_drawing": "un disegno offensivo",
+        "inappropriate_name": "un nome inappropriato",
+        "cheating": "imbrogli",
+        "spam": "spam",
+        "inappropriate_avatar": "un’immagine inappropriata",
+    },
 )
 
 NL = MailCopy(
@@ -299,6 +346,14 @@ NL = MailCopy(
     hidden_default_what="Iets dat je gedeeld hebt",
     hidden_prompt="Een woord dat je gedeeld hebt",
     hidden_prompt_list="Een woordenlijst die je gedeeld hebt",
+    categories={
+        "harassment": "intimidatie",
+        "offensive_drawing": "een aanstootgevende tekening",
+        "inappropriate_name": "een ongepaste naam",
+        "cheating": "valsspelen",
+        "spam": "spam",
+        "inappropriate_avatar": "een ongepaste afbeelding",
+    },
 )
 
 PT = MailCopy(
@@ -337,6 +392,14 @@ PT = MailCopy(
     hidden_default_what="Algo que partilhaste",
     hidden_prompt="Uma palavra que partilhaste",
     hidden_prompt_list="Uma lista de palavras que partilhaste",
+    categories={
+        "harassment": "assédio",
+        "offensive_drawing": "um desenho ofensivo",
+        "inappropriate_name": "um nome impróprio",
+        "cheating": "batota",
+        "spam": "spam",
+        "inappropriate_avatar": "uma imagem imprópria",
+    },
 )
 
 COPY: dict[str, MailCopy] = {

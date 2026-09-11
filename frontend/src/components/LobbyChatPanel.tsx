@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { chatTimeLabel, reportableLine, type LobbyChatLine } from "../lib/lobbyChat";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
-import { needsIdentity, useAuthStore } from "../store/authStore";
+import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { useLobbyChatStore } from "../store/lobbyChatStore";
 import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
@@ -19,9 +19,10 @@ const CLOCK_TICK_MS = 30_000;
 const MAX_LINE_LENGTH = 500;
 
 function identityMessage(error: unknown): string {
-  return error instanceof Error && error.message
-    ? error.message
-    : ui.lobbyChatPanel.couldNotSaveThatName;
+  // Only the name check's own words are ours to show; an ApiError's message
+  // is the server's English, for a log (R-I18N-01).
+  if (error instanceof IdentityRequiredError) return error.message;
+  return refusalText(error, ui.lobbyChatPanel.couldNotSaveThatName);
 }
 
 /** The lobby's chat: the recent lines, and a way to add one.

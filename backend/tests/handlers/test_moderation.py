@@ -101,6 +101,8 @@ async def test_vote_kick_and_vote_afk_socket_handlers():
     # Emitted kicked event to P2
     kicked_calls = [call for call in sio.emit.await_args_list if call.args[0] == "kicked" and call.kwargs.get("to") == "p2-sid"]
     assert len(kicked_calls) == 1
+    # The client says it from the code; the reason is English for a log.
+    assert kicked_calls[0].args[1]["code"] == "kicked_by_vote"
 
 async def test_direct_socket_moderation_rejects_spectator_voters_and_targets():
     room_manager = RoomManager()

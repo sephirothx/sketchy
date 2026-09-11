@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 
 import { StepUpRequiredError } from "../lib/api";
+import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 import { StepUpDialog } from "../components/StepUpDialog";
 
 /**
@@ -40,7 +42,7 @@ export function useStepUp() {
         if (!(problem instanceof StepUpRequiredError)) throw problem;
         return await new Promise<T | typeof STEP_UP_ABANDONED>((resolve, reject) => {
           setPending({
-            reason: problem.message,
+            reason: refusalText(problem, ui.stepUpDialog.confirmYou),
             retry: () => {
               setPending(null);
               action().then(resolve, reject);
