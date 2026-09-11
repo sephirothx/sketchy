@@ -5,6 +5,7 @@ import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { AccountMenu } from "./AccountMenu";
 import { BackIcon, GearIcon, Wordmark } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
 
 /**
  * The shared page chrome outside a room: the wordmark on the left, preceded by
@@ -29,11 +30,16 @@ import { ui } from "../content/ui/index.ts";
  * they are passed in rather than known about here; and a phone gets none of
  * them, because that is the same two-row problem the gear was moved for. The
  * lobby keeps its thumb dock for those.
+ *
+ * `languageSwitch` is the exception, shown at every width: the language you
+ * read in, as a flag. It is the one control a visitor who cannot read the
+ * page needs before any other, and a phone is where Settings is furthest away.
  */
 export function AppHeader({
   backLabel,
   actions,
-}: { backLabel?: string; actions?: ReactNode } = {}) {
+  languageSwitch = false,
+}: { backLabel?: string; actions?: ReactNode; languageSwitch?: boolean } = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useOpenSettings();
@@ -59,6 +65,7 @@ export function AppHeader({
       </div>
       <div className="lobby-header-actions">
         {!isNarrow && actions}
+        {languageSwitch && <InterfaceLanguageButton />}
         {!isNarrow && (
           <button
             type="button"

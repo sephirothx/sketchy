@@ -27,6 +27,8 @@ interface LanguagePickerProps {
   compact?: boolean;
   /** Trigger shows the flag alone; the list still names every language. */
   flagOnly?: boolean;
+  /** A flag a size down, to sit among a header's buttons rather than a form's rows. */
+  small?: boolean;
 }
 
 /**
@@ -44,8 +46,8 @@ interface LanguagePickerProps {
  * Escape closes and hands focus back. Each row is a flag and the language's
  * name as that language writes it — `Deutsch`, not `German` — because the
  * person looking for it is, by definition, looking for the word they use.
- * The English name rides along for screen readers, since the interface around
- * it is English and untranslated.
+ * The name in the reader's own interface language rides along for screen
+ * readers, where it says something the endonym does not.
  */
 export function LanguagePicker({
   label,
@@ -56,6 +58,7 @@ export function LanguagePicker({
   disabled = false,
   compact = false,
   flagOnly = false,
+  small = false,
 }: LanguagePickerProps) {
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -127,7 +130,7 @@ export function LanguagePicker({
 
   return (
     <div
-      className={`language-picker${compact ? " is-compact" : ""}${flagOnly ? " is-flag-only" : ""}`}
+      className={`language-picker${compact ? " is-compact" : ""}${flagOnly ? " is-flag-only" : ""}${small ? " is-small" : ""}`}
       ref={rootRef}
     >
       <button
@@ -217,9 +220,9 @@ export function LanguageFace({
       <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
         {endonym}
       </span>
-      {/* The interface is English and untranslated, so the English name is
-          what makes the row answerable to a screen reader — but only where it
-          says something the endonym does not. */}
+      {/* The name in the reader's interface language is what makes the row
+          answerable to a screen reader — but only where it says something
+          the endonym does not. */}
       {english !== endonym && <span className="visually-hidden">{english}</span>}
     </span>
   );

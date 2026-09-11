@@ -25,6 +25,7 @@ import { FriendsOverlay } from "./components/FriendsOverlay";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
+import { SettingsSyncNotices } from "./components/SettingsSyncNotices";
 import { FriendInviteNotice } from "./components/FriendInviteNotice";
 import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
@@ -279,6 +280,7 @@ function App() {
       {/* Nothing in a production build; the E2E suite's way to crash the app. */}
       <CrashProbe scope="app" />
       <ConnectionStatusBanner />
+      <SettingsSyncNotices />
       <EmailRecoveryReminder />
       <SuspensionNotice />
       <WarningNotice />

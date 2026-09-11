@@ -308,6 +308,7 @@ export function LobbyBrowserPage() {
   return (
     <div className="lobby-page">
       <AppHeader
+        languageSwitch
         actions={
           <>
             <button

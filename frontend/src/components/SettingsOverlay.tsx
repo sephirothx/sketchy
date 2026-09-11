@@ -11,13 +11,12 @@ import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { emitWithAck, socket } from "../lib/socket";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
-import { flushSettingsSync, onSettingsSyncError, queueSettingsSync } from "../lib/accountSettingsSync";
+import { flushSettingsSync, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
 import { removeAvatar, uploadAvatar } from "../lib/avatars";
 import { TwoFactorDialog } from "./TwoFactorDialog";
 import { roleName } from "../lib/operatorAccess";
 import { fetchSecondFactor, type SecondFactorState } from "../lib/secondFactor";
-import { useToast } from "../lib/toast";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
@@ -85,6 +84,7 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
+import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
 
 /* ------------------------------------------------------------- vocabulary */
 
@@ -926,18 +926,12 @@ function AppearancePane() {
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
   const promptLanguage = useSettingsStore((state) => state.promptLanguage);
   const setPromptLanguage = useSettingsStore((state) => state.setPromptLanguage);
-  const locale = useSettingsStore((state) => state.locale);
-  const setLocale = useSettingsStore((state) => state.setLocale);
+  const [locale, chooseLocale] = useInterfaceLocale();
   const activePlayerId = useGameStore((state) => state.playerId);
 
   function choosePromptLanguage(next: PromptLanguage) {
     setPromptLanguage(next);
     queueSettingsSync({ promptLanguage: next });
-  }
-
-  function chooseLocale(next: Locale) {
-    setLocale(next);
-    queueSettingsSync({ locale: next });
   }
 
   function chooseTimeFormat(next: TimeFormat) {
@@ -1245,7 +1239,6 @@ export function SettingsOverlay() {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
-  const { notify } = useToast();
 
   const isGuest = useAuthStore((state) => Boolean(state.user?.isAnonymous));
 
@@ -1258,14 +1251,10 @@ export function SettingsOverlay() {
     if (arrivedAsGuest.current && !isGuest) setSignedInHere(true);
   }, [isGuest]);
 
-  useEffect(() => {
-    onSettingsSyncError((message) => notify(message, "error"));
-    return () => {
-      onSettingsSyncError(null);
-      // Whatever is still waiting for company goes out as the pane closes.
-      void flushSettingsSync();
-    };
-  }, [notify]);
+  // A refused save is reported app-wide (SettingsSyncNotices), since the
+  // lobby saves settings too; what is still waiting for company goes out as
+  // the pane closes.
+  useEffect(() => () => void flushSettingsSync(), []);
 
   function close() {
     void flushSettingsSync();
