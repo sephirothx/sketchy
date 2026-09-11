@@ -1671,6 +1671,9 @@
    "createdAt",
    "updatedAt"
   ],
+  "api.serializers:community_prompt_list_detail_payload": [
+   "promptVersionId"
+  ],
   "api.serializers:community_prompt_list_payload": [
    "ownerDisplayName",
    "promptCount",

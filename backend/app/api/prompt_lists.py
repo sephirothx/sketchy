@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
 from app.api.serializers import (
+    community_prompt_list_detail_payload,
     community_prompt_list_payload,
     owned_prompt_list_payload,
     prompt_list_payload,
@@ -75,6 +76,9 @@ publish_limiter = RateLimiter(limit=10, window_seconds=600)
 # Browsing is cheap and ordinary; this is here so the catalogue is a poor way
 # to enumerate every published list quickly, the way the stats limiter is.
 community_limiter = RateLimiter(limit=120, window_seconds=60)
+# A preview reads a whole list, up to 500 prompts, so it is priced like
+# the stats page rather than like a listing.
+preview_limiter = RateLimiter(limit=60, window_seconds=60)
 # Starring is one click, and a person browsing does it a handful of times a
 # session. The limit is what stops one account walking the catalogue.
 star_limiter = RateLimiter(limit=60, window_seconds=60)
@@ -234,6 +238,7 @@ def create_prompt_list_router(
         language: str | None = Query(default=None),
         tag: list[str] = Query(default_factory=list),
         sort: str = Query(default="stars"),
+        starred: bool = Query(default=False),
         limit: int = Query(default=24, ge=1, le=MAX_COMMUNITY_PAGE),
         cursor: str | None = Query(default=None, max_length=32),
     ):
@@ -282,13 +287,22 @@ def create_prompt_list_router(
         # which is the registered answer - it says "you have not starred this"
         # to somebody who cannot, and invites a control that would 403. Only a
         # registered account is a star requester; everyone else reads null.
+        requester = await _star_requester(request)
+        if starred and requester is None:
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Create an account to star prompt lists.",
+                params={"action": "stars"},
+            )
         page = await prompt_list_repo.list_community(
             language=language,
             tags=tags,
             sort=sort,
             limit=limit,
             cursor=cursor,
-            requesting_user_id=await _star_requester(request),
+            requesting_user_id=requester,
+            starred_only=starred,
         )
         return {
             "lists": [
@@ -297,6 +311,30 @@ def create_prompt_list_router(
             ],
             "nextCursor": page.next_cursor,
         }
+
+    @router.get("/prompt-lists/community/{prompt_list_id}")
+    async def read_community_prompt_list(prompt_list_id: str, request: Request):
+        """Every prompt in a published list (R-LIST-19).
+
+        Choosing a list to play or to copy from a name and a count is choosing
+        blind, and playing one reveals its prompts anyway - so the contents are
+        readable by anyone the listing is readable by, signed out included.
+        Rate-limited, because this is the one route that returns a list whole.
+        """
+        if not preview_limiter.check(client_key(request)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REQUESTS,
+                "Too many requests. Please wait and try again.",
+            )
+        detail = await prompt_list_repo.get_community(
+            prompt_list_id, requesting_user_id=await _star_requester(request)
+        )
+        if detail is None:
+            raise Refusal(
+                404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found."
+            )
+        return community_prompt_list_detail_payload(detail)
 
     @router.get("/prompt-lists/mine")
     async def list_my_prompt_lists(request: Request):

@@ -76,6 +76,8 @@ function accountRequired(params: MessageParams): string {
       return "Crée un compte avant de configurer la double authentification.";
     case "friends":
       return "Crée un compte pour ajouter des amis.";
+    case "stars":
+      return "Un compte est nécessaire pour donner une étoile à une liste.";
     default:
       return "Crée un compte pour faire cela.";
   }

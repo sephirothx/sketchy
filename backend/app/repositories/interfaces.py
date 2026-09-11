@@ -451,6 +451,23 @@ class CommunityPromptList:
 
 
 @dataclass(frozen=True)
+class CommunityPromptListDetail(CommunityPromptList):
+    """A catalogue row, plus the prompts themselves (R-LIST-19).
+
+    The listing answers *which lists exist*; this answers *what is in one*,
+    which is the question somebody choosing between them actually has. Hidden
+    prompt versions are left out: a moderator took them out of play, so they
+    are not part of what this list would draw.
+
+    Entries carry their version id for the reason the share-code flow does:
+    it is what lets a reader report one exact prompt rather than the whole
+    list (R-LIST-13).
+    """
+
+    prompts: tuple[PromptListEntry, ...] = ()
+
+
+@dataclass(frozen=True)
 class CommunityPromptListPage:
     """One page of the catalogue, and the cursor for the next."""
 
@@ -1066,8 +1083,16 @@ class PromptListRepository(ABC):
         limit: int = 24,
         cursor: str | None = None,
         requesting_user_id: str | None = None,
+        starred_only: bool = False,
     ) -> CommunityPromptListPage:
         """One page of the community catalogue (R-LIST-14)."""
+        ...
+
+    @abstractmethod
+    async def get_community(
+        self, prompt_list_id: str, *, requesting_user_id: str | None = None
+    ) -> CommunityPromptListDetail | None:
+        """One published list with its prompts, or None if it is not published."""
         ...
 
     @abstractmethod
