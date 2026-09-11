@@ -32,6 +32,13 @@
 }
 
 /* Groups the account control with Settings so the header stays one row. */
+/* The language list opens from a flag at the header's right edge, so it
+   hangs leftwards from there rather than off the side of a phone. */
+.lobby-header-actions .language-picker-list {
+  left: auto;
+  right: 0;
+}
+
 .lobby-header-actions {
   display: flex;
   align-items: center;

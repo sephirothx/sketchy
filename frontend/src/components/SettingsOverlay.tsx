@@ -85,6 +85,7 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
+import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
 
 /* ------------------------------------------------------------- vocabulary */
 
@@ -926,18 +927,12 @@ function AppearancePane() {
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
   const promptLanguage = useSettingsStore((state) => state.promptLanguage);
   const setPromptLanguage = useSettingsStore((state) => state.setPromptLanguage);
-  const locale = useSettingsStore((state) => state.locale);
-  const setLocale = useSettingsStore((state) => state.setLocale);
+  const [locale, chooseLocale] = useInterfaceLocale();
   const activePlayerId = useGameStore((state) => state.playerId);
 
   function choosePromptLanguage(next: PromptLanguage) {
     setPromptLanguage(next);
     queueSettingsSync({ promptLanguage: next });
-  }
-
-  function chooseLocale(next: Locale) {
-    setLocale(next);
-    queueSettingsSync({ locale: next });
   }
 
   function chooseTimeFormat(next: TimeFormat) {

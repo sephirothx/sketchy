@@ -313,6 +313,13 @@
   width: 100%;
 }
 
+/* The header's size: as tall as the buttons beside it (`btn-compact`, 38px),
+   at the same 18:13 the full-size flag keeps. */
+.language-picker.is-flag-only.is-small .language-picker-trigger {
+  height: 38px;
+  width: 52px;
+}
+
 .language-picker.is-compact .language-picker-trigger {
   font-size: 13.5px;
   min-height: 42px;
