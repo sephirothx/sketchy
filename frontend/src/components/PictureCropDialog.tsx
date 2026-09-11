@@ -72,7 +72,7 @@ export function PictureCropDialog({
           setError(
             failure instanceof AvatarInputError
               ? failure.message
-              : "That file could not be read as a picture.",
+              : ui.pictureCropDialog.fileNotAPicture,
           );
         }
       });

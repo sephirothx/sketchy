@@ -392,7 +392,7 @@ export function Toolbar({
                     color={c}
                     selected={isSelectedColor(c)}
                     variant="toolbar-mobile-swatch-btn"
-                    label={`color ${c}`}
+                    label={ui.toolbar.colorOption({ color: c })}
                     onSelect={() => {
                       handleSelectColor(c);
                       setMobilePanel(null);
@@ -481,7 +481,7 @@ export function Toolbar({
                 key={c}
                 color={c}
                 selected={isSelectedColor(c)}
-                label={`color ${c}`}
+                label={ui.toolbar.colorOption({ color: c })}
                 title={ui.toolbar.colorSwatch({ color: c })}
                 onSelect={() => handleSelectColor(c)}
               />

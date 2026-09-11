@@ -45,13 +45,7 @@ export function ReportsReviewedNotice() {
         // the request is in flight, the effect torn down - and a report
         // marked as told that nobody was told about is never announced
         // again. This way the worst case is being thanked twice.
-        notify(
-          count === 1
-            ? "A report you sent has been reviewed. Thank you."
-            : `${count} reports you sent have been reviewed. Thank you.`,
-          ui.reportsReviewedNotice.info,
-          12000,
-        );
+        notify(ui.reportsReviewedNotice.reportsReviewed({ count }), "info", 12000);
         // Exactly the ones that message was about. A report decided since the
         // read is not in the list, so it keeps its turn.
         await acknowledgeReportsReviewed(reportIds);

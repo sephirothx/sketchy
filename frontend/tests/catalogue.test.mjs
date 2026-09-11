@@ -6,8 +6,9 @@ English button, which is too late. So this reads the tree the way
 `backend/tests/test_doc_invariants.py` reads the documents - as source, with a
 parser rather than a regex - and fails on a literal in a place a person reads.
 
-The three places are the ones a person actually reads: text between JSX tags,
-the attributes a screen reader speaks, and the arguments of the calls that put
+The places checked are the ones a person actually reads: text between JSX
+tags, the attributes a screen reader speaks, this app's own copy-carrying
+props (`label`, `hint`, and the rest), and the arguments of the calls that put
 words on screen. A literal anywhere else - a CSS class, a test id, a sort key -
 is not copy and is left alone.
 
@@ -32,14 +33,30 @@ const STAFF = [
 // The catalogue itself, and the rules document, hold copy on purpose.
 const CONTENT = ["content/"];
 
-const SPEAKING_CALLS = new Set([
-  "notify", "setError", "refusalText", "setNameError", "setPictureError",
-  "setFetchError", "setShareError", "setSubmitError", "setFailure",
-  "setStartError", "setPromotionError",
+// Which argument of each call is the thing a person reads. `notify` takes a
+// tone after its message, and `refusalText` takes the message *second* - so
+// "the first one" would be wrong in both directions.
+const SPEAKING_CALLS = new Map([
+  ["notify", 0],
+  ["refusalText", 1],
+  ["setError", 0],
+  ["setNameError", 0],
+  ["setPictureError", 0],
+  ["setFetchError", 0],
+  ["setShareError", 0],
+  ["setSubmitError", 0],
+  ["setFailure", 0],
+  ["setStartError", 0],
+  ["setPromotionError", 0],
 ]);
 const SPEAKING_ATTRS = new Set([
   "aria-label", "aria-description", "aria-valuetext", "aria-placeholder",
   "placeholder", "title", "alt", "aria-roledescription",
+  // This app's own components take copy as props, and nothing about a prop
+  // looks like text - which is exactly why #762's first pass walked past 57
+  // of them and a German settings page was still half English (#764).
+  "label", "hint", "heading", "caption", "description", "summary",
+  "confirmLabel", "cancelLabel", "actionLabel", "emptyLabel", "note",
 ]);
 
 function sourceFiles(dir = ROOT, out = []) {
@@ -90,16 +107,26 @@ function literalsIn(path) {
       const name = ts.isIdentifier(node.expression)
         ? node.expression.text
         : node.expression.getText(source).split(".").pop();
-      if (SPEAKING_CALLS.has(name)) {
-        for (const arg of node.arguments) {
-          const literal =
-            ts.isStringLiteral(arg)
-            || ts.isTemplateExpression(arg)
-            || ts.isNoSubstitutionTemplateLiteral(arg);
-          if (literal && words(arg.getText(source))) {
-            found.push(`${at(arg)} ${name}()`);
+      const position = SPEAKING_CALLS.get(name);
+      const message = position === undefined ? undefined : node.arguments[position];
+      if (message) {
+        // Anywhere inside the argument, not only at its root: a message is
+        // as often `count === 1 ? "..." : "..."` as it is a bare string.
+        const inside = (child) => {
+          if (
+            (ts.isStringLiteral(child)
+              || ts.isTemplateExpression(child)
+              || ts.isNoSubstitutionTemplateLiteral(child))
+            && words(child.getText(source))
+          ) {
+            found.push(`${at(child)} ${name}()`);
           }
-        }
+          // A nested speaking call carries its own message and is checked on
+          // its own; descending into it would report the same literal twice.
+          if (ts.isCallExpression(child)) return;
+          ts.forEachChild(child, inside);
+        };
+        inside(message);
       }
     }
     ts.forEachChild(node, visit);

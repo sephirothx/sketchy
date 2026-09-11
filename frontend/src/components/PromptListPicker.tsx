@@ -106,8 +106,10 @@ export function PromptListPicker({
       );
       if (!selection.ok) {
         setShareError(
-          `That list is in ${promptLanguageLabel(selection.language)}; this room is in `
-          + `${promptLanguageLabel(language)}.`,
+          ui.promptListPicker.languageMismatch({
+            listLanguage: promptLanguageLabel(selection.language),
+            roomLanguage: promptLanguageLabel(language),
+          }),
         );
         return;
       }

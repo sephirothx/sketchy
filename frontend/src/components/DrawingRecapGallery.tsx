@@ -192,7 +192,7 @@ export function DrawingRecapGallery({
               ref={canvasRef}
               actions={actions}
               downloadPrompt={entry.prompt}
-              label={`Drawing of ${entry.prompt} by ${entry.drawerNickname}`}
+              label={ui.drawingRecapGallery.drawingLabel({ prompt: entry.prompt, drawer: entry.drawerNickname })}
             />
           )}
         </div>

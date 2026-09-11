@@ -159,7 +159,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         roomCode: descriptionOnly ? null : roomCode,
         screenshot: descriptionOnly ? null : shot?.base64 ?? null,
       });
-      notify(ui.bugReportDialog.thanksYourReportWithPeopleWho, ui.bugReportDialog.success);
+      notify(ui.bugReportDialog.thanksYourReportWithPeopleWho, "success");
       onClose();
     } catch (caught) {
       setError(refusalText(caught, ui.bugReportDialog.couldNotSendReport));

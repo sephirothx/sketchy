@@ -18,6 +18,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -100,7 +101,7 @@ export function PlayerList({
         status?: string;
       }>("add_friend", { playerId });
       if (!answer?.ok) {
-        notify(answer?.error ?? "That request could not be sent.");
+        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent));
         return;
       }
       // Two outcomes worth telling apart, and a third that deliberately is

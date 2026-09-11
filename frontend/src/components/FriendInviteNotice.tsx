@@ -12,6 +12,7 @@ import { useToast } from "../lib/toast";
 import { XIcon } from "./icons";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 /** An invitation from a friend, and the one control that answers it.
 
@@ -89,7 +90,7 @@ export function FriendInviteNotice() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(answer?.error ?? "That game could not be joined.");
+        notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame));
         return;
       }
       setSession(session);

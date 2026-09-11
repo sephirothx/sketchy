@@ -85,9 +85,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(value);
-      notify(ui.waitingRoomPanel.copied({ what }), ui.waitingRoomPanel.success, 2500);
+      notify(ui.waitingRoomPanel.copied({ what }), "success", 2500);
     } catch {
-      notify(ui.waitingRoomPanel.couldNotCopy({ what: what.toLowerCase() }), ui.waitingRoomPanel.error);
+      notify(ui.waitingRoomPanel.couldNotCopy({ what: what.toLowerCase() }), "error");
     }
   }
 

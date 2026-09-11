@@ -167,7 +167,7 @@ export function DrawingReactionControl({
       // The strip holds emoji and nothing else, so a refusal is said elsewhere.
       notify(
         refusalText(failure, ui.drawingReactionControl.thatReactionCouldNotBeSent),
-        ui.drawingReactionControl.error,
+        "error",
       );
     } finally {
       setBusy(false);

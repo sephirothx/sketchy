@@ -73,7 +73,7 @@ export function StepUpDialog({
     } catch (problem) {
       setError(
         problem instanceof DOMException
-          ? "That passkey was not used. You can try again."
+          ? ui.stepUpDialog.passkeyNotUsed
           : refusalText(problem, ui.stepUpDialog.thatPasskeyWasNotAccepted),
       );
       setBusy(false);
@@ -128,7 +128,7 @@ export function StepUpDialog({
                 value={code}
                 onChange={setCode}
                 onComplete={(complete) => void submitWith(complete)}
-                label="Code from your authenticator app"
+                label={ui.stepUpDialog.codeFromYourAuthenticatorApp2}
                 autoFocus
                 disabled={busy}
               />

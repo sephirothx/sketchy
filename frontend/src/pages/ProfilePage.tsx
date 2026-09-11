@@ -496,8 +496,8 @@ function ProfileView({ userId }: { userId: string }) {
         if (cancelled) return;
         setError(
           loadError instanceof ApiError && loadError.status === 404
-            ? "There is no player with that profile."
-            : "Could not load this profile. Please try again.",
+            ? ui.profilePage.noSuchProfile
+            : ui.profilePage.couldNotLoadProfile,
         );
       }
     })();
@@ -653,20 +653,20 @@ function ProfileView({ userId }: { userId: string }) {
           <section className="panel">
             <h2>{ui.profilePage.statistics}</h2>
             <div className="profile-stats">
-              <StatTile label="Games played" value={String(stats.gamesPlayed)} />
-              <StatTile label="Games won" value={String(stats.gamesWon)} />
+              <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
+              <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
               <StatTile
-                label="Win rate"
+                label={ui.profilePage.winRate}
                 value={`${Math.round(stats.winRate * 100)}%`}
               />
-              <StatTile label="Average score" value={String(Math.round(stats.averageScore))} />
+              <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
             </div>
             <div className="profile-stats profile-stats-small">
-              <StatTile label="Turns played" value={String(stats.turnsPlayed)} />
-              <StatTile label="Prompts guessed" value={String(stats.promptsGuessed)} />
-              <StatTile label="Drawings made" value={String(stats.drawingsMade)} />
-              <StatTile label="Reactions received" value={String(stats.reactionsReceived)} />
-              <StatTile label="Total score" value={String(stats.totalScore)} />
+              <StatTile label={ui.profilePage.turnsPlayed} value={String(stats.turnsPlayed)} />
+              <StatTile label={ui.profilePage.promptsGuessed} value={String(stats.promptsGuessed)} />
+              <StatTile label={ui.profilePage.drawingsMade} value={String(stats.drawingsMade)} />
+              <StatTile label={ui.profilePage.reactionsReceived} value={String(stats.reactionsReceived)} />
+              <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
             </div>
           </section>
 

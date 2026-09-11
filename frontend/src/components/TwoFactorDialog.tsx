@@ -75,9 +75,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(value);
-      notify(ui.twoFactorDialog.copied({ what }), ui.twoFactorDialog.success, 2500);
+      notify(ui.twoFactorDialog.copied({ what }), "success", 2500);
     } catch {
-      notify(ui.twoFactorDialog.couldNotCopy({ what: what.toLowerCase() }), ui.twoFactorDialog.error);
+      notify(ui.twoFactorDialog.couldNotCopy({ what: what.toLowerCase() }), "error");
     }
   }
 
@@ -170,7 +170,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setPasskeys((current) => [...(current ?? []), result.passkey]);
       if (!result.roleGranted) {
         setState(await fetchSecondFactor());
-        notify(ui.twoFactorDialog.passkeyAdded, ui.twoFactorDialog.success);
+        notify(ui.twoFactorDialog.passkeyAdded, "success");
         onClose();
       }
     } catch (problem) {
@@ -214,7 +214,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setGranted(result.roleGranted);
       if (result.roleGranted) return;
       setState(await fetchSecondFactor());
-      notify(ui.twoFactorDialog.confirmedThisAccountCanNowBe, ui.twoFactorDialog.success);
+      notify(ui.twoFactorDialog.confirmedThisAccountCanNowBe, "success");
     } catch (problem) {
       setCode("");
       failed(problem, "Could not confirm it.");
@@ -378,7 +378,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 <Suspense fallback={<p className="modal-hint">{ui.twoFactorDialog.drawingCode}</p>}>
                   <AuthenticatorQrCode
                     uri={offer.uri}
-                    label="Scan this with your authenticator app to add this account"
+                    label={ui.twoFactorDialog.scanThisWithYourAuthenticatorApp}
                   />
                 </Suspense>
               </div>
@@ -421,7 +421,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 value={code}
                 onChange={setCode}
                 onComplete={(complete) => void submitWith(complete)}
-                label="Code from your authenticator app"
+                label={ui.twoFactorDialog.codeFromYourAuthenticatorApp}
                 autoFocus
                 disabled={busy}
               />
@@ -521,7 +521,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   <SegmentedCodeInput
                     value={code}
                     onChange={setCode}
-                    label="Code from your authenticator app"
+                    label={ui.twoFactorDialog.codeFromYourAuthenticatorApp}
                     disabled={busy}
                   />
                   <button

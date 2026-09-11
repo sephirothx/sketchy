@@ -167,7 +167,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         // value back"; the form reloads from what the room actually holds.
         const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseSettings);
         setError(message);
-        notify(message, ui.roomSettingsEditor.error);
+        notify(message, "error");
         return;
       }
       setBaseline(values);
@@ -176,7 +176,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     } catch (saveError) {
       const message = socketRequestErrorMessage(saveError, "save room rules");
       setError(message);
-      notify(message, ui.roomSettingsEditor.error);
+      notify(message, "error");
     } finally {
       setSaving(false);
     }

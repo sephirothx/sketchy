@@ -22,19 +22,43 @@ two cannot drift.
 first paint and again whenever the reader changes languages, and every
 component that read `ui.something.key` at render time sees the new words on
 the next render. */
+import { DE } from "./de.ts";
 import { EN } from "./en.ts";
+import { ES } from "./es.ts";
+import { FR } from "./fr.ts";
+import { IT } from "./it.ts";
+import { NL } from "./nl.ts";
+import { PT } from "./pt.ts";
 
-/** What every locale must provide, member for member. */
+/** What every locale must provide, member for member.
+
+Taken from the English module rather than declared by hand, so the two cannot
+drift: adding an entry to `en.ts` is what makes every other locale
+incomplete, and that is exactly the pressure the completeness rule is for
+(R-I18N-04). The *keys* are what a locale must match - `en.ts` is deliberately
+not `as const`, or a translation would be unassignable to the English words
+it replaces. */
 export type Catalogue = typeof EN;
 
 /** Every language the interface has been finished in. */
 const CATALOGUES = {
+  de: DE,
   en: EN,
+  es: ES,
+  fr: FR,
+  it: IT,
+  nl: NL,
+  pt: PT,
 } satisfies Record<string, Catalogue>;
 
 export type Locale = keyof typeof CATALOGUES;
 
 export const LOCALES = Object.keys(CATALOGUES) as Locale[];
+
+/** The same list, named for callers that mean "every catalogue there is"
+    rather than "every locale a player may pick" - today they are the same,
+    and R-I18N-07 is the rule that keeps them so. */
+export const CATALOGUE_LOCALES = LOCALES;
 
 export const FALLBACK_LOCALE: Locale = "en";
 

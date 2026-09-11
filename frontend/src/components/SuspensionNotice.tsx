@@ -138,7 +138,7 @@ export function SuspensionNotice() {
                 key={drawing.reportId}
                 className="suspension-drawing"
                 load={() => fetchSuspensionDrawing(drawing.reportId)}
-                label={`Your drawing of ${drawing.prompt}, as it was reported`}
+                label={ui.suspensionNotice.yourReportedDrawing({ prompt: drawing.prompt })}
                 caption={<>{ui.suspensionNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
               />
             ))}

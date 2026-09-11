@@ -189,7 +189,7 @@ export function RoomSetupForm({
                 </span>
               ) : (
                 <LanguagePicker
-                  label="Language"
+                  label={ui.roomSetupForm.language}
                   flagOnly
                   value={promptLanguage}
                   options={languageOptions}
@@ -215,7 +215,7 @@ export function RoomSetupForm({
                 : "Joinable only with the code or invite link."}
             >
               <SegmentedControl
-                label="Visibility"
+                label={ui.roomSetupForm.visibility}
                 value={isPublic ? "public" : "private"}
                 onChange={(value) => onChange({ isPublic: value === "public" })}
                 options={[
@@ -231,7 +231,7 @@ export function RoomSetupForm({
                 round is, and the line below already says what the three of
                 them add up to in minutes. */}
             <InputNumber
-              label="Max players"
+              label={ui.roomSetupForm.maxPlayers}
               icon={<UsersIcon size={14} />}
               value={maxPlayers}
               min={MAX_PLAYERS_MIN}
@@ -239,7 +239,7 @@ export function RoomSetupForm({
               onChange={(value) => onChange({ maxPlayers: value })}
             />
             <InputNumber
-              label="Rounds"
+              label={ui.roomSetupForm.rounds}
               icon={<RoundsIcon size={14} />}
               value={rounds}
               min={ROUNDS_MIN}
@@ -247,7 +247,7 @@ export function RoomSetupForm({
               onChange={(value) => onChange({ rounds: value })}
             />
             <InputNumber
-              label="Drawing time"
+              label={ui.roomSetupForm.drawingTime}
               icon={<ClockIcon size={14} />}
               unit="s"
               value={drawingSeconds}
@@ -281,8 +281,8 @@ export function RoomSetupForm({
             footer={promptsFooter}
           />
           <Switch
-            label="Only use custom prompts"
-            hint="Add a usable custom prompt to enable this option."
+            label={ui.roomSetupForm.onlyUseCustomPrompts}
+            hint={ui.roomSetupForm.addUsableCustomPromptEnableThis}
             checked={customPrompts.only}
             disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
             onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
@@ -298,7 +298,7 @@ export function RoomSetupForm({
         </summary>
         <div className="form-section-body">
           <ToggleChips
-            label="Allowed tools"
+            label={ui.roomSetupForm.allowedTools}
             values={allowedTools}
             onChange={(tools: DrawingToolGroup[]) => onChange({ allowedTools: tools })}
             options={TOOL_GROUP_OPTIONS.map((option) => ({
@@ -307,7 +307,7 @@ export function RoomSetupForm({
             }))}
           />
           <ChoiceCards
-            label="Colors"
+            label={ui.roomSetupForm.colors}
             value={colorMode}
             onChange={(mode: ColorMode) => onChange({ colorMode: mode })}
             columns={4}
@@ -324,7 +324,7 @@ export function RoomSetupForm({
         </summary>
         <div className="form-section-body">
           <ChoiceCards
-            label="Scoring"
+            label={ui.roomSetupForm.scoring}
             value={scoringMode}
             columns={3}
             onChange={(mode: ScoringMode) => onChange({
@@ -336,7 +336,7 @@ export function RoomSetupForm({
             options={SCORING_OPTIONS}
           />
           <ChoiceCards
-            label="Hints"
+            label={ui.roomSetupForm.hints}
             value={hintMode}
             columns={2}
             disabled={hideMaskedPrompt}
@@ -350,13 +350,13 @@ export function RoomSetupForm({
           {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.pointPurchaseHintModesRequireScoring}</p>}
           <div className="form-section-switch-row">
             <Switch
-              label="Spectators can see the prompt"
+              label={ui.roomSetupForm.spectatorsCanSeePrompt}
               checked={spectatorsSeePrompt}
               onChange={(checked) => onChange({ spectatorsSeePrompt: checked })}
             />
             <Switch
-              label="Hide blanks"
-              hint="Also turns hints off: with no blanks there is nothing to reveal."
+              label={ui.roomSetupForm.hideBlanks}
+              hint={ui.roomSetupForm.alsoTurnsHintsOffWithNo}
               checked={hideMaskedPrompt}
               onChange={(checked) => onChange({
                 hideMaskedPrompt: checked,

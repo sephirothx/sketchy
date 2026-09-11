@@ -5,6 +5,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 /** What went with the report, in one sentence.
 
@@ -105,7 +106,7 @@ export function ReportPlayerDialog({
         includeDrawing: drawingRequested,
       });
       if (!result.ok) {
-        setError(result.error ?? "That report could not be sent.");
+        setError(refusalText(result, ui.reportPlayerDialog.reportCouldNotBeSent));
         return;
       }
       setSent({

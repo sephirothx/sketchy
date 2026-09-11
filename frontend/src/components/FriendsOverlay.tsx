@@ -221,8 +221,8 @@ export function FriendsOverlay() {
       {confirming?.kind === "decline" && (
         <ConfirmationDialog
           title={ui.friendsOverlay.declineThisRequest}
-          description={`${confirming.entry.displayName} will not be able to ask again. You can still send them a request yourself later.`}
-          confirmLabel="Decline"
+          description={ui.friendsOverlay.declineWarning({ name: confirming.entry.displayName })}
+          confirmLabel={ui.friendsOverlay.decline2}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const userId = confirming.entry.userId;
@@ -234,8 +234,8 @@ export function FriendsOverlay() {
       {confirming?.kind === "unfriend" && (
         <ConfirmationDialog
           title={ui.friendsOverlay.removeConfirm({ name: confirming.entry.displayName })}
-          description="You will both stop being able to join each other's games without an invitation. Either of you can ask again."
-          confirmLabel="Remove"
+          description={ui.friendsOverlay.youWillBothStopBeingAble}
+          confirmLabel={ui.friendsOverlay.remove2}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const userId = confirming.entry.userId;

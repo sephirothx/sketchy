@@ -7,6 +7,7 @@ import { usePresenceStore } from "../store/presenceStore";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 /** Friends who are online, on the card whose whole job is getting people in.
 
@@ -47,7 +48,7 @@ export function InviteFriendsList() {
         setInvited((current) => new Set(current).add(userId));
         notify(ui.inviteFriendsList.invitationSent({ name: displayName }));
       } else {
-        notify(answer?.error ?? "That invitation could not be sent.");
+        notify(refusalText(answer, ui.inviteFriendsList.invitationCouldNotBeSent));
       }
     } catch {
       notify(ui.inviteFriendsList.thatInvitationCouldNotBeSent);

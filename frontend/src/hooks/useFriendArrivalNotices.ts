@@ -57,12 +57,12 @@ export function useFriendArrivalNotices(): void {
     const { arrived, accepted } = notices;
     if (arrived.length === 1) {
       const asker = arrived[0];
-      notify(ui.useFriendArrivalNotices.wantsToBeFriends({ name: asker.displayName }), ui.useFriendArrivalNotices.info, ACTIONABLE_MS, {
+      notify(ui.useFriendArrivalNotices.wantsToBeFriends({ name: asker.displayName }), "info", ACTIONABLE_MS, {
         label: "Accept",
         onClick: () => void accept(asker.userId),
       });
     } else if (arrived.length > 1) {
-      notify(manyArrived(arrived), ui.useFriendArrivalNotices.info, ACTIONABLE_MS, {
+      notify(manyArrived(arrived), "info", ACTIONABLE_MS, {
         label: "Open",
         onClick: () => openOverlay(FRIENDS_PATH),
       });

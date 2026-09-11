@@ -17,6 +17,7 @@ import { ReportAccountDialog } from "./ReportAccountDialog";
 import { Button } from "./ui/Button";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { refusalText } from "../lib/refusals.ts";
 
 /** Who else is here, beside the room list.
 
@@ -68,7 +69,7 @@ export function OnlinePlayersPanel() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(answer?.error ?? "Could not join that game.");
+        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame));
         return;
       }
       // The seat is already taken by the time this answers, so the page has

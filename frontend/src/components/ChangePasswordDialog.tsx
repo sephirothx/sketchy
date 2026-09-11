@@ -61,7 +61,7 @@ export function ChangePasswordDialog({
     setError(null);
     try {
       await changePassword(current, next);
-      notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, ui.changePasswordDialog.success);
+      notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, "success");
       onClose();
     } catch (failure) {
       setError(

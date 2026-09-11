@@ -125,8 +125,8 @@ export function PromptStatsPage() {
         if (cancelled) return;
         setError(
           err instanceof ApiError && err.status === 404
-            ? "There is no prompt list with that name."
-            : "Could not load these prompt stats. Please try again.",
+            ? ui.promptStatsPage.noSuchList
+            : ui.promptStatsPage.couldNotLoadStats,
         );
       } finally {
         if (!cancelled) setLoading(false);

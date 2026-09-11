@@ -381,7 +381,7 @@ export function LobbyBrowserPage() {
             ) : (
               <>
                 <LanguagePicker
-                  label="Filter by language"
+                  label={ui.lobbyBrowserPage.filterByLanguage}
                   value={languageFilter}
                   options={roomLanguages}
                   includeAny
@@ -439,7 +439,7 @@ export function LobbyBrowserPage() {
               <div className="lobby-filter-row">
                 <span>{ui.lobbyBrowserPage.language}</span>
                 <LanguagePicker
-                  label="Filter by language"
+                  label={ui.lobbyBrowserPage.filterByLanguage}
                   value={languageFilter}
                   options={roomLanguages}
                   includeAny

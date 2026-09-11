@@ -497,7 +497,7 @@ export function AuthDialog({
     } catch (passkeyError) {
       setError(
         passkeyError instanceof DOMException
-          ? "No passkey was used. You can sign in with your password instead."
+          ? ui.accountMenu.noPasskeyWasUsed
           : refusalText(passkeyError, ui.accountMenu.thatPasskeyWasNotAccepted),
       );
       setBusy(false);

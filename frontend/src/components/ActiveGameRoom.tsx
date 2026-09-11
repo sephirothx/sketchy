@@ -117,9 +117,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(window.location.href);
-      notify(ui.activeGameRoom.inviteLinkCopied, ui.activeGameRoom.success, 2500);
+      notify(ui.activeGameRoom.inviteLinkCopied, "success", 2500);
     } catch {
-      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, ui.activeGameRoom.error);
+      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, "error");
     }
   }
 
@@ -132,7 +132,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
     function onVotedAfk(data: { message?: string }) {
-      notify(data?.message || "You were marked AFK by room vote.", ui.activeGameRoom.warning);
+      notify(data?.message || ui.activeGameRoom.markedAfkByRoomVote, "warning");
     }
     // One seat per account per room: another tab took this one over. Say so
     // rather than leaving this tab on a board that has silently stopped.
@@ -198,10 +198,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("propose_restart_vote", {});
       if (!response.ok) {
-        notify(refusalText(response, ui.activeGameRoom.couldNotStartRestartVote), ui.activeGameRoom.error);
+        notify(refusalText(response, ui.activeGameRoom.couldNotStartRestartVote), "error");
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "start a restart vote"), ui.activeGameRoom.error);
+      notify(socketRequestErrorMessage(restartError, "start a restart vote"), "error");
     } finally {
       setRestartBusy(false);
     }
@@ -213,10 +213,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("cast_restart_vote", { vote });
       if (!response.ok) {
-        notify(refusalText(response, ui.activeGameRoom.couldNotRecordYourRestartVote), ui.activeGameRoom.error);
+        notify(refusalText(response, ui.activeGameRoom.couldNotRecordYourRestartVote), "error");
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "record your restart vote"), ui.activeGameRoom.error);
+      notify(socketRequestErrorMessage(restartError, "record your restart vote"), "error");
     } finally {
       setRestartBusy(false);
     }
@@ -235,13 +235,13 @@ export function ActiveGameRoom({ code }: { code: string }) {
       if (!response.ok) {
         notify(
           refusalText(response, ui.activeGameRoom.couldNotChangeSuggestion({ action })),
-          ui.activeGameRoom.error,
+          "error",
         );
       }
     } catch (suggestionError) {
       notify(
         socketRequestErrorMessage(suggestionError, `${action} the color suggestion`),
-        ui.activeGameRoom.error,
+        "error",
       );
     } finally {
       setColorSuggestionBusy(false);
@@ -316,7 +316,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           description={amDrawer
             ? "You’re the current drawer. Leaving now will interrupt your turn and advance the game for everyone."
             : "The game is still in progress. You’ll leave the room and give up your place in this game."}
-          confirmLabel="Leave game"
+          confirmLabel={ui.activeGameRoom.leaveGame}
           onCancel={() => setLeaveConfirmationOpen(false)}
           onConfirm={() => {
             setLeaveConfirmationOpen(false);

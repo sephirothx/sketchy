@@ -117,9 +117,9 @@ export function PromptDisplay({
     setPendingAction(key);
     try {
       const response = await emitWithAck<AckResponse>(event, data);
-      if (!response.ok) notify(refusalText(response, ui.promptDisplay.couldNotDoAction({ action })), ui.promptDisplay.error);
+      if (!response.ok) notify(refusalText(response, ui.promptDisplay.couldNotDoAction({ action })), "error");
     } catch (requestError) {
-      notify(socketRequestErrorMessage(requestError, action), ui.promptDisplay.error);
+      notify(socketRequestErrorMessage(requestError, action), "error");
     } finally {
       setPendingAction(null);
     }

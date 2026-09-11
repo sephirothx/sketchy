@@ -189,7 +189,7 @@ export function WarningNotice() {
                 key={drawing.reportId}
                 className="suspension-drawing"
                 load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
-                label={`Your drawing of ${drawing.prompt}, as it was reported`}
+                label={ui.warningNotice.yourReportedDrawing({ prompt: drawing.prompt })}
                 caption={<>{ui.warningNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
               />
             ))}
