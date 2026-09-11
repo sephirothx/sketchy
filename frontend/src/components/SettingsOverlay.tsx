@@ -83,6 +83,7 @@ import {
   XIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /* ------------------------------------------------------------- vocabulary */
 
@@ -254,7 +255,7 @@ function NeedsAccount() {
   return (
     <span className="settings-locked-reason">
       <LockIcon size={13} />
-      Needs an account
+      {ui.settingsOverlay.needsAccount}
     </span>
   );
 }
@@ -359,7 +360,7 @@ function PictureEditChip({
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="settings-picture-input"
-        aria-label="Choose a picture"
+        aria-label={ui.settingsOverlay.choosePicture}
         onChange={(event) => {
           onChoose(event.target.files?.[0]);
           event.target.value = "";
@@ -369,8 +370,8 @@ function PictureEditChip({
         type="button"
         className="settings-you-edit-chip"
         disabled={busy}
-        aria-label="Edit picture"
-        title="Edit picture"
+        aria-label={ui.settingsOverlay.editPicture}
+        title={ui.settingsOverlay.editPicture}
         aria-haspopup={hasPicture ? "menu" : undefined}
         aria-expanded={hasPicture ? open : undefined}
         aria-controls={hasPicture && open ? menuId : undefined}
@@ -384,13 +385,13 @@ function PictureEditChip({
           id={menuId}
           className="settings-you-menu"
           role="menu"
-          aria-label="Picture"
+          aria-label={ui.settingsOverlay.picture}
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
           <button type="button" role="menuitem" onClick={pick}>
             <ImageIcon size={15} />
-            Change picture
+            {ui.settingsOverlay.changePicture}
           </button>
           <button
             type="button"
@@ -402,7 +403,7 @@ function PictureEditChip({
             }}
           >
             <TrashIcon size={15} />
-            Remove picture
+            {ui.settingsOverlay.removePicture}
           </button>
         </div>
       )}
@@ -452,7 +453,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       await useAuthStore.getState().fetchMe();
     } catch (error) {
       setPictureError(
-        refusalText(error, "Could not remove the picture."),
+        refusalText(error, ui.settingsOverlay.couldNotRemovePicture),
       );
     } finally {
       setPictureBusy(false);
@@ -539,7 +540,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           { nickname: trimmed },
         );
         if (!response.ok) {
-          setNameError(refusalText(response, "Could not change your display name."));
+          setNameError(refusalText(response, ui.settingsOverlay.couldNotChangeYourDisplayName));
           return;
         }
         await useAuthStore.getState().fetchMe();
@@ -552,7 +553,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       // the whole point of the check, and a generic line would leave the
       // player guessing why it was refused.
       setNameError(
-        refusalText(error, "Could not change your display name. Please try again."),
+        refusalText(error, ui.settingsOverlay.couldNotChangeYourDisplayName2),
       );
     } finally {
       setNameBusy(false);
@@ -582,11 +583,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         <div className="settings-notice" role="status">
           <CheckIcon size={16} />
           <p>
-            <b>These are {user?.username}’s settings now.</b> The theme, sound and
-            shortcuts came from the account. What this browser had is untouched, and
-            comes back if you log out.
+            <b>{ui.settingsOverlay.theseAreTheirSettings({ name: user?.username ?? "" })}</b> {ui.settingsOverlay.themeSoundShortcutsCameFromAccount}
           </p>
-          <button type="button" aria-label="Dismiss" onClick={() => setNoticeOpen(false)}>
+          <button type="button" aria-label={ui.settingsOverlay.dismiss} onClick={() => setNoticeOpen(false)}>
             <XIcon size={14} />
           </button>
         </div>
@@ -594,25 +593,26 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
 
       {isGuest && (
         <div className="settings-guest-card">
-          <b>Playing as a guest</b>
+          <b>{ui.settingsOverlay.playingAsGuest}</b>
           <p>
-            {user?.displayName} lives in this browser only. An account keeps the name,
-            your points and your history on every device, and lets you pick a color.
+            {ui.settingsOverlay.guestLivesInThisBrowser({
+              name: user?.displayName ?? "",
+            })}
           </p>
           <div className="settings-guest-actions">
             <button type="button" className="btn btn-primary" onClick={() => setAuthMode("claim")}>
               <PlusIcon size={15} />
-              Create an account
+              {ui.settingsOverlay.createAccount}
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => setAuthMode("login")}>
               <KeyIcon size={15} />
-              Log in
+              {ui.settingsOverlay.logIn}
             </button>
           </div>
         </div>
       )}
 
-      <Group title="You">
+      <Group title={ui.settingsOverlay.you}>
         {/* The identity card: disc, name in its colour, palette. A registered
             player always plays as their username (R-ACCT-05), so only a guest
             gets a way to change the name; and only an account gets a picture
@@ -659,7 +659,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                     autoCapitalize="off"
                     autoCorrect="off"
                     spellCheck={false}
-                    aria-label="Display name"
+                    aria-label={ui.settingsOverlay.displayName}
                     aria-describedby={nameError ? "settings-name-error" : undefined}
                   />
                   {/* The one thing here the server can refuse - the name may
@@ -683,7 +683,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                       setDraftName(user?.displayName ?? "");
                     }}
                   >
-                    Cancel
+                    {ui.settingsOverlay.cancel}
                   </button>
                 </>
               ) : (
@@ -701,7 +701,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
                       onClick={() => setEditingName(true)}
                     >
                       <PencilIcon size={14} />
-                      Change
+                      {ui.settingsOverlay.change}
                     </button>
                   )}
                 </>
@@ -713,7 +713,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               </p>
             )}
             {!isGuest && (
-              <span className="settings-swatches" role="group" aria-label="Name color">
+              <span className="settings-swatches" role="group" aria-label={ui.settingsOverlay.nameColor}>
                 {NAME_COLOR_PALETTE.map((color) => (
                   <button
                     key={color}
@@ -739,7 +739,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         </div>
       </Group>
 
-      <Group title="Signing in">
+      <Group title={ui.settingsOverlay.signingIn}>
         <Row
           label="Email"
           locked={isGuest}
@@ -782,7 +782,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               onClick={() => setPasswordOpen(true)}
             >
               <KeyIcon size={15} />
-              Change password
+              {ui.settingsOverlay.changePassword}
             </button>
           )}
         </Row>
@@ -831,13 +831,13 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               onClick={() => setSessionsOpen(true)}
             >
               <DevicesIcon size={15} />
-              Manage
+              {ui.settingsOverlay.manage}
             </button>
           )}
         </Row>
       </Group>
 
-      <Group title="Your data">
+      <Group title={ui.settingsOverlay.yourData}>
         <Row
           label="Download everything"
           hint={
@@ -852,7 +852,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             onClick={() => setDataOpen(true)}
           >
             <DownloadIcon size={15} />
-            Request export
+            {ui.settingsOverlay.requestExport}
           </button>
         </Row>
         <Row
@@ -869,7 +869,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             className="btn btn-danger-ghost btn-compact"
             onClick={() => setDeleteOpen(true)}
           >
-            Delete…
+            {ui.settingsOverlay.delete}
           </button>
         </Row>
       </Group>
@@ -959,9 +959,9 @@ function AppearancePane() {
 
   return (
     <>
-      <Group title="Display">
+      <Group title={ui.settingsOverlay.display}>
         <Row label="Color scheme" stacked hint="Applies the moment you pick it.">
-          <div className="theme-cards" role="group" aria-label="Theme">
+          <div className="theme-cards" role="group" aria-label={ui.settingsOverlay.theme}>
             {THEME_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -980,7 +980,7 @@ function AppearancePane() {
                 <strong>
                   {option.label}
                   {option.value === "system" && (
-                    <small>Now: {getSystemTheme() === "dark" ? "dark" : "light"}</small>
+                    <small>{ui.settingsOverlay.systemThemeNow({ theme: getSystemTheme() === "dark" ? "dark" : "light" })}</small>
                   )}
                 </strong>
               </button>
@@ -1015,7 +1015,7 @@ function AppearancePane() {
       </Group>
       {/* A fact about the player rather than a taste, so it is not a theme
           option: its own group, worded as what it says about you. */}
-      <Group title="Accessibility">
+      <Group title={ui.settingsOverlay.accessibility}>
         <ToggleRow
           label="I have trouble telling colors apart"
           hint="Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own."
@@ -1023,7 +1023,7 @@ function AppearancePane() {
           onChange={chooseColorblindSafe}
         />
       </Group>
-      <Group title="The canvas">
+      <Group title={ui.settingsOverlay.theCanvas}>
         <Row
           label="Brush cursor"
           hint="A crosshair is precise at the point; an outline shows how wide the stroke will be."
@@ -1052,7 +1052,7 @@ function SoundPane() {
 
   return (
     <>
-      <Group title="Sound">
+      <Group title={ui.settingsOverlay.sound}>
         <ToggleRow
           label="Sound effects"
           hint="Chimes for a correct guess, the start of a round, the last ten seconds, and players coming and going."
@@ -1081,14 +1081,14 @@ function SoundPane() {
                   // Merged with its neighbours: a drag is one request.
                   queueSettingsSync({ volume: next });
                 }}
-                aria-label="Volume"
+                aria-label={ui.settingsOverlay.volume}
               />
               <span className="settings-volume-value">{Math.round(volume * 100)}%</span>
             </span>
           </Row>
         )}
       </Group>
-      <Group title="Effects">
+      <Group title={ui.settingsOverlay.effects}>
         <ToggleRow
           label="Confetti"
           hint="A burst when you guess right, and again for the winner at the end of a game."
@@ -1146,15 +1146,14 @@ function ShortcutsPane() {
       {!hasKeyboard && (
         <div className="settings-empty">
           <KeyboardIcon size={28} />
-          <b>No keyboard on this device</b>
+          <b>{ui.settingsOverlay.noKeyboardThisDevice}</b>
           <span>
-            Your bindings are still saved and still work. Open Sketchy with a keyboard
-            attached to change them.
+            {ui.settingsOverlay.yourBindingsAreStillSavedStill}
           </span>
         </div>
       )}
       <Group
-        title="Drawing tools"
+        title={ui.settingsOverlay.drawingTools}
         hint="Click a key to rebind it. Each action can hold two. Press Esc to cancel."
         action={
           <button
@@ -1166,7 +1165,7 @@ function ShortcutsPane() {
               queueSettingsSync({ keyBindings: DEFAULT_KEY_BINDINGS });
             }}
           >
-            Reset to defaults
+            {ui.settingsOverlay.resetDefaults}
           </button>
         }
       >
@@ -1240,7 +1239,7 @@ export function SettingsOverlay() {
   }, [isGuest]);
 
   useEffect(() => {
-    onSettingsSyncError((message) => notify(message, "error"));
+    onSettingsSyncError((message) => notify(message, ui.settingsOverlay.error));
     return () => {
       onSettingsSyncError(null);
       // Whatever is still waiting for company goes out as the pane closes.
@@ -1282,22 +1281,22 @@ export function SettingsOverlay() {
         <div className="settings-modal-header">
           <h3 id={titleId}>
             <GearIcon size={20} />
-            <span>Settings</span>
+            <span>{ui.settingsOverlay.settings}</span>
           </h3>
           <button
             ref={closeButtonRef}
             type="button"
             className="close-icon-button"
             onClick={close}
-            title="Close"
-            aria-label="Close settings"
+            title={ui.settingsOverlay.close}
+            aria-label={ui.settingsOverlay.closeSettings}
           >
             <XIcon size={16} />
           </button>
         </div>
 
         <div className="settings-modal-body">
-          <div className="settings-tabs" role="tablist" aria-label="Settings sections">
+          <div className="settings-tabs" role="tablist" aria-label={ui.settingsOverlay.settingsSections}>
             {SETTINGS_SECTIONS.map((id) => (
               <button
                 key={id}

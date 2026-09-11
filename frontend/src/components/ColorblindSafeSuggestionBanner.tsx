@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 export function ColorblindSafeSuggestionBanner({
   busy,
   onAccept,
@@ -10,12 +11,12 @@ export function ColorblindSafeSuggestionBanner({
   return (
     <aside
       className="colorblind-safe-suggestion"
-      aria-label="Colorblind-safe color suggestion"
+      aria-label={ui.colorblindSafeSuggestionBanner.colorblindSafeColorSuggestion}
       data-testid="colorblind-safe-suggestion"
     >
       <div className="colorblind-safe-suggestion-copy">
-        <strong>A player in this room plays with colorblind-safe colors.</strong>
-        <span>Switch the room palette for future drawings?</span>
+        <strong>{ui.colorblindSafeSuggestionBanner.playerThisRoomPlaysWithColorblind}</strong>
+        <span>{ui.colorblindSafeSuggestionBanner.switchRoomPaletteFutureDrawings}</span>
       </div>
       <div className="colorblind-safe-suggestion-actions">
         <button
@@ -24,10 +25,10 @@ export function ColorblindSafeSuggestionBanner({
           disabled={busy}
           onClick={onAccept}
         >
-          Switch colors
+          {ui.colorblindSafeSuggestionBanner.switchColors}
         </button>
         <button type="button" disabled={busy} onClick={onDismiss}>
-          Not now
+          {ui.colorblindSafeSuggestionBanner.notNow}
         </button>
       </div>
     </aside>

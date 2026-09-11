@@ -4,6 +4,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { deleteAccount } from "../lib/accountData";
 import { useAuthStore } from "../store/authStore";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const CONFIRMATION = "DELETE";
 
@@ -49,7 +50,7 @@ export function DeleteAccountDialog({
       await logout();
     } catch (failure) {
       setError(
-        refusalText(failure, "Could not delete the account."),
+        refusalText(failure, ui.deleteAccountDialog.couldNotDeleteAccount),
       );
       setDeleting(false);
     }
@@ -74,16 +75,12 @@ export function DeleteAccountDialog({
           {isGuest ? "Delete this guest" : "Delete your account"}
         </h3>
         <p className="modal-body">
-          {isGuest
-            ? "The name, the points and the history kept against this browser are removed. "
-            : "Your name is removed from the games you played. "}
-          The scores and drawings stay, under “Deleted player”, because they are other
-          people’s games too. This cannot be undone.
+          {ui.deleteAccountDialog.whatIsRemoved({ isGuest })}
         </p>
         <form onSubmit={(event) => void submit(event)} className="auth-form account-delete-form">
           {!isGuest && (
             <>
-              <label htmlFor={`${titleId}-password`}>Password</label>
+              <label htmlFor={`${titleId}-password`}>{ui.deleteAccountDialog.password}</label>
               <input
                 id={`${titleId}-password`}
                 ref={firstFieldRef}
@@ -98,7 +95,7 @@ export function DeleteAccountDialog({
               />
             </>
           )}
-          <label htmlFor={`${titleId}-confirm`}>Type {CONFIRMATION} to confirm</label>
+          <label htmlFor={`${titleId}-confirm`}>{ui.deleteAccountDialog.typeToConfirm({ word: CONFIRMATION })}</label>
           <input
             id={`${titleId}-confirm`}
             ref={isGuest ? firstFieldRef : undefined}

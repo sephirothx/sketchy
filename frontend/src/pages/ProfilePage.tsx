@@ -36,6 +36,7 @@ import { isFriend, profileFriendActionFor } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
+import { ui } from "../content/ui/index.ts";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -185,14 +186,18 @@ function GameRow({
         <span className="profile-game-title">
           <span className="profile-game-room">{game.roomName}</span>
           <span className="profile-game-meta">
-            {finishedAt} · {game.totalRounds} rounds · {game.playerCount} players
+            {ui.profilePage.gameMeta({
+              finishedAt,
+              rounds: game.totalRounds,
+              players: game.playerCount,
+            })}
             {game.outcome !== "finished" && (
               <span className="profile-game-outcome">
                 {game.outcome === "abandoned" ? "abandoned" : "cut short"}
               </span>
             )}
             {game.visibility === "private" && (
-              <span className="profile-game-outcome">private room</span>
+              <span className="profile-game-outcome">{ui.profilePage.privateRoom}</span>
             )}
           </span>
         </span>
@@ -212,7 +217,7 @@ function GameRow({
                 #{seat.finalRank}
               </span>
             )}
-            <span className="profile-game-score">{seat.finalScore} pts</span>
+            <span className="profile-game-score">{ui.profilePage.seatScore({ points: seat.finalScore })}</span>
           </span>
         )}
         <span className="profile-game-chevron" aria-hidden="true">
@@ -223,15 +228,17 @@ function GameRow({
       {expanded && (
         <div className="profile-game-body">
           <p className="profile-note">
-            Rules: {game.scoringMode} scoring
-            {game.scoringVersion > 0 ? ` v${game.scoringVersion}` : " (legacy version unknown)"}
-            {` · ${game.hintMode} hints · ${game.drawingSeconds} seconds`}
-            {` · ${game.promptSourceMode.replaceAll("_", " ")} prompts`}
+            {ui.profilePage.gameRules({
+              scoringMode: game.scoringMode,
+              scoringVersion: game.scoringVersion,
+              hintMode: game.hintMode,
+              seconds: game.drawingSeconds,
+              promptSource: game.promptSourceMode.replaceAll("_", " "),
+            })}
           </p>
           {game.outcome !== "finished" && (
             <p className="profile-note">
-              This game did not finish, so these are the scores as they stood
-              when it stopped rather than a final placing.
+              {ui.profilePage.thisGameDidNotFinishSo}
             </p>
           )}
           <ol className="profile-standings">
@@ -259,7 +266,7 @@ function GameRow({
           </ol>
 
           {detailError && <p className="profile-note">{detailError}</p>}
-          {!detail && !detailError && <p className="profile-note">Loading turns…</p>}
+          {!detail && !detailError && <p className="profile-note">{ui.profilePage.loadingTurns}</p>}
 
           {detail && (() => {
             // The rounds carry ids, the standings carry the colors: joining
@@ -339,16 +346,16 @@ function GameRow({
               />
             )}
             <table className="profile-turns">
-              <caption className="visually-hidden">Turn by turn</caption>
+              <caption className="visually-hidden">{ui.profilePage.turnByTurn}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Round</th>
-                  <th scope="col">Prompt</th>
-                  <th scope="col">Drawn by</th>
-                  <th scope="col">Time</th>
-                  <th scope="col">Drawing</th>
-                  <th scope="col">Reactions</th>
-                  <th scope="col">Guesser outcomes</th>
+                  <th scope="col">{ui.profilePage.round}</th>
+                  <th scope="col">{ui.profilePage.prompt}</th>
+                  <th scope="col">{ui.profilePage.drawnBy}</th>
+                  <th scope="col">{ui.profilePage.time}</th>
+                  <th scope="col">{ui.profilePage.drawing}</th>
+                  <th scope="col">{ui.profilePage.reactions}</th>
+                  <th scope="col">{ui.profilePage.guesserOutcomes}</th>
                 </tr>
               </thead>
               <tbody>
@@ -369,7 +376,7 @@ function GameRow({
                           className="profile-drawing-button"
                           onClick={() => setViewingIndex(turnIndex)}
                         >
-                          View
+                          {ui.profilePage.view}
                         </button>
                       ) : (
                         <span className="profile-note">{drawingNote(turn)}</span>
@@ -513,7 +520,7 @@ function ProfileView({ userId }: { userId: string }) {
       setHasMore(page.hasMore);
     } catch {
       if (generation !== listGeneration.current) return;
-      setError("Could not load more games.");
+      setError(ui.profilePage.couldNotLoadMoreGames);
     } finally {
       setLoadingMore(false);
     }
@@ -525,7 +532,7 @@ function ProfileView({ userId }: { userId: string }) {
     <div className="profile-page">
       <AppHeader backLabel="Back to lobby" />
 
-      {!subject && !error && <p className="profile-note">Loading…</p>}
+      {!subject && !error && <p className="profile-note">{ui.profilePage.loading}</p>}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
       {subject && stats && (
@@ -566,7 +573,7 @@ function ProfileView({ userId }: { userId: string }) {
               <h1>
                 {/* The disc's mark is decorative, so the heading carries the
                     word for a screen reader. */}
-                {viewerIsFriend && <span className="visually-hidden">Friend. </span>}
+                {viewerIsFriend && <span className="visually-hidden">{ui.profilePage.friend} </span>}
                 <PlayerName
                   name={shownName}
                   nameColor={subject.nameColor}
@@ -613,8 +620,8 @@ function ProfileView({ userId }: { userId: string }) {
                 <button
                   type="button"
                   className="btn btn-ghost btn-compact profile-report-picture"
-                  title={`Report ${shownName}`}
-                  aria-label={`Report ${shownName}`}
+                  title={ui.profilePage.reportPlayer({ name: shownName })}
+                  aria-label={ui.profilePage.reportPlayer({ name: shownName })}
                   onClick={() => setReportingPicture(true)}
                 >
                   <FlagIcon size={14} />
@@ -633,19 +640,18 @@ function ProfileView({ userId }: { userId: string }) {
 
           {isOwnProfile && subject.isAnonymous && (
             <section className="panel profile-claim">
-              <h2>Claim your account</h2>
+              <h2>{ui.profilePage.claimYourAccount}</h2>
               <p>
-                Your games are already being recorded under this display name.
-                Create an account to keep them and use it as your username on every device.
+                {ui.profilePage.yourGamesAreAlreadyBeingRecorded}
               </p>
               <button type="button" onClick={() => setAuthMode("claim")}>
-                Create account
+                {ui.profilePage.createAccount}
               </button>
             </section>
           )}
 
           <section className="panel">
-            <h2>Statistics</h2>
+            <h2>{ui.profilePage.statistics}</h2>
             <div className="profile-stats">
               <StatTile label="Games played" value={String(stats.gamesPlayed)} />
               <StatTile label="Games won" value={String(stats.gamesWon)} />
@@ -666,14 +672,14 @@ function ProfileView({ userId }: { userId: string }) {
 
           <section className="panel">
             <div className="profile-history-head">
-              <h2>Game history</h2>
+              <h2>{ui.profilePage.gameHistory}</h2>
               <label className="profile-history-filter">
                 <input
                   type="checkbox"
                   checked={includeAbandoned}
                   onChange={(change) => setIncludeAbandoned(change.target.checked)}
                 />
-                Include games that fell apart
+                {ui.profilePage.includeGamesThatFellApart}
               </label>
             </div>
             {games.length === 0 ? (

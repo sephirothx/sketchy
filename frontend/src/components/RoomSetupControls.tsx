@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CheckIcon, PlusIcon } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -99,7 +100,7 @@ export function InputNumber({
       <div className="input-number">
         <button
           type="button"
-          aria-label={`Decrease ${label}`}
+          aria-label={ui.roomSetupControls.decrease({ label })}
           disabled={atMin}
           onClick={() =>
             onChange(options ? stepDiscrete(value, -1, options) : clampInt(value - 1, low, high))
@@ -129,7 +130,7 @@ export function InputNumber({
         </span>
         <button
           type="button"
-          aria-label={`Increase ${label}`}
+          aria-label={ui.roomSetupControls.increase({ label })}
           disabled={atMax}
           onClick={() =>
             onChange(options ? stepDiscrete(value, 1, options) : clampInt(value + 1, low, high))

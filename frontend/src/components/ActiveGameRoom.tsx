@@ -43,6 +43,7 @@ import { recordRender } from "../lib/renderDiagnostics";
 import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -116,9 +117,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(window.location.href);
-      notify("Invite link copied.", "success", 2500);
+      notify(ui.activeGameRoom.inviteLinkCopied, ui.activeGameRoom.success, 2500);
     } catch {
-      notify("Couldn’t copy the link. Copy it from the address bar.", "error");
+      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, ui.activeGameRoom.error);
     }
   }
 
@@ -131,7 +132,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       navigate("/", { state: { criticalError: data?.reason || "You were kicked from the room." } });
     }
     function onVotedAfk(data: { message?: string }) {
-      notify(data?.message || "You were marked AFK by room vote.", "warning");
+      notify(data?.message || "You were marked AFK by room vote.", ui.activeGameRoom.warning);
     }
     // One seat per account per room: another tab took this one over. Say so
     // rather than leaving this tab on a board that has silently stopped.
@@ -183,7 +184,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setStartError(null);
     try {
       const response = await emitWithAck<AckResponse>("start_game", {});
-      if (!response.ok) setStartError(refusalText(response, "Could not start the game. Please try again."));
+      if (!response.ok) setStartError(refusalText(response, ui.activeGameRoom.couldNotStartGamePleaseTry));
     } catch (startError) {
       setStartError(socketRequestErrorMessage(startError, "start the game"));
     } finally {
@@ -197,10 +198,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("propose_restart_vote", {});
       if (!response.ok) {
-        notify(refusalText(response, "Could not start a restart vote."), "error");
+        notify(refusalText(response, ui.activeGameRoom.couldNotStartRestartVote), ui.activeGameRoom.error);
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "start a restart vote"), "error");
+      notify(socketRequestErrorMessage(restartError, "start a restart vote"), ui.activeGameRoom.error);
     } finally {
       setRestartBusy(false);
     }
@@ -212,10 +213,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     try {
       const response = await emitWithAck<AckResponse>("cast_restart_vote", { vote });
       if (!response.ok) {
-        notify(refusalText(response, "Could not record your restart vote."), "error");
+        notify(refusalText(response, ui.activeGameRoom.couldNotRecordYourRestartVote), ui.activeGameRoom.error);
       }
     } catch (restartError) {
-      notify(socketRequestErrorMessage(restartError, "record your restart vote"), "error");
+      notify(socketRequestErrorMessage(restartError, "record your restart vote"), ui.activeGameRoom.error);
     } finally {
       setRestartBusy(false);
     }
@@ -233,14 +234,14 @@ export function ActiveGameRoom({ code }: { code: string }) {
       );
       if (!response.ok) {
         notify(
-          refusalText(response, `Could not ${action} the color suggestion.`),
-          "error",
+          refusalText(response, ui.activeGameRoom.couldNotChangeSuggestion({ action })),
+          ui.activeGameRoom.error,
         );
       }
     } catch (suggestionError) {
       notify(
         socketRequestErrorMessage(suggestionError, `${action} the color suggestion`),
-        "error",
+        ui.activeGameRoom.error,
       );
     } finally {
       setColorSuggestionBusy(false);
@@ -339,8 +340,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
             className="room-copy-button"
             data-room-code={code}
             onClick={() => void handleCopyLink()}
-            aria-label="Copy the room invite link"
-            title="Click to copy room invite link"
+            aria-label={ui.activeGameRoom.copyRoomInviteLink}
+            title={ui.activeGameRoom.clickCopyRoomInviteLink}
           >
             <span>{code}</span>
             <CopyIcon size={13} />
@@ -350,9 +351,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
             type="button"
             className="btn btn-icon game-header-menu-button"
             onClick={() => setRoomMenuOpen(true)}
-            aria-label="Room menu"
+            aria-label={ui.activeGameRoom.roomMenu}
             aria-haspopup="dialog"
-            title="Room menu"
+            title={ui.activeGameRoom.roomMenu}
             data-testid="open-room-menu"
           >
             <DotsIcon size={18} />
@@ -367,7 +368,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               className="room-copy-button"
               data-room-code={code}
               onClick={() => void handleCopyLink()}
-              title="Click to copy room invite link"
+              title={ui.activeGameRoom.clickCopyRoomInviteLink}
             >
               <span>{code}</span>
               <CopyIcon size={13} />
@@ -406,15 +407,15 @@ export function ActiveGameRoom({ code }: { code: string }) {
               title={isAfk ? "Back from AFK" : "Go AFK"}
             >
               <MoonIcon size={14} />
-              <span className="header-action-label">AFK</span>
+              <span className="header-action-label">{ui.activeGameRoom.afk}</span>
             </button>
             {roomView === "playing" && (
               <button
                 type="button"
                 className="btn btn-icon btn-compact save-image-button game-header-save-button"
                 onClick={() => canvasRef.current?.saveImage()}
-                aria-label="Save image"
-                title="Save drawn image to file"
+                aria-label={ui.activeGameRoom.saveImage}
+                title={ui.activeGameRoom.saveDrawnImageFile}
               >
                 <DownloadIcon size={16} />
               </button>
@@ -423,8 +424,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
               type="button"
               className="btn btn-icon btn-compact header-settings-button"
               onClick={() => openSettings()}
-              title="Player settings"
-              aria-label="Player settings"
+              title={ui.activeGameRoom.playerSettings}
+              aria-label={ui.activeGameRoom.playerSettings}
             >
               <GearIcon size={16} />
             </button>
@@ -433,11 +434,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
               type="button"
               className="btn btn-danger-ghost btn-compact game-header-leave-button"
               onClick={handleLeave}
-              aria-label="Leave room"
-              title="Leave room"
+              aria-label={ui.activeGameRoom.leaveRoom}
+              title={ui.activeGameRoom.leaveRoom}
             >
               <LeaveIcon size={14} />
-              <span className="header-action-label">Leave</span>
+              <span className="header-action-label">{ui.activeGameRoom.leave}</span>
             </button>
           </div>
         </header>
@@ -465,7 +466,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           drawing you are trying to guess. */}
       {playersSheetOpen && (
         <BottomSheet
-          title="Players"
+          title={ui.activeGameRoom.players}
           height="55%"
           className="players-sheet"
           testId="players-drawer"

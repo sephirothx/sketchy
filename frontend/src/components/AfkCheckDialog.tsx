@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ui } from "../content/ui/index.ts";
 
 /** The AFK check: the room asking whether anybody is still there (#677).
 
@@ -39,22 +40,21 @@ export function AfkCheckDialog({
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="modal-title">Still there?</h3>
+        <h3 id={titleId} className="modal-title">{ui.afkCheckDialog.stillThere}</h3>
         <p className="modal-body">
-          You have been quiet for a while. Answer and you keep playing;
-          otherwise the room will mark you AFK and carry on without you.
+          {ui.afkCheckDialog.youHaveBeenQuietWhileAnswer}
         </p>
         <p className="afk-check-countdown" role="timer" aria-live="off">
           <span className="afk-check-seconds">{secondsLeft}</span>
           <span className="afk-check-unit">
-            {secondsLeft === 1 ? "second" : "seconds"}
+            {ui.afkCheckDialog.secondsUnit({ count: secondsLeft })}
           </span>
         </p>
         {/* Announced once rather than on every tick: a countdown read out
         second by second is unusable with a screen reader, and the sentence
         that matters is this one. */}
         <p className="visually-hidden" role="status">
-          Still there? Press the button, or move the mouse, to keep playing.
+          {ui.afkCheckDialog.stillTherePressButtonMoveMouse}
         </p>
         <button
           type="button"
@@ -62,7 +62,7 @@ export function AfkCheckDialog({
           onClick={onAnswer}
           autoFocus
         >
-          I’m here
+          {ui.afkCheckDialog.iMHere}
         </button>
       </div>
     </div>

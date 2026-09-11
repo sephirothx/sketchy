@@ -6,6 +6,7 @@ import {
 } from "../lib/promptLists";
 import type { SharedPromptList } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const REASONS: Array<{ value: PromptContentReportReason; label: string }> = [
   { value: "inappropriate", label: "Inappropriate content" },
@@ -58,7 +59,7 @@ export function PromptContentReportDialog({
       });
       onSubmitted();
     } catch (caught) {
-      setError(refusalText(caught, "Could not send the report."));
+      setError(refusalText(caught, ui.promptContentReportDialog.couldNotSendReport));
     } finally {
       setBusy(false);
     }
@@ -68,23 +69,23 @@ export function PromptContentReportDialog({
     if (event.target === event.currentTarget) onClose();
   }}>
     <div ref={dialogRef} className="modal-card prompt-content-report-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-      <h2 id={titleId} className="modal-title">Report {promptList.name}</h2>
-      <p className="modal-body">Reports are reviewed after submission. The list stays available unless a moderator hides it.</p>
+      <h2 id={titleId} className="modal-title">{ui.promptContentReportDialog.reportList({ name: promptList.name })}</h2>
+      <p className="modal-body">{ui.promptContentReportDialog.reportsAreReviewedAfterSubmissionList}</p>
       <form onSubmit={(event) => void submit(event)}>
-        <label htmlFor={targetId}>Content</label>
+        <label htmlFor={targetId}>{ui.promptContentReportDialog.content}</label>
           <select id={targetId} value={target} onChange={(event) => setTarget(event.target.value)}>
-            <option value="list">Entire list</option>
+            <option value="list">{ui.promptContentReportDialog.entireList}</option>
             {promptList.prompts.map((prompt) => <option key={prompt.promptVersionId} value={prompt.promptVersionId}>{prompt.prompt}</option>)}
           </select>
-        <label htmlFor={reasonId}>Reason</label>
+        <label htmlFor={reasonId}>{ui.promptContentReportDialog.reason}</label>
           <select id={reasonId} value={reason} onChange={(event) => setReason(event.target.value as PromptContentReportReason)}>
             {REASONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
-        <label htmlFor={detailsId}>What should the moderator know?</label>
+        <label htmlFor={detailsId}>{ui.promptContentReportDialog.whatShouldModeratorKnow}</label>
           <textarea id={detailsId} value={details} required minLength={1} maxLength={2000} onChange={(event) => setDetails(event.target.value)} />
         {error && <p className="auth-error" role="alert">{error}</p>}
         <div className="confirmation-dialog-actions">
-          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>Cancel</button>
+          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.promptContentReportDialog.cancel}</button>
           <button type="submit" className="confirmation-danger-button" disabled={busy || !details.trim()}>{busy ? "Sending…" : "Send report"}</button>
         </div>
       </form>

@@ -21,6 +21,8 @@ import type {
   ScoreEntry,
   ScoringMode,
 } from "../types";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 interface WaitingRoomPanelProps {
   name: string;
@@ -83,9 +85,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(value);
-      notify(`${what} copied.`, "success", 2500);
+      notify(ui.waitingRoomPanel.copied({ what }), ui.waitingRoomPanel.success, 2500);
     } catch {
-      notify(`Couldn’t copy the ${what.toLowerCase()}. Copy it from the address bar.`, "error");
+      notify(ui.waitingRoomPanel.couldNotCopy({ what: what.toLowerCase() }), ui.waitingRoomPanel.error);
     }
   }
 
@@ -118,7 +120,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         ? `${props.promptListSlugs.length} curated prompt lists`
         : null;
   const settingsFacts = [
-    `${props.rounds} ${props.rounds === 1 ? "round" : "rounds"}`,
+    ui.waitingRoomPanel.roundCount({ count: props.rounds }),
     `${props.drawingSeconds}s`,
     hintLabelFor(props.hintMode, props.hideMaskedPrompt),
     props.scoringMode === "none" ? "No scoring" : null,
@@ -142,13 +144,13 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       {/* The code, read at a glance or tapped to copy, and one way to send it.
           Six bordered cells and two buttons spent 237px on that. */}
       <section className="waiting-card waiting-invite-card">
-        <p className="waiting-invite-kicker">Invite your friends</p>
+        <p className="waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
         {code && (
-          <p className="waiting-code" aria-label={`Room code ${code}`}>{code}</p>
+          <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
         )}
         <div className="waiting-invite-actions">
           <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
-            Share the link
+            {ui.waitingRoomPanel.shareLink}
           </Button>
           {/* A button of its own, not a link pretending to be one: it is the
               other half of the same job as Share, on a card whose whole
@@ -158,7 +160,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             iconLeft={<CopyIcon size={15} />}
             onClick={() => code && void copyToClipboard(code, "Room code")}
           >
-            Copy code
+            {ui.waitingRoomPanel.copyCode}
           </Button>
         </div>
         {/* The same job as Share, for the people you already play with: no
@@ -171,9 +173,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           below the chat card. */}
       {isNarrow && <section className="waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
         <div className="waiting-roster-head">
-          <h2 id="waiting-roster-title">In the room</h2>
+          <h2 id="waiting-roster-title">{ui.waitingRoomPanel.inTheRoom}</h2>
           <span className="waiting-roster-count">
-            {activePlayers.length} of {props.maxPlayers}
+            {ui.waitingRoomPanel.rosterCount({
+              here: activePlayers.length,
+              capacity: props.maxPlayers,
+            })}
           </span>
         </div>
         <ul className="waiting-roster-grid">
@@ -200,11 +205,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                   {player.nickname}
                 </span>
                 {player.playerId === myPlayerId && (
-                  <span className="visually-hidden">(you)</span>
+                  <span className="visually-hidden">{ui.waitingRoomPanel.you}</span>
                 )}
-                {player.isHost && <span className="visually-hidden">Host</span>}
+                {player.isHost && <span className="visually-hidden">{ui.waitingRoomPanel.host}</span>}
                 {friendSeats.has(player.playerId) && (
-                  <span className="visually-hidden">Friend</span>
+                  <span className="visually-hidden">{ui.waitingRoomPanel.friend}</span>
                 )}
               </span>
             </li>
@@ -214,7 +219,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               <span className="waiting-roster-empty-avatar" aria-hidden="true">
                 <PlusIcon size={18} />
               </span>
-              <span className="waiting-roster-name">Invite</span>
+              <span className="waiting-roster-name">{ui.waitingRoomPanel.invite}</span>
             </li>
           )}
         </ul>
@@ -237,7 +242,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             ))}
           </span>
           <span className="waiting-settings-edit">
-            Edit <ChevronRightIcon size={16} />
+            {ui.waitingRoomPanel.edit} <ChevronRightIcon size={16} />
           </span>
         </button>
       ) : (
@@ -263,12 +268,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         <div className="waiting-room-actions">
           {props.highlightCount > 0 && (
             <Button variant="secondary" onClick={props.onViewHighlights}>
-              View highlights
+              {ui.waitingRoomPanel.viewHighlights}
             </Button>
           )}
           {props.drawingCount > 0 && (
             <Button variant="secondary" onClick={props.onViewDrawings}>
-              View drawings
+              {ui.waitingRoomPanel.viewDrawings}
             </Button>
           )}
         </div>
@@ -292,13 +297,22 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 ? "Starting…"
                 : canStart
                   ? rematch ? "Rematch" : "Start game"
-                  : `Need ${needsPlayers} more player${needsPlayers === 1 ? "" : "s"}`}
+                  : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
             </button>
           </>
         ) : (
           <p className="waiting-start-waiting">
             {host
-              ? <><span className={playerNameClass(host.isAnonymous)} style={playerNameStyle(host.nameColor, host.isAnonymous)}>{host.nickname}</span> will start {rematch ? "the rematch" : "the game"}</>
+              ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
+              host: (
+                <span
+                  className={playerNameClass(host.isAnonymous)}
+                  style={playerNameStyle(host.nameColor, host.isAnonymous)}
+                >
+                  {host.nickname}
+                </span>
+              ),
+            })}</>
               : "Waiting for a host"}
           </p>
         )}

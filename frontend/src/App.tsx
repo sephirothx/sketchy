@@ -46,6 +46,7 @@ import { onServerFull } from "./lib/socket";
 import { reloadForUpdate } from "./lib/protocol";
 import { onUpdateRequired } from "./lib/updateRequired";
 import type { ServerShutdownNotice } from "./types";
+import { ui } from "./content/ui/index.ts";
 
 /* The router keeps the window scroll across navigations, so submitting a form
    at the bottom of one page would open the next one part-way down. The overlay
@@ -231,7 +232,7 @@ function App() {
     <ToastProvider>
       {updateRequired && (
         <div className="server-shutdown-banner is-update-required" role="alert">
-          <span>This tab is out of date and cannot play until it is reloaded.</span>
+          <span>{ui.app.thisTabOutDateCannotPlay}</span>
           <button
             type="button"
             onClick={() =>
@@ -241,7 +242,7 @@ function App() {
               })
             }
           >
-            Reload
+            {ui.app.reload}
           </button>
         </div>
       )}
@@ -252,22 +253,18 @@ function App() {
       )}
       {paused && !shutdownNotice && (
         <div className="server-shutdown-banner" role="status" aria-live="polite">
-          New rooms are paused for maintenance. Games already running carry on
-          as normal.
+          {ui.app.newRoomsArePausedMaintenanceGames}
         </div>
       )}
       {shutdownNotice && (
         <div className="server-shutdown-banner" role="status" aria-live="polite">
-          Server update in progress. No new rooms or games can start;{" "}
-          {secondsLeft > 0
-            ? `a current game has ${secondsLeft} second${secondsLeft === 1 ? "" : "s"} to finish.`
-            : "any game still running is ending now."}
+          {ui.app.serverUpdateInProgress({ seconds: secondsLeft })}
         </div>
       )}
       {restarted && (
         <div className="server-shutdown-banner is-restarted" role="status" aria-live="polite">
-          <span>The server was updated and is back. Any game in progress ended.</span>
-          <button type="button" aria-label="Dismiss" onClick={() => setRestarted(false)}><XIcon size={14} /></button>
+          <span>{ui.app.serverWasUpdatedBackAnyGame}</span>
+          <button type="button" aria-label={ui.app.dismiss} onClick={() => setRestarted(false)}><XIcon size={14} /></button>
         </div>
       )}
       {/* Nothing in a production build; the E2E suite's way to crash the app. */}

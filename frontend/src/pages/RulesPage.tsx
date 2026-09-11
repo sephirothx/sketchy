@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { Card, SectionLabel } from "../components/ui/Card";
 import { rulesFor } from "../content/rules";
+import { ui } from "../content/ui/index.ts";
 
 /** The rules, on one page.
 
@@ -72,14 +73,14 @@ export function RulesPage() {
       <AppHeader backLabel="Back to lobby" />
 
       <header className="rules-masthead">
-        <SectionLabel>Sketchy</SectionLabel>
+        <SectionLabel>{ui.rulesPage.sketchy}</SectionLabel>
         <h1>{rules.title}</h1>
       </header>
 
       <div className="rules-layout">
-        <aside className="rules-rail" aria-label="The rules">
+        <aside className="rules-rail" aria-label={ui.rulesPage.theRules}>
           <Card className="rules-contents">
-            <SectionLabel>On this page</SectionLabel>
+            <SectionLabel>{ui.rulesPage.thisPage}</SectionLabel>
             <ol>
               {rules.sections.map((section) => (
                 <li key={section.id} className="rules-contents-section">
@@ -136,7 +137,7 @@ export function RulesPage() {
                   ))}
                   {rule.examples.length > 0 && (
                     <div className="rules-examples">
-                      <p className="rules-examples-label">For example</p>
+                      <p className="rules-examples-label">{ui.rulesPage.forExample}</p>
                       <ul>
                         {rule.examples.map((example) => (
                           <li key={example}>{example}</li>

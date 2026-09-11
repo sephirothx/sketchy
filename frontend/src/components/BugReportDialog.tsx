@@ -16,6 +16,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useToast } from "../lib/toast";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const MAX_DETAILS = 4000;
 
@@ -92,7 +93,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         setDescriptionOnly(false);
       }
     } catch (caught) {
-      setError(refusalText(caught, "Could not take the screenshot."));
+      setError(refusalText(caught, ui.bugReportDialog.couldNotTakeScreenshot));
     } finally {
       setCapturing(false);
     }
@@ -134,7 +135,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
       "Connection",
       (() => {
         const connection = context.connection as { connected: boolean; reconnects: number };
-        return `${connection.connected ? "connected" : "offline"} · ${connection.reconnects} reconnect${connection.reconnects === 1 ? "" : "s"} this visit`;
+        return ui.bugReportDialog.connectionSummary(connection);
       })(),
     ],
   ];
@@ -158,10 +159,10 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         roomCode: descriptionOnly ? null : roomCode,
         screenshot: descriptionOnly ? null : shot?.base64 ?? null,
       });
-      notify("Thanks — your report is with the people who run Sketchy.", "success");
+      notify(ui.bugReportDialog.thanksYourReportWithPeopleWho, ui.bugReportDialog.success);
       onClose();
     } catch (caught) {
-      setError(refusalText(caught, "Could not send the report."));
+      setError(refusalText(caught, ui.bugReportDialog.couldNotSendReport));
     } finally {
       setBusy(false);
     }
@@ -174,35 +175,35 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
       <div className="bug-report-head">
         <span className="bug-report-mark" aria-hidden="true"><BugIcon size={20} /></span>
         <div>
-          <h2 id={titleId} className="modal-title">Report a bug</h2>
-          <p className="modal-body">Something broken, not something someone said. This reaches the people who run Sketchy — never other players.</p>
+          <h2 id={titleId} className="modal-title">{ui.bugReportDialog.reportBug}</h2>
+          <p className="modal-body">{ui.bugReportDialog.somethingBrokenNotSomethingSomeoneSaid}</p>
         </div>
       </div>
 
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
         <div className="bug-report-row">
           <div>
-            <label htmlFor={areaId}>Where</label>
+            <label htmlFor={areaId}>{ui.bugReportDialog.where}</label>
             <select id={areaId} className="settings-select" value={area} onChange={(event) => setArea(event.target.value as BugReportArea)}>
               {BUG_AREAS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </div>
           <div>
-            <label htmlFor={severityId}>How bad</label>
+            <label htmlFor={severityId}>{ui.bugReportDialog.howBad}</label>
             <select id={severityId} className="settings-select" value={severity} onChange={(event) => setSeverity(event.target.value as BugReportSeverity)}>
               {BUG_SEVERITIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </div>
         </div>
 
-        <label htmlFor={summaryId}>One line summary</label>
+        <label htmlFor={summaryId}>{ui.bugReportDialog.oneLineSummary}</label>
         <input id={summaryId} type="text" value={summary} required maxLength={200}
-          placeholder="What went wrong, in one line"
+          placeholder={ui.bugReportDialog.whatWentWrongOneLine}
           onChange={(event) => setSummary(event.target.value)} />
 
-        <label htmlFor={detailsId}>What happened</label>
+        <label htmlFor={detailsId}>{ui.bugReportDialog.whatHappened}</label>
         <textarea id={detailsId} className="report-details" rows={4} value={details} required maxLength={MAX_DETAILS}
-          placeholder="What you did, what you expected, what happened instead."
+          placeholder={ui.bugReportDialog.whatYouDidWhatYouExpected}
           onChange={(event) => setDetails(event.target.value)} />
         <p className="bug-report-counter">{details.length} / {MAX_DETAILS}</p>
 
@@ -210,18 +211,18 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
           <section className="bug-report-shot">
             <div className="bug-report-shot-head">
               <ImageIcon size={15} aria-hidden="true" />
-              <strong>Screenshot</strong>
-              <span className="bug-report-optional">Optional</span>
+              <strong>{ui.bugReportDialog.screenshot}</strong>
+              <span className="bug-report-optional">{ui.bugReportDialog.optional}</span>
             </div>
             {shot ? (
               <div className="bug-report-shot-body">
-                <img src={shot.previewUrl} alt="The screenshot that will be sent with this report" />
+                <img src={shot.previewUrl} alt={ui.bugReportDialog.screenshotThatWillBeSentWith} />
                 <div>
                   <p className="bug-report-shot-meta">{shot.width} × {shot.height} · {shot.contentType.replace("image/", "").toUpperCase()} · {bytes(shot.byteSize)}</p>
-                  <p className="auth-hint">This dialog hides itself while the shot is taken, so you get the page behind it. Look at it before you send — you chose what to share.</p>
+                  <p className="auth-hint">{ui.bugReportDialog.thisDialogHidesItselfWhileShot}</p>
                   <div className="bug-report-shot-actions">
-                    <button type="button" onClick={() => void attach()} disabled={capturing}>Replace</button>
-                    <button type="button" className="bug-report-remove" onClick={discard}>Remove</button>
+                    <button type="button" onClick={() => void attach()} disabled={capturing}>{ui.bugReportDialog.replace}</button>
+                    <button type="button" className="bug-report-remove" onClick={discard}>{ui.bugReportDialog.remove}</button>
                   </div>
                 </div>
               </div>
@@ -230,7 +231,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
                 <button type="button" className="bug-report-attach" onClick={() => void attach()} disabled={capturing}>
                   {capturing ? "Waiting for the picker…" : "Attach a screenshot"}
                 </button>
-                <p className="auth-hint">Opens your browser's own picker — choose this tab. This dialog hides itself while the shot is taken, so you get the page behind it.</p>
+                <p className="auth-hint">{ui.bugReportDialog.opensYourBrowserSOwnPicker}</p>
               </>
             )}
           </section>
@@ -243,7 +244,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
           </dl>
           {errors.length > 0 && (
             <>
-              <p className="bug-report-subhead">Recent client errors</p>
+              <p className="bug-report-subhead">{ui.bugReportDialog.recentClientErrors}</p>
               <ul className="bug-console-log">
                 {errors.map((entry, index) => (
                   <li key={`${entry.at}-${index}`}><span>{entry.at.slice(11, 19)}</span>{entry.message}</li>
@@ -261,15 +262,15 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         <label className="bug-report-plain">
           <input type="checkbox" checked={descriptionOnly}
             onChange={(event) => setPlainDescription(event.target.checked)} />
-          <span>Send my description only
-            <span>Drops the details above and any screenshot. We will still read it, but the bug is much harder to reproduce.</span>
+          <span>{ui.bugReportDialog.sendMyDescriptionOnly}
+            <span>{ui.bugReportDialog.dropsDetailsAboveAnyScreenshotWe}</span>
           </span>
         </label>
 
         {error && <p className="auth-error" role="alert">{error}</p>}
 
         <div className="confirmation-dialog-actions">
-          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>Cancel</button>
+          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.bugReportDialog.cancel}</button>
           <button type="submit" className="modal-button" disabled={busy || !summary.trim() || !details.trim()}>{busy ? "Sending…" : "Send report"}</button>
         </div>
       </form>

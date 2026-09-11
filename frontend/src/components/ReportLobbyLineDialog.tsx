@@ -6,6 +6,7 @@ import type { LobbyChatLine } from "../lib/lobbyChat";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** The reasons a line of chat can be reported for. A line is words, so the
 reasons about a drawing, a picture, or play are left out rather than offered
@@ -63,7 +64,7 @@ export function ReportLobbyLineDialog({
       setSent(true);
     } catch (problem) {
       setError(
-        refusalText(problem, "That report could not be sent. Please try again."),
+        refusalText(problem, ui.reportLobbyLineDialog.thatReportCouldNotBeSent),
       );
     } finally {
       setBusy(false);
@@ -95,8 +96,7 @@ export function ReportLobbyLineDialog({
         {!sent ? (
           <>
             <p className="modal-body">
-              A moderator will see this line. Nothing happens to {line.displayName} right
-              now, and they are not told who reported them.
+              {ui.reportLobbyLineDialog.nothingHappensYet({ name: line.displayName })}
             </p>
             <blockquote className="report-quoted-line" data-testid="report-quoted-line">
               <strong
@@ -108,7 +108,7 @@ export function ReportLobbyLineDialog({
               {line.text}
             </blockquote>
             <form onSubmit={submit} className="auth-form">
-              <label htmlFor={`${titleId}-reason`}>What is wrong with it</label>
+              <label htmlFor={`${titleId}-reason`}>{ui.reportLobbyLineDialog.whatWrongWith}</label>
               <select
                 id={`${titleId}-reason`}
                 ref={reasonRef}
@@ -123,7 +123,7 @@ export function ReportLobbyLineDialog({
                 ))}
               </select>
 
-              <label htmlFor={`${titleId}-details`}>Anything else (optional)</label>
+              <label htmlFor={`${titleId}-details`}>{ui.reportLobbyLineDialog.anythingElseOptional}</label>
               <textarea
                 id={`${titleId}-details`}
                 className="report-details"
@@ -134,10 +134,10 @@ export function ReportLobbyLineDialog({
                   setDetails(change.target.value);
                   setError(null);
                 }}
-                placeholder="Anything a moderator should know"
+                placeholder={ui.reportLobbyLineDialog.anythingModeratorShouldKnow}
               />
               <p className="auth-hint">
-                This line is attached, with what the lobby said around it.
+                {ui.reportLobbyLineDialog.thisLineAttachedWithWhatLobby}
               </p>
 
               {error && (
@@ -152,9 +152,9 @@ export function ReportLobbyLineDialog({
           </>
         ) : (
           <>
-            <p className="modal-body">Sent, with the line and what was said around it attached.</p>
+            <p className="modal-body">{ui.reportLobbyLineDialog.sentWithLineWhatWasSaid}</p>
             <button type="button" className="modal-button" onClick={onClose}>
-              Done
+              {ui.reportLobbyLineDialog.done}
             </button>
           </>
         )}

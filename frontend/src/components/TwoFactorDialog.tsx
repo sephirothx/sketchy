@@ -21,6 +21,7 @@ import {
   type SecondFactorState,
 } from "../lib/secondFactor";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Setting up the second factor an account can hold, and a staff account must.
@@ -74,9 +75,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(value);
-      notify(`${what} copied.`, "success", 2500);
+      notify(ui.twoFactorDialog.copied({ what }), ui.twoFactorDialog.success, 2500);
     } catch {
-      notify(`Couldn't copy the ${what.toLowerCase()}. Select it and copy by hand.`, "error");
+      notify(ui.twoFactorDialog.couldNotCopy({ what: what.toLowerCase() }), ui.twoFactorDialog.error);
     }
   }
 
@@ -90,7 +91,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         if (!active) return;
         setState(result);
       })
-      .catch(() => { if (active) setError("Could not read your security settings."); });
+      .catch(() => { if (active) setError(ui.twoFactorDialog.couldNotReadYourSecuritySettings); });
     return () => { active = false; };
   }, []);
 
@@ -125,7 +126,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     // nobody has vouched for, and a role waiting on this enrolment would go
     // on waiting with nothing to say why.
     if (!password) {
-      setError("Your password confirms the authenticator is yours.");
+      setError(ui.twoFactorDialog.yourPasswordConfirmsAuthenticatorYours);
       return;
     }
     setBusy(true);
@@ -156,7 +157,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
 
   async function addPasskey() {
     if (!password) {
-      setError("Your password confirms this passkey is yours.");
+      setError(ui.twoFactorDialog.yourPasswordConfirmsThisPasskeyYours);
       return;
     }
     setBusy(true);
@@ -169,14 +170,14 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setPasskeys((current) => [...(current ?? []), result.passkey]);
       if (!result.roleGranted) {
         setState(await fetchSecondFactor());
-        notify("Passkey added.", "success");
+        notify(ui.twoFactorDialog.passkeyAdded, ui.twoFactorDialog.success);
         onClose();
       }
     } catch (problem) {
       // The browser's own refusals arrive as DOMException - a cancelled
       // prompt, a device that will not do it - and read badly as-is.
       if (problem instanceof DOMException) {
-        setError("That passkey was not created. You can try again.");
+        setError(ui.twoFactorDialog.thatPasskeyWasNotCreatedYou);
       } else {
         failed(problem, "Could not add that passkey.");
       }
@@ -187,7 +188,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
 
   async function removePasskey(passkeyId: string) {
     if (!password) {
-      setError("Your password is needed to remove a passkey.");
+      setError(ui.twoFactorDialog.yourPasswordNeededRemovePasskey);
       return;
     }
     setBusy(true);
@@ -213,7 +214,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
       setGranted(result.roleGranted);
       if (result.roleGranted) return;
       setState(await fetchSecondFactor());
-      notify("Confirmed. This account can now be given a staff role.", "success");
+      notify(ui.twoFactorDialog.confirmedThisAccountCanNowBe, ui.twoFactorDialog.success);
     } catch (problem) {
       setCode("");
       failed(problem, "Could not confirm it.");
@@ -271,17 +272,15 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="modal-title">Two-factor authentication</h3>
+        <h3 id={titleId} className="modal-title">{ui.twoFactorDialog.twoFactorAuthentication}</h3>
         {error && <p className="auth-error" role="alert">{error}</p>}
 
         {codes && (
           <div className="two-factor-codes">
             <p className="modal-body">
-              <strong>Save these recovery codes now.</strong> Each one signs you
-              in once if you lose your authenticator app. They are not shown
-              again — only their hashes are kept.
+              <strong>{ui.twoFactorDialog.saveTheseRecoveryCodesNow}</strong> {ui.twoFactorDialog.eachOneSignsYouOnceIf}
             </p>
-            <ul aria-label="Recovery codes">
+            <ul aria-label={ui.twoFactorDialog.recoveryCodes}>
               {codes.map((value) => <li key={value}><code>{value}</code></li>)}
             </ul>
             <div className="two-factor-actions">
@@ -291,7 +290,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => downloadRecoveryCodes(username, codes)}
               >
                 <DownloadIcon size={15} />
-                Download as a file
+                {ui.twoFactorDialog.downloadAsFile}
               </button>
               <button
                 type="button"
@@ -299,7 +298,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => void copy(codes.join("\n"), "Recovery codes")}
               >
                 <CopyIcon size={15} />
-                Copy all
+                {ui.twoFactorDialog.copyAll}
               </button>
             </div>
             {/* A tick rather than a button, and the only way past: these exist
@@ -311,7 +310,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 checked={savedCodes}
                 onChange={(event) => setSavedCodes(event.target.checked)}
               />
-              I have saved these somewhere safe
+              {ui.twoFactorDialog.iHaveSavedTheseSomewhereSafe}
             </label>
             {/* Done means done. Behind these codes is the manage view, which
                 is a different errand - somebody who came here to set a factor
@@ -326,7 +325,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               onClick={() => (granted ? setCodes(null) : onClose())}
               disabled={!savedCodes}
             >
-              Done
+              {ui.twoFactorDialog.done}
             </button>
           </div>
         )}
@@ -339,11 +338,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         {!codes && !granted && !offer && passkeys !== null && !hasFactor && (
           <div className="auth-form two-factor-choose">
             <p className="modal-body">
-              Moderators and administrators sign in with a passkey: your
-              device confirms it is you — a fingerprint, your face, or its
-              PIN — and nothing is typed that could be given away.
+              {ui.twoFactorDialog.moderatorsAdministratorsSignWithPasskeyYour}
             </p>
-            <label htmlFor={passwordId}>Your password</label>
+            <label htmlFor={passwordId}>{ui.twoFactorDialog.yourPassword}</label>
             <input
               id={passwordId}
               type="password"
@@ -351,7 +348,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
             />
-            <p className="modal-hint">Confirms the passkey is being added by you.</p>
+            <p className="modal-hint">{ui.twoFactorDialog.confirmsPasskeyBeingAddedByYou}</p>
             <button
               type="button"
               className="modal-button"
@@ -365,7 +362,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 ? "No passkey on this device? "
                 : "This browser cannot make a passkey. "}
               <button type="button" className="auth-link" onClick={() => void start()}>
-                Use an authenticator app instead
+                {ui.twoFactorDialog.useAuthenticatorAppInstead}
               </button>
             </p>
           </div>
@@ -374,38 +371,37 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         {!codes && !granted && offer && (
           <form className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
             <p className="modal-body two-factor-lead">
-              Scan the code with an authenticator app, then type the six digits
-              it shows back.
+              {ui.twoFactorDialog.scanCodeWithAuthenticatorAppThen}
             </p>
             <div className="two-factor-scan">
               <div className="two-factor-frame">
-                <Suspense fallback={<p className="modal-hint">Drawing the code…</p>}>
+                <Suspense fallback={<p className="modal-hint">{ui.twoFactorDialog.drawingCode}</p>}>
                   <AuthenticatorQrCode
                     uri={offer.uri}
                     label="Scan this with your authenticator app to add this account"
                   />
                 </Suspense>
               </div>
-              <p className="modal-hint">Point your app at this.</p>
+              <p className="modal-hint">{ui.twoFactorDialog.pointYourAppAtThis}</p>
             </div>
 
             <div className="auth-form two-factor-entry">
-              <label htmlFor={keyId}>Setup key</label>
+              <label htmlFor={keyId}>{ui.twoFactorDialog.setupKey}</label>
               <div className="two-factor-secret">
                 <code id={keyId}>{offer.secret}</code>
                 <button
                   type="button"
                   className="btn btn-ghost btn-compact"
                   onClick={() => void copy(offer.secret, "Setup key")}
-                  aria-label="Copy the setup key"
+                  aria-label={ui.twoFactorDialog.copySetupKey}
                 >
                   <CopyIcon size={15} />
                 </button>
               </div>
-              <p className="modal-hint">Use this if you can’t scan.</p>
+              <p className="modal-hint">{ui.twoFactorDialog.useThisIfYouCanT}</p>
 
               <label className="two-factor-code-label" htmlFor={passwordId}>
-                Your password
+                {ui.twoFactorDialog.yourPassword}
               </label>
               <input
                 id={passwordId}
@@ -418,9 +414,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   The code says an authenticator produced it; the password
                   says whose account it is being bound to, and a role is
                   granted on the pair (R-AUTH-20). */}
-              <p className="modal-hint">Confirms the authenticator is yours.</p>
+              <p className="modal-hint">{ui.twoFactorDialog.confirmsAuthenticatorYours}</p>
 
-              <span className="two-factor-code-label">Code from your app</span>
+              <span className="two-factor-code-label">{ui.twoFactorDialog.codeFromYourApp}</span>
               <SegmentedCodeInput
                 value={code}
                 onChange={setCode}
@@ -440,7 +436,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 {busy ? "Checking…" : "Confirm"}
               </button>
               <button type="button" className="btn btn-ghost" onClick={onClose}>
-                Cancel
+                {ui.twoFactorDialog.cancel}
               </button>
             </div>
           </form>
@@ -449,12 +445,9 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         {!codes && granted && (
           <>
             <p className="modal-body">
-              <strong>
-                You are now {granted === "admin" ? "an administrator" : "a moderator"}.
-              </strong>{" "}
-              Two-factor authentication is on, and the role that was waiting
-              for it has taken effect. Your other devices have been signed out;
-              this one carries on, and each sign-in from here asks for a code.
+              {ui.twoFactorDialog.roleTaken({
+                role: granted === "admin" ? "admin" : "moderator",
+              })}
             </p>
             <button
               type="button"
@@ -467,7 +460,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 onClose();
               }}
             >
-              Done
+              {ui.twoFactorDialog.done}
             </button>
           </>
         )}
@@ -475,34 +468,24 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
         {!codes && !granted && !offer && hasFactor && (
           <>
             <p className="modal-body">
-              Two-factor authentication is on.{" "}
-              {state?.enrolled && (
-                <>
-                  You have {state.recoveryCodesRemaining} recovery{" "}
-                  {state.recoveryCodesRemaining === 1 ? "code" : "codes"} left.
-                </>
-              )}
-              {state?.enrolled && !state.passwordProved && (
-                <>
-                  {" "}Before this account can be given a moderator or
-                  administrator role, confirm that the authenticator is yours
-                  with your password and a code from it.
-                </>
-              )}{" "}
-              Each of the changes below swaps a credential, so each asks for
-              your password.
+              {ui.twoFactorDialog.secondFactorState({
+                recoveryCodesRemaining: state?.enrolled
+                  ? state.recoveryCodesRemaining
+                  : null,
+                confirmAuthenticator: Boolean(state?.enrolled && !state.passwordProved),
+              })}
             </p>
             {/* What this account can actually sign in with, listed like the
                 signed-in devices are: several is the point, because losing
                 one device should not be losing the role. */}
             {(passkeys?.length ?? 0) > 0 && (
-              <ul className="two-factor-passkeys" aria-label="Passkeys">
+              <ul className="two-factor-passkeys" aria-label={ui.twoFactorDialog.passkeys}>
                 {(passkeys ?? []).map((passkey) => (
                   <li key={passkey.id}>
                     <span className="two-factor-passkey-name">
                       {passkey.label}
                       {!passkey.backedUp && (
-                        <span className="modal-hint"> · on this device only</span>
+                        <span className="modal-hint"> {ui.twoFactorDialog.thisDeviceOnly}</span>
                       )}
                     </span>
                     <button
@@ -511,14 +494,14 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                       onClick={() => void removePasskey(passkey.id)}
                       disabled={busy || !password}
                     >
-                      Remove
+                      {ui.twoFactorDialog.remove}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
             <div className="auth-form two-factor-manage">
-              <label htmlFor={passwordId}>Your password</label>
+              <label htmlFor={passwordId}>{ui.twoFactorDialog.yourPassword}</label>
               <input
                 id={passwordId}
                 type="password"
@@ -534,7 +517,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   the authenticator in place is theirs. */}
               {state?.enrolled && !state.passwordProved && (
                 <>
-                  <span className="two-factor-code-label">Code from your app</span>
+                  <span className="two-factor-code-label">{ui.twoFactorDialog.codeFromYourApp}</span>
                   <SegmentedCodeInput
                     value={code}
                     onChange={setCode}
@@ -547,7 +530,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                     onClick={() => void proveOwner()}
                     disabled={busy || !password || code.length < 6}
                   >
-                    Confirm it’s yours
+                    {ui.twoFactorDialog.confirmSYours}
                   </button>
                 </>
               )}
@@ -559,7 +542,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                     onClick={() => void addPasskey()}
                     disabled={busy || !password}
                   >
-                    Add a passkey
+                    {ui.twoFactorDialog.addPasskey}
                   </button>
                 )}
                 {/* Both of these are about the authenticator app, and an
@@ -575,7 +558,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                       onClick={() => void newCodes()}
                       disabled={busy || !password}
                     >
-                      New recovery codes
+                      {ui.twoFactorDialog.newRecoveryCodes}
                     </button>
                     {/*
                       Offered even when the role requires it: the server
@@ -588,7 +571,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                       onClick={() => void turnOff()}
                       disabled={busy || !password}
                     >
-                      Turn off
+                      {ui.twoFactorDialog.turnOff}
                     </button>
                   </>
                 ) : (
@@ -598,7 +581,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                     onClick={() => void start()}
                     disabled={busy}
                   >
-                    Add an authenticator app
+                    {ui.twoFactorDialog.addAuthenticatorApp}
                   </button>
                 )}
               </div>
@@ -610,7 +593,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
             their own way out. */}
         {!offer && !codes && !granted && (
           <button type="button" className="modal-dismiss" onClick={onClose}>
-            Close
+            {ui.twoFactorDialog.close}
           </button>
         )}
       </div>

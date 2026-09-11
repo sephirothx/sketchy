@@ -33,8 +33,10 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
 
             started = perf_counter()
             await set_textarea_value(host, "#custom-prompts", raw)
+            # The catalogue writes counts through `Intl.NumberFormat`, so a
+            # thousands separator is the reader's, not Python's (R-I18N-04).
             await host.get_by_text(
-                f"{total} usable custom prompts", exact=True
+                f"{total:,} usable custom prompts", exact=True
             ).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
 
@@ -64,14 +66,14 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
 
             started = perf_counter()
             await guest.get_by_text(
-                f"Inspect {total} custom prompts", exact=False
+                f"Inspect {total:,} custom prompts", exact=False
             ).click()
             prompt_list = guest.locator(".waiting-custom-prompts-list")
             await prompt_list.wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             items = prompt_list.locator('[role="listitem"]')
             assert await items.count() < 100
-            assert await guest.get_by_text(f"{total} prompts", exact=True).is_visible()
+            assert await guest.get_by_text(f"{total:,} prompts", exact=True).is_visible()
 
             # The fixture builds its three length families by index, so the
             # counts the filters must report follow from its own rule.
@@ -86,7 +88,7 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
             for label, count in expected_filter_counts.items():
                 await guest.get_by_role("button", name=label, exact=True).click()
                 await guest.get_by_text(
-                    f"{count} of {total} prompts match",
+                    f"{count:,} of {total:,} prompts match",
                     exact=True,
                 ).wait_for()
 
@@ -95,13 +97,13 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
             for prompt in (prompts[0], prompts[len(prompts) // 2], prompts[-1]):
                 await search.fill(prompt)
                 await guest.get_by_text(
-                    f"1 of {total} prompts match", exact=True
+                    f"1 of {total:,} prompts match", exact=True
                 ).wait_for()
                 assert await prompt_list.get_by_text(prompt, exact=True).is_visible()
 
             started = perf_counter()
             await search.fill("")
-            await guest.get_by_text(f"{total} prompts", exact=True).wait_for()
+            await guest.get_by_text(f"{total:,} prompts", exact=True).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             # No display cap survives: every entry is reachable, and the list
             # says so through aria-setsize while only rendering a window of it.
@@ -121,14 +123,14 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
             assert await tooltip.count() == 0
             await long_prompt.click()
             await tooltip.wait_for()
-            await guest.get_by_text(f"{total} prompts", exact=True).click()
+            await guest.get_by_text(f"{total:,} prompts", exact=True).click()
             assert await tooltip.count() == 0
             await items.first.hover()
             assert await tooltip.count() == 0
 
             await search.fill("skeleton")
             await guest.get_by_text(
-                f"1 of {total} prompts match", exact=True
+                f"1 of {total:,} prompts match", exact=True
             ).wait_for()
             fully_visible_word = prompt_list.get_by_text(prompts[2], exact=True)
             await fully_visible_word.hover()
@@ -137,7 +139,7 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
                 "element => element.scrollWidth <= element.clientWidth"
             )
             await search.fill("")
-            await guest.get_by_text(f"{total} prompts", exact=True).wait_for()
+            await guest.get_by_text(f"{total:,} prompts", exact=True).wait_for()
 
             await prompt_list.focus()
             await prompt_list.press("End")
@@ -153,7 +155,7 @@ async def test_maximum_custom_prompt_editing_search_and_all_view_remain_bounded(
             await search.fill("long-custom-")
             # Every long entry except the one deliberately worded differently.
             await guest.get_by_text(
-                f"{longs - 1} of {total} prompts match", exact=True
+                f"{longs - 1:,} of {total:,} prompts match", exact=True
             ).wait_for()
             assert perf_counter() - started < MAX_INTERACTION_SECONDS
             assert await items.count() < 100

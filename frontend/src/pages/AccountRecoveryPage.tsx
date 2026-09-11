@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from "../store/authStore";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 type Mode = "forgot" | "reset" | "verify";
 
@@ -53,7 +54,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       .catch((confirmError) => {
         if (cancelled) return;
         setError(
-          refusalText(confirmError, "That confirmation link could not be used."),
+          refusalText(confirmError, ui.accountRecoveryPage.thatConfirmationLinkCouldNotBe),
         );
       })
       .finally(() => {
@@ -91,7 +92,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       setDone(detail);
     } catch (requestError) {
       setError(
-        refusalText(requestError, "Something went wrong. Please try again."),
+        refusalText(requestError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),
       );
     } finally {
       setBusy(false);
@@ -113,7 +114,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       setDone("Your password is set and you are signed in again.");
     } catch (resetError) {
       setError(
-        refusalText(resetError, "Something went wrong. Please try again."),
+        refusalText(resetError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),
       );
     } finally {
       setBusy(false);
@@ -135,17 +136,16 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     <main className="recovery-page">
       <div className="recovery-card">
         <section className="recovery-aside" aria-hidden="true">
-          <h2>Even the best guessers forget sometimes.</h2>
+          <h2>{ui.accountRecoveryPage.evenBestGuessersForgetSometimes}</h2>
           <Squiggle width={110} color="var(--primary)" />
           <p>
-            We&rsquo;ll send a secure, time-limited link to the confirmed email
-            on your account.
+            {ui.accountRecoveryPage.weRsquoLlSendSecureTime}
           </p>
         </section>
         <section className="recovery-form">
         <Wordmark size={22} />
         <div className="recovery-heading">
-          <SectionLabel>Account help</SectionLabel>
+          <SectionLabel>{ui.accountRecoveryPage.accountHelp}</SectionLabel>
           <h1>{heading}</h1>
         </div>
 
@@ -153,16 +153,15 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           <>
             <p className="recovery-body">{done}</p>
             <Link className="modal-button" to="/">
-              Back to the lobby
+              {ui.accountRecoveryPage.backLobby}
             </Link>
           </>
         ) : mode === "forgot" ? (
           <form onSubmit={submitForgot} className="auth-form">
             <p className="recovery-body">
-              Enter your username or your confirmed email address. If the
-              account can be recovered, a link is on its way.
+              {ui.accountRecoveryPage.enterYourUsernameYourConfirmedEmail}
             </p>
-            <label htmlFor="recovery-identifier">Username or email</label>
+            <label htmlFor="recovery-identifier">{ui.accountRecoveryPage.usernameEmail}</label>
             <input
               id="recovery-identifier"
               value={identifier}
@@ -188,22 +187,20 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         ) : mode === "reset" && linkUsable === false ? (
           <>
             <p className="recovery-body">
-              That reset link has expired or has already been used. Reset links
-              work once and last an hour.
+              {ui.accountRecoveryPage.thatResetLinkHasExpiredHas}
             </p>
             <Link className="modal-button" to="/forgot-password">
-              Send a new one
+              {ui.accountRecoveryPage.sendNewOne}
             </Link>
           </>
         ) : mode === "reset" && linkUsable === null ? (
-          <p className="recovery-body">Checking that link…</p>
+          <p className="recovery-body">{ui.accountRecoveryPage.checkingThatLink}</p>
         ) : mode === "reset" ? (
           <form onSubmit={submitReset} className="auth-form">
             <p className="recovery-body">
-              Every signed-in device will be signed out, including any you did
-              not recognise.
+              {ui.accountRecoveryPage.everySignedDeviceWillBeSigned}
             </p>
-            <label htmlFor="recovery-password">New password</label>
+            <label htmlFor="recovery-password">{ui.accountRecoveryPage.newPassword}</label>
             <input
               id="recovery-password"
               type="password"
@@ -230,7 +227,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
               {error ?? (busy ? "One moment…" : "Nothing to confirm.")}
             </p>
             <Link className="modal-button" to="/">
-              Back to the lobby
+              {ui.accountRecoveryPage.backLobby}
             </Link>
           </>
         )}
@@ -238,7 +235,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         {!done && mode !== "verify" && error === null && (
           <p className="auth-switch">
             <Link className="auth-link" to="/">
-              Back to the lobby
+              {ui.accountRecoveryPage.backLobby}
             </Link>
           </p>
         )}

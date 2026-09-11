@@ -17,6 +17,7 @@ import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { UsersIcon, XIcon } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 /** Friends, everywhere and whether or not they are online (R-FRIEND-10).
 
@@ -115,15 +116,15 @@ export function FriendsOverlay() {
         <div className="friends-modal-header">
           <h3 id={titleId}>
             <UsersIcon size={20} />
-            <span>Friends</span>
+            <span>{ui.friendsOverlay.friends}</span>
           </h3>
           <button
             ref={closeButtonRef}
             type="button"
             className="close-icon-button"
             onClick={close}
-            title="Close"
-            aria-label="Close friends"
+            title={ui.friendsOverlay.close}
+            aria-label={ui.friendsOverlay.closeFriends}
           >
             <XIcon size={16} />
           </button>
@@ -135,21 +136,18 @@ export function FriendsOverlay() {
               rather than showing an empty list that looks like a fault. */}
           {isGuest ? (
             <p className="friends-empty">
-              Friends need an account. A guest name belongs to this browser
-              rather than to you, so there would be nobody left to be friends
-              with a month from now.
+              {ui.friendsOverlay.friendsNeedAccountGuestNameBelongs}
             </p>
           ) : !loaded ? (
-            <p className="friends-empty">Loading…</p>
+            <p className="friends-empty">{ui.friendsOverlay.loading}</p>
           ) : friendsSurfaceIsEmpty(surface) && suggestions.length === 0 ? (
             <p className="friends-empty">
-              No friends yet. Add somebody from the lobby, or from a game you
-              are both in.
+              {ui.friendsOverlay.noFriendsYetAddSomebodyFrom}
             </p>
           ) : (
             <>
               <FriendsSection
-                title="Requests"
+                title={ui.friendsOverlay.requests}
                 count={surface.incoming.length}
                 entries={surface.incoming}
                 testId="friends-incoming"
@@ -161,7 +159,7 @@ export function FriendsOverlay() {
                       disabled={pending === entry.userId}
                       onClick={() => void accept(entry.userId)}
                     >
-                      Accept
+                      {ui.friendsOverlay.accept}
                     </Button>
                     <button
                       type="button"
@@ -169,13 +167,13 @@ export function FriendsOverlay() {
                       disabled={pending === entry.userId}
                       onClick={() => setConfirming({ kind: "decline", entry })}
                     >
-                      Decline
+                      {ui.friendsOverlay.decline}
                     </button>
                   </>
                 )}
               />
               <FriendsSection
-                title="Sent"
+                title={ui.friendsOverlay.sent}
                 count={surface.outgoing.length}
                 entries={surface.outgoing}
                 testId="friends-outgoing"
@@ -189,12 +187,12 @@ export function FriendsOverlay() {
                     disabled={pending === entry.userId}
                     onClick={() => void remove(entry.userId)}
                   >
-                    Cancel
+                    {ui.friendsOverlay.cancel}
                   </button>
                 )}
               />
               <FriendsSection
-                title="Friends"
+                title={ui.friendsOverlay.friends}
                 count={surface.friends.length}
                 entries={surface.friends}
                 testId="friends-accepted"
@@ -205,7 +203,7 @@ export function FriendsOverlay() {
                     disabled={pending === entry.userId}
                     onClick={() => setConfirming({ kind: "unfriend", entry })}
                   >
-                    Remove
+                    {ui.friendsOverlay.remove}
                   </button>
                 )}
               />
@@ -222,7 +220,7 @@ export function FriendsOverlay() {
           reasoning, without the block), and re-making it needs both people. */}
       {confirming?.kind === "decline" && (
         <ConfirmationDialog
-          title="Decline this request?"
+          title={ui.friendsOverlay.declineThisRequest}
           description={`${confirming.entry.displayName} will not be able to ask again. You can still send them a request yourself later.`}
           confirmLabel="Decline"
           onCancel={() => setConfirming(null)}
@@ -235,7 +233,7 @@ export function FriendsOverlay() {
       )}
       {confirming?.kind === "unfriend" && (
         <ConfirmationDialog
-          title={`Remove ${confirming.entry.displayName}?`}
+          title={ui.friendsOverlay.removeConfirm({ name: confirming.entry.displayName })}
           description="You will both stop being able to join each other's games without an invitation. Either of you can ask again."
           confirmLabel="Remove"
           onCancel={() => setConfirming(null)}
@@ -312,7 +310,7 @@ function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
   if (players.length === 0) return null;
   return (
     <section className="friends-section">
-      <h4 className="friends-section-heading">Recently played with</h4>
+      <h4 className="friends-section-heading">{ui.friendsOverlay.recentlyPlayedWith}</h4>
       <ul className="friends-list" data-testid="friends-recent">
         {players.map((player) => (
           <li key={player.userId} className="friends-row">

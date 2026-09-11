@@ -1,6 +1,7 @@
 import { emitWithAck } from "./socket";
 import type { ReactToDrawingResponse } from "../types";
 import { refusalText } from "./refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * React to a drawing the live room is showing - the current turn's, or one in
@@ -17,7 +18,7 @@ export async function sendDrawingReaction(
     emoji,
   });
   if (!response.ok) {
-    throw new Error(refusalText(response, "That reaction could not be sent."));
+    throw new Error(refusalText(response, ui.reactionRequests.thatReactionCouldNotBeSent));
   }
   return response;
 }

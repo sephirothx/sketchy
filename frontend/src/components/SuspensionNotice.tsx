@@ -14,6 +14,8 @@ import {
   suspensionDuration,
   type Suspension,
 } from "../lib/suspension";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 /** Tell a suspended player what happened, before they are simply signed out.
 
@@ -77,17 +79,20 @@ export function SuspensionNotice() {
         aria-labelledby="suspension-title"
       >
         <h3 className="modal-title" id="suspension-title">
-          Your account is suspended
+          {ui.suspensionNotice.yourAccountSuspended}
         </h3>
         {suspension.category && (
           <p className="modal-body notice-category" data-testid="suspension-category">
             {/* The rule itself, not just its name: a decision you can read
                 the rule behind is one you can check rather than only be
                 told (R-RULES-02). */}
-            Recorded as{" "}
-            <a href={ruleAnchorFor(suspension.category)}>
-              {humanizeCategory(suspension.category)}
-            </a>
+            {fill(ui.suspensionNotice.recordedAs, {
+              category: (
+                <a href={ruleAnchorFor(suspension.category)}>
+                  {humanizeCategory(suspension.category)}
+                </a>
+              ),
+            })}
           </p>
         )}
         {suspension.reason && (
@@ -134,7 +139,7 @@ export function SuspensionNotice() {
                 className="suspension-drawing"
                 load={() => fetchSuspensionDrawing(drawing.reportId)}
                 label={`Your drawing of ${drawing.prompt}, as it was reported`}
-                caption={<>You were asked to draw <strong>{drawing.prompt}</strong>.</>}
+                caption={<>{ui.suspensionNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
               />
             ))}
           </>

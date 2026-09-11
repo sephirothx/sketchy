@@ -7,6 +7,8 @@ import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { DrawingRecapMetadata } from "../types";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 interface DrawingRecapGalleryProps {
   entries: DrawingRecapMetadata[];
@@ -71,7 +73,7 @@ export function DrawingRecapGallery({
       if (loadGeneration !== loadGenerationRef.current) return;
       const decoded = decodeCanvasHistory(canvas);
       if (!decoded) {
-        setError("This drawing could not be decoded.");
+        setError(ui.drawingRecapGallery.thisDrawingCouldNotBeDecoded);
         return;
       }
       cacheRef.current.set(entry.index, decoded);
@@ -130,17 +132,21 @@ export function DrawingRecapGallery({
       <section className="drawing-recap-card">
         <header className="drawing-recap-header">
           <div>
-            <p className="drawing-recap-kicker">Drawing recap</p>
+            <p className="drawing-recap-kicker">{ui.drawingRecapGallery.drawingRecap}</p>
             <h1 id="drawing-recap-title">{entry.prompt}</h1>
             <p className="drawing-recap-meta">
-              Drawn by{" "}
-              <strong
-                className="colored-player-name"
-                style={{ color: entry.drawerNameColor }}
-              >
-                {entry.drawerNickname}
-              </strong>
-              {" · "}Round {entry.roundNumber} · Turn {entry.turnNumber}
+              {fill(ui.drawingRecapGallery.drawnBy, {
+                drawer: (
+                  <strong
+                    className="colored-player-name"
+                    style={{ color: entry.drawerNameColor }}
+                  >
+                    {entry.drawerNickname}
+                  </strong>
+                ),
+                round: entry.roundNumber,
+                turn: entry.turnNumber,
+              })}
             </p>
             {renderReactions && (
               <div className="drawing-recap-reactions">{renderReactions(entry)}</div>
@@ -153,10 +159,10 @@ export function DrawingRecapGallery({
               disabled={actions === null || unavailable || Boolean(error)}
               onClick={() => canvasRef.current?.saveImage()}
             >
-              Save image
+              {ui.drawingRecapGallery.saveImage}
             </button>
             <button type="button" className="drawing-recap-close" onClick={onClose}>
-              Close
+              {ui.drawingRecapGallery.close}
             </button>
           </div>
         </header>
@@ -169,18 +175,18 @@ export function DrawingRecapGallery({
         >
           {unavailable ? (
             <div className="drawing-recap-status">
-              <p>This drawing was not kept.</p>
+              <p>{ui.drawingRecapGallery.thisDrawingWasNotKept}</p>
               <p className="drawing-recap-status-detail">
-                The room ran out of room for it. Later turns were kept instead.
+                {ui.drawingRecapGallery.roomRanOutRoomLaterTurns}
               </p>
             </div>
           ) : error ? (
             <div className="drawing-recap-status" role="alert">
               <p>{error}</p>
-              <button type="button" onClick={() => void loadDrawing()}>Try again</button>
+              <button type="button" onClick={() => void loadDrawing()}>{ui.drawingRecapGallery.tryAgain}</button>
             </div>
           ) : actions === null ? (
-            <p className="drawing-recap-status">Loading drawing…</p>
+            <p className="drawing-recap-status">{ui.drawingRecapGallery.loadingDrawing}</p>
           ) : (
             <CanvasSnapshot
               ref={canvasRef}
@@ -192,19 +198,19 @@ export function DrawingRecapGallery({
         </div>
 
         {entry.actionCount === 0 && actions !== null && (
-          <p className="drawing-recap-empty">No drawing was captured for this turn.</p>
+          <p className="drawing-recap-empty">{ui.drawingRecapGallery.noDrawingWasCapturedThisTurn}</p>
         )}
 
-        <nav className="drawing-recap-navigation" aria-label="Drawing recap navigation">
+        <nav className="drawing-recap-navigation" aria-label={ui.drawingRecapGallery.drawingRecapNavigation}>
           <button
             type="button"
             disabled={position === 0}
             onClick={() => changePosition(position - 1)}
           >
-            Previous
+            {ui.drawingRecapGallery.previous}
           </button>
           <span className="drawing-recap-pager">
-            <strong className="drawing-recap-position">{position + 1} of {entries.length}</strong>
+            <strong className="drawing-recap-position">{ui.drawingRecapGallery.position({ position: position + 1, total: entries.length })}</strong>
             <span className="drawing-recap-dots" aria-hidden="true">
               {entries.map((dotEntry, dotIndex) => (
                 <i key={dotEntry.index} className={dotIndex === position ? "is-current" : ""} />
@@ -216,7 +222,7 @@ export function DrawingRecapGallery({
             disabled={position === entries.length - 1}
             onClick={() => changePosition(position + 1)}
           >
-            Next
+            {ui.drawingRecapGallery.next}
           </button>
         </nav>
       </section>

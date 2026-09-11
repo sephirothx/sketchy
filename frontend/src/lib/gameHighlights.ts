@@ -1,4 +1,5 @@
 import type { GameHighlight, HighlightName } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * One highlight reduced to what the final screen draws: a label, a headline
@@ -62,7 +63,7 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
       return {
         kind: highlight.kind,
         label: "Most reacted drawing",
-        value: `${highlight.reactionCount} ${highlight.reactionCount === 1 ? "reaction" : "reactions"}`,
+        value: ui.gameHighlights.reactionCount({ count: highlight.reactionCount }),
         prompt: highlight.prompt,
         name: highlight,
         drawingIndex: highlight.drawingIndex,

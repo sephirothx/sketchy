@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { MAX_CUSTOM_PROMPTS, MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import type { CustomPromptAnalysis } from "../lib/customPrompts";
+import { ui } from "../content/ui/index.ts";
 
 interface CustomPromptsEditorProps {
   value: string;
@@ -14,18 +15,18 @@ interface CustomPromptsEditorProps {
 
 export function CustomPromptsEditor({ value, analysis, onChange, onCommit, footer }: CustomPromptsEditorProps) {
   return <div className="custom-prompts-editor">
-    <label htmlFor="custom-prompts">Custom prompts (optional)</label>
+    <label htmlFor="custom-prompts">{ui.customPromptsEditor.customPromptsOptional}</label>
     <textarea id="custom-prompts" value={value} onChange={(event) => onChange(event.target.value)}
       onBlur={onCommit}
-      placeholder={"One prompt per line\nor separate entries with commas"}
+      placeholder={ui.customPromptsEditor.onePromptPerLineSeparateEntries}
       maxLength={MAX_RAW_INPUT_LENGTH} rows={7} aria-describedby="custom-prompts-summary" />
     <div id="custom-prompts-summary" className={analysis.hasErrors ? "custom-prompts-summary has-errors" : "custom-prompts-summary"} aria-live="polite">
-      <strong>{analysis.usableCount} usable custom prompt{analysis.usableCount === 1 ? "" : "s"}</strong>
-      {analysis.duplicateCount > 0 && <span>{analysis.duplicateCount} duplicate{analysis.duplicateCount === 1 ? "" : "s"} ignored</span>}
-      {analysis.invalidEntries.length > 0 && <span>{analysis.invalidEntries.length} entr{analysis.invalidEntries.length === 1 ? "y is" : "ies are"} over {MAX_PROMPT_LENGTH} characters</span>}
-      {analysis.overLimitCount > 0 && <span>Only {MAX_CUSTOM_PROMPTS.toLocaleString()} entries are allowed</span>}
+      <strong>{ui.customPromptsEditor.usableCount({ count: analysis.usableCount })}</strong>
+      {analysis.duplicateCount > 0 && <span>{ui.customPromptsEditor.duplicatesIgnored({ count: analysis.duplicateCount })}</span>}
+      {analysis.invalidEntries.length > 0 && <span>{ui.customPromptsEditor.entriesTooLong({ count: analysis.invalidEntries.length, limit: MAX_PROMPT_LENGTH })}</span>}
+      {analysis.overLimitCount > 0 && <span>{ui.customPromptsEditor.entryLimit({ limit: MAX_CUSTOM_PROMPTS })}</span>}
     </div>
-    {analysis.invalidEntries.length > 0 && <p className="custom-prompts-error">Shorten or remove overlong entries before creating the room.</p>}
+    {analysis.invalidEntries.length > 0 && <p className="custom-prompts-error">{ui.customPromptsEditor.shortenRemoveOverlongEntriesBeforeCreating}</p>}
     {footer}
   </div>;
 }

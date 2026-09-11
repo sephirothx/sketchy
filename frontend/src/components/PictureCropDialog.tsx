@@ -11,6 +11,7 @@ import {
 } from "../lib/avatarCrop.ts";
 import { AvatarInputError, encodePicture, loadPicture, type LoadedPicture } from "../lib/avatars";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** The square the player frames the picture in, in CSS pixels. */
 export const CROP_VIEWPORT = 272;
@@ -150,7 +151,7 @@ export function PictureCropDialog({
       setError(
         failure instanceof AvatarInputError
           ? failure.message
-          : refusalText(failure, "Could not set that picture. Please try again."),
+          : refusalText(failure, ui.pictureCropDialog.couldNotSetThatPicturePlease),
       );
       setBusy(false);
     }
@@ -190,10 +191,10 @@ export function PictureCropDialog({
         tabIndex={-1}
       >
         <h3 id={titleId} className="modal-title">
-          Frame your picture
+          {ui.pictureCropDialog.frameYourPicture}
         </h3>
         <p className="modal-body">
-          Drag to move it and zoom to get closer. The circle is what everyone sees.
+          {ui.pictureCropDialog.dragMoveZoomGetCloserCircle}
         </p>
 
         <div
@@ -201,7 +202,7 @@ export function PictureCropDialog({
           className="picture-crop-viewport"
           style={{ width: CROP_VIEWPORT, height: CROP_VIEWPORT }}
           role="img"
-          aria-label="The picture, framed. Arrow keys move it; plus and minus zoom."
+          aria-label={ui.pictureCropDialog.pictureFramedArrowKeysMovePlus}
           tabIndex={loaded ? 0 : -1}
           data-dragging={dragging ? "" : undefined}
           onPointerDown={startDrag}
@@ -227,7 +228,7 @@ export function PictureCropDialog({
         </div>
 
         <div className="picture-crop-zoom">
-          <label htmlFor={sliderId}>Zoom</label>
+          <label htmlFor={sliderId}>{ui.pictureCropDialog.zoom}</label>
           <input
             id={sliderId}
             type="range"
@@ -256,7 +257,7 @@ export function PictureCropDialog({
           {busy ? "Uploading…" : "Use picture"}
         </button>
         <button type="button" className="modal-dismiss" disabled={busy} onClick={onCancel}>
-          Cancel
+          {ui.pictureCropDialog.cancel}
         </button>
       </div>
     </div>

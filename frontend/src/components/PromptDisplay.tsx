@@ -4,6 +4,7 @@ import { useToast } from "../lib/toast";
 import { maskedWords, splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 interface PromptDisplayProps {
   isDrawer: boolean;
@@ -39,7 +40,7 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
   let slot = -1;
 
   return (
-    <span className="masked-words" aria-label={`Masked prompt, ${counts.join(" and ")} letters`}>
+    <span className="masked-words" aria-label={ui.promptDisplay.maskedPrompt({ shape: counts.join(" and ") })}>
       {words.map((segments, wordIndex) => (
         <span key={wordIndex} className="masked-word">
           {segments.map((segment, segmentIndex) => {
@@ -66,8 +67,8 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
                             type="button"
                             className="masked-tile hint-blank"
                             disabled={!buyableProps.canAfford || buyableProps.busy}
-                            aria-label={`Buy this letter for ${buyableProps.cost} points`}
-                            title={`Buy this letter for ${buyableProps.cost} points`}
+                            aria-label={ui.promptDisplay.buyThisLetter({ cost: buyableProps.cost })}
+                            title={ui.promptDisplay.buyThisLetter({ cost: buyableProps.cost })}
                             onClick={() => buyableProps.onBuy(currentSlot)}
                           />
                         );
@@ -82,7 +83,7 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
                   })}
                 </span>
                 {count && (
-                  <sup className="masked-word-count" aria-label={`${count} letters`}>
+                  <sup className="masked-word-count" aria-label={ui.promptDisplay.letterCount({ count: Number(count) })}>
                     {count}
                   </sup>
                 )}
@@ -116,9 +117,9 @@ export function PromptDisplay({
     setPendingAction(key);
     try {
       const response = await emitWithAck<AckResponse>(event, data);
-      if (!response.ok) notify(refusalText(response, `Could not ${action}.`), "error");
+      if (!response.ok) notify(refusalText(response, ui.promptDisplay.couldNotDoAction({ action })), ui.promptDisplay.error);
     } catch (requestError) {
-      notify(socketRequestErrorMessage(requestError, action), "error");
+      notify(socketRequestErrorMessage(requestError, action), ui.promptDisplay.error);
     } finally {
       setPendingAction(null);
     }
@@ -128,9 +129,9 @@ export function PromptDisplay({
     return (
       <div className="prompt-display choosing">
         <div className="prompt-choice-card">
-          <p className="section-label">Your turn</p>
-          <h2 className="prompt-choice-title">Pick something to draw</h2>
-          <p className="prompt-choice-hint">Auto-picks when time runs out.</p>
+          <p className="section-label">{ui.promptDisplay.yourTurn}</p>
+          <h2 className="prompt-choice-title">{ui.promptDisplay.pickSomethingDraw}</h2>
+          <p className="prompt-choice-hint">{ui.promptDisplay.autoPicksWhenTimeRunsOut}</p>
           <div className="prompt-choices">
             {promptChoices.map((prompt) => (
               <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, "select the prompt")}>
@@ -159,17 +160,17 @@ export function PromptDisplay({
         <p className="hint-meta">
           {canBuy && (
             nextHintCost > remaining ? (
-              <span className="hint-price-warning">Hint spend limit reached</span>
+              <span className="hint-price-warning">{ui.promptDisplay.hintSpendLimitReached}</span>
             ) : (
-              <span className="hint-price">Next hint: {nextHintCost}</span>
+              <span className="hint-price">{ui.promptDisplay.nextHintCost({ cost: nextHintCost })}</span>
             )
           )}
           {hintSpend > 0 && (
             <span
               className="hint-spend-total"
-              title="Deducted from your score if you guess the prompt"
+              title={ui.promptDisplay.deductedFromYourScoreIfYou}
             >
-              Total: {hintSpend}
+              {ui.promptDisplay.hintSpendTotal({ spent: hintSpend })}
             </span>
           )}
         </p>
@@ -193,7 +194,7 @@ export function PromptDisplay({
       )}
       {canBuyWheel && (
         <div className="wheel-hint-panel">
-          <p className="hint-wheel-label">Buy a letter - reveals every match</p>
+          <p className="hint-wheel-label">{ui.promptDisplay.buyLetterRevealsEveryMatch}</p>
           <div className="wheel-letter-grid">
             {Object.entries(letterPrices)
               .sort(([a], [b]) => a.localeCompare(b))
@@ -203,7 +204,7 @@ export function PromptDisplay({
                   type="button"
                   className="wheel-letter-btn"
                   disabled={price > remaining || pendingAction !== null}
-                  title={`Buy "${letter.toUpperCase()}" for ${price} points`}
+                  title={ui.promptDisplay.buyLetter({ letter: letter.toUpperCase(), price })}
                   onClick={() => void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, "buy the letter hint")}
                 >
                   {letter.toUpperCase()}

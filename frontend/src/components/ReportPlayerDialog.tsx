@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
+import { ui } from "../content/ui/index.ts";
 
 /** What went with the report, in one sentence.
 
@@ -17,7 +18,7 @@ function sentSummary(sent: {
 }): string {
   const messages =
     sent.messages > 0
-      ? `${sent.messages} of their recent message${sent.messages === 1 ? "" : "s"}`
+      ? ui.reportPlayerDialog.recentMessages({ count: sent.messages })
       : null;
   if (sent.drawing) {
     return messages
@@ -145,11 +146,10 @@ export function ReportPlayerDialog({
         {sent === null ? (
           <>
             <p className="modal-body">
-              A moderator will see this. Nothing happens to {nickname} right
-              now, and they are not told who reported them.
+              {ui.reportPlayerDialog.nothingHappensYet({ name: nickname })}
             </p>
             <form onSubmit={submit} className="auth-form">
-              <label htmlFor={`${titleId}-reason`}>What happened</label>
+              <label htmlFor={`${titleId}-reason`}>{ui.reportPlayerDialog.whatHappened}</label>
               <select
                 id={`${titleId}-reason`}
                 className="report-reason"
@@ -163,7 +163,7 @@ export function ReportPlayerDialog({
                 ))}
               </select>
 
-              <label htmlFor={`${titleId}-details`}>Anything else (optional)</label>
+              <label htmlFor={`${titleId}-details`}>{ui.reportPlayerDialog.anythingElseOptional}</label>
               <textarea
                 id={`${titleId}-details`}
                 ref={detailsRef}
@@ -175,11 +175,10 @@ export function ReportPlayerDialog({
                   setDetails(change.target.value);
                   setError(null);
                 }}
-                placeholder="What they said or drew, and when"
+                placeholder={ui.reportPlayerDialog.whatTheySaidDrewWhen}
               />
               <p className="auth-hint">
-                Their recent messages in this room are attached automatically,
-                with what was said around them, so this can be left empty.
+                {ui.reportPlayerDialog.theirRecentMessagesThisRoomAre}
               </p>
               {drawingOffered && (
                 <label className="report-include-drawing">
@@ -189,10 +188,9 @@ export function ReportPlayerDialog({
                     onChange={(change) => setIncludeDrawing(change.target.checked)}
                   />
                   <span>
-                    Include their drawing
+                    {ui.reportPlayerDialog.includeTheirDrawing}
                     <span>
-                      The canvas as it is right now, so a moderator sees what
-                      you saw.
+                      {ui.reportPlayerDialog.canvasAsRightNowSoModerator}
                     </span>
                   </span>
                 </label>
@@ -212,7 +210,7 @@ export function ReportPlayerDialog({
           <>
             <p className="modal-body">{sentSummary(sent)}</p>
             <button type="button" className="modal-button" onClick={onClose}>
-              Done
+              {ui.reportPlayerDialog.done}
             </button>
           </>
         )}

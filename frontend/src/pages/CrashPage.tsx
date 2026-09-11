@@ -23,6 +23,7 @@ import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** Read something that may be the very thing that broke. The page must render
     with nothing rather than not render. */
@@ -165,7 +166,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
       });
       setSent(true);
     } catch (caught) {
-      setFailure(refusalText(caught, "Could not send the report."));
+      setFailure(refusalText(caught, ui.crashPage.couldNotSendReport));
     } finally {
       setBusy(false);
     }
@@ -186,21 +187,20 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
           <span><RectIcon size={18} /></span>
           <span><UndoIcon size={18} /></span>
         </div>
-        <h1>A bug crawled onto the page</h1>
+        <h1>{ui.crashPage.bugCrawledOntoPage}</h1>
         <p>
           {scope === "room"
             ? "This room’s screen hit an error and had to stop. Your seat is held for a moment: send the report below, then reload to pick it back up or go back to the lobby."
             : "This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you’ll be on your way."}
         </p>
         <form className="auth-form crash-report" aria-labelledby={reportTitleId} onSubmit={(event) => void submit(event)}>
-          <h2 id={reportTitleId}>Help us squash it</h2>
+          <h2 id={reportTitleId}>{ui.crashPage.helpUsSquash}</h2>
           <p className="auth-hint">
-            A report is ready to send: the error, and what this tab knows about itself.
-            It reaches the people who run Sketchy — never other players.
+            {ui.crashPage.reportReadySendErrorWhatThis}
           </p>
 
           <label htmlFor={detailsId}>
-            What were you doing? <span className="crash-optional">Optional</span>
+            {ui.crashPage.whatWereYouDoing} <span className="crash-optional">{ui.crashPage.optional}</span>
           </label>
           <textarea
             id={detailsId}
@@ -209,7 +209,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
             value={playerText}
             maxLength={budget}
             disabled={sent}
-            placeholder="The last thing you clicked or typed, if you remember."
+            placeholder={ui.crashPage.lastThingYouClickedTypedIf}
             onChange={(event) => setPlayerText(event.target.value)}
           />
 
@@ -220,7 +220,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
             </dl>
             {errors.length > 0 && (
               <>
-                <p className="bug-report-subhead">Recent client errors, newest first</p>
+                <p className="bug-report-subhead">{ui.crashPage.recentClientErrorsNewestFirst}</p>
                 <ul className="bug-console-log">
                   {errors.map((entry, index) => (
                     <li key={`${entry.at}-${index}`}><span>{entry.at.slice(11, 19)}</span>{entry.message}</li>
@@ -242,14 +242,14 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
               disabled={sent}
               onChange={(event) => setDescriptionOnly(event.target.checked)}
             />
-            <span>Send my description only
-              <span>Drops the details above. We will still read it, but the crash is much harder to find.</span>
+            <span>{ui.crashPage.sendMyDescriptionOnly}
+              <span>{ui.crashPage.dropsDetailsAboveWeWillStill}</span>
             </span>
           </label>
 
           {failure && <p className="auth-error" role="alert">{failure}</p>}
           {sent ? (
-            <p className="crash-sent" role="status">Thanks — your report is with the people who run Sketchy.</p>
+            <p className="crash-sent" role="status">{ui.crashPage.thanksYourReportWithPeopleWho}</p>
           ) : (
             <button type="submit" className="modal-button" disabled={busy || nothingToSend}>
               {busy ? (failure ? "Sending again…" : "Sending…") : (failure ? "Try sending again" : "Send report")}
@@ -260,10 +260,10 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
         {waysOutOpen && (
           <div className="crash-actions">
             <button type="button" className="btn btn-primary" onClick={onReload}>
-              Reload
+              {ui.crashPage.reload}
             </button>
             <button type="button" className="btn btn-secondary" onClick={onBackToLobby}>
-              Back to lobby
+              {ui.crashPage.backLobby}
             </button>
           </div>
         )}

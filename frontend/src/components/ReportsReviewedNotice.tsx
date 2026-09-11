@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { acknowledgeReportsReviewed, countReportsReviewed } from "../lib/moderation";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
+import { ui } from "../content/ui/index.ts";
 
 /** Tells a reporter their report was looked at.
 
@@ -48,7 +49,7 @@ export function ReportsReviewedNotice() {
           count === 1
             ? "A report you sent has been reviewed. Thank you."
             : `${count} reports you sent have been reviewed. Thank you.`,
-          "info",
+          ui.reportsReviewedNotice.info,
           12000,
         );
         // Exactly the ones that message was about. A report decided since the

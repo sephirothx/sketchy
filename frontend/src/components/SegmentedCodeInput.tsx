@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Six boxes for a six-digit code, rather than one field to type into.
@@ -91,7 +92,7 @@ export function SegmentedCodeInput({
           onFocus={(event) => event.target.select()}
           inputMode="numeric"
           autoComplete={index === 0 ? "one-time-code" : "off"}
-          aria-label={`${label}, digit ${index + 1} of ${length}`}
+          aria-label={ui.segmentedCodeInput.digitPosition({ label, index: index + 1, length })}
           // Deliberately no `maxLength`: the controlled value already keeps a
           // box to one character, and the attribute would truncate a pasted
           // code before the paste path below ever saw it.

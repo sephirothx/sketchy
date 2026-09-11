@@ -47,6 +47,7 @@ import type {
   PromptListSummary,
   ScoringMode,
 } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /** Everything both surfaces set. Custom prompts travel beside it, because they
     are a reducer rather than a value. */
@@ -136,7 +137,7 @@ export function RoomSetupForm({
       const names = selectedLists.map((list) => list.name);
       parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
       const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
-      if (total > 0) parts.push(`${total.toLocaleString()} prompts`);
+      if (total > 0) parts.push(ui.roomSetupForm.promptTotal({ count: total }));
     }
     if (customPrompts.analysis.usableCount > 0) {
       parts.push(`${customPrompts.analysis.usableCount} custom`);
@@ -158,12 +159,12 @@ export function RoomSetupForm({
     <div className="create-room-sections">
       <section className="form-section">
         <div className="form-section-head">
-          <h2>Basics</h2>
+          <h2>{ui.roomSetupForm.basics}</h2>
         </div>
         <div className="form-section-body">
           <div className="create-room-name-row">
             <label className="create-room-name-field">
-              Room name
+              {ui.roomSetupForm.roomName}
               {/* Search type suppresses Android Chrome's unrelated autofill toolbar. */}
               <input
                 type="search"
@@ -218,8 +219,8 @@ export function RoomSetupForm({
                 value={isPublic ? "public" : "private"}
                 onChange={(value) => onChange({ isPublic: value === "public" })}
                 options={[
-                  { value: "public", label: <><GlobeIcon size={14} />Public</> },
-                  { value: "private", label: <><LockIcon size={14} />Private</> },
+                  { value: "public", label: <><GlobeIcon size={14} />{ui.roomSetupForm.public}</> },
+                  { value: "private", label: <><LockIcon size={14} />{ui.roomSetupForm.private}</> },
                 ]}
               />
             </div>
@@ -260,7 +261,7 @@ export function RoomSetupForm({
 
       <details className="form-section is-collapsible">
         <summary>
-          <h2>Prompts</h2>
+          <h2>{ui.roomSetupForm.prompts}</h2>
           {promptsSummary && <span className="form-section-summary">{promptsSummary}</span>}
           <span className="form-section-chevron" aria-hidden="true"><ChevronRightIcon size={16} /></span>
         </summary>
@@ -291,7 +292,7 @@ export function RoomSetupForm({
 
       <details className="form-section is-collapsible">
         <summary>
-          <h2>Drawing</h2>
+          <h2>{ui.roomSetupForm.drawing}</h2>
           <span className="form-section-summary">{drawingSummary}</span>
           <span className="form-section-chevron" aria-hidden="true"><ChevronRightIcon size={16} /></span>
         </summary>
@@ -317,7 +318,7 @@ export function RoomSetupForm({
 
       <details className="form-section is-collapsible">
         <summary>
-          <h2>Scoring and hints</h2>
+          <h2>{ui.roomSetupForm.scoringHints}</h2>
           <span className="form-section-summary">{scoringSummary}</span>
           <span className="form-section-chevron" aria-hidden="true"><ChevronRightIcon size={16} /></span>
         </summary>
@@ -345,8 +346,8 @@ export function RoomSetupForm({
               disabled: scoringMode === "none" && (option.value === "purchase" || option.value === "wheel"),
             }))}
           />
-          {hideMaskedPrompt && <p className="setting-dependency">Hints are off because blanks are hidden.</p>}
-          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">Point-purchase hint modes require scoring.</p>}
+          {hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.hintsAreOffBecauseBlanksAre}</p>}
+          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.pointPurchaseHintModesRequireScoring}</p>}
           <div className="form-section-switch-row">
             <Switch
               label="Spectators can see the prompt"

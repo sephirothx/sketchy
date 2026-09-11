@@ -19,6 +19,7 @@ import type {
   PromptStatsSort,
   ScoringMode,
 } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 /* A list of 592 prompts rendered whole is a 25 496px page on a phone -
    thirty screens of scroll. Paged, with the count stated, so nothing is
@@ -88,7 +89,7 @@ export function PromptStatsPage() {
         if (loaded.length === 0) setLoading(false);
       } catch {
         if (!cancelled) {
-          setError("Could not load the prompt lists. Please try again.");
+          setError(ui.promptStatsPage.couldNotLoadPromptListsPlease);
           setLoading(false);
         }
       }
@@ -171,18 +172,17 @@ export function PromptStatsPage() {
       <AppHeader backLabel="Back to lobby" />
 
       <header className="prompt-stats-header">
-        <SectionLabel>Server-wide</SectionLabel>
-        <h1>Prompt stats</h1>
+        <SectionLabel>{ui.promptStatsPage.serverWide}</SectionLabel>
+        <h1>{ui.promptStatsPage.promptStats}</h1>
         <p className="prompt-stats-intro">
-          Every prompt in the list, and how it has actually played across finished
-          games on this server.
+          {ui.promptStatsPage.everyPromptListHowHasActually}
         </p>
       </header>
 
       <div className="prompt-stats-controls">
         {lists.length > 1 && (
           <div className="prompt-stats-control">
-            <label htmlFor="prompt-stats-list">Prompt list</label>
+            <label htmlFor="prompt-stats-list">{ui.promptStatsPage.promptList}</label>
             <select
               id="prompt-stats-list"
               value={slug ?? ""}
@@ -197,7 +197,7 @@ export function PromptStatsPage() {
           </div>
         )}
         <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-sort">Sort</label>
+          <label htmlFor="prompt-stats-sort">{ui.promptStatsPage.sort}</label>
           <select
             id="prompt-stats-sort"
             value={sort}
@@ -211,36 +211,36 @@ export function PromptStatsPage() {
           </select>
         </div>
         <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-window">Period</label>
+          <label htmlFor="prompt-stats-window">{ui.promptStatsPage.period}</label>
           <select id="prompt-stats-window" value={windowFilter} onChange={(event) => setFilter("window", event.target.value, "all")}>
             {WINDOWS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-scoring">Scoring</label>
+          <label htmlFor="prompt-stats-scoring">{ui.promptStatsPage.scoring}</label>
           <select id="prompt-stats-scoring" value={scoringMode} onChange={(event) => setFilter("scoringMode", event.target.value, "all")}>
             {SCORING_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <div className="prompt-stats-control">
-          <label htmlFor="prompt-stats-hints">Hints</label>
+          <label htmlFor="prompt-stats-hints">{ui.promptStatsPage.hints}</label>
           <select id="prompt-stats-hints" value={hintMode} onChange={(event) => setFilter("hintMode", event.target.value, "all")}>
             {HINT_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <div className="prompt-stats-control prompt-stats-search">
-          <label htmlFor="prompt-stats-search">Find a prompt</label>
+          <label htmlFor="prompt-stats-search">{ui.promptStatsPage.findPrompt}</label>
           <input
             id="prompt-stats-search"
             type="search"
             value={query}
-            placeholder="roller coaster"
+            placeholder={ui.promptStatsPage.rollerCoaster}
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
       </div>
 
-      {loading && <p className="prompt-stats-note">Loading…</p>}
+      {loading && <p className="prompt-stats-note">{ui.promptStatsPage.loading}</p>}
       {error && !loading && <p className="prompt-stats-note is-error">{error}</p>}
       {!loading && !error && coverage && (
         <p className="prompt-stats-note">{coverage}</p>
@@ -257,11 +257,11 @@ export function PromptStatsPage() {
             </caption>
             <thead>
               <tr>
-                <th scope="col">Prompt</th>
-                <th scope="col">How it goes</th>
-                <th scope="col">Guessed</th>
-                <th scope="col">Picked</th>
-                <th scope="col">Drawn</th>
+                <th scope="col">{ui.promptStatsPage.prompt}</th>
+                <th scope="col">{ui.promptStatsPage.howGoes}</th>
+                <th scope="col">{ui.promptStatsPage.guessed}</th>
+                <th scope="col">{ui.promptStatsPage.picked}</th>
+                <th scope="col">{ui.promptStatsPage.drawn}</th>
               </tr>
             </thead>
             <tbody>
@@ -295,10 +295,10 @@ export function PromptStatsPage() {
                 className="btn btn-secondary"
                 onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
               >
-                Show {Math.min(PAGE_SIZE, rows.length - visibleCount)} more
+                {ui.promptStatsPage.showMore({ count: Math.min(PAGE_SIZE, rows.length - visibleCount) })}
               </button>
               <p className="prompt-stats-note">
-                Showing {visibleCount} of {rows.length}
+                {ui.promptStatsPage.showingOf({ shown: visibleCount, total: rows.length })}
               </p>
             </div>
           )}

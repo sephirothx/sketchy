@@ -2,6 +2,7 @@ import { useFriendsStore } from "../store/friendsStore";
 import type { FriendAction } from "../lib/friends";
 import { Button } from "./ui/Button";
 import { PlusIcon } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 /** The one control for "become friends with this person".
 
@@ -44,7 +45,7 @@ export function FriendButton({
         iconLeft={<PlusIcon size={14} />}
         onClick={() => void add(userId)}
       >
-        Add friend
+        {ui.friendButton.addFriend}
       </Button>
     );
   }
@@ -56,7 +57,7 @@ export function FriendButton({
         disabled={busy}
         onClick={() => void accept(userId)}
       >
-        Accept request
+        {ui.friendButton.acceptRequest}
       </Button>
     );
   }
@@ -64,8 +65,8 @@ export function FriendButton({
     // A statement rather than a control. Withdrawing is on the friends
     // surface, beside the rest of what was sent.
     return (
-      <span className="friend-button-status" aria-label={`Friend request sent to ${displayName}`}>
-        Request sent
+      <span className="friend-button-status" aria-label={ui.friendButton.requestSentTo({ name: displayName })}>
+        {ui.friendButton.requestSent}
       </span>
     );
   }

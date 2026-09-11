@@ -30,6 +30,7 @@ import {
   TriangleIcon,
   UndoIcon,
 } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
@@ -260,7 +261,7 @@ export function Toolbar({
   );
 
   const sizeSlider = (
-    <div className="brush-slider-popover" id={sizePickerId} role="group" aria-label={`Adjust ${labelPrefix.toLowerCase()} size`}>
+    <div className="brush-slider-popover" id={sizePickerId} role="group" aria-label={ui.toolbar.adjustSize({ tool: labelPrefix.toLowerCase() })}>
       <div className="slider-top-preview">
         <span
           className="preview-dot"
@@ -270,7 +271,7 @@ export function Toolbar({
             backgroundColor: activeColor,
           }}
         />
-        <span className="preview-readout">{brushWidth}px</span>
+        <span className="preview-readout">{ui.toolbar.widthReadout({ width: brushWidth })}</span>
       </div>
       <div className="slider-track-wrapper">
         <input
@@ -281,7 +282,7 @@ export function Toolbar({
           value={sliderValue}
           onChange={(e) => handleWidthChange(PRESET_WIDTHS[Number(e.target.value)])}
           className="vertical-brush-slider"
-          aria-label={`${labelPrefix} size snapping slider`}
+          aria-label={ui.toolbar.sizeSnappingSlider({ tool: labelPrefix })}
         />
       </div>
     </div>
@@ -296,15 +297,15 @@ export function Toolbar({
     // so the strip sits at the bottom of the screen under the thumb.
     const mobileToolbar = (
       <div className="toolbar-container toolbar-mobile" ref={mobileToolbarRef} data-testid="toolbar-mobile">
-          <div className="toolbar toolbar-mobile-strip" role="toolbar" aria-label="Drawing tools">
+          <div className="toolbar toolbar-mobile-strip" role="toolbar" aria-label={ui.toolbar.drawingTools}>
             <button
               type="button"
               className={`toolbar-mobile-chip toolbar-mobile-tool-chip${mobilePanel === "tool" ? " active" : ""}`}
-              aria-label={`Choose tool, current: ${activeTool.name}`}
+              aria-label={ui.toolbar.chooseToolCurrent({ tool: activeTool.name })}
               aria-expanded={mobilePanel === "tool"}
               aria-haspopup="true"
               aria-controls={mobileToolPanelId}
-              title="Choose tool"
+              title={ui.toolbar.chooseTool}
               onClick={() => toggleMobilePanel("tool")}
             >
               <span className="tool-glyph">{activeTool.glyph}</span>
@@ -314,11 +315,11 @@ export function Toolbar({
             <button
               type="button"
               className={`toolbar-mobile-chip toolbar-mobile-color-chip${mobilePanel === "color" ? " active" : ""}`}
-              aria-label={`Choose color, current ${color}`}
+              aria-label={ui.toolbar.chooseColorCurrent({ color })}
               aria-expanded={mobilePanel === "color"}
               aria-haspopup="true"
               aria-controls={mobileColorPanelId}
-              title="Choose color"
+              title={ui.toolbar.chooseColor}
               onClick={() => toggleMobilePanel("color")}
             >
               <span className="toolbar-mobile-swatch" style={{ backgroundColor: activeColor }} />
@@ -328,7 +329,7 @@ export function Toolbar({
             <button
               type="button"
               className={`toolbar-mobile-chip${mobilePanel === "size" ? " active" : ""}`}
-              aria-label={`${labelPrefix} size ${brushWidth}px`}
+              aria-label={ui.toolbar.sizeWithWidth({ tool: labelPrefix, width: brushWidth })}
               aria-expanded={mobilePanel === "size"}
               aria-haspopup="true"
               aria-controls={mobileSizePanelId}
@@ -343,8 +344,8 @@ export function Toolbar({
             <button
               type="button"
               className="toolbar-mobile-chip"
-              aria-label="Undo last stroke"
-              title="Undo"
+              aria-label={ui.toolbar.undoLastStroke}
+              title={ui.toolbar.undo}
               onClick={requestCanvasUndo}
             >
               <UndoIcon size={18} />
@@ -352,8 +353,8 @@ export function Toolbar({
             <button
               type="button"
               className="toolbar-mobile-chip toolbar-mobile-clear"
-              aria-label="Clear canvas"
-              title="Clear canvas"
+              aria-label={ui.toolbar.clearCanvas}
+              title={ui.toolbar.clearCanvas}
               onClick={requestCanvasClear}
             >
               <TrashIcon size={18} />
@@ -361,7 +362,7 @@ export function Toolbar({
           </div>
 
           {mobilePanel === "tool" && (
-            <div id={mobileToolPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose tool">
+            <div id={mobileToolPanelId} className="toolbar-mobile-popover" role="group" aria-label={ui.toolbar.chooseTool}>
               <div className="toolbar-mobile-tools">
                 {tools.map((t) => (
                   <button
@@ -383,7 +384,7 @@ export function Toolbar({
           )}
 
           {mobilePanel === "color" && (
-            <div id={mobileColorPanelId} className="toolbar-mobile-popover" role="group" aria-label="Choose color">
+            <div id={mobileColorPanelId} className="toolbar-mobile-popover" role="group" aria-label={ui.toolbar.chooseColor}>
               <div className="toolbar-mobile-colors">
                 {colors.map((c) => (
                   <ColorSwatch
@@ -402,7 +403,7 @@ export function Toolbar({
                   <label
                     className={`color-swatch color-swatch-custom toolbar-mobile-swatch-btn${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
                     style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-                    title="Choose custom color"
+                    title={ui.toolbar.chooseCustomColor}
                   >
                     <input
                       type="color"
@@ -411,7 +412,7 @@ export function Toolbar({
                         handleSelectColor(e.target.value);
                         setMobilePanel(null);
                       }}
-                      aria-label="Choose custom color"
+                      aria-label={ui.toolbar.chooseCustomColor}
                     />
                   </label>
                 )}
@@ -432,7 +433,7 @@ export function Toolbar({
   return (
     <div className="toolbar-container">
         <div className="toolbar">
-          <div className="toolbar-group toolbar-tools" aria-label="Drawing tools">
+          <div className="toolbar-group toolbar-tools" aria-label={ui.toolbar.drawingTools}>
             {tools.map((t) => {
               const unavailable = disabledReason(t.value);
               const label = unavailable ?? getToolLabel(t.value, t.name);
@@ -460,28 +461,28 @@ export function Toolbar({
               type="button"
               className={`brush-size-trigger${sizePickerOpen ? " active" : ""}`}
               onClick={() => setSizePickerOpen((prev) => !prev)}
-              aria-label={`${labelPrefix} size ${brushWidth}px`}
+              aria-label={ui.toolbar.sizeWithWidth({ tool: labelPrefix, width: brushWidth })}
               aria-expanded={sizePickerOpen}
               aria-haspopup="true"
               aria-controls={sizePickerId}
-              title={`${labelPrefix} size: ${brushWidth}px ([ / ])`}
+              title={ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth })}
             >
               {sizePreview}
-              <span className="size-text-readout">{brushWidth}px</span>
+              <span className="size-text-readout">{ui.toolbar.widthReadout({ width: brushWidth })}</span>
             </button>
             {sizePickerOpen && sizeSlider}
           </div>
 
           <div className="toolbar-divider" />
 
-          <div className={`toolbar-group toolbar-colors${paletteClass}`} aria-label="Color palette">
+          <div className={`toolbar-group toolbar-colors${paletteClass}`} aria-label={ui.toolbar.colorPalette}>
             {colors.map((c) => (
               <ColorSwatch
                 key={c}
                 color={c}
                 selected={isSelectedColor(c)}
                 label={`color ${c}`}
-                title={`Color ${c}`}
+                title={ui.toolbar.colorSwatch({ color: c })}
                 onSelect={() => handleSelectColor(c)}
               />
             ))}
@@ -489,13 +490,13 @@ export function Toolbar({
               <label
                 className={`color-swatch color-swatch-custom${isCustomColor && tool !== "eraser" ? " selected" : ""}`}
                 style={isCustomColor ? { backgroundColor: color, backgroundImage: "none" } : undefined}
-                title="Choose custom color"
+                title={ui.toolbar.chooseCustomColor}
               >
                 <input
                   type="color"
                   value={color}
                   onChange={(e) => handleSelectColor(e.target.value)}
-                  aria-label="Choose custom color"
+                  aria-label={ui.toolbar.chooseCustomColor}
                 />
               </label>
             )}
@@ -503,22 +504,22 @@ export function Toolbar({
 
           <div className="toolbar-divider" />
 
-          <div className="toolbar-group toolbar-actions" aria-label="Canvas actions">
+          <div className="toolbar-group toolbar-actions" aria-label={ui.toolbar.canvasActions}>
             <button
               className="toolbar-action-button undo-button"
               onClick={requestCanvasUndo}
-              title="Undo last stroke (Ctrl+Z)"
+              title={ui.toolbar.undoLastStrokeCtrlZ}
             >
               <UndoIcon size={18} />
-              <span>Undo</span>
+              <span>{ui.toolbar.undo}</span>
             </button>
             <button
               className="toolbar-action-button clear-button"
               onClick={requestCanvasClear}
-              title="Clear canvas"
+              title={ui.toolbar.clearCanvas}
             >
               <TrashIcon size={18} />
-              <span>Clear</span>
+              <span>{ui.toolbar.clear}</span>
             </button>
           </div>
         </div>

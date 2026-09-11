@@ -44,6 +44,8 @@ import {
   ZapIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 
 function MenuItem({
   icon,
@@ -164,7 +166,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         setBugReportOpen(true);
       }}
     >
-      Report a bug
+      {ui.accountMenu.reportBug}
     </MenuItem>
   );
 
@@ -223,7 +225,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           id={menuId}
           className="account-dropdown"
           role="menu"
-          aria-label="Account"
+          aria-label={ui.accountMenu.account}
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
@@ -239,7 +241,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
               openSettings();
             }}
           >
-            Settings
+            {ui.accountMenu.settings}
           </MenuItem>
           {/* What is outstanding on this account, and the only reminder of it
               once the notice has been set aside: an offered role waits on a
@@ -253,7 +255,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 openSettings("account");
               }}
             >
-              Finish your {pendingRole === "admin" ? "administrator" : "moderator"} role
+              {ui.accountMenu.finishYourRole({ role: pendingRole === "admin" ? "admin" : "moderator" })}
             </MenuItem>
           )}
           {/* The two entries that leave the page. Hidden for a guest in a
@@ -267,7 +269,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   navigate("/profile");
                 }}
               >
-                My profile
+                {ui.accountMenu.myProfile}
               </MenuItem>
               <MenuItem
                 icon={<ZapIcon size={16} />}
@@ -276,7 +278,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   navigate("/prompt-lists");
                 }}
               >
-                Prompt stats
+                {ui.accountMenu.promptStats}
               </MenuItem>
             </>
           )}
@@ -292,7 +294,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   setMode("claim");
                 }}
               >
-                Create account
+                {ui.accountMenu.createAccount}
               </MenuItem>
               <MenuItem
                 icon={<KeyIcon size={16} />}
@@ -301,7 +303,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   setMode("login");
                 }}
               >
-                Log in
+                {ui.accountMenu.logIn}
               </MenuItem>
             </>
           ) : (
@@ -318,7 +320,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   openOverlay(FRIENDS_PATH);
                 }}
               >
-                Friends
+                {ui.accountMenu.friends}
                 {waiting > 0 && (
                   <span className="menu-item-count">{waiting}</span>
                 )}
@@ -330,7 +332,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   navigate("/my-prompt-lists");
                 }}
               >
-                My prompt lists
+                {ui.accountMenu.myPromptLists}
               </MenuItem>
               {/* A permanent home for the rules, so they are reachable
                   without having been reported or having reported anybody
@@ -342,7 +344,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   navigate("/rules");
                 }}
               >
-                Rules
+                {ui.accountMenu.rules}
               </MenuItem>
               {/* Shown, not enforced: each of these endpoints checks the role
                   again for itself and answers 404 to anyone else. Hiding them
@@ -371,7 +373,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                   void logout();
                 }}
               >
-                Log out
+                {ui.accountMenu.logOut}
               </MenuItem>
             </>
           )}
@@ -451,7 +453,7 @@ export function AuthDialog({
       // Optional, so an empty field is fine; a filled-in one that cannot work
       // is worth catching before the account is created around it.
       if (email.trim() && !emailLooksUsable(email)) {
-        setError("That does not look like an email address.");
+        setError(ui.accountMenu.thatDoesNotLookLikeEmail);
         return;
       }
     }
@@ -474,7 +476,7 @@ export function AuthDialog({
         else setCodeWanted(true);
       }
       setError(
-        refusalText(submitError, "Something went wrong. Please try again."),
+        refusalText(submitError, ui.accountMenu.somethingWentWrongPleaseTryAgain),
       );
     } finally {
       setBusy(false);
@@ -496,7 +498,7 @@ export function AuthDialog({
       setError(
         passkeyError instanceof DOMException
           ? "No passkey was used. You can sign in with your password instead."
-          : refusalText(passkeyError, "That passkey was not accepted."),
+          : refusalText(passkeyError, ui.accountMenu.thatPasskeyWasNotAccepted),
       );
       setBusy(false);
     }
@@ -544,10 +546,10 @@ export function AuthDialog({
             </button>
             {passkeyOnly ? (
               <p className="modal-hint">
-                This account signs in with a passkey.
+                {ui.accountMenu.thisAccountSignsWithPasskey}
               </p>
             ) : (
-              <p className="auth-divider"><span>or</span></p>
+              <p className="auth-divider"><span>{ui.accountMenu.or}</span></p>
             )}
           </>
         )}
@@ -559,7 +561,7 @@ export function AuthDialog({
             sit outside the form, so the way on is still there. */}
         {!(passkeyOnly && !isClaim) && (
         <form onSubmit={submit} className="auth-form">
-          <label htmlFor={`${titleId}-username`}>Username</label>
+          <label htmlFor={`${titleId}-username`}>{ui.accountMenu.username}</label>
           {/* Pre-filled from the guest name but editable: this is where a typo
               gets fixed, and where you pick another if yours is taken. */}
           <input
@@ -580,7 +582,7 @@ export function AuthDialog({
             required
           />
 
-          <label htmlFor={`${titleId}-password`}>Password</label>
+          <label htmlFor={`${titleId}-password`}>{ui.accountMenu.password}</label>
           <input
             id={`${titleId}-password`}
             type="password"
@@ -596,7 +598,7 @@ export function AuthDialog({
           {codeWanted && (
             <>
               <label htmlFor={`${titleId}-code`}>
-                Code from your authenticator app
+                {ui.accountMenu.codeFromYourAuthenticatorApp}
               </label>
               <input
                 id={`${titleId}-code`}
@@ -612,7 +614,7 @@ export function AuthDialog({
                 required
               />
               <p className="modal-hint">
-                A recovery code works here too, and can be used once.
+                {ui.accountMenu.recoveryCodeWorksHereTooCan}
               </p>
             </>
           )}
@@ -620,7 +622,7 @@ export function AuthDialog({
           {isClaim && (
             <>
               <label htmlFor={`${titleId}-email`}>
-                Email <span className="auth-optional">optional</span>
+                {ui.accountMenu.email} <span className="auth-optional">{ui.accountMenu.optional}</span>
               </label>
               {/* The only way back into an account whose password is lost. Not
                   required, because a deployment with no mail server would then
@@ -640,7 +642,7 @@ export function AuthDialog({
                 spellCheck={false}
               />
               <p className="auth-hint">
-                Lets you reset your password later. Used for nothing else.
+                {ui.accountMenu.letsYouResetYourPasswordLater}
               </p>
             </>
           )}
@@ -656,11 +658,13 @@ export function AuthDialog({
               log-in form, where it would be noise. */}
           {isClaim && (
             <p className="auth-hint auth-rules-note">
-              By creating an account you agree to follow the{" "}
-              <a href="/rules" target="_blank" rel="noreferrer">
-                rules
-              </a>
-              .
+              {fill(ui.accountMenu.agreeToRules, {
+                rules: (
+                  <a href="/rules" target="_blank" rel="noreferrer">
+                    {ui.accountMenu.rules2}
+                  </a>
+                ),
+              })}
             </p>
           )}
         </form>
@@ -669,7 +673,7 @@ export function AuthDialog({
         {!isClaim && (
           <p className="auth-switch">
             <Link className="auth-link" to="/forgot-password" onClick={onClose}>
-              Forgot your password?
+              {ui.accountMenu.forgotYourPassword}
             </Link>
           </p>
         )}
@@ -697,7 +701,7 @@ export function AuthDialog({
         </p>
 
         <button type="button" className="modal-dismiss" onClick={onClose}>
-          Not now
+          {ui.accountMenu.notNow}
         </button>
       </div>
     </div>

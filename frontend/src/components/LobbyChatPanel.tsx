@@ -11,6 +11,7 @@ import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
 import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
 without a new line arriving, which is the point of the label. */
@@ -83,7 +84,7 @@ export function LobbyChatPanel() {
         setText("");
         setIsScrolledUp(false);
       } else {
-        setError(refusalText(response, "Could not send that."));
+        setError(refusalText(response, ui.lobbyChatPanel.couldNotSendThat));
       }
     } catch (sendError) {
       setError(socketRequestErrorMessage(sendError, "send the message"));
@@ -96,7 +97,7 @@ export function LobbyChatPanel() {
   return (
     <section className="panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
       <div className="lobby-rooms-heading">
-        <h2 id="lobby-chat-heading">Chat</h2>
+        <h2 id="lobby-chat-heading">{ui.lobbyChatPanel.chat}</h2>
       </div>
       <div className="chat-messages-container">
         {/* Focusable because it scrolls: a keyboard user has to be able to
@@ -107,11 +108,11 @@ export function LobbyChatPanel() {
           onScroll={handleScroll}
           tabIndex={0}
           role="log"
-          aria-label="Lobby chat"
+          aria-label={ui.lobbyChatPanel.lobbyChat}
           data-testid="lobby-chat-list"
         >
           {lines.length === 0 ? (
-            <p className="lobby-chat-empty">Nobody has said anything yet.</p>
+            <p className="lobby-chat-empty">{ui.lobbyChatPanel.nobodyHasSaidAnythingYet}</p>
           ) : (
             lines.map((line) => {
               const at = new Date(line.sentAt);
@@ -132,8 +133,8 @@ export function LobbyChatPanel() {
                         type="button"
                         className={`lobby-chat-author ${nameClass}`}
                         style={nameStyle}
-                        title={`Report this line by ${line.displayName}`}
-                        aria-label={`Report this line by ${line.displayName}`}
+                        title={ui.lobbyChatPanel.reportThisLine({ name: line.displayName })}
+                        aria-label={ui.lobbyChatPanel.reportThisLine({ name: line.displayName })}
                         onClick={() => setReporting(line)}
                       >
                         {line.displayName}:
@@ -169,7 +170,7 @@ export function LobbyChatPanel() {
       )}
       {awaitingName ? (
         <button type="button" className="btn btn-secondary lobby-chat-name-prompt" onClick={() => void chooseName()}>
-          Choose a name to chat
+          {ui.lobbyChatPanel.chooseNameChat}
         </button>
       ) : (
         <form className="chat-input lobby-chat-form" onSubmit={(event) => void handleSubmit(event)}>
@@ -182,8 +183,8 @@ export function LobbyChatPanel() {
                 inputMode="text"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
-                placeholder="Say something to the lobby..."
-                aria-label="Lobby chat message"
+                placeholder={ui.lobbyChatPanel.saySomethingLobby}
+                aria-label={ui.lobbyChatPanel.lobbyChatMessage}
                 maxLength={MAX_LINE_LENGTH}
                 autoComplete="off"
                 autoCapitalize="sentences"
@@ -191,7 +192,7 @@ export function LobbyChatPanel() {
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" className="chat-send-button" disabled={sending} aria-label="Send">
+            <button type="submit" className="chat-send-button" disabled={sending} aria-label={ui.lobbyChatPanel.send}>
               <ChevronRightIcon size={17} />
             </button>
           </div>

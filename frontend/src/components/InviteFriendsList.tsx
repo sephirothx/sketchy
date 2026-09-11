@@ -6,6 +6,7 @@ import { useFriendsStore } from "../store/friendsStore";
 import { usePresenceStore } from "../store/presenceStore";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
+import { ui } from "../content/ui/index.ts";
 
 /** Friends who are online, on the card whose whole job is getting people in.
 
@@ -44,12 +45,12 @@ export function InviteFriendsList() {
       );
       if (answer?.ok) {
         setInvited((current) => new Set(current).add(userId));
-        notify(`Invitation sent to ${displayName}.`);
+        notify(ui.inviteFriendsList.invitationSent({ name: displayName }));
       } else {
         notify(answer?.error ?? "That invitation could not be sent.");
       }
     } catch {
-      notify("That invitation could not be sent.");
+      notify(ui.inviteFriendsList.thatInvitationCouldNotBeSent);
     } finally {
       setSending(null);
     }
@@ -57,7 +58,7 @@ export function InviteFriendsList() {
 
   return (
     <div className="waiting-invite-friends">
-      <p className="waiting-invite-friends-label">Friends in the lobby</p>
+      <p className="waiting-invite-friends-label">{ui.inviteFriendsList.friendsLobby}</p>
       <ul className="waiting-invite-friends-list" data-testid="invite-friends">
         {invitable.map(({ friend }) => (
           <li key={friend.userId}>
@@ -70,7 +71,7 @@ export function InviteFriendsList() {
             />
             <span className="waiting-invite-friend-name">{friend.displayName}</span>
             {invited.has(friend.userId) ? (
-              <span className="waiting-invite-friend-sent">Invited</span>
+              <span className="waiting-invite-friend-sent">{ui.inviteFriendsList.invited}</span>
             ) : (
               <Button
                 variant="secondary"
@@ -78,7 +79,7 @@ export function InviteFriendsList() {
                 disabled={sending === friend.userId}
                 onClick={() => void invite(friend.userId, friend.displayName)}
               >
-                Invite
+                {ui.inviteFriendsList.invite}
               </Button>
             )}
           </li>

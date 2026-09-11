@@ -9,6 +9,7 @@ import {
 } from "../lib/sessions";
 import { useAuthStore } from "../store/authStore";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 function usedLabel(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));
@@ -35,7 +36,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       .catch((failure) => {
         if (active) {
           setError(
-            refusalText(failure, "Could not load signed-in devices."),
+            refusalText(failure, ui.sessionManagerDialog.couldNotLoadSignedDevices),
           );
         }
       })
@@ -57,7 +58,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       }
       setSessions((items) => items.filter((item) => item.id !== session.id));
     } catch (failure) {
-      setError(refusalText(failure, "Could not revoke device."));
+      setError(refusalText(failure, ui.sessionManagerDialog.couldNotRevokeDevice));
     } finally {
       setBusyId(null);
     }
@@ -71,7 +72,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       onClose();
       await logout();
     } catch (failure) {
-      setError(refusalText(failure, "Could not log out everywhere."));
+      setError(refusalText(failure, ui.sessionManagerDialog.couldNotLogOutEverywhere));
       setBusyId(null);
     }
   }
@@ -91,12 +92,11 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <h3 id={titleId} className="modal-title">Signed-in devices</h3>
+        <h3 id={titleId} className="modal-title">{ui.sessionManagerDialog.signedDevices}</h3>
         <p className="modal-body">
-          Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.
-          A device you stop using signs itself out after ninety days.
+          {ui.sessionManagerDialog.revokeAnyDeviceYouNoLonger}
         </p>
-        {loading && <p role="status">Loading devices…</p>}
+        {loading && <p role="status">{ui.sessionManagerDialog.loadingDevices}</p>}
         {error && <p className="auth-error" role="alert">{error}</p>}
         {!loading && (
           <ul className="session-list">
@@ -104,11 +104,13 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
               <li key={session.id}>
                 <span>
                   <strong>{session.deviceLabel}</strong>
-                  {session.current && <span className="session-current">Current device</span>}
-                  <small>Last used {usedLabel(session.lastUsedAt, dateTime)}</small>
+                  {session.current && <span className="session-current">{ui.sessionManagerDialog.currentDevice}</span>}
+                  <small>{ui.sessionManagerDialog.lastUsed({ when: usedLabel(session.lastUsedAt, dateTime) })}</small>
                   {session.idleExpiresAt && (
                     <small>
-                      Signs out on its own {usedLabel(session.idleExpiresAt, dateTime)}
+                      {ui.sessionManagerDialog.signsOutOn({
+                        when: usedLabel(session.idleExpiresAt, dateTime),
+                      })}
                     </small>
                   )}
                   {/*
@@ -119,9 +121,9 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
                   */}
                   {session.anomalyAt && (
                     <small className="session-anomaly" role="note">
-                      Used from a different browser on{" "}
-                      {usedLabel(session.anomalyAt, dateTime)}. Revoke this
-                      device if that was not you.
+                      {ui.sessionManagerDialog.usedElsewhere({
+                        when: usedLabel(session.anomalyAt, dateTime),
+                      })}
                     </small>
                   )}
                 </span>
@@ -137,7 +139,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
           </ul>
         )}
         <div className="session-actions">
-          <button type="button" onClick={onClose} disabled={busyId !== null}>Close</button>
+          <button type="button" onClick={onClose} disabled={busyId !== null}>{ui.sessionManagerDialog.close}</button>
           <button
             type="button"
             className="session-revoke-all"

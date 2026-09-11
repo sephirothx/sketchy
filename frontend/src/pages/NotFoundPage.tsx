@@ -7,6 +7,7 @@ import {
   RectIcon,
   UndoIcon,
 } from "../components/icons";
+import { ui } from "../content/ui/index.ts";
 
 /** What a URL with no page behind it shows.
 
@@ -36,14 +37,14 @@ export function NotFoundPage() {
           <span><RectIcon size={18} /></span>
           <span><UndoIcon size={18} /></span>
         </div>
-        <h1>Nobody drew this page</h1>
-        <p>That link doesn’t lead anywhere on Sketchy.</p>
+        <h1>{ui.notFoundPage.nobodyDrewThisPage}</h1>
+        <p>{ui.notFoundPage.thatLinkDoesnTLeadAnywhere}</p>
         <button
           type="button"
           className="btn btn-primary"
           onClick={() => navigate("/")}
         >
-          Back to lobby
+          {ui.notFoundPage.backLobby}
         </button>
       </main>
     </div>

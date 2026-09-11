@@ -8,6 +8,7 @@ import type { PromptLanguage, PromptListSummary, SharedPromptList } from "../typ
 import { PromptContentReportDialog } from "./PromptContentReportDialog";
 import { AlertIcon, CheckIcon, InfoIcon, PlusIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 interface PromptListPickerProps {
   /** The room's declared language. Lists answer to it; it is never read back
@@ -66,7 +67,7 @@ export function PromptListPicker({
         }
       } catch (err) {
         if (!cancelled) {
-          setFetchError(refusalText(err, "Failed to load prompt lists"));
+          setFetchError(refusalText(err, ui.promptListPicker.failedLoadPromptLists));
         }
       } finally {
         if (!cancelled) {
@@ -114,7 +115,7 @@ export function PromptListPicker({
       onChange(selection.slugs);
       setShareCode("");
     } catch (error) {
-      setShareError(refusalText(error, "Could not add that shared list."));
+      setShareError(refusalText(error, ui.promptListPicker.couldNotAddThatSharedList));
     } finally {
       setResolvingShare(false);
     }
@@ -145,7 +146,7 @@ export function PromptListPicker({
   if (loading) {
     return (
       <div className="prompt-list-picker-loading">
-        <p>Loading curated prompt lists…</p>
+        <p>{ui.promptListPicker.loadingCuratedPromptLists}</p>
       </div>
     );
   }
@@ -154,7 +155,7 @@ export function PromptListPicker({
     return (
       <div className="prompt-list-picker-fallback">
         <p className="prompt-list-fallback-note">
-          Prompt-list choices are unavailable ({fetchError}). Your current selection is unchanged.
+          {ui.promptListPicker.choicesUnavailable({ reason: fetchError })}
         </p>
       </div>
     );
@@ -162,14 +163,15 @@ export function PromptListPicker({
 
   return (
     <fieldset className="room-choice-group prompt-list-picker-group">
-      <legend>Prompt lists</legend>
+      <legend>{ui.promptListPicker.promptLists}</legend>
       {visibleLists.length === 0 && (
         <p className="prompt-list-fallback-note">
-          No prompt lists in {promptLanguageLabel(language)} yet — this room draws
-          on its own custom prompts.
+          {ui.promptListPicker.noListsInLanguage({
+            language: promptLanguageLabel(language),
+          })}
         </p>
       )}
-      <div className="toggle-chips" role="group" aria-label="Prompt lists">
+      <div className="toggle-chips" role="group" aria-label={ui.promptListPicker.promptLists}>
         {visibleLists.map((wl) => {
           const isSelected = selectedSlugs.includes(wl.slug);
           const isOnlySelected = isSelected && selectedSlugs.length <= 1;
@@ -201,8 +203,8 @@ export function PromptListPicker({
                 href={`/prompt-lists/${wl.slug}`}
                 target="_blank"
                 rel="noreferrer"
-                title={`How ${wl.name} prompts play`}
-                aria-label={`How ${wl.name} prompts play`}
+                title={ui.promptListPicker.howListPlays({ name: wl.name })}
+                aria-label={ui.promptListPicker.howListPlays({ name: wl.name })}
               >
                 <span aria-hidden="true"><InfoIcon size={13} /></span>
               </a>}
@@ -210,8 +212,8 @@ export function PromptListPicker({
                 type="button"
                 className="prompt-list-chip-report"
                 disabled={disabled}
-                aria-label={`Report ${wl.name}`}
-                title={`Report ${wl.name}`}
+                aria-label={ui.promptListPicker.reportList({ name: wl.name })}
+                title={ui.promptListPicker.reportList({ name: wl.name })}
                 onClick={() => setReportingSlug(wl.slug)}
               ><AlertIcon size={13} /></button>}
             </span>
@@ -219,7 +221,7 @@ export function PromptListPicker({
         })}
       </div>
       <form className="prompt-list-share-form" onSubmit={(event) => void addSharedList(event)}>
-        <label htmlFor="prompt-list-share-code">Add an unlisted list by code</label>
+        <label htmlFor="prompt-list-share-code">{ui.promptListPicker.addUnlistedListByCode}</label>
         <div><input id="prompt-list-share-code" value={shareCode} disabled={disabled || resolvingShare} maxLength={24} autoComplete="off" onChange={(event) => setShareCode(event.target.value)} /><button type="submit" className="btn btn-primary btn-compact" disabled={disabled || resolvingShare || !shareCode.trim()}>{resolvingShare ? "Adding…" : "Add"}</button></div>
         {shareError && <p className="prompt-list-fallback-note" role="alert">{shareError}</p>}
       </form>

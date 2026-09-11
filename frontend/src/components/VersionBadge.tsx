@@ -1,3 +1,4 @@
+import { ui } from "../content/ui/index.ts";
 // Small, unobtrusive build indicator - shows the short git commit SHA (and
 // commit date) the current build was produced from. Useful for confirming
 // whether a fix has actually been deployed, without needing a manually
@@ -8,7 +9,7 @@ export function VersionBadge() {
   return (
     <div
       className="version-badge"
-      title={`Commit date: ${__APP_COMMIT_DATE__} | Built: ${__APP_BUILD_TIME__}`}
+      title={ui.versionBadge.buildDetails({ commitDate: __APP_COMMIT_DATE__, builtAt: __APP_BUILD_TIME__ })}
     >
       {__APP_COMMIT_SHA__} ({__APP_BUILD_TIME__})
     </div>

@@ -8,6 +8,7 @@ import { useToast } from "../lib/toast";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, EditableRoomSettings, PromptListSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 const emptySettings: EditableRoomSettings = {
   name: "",
@@ -117,7 +118,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
           });
           setError(null);
         }
-        else setError(refusalText(response, "Could not load room rules"));
+        else setError(refusalText(response, ui.roomSettingsEditor.couldNotLoadRoomRules));
       } catch (loadError) {
         if (!cancelled) setError(socketRequestErrorMessage(loadError, "load room rules"));
       } finally {
@@ -164,9 +165,9 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         // The server settles dependent settings itself — a hint mode the
         // scoring rules out, say — so a refusal is not simply "put the old
         // value back"; the form reloads from what the room actually holds.
-        const message = refusalText(response, "The room refused those settings.");
+        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseSettings);
         setError(message);
-        notify(message, "error");
+        notify(message, ui.roomSettingsEditor.error);
         return;
       }
       setBaseline(values);
@@ -175,7 +176,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     } catch (saveError) {
       const message = socketRequestErrorMessage(saveError, "save room rules");
       setError(message);
-      notify(message, "error");
+      notify(message, ui.roomSettingsEditor.error);
     } finally {
       setSaving(false);
     }
@@ -188,10 +189,10 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     aria-labelledby="room-settings-title"
   >
     <div className="room-settings-editor-heading">
-      <p className="waiting-card-kicker">Host settings</p>
-      <h2 id="room-settings-title">Edit room rules</h2>
+      <p className="waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
+      <h2 id="room-settings-title">{ui.roomSettingsEditor.editRoomRules}</h2>
     </div>
-    {loading ? <p>Loading settings…</p> : (
+    {loading ? <p>{ui.roomSettingsEditor.loadingSettings}</p> : (
       <RoomSetupForm
         values={values}
         onChange={handleChange}
@@ -206,7 +207,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     <div className="room-settings-actions">
       {onCancel && (
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
+          {ui.roomSettingsEditor.cancel}
         </button>
       )}
       <button

@@ -14,6 +14,7 @@ import type { DrawingReaction } from "../types";
 import { HeartIcon } from "./icons";
 import { ReactionGlyph } from "./ReactionGlyph";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 interface DrawingReactionControlProps {
   /** Every reaction on this drawing, by reactor seat. */
@@ -165,8 +166,8 @@ export function DrawingReactionControl({
     } catch (failure) {
       // The strip holds emoji and nothing else, so a refusal is said elsewhere.
       notify(
-        refusalText(failure, "That reaction could not be sent."),
-        "error",
+        refusalText(failure, ui.drawingReactionControl.thatReactionCouldNotBeSent),
+        ui.drawingReactionControl.error,
       );
     } finally {
       setBusy(false);
@@ -235,7 +236,7 @@ export function DrawingReactionControl({
       {open && canPick && (
         // A strip of emoji and nothing else: the names live in the labels, and
         // a refusal goes to a toast.
-        <div className="reaction-picker" role="dialog" aria-label="React to this drawing">
+        <div className="reaction-picker" role="dialog" aria-label={ui.drawingReactionControl.reactThisDrawing}>
           {offeredReactions().map((emoji) => (
             <button
               key={emoji.code}
@@ -254,8 +255,8 @@ export function DrawingReactionControl({
         </div>
       )}
       {open && !canPick && eligibility === "guest" && (
-        <div className="reaction-picker reaction-picker-guest" role="dialog" aria-label="Reactions">
-          <p className="reaction-picker-hint">Create an account to react.</p>
+        <div className="reaction-picker reaction-picker-guest" role="dialog" aria-label={ui.drawingReactionControl.reactions}>
+          <p className="reaction-picker-hint">{ui.drawingReactionControl.createAccountReact}</p>
           <button
             type="button"
             className="reaction-claim"
@@ -264,7 +265,7 @@ export function DrawingReactionControl({
               onRequestAccount?.();
             }}
           >
-            Create account
+            {ui.drawingReactionControl.createAccount}
           </button>
         </div>
       )}

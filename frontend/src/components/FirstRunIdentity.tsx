@@ -5,6 +5,7 @@ import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 /**
  * Shown only until the visitor has an account or a name of their own.
@@ -71,7 +72,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
       await setDisplayName(chosen);
     } catch (saveError) {
       setError(
-        refusalText(saveError, "Could not save that name. Please try again."),
+        refusalText(saveError, ui.firstRunIdentity.couldNotSaveThatNamePlease),
       );
     } finally {
       setBusy(false);
@@ -85,7 +86,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
       </h2>
       {!isNarrow && (
         <p className="first-run-copy">
-          Keep your username and your stats on every device.
+          {ui.firstRunIdentity.keepYourUsernameYourStatsEvery}
         </p>
       )}
       <div className="first-run-actions">
@@ -94,14 +95,14 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
           className="first-run-signup"
           onClick={() => setMode("claim")}
         >
-          Create an account
+          {ui.firstRunIdentity.createAccount}
         </button>
         <button
           type="button"
           className="first-run-login"
           onClick={() => setMode("login")}
         >
-          Log in
+          {ui.firstRunIdentity.logIn}
         </button>
       </div>
     </div>
@@ -109,7 +110,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
 
   const divider = !isNarrow && (
     <div className="first-run-divider" role="presentation" key="divider">
-      <span>or</span>
+      <span>{ui.firstRunIdentity.or}</span>
     </div>
   );
 
@@ -131,7 +132,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
             setError(null);
           }}
           maxLength={MAX_NICKNAME_LENGTH}
-          placeholder="Display name"
+          placeholder={ui.firstRunIdentity.displayName}
           autoComplete="nickname"
           autoCapitalize="off"
           autoCorrect="off"

@@ -5,6 +5,7 @@ import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
 import { useToast } from "../lib/toast";
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
+import { ui } from "../content/ui/index.ts";
 
 
 
@@ -53,18 +54,18 @@ export function ChangePasswordDialog({
       return;
     }
     if (next !== confirm) {
-      setError("The two new passwords do not match.");
+      setError(ui.changePasswordDialog.twoNewPasswordsDoNotMatch);
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await changePassword(current, next);
-      notify("Password changed. Every other device has been signed out.", "success");
+      notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, ui.changePasswordDialog.success);
       onClose();
     } catch (failure) {
       setError(
-        refusalText(failure, "Could not change the password. Please try again."),
+        refusalText(failure, ui.changePasswordDialog.couldNotChangePasswordPleaseTry),
       );
       setBusy(false);
     }
@@ -102,21 +103,19 @@ export function ChangePasswordDialog({
         {mailed ? (
           <>
             <p className="modal-body">
-              If that account has a verified email address, a link to set a new
-              password is on its way. It works once, and it expires.
+              {ui.changePasswordDialog.ifThatAccountHasVerifiedEmail}
             </p>
             <button type="button" className="modal-button" onClick={onClose}>
-              Done
+              {ui.changePasswordDialog.done}
             </button>
           </>
         ) : (
           <>
             <p className="modal-body">
-              Every device signs out when the password changes, including any you
-              did not mean to leave signed in. This one stays.
+              {ui.changePasswordDialog.everyDeviceSignsOutWhenPassword}
             </p>
             <form onSubmit={(event) => void submit(event)} className="auth-form">
-              <label htmlFor={`${titleId}-current`}>Current password</label>
+              <label htmlFor={`${titleId}-current`}>{ui.changePasswordDialog.currentPassword}</label>
               <input
                 id={`${titleId}-current`}
                 ref={currentRef}
@@ -129,7 +128,7 @@ export function ChangePasswordDialog({
                 autoComplete="current-password"
                 required
               />
-              <label htmlFor={`${titleId}-next`}>New password</label>
+              <label htmlFor={`${titleId}-next`}>{ui.changePasswordDialog.newPassword}</label>
               <input
                 id={`${titleId}-next`}
                 type="password"
@@ -142,7 +141,7 @@ export function ChangePasswordDialog({
                 minLength={MIN_PASSWORD_LENGTH}
                 required
               />
-              <label htmlFor={`${titleId}-confirm`}>New password again</label>
+              <label htmlFor={`${titleId}-confirm`}>{ui.changePasswordDialog.newPasswordAgain}</label>
               <input
                 id={`${titleId}-confirm`}
                 type="password"
@@ -168,14 +167,14 @@ export function ChangePasswordDialog({
                 is no verified address, because the link could not arrive. */}
             {canEmailLink && (
               <p className="modal-body settings-alt-route">
-                Forgotten the current one?{" "}
+                {ui.changePasswordDialog.forgottenTheCurrentOne}{" "}
                 <button
                   type="button"
                   className="auth-link"
                   disabled={busy}
                   onClick={() => void mailLink()}
                 >
-                  Email me a link instead
+                  {ui.changePasswordDialog.emailMeLinkInstead}
                 </button>
               </p>
             )}

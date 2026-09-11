@@ -1,5 +1,6 @@
 import type { PromptLanguage, PromptListSummary } from "../types";
 import type { PromptListDraftEntry } from "./promptLists";
+import { ui } from "../content/ui/index.ts";
 
 export function promptEntriesFromQuickInput(raw: string | undefined): PromptListDraftEntry[] {
   // Nothing carried over means an empty list, not a blank row to fill in: the
@@ -88,7 +89,7 @@ export function describePromptMerge(result: PromptMergeResult): string | null {
     skipped.push(`${result.overLimit} past the ${MAX_LIST_PROMPTS} limit`);
   }
   if (!skipped.length) return null;
-  const kept = result.added === 1 ? "Added 1 prompt" : `Added ${result.added} prompts`;
+  const kept = ui.promptListDrafts.promptsAdded({ count: result.added });
   return `${kept}; skipped ${skipped.join(", ")}.`;
 }
 

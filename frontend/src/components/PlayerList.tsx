@@ -17,6 +17,7 @@ import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/use
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
+import { ui } from "../content/ui/index.ts";
 
 interface PlayerListProps {
   players: PlayerInfo[];
@@ -108,14 +109,14 @@ export function PlayerList({
       // one. Which means the wording must not name any of them - saying "you
       // have already asked" asserts the one fact it happens not to know.
       if (answer.status === "accepted") {
-        notify(`You and ${nickname} are now friends.`);
+        notify(ui.playerList.nowFriends({ name: nickname }));
       } else if (answer.status === "created") {
-        notify(`Friend request sent to ${nickname}.`);
+        notify(ui.playerList.friendRequestSent({ name: nickname }));
       } else {
-        notify(`Nothing to do about ${nickname} right now.`);
+        notify(ui.playerList.nothingToDoAbout({ name: nickname }));
       }
     } catch {
-      notify("That request could not be sent.");
+      notify(ui.playerList.thatRequestCouldNotBeSent);
     }
   }
   const listRef = useRef<HTMLUListElement>(null);
@@ -184,17 +185,17 @@ export function PlayerList({
         const status = isDrawer ? (
           <span className="player-status player-status-drawing">
             <PencilIcon size={12} />
-            Drawing
+            {ui.playerList.drawing}
           </span>
         ) : guessedAt != null ? (
           <span className="player-status player-status-guessed">
             <CheckIcon size={12} />
-            Got it · <span className="player-status-time">{guessTime(guessedAt)}</span>
+            {ui.playerList.gotIt} <span className="player-status-time">{guessTime(guessedAt)}</span>
           </span>
         ) : p.isAfk ? (
           <span className="player-status player-status-afk">
             <MoonIcon size={12} />
-            AFK
+            {ui.playerList.afk}
           </span>
         ) : null;
 
@@ -243,12 +244,12 @@ export function PlayerList({
                 {/* The ring, the crown and the friend mark are on the
                     avatar (#574, R-FRIEND-13); these say the same things
                     where a screen reader reads the name. */}
-                {isMe && <span className="visually-hidden">(you)</span>}
-                {p.isHost && <span className="visually-hidden">Host</span>}
+                {isMe && <span className="visually-hidden">{ui.playerList.you}</span>}
+                {p.isHost && <span className="visually-hidden">{ui.playerList.host}</span>}
                 {friendSeats.has(p.playerId) && (
-                  <span className="visually-hidden">Friend</span>
+                  <span className="visually-hidden">{ui.playerList.friend}</span>
                 )}
-                {!p.connected && <span className="visually-hidden">Disconnected</span>}
+                {!p.connected && <span className="visually-hidden">{ui.playerList.disconnected}</span>}
               </span>
               {status}
             </span>
@@ -330,8 +331,8 @@ function PlacementBadge({ rank }: { rank: number }) {
     <span
       className="player-role player-role-placement"
       role="img"
-      aria-label={`Rank ${rank}`}
-      title={`Rank ${rank}`}
+      aria-label={ui.playerList.rank({ rank })}
+      title={ui.playerList.rank({ rank })}
     >
       {medalColor ? (
         <span style={{ color: medalColor, display: "inline-flex" }}>
@@ -488,7 +489,7 @@ function PlayerModerationMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        aria-label={`Moderation for ${player.nickname}`}
+        aria-label={ui.playerList.moderationFor({ name: player.nickname })}
         title={canVote ? "Vote AFK or kick, or report" : "Report this player"}
         onClick={() => onOpenChange(!isOpen)}
       />
@@ -498,7 +499,7 @@ function PlayerModerationMenu({
           id={menuId}
           className="player-vote-menu"
           role="menu"
-          aria-label={`Moderation actions for ${player.nickname}`}
+          aria-label={ui.playerList.moderationActionsFor({ name: player.nickname })}
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
@@ -509,7 +510,7 @@ function PlayerModerationMenu({
               className={`player-vote-action player-vote-afk${hasVotedAfk ? " is-cast" : ""}`}
               onClick={() => handleVote("afk")}
             >
-              <span className="player-vote-action-kind">AFK</span>
+              <span className="player-vote-action-kind">{ui.playerList.afk}</span>
               <span className="player-vote-action-label">
                 {hasVotedAfk ? "Undo vote" : "Vote"}
               </span>
@@ -525,7 +526,7 @@ function PlayerModerationMenu({
               className={`player-vote-action player-vote-kick${hasVotedKick ? " is-cast" : ""}`}
               onClick={() => handleVote("kick")}
             >
-              <span className="player-vote-action-kind">Kick</span>
+              <span className="player-vote-action-kind">{ui.playerList.kick}</span>
               <span className="player-vote-action-label">
                 {hasVotedKick ? "Undo vote" : "Vote"}
               </span>
@@ -541,10 +542,10 @@ function PlayerModerationMenu({
               className="player-vote-action player-vote-friend"
               onClick={handleAddFriend}
             >
-              <span className="player-vote-action-kind">Add friend</span>
+              <span className="player-vote-action-kind">{ui.playerList.addFriend}</span>
               {/* The seat is what is named on the wire; the server resolves
                   who is in it, so no account id passes through here. */}
-              <span className="player-vote-action-label">Send a request</span>
+              <span className="player-vote-action-label">{ui.playerList.sendRequest}</span>
             </button>
           )}
           {canReport && (
@@ -554,10 +555,10 @@ function PlayerModerationMenu({
               className="player-vote-action player-vote-report"
               onClick={handleReport}
             >
-              <span className="player-vote-action-kind">Report</span>
+              <span className="player-vote-action-kind">{ui.playerList.report}</span>
               {/* No count: this asks a moderator to look rather than needing a
                   majority, so there is nothing to tally. */}
-              <span className="player-vote-action-label">To a moderator</span>
+              <span className="player-vote-action-label">{ui.playerList.toAModerator}</span>
             </button>
           )}
         </div>
