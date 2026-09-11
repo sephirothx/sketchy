@@ -28,7 +28,8 @@ export interface SettingsSync {
   queue: (change: Partial<AccountSettings>) => void;
   /** Send whatever is waiting now; resolves once it has been answered. */
   flush: () => Promise<void>;
-  /** Where a refused write is reported. One listener: the open pane. */
+  /** Where a refused write is reported. One listener: `SettingsSyncNotices`,
+      mounted for the whole app, since more than Settings saves settings. */
   onError: (handler: ((message: string) => void) | null) => void;
   pendingKeys: () => string[];
 }
