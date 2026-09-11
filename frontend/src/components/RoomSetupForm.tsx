@@ -31,7 +31,7 @@ import {
   ROUNDS_MIN,
   SCORING_OPTIONS,
   hintLabelFor,
-  scoringLabelFor,
+  scoringNameFor,
 } from "../lib/roomSetup";
 import {
   availablePromptLanguages,
@@ -140,7 +140,7 @@ export function RoomSetupForm({
       if (total > 0) parts.push(ui.roomSetupForm.promptTotal({ count: total }));
     }
     if (customPrompts.analysis.usableCount > 0) {
-      parts.push(`${customPrompts.analysis.usableCount} custom`);
+      parts.push(ui.roomSetupForm.customCount({ count: customPrompts.analysis.usableCount }));
     }
     return parts.join(" · ");
   })();
@@ -152,7 +152,7 @@ export function RoomSetupForm({
     COLOR_MODE_OPTIONS.find((option) => option.value === colorMode)?.label ?? ui.roomSetupForm.allColors,
   ].filter(Boolean).join(" · ");
 
-  const scoringSummary = `${scoringMode === "none" ? ui.roomSetupForm.noScoring : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
+  const scoringSummary = `${scoringMode === "none" ? ui.roomSetupForm.noScoring : scoringNameFor(scoringMode)} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
 
   return (

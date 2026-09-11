@@ -427,6 +427,10 @@ export const IT: Catalogue = {
     bestDrawer: "Miglior disegnatore",
     quickestOnAverage: "Più veloce in media",
     mostReactedDrawing: "Disegno con più reazioni",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      plural(p.correct, { one: `${p.correct} su ${p.total} l’ha indovinata`, other: `${p.correct} su ${p.total} l’hanno indovinata` }),
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} indovinato`,
   },
 
   versionBadge: {
@@ -684,6 +688,10 @@ export const IT: Catalogue = {
     theLast20ErrorsYour: "Gli ultimi 20 errori registrati dal tuo browser. Nessun indirizzo di pagina oltre il percorso, niente di ciò che hai scritto in chat e mai la parola in gioco.",
     sending: "Invio…",
     sendReport: "Invia segnalazione",
+    kilobytes: (p: { size: number }) =>
+      `${number(p.size)} KB`,
+    megabytes: (p: { size: number }) =>
+      `${number(p.size)} MB`,
   },
 
   changePasswordDialog: {
@@ -798,6 +806,10 @@ export const IT: Catalogue = {
     leaveBlankForARandom: "Lascia vuoto per un nome a caso!",
     creating: "Creazione…",
     createRoom2: "Crea stanza",
+    playerCount: (p: { count: number }) =>
+      counted(p.count, { one: "giocatore", other: "giocatori" }),
+    roundCount: (p: { count: number }) =>
+      counted(p.count, { one: "round", other: "round" }),
   },
 
   customPromptsEditor: {
@@ -1160,6 +1172,10 @@ export const IT: Catalogue = {
       `${p.promptsCount} parole su ${p.MAX_LIST_PROMPTS} in questa lista`,
     saving: "Salvataggio…",
     saveList: "Salva lista",
+    promptCount: (p: { count: number }) =>
+      counted(p.count, { one: "parola", other: "parole" }),
+    visibleOfTotal: (p: { visible: number; total: number }) =>
+      `${p.visible} su ${p.total}`,
   },
 
   notFoundPage: {
@@ -1225,6 +1241,8 @@ export const IT: Catalogue = {
       `Voti ${p.kind} per ${p.nickname}, ${p.count} su ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `Voti ${p.kind} per ${p.nickname}, ${p.count} su ${p.required}, compreso il tuo`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (ospite)`,
   },
 
   profilePage: {
@@ -1291,6 +1309,12 @@ export const IT: Catalogue = {
     noGamesToShowGames: "Nessuna partita da mostrare. Le partite delle stanze private sono visibili solo a chi c’era.",
     loadHistoryPageSizeMore: (p: { HISTORY_PAGE_SIZE: number }) =>
       `Carica altre ${p.HISTORY_PAGE_SIZE}`,
+    correctWithPoints: (p: { points: number }) =>
+      `indovinato, ${p.points}`,
+    wrongCount: (p: { count: number }) =>
+      counted(p.count, { one: "errore", other: "errori" }),
+    joinedOn: (p: { date: string }) =>
+      `iscritto il ${p.date}`,
   },
 
   promptContentReportDialog: {
@@ -1650,6 +1674,8 @@ export const IT: Catalogue = {
     noScoring: "Senza punteggio",
     listedInTheLobbyAnyone: "Elencata nella lobby: chiunque può entrare.",
     joinableOnlyWithTheCode: "Accessibile solo con il codice o il link d’invito.",
+    customCount: (p: { count: number }) =>
+      counted(p.count, { one: "personalizzata", other: "personalizzate" }),
   },
 
   rulesPage: {
@@ -2153,6 +2179,8 @@ export const IT: Catalogue = {
     wheelOfFortune: "Ruota della fortuna",
     pickALetterPayIts: "Scegli una lettera e pagane il prezzo: le vocali costano di più.",
     hiddenPrompt: "Parola nascosta",
+    defaultScoring: "Punteggio standard",
+    pressureScoring: "Punteggio a pressione",
   },
   screenCapture: {
     thisBrowserCouldNotEncode: "Questo browser non è riuscito a codificare lo screenshot.",
@@ -2174,6 +2202,8 @@ export const IT: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `${p.shown} su ${p.onlineCount} mostrati`,
+    onlineCount: (p: { count: number }) =>
+      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Scegli un nome con cui giocare.",
@@ -2192,6 +2222,10 @@ export const IT: Catalogue = {
       `La parola era «${p.prompt}»`,
     gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
       `${p.nickname} ha indovinato${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    playerReconnected: (p: { nickname: string }) =>
+      `${p.nickname} si è riconnesso`,
+    playerDisconnected: (p: { nickname: string }) =>
+      `${p.nickname} si è disconnesso`,
   },
   settingsStore: {
     brushTool: "Pennello",
@@ -2227,6 +2261,10 @@ export const IT: Catalogue = {
     blackAndWhite: "Bianco e nero",
     blackAndWhiteOnly: "Solo bianco e nero.",
     allTools: "Tutti gli strumenti",
+    onlyTool: (p: { tool: string }) =>
+      `solo ${p.tool}`,
+    toolList: (p: { rest: string; last: string }) =>
+      `${p.rest} e ${p.last}`,
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy è pieno in questo momento. Riprova tra qualche minuto.",

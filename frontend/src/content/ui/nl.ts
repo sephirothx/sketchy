@@ -427,6 +427,10 @@ export const NL: Catalogue = {
     bestDrawer: "Beste tekenaar",
     quickestOnAverage: "Gemiddeld het snelst",
     mostReactedDrawing: "Tekening met de meeste reacties",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      plural(p.correct, { one: `${p.correct} van ${p.total} raadde het`, other: `${p.correct} van ${p.total} raadden het` }),
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} geraden`,
   },
 
   versionBadge: {
@@ -684,6 +688,10 @@ export const NL: Catalogue = {
     theLast20ErrorsYour: "De laatste 20 fouten die je browser heeft vastgelegd. Geen paginaadressen verder dan het pad, niets wat je in de chat hebt getypt en nooit het woord dat in het spel is.",
     sending: "Versturen…",
     sendReport: "Melding versturen",
+    kilobytes: (p: { size: number }) =>
+      `${number(p.size)} KB`,
+    megabytes: (p: { size: number }) =>
+      `${number(p.size)} MB`,
   },
 
   changePasswordDialog: {
@@ -798,6 +806,10 @@ export const NL: Catalogue = {
     leaveBlankForARandom: "Laat leeg voor een willekeurige naam!",
     creating: "Maken…",
     createRoom2: "Kamer maken",
+    playerCount: (p: { count: number }) =>
+      counted(p.count, { one: "speler", other: "spelers" }),
+    roundCount: (p: { count: number }) =>
+      counted(p.count, { one: "ronde", other: "rondes" }),
   },
 
   customPromptsEditor: {
@@ -1160,6 +1172,10 @@ export const NL: Catalogue = {
       `${p.promptsCount} van ${p.MAX_LIST_PROMPTS} woorden in deze lijst`,
     saving: "Opslaan…",
     saveList: "Lijst opslaan",
+    promptCount: (p: { count: number }) =>
+      counted(p.count, { one: "woord", other: "woorden" }),
+    visibleOfTotal: (p: { visible: number; total: number }) =>
+      `${p.visible} van ${p.total}`,
   },
 
   notFoundPage: {
@@ -1225,6 +1241,8 @@ export const NL: Catalogue = {
       `Stemmen ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `Stemmen ${p.kind} voor ${p.nickname}, ${p.count} van ${p.required}, inclusief die van jou`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (gast)`,
   },
 
   profilePage: {
@@ -1291,6 +1309,12 @@ export const NL: Catalogue = {
     noGamesToShowGames: "Geen spellen om te tonen. Spellen uit privékamers zijn alleen zichtbaar voor wie erbij was.",
     loadHistoryPageSizeMore: (p: { HISTORY_PAGE_SIZE: number }) =>
       `Nog ${p.HISTORY_PAGE_SIZE} laden`,
+    correctWithPoints: (p: { points: number }) =>
+      `goed, ${p.points}`,
+    wrongCount: (p: { count: number }) =>
+      `${p.count} fout`,
+    joinedOn: (p: { date: string }) =>
+      `lid sinds ${p.date}`,
   },
 
   promptContentReportDialog: {
@@ -1651,6 +1675,8 @@ export const NL: Catalogue = {
     noScoring: "Zonder punten",
     listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen.",
     joinableOnlyWithTheCode: "Alleen toegankelijk met de code of de uitnodigingslink.",
+    customCount: (p: { count: number }) =>
+      `${number(p.count)} eigen`,
   },
 
   rulesPage: {
@@ -2154,6 +2180,8 @@ export const NL: Catalogue = {
     wheelOfFortune: "Rad van fortuin",
     pickALetterPayIts: "Kies een letter, betaal de prijs — klinkers kosten extra.",
     hiddenPrompt: "Verborgen woord",
+    defaultScoring: "Standaardpunten",
+    pressureScoring: "Drukpunten",
   },
   screenCapture: {
     thisBrowserCouldNotEncode: "Deze browser kon de screenshot niet coderen.",
@@ -2175,6 +2203,8 @@ export const NL: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `${p.shown} van ${p.onlineCount} getoond`,
+    onlineCount: (p: { count: number }) =>
+      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Kies een naam om onder te spelen.",
@@ -2193,6 +2223,10 @@ export const NL: Catalogue = {
       `Het woord was ‘${p.prompt}’`,
     gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
       `${p.nickname} heeft het geraden${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    playerReconnected: (p: { nickname: string }) =>
+      `${p.nickname} is weer verbonden`,
+    playerDisconnected: (p: { nickname: string }) =>
+      `${p.nickname} heeft de verbinding verloren`,
   },
   settingsStore: {
     brushTool: "Penseel",
@@ -2228,6 +2262,10 @@ export const NL: Catalogue = {
     blackAndWhite: "Zwart-wit",
     blackAndWhiteOnly: "Alleen zwart en wit.",
     allTools: "Alle gereedschappen",
+    onlyTool: (p: { tool: string }) =>
+      `alleen ${p.tool}`,
+    toolList: (p: { rest: string; last: string }) =>
+      `${p.rest} en ${p.last}`,
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy zit nu vol. Probeer het over een paar minuten nog eens.",

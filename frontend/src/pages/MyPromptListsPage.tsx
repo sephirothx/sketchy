@@ -325,8 +325,11 @@ export function MyPromptListsPage() {
                   )}
                   <span className="prompt-list-entry-count">
                     {visiblePrompts.length === draft.prompts.length
-                      ? `${draft.prompts.length} prompts`
-                      : `${visiblePrompts.length} of ${draft.prompts.length}`}
+                      ? ui.myPromptListsPage.promptCount({ count: draft.prompts.length })
+                      : ui.myPromptListsPage.visibleOfTotal({
+                        visible: visiblePrompts.length,
+                        total: draft.prompts.length,
+                      })}
                   </span>
                 </div>
                 {visiblePrompts.length === 0 ? (

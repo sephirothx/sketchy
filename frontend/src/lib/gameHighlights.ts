@@ -34,7 +34,10 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
       return {
         kind: highlight.kind,
         label: ui.gameHighlights.hardestPrompt,
-        value: `${highlight.correctGuessCount} of ${highlight.totalGuesserCount} guessed it`,
+        value: ui.gameHighlights.guessedItOf({
+          correct: highlight.correctGuessCount,
+          total: highlight.totalGuesserCount,
+        }),
         prompt: highlight.prompt,
       };
     case "fastest_guess":
@@ -49,7 +52,7 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
       return {
         kind: highlight.kind,
         label: ui.gameHighlights.bestDrawer,
-        value: `${percent(highlight.guessRatio)} guessed`,
+        value: ui.gameHighlights.percentGuessed({ percent: percent(highlight.guessRatio) }),
         name: highlight,
       };
     case "quickest_average":

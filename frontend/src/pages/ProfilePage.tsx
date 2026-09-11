@@ -289,9 +289,11 @@ function GameRow({
               );
             };
             const outcomeLabel = (outcome: GameTurn["participantOutcomes"][number]) => {
-              if (outcome.outcome === "correct") return `correct, ${outcome.pointsAwarded ?? 0}`;
+              if (outcome.outcome === "correct") {
+                return ui.profilePage.correctWithPoints({ points: outcome.pointsAwarded ?? 0 });
+              }
               if (outcome.outcome === "incorrect") {
-                return `${outcome.wrongGuessCount} wrong`;
+                return ui.profilePage.wrongCount({ count: outcome.wrongGuessCount });
               }
               if (outcome.outcome === "no_attempt") return ui.profilePage.noAttempt;
               // Only games finished before a mid-turn arrival became an
@@ -582,7 +584,8 @@ function ProfileView({ userId }: { userId: string }) {
               </h1>
               <p className="profile-subtitle">
                 {subject.isAnonymous ? ui.profilePage.guestDisplayNameNotSaved : ui.profilePage.registeredPlayer}
-                {subject.createdAt && ` · joined ${formatTimestamp(subject.createdAt, timeFormat)}`}
+                {subject.createdAt
+                  && ` · ${ui.profilePage.joinedOn({ date: formatTimestamp(subject.createdAt, timeFormat) })}`}
                 {lastSeenLabel(subject) && (
                   <>
                     {" · "}

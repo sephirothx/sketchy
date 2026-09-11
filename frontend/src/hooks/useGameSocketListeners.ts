@@ -51,7 +51,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} reconnected`,
+        text: ui.useGameSocketListeners.playerReconnected({ nickname: payload.nickname }),
         correct: false,
         system: true,
       });
@@ -62,7 +62,7 @@ export function useGameSocketListeners() {
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: `${payload.nickname} disconnected`,
+        text: ui.useGameSocketListeners.playerDisconnected({ nickname: payload.nickname }),
         correct: false,
         system: true,
       });

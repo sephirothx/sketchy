@@ -192,7 +192,7 @@ test("the scan would notice a literal put back", () => {
 // unless it says otherwise: a `// Not copy: <why>` comment above it, a key or
 // attribute that is plumbing by name, or a call that is styling or a log.
 const NOT_COPY_NAMES = new Set([
-  "id", "key", "className", "value", "type", "kind", "testId", "href", "path", "icon", "color",
+  "id", "key", "className", "type", "kind", "testId", "href", "path", "icon", "color",
   "event", "code", "slug", "variant", "role", "tone", "mode", "errorCode", "method", "storageKey",
   "format", "hourCycle", "locale", "language", "transform", "rootMargin", "boxShadow",
   "transition", "fontFamily", "background", "gridTemplateColumns", "style", "data-testid", "src",
@@ -211,6 +211,7 @@ const DIAGNOSTIC = ["lib/crashReport", "lib/clientErrorLog"];
 // player was warned for) comes from the catalogue.
 const STAFF_LIBS = ["lib/operations", "lib/adminControls", "lib/moderation"];
 const BRAND = new Set(["Sketchy"]);
+const LOOKUPS = new Set(["includes", "indexOf", "lastIndexOf", "some", "every", "find", "findIndex"]);
 
 function looksLikeASentence(node) {
   const parts = ts.isTemplateExpression(node)
@@ -218,6 +219,21 @@ function looksLikeASentence(node) {
     : [node.text];
   const text = parts.join("");
   if (BRAND.has(text.trim()) || !/[A-Za-z]{2}/.test(text)) return false;
+  // A template's words need not sit beside each other: in `${n} players` or
+  // `${label} scoring` no part holds two words, and #762 closed with both
+  // still English. A literal part holding one whole word is copy - unless the
+  // template is CSS (`translate(${x}px, …)`, a bare unit) or glued plumbing
+  // (`chip-${kind}`, `/api/${id}`, `${name}.png`), which never stands a word
+  // alone between spaces. Asked first: trimmed, ` players` is one lowercase
+  // token, which the checks below would take for a class name.
+  if (ts.isTemplateExpression(node)) {
+    if (parts.some((part) => /\w\(/.test(part))) return false;
+    const UNITS = /^(px|em|rem|ms|vh|vw|fr|deg)\b/;
+    if (parts.some((part) =>
+      /(^|[\s:;,!?(·—–])[A-Za-z]{2,}(?=[\s:;,.!?)·—–]|$)/.test(part) && !UNITS.test(part.trim()))) {
+      return true;
+    }
+  }
   if (/^(https?:|\/|#|--|var\(|\.|\[)/.test(text) || /[{};]\s*$/.test(text)) return false;
   if (/^[a-z-]+\s*:/.test(text) || /^[a-z0-9_.\/:-]*$/.test(text.trim())) return false;
   // A class list - "chip is-active" - rather than lowercase words like "cut short".
@@ -246,7 +262,9 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
       if (ts.isPropertyAssignment(at) && NOT_COPY_NAMES.has(at.name.getText(source).replace(/["']/g, ""))) return true;
       if ((ts.isCallExpression(at) || ts.isNewExpression(at)) && NOT_COPY_CALLS.has(callee(at))) return true;
       // A list something is looked up in, rather than shown: `[...].includes(key)`.
-      if (ts.isPropertyAccessExpression(at) && ts.isArrayLiteralExpression(at.expression)) return true;
+      // Only a lookup - `[...].join(" · ")` is a list being shown.
+      if (ts.isPropertyAccessExpression(at) && ts.isArrayLiteralExpression(at.expression)
+        && LOOKUPS.has(at.name.text)) return true;
     }
     return marked(node);
   };
@@ -259,6 +277,10 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
     }
     if (ts.isPropertyAssignment(parent) && parent.initializer === child) return "table";
     if (ts.isArrayLiteralExpression(parent)) return "list";
+    // `parts.push(`${n} custom`)`, then `parts.join(" · ")`: a list built a
+    // piece at a time is a list all the same.
+    if (ts.isCallExpression(parent) && parent.arguments.includes(child)
+      && ["push", "unshift", "concat"].includes(parent.expression.getText(source).split(".").pop())) return "list";
     if (ts.isReturnStatement(parent) || (ts.isArrowFunction(parent) && parent.body === child)) return "return";
     if (ts.isVariableDeclaration(parent) && parent.initializer === child) return "constant";
     if (ts.isConditionalExpression(parent) && parent.condition !== child) return "branch";
@@ -274,7 +296,22 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
     if (attr && !SPEAKING_ATTRS.has(attr.name.getText(source))) return "prop";
     return null;
   };
+  // `n === 1 ? "round" : "rounds"` - a plural English happens to need, and no
+  // other language's. Counts go through `counted`/`plural` in the catalogue.
+  const countOfOne = (condition) => ts.isBinaryExpression(condition)
+    && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken,
+      ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken,
+      ts.SyntaxKind.GreaterThanToken].includes(condition.operatorToken.kind)
+    && [condition.left, condition.right].some((side) => ts.isNumericLiteral(side) && side.text === "1");
+  const wordOrNothing = (branch) => (ts.isStringLiteral(branch) || ts.isNoSubstitutionTemplateLiteral(branch))
+    && /^[\p{L} ]*$/u.test(branch.text);
   const visit = (node) => {
+    if (ts.isConditionalExpression(node) && countOfOne(node.condition)
+      && wordOrNothing(node.whenTrue) && wordOrNothing(node.whenFalse)
+      && (node.whenTrue.text.trim() || node.whenFalse.text.trim()) && !excused(node.whenTrue)) {
+      const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+      found.push(`${relative(ROOT, path)}:${line} plural ${node.getText(source).slice(0, 50)}`);
+    }
     if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node))
       && looksLikeASentence(node)) {
       const where = place(node);
@@ -316,6 +353,15 @@ test("the table scan would notice a sentence put back", () => {
     'const el = <p>{signedOut && "You signed out everywhere."}</p>;',
     'const el = <button aria-label={open ? "Close the menu" : "Open the menu"} />;',
     'const el = <Header title={name || "A player"} />;',
+    // The three shapes #762 was reopened for.
+    'const s = total ? `${total} ${total === 1 ? "reaction" : "reactions"}: ${chips}` : none;',
+    "const footer = [`${maxPlayers} players`, `${drawingSeconds}s`].join(\" · \");",
+    "const scoring = `${scoringLabelFor(mode)} scoring`;",
+    'const rounds = count === 1 ? "round" : "rounds";',
+    // The three #786's review found.
+    "parts.push(`${customPrompts.analysis.usableCount} custom`);",
+    "const el = <span title={isAnonymous ? `${nickname} (guest)` : undefined} />;",
+    "const highlight = { label: ui.x.y, value: `${correct} of ${total} guessed it` };",
   ]) {
     assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
   }
@@ -325,6 +371,10 @@ test("the table scan would notice a sentence put back", () => {
     'const s = "Sketchy";',
     'const el = <div className={on ? "panel is-open" : "panel"} />;',
     'if (["Control", "Shift"].includes(key)) skip();',
+    "const t = active ? `translate(${x}px, ${y}px)` : undefined;",
+    "const f = [`sketchy-${date}.png`, `chip-${kind}`, `/api/rooms/${id}`, `${seconds}s`];",
+    'const size = place === 1 ? 52 : 42;',
+    'const color = rank === 1 ? "var(--gold)" : null;',
     '// Not copy: a filename.\nconst f = "Sketchy recovery codes.txt";',
   ]) {
     assert.ok(!probe(plumbing), `the table scan takes plumbing for words: ${plumbing}`);

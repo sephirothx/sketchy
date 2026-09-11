@@ -177,9 +177,10 @@ export function DrawingReactionControl({
   const summary =
     total === 0
       ? ui.drawingReactionControl.noReactionsYet
-      : `${total} ${total === 1 ? "reaction" : "reactions"}: ${chips
-          .map((chip) => `${chip.label} ${chip.count}`)
-          .join(", ")}`;
+      : ui.drawingReactionControl.reactionSummary({
+          total,
+          chips: chips.map((chip) => `${chip.label} ${chip.count}`).join(", "),
+        });
 
   return (
     <div

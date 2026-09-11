@@ -437,6 +437,10 @@ export const EN = {
     bestDrawer: "Best drawer",
     quickestOnAverage: "Quickest on average",
     mostReactedDrawing: "Most reacted drawing",
+    guessedItOf: (p: { correct: number; total: number }) =>
+      `${p.correct} of ${p.total} guessed it`,
+    percentGuessed: (p: { percent: string }) =>
+      `${p.percent} guessed`,
   },
 
   versionBadge: {
@@ -695,6 +699,10 @@ export const EN = {
       "The last 20 errors your browser recorded. No page addresses beyond the path, nothing you typed into chat, and never the prompt in play.",
     sending: "Sending…",
     sendReport: "Send report",
+    kilobytes: (p: { size: number }) =>
+      `${number(p.size)} KB`,
+    megabytes: (p: { size: number }) =>
+      `${number(p.size)} MB`,
   },
 
   changePasswordDialog: {
@@ -810,6 +818,10 @@ export const EN = {
     leaveBlankForARandom: "Leave blank for a random name!",
     creating: "Creating…",
     createRoom2: "Create room",
+    playerCount: (p: { count: number }) =>
+      counted(p.count, { one: "player", other: "players" }),
+    roundCount: (p: { count: number }) =>
+      counted(p.count, { one: "round", other: "rounds" }),
   },
 
   customPromptsEditor: {
@@ -1172,6 +1184,10 @@ export const EN = {
       (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) => `${p.promptsCount} of ${p.MAX_LIST_PROMPTS} prompts in this list`,
     saving: "Saving…",
     saveList: "Save list",
+    promptCount: (p: { count: number }) =>
+      counted(p.count, { one: "prompt", other: "prompts" }),
+    visibleOfTotal: (p: { visible: number; total: number }) =>
+      `${p.visible} of ${p.total}`,
   },
 
   notFoundPage: {
@@ -1237,6 +1253,8 @@ export const EN = {
       `${p.kind} votes for ${p.nickname}, ${p.count} of ${p.required}`,
     votesForIncludingYours: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `${p.kind} votes for ${p.nickname}, ${p.count} of ${p.required}, including yours`,
+    guestName: (p: { nickname: string }) =>
+      `${p.nickname} (guest)`,
   },
 
   profilePage: {
@@ -1304,6 +1322,12 @@ export const EN = {
       "No games to show. Games from private rooms are listed only for the players who were in them.",
     loadHistoryPageSizeMore:
       (p: { HISTORY_PAGE_SIZE: number }) => `Load ${p.HISTORY_PAGE_SIZE} more`,
+    correctWithPoints: (p: { points: number }) =>
+      `correct, ${p.points}`,
+    wrongCount: (p: { count: number }) =>
+      `${p.count} wrong`,
+    joinedOn: (p: { date: string }) =>
+      `joined ${p.date}`,
   },
 
   promptContentReportDialog: {
@@ -1660,6 +1684,8 @@ export const EN = {
     noScoring: "No scoring",
     listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in.",
     joinableOnlyWithTheCode: "Joinable only with the code or invite link.",
+    customCount: (p: { count: number }) =>
+      `${number(p.count)} custom`,
   },
 
   rulesPage: {
@@ -2168,6 +2194,8 @@ export const EN = {
     wheelOfFortune: "Wheel of Fortune",
     pickALetterPayIts: "Pick a letter, pay its price — vowels cost extra.",
     hiddenPrompt: "Hidden prompt",
+    defaultScoring: "Default scoring",
+    pressureScoring: "Pressure scoring",
   },
   screenCapture: {
     thisBrowserCouldNotEncode: "This browser could not encode the screenshot.",
@@ -2190,6 +2218,8 @@ export const EN = {
   lobbyPresence: {
     showingShownOfOnlineCount:
       (p: { shown: number; onlineCount: number }) => `Showing ${p.shown} of ${p.onlineCount}`,
+    onlineCount: (p: { count: number }) =>
+      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Choose a name to play under.",
@@ -2206,6 +2236,10 @@ export const EN = {
     thePromptWasPrompt: (p: { prompt: string }) => `The prompt was "${p.prompt}"`,
     gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
       `${p.nickname} got it${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    playerReconnected: (p: { nickname: string }) =>
+      `${p.nickname} reconnected`,
+    playerDisconnected: (p: { nickname: string }) =>
+      `${p.nickname} disconnected`,
   },
   settingsStore: {
     brushTool: "Brush tool",
@@ -2241,6 +2275,10 @@ export const EN = {
     blackAndWhite: "Black and white",
     blackAndWhiteOnly: "Black and white only.",
     allTools: "All tools",
+    onlyTool: (p: { tool: string }) =>
+      `${p.tool} only`,
+    toolList: (p: { rest: string; last: string }) =>
+      `${p.rest} and ${p.last}`,
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy is full right now. Try again in a few minutes.",

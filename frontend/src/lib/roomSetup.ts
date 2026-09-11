@@ -71,6 +71,14 @@ export function scoringLabelFor(mode: ScoringMode) {
   return SCORING_OPTIONS.find((option) => option.value === mode)?.label ?? ui.roomSetup.default;
 }
 
+/** A scoring mode named on its own in a summary - "Pressure scoring" - as a
+whole phrase, since a label glued to an English noun is English in every
+language but one. */
+export function scoringNameFor(mode: ScoringMode): string {
+  if (mode === "none") return ui.roomSetup.noScoring;
+  return mode === "pressure" ? ui.roomSetup.pressureScoring : ui.roomSetup.defaultScoring;
+}
+
 export function hintLabelFor(hintMode: HintMode, hideMaskedPrompt: boolean) {
   return hideMaskedPrompt
     ? ui.roomSetup.hiddenPrompt
