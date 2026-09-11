@@ -3417,6 +3417,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         language=language,
                         is_bundled=True,
                         visibility=PromptListVisibility.PUBLIC.value,
+                        # The official catalogue is published by being seeded;
+                        # `ck_prompt_lists_published_at` holds it to the same
+                        # rule a player's list obeys (R-LIST-11).
+                        published_at=datetime.now(timezone.utc),
                         moderation_state=PromptContentModerationState.ACTIVE.value,
                         version=version,
                     )
@@ -3449,6 +3453,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     wl.name = name
                     wl.description = description
                     wl.visibility = PromptListVisibility.PUBLIC.value
+                    wl.published_at = wl.published_at or datetime.now(timezone.utc)
                     wl.moderation_state = PromptContentModerationState.ACTIVE.value
                 elif version < wl.version:
                     raise PromptSeedConflictError(
@@ -3536,6 +3541,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     wl.description = description
                     wl.language = language
                     wl.visibility = PromptListVisibility.PUBLIC.value
+                    wl.published_at = wl.published_at or datetime.now(timezone.utc)
                     wl.moderation_state = PromptContentModerationState.ACTIVE.value
                     wl.version = version
 

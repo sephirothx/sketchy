@@ -52,6 +52,7 @@ from app.db.models import (
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
+    PromptListStar,
     PromptVersion,
     PromptVersionAlias,
     RoomMessage,
@@ -93,7 +94,7 @@ from app.domain_values import (
 # document's field surface changed, and a reader that keys off the version
 # should be able to tell which shape it has. To 5 when the account gained
 # `lastSeenAt` (#469).
-EXPORT_SCHEMA_VERSION = 7
+EXPORT_SCHEMA_VERSION = 8
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -542,6 +543,9 @@ def _prompt_list_document(prompt_list: PromptList) -> dict:
         "visibility": prompt_list.visibility,
         "shareCode": prompt_list.share_code,
         "moderationState": prompt_list.moderation_state,
+        "publishedAt": _timestamp(prompt_list.published_at)
+        if prompt_list.published_at
+        else None,
         "version": prompt_list.version,
         "createdAt": _timestamp(prompt_list.created_at),
         "updatedAt": _timestamp(prompt_list.updated_at),
@@ -943,6 +947,28 @@ async def _write_export_artifact(
         )
         .order_by(PromptList.created_at, PromptList.id),
         _prompt_list_document,
+    )
+    # Which published lists this account starred, and when. The list's name
+    # travels with it so the document reads without a lookup, but its owner's
+    # account id does not: a star says something about the reader, not about
+    # the person whose list it is, and the friends section below avoids a raw
+    # third-party id for the same reason. The count a starred list carries is
+    # left out - it is derived from other people's rows (R-LIST-16), not a
+    # record of anything this account did.
+    writer.key("stars")
+    await _write_rows(
+        writer,
+        session,
+        select(PromptListStar, PromptList.name)
+        .join(PromptList, PromptList.id == PromptListStar.prompt_list_id)
+        .where(PromptListStar.user_id.in_(identity_ids))
+        .order_by(PromptListStar.created_at, PromptListStar.prompt_list_id),
+        lambda row: {
+            "promptListId": str(row[0].prompt_list_id),
+            "promptListName": row[1],
+            "starredAt": _timestamp(row[0].created_at),
+        },
+        scalars=False,
     )
     writer.key("roomPresets")
     await _write_rows(
@@ -1563,6 +1589,16 @@ async def anonymize_account(
             # them (R-PRIV-05 keeps those games' provenance; #605). Their
             # names go with the account; the prompts are shared content.
             await retire_owned_lists(session, identity_ids, now=deleted_at)
+            # Stars this account gave. The cascade on the table would never
+            # fire - deletion tombstones the user row rather than removing it -
+            # and leaving them would keep somebody else's list carrying the
+            # approval of an account that no longer exists. Nothing derives
+            # from the row but a count (R-LIST-16), so it goes.
+            await session.execute(
+                delete(PromptListStar).where(
+                    PromptListStar.user_id.in_(identity_ids)
+                )
+            )
             await session.execute(
                 delete(UserBlock).where(
                     or_(

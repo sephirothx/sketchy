@@ -3631,14 +3631,30 @@ class PromptList(Base):
             "is_bundled = false OR owner_user_id IS NULL",
             name="ck_prompt_lists_bundled_owner",
         ),
-        # Public is reserved for the official catalogue (R-LIST-02, N-04).
-        CheckConstraint(
-            "visibility <> 'public' OR is_bundled = true",
-            name="ck_prompt_lists_public_is_bundled",
-        ),
         CheckConstraint(
             "visibility != 'unlisted' OR share_code IS NOT NULL",
             name="ck_prompt_lists_unlisted_share_code",
+        ),
+        # Publishing is an act, not a value an edit can carry (R-LIST-11), and
+        # this is what makes the two inseparable at rest: a public row without
+        # the moment it became public cannot exist, whatever wrote it.
+        CheckConstraint(
+            "visibility <> 'public' OR published_at IS NOT NULL",
+            name="ck_prompt_lists_published_at",
+        ),
+        # The catalogue's whole question - published, still active, still
+        # here - and the star counts join through it (#712).
+        Index(
+            "ix_prompt_lists_published",
+            "published_at",
+            postgresql_where=text(
+                "visibility = 'public' AND moderation_state = 'active' "
+                "AND deleted_at IS NULL"
+            ),
+            sqlite_where=text(
+                "visibility = 'public' AND moderation_state = 'active' "
+                "AND deleted_at IS NULL"
+            ),
         ),
     )
 
@@ -3690,6 +3706,14 @@ class PromptList(Base):
     moderated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
+    )
+    # When the owner published it (R-LIST-11). Nullable because most lists
+    # never are, and set rather than derived because "public since" is a fact
+    # about an act somebody took - `updated_at` moves for every edit and could
+    # not answer it. Cleared on unpublish: the list stops being public, and a
+    # later publish is a new act with its own moment.
+    published_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
     )
     # A retired list: out of every listing, resolution and share the moment
     # this is set, physically reclaimed by `services.prompt_reclaim` once
@@ -3866,6 +3890,39 @@ class PromptListLocalization(Base):
     )
 
     prompt_list: Mapped[PromptList] = relationship(back_populates="localizations")
+
+
+class PromptListStar(Base):
+    """One account's star on one published prompt list.
+
+    A fact, not a counter (R-LIST-16): the rows are the truth and every count
+    is derived from them, so a double-star cannot inflate anything and a
+    deleted account cannot leave one behind. Both sides cascade because a star
+    is disposable in a way a finished game's facts are not - nothing pins it,
+    nothing reconstructs history from it.
+    """
+
+    __tablename__ = "prompt_list_stars"
+    __table_args__ = (
+        # The PK leads with the account, which answers "did I star this?" and
+        # "what have I starred?". The count looks the other way, once per
+        # catalogue row, and would otherwise scan (#551's lesson, again).
+        Index("ix_prompt_list_stars_list", "prompt_list_id"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
 
 
 class PromptUsageFact(Base):
