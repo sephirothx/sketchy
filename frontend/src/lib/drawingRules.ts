@@ -185,8 +185,11 @@ export function describeAllowedTools(allowedTools?: readonly DrawingToolGroup[])
   const labels = selected.map(
     (group) => TOOL_GROUP_OPTIONS.find((option) => option.value === group)!.label,
   );
-  if (labels.length === 1) return `${labels[0]} only`;
-  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+  if (labels.length === 1) return ui.drawingRules.onlyTool({ tool: labels[0] });
+  return ui.drawingRules.toolList({
+    rest: labels.slice(0, -1).join(", "),
+    last: labels[labels.length - 1],
+  });
 }
 
 export function describeColorMode(mode?: ColorMode): string {

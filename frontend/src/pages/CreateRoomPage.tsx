@@ -6,7 +6,7 @@ import { SectionLabel } from "../components/ui/Card";
 import { ClockIcon } from "../components/icons";
 import type { PromptListSummary } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
-import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringLabelFor } from "../lib/roomSetup";
+import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -315,11 +315,11 @@ export function CreateRoomPage() {
 
   // The form's own collapsed summaries live with the form. What is left here
   // is the one the dock carries, which is about the room as a whole.
-  const scoringSummary = `${scoringMode === "none" ? ui.createRoomPage.noScoring : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
+  const scoringSummary = `${scoringMode === "none" ? ui.createRoomPage.noScoring : scoringNameFor(scoringMode)} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const footerSummary = [
     isPublic ? ui.createRoomPage.public : ui.createRoomPage.private,
-    `${maxPlayers} players`,
-    `${rounds} ${rounds === 1 ? "round" : "rounds"}`,
+    ui.createRoomPage.playerCount({ count: maxPlayers }),
+    ui.createRoomPage.roundCount({ count: rounds }),
     `${drawingSeconds}s`,
     scoringSummary,
   ].join(" · ");

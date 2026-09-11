@@ -22,8 +22,8 @@ const MAX_DETAILS = 4000;
 
 function bytes(size: number): string {
   return size < 1024 * 1024
-    ? `${Math.round(size / 1024)} KB`
-    : `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    ? ui.bugReportDialog.kilobytes({ size: Math.round(size / 1024) })
+    : ui.bugReportDialog.megabytes({ size: Math.round(size / (1024 * 1024) * 10) / 10 });
 }
 
 /** Report that the app is broken, from anywhere, as anyone.

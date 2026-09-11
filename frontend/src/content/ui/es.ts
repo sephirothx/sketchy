@@ -684,6 +684,10 @@ export const ES: Catalogue = {
     theLast20ErrorsYour: "Los últimos 20 errores que registró tu navegador. Ninguna dirección de página más allá de la ruta, nada de lo que escribiste en el chat y nunca la palabra en juego.",
     sending: "Enviando…",
     sendReport: "Enviar informe",
+    kilobytes: (p: { size: number }) =>
+      `${number(p.size)} KB`,
+    megabytes: (p: { size: number }) =>
+      `${number(p.size)} MB`,
   },
 
   changePasswordDialog: {
@@ -798,6 +802,10 @@ export const ES: Catalogue = {
     leaveBlankForARandom: "¡Déjalo en blanco para un nombre al azar!",
     creating: "Creando…",
     createRoom2: "Crear sala",
+    playerCount: (p: { count: number }) =>
+      counted(p.count, { one: "jugador", other: "jugadores" }),
+    roundCount: (p: { count: number }) =>
+      counted(p.count, { one: "ronda", other: "rondas" }),
   },
 
   customPromptsEditor: {
@@ -1160,6 +1168,10 @@ export const ES: Catalogue = {
       `${p.promptsCount} de ${p.MAX_LIST_PROMPTS} palabras en esta lista`,
     saving: "Guardando…",
     saveList: "Guardar lista",
+    promptCount: (p: { count: number }) =>
+      counted(p.count, { one: "palabra", other: "palabras" }),
+    visibleOfTotal: (p: { visible: number; total: number }) =>
+      `${p.visible} de ${p.total}`,
   },
 
   notFoundPage: {
@@ -1291,6 +1303,12 @@ export const ES: Catalogue = {
     noGamesToShowGames: "No hay partidas que mostrar. Las partidas de salas privadas solo se muestran a quienes estuvieron en ellas.",
     loadHistoryPageSizeMore: (p: { HISTORY_PAGE_SIZE: number }) =>
       `Cargar ${p.HISTORY_PAGE_SIZE} más`,
+    correctWithPoints: (p: { points: number }) =>
+      `acierto, ${p.points}`,
+    wrongCount: (p: { count: number }) =>
+      counted(p.count, { one: "fallo", other: "fallos" }),
+    joinedOn: (p: { date: string }) =>
+      `se unió el ${p.date}`,
   },
 
   promptContentReportDialog: {
@@ -2153,6 +2171,8 @@ export const ES: Catalogue = {
     wheelOfFortune: "Ruleta de la suerte",
     pickALetterPayIts: "Elige una letra y paga su precio; las vocales cuestan más.",
     hiddenPrompt: "Palabra oculta",
+    defaultScoring: "Puntuación estándar",
+    pressureScoring: "Puntuación de presión",
   },
   screenCapture: {
     thisBrowserCouldNotEncode: "Este navegador no pudo codificar la captura.",
@@ -2174,6 +2194,8 @@ export const ES: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `Mostrando ${p.shown} de ${p.onlineCount}`,
+    onlineCount: (p: { count: number }) =>
+      `${number(p.count)} en línea`,
   },
   authStore: {
     chooseANameToPlay: "Elige un nombre con el que jugar.",
@@ -2192,6 +2214,10 @@ export const ES: Catalogue = {
       `La palabra era «${p.prompt}»`,
     gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
       `${p.nickname} acertó${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    playerReconnected: (p: { nickname: string }) =>
+      `${p.nickname} se volvió a conectar`,
+    playerDisconnected: (p: { nickname: string }) =>
+      `${p.nickname} se desconectó`,
   },
   settingsStore: {
     brushTool: "Pincel",
@@ -2227,6 +2253,10 @@ export const ES: Catalogue = {
     blackAndWhite: "Blanco y negro",
     blackAndWhiteOnly: "Solo blanco y negro.",
     allTools: "Todas las herramientas",
+    onlyTool: (p: { tool: string }) =>
+      `solo ${p.tool}`,
+    toolList: (p: { rest: string; last: string }) =>
+      `${p.rest} y ${p.last}`,
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy está lleno ahora mismo. Inténtalo de nuevo en unos minutos.",

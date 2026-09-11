@@ -31,7 +31,7 @@ import {
   ROUNDS_MIN,
   SCORING_OPTIONS,
   hintLabelFor,
-  scoringLabelFor,
+  scoringNameFor,
 } from "../lib/roomSetup";
 import {
   availablePromptLanguages,
@@ -152,7 +152,7 @@ export function RoomSetupForm({
     COLOR_MODE_OPTIONS.find((option) => option.value === colorMode)?.label ?? ui.roomSetupForm.allColors,
   ].filter(Boolean).join(" · ");
 
-  const scoringSummary = `${scoringMode === "none" ? ui.roomSetupForm.noScoring : `${scoringLabelFor(scoringMode)} scoring`} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
+  const scoringSummary = `${scoringMode === "none" ? ui.roomSetupForm.noScoring : scoringNameFor(scoringMode)} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
   const hintsDisabled = hideMaskedPrompt || scoringMode === "none";
 
   return (

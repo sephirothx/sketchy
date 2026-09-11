@@ -176,5 +176,5 @@ the one reading that would make the panel actively misleading. */
 export function presenceSummary(state: PresenceState): string {
   const shown = state.players.length;
   if (state.onlineCount > shown) return ui.lobbyPresence.showingShownOfOnlineCount({ shown, onlineCount: state.onlineCount });
-  return `${state.onlineCount} online`;
+  return ui.lobbyPresence.onlineCount({ count: state.onlineCount });
 }
