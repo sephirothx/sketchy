@@ -64,7 +64,11 @@ async def test_german_does_not_push_any_screen_sideways(viewport):
             # Settings: the densest screen in the app, and the one whose rows
             # are all label-plus-hint - the shape German lengthens most. Its
             # four sections are separate panels, so each is its own answer.
-            await page.get_by_role("button", name="Spielereinstellungen").click()
+            #
+            # Opened by its route rather than by its button: the header packs
+            # differently at 390px, and this test is about what the panel does
+            # to the layout, not about how you get to it.
+            await page.goto(f"{BASE_URL}/settings")
             await page.get_by_test_id("settings").wait_for()
             for tab in await page.get_by_role("tab").all():
                 await tab.click()
@@ -72,10 +76,8 @@ async def test_german_does_not_push_any_screen_sideways(viewport):
                     f"the {await tab.inner_text()} settings scroll sideways in German"
                 )
 
-            await page.keyboard.press("Escape")
-
             # Room setup: every control has a German label beside a German hint.
-            await page.get_by_role("button", name="Raum erstellen").first.click()
+            await page.goto(f"{BASE_URL}/create")
             await page.wait_for_selector(".create-room-page")
             assert await _overflow(page) == 0, "room setup scrolls sideways in German"
         finally:
