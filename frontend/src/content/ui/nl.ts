@@ -551,6 +551,8 @@ export const NL: Catalogue = {
     setPassword: "Wachtwoord instellen",
     oneMoment: "Een moment…",
     nothingToConfirm: "Niets te bevestigen.",
+    resetLinkOnItsWay:
+      "Als dat account bestaat en een bevestigd e-mailadres heeft, is er een herstellink onderweg.",
   },
 
   activeGameRoom: {

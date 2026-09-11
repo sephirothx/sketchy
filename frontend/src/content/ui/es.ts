@@ -551,6 +551,8 @@ export const ES: Catalogue = {
     setPassword: "Establecer contraseña",
     oneMoment: "Un momento…",
     nothingToConfirm: "Nada que confirmar.",
+    resetLinkOnItsWay:
+      "Si esa cuenta existe y tiene una dirección de correo confirmada, te llegará un enlace para restablecer la contraseña.",
   },
 
   activeGameRoom: {

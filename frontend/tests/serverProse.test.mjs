@@ -43,6 +43,11 @@ const REVIEWED = {
   "components/LobbyChatPanel.tsx: error.message":
     "an IdentityRequiredError, thrown with the name check's catalogue text",
   "pages/LobbyBrowserPage.tsx: error.message": "the same",
+  "lib/suspension.ts: body.reason":
+    "the moderator's own words to the player, shown as written - a person's, not the server's",
+  "components/SuspensionNotice.tsx: body.reason": "the same, as it arrives on the socket",
+  "components/InviteEntryPage.tsx: state.error":
+    "a room-entry state's error, always written on this side (refusalText or the catalogue)",
 };
 
 function sourceFiles(dir = ROOT, out = []) {
@@ -64,15 +69,29 @@ function readsIn(path, text = readFileSync(path, "utf8")) {
   const visit = (node) => {
     if (ts.isPropertyAccessExpression(node)) {
       const name = node.name.text;
-      const parent = node.parent;
-      const leftOf = (...kinds) => ts.isBinaryExpression(parent) && parent.left === node
+      let child = node;
+      let parent = node.parent;
+      while (ts.isParenthesizedExpression(parent) || ts.isNonNullExpression(parent) || ts.isAsExpression(parent)) {
+        child = parent;
+        parent = parent.parent;
+      }
+      const leftOf = (...kinds) => ts.isBinaryExpression(parent) && parent.left === child
         && kinds.includes(parent.operatorToken.kind);
       const withFallback = leftOf(ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken);
+      // `ok ? notice.reason : ui.x.y` picks the server's words as surely as `||`.
+      const branch = ts.isConditionalExpression(parent) && parent.condition !== child;
       const assigned = leftOf(ts.SyntaxKind.EqualsToken);
       if (!assigned && (name === "message" || name === "detail"
-        || ((name === "error" || name === "reason") && withFallback))) {
+        || ((name === "error" || name === "reason") && (withFallback || branch)))) {
         found.push(`${rel}: ${node.getText(source)}`);
       }
+    }
+    // `const { detail } = await …` reads the field without a dot in sight.
+    // Only a declaration: a component's own props are not the server's.
+    if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)
+      && ts.isVariableDeclaration(node.parent.parent)) {
+      const field = (node.propertyName ?? node.name).getText(source);
+      if (["message", "detail", "reason"].includes(field)) found.push(`${rel}: { ${field} }`);
     }
     ts.forEachChild(node, visit);
   };
@@ -113,6 +132,11 @@ test("the scan sees the shapes that print the server's words", () => {
     "setError(response.error ?? ui.x.y);",
     "const shown = payload.detail;",
     "function f(error) { if (error instanceof ApiError) return error.message; }",
+    // The two forms #780's review found, verbatim.
+    'serverFullReason = typeof notice?.reason === "string" && notice.reason\n'
+      + "  ? notice.reason\n  : ui.socket.sketchyIsFullRightNow;",
+    "const { detail } = await requestPasswordReset(identifier.trim());",
+    "const { reason: why } = payload;",
   ]) {
     assert.ok(probe(snippet), `the scan cannot see: ${snippet}`);
   }
@@ -120,6 +144,8 @@ test("the scan sees the shapes that print the server's words", () => {
     "setError(refusalText(problem, ui.x.y));",
     "const reason = row.reason;",
     "if (response.error) retry();",
+    'const kind = row.reason === "spam" ? "a" : "b";',
+    "function Notice({ message }) { return message; }",
   ]) {
     assert.ok(!probe(snippet), `the scan objects to something harmless: ${snippet}`);
   }

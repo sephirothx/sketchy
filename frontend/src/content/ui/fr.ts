@@ -551,6 +551,8 @@ export const FR: Catalogue = {
     setPassword: "Définir le mot de passe",
     oneMoment: "Un instant…",
     nothingToConfirm: "Rien à confirmer.",
+    resetLinkOnItsWay:
+      "Si ce compte existe et a une adresse e-mail confirmée, un lien de réinitialisation est en route.",
   },
 
   activeGameRoom: {

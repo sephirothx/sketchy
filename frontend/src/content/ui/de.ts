@@ -551,6 +551,8 @@ export const DE: Catalogue = {
     setPassword: "Passwort setzen",
     oneMoment: "Einen Moment …",
     nothingToConfirm: "Nichts zu bestätigen.",
+    resetLinkOnItsWay:
+      "Falls dieses Konto existiert und eine bestätigte E-Mail-Adresse hat, ist ein Link zum Zurücksetzen unterwegs.",
   },
 
   activeGameRoom: {

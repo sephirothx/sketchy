@@ -559,6 +559,8 @@ export const EN = {
     setPassword: "Set password",
     oneMoment: "One moment…",
     nothingToConfirm: "Nothing to confirm.",
+    resetLinkOnItsWay:
+      "If that account exists and has a confirmed email address, a reset link is on its way.",
   },
 
   activeGameRoom: {
