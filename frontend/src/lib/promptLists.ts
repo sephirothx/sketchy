@@ -1,6 +1,7 @@
 import { apiRequest } from "./api";
 import type {
   CommunityPromptList,
+  CommunityPromptListDetail,
   OwnedPromptList,
   PromptLanguage,
   PromptTag,
@@ -45,6 +46,8 @@ export interface CommunityPromptListQuery {
   language?: PromptLanguage;
   tags?: string[];
   sort?: "stars" | "newest";
+  /** Only the lists this account starred — its shortlist. Needs an account. */
+  starred?: boolean;
   limit?: number;
   cursor?: string | null;
 }
@@ -63,6 +66,7 @@ export function listCommunityPromptLists(
   if (query.language) params.set("language", query.language);
   for (const tag of query.tags ?? []) params.append("tag", tag);
   if (query.sort) params.set("sort", query.sort);
+  if (query.starred) params.set("starred", "true");
   if (query.limit) params.set("limit", String(query.limit));
   if (query.cursor) params.set("cursor", query.cursor);
   const search = params.toString();
@@ -101,6 +105,15 @@ export function setPromptListStarred(
   return apiRequest(`/api/prompt-lists/${encodeURIComponent(id)}/star`, {
     method: starred ? "PUT" : "DELETE",
   });
+}
+
+/**
+ * One published list and its prompts. Open to a signed-out reader, like the
+ * listing: choosing a list to play or copy from a name and a count is
+ * choosing blind.
+ */
+export function readCommunityPromptList(id: string): Promise<CommunityPromptListDetail> {
+  return apiRequest(`/api/prompt-lists/community/${encodeURIComponent(id)}`);
 }
 
 export function listOwnedPromptLists(): Promise<OwnedPromptList[]> {

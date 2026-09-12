@@ -12,6 +12,7 @@ from app.repositories.interfaces import (
     GameDetail,
     GameSummary,
     CommunityPromptList,
+    CommunityPromptListDetail,
     OwnedPromptList,
     PromptListSummary,
     SharedPromptList,
@@ -231,6 +232,23 @@ def community_prompt_list_payload(prompt_list: CommunityPromptList) -> dict:
         "starredByMe": prompt_list.starred_by_me,
         "publishedAt": _timestamp(prompt_list.published_at),
         "version": prompt_list.version,
+    }
+
+
+def community_prompt_list_detail_payload(prompt_list: CommunityPromptListDetail) -> dict:
+    """A catalogue row with the prompts in it (R-LIST-19).
+
+    The same entry shape the share-code flow returns, and for the same reason
+    its docstring gives: a version id is what lets a reader report one exact
+    prompt instead of the whole list. Aliases and concept ids stay out - they
+    are matching machinery, and nobody reading a catalogue needs them.
+    """
+    return {
+        **community_prompt_list_payload(prompt_list),
+        "prompts": [
+            {"promptVersionId": entry.prompt_version_id, "prompt": entry.answer}
+            for entry in prompt_list.prompts
+        ],
     }
 
 

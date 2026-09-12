@@ -521,7 +521,8 @@ administrator can switch new publications into a review queue instead
 enough. Lists held that way wait in a moderation queue of their own, where a
 moderator releases them into the catalogue or takes them down; it is separate
 from the report queue because nothing was reported — they were held by a policy,
-not an accusation. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
+not an accusation. A published list can be opened to read every prompt in it before playing or
+copying it. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
 by language and tag and sorted by stars or by recency; it is a route of its own
 rather than a filter on the official one, so official content and player content
 are never in the same listing. A host can pick a published list for a room

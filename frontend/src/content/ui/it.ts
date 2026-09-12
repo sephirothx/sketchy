@@ -76,6 +76,8 @@ function accountRequired(params: MessageParams): string {
       return "Crea un account prima di attivare l’autenticazione a due fattori.";
     case "friends":
       return "Crea un account per aggiungere amici.";
+    case "stars":
+      return "Serve un account per dare una stella alle liste.";
     default:
       return "Crea un account per farlo.";
   }

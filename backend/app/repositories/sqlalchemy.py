@@ -88,6 +88,7 @@ from app.services.friends import friendship_key, other_of
 from app.repositories.interfaces import (
     AuditStamp,
     CommunityPromptList,
+    CommunityPromptListDetail,
     CommunityPromptListPage,
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
@@ -2532,6 +2533,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         limit: int = 24,
         cursor: str | None = None,
         requesting_user_id: str | None = None,
+        starred_only: bool = False,
     ) -> CommunityPromptListPage:
         """One page of published lists (R-LIST-14).
 
@@ -2553,6 +2555,19 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             .join(User, User.id == PromptList.owner_user_id)
             .where(*_published_by_a_player())
         )
+        if starred_only:
+            if requester_id is None:
+                # Nobody's shortlist. The route refuses this first; the guard
+                # is here so the query can never mean "everyone's stars".
+                return CommunityPromptListPage(lists=(), next_cursor=None)
+            stmt = stmt.where(
+                select(PromptListStar.prompt_list_id)
+                .where(
+                    PromptListStar.prompt_list_id == PromptList.id,
+                    PromptListStar.user_id == requester_id,
+                )
+                .exists()
+            )
         if language is not None:
             stmt = stmt.where(PromptList.language == language)
         for slug in tags:
@@ -2636,6 +2651,85 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             ),
             next_cursor=(
                 _encode_catalogue_cursor(offset + limit) if has_more else None
+            ),
+        )
+
+    async def get_community(
+        self, prompt_list_id: str, *, requesting_user_id: str | None = None
+    ) -> CommunityPromptListDetail | None:
+        """One published list and what is in it (R-LIST-19).
+
+        The same predicate the listing uses, so a list that left the catalogue
+        cannot be read through here either - a takedown closes both doors at
+        once, which is the property post-hoc moderation rests on.
+        """
+        list_id = _optional_entity_id(prompt_list_id)
+        if list_id is None:
+            return None
+        requester_id = _optional_entity_id(requesting_user_id)
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(
+                        PromptList,
+                        self._prompt_count(),
+                        self._star_count(),
+                        User.display_name,
+                    )
+                    .join(User, User.id == PromptList.owner_user_id)
+                    .where(PromptList.id == list_id, *_published_by_a_player())
+                )
+            ).one_or_none()
+            if row is None:
+                return None
+            prompt_list, prompt_count, stars, display_name = row
+            revision = await session.scalar(
+                select(PromptListRevision)
+                .where(
+                    PromptListRevision.prompt_list_id == prompt_list.id,
+                    PromptListRevision.version == prompt_list.version,
+                )
+                .options(
+                    selectinload(PromptListRevision.items).selectinload(
+                        PromptListRevisionItem.prompt_version
+                    )
+                )
+            )
+            tags_by_list = await self._current_revision_tags(session, [prompt_list.id])
+            starred_by_me = None
+            if requester_id is not None:
+                starred_by_me = (
+                    await session.scalar(
+                        select(PromptListStar.prompt_list_id).where(
+                            PromptListStar.user_id == requester_id,
+                            PromptListStar.prompt_list_id == prompt_list.id,
+                        )
+                    )
+                ) is not None
+        return CommunityPromptListDetail(
+            id=_public_id(prompt_list.id),
+            slug=prompt_list.slug,
+            name=prompt_list.name,
+            description=prompt_list.description,
+            language=prompt_list.language,
+            prompt_count=int(prompt_count),
+            owner_display_name=display_name,
+            tags=tags_by_list.get(prompt_list.id, ()),
+            star_count=int(stars),
+            published_at=prompt_list.published_at,
+            version=prompt_list.version,
+            starred_by_me=starred_by_me,
+            prompts=tuple(
+                PromptListEntry(
+                    concept_id=_public_id(item.prompt_version.concept_id),
+                    prompt_version_id=_public_id(item.prompt_version.id),
+                    answer=item.prompt_version.canonical_answer,
+                    aliases=(),
+                    moderation_state=item.prompt_version.moderation_state,
+                )
+                for item in (revision.items if revision is not None else ())
+                if item.prompt_version.moderation_state
+                == PromptContentModerationState.ACTIVE.value
             ),
         )
 
