@@ -58,6 +58,24 @@ export function updateOwnedPromptList(
   });
 }
 
+/**
+ * Put a list in the community catalogue, or take it back out.
+ *
+ * Separate calls rather than a `visibility` on the save, because publishing
+ * is gated, rate-limited and audited (R-LIST-11): a field on the save would
+ * be a way around all three, and an edit would take a list out of the
+ * catalogue as a side effect of fixing a typo.
+ */
+export function setOwnedPromptListPublished(
+  id: string,
+  published: boolean,
+): Promise<OwnedPromptList> {
+  const action = published ? "publish" : "unpublish";
+  return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}/${action}`, {
+    method: "POST",
+  });
+}
+
 export function deleteOwnedPromptList(id: string): Promise<void> {
   return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}`, {
     method: "DELETE",

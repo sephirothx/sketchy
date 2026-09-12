@@ -2688,12 +2688,32 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if prompt_list is None:
                     raise PromptListNotFoundError("Prompt list not found.")
-                name, description, language, visibility = self._clean_owned_metadata(
-                    name=name,
-                    description=description,
-                    language=prompt_list.language,
-                    visibility=visibility,
+                published = (
+                    prompt_list.visibility == PromptListVisibility.PUBLIC.value
                 )
+                if published:
+                    # An ordinary save leaves publication alone. Publishing is
+                    # an act with a gate, a rate limit and an audit event
+                    # (R-LIST-11), and letting a save carry `visibility` either
+                    # way would be a route around all three - in this direction
+                    # it would take a list out of the catalogue as a side
+                    # effect of fixing a typo. `unpublish` is how it leaves.
+                    visibility = PromptListVisibility.PUBLIC.value
+                    name, description, language, _ = self._clean_owned_metadata(
+                        name=name,
+                        description=description,
+                        language=prompt_list.language,
+                        visibility=PromptListVisibility.PRIVATE.value,
+                    )
+                else:
+                    name, description, language, visibility = (
+                        self._clean_owned_metadata(
+                            name=name,
+                            description=description,
+                            language=prompt_list.language,
+                            visibility=visibility,
+                        )
+                    )
                 entries = self._clean_owned_entries(
                     prompts, language=prompt_list.language
                 )
@@ -2734,10 +2754,83 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     prompt_list.share_code = (
                         prompt_list.share_code or await self._new_share_code(session)
                     )
-                else:
+                elif visibility == PromptListVisibility.PRIVATE.value:
                     prompt_list.share_code = None
+                # A published list keeps the `None` that publishing set: it is
+                # reached by identity, so there is no capability to reissue.
                 prompt_list.visibility = visibility
                 prompt_list.version = next_version
+                prompt_list.updated_at = datetime.now(timezone.utc)
+            result = await self._owned_with_entries(session, owner_id, list_id)
+            assert result is not None
+            return result
+
+    async def set_owned_publication(
+        self,
+        owner_user_id: str,
+        prompt_list_id: str,
+        *,
+        published: bool,
+        under_review: bool = False,
+    ) -> OwnedPromptList:
+        """Publish or unpublish an owned list (R-LIST-11).
+
+        Publishing is its own act rather than a `visibility` an ordinary save
+        could carry, which is why this is not part of `update_owned`: the gate,
+        the rate limit and the audit event all hang off the act, and a field on
+        a save would be a way around all three.
+
+        `under_review` is the operator switch (R-LIST-13). It lands the list in
+        the catalogue's waiting room instead of the catalogue, and it applies
+        to the publish only - unpublishing never changes a moderation state,
+        because leaving the catalogue is not a moderator's finding.
+        """
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            raise PromptListNotFoundError("Prompt list not found.")
+        async with self._session_factory() as session:
+            async with session.begin():
+                await require_live_account(session, owner_id)
+                prompt_list = await session.scalar(
+                    select(PromptList)
+                    .where(
+                        PromptList.id == list_id,
+                        PromptList.owner_user_id == owner_id,
+                        PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
+                    )
+                    .with_for_update()
+                )
+                if prompt_list is None:
+                    raise PromptListNotFoundError("Prompt list not found.")
+                if published:
+                    if (
+                        prompt_list.moderation_state
+                        == PromptContentModerationState.HIDDEN.value
+                    ):
+                        # A hidden list is one a moderator ruled on. Publishing
+                        # it would put it back in front of people by the
+                        # owner's own hand, which is the one thing a takedown
+                        # has to survive.
+                        raise PromptListMutationError(
+                            "This list is hidden and cannot be published. "
+                            "A moderator must review it first.",
+                            code=ErrorCode.PROMPT_LIST_HIDDEN,
+                        )
+                    prompt_list.visibility = PromptListVisibility.PUBLIC.value
+                    prompt_list.published_at = datetime.now(timezone.utc)
+                    # A published list is reached by identity, not by bearer
+                    # capability, so the share code it may have been carrying
+                    # has nothing left to authorize (R-LIST-03).
+                    prompt_list.share_code = None
+                    if under_review:
+                        prompt_list.moderation_state = (
+                            PromptContentModerationState.UNDER_REVIEW.value
+                        )
+                else:
+                    prompt_list.visibility = PromptListVisibility.PRIVATE.value
+                    prompt_list.published_at = None
                 prompt_list.updated_at = datetime.now(timezone.utc)
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None

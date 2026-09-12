@@ -506,6 +506,17 @@ serves at `GET /api/prompt-tags` rather than the client guessing at it; the tags
 belong to the revision, so setting them is an edit like any other, and a tag the
 vocabulary does not contain is refused by name rather than quietly dropped.
 
+Publishing a list puts it in the **Community catalogue**, where anyone can find
+and play it. It is a deliberate act with its own controls rather than a
+visibility setting: it needs a verified email address and no unread moderator
+warning, it is rate-limited, it is recorded in the audit ledger, and editing a
+published list never takes it back out. Unpublishing does, at once, and leaves
+its stars where they are. Community content is moderated **after** publication,
+through the same report and review path any player-authored content uses — an
+administrator can switch new publications into a review queue instead
+(`POST /api/admin/prompt-list-review`) without a redeploy, if that stops being
+enough.
+
 Private lists resolve only for their owner. Switching a list to Unlisted creates
 a cryptographically random **Prompt-list share code**; a host must add that code
 in the prompt picker before the server will resolve the list. These codes are

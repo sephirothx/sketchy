@@ -6,6 +6,8 @@ from typing import Literal
 
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -15,7 +17,11 @@ from app.api.serializers import (
     prompt_stats_payload,
     shared_prompt_list_payload,
 )
+from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import RateLimiter, client_key
+from app.db.models import AuditEvent, User, UserWarning, generate_uuid
+from app.domain_values import AuditTargetType
+from uuid import UUID
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
     MAX_LIST_TAGS,
@@ -34,6 +40,7 @@ from app.repositories.interfaces import (
     UserRepository,
 )
 from app.repositories.sqlalchemy import MAX_PROMPTS_PER_OWNED_LIST
+from app.services.publication_policy import read_publication_review
 from app.domain_values import HintMode, ScoringMode
 
 # How many guessers a prompt must have faced before its difficulty means
@@ -54,6 +61,13 @@ SORTS = ("hardest", "easiest", "most-picked")
 # Generous for someone browsing, tight enough to be a poor scraping tool.
 stats_limiter = RateLimiter(limit=60, window_seconds=60)
 share_limiter = RateLimiter(limit=30, window_seconds=60)
+# Publishing is a deliberate act somebody takes a handful of times, and the
+# thing it costs an abuser is the account (R-LIST-12) rather than the request.
+# The limit is here so that account cannot be spent quickly.
+publish_limiter = RateLimiter(limit=10, window_seconds=600)
+
+PUBLISHED_EVENT = "prompt_list.published"
+UNPUBLISHED_EVENT = "prompt_list.unpublished"
 
 
 class PromptEntryRequest(BaseModel):
@@ -127,6 +141,7 @@ def _ordered(summaries: list[PromptStatsSummary], sort: str) -> list[PromptStats
 def create_prompt_list_router(
     prompt_list_repo: PromptListRepository,
     user_repo: UserRepository | None = None,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -258,6 +273,112 @@ def create_prompt_list_router(
             )
         except PromptListMutationError as error:
             raise mutation_error(error) from error
+        return owned_prompt_list_payload(updated)
+
+    async def require_publisher(request: Request, *, action: str = "publish") -> UserData:
+        """R-LIST-12's gate: registered, verified, and not in trouble.
+
+        The bar is about the account rather than the content, because content
+        is judged after the fact (R-LIST-13) - so what the gate has to cost
+        somebody publishing abuse is the account itself, which an unverified
+        address does not.
+
+        A ban is not checked here: a suspended account's every request but
+        export, deletion and logout is already refused before this route runs
+        (R-BAN-04), so a check would be dead code pretending to be a rule. An
+        unacknowledged warning is the state that reaches this far.
+        """
+        user = await require_registered(request)
+        if session_factory is None:  # pragma: no cover - wiring guard
+            # A programming error, not a refusal: no player can cause it.
+            raise RuntimeError("create_prompt_list_router needs a session factory")
+        async with session_factory() as session:
+            row = await session.get(User, UUID(user.id))
+            if row is None or row.email_verified_at is None:
+                raise Refusal(
+                    403,
+                    ErrorCode.EMAIL_VERIFICATION_REQUIRED,
+                    "Verify your email address first.",
+                    params={"action": action},
+                )
+            pending = await session.scalar(
+                select(UserWarning.id).where(
+                    UserWarning.user_id == UUID(user.id),
+                    UserWarning.acknowledged_at.is_(None),
+                )
+            )
+        if pending is not None:
+            raise Refusal(
+                403,
+                ErrorCode.WARNING_UNREAD,
+                "Read your moderator warning first.",
+                params={"action": action},
+            )
+        return user
+
+    async def _audit_publication(
+        request: Request, user: UserData, *, event: str, prompt_list_id: str
+    ) -> None:
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        async with session_factory() as session:
+            async with session.begin():
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type=event,
+                        actor_user_id=UUID(user.id),
+                        target_type=AuditTargetType.PROMPT_LIST.value,
+                        target_id=prompt_list_id,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={},
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+
+    @router.post("/prompt-lists/mine/{prompt_list_id}/publish")
+    async def publish_my_prompt_list(prompt_list_id: str, request: Request):
+        """Put an owned list in the community catalogue (R-LIST-11).
+
+        Its own endpoint rather than a `visibility` field on the save, because
+        the gate above, the rate limit and the audit event all belong to the
+        act. A field on a save would be a way around all three.
+        """
+        user = await require_publisher(request)
+        if not publish_limiter.check(client_key(request)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
+            )
+        try:
+            updated = await prompt_list_repo.set_owned_publication(
+                user.id,
+                prompt_list_id,
+                published=True,
+                under_review=await read_publication_review(session_factory),
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        await _audit_publication(
+            request, user, event=PUBLISHED_EVENT, prompt_list_id=prompt_list_id
+        )
+        return owned_prompt_list_payload(updated)
+
+    @router.post("/prompt-lists/mine/{prompt_list_id}/unpublish")
+    async def unpublish_my_prompt_list(prompt_list_id: str, request: Request):
+        """Take it back out. The stars stay as rows (R-LIST-16); the list
+        simply stops being reachable, and publishing again finds them."""
+        user = await require_registered(request)
+        try:
+            updated = await prompt_list_repo.set_owned_publication(
+                user.id, prompt_list_id, published=False
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        await _audit_publication(
+            request, user, event=UNPUBLISHED_EVENT, prompt_list_id=prompt_list_id
+        )
         return owned_prompt_list_payload(updated)
 
     @router.delete(

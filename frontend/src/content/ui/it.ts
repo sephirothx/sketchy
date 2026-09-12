@@ -304,6 +304,27 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Qualcun altro ha modificato questa lista. Ricaricala e riprova.",
   prompt_list_invalid: "Non è stato possibile salvare questa lista di parole.",
   prompt_list_forbidden: "Questa lista di parole non è tua da modificare.",
+  email_verification_required: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Per pubblicare una lista serve un indirizzo email confermato.";
+      case "star":
+        return "Per dare una stella a una lista serve un indirizzo email confermato.";
+      default:
+        return "Per farlo serve un indirizzo email confermato.";
+    }
+  },
+  warning_unread: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Prima di pubblicare una lista va letto l’avviso della moderazione.";
+      case "star":
+        return "Prima di dare una stella va letto l’avviso della moderazione.";
+      default:
+        return "Prima va letto l’avviso della moderazione.";
+    }
+  },
+  prompt_list_hidden: "Questa lista è nascosta e non può essere pubblicata. Prima deve esaminarla la moderazione.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `«${tag}» non è un’etichetta che una lista può avere.`;
@@ -1148,6 +1169,16 @@ export const IT: Catalogue = {
     "abstract": "Astratto",
   },
   myPromptListsPage: {
+    inCommunityCatalogue: "Nel catalogo della community",
+    notPublished: "Non pubblicata",
+    publishedExplainer: "Chiunque può trovare questa lista, giocarla, darle una stella o farne una propria copia.",
+    unpublishedExplainer: "Pubblicandola, chiunque potrà trovare e giocare questa lista. Si può ritirare in qualsiasi momento.",
+    publish: "Pubblica",
+    unpublish: "Ritira",
+    promptListPublished: "Lista di parole pubblicata.",
+    promptListUnpublished: "Lista di parole ritirata.",
+    couldNotChangePublication: "Non è stato possibile cambiare la pubblicazione di questa lista.",
+    published: "Pubblicata",
     tags: "Etichette",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} di ${p.max} scelte`,
     tagsAreHowListsAreFound: "Le etichette sono il modo in cui questa lista si trova nel catalogo della community.",

@@ -179,6 +179,8 @@ class ErrorCode(StrEnum):
     EMAIL_IN_USE = "email_in_use"
     EMAIL_CHANGE_REFUSED = "email_change_refused"
     VERIFICATION_LINK_INVALID = "verification_link_invalid"
+    # Publishing and starring need a confirmed address (R-LIST-12); carries `action`.
+    EMAIL_VERIFICATION_REQUIRED = "email_verification_required"
     RESET_LINK_INVALID = "reset_link_invalid"
 
     # Account data export
@@ -224,6 +226,8 @@ class ErrorCode(StrEnum):
     PROMPT_LIST_FORBIDDEN = "prompt_list_forbidden"
     # A tag the curated vocabulary does not hold (R-LIST-18); carries `tag`.
     UNKNOWN_PROMPT_TAG = "unknown_prompt_tag"
+    # A list a moderator hid cannot be put back in front of people by its owner.
+    PROMPT_LIST_HIDDEN = "prompt_list_hidden"
     UNKNOWN_SORT = "unknown_sort"
     TIMEZONE_REQUIRED = "timezone_required"
     RANGE_REVERSED = "range_reversed"
@@ -262,4 +266,6 @@ class ErrorCode(StrEnum):
     EVIDENCE_NOT_IN_GAME = "evidence_not_in_game"
     EVIDENCE_NOT_IN_TURN = "evidence_not_in_turn"
     NO_SUCH_WARNING = "no_such_warning"
+    # An unacknowledged warning holds publishing and starring back; carries `action`.
+    WARNING_UNREAD = "warning_unread"
     NO_DRAWING = "no_drawing"
