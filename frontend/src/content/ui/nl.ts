@@ -1175,6 +1175,7 @@ export const NL: Catalogue = {
     "abstract": "Abstract",
   },
   communityCataloguePage: {
+    playThisList: "Met deze lijst spelen",
     backToLobby: "Terug naar de lobby",
     loading: "Laden…",
     communityCatalogue: "Communitycatalogus",
@@ -1460,6 +1461,7 @@ export const NL: Catalogue = {
   },
 
   promptListPicker: {
+    listsYouStarred: "Lijsten met jouw ster",
     languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
       `Die lijst is in het ${p.listLanguage}; deze kamer is in het ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>

@@ -1175,6 +1175,7 @@ export const ES: Catalogue = {
     "abstract": "Abstracto",
   },
   communityCataloguePage: {
+    playThisList: "Jugar con esta lista",
     backToLobby: "Volver al vestíbulo",
     loading: "Cargando…",
     communityCatalogue: "Catálogo de la comunidad",
@@ -1459,6 +1460,7 @@ export const ES: Catalogue = {
   },
 
   promptListPicker: {
+    listsYouStarred: "Listas que marcaste",
     languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
       `Esa lista está en ${p.listLanguage}; esta sala está en ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>

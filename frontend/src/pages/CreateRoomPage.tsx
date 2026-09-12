@@ -1,5 +1,5 @@
-import { useEffect, useReducer, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useReducer, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { RoomSetupForm } from "../components/RoomSetupForm";
 import { SectionLabel } from "../components/ui/Card";
@@ -9,6 +9,7 @@ import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { readCommunityPromptList } from "../lib/promptLists";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -28,8 +29,11 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 
+const EMPTY_LISTS: PromptListSummary[] = [];
+
 export function CreateRoomPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
@@ -60,6 +64,11 @@ export function CreateRoomPage() {
   );
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   const [promptListShareCodes, setPromptListShareCodes] = useState<string[]>([]);
+  // A list the host arrived with, from the community catalogue's Play. The
+  // room takes its language too: a room declares one and its lists must agree
+  // with it (R-PROMPT-02), so carrying the slug alone would put a German list
+  // in an English room and be refused on create.
+  const [carriedList, setCarriedList] = useState<PromptListSummary | null>(null);
   const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,
@@ -116,12 +125,37 @@ export function CreateRoomPage() {
    * selected, which the server refuses. The lists say which slugs belong to
    * the language, so this is the first moment the selection can be put right.
    */
+  // Memoized because the picker reports its lists back through an effect
+  // keyed on this prop: a fresh array each render would report, re-render,
+  // and report again without ever settling.
+  const carried = useMemo(
+    () => (carriedList ? [carriedList] : EMPTY_LISTS),
+    [carriedList],
+  );
+
   function handleListsLoaded(lists: PromptListSummary[]) {
     setLoadedLists(lists);
     setPromptListSlugs((current) =>
       reconcileSelectionForLanguage(lists, promptLanguage, current),
     );
   }
+
+  useEffect(() => {
+    const carried = searchParams.get("list");
+    if (!carried) return;
+    let cancelled = false;
+    void readCommunityPromptList(carried)
+      .then((list) => {
+        if (cancelled) return;
+        setCarriedList({ ...list, isBundled: false });
+        setPromptLanguage(list.language);
+        setPromptListSlugs([list.slug]);
+      })
+      // A list unpublished since the link was made leaves the form as it was,
+      // on the built-in selection, rather than empty-handed.
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [searchParams]);
 
   function currentPresetSettings(): RoomPresetSettings {
     return {
@@ -421,6 +455,7 @@ export function CreateRoomPage() {
       dispatchCustomPrompts={dispatchCustomPrompts}
       namePlaceholder={ui.createRoomPage.leaveBlankForARandom}
       onListsLoaded={handleListsLoaded}
+      extraLists={carried}
       loadedLists={loadedLists}
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
         <button

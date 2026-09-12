@@ -86,6 +86,9 @@ interface RoomSetupFormProps {
   /** A room's language is fixed at creation, so the editor shows it rather
       than offering it. */
   languageLocked?: boolean;
+  /** A community list the host arrived with, so the picker knows a list the
+      catalogue would not have told it about. */
+  extraLists?: PromptListSummary[];
 }
 
 /**
@@ -110,6 +113,7 @@ export function RoomSetupForm({
   durationNote,
   loadedLists = [],
   languageLocked = false,
+  extraLists,
 }: RoomSetupFormProps) {
   const {
     name,
@@ -273,6 +277,7 @@ export function RoomSetupForm({
             shareCodes={promptListShareCodes}
             onShareCodesChange={(codes) => onChange({ promptListShareCodes: codes })}
             onListsLoaded={onListsLoaded}
+            extraLists={extraLists}
           />
           <CustomPromptsEditor
             value={customPrompts.value}

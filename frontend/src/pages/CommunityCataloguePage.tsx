@@ -403,6 +403,12 @@ export function CommunityCataloguePage() {
               {detail.description && <p className="community-catalogue-description">{detail.description}</p>}
             </header>
             <div className="community-catalogue-actions">
+              {/* Playing needs no account: a guest can open a room. */}
+              <button
+                type="button"
+                className="btn btn-primary btn-compact"
+                onClick={() => navigate(`/create?list=${encodeURIComponent(detail.id)}`)}
+              >{ui.communityCataloguePage.playThisList}</button>
               {registered ? <>
                 <button
                   type="button"
