@@ -175,6 +175,73 @@
   justify-content: space-between;
 }
 
+/* The tag picker wraps rather than scrolls: the vocabulary is fixed and small
+   enough to show whole, and a set that scrolled would hide the ones already
+   chosen. Its chips are the `toggle-chip` from the room-creation form, so
+   picking tags here and picking prompt lists there are visibly one kind of
+   choice; only the size differs, because fifteen of them share a column with
+   the rest of the editor. */
+.prompt-list-tags {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 15px 17px 17px;
+}
+
+/* The title stays a real `legend`, a direct child of the fieldset: nested in
+   a div it is an unknown element that names nothing, and this group's name is
+   the only thing telling a screen reader what the fifteen buttons are for.
+   So the changing count goes in the row below it instead, beside the hint. */
+.prompt-list-tags legend {
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 800;
+  padding: 0;
+}
+
+.prompt-list-tags-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  justify-content: space-between;
+}
+
+/* The count changes as you pick, so it sits where a changing value goes and
+   is tabular: 1 and 5 are different widths in this face, and the number
+   would otherwise shift under the eye. */
+.prompt-list-tags-count {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  margin-left: auto;
+}
+
+/* At the cap the number is the explanation for why the rest went quiet. */
+.prompt-list-tags-count.is-full { color: var(--warm-ink); }
+
+.prompt-list-tags-hint {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 400;
+  margin: 0;
+  max-width: 56ch;
+}
+
+/* One size down from the form's own chips. Fifteen tags at 42px tall run to
+   four rows and take over the editor; at 34 they read as metadata, which is
+   what they are. */
+.prompt-list-tag-chips { gap: 6px; margin-top: 0; }
+
+.prompt-list-tag-chips .toggle-chip {
+  font-size: 13px;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 12px;
+}
+
 /* Both halves of the editor follow the rhythm the room-creation prompts field
    set: a rule above, a bold label, a full-width control, muted counts below. */
 .prompt-list-bulk-add {

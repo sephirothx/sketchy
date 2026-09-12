@@ -1695,8 +1695,29 @@ R-HINT-03 records among the histogram's approximations.
 `position`, unique on `(revision_id, position)`. The `RESTRICT` on `prompt_version_id`
 is what stops a prompt version being deleted out from under a revision a game pinned.
 
+`prompt_list_revision_tags`: `revision_id` + `tag_id` composite **PK**, indexed on
+`tag_id` for the direction the community catalogue reads (*which lists carry this tag*).
+
+**Tags are copied onto every revision, not shared across a list's revisions.** A game
+pins a revision, and a discovery filter that found a list by its tags has to go on
+agreeing with what that revision holds — which it could not if the tags hung off the
+mutable list row. The cost is one row per tag per revision, which is nothing beside the
+membership rows already written; the benefit is that revision one keeps what it was
+tagged with after revision two is tagged differently.
+
+An owner's tags come from a **curated vocabulary** (`prompt_content.LIST_TAG_VOCABULARY`,
+R-LIST-18), seeded beside the bundled lists and idempotent: a missing slug is inserted
+and a stale display name refreshed. A slug is never rewritten, because every revision
+tagged with it points at that row — a tag is renamed by changing its name. Free text was
+refused: a tag is player-authored copy shown in a discovery surface, and a discovery
+feature must not introduce a second kind of content to moderate.
+`clean_prompt_tags` still takes any well-formed slug for **bundled** prompt content,
+which is authored in the repository and reviewed as code; `clean_list_tags` is the one
+that answers a request.
+
 Editing a list uses **optimistic concurrency** and creates a new immutable revision
-instead of rewriting the revision a running or finished game pinned. The content
+instead of rewriting the revision a running or finished game pinned. Setting or clearing
+tags is such an edit and earns its own revision (R-LIST-05). The content
 language cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
 
 ### `prompt_list_localizations`

@@ -401,6 +401,7 @@ const READ_BY_CODE = {
   announcements: "ui.announcements[code]",
   document: "catalogueFor(locale).document, before any component renders",
   moderationCategories: "humanizeCategory(), by the category a moderator recorded",
+  promptTags: "tagName() in MyPromptListsPage, by the slug the server sent",
 };
 
 test("every catalogue group is read by something", () => {

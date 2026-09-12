@@ -16,7 +16,12 @@ from app.api.serializers import (
     shared_prompt_list_payload,
 )
 from app.auth.rate_limit import RateLimiter, client_key
-from app.prompt_content import best_supported_prompt_locale, validate_prompt_language
+from app.prompt_content import (
+    LIST_TAG_VOCABULARY,
+    MAX_LIST_TAGS,
+    best_supported_prompt_locale,
+    validate_prompt_language,
+)
 from app.prompts import MAX_PROMPT_LENGTH
 from app.repositories.interfaces import (
     PromptListConflictError,
@@ -69,6 +74,10 @@ class CreateOwnedPromptListRequest(BaseModel):
     prompts: list[PromptEntryRequest] = Field(
         min_length=1, max_length=MAX_PROMPTS_PER_OWNED_LIST
     )
+    # Bounded here so an oversized list is refused before it reaches a
+    # transaction; the vocabulary check that names the offending tag lives in
+    # `prompt_content.clean_list_tags`, because naming it is the point.
+    tags: list[str] = Field(default_factory=list, max_length=MAX_LIST_TAGS)
 
 
 class UpdateOwnedPromptListRequest(BaseModel):
@@ -81,6 +90,7 @@ class UpdateOwnedPromptListRequest(BaseModel):
     prompts: list[PromptEntryRequest] = Field(
         min_length=1, max_length=MAX_PROMPTS_PER_OWNED_LIST
     )
+    tags: list[str] = Field(default_factory=list, max_length=MAX_LIST_TAGS)
 
 
 class SharedPromptListRequest(BaseModel):
@@ -151,7 +161,12 @@ def create_prompt_list_router(
             return Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, str(error))
         if isinstance(error, PromptListConflictError):
             return Refusal(409, ErrorCode.PROMPT_LIST_CONFLICT, str(error))
-        return Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error))
+        return Refusal(
+            422,
+            error.code or ErrorCode.PROMPT_LIST_INVALID,
+            str(error),
+            params=error.params,
+        )
 
     @router.get("/prompt-lists")
     async def list_prompt_lists(
@@ -171,6 +186,19 @@ def create_prompt_list_router(
                 language=language, locale=locale
             )
         ]
+
+    @router.get("/prompt-tags")
+    async def list_prompt_tags():
+        """The vocabulary a list owner may choose from (R-LIST-18).
+
+        Served rather than duplicated in the client: a client guessing at the
+        set would show tags a save then refuses. Unauthenticated, because it
+        is a fixed vocabulary and the community catalogue filters by it.
+        """
+        return {
+            "maxPerList": MAX_LIST_TAGS,
+            "tags": [{"slug": slug, "name": name} for slug, name in LIST_TAG_VOCABULARY],
+        }
 
     @router.get("/prompt-lists/mine")
     async def list_my_prompt_lists(request: Request):
@@ -196,6 +224,7 @@ def create_prompt_list_router(
                 language=body.language,
                 visibility=body.visibility,
                 prompts=entry_inputs(body.prompts),
+                tags=body.tags,
             )
         except PromptListMutationError as error:
             raise mutation_error(error) from error
@@ -225,6 +254,7 @@ def create_prompt_list_router(
                 description=body.description,
                 visibility=body.visibility,
                 prompts=entry_inputs(body.prompts),
+                tags=body.tags,
             )
         except PromptListMutationError as error:
             raise mutation_error(error) from error

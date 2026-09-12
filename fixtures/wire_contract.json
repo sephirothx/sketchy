@@ -1605,9 +1605,13 @@
   ],
   "api.prompt_lists:create_prompt_list_router": [
    "isRated",
+   "maxPerList",
    "minRatedGuessers",
    "ratedCount",
    "unratedCount"
+  ],
+  "api.prompt_lists:list_prompt_tags": [
+   "maxPerList"
   ],
   "api.prompt_lists:prompt_stats": [
    "isRated",
@@ -2685,6 +2689,7 @@
    "prompt_list_conflict",
    "prompt_list_invalid",
    "prompt_list_forbidden",
+   "unknown_prompt_tag",
    "unknown_sort",
    "timezone_required",
    "range_reversed",
