@@ -248,6 +248,9 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         "version": prompt_list.version,
         "promptCount": prompt_list.prompt_count,
         "tags": list(prompt_list.tags),
+        # The number, and nothing else about it: who starred a list is
+        # disclosed to nobody, its owner included (R-LIST-16).
+        "starCount": prompt_list.star_count,
         "createdAt": _timestamp(prompt_list.created_at),
         "updatedAt": _timestamp(prompt_list.updated_at),
         "prompts": [

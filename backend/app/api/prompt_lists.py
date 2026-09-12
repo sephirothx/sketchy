@@ -75,6 +75,9 @@ publish_limiter = RateLimiter(limit=10, window_seconds=600)
 # Browsing is cheap and ordinary; this is here so the catalogue is a poor way
 # to enumerate every published list quickly, the way the stats limiter is.
 community_limiter = RateLimiter(limit=120, window_seconds=60)
+# Starring is one click, and a person browsing does it a handful of times a
+# session. The limit is what stops one account walking the catalogue.
+star_limiter = RateLimiter(limit=60, window_seconds=60)
 
 PUBLISHED_EVENT = "prompt_list.published"
 UNPUBLISHED_EVENT = "prompt_list.unpublished"
@@ -410,6 +413,40 @@ def create_prompt_list_router(
                         created_at=datetime.now(timezone.utc),
                     )
                 )
+
+    async def _set_star(prompt_list_id: str, request: Request, *, starred: bool):
+        """Starring needs a verified account, for R-LIST-12's reason.
+
+        A star is a public number somebody else's list carries, so the account
+        giving it has to cost something - otherwise the count means only that
+        somebody could open a browser.
+        """
+        user = await require_publisher(request, action="star")
+        if not star_limiter.check(client_key(request)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
+            )
+        try:
+            count = await prompt_list_repo.set_star(
+                user.id, prompt_list_id, starred=starred
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        return {"starCount": count, "starredByMe": starred}
+
+    @router.put("/prompt-lists/{prompt_list_id}/star")
+    async def star_prompt_list(prompt_list_id: str, request: Request):
+        """Star a published list. Idempotent: the composite primary key is
+        what makes starring twice the same row, so there is no guard here."""
+        return await _set_star(prompt_list_id, request, starred=True)
+
+    @router.delete("/prompt-lists/{prompt_list_id}/star")
+    async def unstar_prompt_list(prompt_list_id: str, request: Request):
+        """Take it back. Unstarring one never starred is not an error - the
+        caller's intent is already true."""
+        return await _set_star(prompt_list_id, request, starred=False)
 
     @router.post("/prompt-lists/mine/{prompt_list_id}/publish")
     async def publish_my_prompt_list(prompt_list_id: str, request: Request):
