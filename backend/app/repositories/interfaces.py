@@ -488,6 +488,10 @@ class OwnedPromptList:
     # nothing else about it: who starred a list is disclosed to nobody,
     # including them (R-LIST-16).
     star_count: int = 0
+    # The exact revision this list was forked from, when it was (R-LIST-17).
+    # A revision rather than a list, because both go on being edited and a
+    # pointer at the list would stop meaning anything after the first edit.
+    forked_from_revision_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1017,6 +1021,13 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
         """Delete a player-owned list and all of its revisions."""
+        ...
+
+    @abstractmethod
+    async def fork_published(
+        self, user_id: str, prompt_list_id: str
+    ) -> OwnedPromptList:
+        """Copy a published list into a new private list of the caller's."""
         ...
 
     @abstractmethod

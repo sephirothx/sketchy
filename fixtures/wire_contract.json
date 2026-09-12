@@ -1723,6 +1723,7 @@
   "api.serializers:owned_prompt_list_payload": [
    "conceptId",
    "createdAt",
+   "forkedFromRevisionId",
    "isBundled",
    "moderationState",
    "promptCount",
@@ -2710,6 +2711,7 @@
    "prompt_list_forbidden",
    "unknown_prompt_tag",
    "prompt_list_hidden",
+   "prompt_list_allowance_reached",
    "unknown_sort",
    "timezone_required",
    "range_reversed",
