@@ -17,7 +17,9 @@ import {
   shutdownBlocked,
   readLiveRooms,
   readMaintenance,
+  readPromptListReview,
   setMaintenance,
+  setPromptListReview,
   setPlayerRole,
   type LiveRoom,
   type MaintenanceState,
@@ -34,8 +36,10 @@ somebody's room and granting a role have none of those, and an irreversible
 button in a row of sliders is a button pressed by accident. */
 export function ControlsPanel() {
   const [maintenance, setMaintenanceState] = useState<MaintenanceState | null>(null);
+  const [publicationReview, setPublicationReview] = useState<boolean | null>(null);
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
   const [reason, setReason] = useState("");
+  const [reviewReason, setReviewReason] = useState("");
   const [shutdownReason, setShutdownReason] = useState("");
   const [drainSeconds, setDrainSeconds] = useState("");
   const [confirmingShutdown, setConfirmingShutdown] = useState(false);
@@ -71,6 +75,11 @@ export function ControlsPanel() {
     void readMaintenance()
       .then(setMaintenanceState)
       .catch((failure) => fail(failure, "Could not read the maintenance state."));
+    void readPromptListReview()
+      .then((state) => setPublicationReview(state.review))
+      .catch((failure) =>
+        fail(failure, "Could not read the publication-review setting."),
+      );
     void readLiveRooms()
       .then((result) => setRooms(result.rooms))
       .catch((failure) => fail(failure, "Could not list the live rooms."));
@@ -216,6 +225,48 @@ export function ControlsPanel() {
             }
           >
             {paused ? "Resume" : "Pause new rooms"}
+          </button>
+        </div>
+      </section>
+
+      <section className="ops-card" aria-label="Community publications">
+        <div className="ops-card-head">
+          <div>
+            <h2>Community publications</h2>
+            <p className="ops-card-note">
+              Community lists are reviewed after a report, not before
+              publication. Turning this on holds every list published from now
+              on until a moderator releases it, and leaves the ones already
+              published where they are.
+            </p>
+          </div>
+        </div>
+        <div className="ops-filters">
+          <label htmlFor="ops-review-reason">Reason</label>
+          <input
+            id="ops-review-reason"
+            value={reviewReason}
+            placeholder="spam wave"
+            onChange={(change) => setReviewReason(change.target.value)}
+          />
+          <button
+            type="button"
+            className={
+              publicationReview
+                ? "btn btn-primary btn-compact"
+                : "btn btn-secondary btn-compact"
+            }
+            disabled={busy || publicationReview === null}
+            onClick={() =>
+              run(
+                () => setPromptListReview(!publicationReview, reviewReason),
+                publicationReview
+                  ? "New publications go straight to the catalogue again."
+                  : "New publications will wait for a moderator.",
+              )
+            }
+          >
+            {publicationReview ? "Stop holding publications" : "Hold new publications"}
           </button>
         </div>
       </section>
