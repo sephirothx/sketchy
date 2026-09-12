@@ -10,7 +10,7 @@ the list would stop meaning anything after the first edit on either.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest_asyncio
@@ -22,8 +22,17 @@ from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import create_prompt_list_router, publish_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import PromptList, PromptListRevision, PromptVersion
-from app.repositories.interfaces import PromptListEntryInput
+from app.db.models import (
+    PromptList,
+    PromptListRevision,
+    PromptVersion,
+    generate_uuid,
+)
+from app.repositories.interfaces import (
+    BundledPromptDefinition,
+    PromptListEntryInput,
+)
+from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.repositories.sqlalchemy import (
     MAX_OWNED_PROMPT_LISTS,
     SqlAlchemyPromptListRepository,
@@ -250,3 +259,117 @@ async def test_a_guest_cannot_fork(env):
     response = await http.post(f"/api/prompt-lists/{source.id}/fork")
 
     assert response.status_code == 403
+
+
+async def test_provenance_survives_the_fork_being_edited(env):
+    """It is the list's origin, so it cannot live on the current revision.
+
+    `forked_from_revision_id` is a fact about one revision - where *that*
+    revision was derived from - and only the revision a fork starts life as
+    was derived from anywhere else. Reading the current one answered correctly
+    until the fork's owner made their first edit, and null from then on.
+    """
+    http, users, prompts, factory = env
+    author = await account(users, "Author")
+    source = await a_published_list(prompts, factory, author.id)
+    forker = await account(users, "Forker")
+    await sign_in(http, factory, forker.id)
+    forked = (await http.post(f"/api/prompt-lists/{source.id}/fork")).json()
+    origin = forked["forkedFromRevisionId"]
+    assert origin is not None
+
+    edited = await http.put(
+        f"/api/prompt-lists/mine/{forked['id']}",
+        json={
+            "expectedVersion": forked["version"],
+            "name": "Mine now",
+            "prompts": [
+                {"conceptId": entry["conceptId"], "prompt": entry["prompt"]}
+                for entry in forked["prompts"]
+            ]
+            + [{"prompt": "heron"}],
+        },
+    )
+
+    assert edited.status_code == 200
+    assert edited.json()["version"] > forked["version"]
+    assert edited.json()["forkedFromRevisionId"] == origin
+    reopened = await http.get(f"/api/prompt-lists/mine/{forked['id']}")
+    assert reopened.json()["forkedFromRevisionId"] == origin
+
+
+async def test_an_official_bundled_list_cannot_be_forked(env):
+    """Bundled lists are public and active, so a public-active-present check
+    let them through - and the extended one holds 592 prompts, well past the
+    500 an owned list may contain."""
+    http, users, prompts, factory = env
+    forker = await account(users, "Forker")
+    await prompts.upsert_bundled(
+        slug="official",
+        name="Official",
+        description="",
+        language="en",
+        prompts=[
+            BundledPromptDefinition(
+                concept_id=str(generate_uuid()), answer="otter"
+            )
+        ],
+        version=1,
+    )
+    async with factory() as session:
+        bundled_id = await session.scalar(
+            select(PromptList.id).where(PromptList.slug == "official")
+        )
+    await sign_in(http, factory, forker.id)
+
+    response = await http.post(f"/api/prompt-lists/{bundled_id}/fork")
+
+    assert response.status_code == 404
+    async with factory() as session:
+        owned = await session.scalar(
+            select(func.count(PromptList.id)).where(
+                PromptList.owner_user_id == UUID(forker.id)
+            )
+        )
+    assert owned == 0, "a refused fork spends no list slot"
+
+
+async def test_reclaiming_a_deleted_source_forgets_where_the_fork_came_from(env):
+    """And that is retention working, not provenance being lost.
+
+    A fork reference is deliberately **not** a pin. Pins exist so a finished
+    game's provenance survives its content's author tidying up (R-PRIV-05);
+    a fork is not a finished game, it is a live list somebody else owns and
+    edits. Treating it as a pin would mean an author who deletes their list
+    can never actually remove it once a stranger has copied it — the sweep
+    would keep the revision alive for as long as the copy exists, which is
+    indefinitely.
+
+    So the foreign key's `SET NULL` is the answer rather than a leak: the fork
+    keeps every prompt it copied and forgets only the pointer. This test is
+    here because that is a decision, and a decision nobody wrote down looks
+    exactly like a bug the next time somebody reads the column.
+    """
+    http, users, prompts, factory = env
+    author = await account(users, "Author")
+    source = await a_published_list(prompts, factory, author.id)
+    forker = await account(users, "Forker")
+    await sign_in(http, factory, forker.id)
+    forked = (await http.post(f"/api/prompt-lists/{source.id}/fork")).json()
+    assert forked["forkedFromRevisionId"] is not None
+
+    assert await prompts.delete_owned(author.id, source.id)
+    await reclaim_retired_prompt_lists(
+        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
+    )
+
+    kept = await http.get(f"/api/prompt-lists/mine/{forked['id']}")
+    assert kept.status_code == 200
+    assert [entry["prompt"] for entry in kept.json()["prompts"]] == [
+        "otter",
+        "badger",
+    ], "the copy keeps every prompt it copied"
+    assert kept.json()["forkedFromRevisionId"] is None, (
+        "only the pointer goes, and it goes because the author asked for the "
+        "list to go"
+    )

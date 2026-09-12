@@ -49,11 +49,13 @@ from app.db.models import (
     PlayerReport,
     PlayerReportDrawingEvidence,
     PlayerReportMessageEvidence,
+    Prompt,
     PromptContentReport,
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
     PromptVersion,
+    PromptVersionAlias,
     RoomMessage,
     TurnRecord,
     User,
@@ -177,6 +179,25 @@ class PromptContentReportBody(BaseModel):
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("details cannot be blank")
+        return cleaned
+
+
+class PublicationReviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    state: Literal["active", "hidden"]
+    note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
+    # The version the reviewer read. An owner can edit a held list - every
+    # save is a new revision (R-LIST-05) - so without this a moderator could
+    # read revision N and release N+1, which they never saw.
+    expected_version: int = Field(alias="expectedVersion", ge=1)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("A decision needs a note.")
         return cleaned
 
 
@@ -2113,6 +2134,256 @@ def create_moderation_router(
                 )
             )
         return named
+
+    def _held():
+        """A publication the switch is holding, and nothing else.
+
+        Public as well as under review. Unpublishing now releases a hold, but
+        the queue asks both questions anyway: a list its owner withdrew is
+        private content, and a moderator has no business deciding on it.
+        """
+        return (
+            PromptList.moderation_state
+            == PromptContentModerationState.UNDER_REVIEW.value,
+            PromptList.visibility == PromptListVisibility.PUBLIC.value,
+            PromptList.is_bundled.is_(False),
+            PromptList.deleted_at.is_(None),
+        )
+
+    @router.get("/moderation/prompt-lists")
+    async def list_publications_awaiting_review(
+        request: Request,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+    ):
+        """Lists the operator switch held back (R-LIST-13).
+
+        Content moderation is otherwise report-driven: somebody complains, and
+        the complaint is the queue entry. A publication routed to review has
+        no complaint behind it - it was held by a posture, not an accusation -
+        so without this it appeared in no queue at all. It was out of the
+        catalogue, unplayable, and unreachable by its owner, who cannot report
+        their own list. The switch was a trapdoor.
+
+        Oldest first: somebody has been waiting since they published.
+        """
+        async with session_factory() as session:
+            await _reviewer(session, request)
+            rows = (
+                await session.execute(
+                    select(PromptList, User.display_name)
+                    .outerjoin(User, User.id == PromptList.owner_user_id)
+                    .where(*_held())
+                    .order_by(PromptList.published_at, PromptList.id)
+                    .offset(offset)
+                    .limit(limit)
+                )
+            ).all()
+            waiting = await session.scalar(
+                select(func.count(PromptList.id)).where(*_held())
+            )
+            prompts_by_list = {
+                list_id: count
+                for list_id, count in (
+                    await session.execute(
+                        select(Prompt.prompt_list_id, func.count(Prompt.id))
+                        .where(
+                            Prompt.prompt_list_id.in_(
+                                [prompt_list.id for prompt_list, _ in rows]
+                            )
+                        )
+                        .group_by(Prompt.prompt_list_id)
+                    )
+                ).all()
+            }
+        return {
+            "waiting": int(waiting or 0),
+            "lists": [
+                {
+                    "id": str(prompt_list.id),
+                    "name": prompt_list.name,
+                    "description": prompt_list.description,
+                    "language": prompt_list.language,
+                    "ownerDisplayName": display_name,
+                    "promptCount": int(prompts_by_list.get(prompt_list.id, 0)),
+                    "version": prompt_list.version,
+                    "publishedAt": (
+                        prompt_list.published_at.isoformat()
+                        if prompt_list.published_at
+                        else None
+                    ),
+                }
+                for prompt_list, display_name in rows
+            ],
+        }
+
+    @router.get("/moderation/prompt-lists/{prompt_list_id}")
+    async def read_held_publication(prompt_list_id: UUID, request: Request):
+        """Every prompt in a held list, at the version being decided on.
+
+        The queue carries a name and a count; a decision needs the words. No
+        other route could supply them - the owner's route is the owner's, and
+        the catalogue and room resolution both exclude a list that is not
+        active - so without this a release was a blind one, and the switch
+        could not keep anything out that it was turned on to keep out.
+
+        Scoped to held lists rather than any list by id: it is a reading
+        surface for this queue, not a general staff window into private
+        content.
+        """
+        async with session_factory() as session:
+            await _reviewer(session, request)
+            row = (
+                await session.execute(
+                    select(PromptList, User.display_name)
+                    .outerjoin(User, User.id == PromptList.owner_user_id)
+                    .where(PromptList.id == prompt_list_id, *_held())
+                )
+            ).one_or_none()
+            if row is None:
+                raise HTTPException(
+                    status_code=404, detail="That prompt list is not awaiting review."
+                )
+            prompt_list, display_name = row
+            revision = await session.scalar(
+                select(PromptListRevision)
+                .where(
+                    PromptListRevision.prompt_list_id == prompt_list.id,
+                    PromptListRevision.version == prompt_list.version,
+                )
+                .options(
+                    selectinload(PromptListRevision.items)
+                    .selectinload(PromptListRevisionItem.prompt_version)
+                    .selectinload(PromptVersion.version_aliases)
+                    .selectinload(PromptVersionAlias.alias)
+                )
+            )
+        return {
+            "id": str(prompt_list.id),
+            "name": prompt_list.name,
+            "description": prompt_list.description,
+            "language": prompt_list.language,
+            "ownerDisplayName": display_name,
+            "version": prompt_list.version,
+            "publishedAt": (
+                prompt_list.published_at.isoformat()
+                if prompt_list.published_at
+                else None
+            ),
+            "prompts": [
+                {
+                    "prompt": item.prompt_version.canonical_answer,
+                    "aliases": sorted(
+                        link.alias.answer
+                        for link in item.prompt_version.version_aliases
+                    ),
+                    # A version may already be hidden by an earlier report;
+                    # the reviewer should see that rather than rediscover it.
+                    "moderationState": item.prompt_version.moderation_state,
+                }
+                for item in (revision.items if revision is not None else ())
+            ],
+        }
+
+    @router.patch("/moderation/prompt-lists/{prompt_list_id}")
+    async def review_publication(
+        prompt_list_id: UUID,
+        body: PublicationReviewBody,
+        request: Request,
+    ):
+        """Release a held publication into the catalogue, or take it down.
+
+        The same two outcomes a reported list has, reached without a report.
+        Releasing is the ordinary answer and the one the queue exists for;
+        hiding tells the owner, because that is the least a decision owes
+        somebody and the second use their address was collected for.
+        """
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        now = datetime.now(timezone.utc)
+        async with session_factory() as session:
+            async with session.begin():
+                reviewer = await _reviewer(session, request)
+                require_step_up(request)
+                prompt_list = await session.scalar(
+                    select(PromptList)
+                    .where(
+                        PromptList.id == prompt_list_id,
+                        PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
+                    )
+                    .with_for_update()
+                )
+                if prompt_list is None:
+                    raise HTTPException(
+                        status_code=404, detail="No such prompt list."
+                    )
+                if not (
+                    prompt_list.moderation_state
+                    == PromptContentModerationState.UNDER_REVIEW.value
+                    and prompt_list.visibility
+                    == PromptListVisibility.PUBLIC.value
+                ):
+                    # Deciding a list nobody held would be a decision made
+                    # about content this queue never showed the reviewer -
+                    # and a withdrawn one is private content besides.
+                    raise HTTPException(
+                        status_code=409,
+                        detail="That prompt list is not awaiting review.",
+                    )
+                if prompt_list.version != body.expected_version:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "This list changed after you opened it. Reload it "
+                            "and read it again before deciding."
+                        ),
+                    )
+                prompt_list.moderation_state = body.state
+                prompt_list.moderated_by_user_id = reviewer.id
+                prompt_list.moderated_at = now
+                if body.state == PromptContentModerationState.HIDDEN.value:
+                    owner = (
+                        await session.get(User, prompt_list.owner_user_id)
+                        if prompt_list.owner_user_id
+                        else None
+                    )
+                    if owner and owner.email and owner.email_verified_at:
+                        queue_email(
+                            session,
+                            to_address=owner.email,
+                            template=EmailTemplate.CONTENT_HIDDEN,
+                            # Frozen at queue time, in the owner's language
+                            # (R-I18N-02) - the same call the report path makes.
+                            locale=await recipient_locale(session, owner.id),
+                            payload={
+                                "displayName": owner.display_name,
+                                # The kind of thing, never a phrase: the email
+                                # writes the sentence around it.
+                                "what": "prompt_list",
+                            },
+                            user_id=owner.id,
+                            now=now,
+                        )
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type=f"prompt_list.review_{body.state}",
+                        actor_user_id=reviewer.id,
+                        target_user_id=prompt_list.owner_user_id,
+                        target_type=AuditTargetType.PROMPT_LIST.value,
+                        target_id=str(prompt_list.id),
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={
+                            "note": body.note,
+                            # Which content the decision was about, since the
+                            # list can be edited again after it.
+                            "version": prompt_list.version,
+                        },
+                        created_at=now,
+                    )
+                )
+        return {"id": str(prompt_list_id), "moderationState": body.state}
 
     @router.post("/moderation/bans", status_code=201)
     async def create_ban(body: BanBody, request: Request):

@@ -1,6 +1,6 @@
 import { apiBinaryRequest, apiRequest } from "./api.ts";
 import { emitWithAck } from "./socket.ts";
-import type { GamePhase, ModerationState } from "../types";
+import type { GamePhase, ModerationState, PromptLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
 
 export function canCastModerationVote(
@@ -597,6 +597,65 @@ export function listPromptContentReports(
   if (input.offset !== undefined) query.set("offset", String(input.offset));
   const suffix = query.size > 0 ? `?${query}` : "";
   return apiRequest(`/api/moderation/prompt-content-reports${suffix}`);
+}
+
+/** One list the publication-review switch held back, awaiting a decision.
+
+Distinct from a content report: nobody complained about it. It was held by a
+posture (R-LIST-13), so it carries no reporter, no reason, and no evidence —
+only the list, its owner and how long it has been waiting. */
+export interface HeldPublication {
+  id: string;
+  name: string;
+  description: string;
+  language: PromptLanguage;
+  ownerDisplayName: string | null;
+  promptCount: number;
+  /** The revision on show. A decision names it, so an edit made after the
+  reviewer opened the list cannot be released unseen. */
+  version: number;
+  publishedAt: string | null;
+}
+
+/** A held list with the prompts a reviewer has to read before deciding. */
+export interface HeldPublicationDetail extends Omit<HeldPublication, "promptCount"> {
+  prompts: {
+    prompt: string;
+    aliases: string[];
+    /** The prompt version's content state — not `ModerationState`, which is
+    a player's standing. A version may already be hidden by an earlier report. */
+    moderationState: "active" | "under_review" | "hidden";
+  }[];
+}
+
+export function readHeldPublication(promptListId: string): Promise<HeldPublicationDetail> {
+  return apiRequest(`/api/moderation/prompt-lists/${promptListId}`);
+}
+
+export function listHeldPublications(
+  input: { limit?: number; offset?: number } = {},
+): Promise<{ lists: HeldPublication[]; waiting: number }> {
+  const query = new URLSearchParams();
+  if (input.limit !== undefined) query.set("limit", String(input.limit));
+  if (input.offset !== undefined) query.set("offset", String(input.offset));
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return apiRequest(`/api/moderation/prompt-lists${suffix}`);
+}
+
+/** Release a held list into the community catalogue, or take it down.
+
+Releasing is the ordinary answer and what the queue exists for. Hiding tells
+the owner, the way a takedown from a report does. */
+export function reviewHeldPublication(
+  promptListId: string,
+  state: "active" | "hidden",
+  note: string,
+  expectedVersion: number,
+): Promise<{ id: string; moderationState: "active" | "hidden" }> {
+  return apiRequest(`/api/moderation/prompt-lists/${promptListId}`, {
+    method: "PATCH",
+    body: { state, note, expectedVersion },
+  });
 }
 
 /** Resolve or dismiss a content report.
