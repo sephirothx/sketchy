@@ -18,8 +18,11 @@ const REASONS: Array<{ value: PromptContentReportReason; label: string }> = [
 ];
 
 interface PromptContentReportDialogProps {
-  promptList: SharedPromptList;
-  shareCode: string;
+  /** Enough of a list to report it: the target, and the prompts to name one. */
+  promptList: Pick<SharedPromptList, "id" | "name" | "prompts">;
+  /** The capability an Unlisted list is reached by. A **published** list is
+  reported by identity and has none — publishing revoked it (R-LIST-03). */
+  shareCode?: string;
   onClose: () => void;
   onSubmitted: () => void;
 }

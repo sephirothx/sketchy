@@ -72,6 +72,68 @@ export const PromptStatsPage = `
   </div>
 </div>`;
 
+// ------------------------------------------------------ Community catalogue
+const catalogueRow = (name, owner, meta, tags, selected = false, starred = false) => `
+<li style="display: flex; align-items: center; gap: 8px; list-style: none">
+  <div style="flex: 1; display: grid; gap: 2px; border: 1.5px solid ${selected ? T.ink : T.line}; border-radius: ${T.radiusSm}; padding: 10px 12px; background: ${T.card}">
+    <strong style="font-size: 15px; color: ${T.ink}">${name}</strong>
+    <span style="font-size: 13px; color: ${T.muted}">by ${owner}</span>
+    <span style="font-size: 13px; color: ${T.muted}; font-variant-numeric: tabular-nums">${meta}</span>
+    ${tags ? `<span style="font-size: 13px; color: ${T.faint}">${tags}</span>` : ''}
+  </div>
+  <span style="display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: ${T.radiusSm}; border: 1.5px solid ${starred ? T.ink : T.line}; color: ${starred ? T.ink : T.faint}">★</span>
+</li>`;
+
+export const CommunityCataloguePage = `
+<div style="width: 1100px; min-height: 1080px; margin: 0 auto; padding: 26px 24px 48px">
+  ${backBar()}
+  <header style="margin-bottom: 16px">
+    ${sectionLabel('Published by players')}
+    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 28px; color: ${T.ink}; margin-top: 4px">Community catalogue</h1>
+    <p style="color: ${T.muted}; font-size: 14px; margin-top: 6px">Lists players published for anyone to play. Open one to read every prompt in it before you start.</p>
+  </header>
+
+  <div style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 14px 16px; box-shadow: ${T.shadow}; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px">
+    ${selectBox('Every language')}
+    ${selectBox('Most starred')}
+    <label style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: ${T.ink}">
+      <span style="display: inline-block; width: 15px; height: 15px; border: 1.5px solid ${T.line}; border-radius: 4px; background: ${T.well}"></span>
+      Only ones I starred
+    </label>
+    <span style="display: inline-flex; gap: 6px; flex-wrap: wrap">
+      <span style="border: 1.5px solid ${T.ink}; border-radius: 999px; padding: 3px 11px; font-size: 13px; color: ${T.ink}">Animals</span>
+      <span style="border: 1.5px solid ${T.line}; border-radius: 999px; padding: 3px 11px; font-size: 13px; color: ${T.muted}">Food and drink</span>
+      <span style="border: 1.5px solid ${T.line}; border-radius: 999px; padding: 3px 11px; font-size: 13px; color: ${T.muted}">Nature</span>
+      <span style="border: 1.5px solid ${T.line}; border-radius: 999px; padding: 3px 11px; font-size: 13px; color: ${T.muted}">Places</span>
+    </span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px">
+    <ul style="margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+      ${catalogueRow('Creatures of the deep', 'Marta', '48 prompts · 12 stars', 'Animals · Nature', true, true)}
+      ${catalogueRow('Kitchen things', 'Jonas', '120 prompts · 9 stars', 'Food and drink')}
+      ${catalogueRow('Landmarks', 'Priya', '64 prompts · 7 stars', 'Places')}
+      ${catalogueRow('Very hard nouns', 'Sam', '200 prompts · 3 stars', 'Abstract')}
+    </ul>
+
+    <div style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadow}; padding: 16px 18px">
+      <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 21px; color: ${T.ink}; margin: 0">Creatures of the deep</h2>
+      <p style="color: ${T.muted}; font-size: 13.5px; margin: 4px 0 0">by Marta</p>
+      <p style="color: ${T.muted}; font-size: 14px; margin: 10px 0 0">Things that live where the light stops.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0">
+        ${btn.ghost('Unstar')}
+        ${btn.ghost('Make a copy')}
+        ${btn.ghost('Report')}
+      </div>
+      <h3 style="font-family: ${T.display}; font-weight: 600; font-size: 16px; color: ${T.ink}; margin: 14px 0 8px">What is in it</h3>
+      <ol style="columns: 2; margin: 0; padding-left: 20px; color: ${T.ink}; font-size: 14px; line-height: 1.9">
+        <li>anglerfish</li><li>nautilus</li><li>giant squid</li><li>lanternfish</li>
+        <li>hagfish</li><li>sea urchin</li><li>coelacanth</li><li>oarfish</li>
+      </ol>
+    </div>
+  </div>
+</div>`;
+
 // --------------------------------------------------------- My prompt lists
 const listNav = (name, meta, active, badge = '') => `
 <button type="button" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: ${active ? T.primarySoft : T.card}; border: 1.5px solid ${active ? T.primary : T.line}; border-radius: ${T.radiusSm}; padding: 12px 15px; font-family: ${T.body}; min-height: 44px">

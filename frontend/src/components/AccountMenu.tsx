@@ -41,6 +41,7 @@ import {
   ShieldIcon,
   UserIcon,
   UsersIcon,
+  StarIcon,
   ZapIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
@@ -279,6 +280,15 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 }}
               >
                 {ui.accountMenu.promptStats}
+              </MenuItem>
+              <MenuItem
+                icon={<StarIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/community-lists");
+                }}
+              >
+                {ui.communityCataloguePage.communityCatalogue}
               </MenuItem>
             </>
           )}

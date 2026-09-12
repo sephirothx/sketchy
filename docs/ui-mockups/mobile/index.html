@@ -1891,6 +1891,54 @@ S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
       <div class="dock"><button class="btn ghost">Invite Jonas to a room</button></div>
     </div>` }]});
 
+/* ─────────────────────── 18 · COMMUNITY CATALOGUE ─────────────────────── */
+S({ id:'catalogue', n:'18', group:'Elsewhere', title:'Community catalogue',
+  lede:'A library of other people’s lists, on a screen one thumb wide.',
+  variants:[{ name:'Rows, then the list itself', ships:true,
+    bad:[],
+    good:[
+      'Built for the phone first, so there is no "what it was": the desktop two-column layout <b>collapses to one</b> under 900px, and the list a preview shows drops to a single column under 640px.',
+      'The filters are a <b>row of chips</b> rather than stacked selects — language and sort stay as menus because they are one-of-many, and tags are the thing people actually poke at.',
+      'A row carries the four things a choice needs: name, who published it, <b>how many prompts and stars</b>, and its tags. The star sits outside the row so tapping it never opens the list.',
+      'Opening a list <b>replaces the rows</b> on a narrow screen instead of squeezing beside them, with the prompts themselves as the body — the point of opening it.',
+      'Paging is an explicit <code>Show more</code>, as the stats page settled on: no infinite scroll, nothing silently dropped.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <div class="disp" style="font-size:17px">Community catalogue</div>
+      </div>
+      <div style="padding:11px 14px 0;flex:0 0 auto;display:flex;flex-direction:column;gap:9px;background:var(--card);border-bottom:1.5px solid var(--line);padding-bottom:11px">
+        <div style="display:flex;gap:8px">
+          <div class="gfield" style="flex:1;min-height:42px;font-size:14px">Every language</div>
+          <div class="gfield" style="flex:1;min-height:42px;font-size:14px">Most starred</div>
+        </div>
+        <div class="chips">
+          <span class="chip on">Animals</span>
+          <span class="chip">Food and drink</span>
+          <span class="chip">Nature</span>
+          <span class="chip">Places</span>
+        </div>
+      </div>
+      <div class="stagearea" style="padding:12px 14px;gap:9px;overflow-y:auto">
+        ${[['Creatures of the deep','Marta','48 prompts · 12 stars','Animals · Nature',true],
+           ['Kitchen things','Jonas','120 prompts · 9 stars','Food and drink',false],
+           ['Landmarks','Priya','64 prompts · 7 stars','Places',false],
+           ['Very hard nouns','Sam','200 prompts · 3 stars','Abstract',false]].map(([n,o,m,t,on])=>`
+          <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto">
+            <div class="card" style="flex:1;padding:11px 13px;display:grid;gap:2px">
+              <div class="disp" style="font-size:16px">${n}</div>
+              <span class="muted" style="font-size:12.5px">by ${o}</span>
+              <span class="muted" style="font-size:12.5px;font-variant-numeric:tabular-nums">${m}</span>
+              <span class="faint" style="font-size:12.5px">${t}</span>
+            </div>
+            <div class="iconbtn ${on?'':'ghost'}" style="font-size:15px">★</div>
+          </div>`).join('')}
+        <button class="btn ghost" style="flex:0 0 auto">Show more</button>
+      </div>
+    </div>` }]});
+
 /* ─────────────────────────── 15 · PROMPT STATS ─────────────────────────── */
 S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
   lede:'A 592-row data table, delivered to a phone in full.',
@@ -1937,7 +1985,7 @@ S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
       </div>
     </div>` }]});
 
-S({ id:'notfound', n:'18', group:'Elsewhere', title:'Page not found',
+S({ id:'notfound', n:'19', group:'Elsewhere', title:'Page not found',
   lede:'A URL with nothing behind it — a mistyped link, a dead bookmark, or a staff page opened by an account that is not staff.',
   variants:[{ name:'Page not found', ships:true,
     bad:[
@@ -1990,7 +2038,7 @@ S({ id:'notfound', n:'18', group:'Elsewhere', title:'Page not found',
       </div>
     </div>` }]});
 
-S({ id:'crash', n:'19', group:'Elsewhere', title:'Crash page',
+S({ id:'crash', n:'20', group:'Elsewhere', title:'Crash page',
   lede:'What a screen shows when its own code throws — before this, a render error was a blank page with no way out and nothing recorded.',
   variants:[{ name:'Crash page', ships:true,
     bad:[
@@ -2137,7 +2185,7 @@ function render(){
       ? 'This is the one that shipped — the artboard is drawn from the build.'
       : 'Drawn as an alternative; the build went the other way.'}</p>` : ''}
     <div class="notes">
-      <div class="note bad"><h3>What it was</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>
+      ${v.bad.length ? `<div class="note bad"><h3>What it was</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>` : ''}
       <div class="note good"><h3>What it is now</h3><ul>${v.good.map(b=>`<li>${b}</li>`).join('')}</ul></div>
     </div>
     <div class="pager">
