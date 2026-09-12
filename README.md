@@ -515,7 +515,10 @@ its stars where they are. Community content is moderated **after** publication,
 through the same report and review path any player-authored content uses — an
 administrator can switch new publications into a review queue instead
 (`POST /api/admin/prompt-list-review`) without a redeploy, if that stops being
-enough.
+enough. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
+by language and tag and sorted by stars or by recency; it is a route of its own
+rather than a filter on the official one, so official content and player content
+are never in the same listing.
 
 Private lists resolve only for their owner. Switching a list to Unlisted creates
 a cryptographically random **Prompt-list share code**; a host must add that code
