@@ -67,7 +67,7 @@
  "tests/e2e/test_network_resilience.py::test_page_load_and_reload_never_show_the_connection_banner": 4.2,
  "tests/e2e/test_not_found.py::test_a_staff_route_shows_the_same_page_to_everyone_else": 4.3,
  "tests/e2e/test_not_found.py::test_an_unknown_url_answers_404_and_offers_the_way_back": 2.5,
- "tests/e2e/test_owned_prompt_lists.py::test_registered_owner_can_manage_and_share_a_prompt_list": 6.7,
+ "tests/e2e/test_owned_prompt_lists.py::test_registered_owner_can_manage_and_play_a_private_prompt_list": 6.7,
  "tests/e2e/test_passkey_setup.py::test_a_passkey_is_set_up_once_and_then_signs_in_on_its_own": 5.5,
  "tests/e2e/test_player_afk_reconnect.py::test_player_afk_and_disconnect_scenario": 5.7,
  "tests/e2e/test_player_reporting.py::test_a_guest_votes_but_is_offered_no_way_to_report": 5.5,

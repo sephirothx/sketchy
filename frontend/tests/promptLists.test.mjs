@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  addSharedPromptSelection,
-  promptEntriesFromQuickInput,
-} from "../src/lib/promptListDrafts.ts";
+import { promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
   preferredPromptLanguage,
@@ -40,40 +37,6 @@ test("quick room prompts become a bounded deduplicated persistence draft", () =>
     { prompt: "apple", aliases: [] },
     { prompt: "red panda", aliases: [] },
   ]);
-});
-
-const sharedFrenchList = {
-  slug: "user-fr",
-  name: "Français",
-  description: "",
-  language: "fr",
-  promptCount: 10,
-  isBundled: false,
-  version: 1,
-};
-
-test("a shared list in the room's language is added and keeps its bearer code", () => {
-  const selection = addSharedPromptSelection(
-    ["francais_standard"],
-    [],
-    sharedFrenchList,
-    "same-code",
-    "fr",
-  );
-  assert.equal(selection.ok, true);
-  assert.deepEqual(selection.slugs, ["francais_standard", "user-fr"]);
-  assert.deepEqual(selection.shareCodes, ["same-code"]);
-});
-
-test("a shared list in another language is refused, not swapped in", () => {
-  const selection = addSharedPromptSelection(
-    ["english_standard"],
-    ["same-code"],
-    sharedFrenchList,
-    "another-code",
-    "en",
-  );
-  assert.deepEqual(selection, { ok: false, language: "fr" });
 });
 
 test("the language options offered are the ones with content, plus the room's own", () => {

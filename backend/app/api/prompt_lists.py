@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal
 
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,7 +16,6 @@ from app.api.serializers import (
     owned_prompt_list_payload,
     prompt_list_payload,
     prompt_stats_payload,
-    shared_prompt_list_payload,
 )
 from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import RateLimiter, client_key
@@ -68,7 +66,6 @@ COMMUNITY_SORTS = ("stars", "newest")
 # The bundled lists top out around 600 prompts, and this reads them whole.
 # Generous for someone browsing, tight enough to be a poor scraping tool.
 stats_limiter = RateLimiter(limit=60, window_seconds=60)
-share_limiter = RateLimiter(limit=30, window_seconds=60)
 # Publishing is a deliberate act somebody takes a handful of times, and the
 # thing it costs an abuser is the account (R-LIST-12) rather than the request.
 # The limit is here so that account cannot be spent quickly.
@@ -101,7 +98,6 @@ class CreateOwnedPromptListRequest(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str = Field(default="", max_length=255)
     language: str = Field(default="en", min_length=2, max_length=16)
-    visibility: Literal["private", "unlisted"] = "private"
     prompts: list[PromptEntryRequest] = Field(
         min_length=1, max_length=MAX_PROMPTS_PER_OWNED_LIST
     )
@@ -117,17 +113,10 @@ class UpdateOwnedPromptListRequest(BaseModel):
     expected_version: int = Field(alias="expectedVersion", ge=1)
     name: str = Field(min_length=1, max_length=64)
     description: str = Field(default="", max_length=255)
-    visibility: Literal["private", "unlisted"] = "private"
     prompts: list[PromptEntryRequest] = Field(
         min_length=1, max_length=MAX_PROMPTS_PER_OWNED_LIST
     )
     tags: list[str] = Field(default_factory=list, max_length=MAX_LIST_TAGS)
-
-
-class SharedPromptListRequest(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
-
-    code: str = Field(min_length=8, max_length=24)
 
 
 def _is_rated(summary: PromptStatsSummary) -> bool:
@@ -358,7 +347,6 @@ def create_prompt_list_router(
                 name=body.name,
                 description=body.description,
                 language=body.language,
-                visibility=body.visibility,
                 prompts=entry_inputs(body.prompts),
                 tags=body.tags,
             )
@@ -388,7 +376,6 @@ def create_prompt_list_router(
                 expected_version=body.expected_version,
                 name=body.name,
                 description=body.description,
-                visibility=body.visibility,
                 prompts=entry_inputs(body.prompts),
                 tags=body.tags,
             )
@@ -573,25 +560,6 @@ def create_prompt_list_router(
         if not await prompt_list_repo.delete_owned(user.id, prompt_list_id):
             raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-    @router.post("/prompt-lists/shared")
-    async def resolve_shared_prompt_list(
-        body: SharedPromptListRequest, request: Request
-    ):
-        if not share_limiter.check(client_key(request)):
-            raise Refusal(
-                429,
-                ErrorCode.TOO_MANY_ATTEMPTS,
-                "Too many attempts. Please wait and try again.",
-            )
-        prompt_list = await prompt_list_repo.get_shared(body.code)
-        if prompt_list is None:
-            raise Refusal(
-                404,
-                ErrorCode.SHARED_PROMPT_LIST_NOT_FOUND,
-                "No shared prompt list found.",
-            )
-        return shared_prompt_list_payload(prompt_list)
 
     @router.get("/prompt-lists/{slug}/prompt-stats")
     async def prompt_stats(

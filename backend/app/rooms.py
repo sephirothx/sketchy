@@ -430,9 +430,6 @@ class Room:
     color_mode: str = DEFAULT_COLOR_MODE
     prompt_language: str = "en"
     prompt_list_slugs: list[str] = field(default_factory=list)
-    # Bearer capabilities used only to authorize unlisted content. Never expose
-    # these in room state, settings responses, logs, or history.
-    prompt_list_share_codes: list[str] = field(default_factory=list, repr=False)
     prompt_list_revision_ids: list[str] = field(default_factory=list)
     # What the pinned revisions hold, rather than the content itself. The pool
     # used to live here for the room's whole life so that a game could offer
@@ -752,7 +749,6 @@ class RoomManager:
         color_mode: str = DEFAULT_COLOR_MODE,
         prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
-        prompt_list_share_codes: list[str] | None = None,
         prompt_list_revision_ids: list[str] | None = None,
         prompt_pool_size: int = 0,
         prompt_letter_counts: dict[str, int] | None = None,
@@ -784,7 +780,6 @@ class RoomManager:
             color_mode=color_mode,
             prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
-            prompt_list_share_codes=list(prompt_list_share_codes or []),
             prompt_list_revision_ids=list(prompt_list_revision_ids or []),
             prompt_pool_size=prompt_pool_size,
             prompt_letter_counts=dict(prompt_letter_counts or {}),

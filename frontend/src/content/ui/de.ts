@@ -302,7 +302,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Prompt lists
   prompt_list_not_found: "Begriffsliste nicht gefunden.",
-  shared_prompt_list_not_found: "Keine geteilte Begriffsliste gefunden.",
   prompt_list_conflict: "Jemand anderes hat diese Liste geändert. Lade sie neu und versuch es noch einmal.",
   prompt_list_invalid: "Diese Begriffsliste konnte nicht gespeichert werden.",
   prompt_list_forbidden: "Diese Begriffsliste kannst du nicht ändern.",
@@ -821,7 +820,7 @@ export const DE: Catalogue = {
     delete: "Löschen",
     undo: "Rückgängig",
     saveAsReusableList: "Als wiederverwendbare Liste speichern",
-    saveQuickPromptsAsA: "Speichere schnelle Begriffe als Liste und entferne geteilte Codes, bevor du eine Vorlage speicherst.",
+    saveQuickPromptsAsA: "Speichere schnelle Begriffe als Liste, bevor du eine Vorlage speicherst.",
     appliedName: (p: { name: string }) =>
       `„${p.name}“ übernommen.`,
     savedName: (p: { name: string }) =>
@@ -1236,6 +1235,7 @@ export const DE: Catalogue = {
     notPublished: "Nicht veröffentlicht",
     publishedExplainer: "Alle können diese Liste finden, spielen, mit einem Stern markieren oder eine eigene Kopie anlegen.",
     unpublishedExplainer: "Veröffentlichen macht diese Liste für alle auffindbar und spielbar. Sie lässt sich jederzeit wieder zurückziehen.",
+    saveBeforePublishing: "Speichere die Liste zuerst. Sie bleibt privat, bis du sie veröffentlichst.",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "Stern", other: "Sterne" }),
     copyCount: (p: { count: number }) =>
@@ -1274,12 +1274,7 @@ export const DE: Catalogue = {
     name: "Name",
     description: "Beschreibung",
     language: "Sprache",
-    visibility: "Sichtbarkeit",
     private: "Privat",
-    anyoneWithCode: "Jeder mit Code",
-    shareCode: "Teilen-Code",
-    couldNotCopyShareCode: "Der Teilen-Code konnte nicht kopiert werden.",
-    copy: "Kopieren",
     addPrompts: "Begriffe hinzufügen",
     onePromptPerLineSeparateEntries: "Ein Begriff pro Zeile\noder Einträge mit Komma trennen",
     addList: "Zur Liste hinzufügen",
@@ -1487,24 +1482,16 @@ export const DE: Catalogue = {
   promptListPicker: {
     listsYouStarred: "Mit Stern markierte Listen",
     starredNotAllShown: (p: { shown: number }) => `Die ersten ${number(p.shown)} Listen mit deinem Stern werden angezeigt.`,
-    languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
-      `Diese Liste ist auf ${p.listLanguage}; dieser Raum ist auf ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>
       `Die Auswahl der Begriffslisten ist nicht verfügbar (${p.reason}). Deine bisherige Auswahl bleibt.`,
     noListsInLanguage: (p: { language: string }) =>
       `Noch keine Begriffslisten auf ${p.language} — dieser Raum nutzt seine eigenen Begriffe.`,
     howListPlays: (p: { name: string }) => `Wie sich Begriffe aus ${p.name} spielen`,
-    reportList: (p: { name: string }) => `${p.name} melden`,
     failedLoadPromptLists: "Begriffslisten konnten nicht geladen werden",
-    couldNotAddThatSharedList: "Diese geteilte Liste konnte nicht hinzugefügt werden.",
     loadingCuratedPromptLists: "Kuratierte Begriffslisten werden geladen …",
     promptLists: "Begriffslisten",
-    addUnlistedListByCode: "Nicht gelistete Liste per Code hinzufügen",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
       `${p.name} (${p.promptCount} Begriffe)`,
-    adding: "Wird hinzugefügt …",
-    add: "Hinzufügen",
-    reportSentForModeratorReview: "Meldung zur Prüfung an die Moderation gesendet.",
   },
 
   promptStatsPage: {

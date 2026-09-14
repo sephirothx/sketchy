@@ -44,7 +44,6 @@ def settings(slug: str, **overrides) -> dict:
         "colorMode": "colorblind_safe",
         "promptLanguage": "en",
         "promptListSlugs": [slug],
-        "promptListShareCodes": [],
     }
     value.update(overrides)
     return value
@@ -83,7 +82,6 @@ async def owned_prompt_list(prompt_lists, owner_id: str, name: str = "My prompts
         name=name,
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="red panda"),),
     )
 
@@ -118,7 +116,6 @@ async def test_crud_is_private_versioned_and_configuration_only(env):
         expected_version=1,
         name=prompt_list.name,
         description="",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="snow leopard"),),
     )
     assert updated_list.version == 2
@@ -179,7 +176,6 @@ async def test_rejects_guests_quick_prompts_shared_lists_and_duplicate_names(env
                 "allowed_tools": ["brush"],
                 "color_mode": "all",
                 "prompt_list_slugs": ["missing"],
-                "prompt_list_share_codes": [],
             },
         )
 
@@ -196,15 +192,6 @@ async def test_rejects_guests_quick_prompts_shared_lists_and_duplicate_names(env
         },
     )
     assert quick.status_code == 422
-
-    shared = await client.post(
-        "/api/room-presets",
-        json={
-            "name": "Shared",
-            "settings": settings(prompt_list.slug, promptListShareCodes=["abcdefgh"]),
-        },
-    )
-    assert shared.status_code == 422
 
     first = await client.post(
         "/api/room-presets",
@@ -241,7 +228,6 @@ async def test_a_preset_carries_the_language_of_the_lists_it_saved(env):
         name="Meine Begriffe",
         description="",
         language="de",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="Rotpanda"),),
     )
 

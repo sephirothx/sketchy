@@ -5,7 +5,6 @@ import type {
   OwnedPromptList,
   PromptLanguage,
   PromptTag,
-  SharedPromptList,
 } from "../types";
 
 export interface PromptListDraftEntry {
@@ -18,7 +17,6 @@ export interface PromptListDraft {
   name: string;
   description: string;
   language: PromptLanguage;
-  visibility: "private" | "unlisted";
   prompts: PromptListDraftEntry[];
   /** Slugs from the vocabulary `listPromptTags` returns; a save refuses others. */
   tags: string[];
@@ -163,13 +161,6 @@ export function deleteOwnedPromptList(id: string): Promise<void> {
   });
 }
 
-export function resolveSharedPromptList(code: string): Promise<SharedPromptList> {
-  return apiRequest("/api/prompt-lists/shared", {
-    method: "POST",
-    body: { code: code.trim() },
-  });
-}
-
 
 export type PromptContentReportReason =
   | "inappropriate"
@@ -182,7 +173,6 @@ export type PromptContentReportReason =
 export function submitPromptContentReport(input: {
   promptListId: string;
   promptVersionId?: string;
-  shareCode?: string;
   reason: PromptContentReportReason;
   details: string;
 }): Promise<{ id: string; status: "pending"; createdAt: string }> {

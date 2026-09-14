@@ -302,7 +302,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Prompt lists
   prompt_list_not_found: "Lista de palabras no encontrada.",
-  shared_prompt_list_not_found: "No se encontró ninguna lista compartida.",
   prompt_list_conflict: "Otra persona ha cambiado esa lista. Recárgala e inténtalo de nuevo.",
   prompt_list_invalid: "No se pudo guardar esa lista de palabras.",
   prompt_list_forbidden: "Esa lista de palabras no es tuya para cambiarla.",
@@ -821,7 +820,7 @@ export const ES: Catalogue = {
     delete: "Borrar",
     undo: "Deshacer",
     saveAsReusableList: "Guardar como lista reutilizable",
-    saveQuickPromptsAsA: "Guarda las palabras rápidas como lista y quita los códigos compartidos antes de guardar un ajuste predefinido.",
+    saveQuickPromptsAsA: "Guarda las palabras rápidas como lista antes de guardar un ajuste predefinido.",
     appliedName: (p: { name: string }) =>
       `Se aplicó «${p.name}».`,
     savedName: (p: { name: string }) =>
@@ -1236,6 +1235,7 @@ export const ES: Catalogue = {
     notPublished: "Sin publicar",
     publishedExplainer: "Cualquiera puede encontrar esta lista, jugarla, darle una estrella o hacer su propia copia.",
     unpublishedExplainer: "Al publicarla, cualquiera podrá encontrar y jugar esta lista. Se puede retirar en cualquier momento.",
+    saveBeforePublishing: "Guarda la lista primero. Seguirá siendo privada hasta que la publiques.",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "estrella", other: "estrellas" }),
     copyCount: (p: { count: number }) =>
@@ -1274,12 +1274,7 @@ export const ES: Catalogue = {
     name: "Nombre",
     description: "Descripción",
     language: "Idioma",
-    visibility: "Visibilidad",
     private: "Privada",
-    anyoneWithCode: "Cualquiera con el código",
-    shareCode: "Código para compartir",
-    couldNotCopyShareCode: "No se pudo copiar el código para compartir.",
-    copy: "Copiar",
     addPrompts: "Añadir palabras",
     onePromptPerLineSeparateEntries: "Una palabra por línea\no separa las entradas con comas",
     addList: "Añadir a la lista",
@@ -1486,24 +1481,16 @@ export const ES: Catalogue = {
   promptListPicker: {
     listsYouStarred: "Listas que marcaste",
     starredNotAllShown: (p: { shown: number }) => `Se muestran las primeras ${number(p.shown)} listas que marcaste con estrella.`,
-    languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
-      `Esa lista está en ${p.listLanguage}; esta sala está en ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>
       `Las listas de palabras no están disponibles (${p.reason}). Tu selección actual no cambia.`,
     noListsInLanguage: (p: { language: string }) =>
       `Todavía no hay listas en ${p.language}: esta sala usa sus propias palabras.`,
     howListPlays: (p: { name: string }) => `Cómo se juegan las palabras de ${p.name}`,
-    reportList: (p: { name: string }) => `Denunciar a ${p.name}`,
     failedLoadPromptLists: "No se pudieron cargar las listas de palabras",
-    couldNotAddThatSharedList: "No se pudo añadir esa lista compartida.",
     loadingCuratedPromptLists: "Cargando listas de palabras…",
     promptLists: "Listas de palabras",
-    addUnlistedListByCode: "Añadir una lista no listada con un código",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
       `${p.name} (${p.promptCount} palabras)`,
-    adding: "Añadiendo…",
-    add: "Añadir",
-    reportSentForModeratorReview: "Denuncia enviada para revisión de un moderador.",
   },
 
   promptStatsPage: {

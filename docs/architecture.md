@@ -302,7 +302,6 @@ This is the table to consult before adding a feature: *where does this state liv
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
-| Prompt-list share codes borrowed into a room | `Room` (memory only, never logged or published) | No |
 | Quick custom prompts typed into a room | `Room` (memory) | No |
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
 | Finished game history, turns, outcomes, score ledger, drawings | Database | Yes |

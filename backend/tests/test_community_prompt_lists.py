@@ -81,7 +81,6 @@ async def published(
         name=name,
         description="",
         language=language,
-        visibility="private",
         prompts=entries,
         tags=tags,
     )
@@ -112,7 +111,6 @@ async def test_only_published_active_present_lists_are_in_the_catalogue(env):
         name="Never published",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     async with factory() as session:
@@ -392,7 +390,6 @@ async def test_the_preview_opens_only_what_the_listing_shows(env):
         name="Private",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     await prompts.upsert_bundled(

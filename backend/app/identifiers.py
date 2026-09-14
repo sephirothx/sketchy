@@ -16,6 +16,6 @@ def generate_uuid7() -> UUID:
     These identifiers are not credentials. Within a single millisecond the
     counter makes consecutive values guessable from a neighbour, which is
     irrelevant for entity IDs and unacceptable for capabilities - session
-    tokens, room codes, and share codes stay cryptographically random.
+    tokens, room codes, and invitation tokens stay cryptographically random.
     """
     return uuid7()

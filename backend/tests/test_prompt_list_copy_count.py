@@ -80,7 +80,6 @@ async def a_published_list(prompts, factory, owner_id: str, name: str = "Source"
         name=name,
         description="Worth copying",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="badger")),
         tags=("animals",),
     )
@@ -167,7 +166,6 @@ async def test_a_copy_still_counts_after_its_source_is_edited(env):
         expected_version=source.version,
         name="Source, revised",
         description="Worth copying",
-        visibility="public",
         prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="weasel")),
         tags=("animals",),
     )

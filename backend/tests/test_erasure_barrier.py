@@ -388,7 +388,6 @@ async def test_writes_authorized_before_a_deletion_are_refused_after_it():
             name="Mine",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
 
@@ -400,7 +399,6 @@ async def test_writes_authorized_before_a_deletion_are_refused_after_it():
                 name="Too late",
                 description="",
                 language="en",
-                visibility="private",
                 prompts=(PromptListEntryInput(answer="otter"),),
             )
         with pytest.raises((AccountErasedError, Exception)):
@@ -410,7 +408,6 @@ async def test_writes_authorized_before_a_deletion_are_refused_after_it():
                 expected_version=1,
                 name="Too late",
                 description="",
-                visibility="private",
                 prompts=(PromptListEntryInput(answer="otter"),),
             )
         with pytest.raises(AvatarError):

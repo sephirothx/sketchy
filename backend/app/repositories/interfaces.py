@@ -511,7 +511,6 @@ class OwnedPromptList:
     description: str
     language: str
     visibility: str
-    share_code: str | None
     moderation_state: str
     version: int
     prompt_count: int
@@ -551,21 +550,6 @@ class CopiedFrom:
     list_id: str | None = None
     name: str | None = None
     owner_display_name: str | None = None
-
-
-@dataclass(frozen=True)
-class SharedPromptList:
-    """Capability-resolved list content safe to show to a signed-in player."""
-
-    id: str
-    slug: str
-    name: str
-    description: str
-    language: str
-    prompt_count: int
-    is_bundled: bool
-    version: int
-    prompts: tuple[PromptListEntry, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -983,7 +967,6 @@ class PromptListRepository(ABC):
         slugs: list[str],
         *,
         requesting_user_id: str | None = None,
-        share_codes: Sequence[str] = (),
         expected_language: str | None = None,
     ) -> ResolvedPromptSelection:
         """Resolve an authorized, language-homogeneous list selection.
@@ -1000,7 +983,6 @@ class PromptListRepository(ABC):
         slugs: list[str],
         *,
         requesting_user_id: str | None = None,
-        share_codes: Sequence[str] = (),
         expected_language: str | None = None,
     ) -> PinnedPromptSelection:
         """Validate and pin a selection without reading its prompts.
@@ -1042,11 +1024,6 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_shared(self, share_code: str) -> SharedPromptList | None:
-        """Resolve active unlisted-list content by its explicit bearer code."""
-        ...
-
-    @abstractmethod
     async def create_owned(
         self,
         owner_user_id: str,
@@ -1054,7 +1031,6 @@ class PromptListRepository(ABC):
         name: str,
         description: str,
         language: str,
-        visibility: str,
         prompts: Sequence[PromptListEntryInput],
         tags: Sequence[str] = (),
     ) -> OwnedPromptList:
@@ -1070,7 +1046,6 @@ class PromptListRepository(ABC):
         expected_version: int,
         name: str,
         description: str,
-        visibility: str,
         prompts: Sequence[PromptListEntryInput],
         tags: Sequence[str] = (),
     ) -> OwnedPromptList:

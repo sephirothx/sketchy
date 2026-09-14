@@ -16,7 +16,6 @@ from app.repositories.interfaces import (
     CopiedFrom,
     OwnedPromptList,
     PromptListSummary,
-    SharedPromptList,
     PromptStatsSummary,
     UserData,
     UserStats,
@@ -278,7 +277,6 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         "language": prompt_list.language,
         "isBundled": False,
         "visibility": prompt_list.visibility,
-        "shareCode": prompt_list.share_code,
         "moderationState": prompt_list.moderation_state,
         "version": prompt_list.version,
         "promptCount": prompt_list.prompt_count,
@@ -301,20 +299,6 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
                 "prompt": entry.answer,
                 "aliases": list(entry.aliases),
                 "moderationState": entry.moderation_state,
-            }
-            for entry in prompt_list.prompts
-        ],
-    }
-
-
-def shared_prompt_list_payload(prompt_list: SharedPromptList) -> dict:
-    """Expose report targets without returning the bearer share code or owner."""
-    return {
-        **prompt_list_payload(prompt_list),
-        "prompts": [
-            {
-                "promptVersionId": entry.prompt_version_id,
-                "prompt": entry.answer,
             }
             for entry in prompt_list.prompts
         ],

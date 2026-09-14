@@ -217,20 +217,19 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
     assert "chat_message" not in events
 
 
-async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
+async def test_owned_list_authority_reaches_the_store_and_share_codes_are_refused():
     class AuthorizingPromptListRepo(StubPromptListRepo):
         def __init__(self):
             super().__init__(("capybara",), revision_ids=("revision-user-1",))
             self.authorization = None
 
         async def authorize_selection(
-            self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
+            self, slugs, *, requesting_user_id=None, expected_language=None
         ):
-            self.authorization = (requesting_user_id, tuple(share_codes))
+            self.authorization = requesting_user_id
             return await super().authorize_selection(
                 slugs,
                 requesting_user_id=requesting_user_id,
-                share_codes=share_codes,
             )
 
     room_manager = RoomManager()
@@ -246,7 +245,9 @@ async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
     sio.enter_room = AsyncMock()
     sio.emit = AsyncMock()
 
-    response = await sio.handlers["/"]["create_room"](
+    # A list is private or published (R-LIST-03), so there is no bearer code
+    # left to present, and a payload still carrying one is refused outright.
+    refused = await sio.handlers["/"]["create_room"](
         "host-sid",
         {
             "nickname": "Ignored",
@@ -254,15 +255,16 @@ async def test_owned_and_shared_list_authority_never_leaks_into_room_payloads():
             "promptListShareCodes": ["bearer-secret"],
         },
     )
+    assert refused["ok"] is False
+    assert prompts.authorization is None
+
+    response = await sio.handlers["/"]["create_room"](
+        "host-sid",
+        {"nickname": "Ignored", "promptListSlugs": ["user-private-list"]},
+    )
 
     assert response["ok"] is True
-    assert prompts.authorization == ("user-1", ("bearer-secret",))
-    room = room_manager.get_room(response["roomId"])
-    assert room is not None
-    assert room.prompt_list_share_codes == ["bearer-secret"]
-    assert "promptListShareCodes" not in room.to_state_payload()
-    assert "promptListShareCodes" not in editable_room_settings_payload(room)
-    assert "bearer-secret" not in repr(room)
+    assert prompts.authorization == "user-1"
 
 
 def build_settings_room(room_manager, prompt_list_repo, **room_kwargs):
@@ -556,14 +558,13 @@ async def test_starting_waits_for_a_settings_change_that_arrived_first():
 
     class BlockingPromptListRepo(StubPromptListRepo):
         async def authorize_selection(
-            self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
+            self, slugs, *, requesting_user_id=None, expected_language=None
         ):
             reading.set()
             await finish_reading.wait()
             return await super().authorize_selection(
                 slugs,
                 requesting_user_id=requesting_user_id,
-                share_codes=share_codes,
             )
 
     ctx.prompt_list_repo = BlockingPromptListRepo()
@@ -1121,7 +1122,7 @@ class UnreachablePromptListRepo:
         self.reads = 0
 
     async def authorize_selection(
-        self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
+        self, slugs, *, requesting_user_id=None, expected_language=None
     ):
         self.reads += 1
         raise RuntimeError("prompt store is unreachable")

@@ -1,7 +1,7 @@
 """A published list is playable by anyone, on the one predicate (R-LIST-15).
 
-Before #744 a room could admit a list on three grounds - bundled, owned, or
-unlisted with its share code - and `public` was none of them. Discovery without
+Before #744 a room could admit a list on two grounds that still stand - bundled
+or owned - and `public` was not one of them. Discovery without
 this issue would have been a shop window: browse, star, fork, and then have to
 own a copy before anybody could play it, spending R-LIST-04's allowance of 25
 on lists nobody wanted to keep.
@@ -53,7 +53,6 @@ async def a_published_list(prompts, users, factory, name: str = "Published"):
         name=name,
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     async with factory() as session:
@@ -156,8 +155,8 @@ async def test_retiring_a_published_list_takes_it_out_of_play_too(env):
         )
 
 
-async def test_the_three_older_refusals_still_refuse(env):
-    """The fourth ground is an addition, not a loosening."""
+async def test_a_private_list_still_refuses_a_stranger(env):
+    """Publication is an addition, not a loosening."""
     prompts, users, factory = env
     guest = await users.create_anonymous("Author")
     author = await users.claim_account(guest.id, "Author", "test-hash")
@@ -166,16 +165,7 @@ async def test_the_three_older_refusals_still_refuse(env):
         name="Private",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
-    )
-    unlisted = await prompts.create_owned(
-        author.id,
-        name="Unlisted",
-        description="",
-        language="en",
-        visibility="unlisted",
-        prompts=(PromptListEntryInput(answer="badger"),),
     )
     stranger = await users.create_anonymous("Stranger")
 
@@ -184,16 +174,9 @@ async def test_the_three_older_refusals_still_refuse(env):
             [private.slug], requesting_user_id=stranger.id
         )
     with pytest.raises(PromptListSelectionError):
-        await prompts.resolve_selection(
-            [unlisted.slug], requesting_user_id=stranger.id
+        await prompts.authorize_selection(
+            [private.slug], requesting_user_id=stranger.id
         )
-    # And with the code, the unlisted one still resolves.
-    resolved = await prompts.resolve_selection(
-        [unlisted.slug],
-        requesting_user_id=stranger.id,
-        share_codes=[unlisted.share_code],
-    )
-    assert list(resolved.prompts) == ["badger"]
 
 
 async def test_a_list_under_review_is_not_playable_even_though_it_is_public(env):

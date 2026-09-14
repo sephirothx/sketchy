@@ -26,7 +26,6 @@ const emptySettings: EditableRoomSettings = {
   colorMode: DEFAULT_COLOR_MODE,
   promptLanguage: "en",
   promptListSlugs: ["english_standard"],
-  promptListShareCodes: [],
 };
 
 function toFormValues(settings: EditableRoomSettings): RoomSetupValues {
@@ -38,7 +37,6 @@ function toFormValues(settings: EditableRoomSettings): RoomSetupValues {
     drawingSeconds: settings.drawingSeconds,
     promptLanguage: settings.promptLanguage,
     promptListSlugs: settings.promptListSlugs || ["english_standard"],
-    promptListShareCodes: settings.promptListShareCodes || [],
     allowedTools: settings.allowedTools,
     colorMode: settings.colorMode,
     scoringMode: settings.scoringMode,

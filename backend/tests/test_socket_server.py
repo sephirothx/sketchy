@@ -332,7 +332,6 @@ def _largest_create_room(text: str) -> str:
         "allowedTools": ["brush", "fill", "shapes"],
         "colorMode": "all",
         "promptListSlugs": ["english_standard", "english_extended"],
-        "promptListShareCodes": [],
     }
     return payload, json_module
 

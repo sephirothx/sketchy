@@ -98,14 +98,13 @@ async def test_a_refused_create_keeps_the_seat_the_socket_already_had():
             super().__init__(("apple", "boat"))
 
         async def authorize_selection(
-            self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
+            self, slugs, *, requesting_user_id=None, expected_language=None
         ):
             if "safari" in slugs:
                 raise RuntimeError("prompt store is unreachable")
             return await super().authorize_selection(
                 slugs,
                 requesting_user_id=requesting_user_id,
-                share_codes=share_codes,
             )
 
     room_manager = RoomManager()

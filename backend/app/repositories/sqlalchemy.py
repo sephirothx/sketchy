@@ -6,7 +6,6 @@ from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
-import secrets
 from uuid import UUID
 
 from sqlalchemy import and_, delete, desc, exists, func, or_, select, update
@@ -133,7 +132,6 @@ from app.repositories.interfaces import (
     PromptListSelectionError,
     PromptSeedConflictError,
     PromptListSummary,
-    SharedPromptList,
     OwnedPromptList,
     PromptStatsSummary,
     PromptUsage,
@@ -452,7 +450,6 @@ def _to_owned_prompt_list(
         description=wl.description,
         language=wl.language,
         visibility=wl.visibility,
-        share_code=wl.share_code,
         moderation_state=wl.moderation_state,
         version=wl.version,
         prompt_count=len(prompts) if prompt_count is None else prompt_count,
@@ -2592,8 +2589,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
 
     @staticmethod
     def _clean_owned_metadata(
-        *, name: str, description: str, language: str, visibility: str
-    ) -> tuple[str, str, str, str]:
+        *, name: str, description: str, language: str
+    ) -> tuple[str, str, str]:
         name = " ".join(name.split())
         description = " ".join(description.split())
         if not name or len(name) > 64:
@@ -2604,24 +2601,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             language = validate_prompt_language(language)
         except ValueError as error:
             raise PromptListMutationError(str(error)) from error
-        if visibility not in {
-            PromptListVisibility.PRIVATE.value,
-            PromptListVisibility.UNLISTED.value,
-        }:
-            raise PromptListMutationError(
-                "Player prompt lists may be private or unlisted."
-            )
-        return name, description, language, visibility
-
-    async def _new_share_code(self, session: AsyncSession) -> str:
-        for _ in range(8):
-            code = secrets.token_urlsafe(9)
-            exists = await session.scalar(
-                select(PromptList.id).where(PromptList.share_code == code)
-            )
-            if exists is None:
-                return code
-        raise PromptListMutationError("Could not generate a share code. Try again.")
+        return name, description, language
 
     async def list_community(
         self,
@@ -3006,54 +2986,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             return await self._owned_with_entries(session, owner_id, list_id)
 
-    async def get_shared(self, share_code: str) -> SharedPromptList | None:
-        async with self._session_factory() as session:
-            prompt_list = await session.scalar(
-                select(PromptList).where(
-                    PromptList.share_code == share_code,
-                    PromptList.visibility == PromptListVisibility.UNLISTED.value,
-                    PromptList.moderation_state
-                    == PromptContentModerationState.ACTIVE.value,
-                    PromptList.is_bundled.is_(False),
-                    PromptList.deleted_at.is_(None),
-                )
-            )
-            if prompt_list is None:
-                return None
-            revision = await session.scalar(
-                select(PromptListRevision)
-                .where(
-                    PromptListRevision.prompt_list_id == prompt_list.id,
-                    PromptListRevision.version == prompt_list.version,
-                )
-                .options(
-                    selectinload(PromptListRevision.items).selectinload(
-                        PromptListRevisionItem.prompt_version
-                    )
-                )
-            )
-            entries = tuple(
-                PromptListEntry(
-                    concept_id=_public_id(item.prompt_version.concept_id),
-                    prompt_version_id=_public_id(item.prompt_version.id),
-                    answer=item.prompt_version.canonical_answer,
-                )
-                for item in (revision.items if revision else ())
-                if item.prompt_version.moderation_state
-                == PromptContentModerationState.ACTIVE.value
-            )
-            return SharedPromptList(
-                id=_public_id(prompt_list.id),
-                slug=prompt_list.slug,
-                name=prompt_list.name,
-                description=prompt_list.description,
-                language=prompt_list.language,
-                prompt_count=len(entries),
-                is_bundled=False,
-                version=prompt_list.version,
-                prompts=entries,
-            )
-
     async def create_owned(
         self,
         owner_user_id: str,
@@ -3061,7 +2993,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         name: str,
         description: str,
         language: str,
-        visibility: str,
         prompts: Sequence[PromptListEntryInput],
         tags: Sequence[str] = (),
     ) -> OwnedPromptList:
@@ -3069,11 +3000,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         if owner_id is None:
             raise PromptListMutationError("Invalid owner.")
         tag_slugs = self._clean_owned_tags(tags)
-        name, description, language, visibility = self._clean_owned_metadata(
-            name=name,
-            description=description,
-            language=language,
-            visibility=visibility,
+        name, description, language = self._clean_owned_metadata(
+            name=name, description=description, language=language
         )
         entries = self._clean_owned_entries(prompts, language=language)
         if any(entry.concept_id for entry in entries):
@@ -3105,12 +3033,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     description=description,
                     language=language,
                     is_bundled=False,
-                    visibility=visibility,
-                    share_code=(
-                        await self._new_share_code(session)
-                        if visibility == PromptListVisibility.UNLISTED.value
-                        else None
-                    ),
+                    # Every list starts private; publishing is the only way
+                    # out of it (R-LIST-02, R-LIST-11).
+                    visibility=PromptListVisibility.PRIVATE.value,
                     moderation_state=PromptContentModerationState.ACTIVE.value,
                     version=1,
                 )
@@ -3135,7 +3060,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         expected_version: int,
         name: str,
         description: str,
-        visibility: str,
         prompts: Sequence[PromptListEntryInput],
         tags: Sequence[str] = (),
     ) -> OwnedPromptList:
@@ -3159,32 +3083,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if prompt_list is None:
                     raise PromptListNotFoundError("Prompt list not found.")
-                published = (
-                    prompt_list.visibility == PromptListVisibility.PUBLIC.value
+                # A save never changes visibility. Publishing is an act with a
+                # gate, a rate limit and an audit event (R-LIST-11), and a save
+                # that carried it either way would be a route around all three
+                # - out of the catalogue as a side effect of fixing a typo, or
+                # into it without the review. `publish` and `unpublish` are
+                # the only ways across.
+                name, description, _ = self._clean_owned_metadata(
+                    name=name,
+                    description=description,
+                    language=prompt_list.language,
                 )
-                if published:
-                    # An ordinary save leaves publication alone. Publishing is
-                    # an act with a gate, a rate limit and an audit event
-                    # (R-LIST-11), and letting a save carry `visibility` either
-                    # way would be a route around all three - in this direction
-                    # it would take a list out of the catalogue as a side
-                    # effect of fixing a typo. `unpublish` is how it leaves.
-                    visibility = PromptListVisibility.PUBLIC.value
-                    name, description, language, _ = self._clean_owned_metadata(
-                        name=name,
-                        description=description,
-                        language=prompt_list.language,
-                        visibility=PromptListVisibility.PRIVATE.value,
-                    )
-                else:
-                    name, description, language, visibility = (
-                        self._clean_owned_metadata(
-                            name=name,
-                            description=description,
-                            language=prompt_list.language,
-                            visibility=visibility,
-                        )
-                    )
                 entries = self._clean_owned_entries(
                     prompts, language=prompt_list.language
                 )
@@ -3197,10 +3106,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 metadata_changed = (
                     prompt_list.name != name
                     or prompt_list.description != description
-                    or prompt_list.visibility != visibility
                     # Tags belong to the revision, so changing them is a change
                     # of content and earns one, exactly as R-LIST-05 says a
-                    # name or visibility change does.
+                    # name change does.
                     or current.tags != tag_slugs
                 )
                 next_version = prompt_list.version + 1
@@ -3221,15 +3129,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     return result
                 prompt_list.name = name
                 prompt_list.description = description
-                if visibility == PromptListVisibility.UNLISTED.value:
-                    prompt_list.share_code = (
-                        prompt_list.share_code or await self._new_share_code(session)
-                    )
-                elif visibility == PromptListVisibility.PRIVATE.value:
-                    prompt_list.share_code = None
-                # A published list keeps the `None` that publishing set: it is
-                # reached by identity, so there is no capability to reissue.
-                prompt_list.visibility = visibility
                 prompt_list.version = next_version
                 prompt_list.updated_at = datetime.now(timezone.utc)
             result = await self._owned_with_entries(session, owner_id, list_id)
@@ -3376,11 +3275,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
     ) -> int:
         """Star or unstar a **published** list (R-LIST-16).
 
-        Published only, and that narrowing is the design rather than a
-        restriction: a star row is durable, so a star on an Unlisted list
-        would be lasting evidence that its owner holds that list's bearer
-        share code - the disclosure R-LIST-03 exists to prevent. Refusing the
-        target removes the problem instead of mitigating it.
+        Published only, because a star is a public act about a public thing:
+        a star on a private list would be lasting evidence that the starrer
+        could see it, which only its owner can.
 
         Starring one's own list is allowed. It is a bookmark as much as a
         vote, and a rule against it would be a rule nobody can enforce anyway
@@ -3490,10 +3387,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         )
                     prompt_list.visibility = PromptListVisibility.PUBLIC.value
                     prompt_list.published_at = datetime.now(timezone.utc)
-                    # A published list is reached by identity, not by bearer
-                    # capability, so the share code it may have been carrying
-                    # has nothing left to authorize (R-LIST-03).
-                    prompt_list.share_code = None
                     if under_review:
                         prompt_list.moderation_state = (
                             PromptContentModerationState.UNDER_REVIEW.value
@@ -3897,7 +3790,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         slugs: list[str],
         *,
         requesting_user_id: str | None,
-        share_codes: Sequence[str],
         load_items: bool,
         expected_language: str | None = None,
     ) -> tuple[list[PromptListRevision], str]:
@@ -3909,7 +3801,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         `load_items` is the only difference - pinning does not read the prompts.
         """
         requester_id = _optional_entity_id(requesting_user_id)
-        supplied_share_codes = set(share_codes)
         list_rows = (
             await session.execute(
                 select(
@@ -3919,7 +3810,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptList.is_bundled,
                     PromptList.owner_user_id,
                     PromptList.visibility,
-                    PromptList.share_code,
                     PromptList.moderation_state,
                 )
                 .where(PromptList.slug.in_(slugs), PromptList.deleted_at.is_(None))
@@ -3932,11 +3822,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             and (
                 row.is_bundled
                 or (requester_id is not None and row.owner_user_id == requester_id)
-                or (
-                    row.visibility == PromptListVisibility.UNLISTED.value
-                    and row.share_code in supplied_share_codes
-                )
-                # Published: the fourth ground a room may admit a list on
+                # Published: the third ground a room may admit a list on
                 # (R-LIST-15). It needs no capability because publishing is
                 # the owner saying so, and it is checked here rather than at
                 # the picker so that Start re-checks it too - which is what
@@ -3995,7 +3881,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         slugs: list[str],
         *,
         requesting_user_id: str | None = None,
-        share_codes: Sequence[str] = (),
         expected_language: str | None = None,
     ) -> ResolvedPromptSelection:
         if not slugs:
@@ -4005,7 +3890,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 session,
                 slugs,
                 requesting_user_id=requesting_user_id,
-                share_codes=share_codes,
                 load_items=True,
                 expected_language=expected_language,
             )
@@ -4073,7 +3957,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         slugs: list[str],
         *,
         requesting_user_id: str | None = None,
-        share_codes: Sequence[str] = (),
         expected_language: str | None = None,
     ) -> PinnedPromptSelection:
         if not slugs:
@@ -4083,7 +3966,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 session,
                 slugs,
                 requesting_user_id=requesting_user_id,
-                share_codes=share_codes,
                 load_items=False,
                 expected_language=expected_language,
             )

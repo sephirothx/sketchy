@@ -4,7 +4,7 @@ import {
   submitPromptContentReport,
   type PromptContentReportReason,
 } from "../lib/promptLists";
-import type { SharedPromptList } from "../types";
+import type { CommunityPromptListDetail } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -19,17 +19,14 @@ const REASONS: Array<{ value: PromptContentReportReason; label: string }> = [
 
 interface PromptContentReportDialogProps {
   /** Enough of a list to report it: the target, and the prompts to name one. */
-  promptList: Pick<SharedPromptList, "id" | "name" | "prompts">;
-  /** The capability an Unlisted list is reached by. A **published** list is
-  reported by identity and has none — publishing revoked it (R-LIST-03). */
-  shareCode?: string;
+  /** Only a published list can be reported: nobody else can see a private one. */
+  promptList: Pick<CommunityPromptListDetail, "id" | "name" | "prompts">;
   onClose: () => void;
   onSubmitted: () => void;
 }
 
 export function PromptContentReportDialog({
   promptList,
-  shareCode,
   onClose,
   onSubmitted,
 }: PromptContentReportDialogProps) {
@@ -56,7 +53,6 @@ export function PromptContentReportDialog({
       await submitPromptContentReport({
         promptListId: promptList.id,
         promptVersionId: target === "list" ? undefined : target,
-        shareCode,
         reason,
         details: details.trim(),
       });

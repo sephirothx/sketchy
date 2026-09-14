@@ -9,9 +9,8 @@ another player's history must not lose its provenance because its author
 tidied up (R-PRIV-05). What they were protecting against was the wrong
 deletion.
 
-So a list is **retired**, not deleted: `deleted_at` is set, the share code is
-revoked, the visibility falls back to private, and the current-display
-`prompts` rows go. From that moment nothing lists, opens, resolves or forks
+So a list is **retired**, not deleted: `deleted_at` is set, the visibility
+falls back to private, and the current-display `prompts` rows go. From that moment nothing lists, opens, resolves or forks
 it (R-LIST-01's "delete"). The immutable revisions stay behind exactly as
 long as something pins them. `reclaim_retired_prompt_lists` runs from the
 hourly retention sweep and, for lists retired longer than
@@ -76,7 +75,6 @@ async def retire_prompt_list(
     """
     retired_at = now or datetime.now(timezone.utc)
     prompt_list.deleted_at = retired_at
-    prompt_list.share_code = None
     prompt_list.visibility = PromptListVisibility.PRIVATE.value
     if erase_copy:
         prompt_list.name = RETIRED_LIST_NAME

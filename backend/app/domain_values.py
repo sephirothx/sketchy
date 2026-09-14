@@ -134,7 +134,6 @@ class PromptContentRating(StrEnum):
 
 class PromptListVisibility(StrEnum):
     PRIVATE = "private"
-    UNLISTED = "unlisted"
     PUBLIC = "public"
 
 

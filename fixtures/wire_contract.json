@@ -192,14 +192,6 @@
       "title": "Promptlanguage",
       "type": "string"
      },
-     "promptListShareCodes": {
-      "items": {
-       "type": "string"
-      },
-      "maxItems": 20,
-      "title": "Promptlistsharecodes",
-      "type": "array"
-     },
      "promptListSlugs": {
       "items": {
        "type": "string"
@@ -955,22 +947,6 @@
       "default": null,
       "title": "Name"
      },
-     "promptListShareCodes": {
-      "anyOf": [
-       {
-        "items": {
-         "type": "string"
-        },
-        "maxItems": 20,
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "default": null,
-      "title": "Promptlistsharecodes"
-     },
      "promptListSlugs": {
       "anyOf": [
        {
@@ -1665,7 +1641,6 @@
    "isPublic",
    "maxPlayers",
    "promptLanguage",
-   "promptListShareCodes",
    "promptListSlugs",
    "scoringMode",
    "spectatorsSeePrompt"
@@ -1760,7 +1735,6 @@
    "moderationState",
    "promptCount",
    "promptVersionId",
-   "shareCode",
    "starCount",
    "updatedAt"
   ],
@@ -1784,9 +1758,6 @@
    "isOnline",
    "lastSeenAt",
    "nameColor"
-  ],
-  "api.serializers:shared_prompt_list_payload": [
-   "promptVersionId"
   ],
   "api.serializers:stats_payload": [
    "averageScore",
@@ -1920,7 +1891,6 @@
    "promptVersion",
    "promptVersionId",
    "publishedAt",
-   "shareCode",
    "updatedAt"
   ],
   "auth.account_data:_retained_message_document": [
@@ -2593,7 +2563,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 22,
+ "protocolVersion": 23,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2737,7 +2707,6 @@
    "no_such_drawing",
    "drawing_unreadable",
    "prompt_list_not_found",
-   "shared_prompt_list_not_found",
    "prompt_list_conflict",
    "prompt_list_invalid",
    "prompt_list_forbidden",

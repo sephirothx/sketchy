@@ -62,7 +62,6 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
             name="Party animals",
             description="Our recurring list",
             language="en",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="red panda"),
                 PromptListEntryInput(answer="otter"),
@@ -72,7 +71,6 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
         assert UUID(created.id).version == 7
         assert created.version == 1
         assert created.visibility == "private"
-        assert created.share_code is None
         assert [entry.answer for entry in created.prompts] == ["red panda", "otter"]
         assert all(UUID(entry.concept_id).version == 7 for entry in created.prompts)
         assert await repo.list_all() == []  # never leaks into the public catalogue
@@ -93,7 +91,6 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
             expected_version=1,
             name="Party animals",
             description="Revised",
-            visibility="unlisted",
             prompts=(
                 PromptListEntryInput(
                     concept_id=panda.concept_id,
@@ -104,7 +101,8 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
             ),
         )
         assert updated.version == 2
-        assert updated.share_code and len(updated.share_code) >= 8
+        # A save never takes a list out of private; publishing does (R-LIST-02).
+        assert updated.visibility == "private"
         assert updated.prompts[0].concept_id == panda.concept_id
         assert updated.prompts[0].prompt_version_id != panda.prompt_version_id
         assert updated.prompts[0].aliases == ("panda",)
@@ -137,18 +135,15 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
                 expected_version=1,
                 name="Stale",
                 description="",
-                visibility="private",
                 prompts=(PromptListEntryInput(answer="apple"),),
             )
 
-        shared = await repo.get_shared(updated.share_code)
-        assert shared is not None and shared.slug == created.slug
         with pytest.raises(PromptListSelectionError):
-            await repo.resolve_selection([created.slug])
-        shared_selection = await repo.resolve_selection(
-            [created.slug], share_codes=(updated.share_code,)
+            await repo.resolve_selection([created.slug], requesting_user_id=other_id)
+        owner_selection = await repo.resolve_selection(
+            [created.slug], requesting_user_id=owner_id
         )
-        assert shared_selection.prompts == ("giant panda", "capybara")
+        assert owner_selection.prompts == ("giant panda", "capybara")
     finally:
         await engine.dispose()
 
@@ -162,7 +157,6 @@ async def test_only_the_owner_can_delete_a_player_list():
             name="Mine",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="apple"),),
         )
         assert await repo.delete_owned(other_id, created.id) is False
@@ -187,7 +181,6 @@ async def test_an_owned_list_revision_is_priced_when_it_is_written():
             name="Mine",
             description="",
             language="en",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="banjo"),
                 PromptListEntryInput(answer="kazoo"),
@@ -225,7 +218,6 @@ async def test_pinning_refuses_the_colliding_selections_resolution_refuses():
             name="First",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
         # A different list whose alias reaches the same answer.
@@ -234,7 +226,6 @@ async def test_pinning_refuses_the_colliding_selections_resolution_refuses():
             name="Second",
             description="",
             language="en",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="river weasel", aliases=("otter",)),
             ),
@@ -266,7 +257,6 @@ async def test_pinning_refuses_a_list_the_requester_may_not_read():
             name="Private",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
 
@@ -301,7 +291,6 @@ async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says()
             name="Mine",
             description="",
             language="en",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="banjo"),
                 PromptListEntryInput(answer="kazoo"),
@@ -326,7 +315,6 @@ async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says()
             expected_version=created.version,
             name="Mine",
             description="",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="banjo"),
                 PromptListEntryInput(answer="kazoo"),
@@ -452,7 +440,6 @@ async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance(
             name="Played once",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
         revision_id = await _current_revision_id(factory, created.id)
@@ -480,7 +467,6 @@ async def test_erasing_the_owner_of_a_used_list_succeeds():
             name="Played once",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
         revision_id = await _current_revision_id(factory, created.id)
@@ -536,23 +522,20 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_st
         repo = SqlAlchemyPromptListRepository(factory)
         created = await repo.create_owned(
             owner_id,
-            name="Shared then gone",
+            name="Kept then gone",
             description="",
             language="en",
-            visibility="unlisted",
             prompts=(PromptListEntryInput(answer="otter", aliases=("sea otter",)),),
         )
-        assert created.share_code is not None
         revision_id = await _current_revision_id(factory, created.id)
         await _pin_a_game_to(factory, owner_id, revision_id)
 
         assert await repo.delete_owned(owner_id, created.id) is True
         assert await repo.delete_owned(owner_id, created.id) is False, "retired once"
 
-        # Gone from every way in: the owner's listing, the share code, a room.
+        # Gone from every way in: the owner's listing, its page, a room.
         assert await repo.list_owned(owner_id) == []
         assert await repo.get_owned(owner_id, created.id) is None
-        assert await repo.get_shared(created.share_code) is None
         with pytest.raises(PromptListSelectionError, match="not found"):
             await repo.resolve_selection([created.slug], requesting_user_id=owner_id)
         # A retired list does not count against the owner's allowance.
@@ -562,7 +545,6 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_st
                 name=f"Fresh {index}",
                 description="",
                 language="en",
-                visibility="private",
                 prompts=(PromptListEntryInput(answer=f"answer {index}"),),
             )
 
@@ -579,7 +561,7 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_st
         assert result.backlog == 0, "a permanent tombstone is exempt, not overdue"
         async with factory() as session:
             tombstone = await session.get(PromptList, UUID(created.id))
-            assert tombstone is not None and tombstone.share_code is None
+            assert tombstone is not None and tombstone.visibility == "private"
             assert tombstone.deleted_at is not None
             assert await session.get(PromptListRevision, UUID(revision_id)) is not None
             assert (
@@ -609,7 +591,6 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
             name="Played while deleted",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
         pinned = await repo.authorize_selection([created.slug], requesting_user_id=owner_id)
@@ -642,7 +623,6 @@ async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind(
                 name=f"Scratch {round_number}",
                 description="",
                 language="en",
-                visibility="private",
                 prompts=(
                     PromptListEntryInput(answer="otter", aliases=("sea otter",)),
                     PromptListEntryInput(answer="heron"),
@@ -654,7 +634,6 @@ async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind(
                 expected_version=1,
                 name=f"Scratch {round_number}",
                 description="",
-                visibility="private",
                 prompts=(PromptListEntryInput(answer="heron"),),
             )
             assert await repo.delete_owned(owner_id, created.id) is True
@@ -694,7 +673,6 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
             name="Reported",
             description="",
             language="en",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="reported answer"),
                 PromptListEntryInput(answer="harmless answer"),
@@ -760,7 +738,6 @@ async def _big_list(repo, owner_id: str, size: int = 500):
         name="Big",
         description="",
         language="en",
-        visibility="private",
         prompts=tuple(PromptListEntryInput(answer=f"prompt {index:03d}") for index in range(size)),
     )
 
@@ -781,7 +758,6 @@ async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
             name="Same",
             description="d",
             language="en",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="otter", aliases=("sea otter",)),
                 PromptListEntryInput(answer="heron"),
@@ -794,7 +770,6 @@ async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
             expected_version=1,
             name="Same",
             description="d",
-            visibility="private",
             prompts=_restated(created),
         )
         assert same.version == 1 and same.prompts == created.prompts
@@ -812,12 +787,12 @@ async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
         with pytest.raises(PromptListConflictError):
             await repo.update_owned(
                 owner_id, created.id, expected_version=7, name="Same", description="d",
-                visibility="private", prompts=_restated(created),
+                prompts=_restated(created),
             )
         # A metadata-only edit is still an edit (R-LIST-05): a revision, a version.
         renamed = await repo.update_owned(
             owner_id, created.id, expected_version=1, name="Renamed", description="d",
-            visibility="private", prompts=_restated(created),
+            prompts=_restated(created),
         )
         assert renamed.version == 2 and renamed.name == "Renamed"
     finally:
@@ -835,7 +810,7 @@ async def test_a_one_answer_edit_in_a_big_list_rewrites_one_display_row():
 
         updated = await repo.update_owned(
             owner_id, created.id, expected_version=1, name="Big", description="",
-            visibility="private", prompts=tuple(entries),
+            prompts=tuple(entries),
         )
 
         assert updated.version == 2
@@ -853,14 +828,13 @@ async def test_swapped_answers_and_alias_only_edits_still_land():
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         created = await repo.create_owned(
-            owner_id, name="Swap", description="", language="en", visibility="private",
+            owner_id, name="Swap", description="", language="en",
             prompts=(PromptListEntryInput(answer="one"), PromptListEntryInput(answer="two"),
                      PromptListEntryInput(answer="three")),
         )
         one, two, three = created.prompts
         swapped = await repo.update_owned(
             owner_id, created.id, expected_version=1, name="Swap", description="",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="two", concept_id=one.concept_id),
                 PromptListEntryInput(answer="one", concept_id=two.concept_id),
@@ -873,7 +847,6 @@ async def test_swapped_answers_and_alias_only_edits_still_land():
 
         aliased = await repo.update_owned(
             owner_id, created.id, expected_version=2, name="Swap", description="",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="two", concept_id=one.concept_id, aliases=("deux",)),
                 PromptListEntryInput(answer="one", concept_id=two.concept_id),
@@ -885,7 +858,6 @@ async def test_swapped_answers_and_alias_only_edits_still_land():
         # changed prompt's old text, both land.
         reused = await repo.update_owned(
             owner_id, created.id, expected_version=3, name="Swap", description="",
-            visibility="private",
             prompts=(
                 PromptListEntryInput(answer="four", concept_id=one.concept_id),
                 PromptListEntryInput(answer="two"),

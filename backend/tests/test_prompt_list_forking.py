@@ -78,7 +78,6 @@ async def a_published_list(prompts, factory, owner_id: str, **kwargs):
         name=kwargs.get("name", "Source"),
         description="Worth copying",
         language="en",
-        visibility="private",
         prompts=kwargs.get(
             "prompts",
             (
@@ -182,7 +181,6 @@ async def test_only_a_published_list_can_be_forked(env):
         name="Private",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     hidden = await a_published_list(prompts, factory, author.id, name="Hidden")
@@ -208,7 +206,6 @@ async def test_the_cap_refuses_visibly_and_writes_nothing(env):
             name=f"Mine {index}",
             description="",
             language="en",
-            visibility="private",
             prompts=(PromptListEntryInput(answer=f"thing {index}"),),
         )
     await sign_in(http, factory, forker.id)

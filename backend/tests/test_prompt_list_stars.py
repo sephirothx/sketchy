@@ -3,10 +3,8 @@
 Two rules do most of the work here. A star is a **fact** rather than a counter
 (R-LIST-16), so the count is derived from the rows every time and a double
 star, a retry, or a departing account cannot leave a number wrong. And only a
-**published** list can be starred, which is not a restriction so much as the
-removal of a problem: a star row is durable, so one on an Unlisted list would
-be lasting evidence that its owner holds that list's bearer share code -
-exactly what R-LIST-03 keeps out of payloads and logs.
+**published** list can be starred: a star row is durable, so one on a private
+list would be lasting evidence that the starrer could see it.
 """
 from __future__ import annotations
 
@@ -76,7 +74,6 @@ async def a_list(prompts, factory, owner_id: str, *, visibility="public"):
         name="Starrable",
         description="",
         language="en",
-        visibility="private" if visibility == "public" else visibility,
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     if visibility == "public":
@@ -114,18 +111,14 @@ async def test_starring_is_idempotent_in_both_directions(env):
 
 
 async def test_only_a_published_list_can_be_starred(env):
-    """The narrowing that keeps a star from disclosing a share code."""
+    """The narrowing that keeps a star from disclosing a private list."""
     http, users, prompts, factory = env
     owner = await verified(users, factory, "Owner")
     reader = await verified(users, factory, "Reader")
     private = await a_list(prompts, factory, owner.id, visibility="private")
-    unlisted = await a_list(prompts, factory, owner.id, visibility="unlisted")
     await sign_in(http, factory, reader.id)
 
     assert (await http.put(f"/api/prompt-lists/{private.id}/star")).status_code == 404
-    assert (
-        await http.put(f"/api/prompt-lists/{unlisted.id}/star")
-    ).status_code == 404
     async with factory() as session:
         assert await session.scalar(
             select(func.count()).select_from(PromptListStar)
