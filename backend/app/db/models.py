@@ -3642,6 +3642,12 @@ class PromptList(Base):
             "visibility <> 'public' OR published_at IS NOT NULL",
             name="ck_prompt_lists_published_at",
         ),
+        # A copy is a player's list: the official catalogue is seeded, never
+        # copied (R-LIST-21).
+        CheckConstraint(
+            "is_copy = false OR is_bundled = false",
+            name="ck_prompt_lists_copy_is_player_owned",
+        ),
         # The catalogue's whole question - published, still active, still
         # here - and the star counts join through it (#712).
         Index(
@@ -3680,6 +3686,13 @@ class PromptList(Base):
     )
     is_bundled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
+    )
+    # That this list was copied from another - and nothing about what from.
+    # `forked_from_revision_id` names the original, and is cleared when its
+    # author deletes it (R-LIST-17); this is what still lets the copy say it
+    # was one, without keeping what that author asked to take away (R-LIST-21).
+    is_copy: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
     )
     visibility: Mapped[str] = mapped_column(
         String(16),

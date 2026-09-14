@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { CheckIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
+import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
@@ -20,7 +21,7 @@ import {
 } from "../lib/promptListDrafts";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { useAuthStore } from "../store/authStore";
-import type { OwnedPromptList, PromptLanguage, PromptTag } from "../types";
+import type { CopiedFrom, OwnedPromptList, PromptLanguage, PromptTag } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -83,6 +84,8 @@ export function MyPromptListsPage() {
   // Numbers only - who starred or copied it is disclosed to nobody, the owner
   // included (R-LIST-16, R-LIST-20).
   const [reach, setReach] = useState({ stars: 0, copies: 0 });
+  // Where this list was copied from, if it was a copy (R-LIST-21).
+  const [copiedFrom, setCopiedFrom] = useState<CopiedFrom | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [shareCode, setShareCode] = useState<string | null>(null);
@@ -142,6 +145,7 @@ export function MyPromptListsPage() {
     setShareCode(null);
     setPublished(false);
     setReach({ stars: 0, copies: 0 });
+    setCopiedFrom(null);
     setModerationState("active");
     setPromptModeration({});
     setDraft({ ...EMPTY_DRAFT, prompts: [] });
@@ -160,6 +164,7 @@ export function MyPromptListsPage() {
       const saved = await setOwnedPromptListPublished(selectedId, !published);
       setPublished(saved.visibility === "public");
       setReach({ stars: saved.starCount, copies: saved.copyCount });
+      setCopiedFrom(saved.copiedFrom);
       setVersion(saved.version);
       setShareCode(saved.shareCode);
       setModerationState(saved.moderationState);
@@ -189,6 +194,7 @@ export function MyPromptListsPage() {
       setShareCode(loaded.shareCode);
       setPublished(loaded.visibility === "public");
       setReach({ stars: loaded.starCount, copies: loaded.copyCount });
+      setCopiedFrom(loaded.copiedFrom);
       setModerationState(loaded.moderationState);
       setPromptModeration(Object.fromEntries(
         loaded.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
@@ -270,6 +276,7 @@ export function MyPromptListsPage() {
       setShareCode(saved.shareCode);
       setPublished(saved.visibility === "public");
       setReach({ stars: saved.starCount, copies: saved.copyCount });
+      setCopiedFrom(saved.copiedFrom);
       setModerationState(saved.moderationState);
       setPromptModeration(Object.fromEntries(
         saved.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
@@ -339,6 +346,14 @@ export function MyPromptListsPage() {
             </button>)}
           </aside>
           <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+            {/* First, above the fields that can be changed: where a list came
+                from is the one thing about it that editing never changes. */}
+            {selectedId && copiedFrom && <CopiedFromCredit
+              credit={copiedFrom}
+              className="prompt-list-credit"
+              sentence={ui.myPromptListsPage.copiedFrom}
+              deletedSentence={ui.myPromptListsPage.copiedFromADeletedList}
+            />}
             {moderationState !== "active" && <p className="prompt-list-moderation-warning" role="status">
               {ui.myPromptListsPage.listUnderReview({
                 state: moderationState.replace("_", " "),

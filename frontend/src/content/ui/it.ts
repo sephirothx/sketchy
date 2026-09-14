@@ -1200,6 +1200,8 @@ export const IT: Catalogue = {
       counted(p.count, { one: "stella", other: "stelle" }),
     copyCount: (p: { count: number }) =>
       counted(p.count, { one: "copia", other: "copie" }),
+    copiedFrom: "Copiata da {list} di {owner}",
+    copiedFromADeletedList: "Copiata da una lista che è stata eliminata",
     showMore: "Mostra altro",
     makeACopy: "Fai una copia",
     report: "Segnala",
@@ -1238,6 +1240,8 @@ export const IT: Catalogue = {
       counted(p.count, { one: "stella", other: "stelle" }),
     copyCount: (p: { count: number }) =>
       counted(p.count, { one: "copia", other: "copie" }),
+    copiedFrom: "Copiata da {list} di {owner}",
+    copiedFromADeletedList: "Copiata da una lista che è stata eliminata",
     publish: "Pubblica",
     unpublish: "Ritira",
     promptListPublished: "Lista di parole pubblicata.",

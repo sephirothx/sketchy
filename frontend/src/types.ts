@@ -66,6 +66,19 @@ export interface OwnedPromptEntry {
   moderationState: "active" | "under_review" | "hidden";
 }
 
+/** The list a copy was taken from, as it is now (R-LIST-21).
+ *
+ * `published`: in the catalogue — named, and `listId` links to it.
+ * `withdrawn`: unpublished by its owner or hidden by a moderator — still named,
+ * never linked. `deleted`: its author deleted it — the copy says only that it
+ * was copied, so `listId`, `name` and `ownerDisplayName` are all null. */
+export interface CopiedFrom {
+  status: "published" | "withdrawn" | "deleted";
+  listId: string | null;
+  name: string | null;
+  ownerDisplayName: string | null;
+}
+
 export interface OwnedPromptList extends PromptListSummary {
   id: string;
   /** `public` is reached by publishing, never by saving (R-LIST-02). */
@@ -78,6 +91,8 @@ export interface OwnedPromptList extends PromptListSummary {
   starCount: number;
   /** How many copies of it still exist — a number, never who made them (R-LIST-20). */
   copyCount: number;
+  /** Where this list was copied from, or null if it was not a copy (R-LIST-21). */
+  copiedFrom: CopiedFrom | null;
   /**
    * The exact revision this list was copied from, if it was one — a revision
    * rather than a list, because both go on being edited. It may name one that
@@ -122,6 +137,8 @@ export interface CommunityPromptList {
  * does: it is what lets a reader report one exact prompt. */
 export interface CommunityPromptListDetail extends CommunityPromptList {
   prompts: SharedPromptEntry[];
+  /** Where a published copy came from, or null for an original (R-LIST-21). */
+  copiedFrom: CopiedFrom | null;
 }
 
 /** One entry of the curated list-tag vocabulary owners choose from. */

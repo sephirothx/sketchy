@@ -1576,7 +1576,7 @@ Deliberately relational rather than a JSON tag blob.
 
 ### `prompt_lists`
 `id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
-`language` · `is_bundled` · `visibility` (`private \| unlisted \| public`) ·
+`language` · `is_bundled` · `is_copy` · `visibility` (`private \| unlisted \| public`) ·
 `share_code` VARCHAR(24) **unique** · `moderation_state` · `moderated_by_user_id` ·
 `moderated_at` · `version` · `published_at` (nullable) · `deleted_at` (indexed,
 nullable) · timestamps.
@@ -1774,6 +1774,14 @@ edit on either side. It may end up naming a revision nothing serves — the sour
 immutable, so the id stays true while the content is out of play. When the source is
 **retired**, the pointer goes: the reclaim sweep deletes unpinned revisions and the
 `SET NULL` clears it.
+
+**`is_copy` is what survives it** (R-LIST-21). A copy credits the list it came from, and once the
+pointer is cleared a copy looked exactly like a list nobody copied, so "copied from a list
+that was deleted" could only be said for the day before the sweep. `is_copy` is set by
+`fork_published`, never cleared, and deliberately a boolean: it says a list was copied and
+nothing about what from — a name, an author or an id would be exactly what the deleted
+list's author asked to take away. `ck_prompt_lists_copy_is_player_owned` keeps it off the
+bundled catalogue.
 
 That is deliberate, and it is why a fork reference is **not** a pin. Pins exist so a
 finished game's provenance survives its content's author tidying up (R-PRIV-05); a fork

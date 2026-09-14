@@ -13,6 +13,7 @@ from app.repositories.interfaces import (
     GameSummary,
     CommunityPromptList,
     CommunityPromptListDetail,
+    CopiedFrom,
     OwnedPromptList,
     PromptListSummary,
     SharedPromptList,
@@ -236,6 +237,20 @@ def community_prompt_list_payload(prompt_list: CommunityPromptList) -> dict:
     }
 
 
+def copied_from_payload(credit: CopiedFrom | None) -> dict | None:
+    """Where a copy came from (R-LIST-21). `listId` is present only while the
+    original is in the catalogue; `name` and `ownerDisplayName` are null only
+    when its author deleted it."""
+    if credit is None:
+        return None
+    return {
+        "status": credit.status,
+        "listId": credit.list_id,
+        "name": credit.name,
+        "ownerDisplayName": credit.owner_display_name,
+    }
+
+
 def community_prompt_list_detail_payload(prompt_list: CommunityPromptListDetail) -> dict:
     """A catalogue row with the prompts in it (R-LIST-19).
 
@@ -246,6 +261,7 @@ def community_prompt_list_detail_payload(prompt_list: CommunityPromptListDetail)
     """
     return {
         **community_prompt_list_payload(prompt_list),
+        "copiedFrom": copied_from_payload(prompt_list.copied_from),
         "prompts": [
             {"promptVersionId": entry.prompt_version_id, "prompt": entry.answer}
             for entry in prompt_list.prompts
@@ -271,6 +287,7 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         # disclosed to nobody, its owner included (R-LIST-16).
         "starCount": prompt_list.star_count,
         "copyCount": prompt_list.copy_count,
+        "copiedFrom": copied_from_payload(prompt_list.copied_from),
         # Where this list was copied from, when it was (R-LIST-17). It may
         # name a revision nothing serves any more; that is the point of
         # recording the revision rather than the list.
