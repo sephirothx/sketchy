@@ -1618,6 +1618,28 @@ erased as authored copy.
 `ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list;
 `ck_prompt_lists_published_at` requires `published_at` on a public one.
 
+**Publication is an act, and the act is what is gated.** `POST .../publish` is its
+own route with its own trust gate (R-LIST-12), rate limit and audit event
+(`prompt_list.published` / `prompt_list.unpublished`, on the `prompt_list` target type
+the ledger already allowed). A `visibility` field on the save would be a way around all
+three, so `update_owned` ignores the visibility a save carries while a list is public —
+without that, fixing a typo would take a list out of the catalogue. Publishing also
+clears `share_code`: a published list is reached by identity, so the bearer capability
+has nothing left to authorize (R-LIST-03).
+
+Unpublishing leaves `moderation_state` alone. Leaving the catalogue is the owner's act
+and moderation is somebody else's; if withdrawal cleared a takedown, unpublishing would
+be the way to launder one.
+
+The operator switch is `app_config['prompt_lists.publication_review']`
+([`services/publication_policy.py`](../backend/app/services/publication_policy.py)):
+with it set, a newly published list lands `under_review` instead of `active` and waits.
+It is read per publish rather than cached, because a cached posture is stale exactly
+when it matters — just after an operator turned it on because something is going wrong —
+and it is **not retroactive**, since sweeping already-published lists into a queue would
+both punish people for a rule that did not exist when they acted and produce, in one
+moment, the backlog this design exists to avoid.
+
 **`published_at` is the record of an act, not a derived date.** Publishing is
 gated, rate-limited and audited (R-LIST-11, R-LIST-12), so the schema refuses a
 public row that carries no moment it became public — the hole worth closing here

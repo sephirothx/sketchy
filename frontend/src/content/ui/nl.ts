@@ -304,6 +304,27 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Iemand anders heeft die lijst gewijzigd. Herlaad hem en probeer het nog eens.",
   prompt_list_invalid: "Deze woordenlijst kon niet opgeslagen worden.",
   prompt_list_forbidden: "Deze woordenlijst is niet van jou om te wijzigen.",
+  email_verification_required: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Om een lijst te publiceren is een bevestigd e-mailadres nodig.";
+      case "star":
+        return "Om een lijst een ster te geven is een bevestigd e-mailadres nodig.";
+      default:
+        return "Daarvoor is een bevestigd e-mailadres nodig.";
+    }
+  },
+  warning_unread: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Voor het publiceren van een lijst moet eerst de waarschuwing van de moderatie gelezen worden.";
+      case "star":
+        return "Voor het geven van een ster moet eerst de waarschuwing van de moderatie gelezen worden.";
+      default:
+        return "Eerst moet de waarschuwing van de moderatie gelezen worden.";
+    }
+  },
+  prompt_list_hidden: "Deze lijst is verborgen en kan niet gepubliceerd worden. Eerst moet de moderatie hem beoordelen.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `„${tag}” is geen label dat een lijst kan hebben.`;
@@ -1148,6 +1169,16 @@ export const NL: Catalogue = {
     "abstract": "Abstract",
   },
   myPromptListsPage: {
+    inCommunityCatalogue: "In de communitycatalogus",
+    notPublished: "Niet gepubliceerd",
+    publishedExplainer: "Iedereen kan deze lijst vinden, ermee spelen, een ster geven of er een eigen kopie van maken.",
+    unpublishedExplainer: "Door te publiceren kan iedereen deze lijst vinden en spelen. Terugtrekken kan op elk moment.",
+    publish: "Publiceren",
+    unpublish: "Terugtrekken",
+    promptListPublished: "Woordenlijst gepubliceerd.",
+    promptListUnpublished: "Woordenlijst teruggetrokken.",
+    couldNotChangePublication: "De publicatiestatus van deze lijst kon niet worden gewijzigd.",
+    published: "Gepubliceerd",
     tags: "Labels",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} van ${p.max} gekozen`,
     tagsAreHowListsAreFound: "Via labels wordt deze lijst in de communitycatalogus gevonden.",

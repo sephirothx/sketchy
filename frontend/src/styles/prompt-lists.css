@@ -175,6 +175,28 @@
   justify-content: space-between;
 }
 
+/* Publication reads as a state with one action, not a third value in the
+   visibility select: it is an act with a gate behind it, and a select would
+   make it look like the same kind of choice as private-or-unlisted. */
+.prompt-list-publication {
+  align-items: center;
+  background: var(--surface-2, transparent);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.prompt-list-publication p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.prompt-list-publication button { flex: none; }
+
 /* The tag picker wraps rather than scrolls: the vocabulary is fixed and small
    enough to show whole, and a set that scrolled would hide the ones already
    chosen. Its chips are the `toggle-chip` from the room-creation form, so

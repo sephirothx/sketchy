@@ -981,6 +981,18 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
+    async def set_owned_publication(
+        self,
+        owner_user_id: str,
+        prompt_list_id: str,
+        *,
+        published: bool,
+        under_review: bool = False,
+    ) -> OwnedPromptList:
+        """Publish or unpublish an owned list as an act of its own (R-LIST-11)."""
+        ...
+
+    @abstractmethod
     async def seed_list_tags(self) -> tuple[str, ...]:
         """Make the curated list-tag vocabulary present (R-LIST-18)."""
         ...

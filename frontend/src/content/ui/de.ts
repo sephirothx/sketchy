@@ -304,6 +304,27 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Jemand anderes hat diese Liste geändert. Lade sie neu und versuch es noch einmal.",
   prompt_list_invalid: "Diese Begriffsliste konnte nicht gespeichert werden.",
   prompt_list_forbidden: "Diese Begriffsliste kannst du nicht ändern.",
+  email_verification_required: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Zum Veröffentlichen einer Liste ist eine bestätigte E-Mail-Adresse nötig.";
+      case "star":
+        return "Zum Vergeben eines Sterns ist eine bestätigte E-Mail-Adresse nötig.";
+      default:
+        return "Dafür ist eine bestätigte E-Mail-Adresse nötig.";
+    }
+  },
+  warning_unread: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Vor dem Veröffentlichen muss die Verwarnung der Moderation gelesen werden.";
+      case "star":
+        return "Vor dem Vergeben eines Sterns muss die Verwarnung der Moderation gelesen werden.";
+      default:
+        return "Zuerst muss die Verwarnung der Moderation gelesen werden.";
+    }
+  },
+  prompt_list_hidden: "Diese Liste ist ausgeblendet und kann nicht veröffentlicht werden. Zuerst muss die Moderation sie prüfen.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `„${tag}“ ist kein Schlagwort, das eine Liste tragen kann.`;
@@ -1148,6 +1169,16 @@ export const DE: Catalogue = {
     "abstract": "Abstraktes",
   },
   myPromptListsPage: {
+    inCommunityCatalogue: "Im Community-Katalog",
+    notPublished: "Nicht veröffentlicht",
+    publishedExplainer: "Alle können diese Liste finden, spielen, mit einem Stern markieren oder eine eigene Kopie anlegen.",
+    unpublishedExplainer: "Veröffentlichen macht diese Liste für alle auffindbar und spielbar. Sie lässt sich jederzeit wieder zurückziehen.",
+    publish: "Veröffentlichen",
+    unpublish: "Zurückziehen",
+    promptListPublished: "Begriffsliste veröffentlicht.",
+    promptListUnpublished: "Begriffsliste zurückgezogen.",
+    couldNotChangePublication: "Der Veröffentlichungsstatus dieser Liste konnte nicht geändert werden.",
+    published: "Veröffentlicht",
     tags: "Schlagwörter",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} von ${p.max} gewählt`,
     tagsAreHowListsAreFound: "Über Schlagwörter wird diese Liste im Community-Katalog gefunden.",

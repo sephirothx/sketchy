@@ -1688,7 +1688,9 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | `GET` | `/api/prompt-lists` | Official catalogue; localized copy selected from `Accept-Language` |
 | `GET` | `/api/prompt-tags` | `{tags: [{slug, name}], maxPerList}` — the curated vocabulary a list owner chooses from (R-LIST-18). Unauthenticated and served rather than duplicated in the client, because a client guessing at the set would offer a tag a save then refuses |
 | `GET` | `/api/prompt-lists/mine` | The caller's own lists, each with the `tags` its current revision carries |
-| `GET`/`PUT` | `/api/prompt-lists/mine/{prompt_list_id}` | Owner only; `PUT` uses optimistic concurrency and creates a new immutable revision. `tags` are part of the saved content: setting them earns a revision the way a name or visibility change does (R-LIST-05), and an unknown tag is **refused by name** rather than dropped — `unknown_prompt_tag`, with the slug in `params.tag` so the client can say which, in the reader's language |
+| `GET`/`PUT` | `/api/prompt-lists/mine/{prompt_list_id}` | Owner only; `PUT` uses optimistic concurrency and creates a new immutable revision. `tags` are part of the saved content: setting them earns a revision the way a name or visibility change does (R-LIST-05), and an unknown tag is **refused by name** rather than dropped — `unknown_prompt_tag`, with the slug in `params.tag` so the client can say which, in the reader's language. A **published** list ignores the `visibility` a save carries and stays published — otherwise fixing a typo would take it out of the catalogue |
+| `POST` | `/api/prompt-lists/mine/{prompt_list_id}/publish` | Put an owned list in the community catalogue (R-LIST-11). Its own route rather than a `visibility` on the save, because the trust gate, the rate limit and the audit event all belong to the act. **403** `email_verification_required` or `warning_unread`, each with `params.action` = `publish` (R-LIST-12); **422** `prompt_list_hidden` for a list a moderator hid; **429** `too_many_attempts` past the limit. Revokes the share code the list may have been carrying: a published list is reached by identity, so the capability has nothing left to authorize |
+| `POST` | `/api/prompt-lists/mine/{prompt_list_id}/unpublish` | Take it back out. Stars survive as rows (R-LIST-16) and the moderation state is untouched — leaving the catalogue is not a moderator's finding |
 | `POST` | `/api/prompt-lists/shared` | Resolve an Unlisted list by its bearer share code |
 | `GET` | `/api/prompt-lists/{slug}/prompt-stats` | Window (all-time / 30 d / 90 d) and scoring/hint segmentation |
 
@@ -1781,6 +1783,8 @@ which is the one thing the 404 exists to refuse.
 | `PATCH` | `/api/admin/tunables` | `{values?, reset?}`. **Writes one `config.changed` audit event per setting moved** |
 | `GET` | `/api/admin/maintenance` | Whether this process is paused, draining, and its readiness |
 | `POST` | `/api/admin/maintenance` | `{paused, reason?}`. **Writes `maintenance.paused` / `maintenance.resumed`** |
+| `GET` | `/api/admin/prompt-list-review` | `{review}` — whether a list published from now on waits for a moderator (R-LIST-13) |
+| `POST` | `/api/admin/prompt-list-review` | `{review, reason?}`. **Writes `prompt_lists.publication_review_changed`.** The lever that makes post-hoc moderation reversible without a release. **Not retroactive**: lists already published were published under the posture in force at the time |
 | `POST` | `/api/admin/shutdown` | `{reason, drainSeconds?}`, 0–300. **Writes `server.shutdown_requested`** |
 | `GET` | `/api/admin/rooms` | Live rooms: code, state, phase, counts, and seats by id and nickname. No prompts, chat or canvas |
 | `DELETE` | `/api/admin/rooms/{id}` | Close a room. **Writes `room.closed_by_admin`** |

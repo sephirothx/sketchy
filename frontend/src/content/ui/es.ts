@@ -304,6 +304,27 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Otra persona ha cambiado esa lista. Recárgala e inténtalo de nuevo.",
   prompt_list_invalid: "No se pudo guardar esa lista de palabras.",
   prompt_list_forbidden: "Esa lista de palabras no es tuya para cambiarla.",
+  email_verification_required: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Para publicar una lista hace falta un correo electrónico confirmado.";
+      case "star":
+        return "Para dar una estrella a una lista hace falta un correo electrónico confirmado.";
+      default:
+        return "Para eso hace falta un correo electrónico confirmado.";
+    }
+  },
+  warning_unread: (params: Record<string, unknown>) => {
+    switch (params.action) {
+      case "publish":
+        return "Antes de publicar una lista hay que leer el aviso de moderación.";
+      case "star":
+        return "Antes de dar una estrella hay que leer el aviso de moderación.";
+      default:
+        return "Primero hay que leer el aviso de moderación.";
+    }
+  },
+  prompt_list_hidden: "Esta lista está oculta y no se puede publicar. Primero tiene que revisarla la moderación.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `«${tag}» no es una etiqueta que pueda llevar una lista.`;
@@ -1148,6 +1169,16 @@ export const ES: Catalogue = {
     "abstract": "Abstracto",
   },
   myPromptListsPage: {
+    inCommunityCatalogue: "En el catálogo de la comunidad",
+    notPublished: "Sin publicar",
+    publishedExplainer: "Cualquiera puede encontrar esta lista, jugarla, darle una estrella o hacer su propia copia.",
+    unpublishedExplainer: "Al publicarla, cualquiera podrá encontrar y jugar esta lista. Se puede retirar en cualquier momento.",
+    publish: "Publicar",
+    unpublish: "Retirar",
+    promptListPublished: "Lista de palabras publicada.",
+    promptListUnpublished: "Lista de palabras retirada.",
+    couldNotChangePublication: "No se pudo cambiar si esta lista está publicada.",
+    published: "Publicada",
     tags: "Etiquetas",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} de ${p.max} elegidas`,
     tagsAreHowListsAreFound: "Las etiquetas son la forma de encontrar esta lista en el catálogo de la comunidad.",

@@ -1,6 +1,7 @@
 """The registered-owner REST workflow for persistent prompt lists."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest_asyncio
@@ -11,7 +12,17 @@ from sqlalchemy.orm import selectinload
 
 from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import create_prompt_list_router, share_limiter
-from app.db.models import PromptList, PromptListRevision, PromptListRevisionTag
+from app.services.publication_policy import PUBLICATION_REVIEW_KEY
+from app.db.models import (
+    AuditEvent,
+    PromptList,
+    PromptListRevision,
+    PromptListRevisionTag,
+    User,
+    UserWarning,
+    generate_uuid,
+)
+from app.services import config_store
 from app.prompt_content import LIST_TAG_VOCABULARY, MAX_LIST_TAGS
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
@@ -36,7 +47,7 @@ async def env():
     # code a client branches on - which is the contract since #760.
     install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
-    app.include_router(create_prompt_list_router(prompts, users))
+    app.include_router(create_prompt_list_router(prompts, users, factory))
     share_limiter.reset()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -279,3 +290,243 @@ async def test_more_tags_than_a_list_may_carry_are_refused(env):
     )
 
     assert response.status_code == 422
+
+
+async def verified(users, factory, name: str):
+    """A registered account that has confirmed its address (R-LIST-12)."""
+    account = await users.create_anonymous(name)
+    account = await users.claim_account(account.id, name, "test-hash")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(account.id))
+            row.email = f"{name.lower()}@example.test"
+            row.email_verified_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    return account
+
+
+async def test_publishing_is_an_act_with_its_own_moment(env):
+    """R-LIST-11: the list is public because somebody published it."""
+    http, users, factory = env
+    account = await verified(users, factory, "Publisher")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Shareable", "prompts": [{"prompt": "otter"}]},
+    )
+    list_id = created.json()["id"]
+    assert created.json()["visibility"] == "private"
+
+    published = await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+
+    assert published.status_code == 200
+    assert published.json()["visibility"] == "public"
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(list_id))
+        assert row.published_at is not None
+        event = await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "prompt_list.published")
+        )
+    assert event is not None and str(event.target_id) == list_id
+
+    withdrawn = await http.post(f"/api/prompt-lists/mine/{list_id}/unpublish")
+
+    assert withdrawn.status_code == 200
+    assert withdrawn.json()["visibility"] == "private"
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(list_id))
+        assert row.published_at is None, "a later publish is a new act"
+
+
+async def test_an_unverified_account_cannot_publish(env):
+    """The gate is on the account, because the content is judged afterwards."""
+    http, users, factory = env
+    account = await users.create_anonymous("Unverified")
+    account = await users.claim_account(account.id, "Unverified", "test-hash")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Eager", "prompts": [{"prompt": "otter"}]},
+    )
+
+    response = await http.post(
+        f"/api/prompt-lists/mine/{created.json()['id']}/publish"
+    )
+
+    assert response.status_code == 403
+    assert response.json()["errorCode"] == "email_verification_required"
+    assert response.json()["params"] == {"action": "publish"}
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(created.json()["id"]))
+    assert row.visibility == "private", "a refused publish changes nothing"
+
+
+async def test_an_unread_warning_holds_publishing_back(env):
+    http, users, factory = env
+    account = await verified(users, factory, "Warned")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Warned list", "prompts": [{"prompt": "otter"}]},
+    )
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserWarning(
+                    id=generate_uuid(),
+                    user_id=UUID(account.id),
+                    reason="Please read the rules.",
+                )
+            )
+
+    response = await http.post(
+        f"/api/prompt-lists/mine/{created.json()['id']}/publish"
+    )
+
+    assert response.status_code == 403
+    assert response.json()["errorCode"] == "warning_unread"
+    assert response.json()["params"] == {"action": "publish"}
+
+
+async def test_the_operator_switch_sends_a_new_publication_to_review(env):
+    """R-LIST-13's lever: pre-approval without a release."""
+    http, users, factory = env
+    account = await verified(users, factory, "Reviewed")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Queued", "prompts": [{"prompt": "otter"}]},
+    )
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, PUBLICATION_REVIEW_KEY, "1")
+
+    published = await http.post(
+        f"/api/prompt-lists/mine/{created.json()['id']}/publish"
+    )
+
+    assert published.status_code == 200
+    assert published.json()["visibility"] == "public"
+    assert published.json()["moderationState"] == "under_review"
+
+
+async def test_a_hidden_list_cannot_be_published_by_its_owner(env):
+    """A takedown has to survive the owner's own hand."""
+    http, users, factory = env
+    account = await verified(users, factory, "Hidden")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Taken down", "prompts": [{"prompt": "otter"}]},
+    )
+    list_id = created.json()["id"]
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(list_id))
+            row.moderation_state = "hidden"
+
+    response = await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+
+    assert response.status_code == 422
+    assert response.json()["errorCode"] == "prompt_list_hidden"
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(list_id))
+    assert row.visibility == "private"
+
+
+async def test_publishing_revokes_the_share_code_it_no_longer_needs(env):
+    """A published list is reached by identity, so the bearer capability it
+    was carrying has nothing left to authorize (R-LIST-03)."""
+    http, users, factory = env
+    account = await verified(users, factory, "Sharer")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={
+            "name": "Was unlisted",
+            "visibility": "unlisted",
+            "prompts": [{"prompt": "otter"}],
+        },
+    )
+    assert created.json()["shareCode"]
+
+    published = await http.post(
+        f"/api/prompt-lists/mine/{created.json()['id']}/publish"
+    )
+
+    assert published.json()["shareCode"] is None
+
+
+async def test_unpublishing_is_not_a_moderator_s_finding(env):
+    """Leaving the catalogue does not clear what a moderator decided.
+
+    Unpublishing is the owner's act and moderation is somebody else's, so a
+    list that was taken down and then withdrawn by its owner stays hidden -
+    otherwise unpublishing would be a way to launder a takedown, and
+    re-publishing would put the content back.
+    """
+    http, users, factory = env
+    account = await verified(users, factory, "Withdrawer")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Withdrawn", "prompts": [{"prompt": "otter"}]},
+    )
+    list_id = created.json()["id"]
+    await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(list_id))
+            row.moderation_state = "hidden"
+
+    withdrawn = await http.post(f"/api/prompt-lists/mine/{list_id}/unpublish")
+
+    assert withdrawn.status_code == 200
+    assert withdrawn.json()["moderationState"] == "hidden"
+    again = await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+    assert again.status_code == 422
+
+
+async def test_editing_a_published_list_leaves_it_published(env):
+    """A save carries content, never publication (R-LIST-11).
+
+    Before this, a published list could not be edited at all: the owner's
+    editor would send back the `visibility` it was given, and `public` is not
+    a value the save endpoint accepts. Silently accepting `private` instead
+    would have been worse - fixing a typo would have taken the list out of the
+    catalogue.
+    """
+    http, users, factory = env
+    account = await verified(users, factory, "Editor")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Typo", "prompts": [{"prompt": "otter"}]},
+    )
+    list_id = created.json()["id"]
+    published = await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+    version = published.json()["version"]
+
+    edited = await http.put(
+        f"/api/prompt-lists/mine/{list_id}",
+        json={
+            "expectedVersion": version,
+            "name": "Typo fixed",
+            "visibility": "private",
+            "prompts": [
+                {
+                    "conceptId": created.json()["prompts"][0]["conceptId"],
+                    "prompt": "otter",
+                }
+            ],
+        },
+    )
+
+    assert edited.status_code == 200
+    assert edited.json()["name"] == "Typo fixed"
+    assert edited.json()["visibility"] == "public", (
+        "an edit cannot take a list out of the catalogue"
+    )
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(list_id))
+    assert row.published_at is not None
+    assert row.share_code is None

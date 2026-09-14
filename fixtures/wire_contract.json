@@ -2660,6 +2660,7 @@
    "email_in_use",
    "email_change_refused",
    "verification_link_invalid",
+   "email_verification_required",
    "reset_link_invalid",
    "export_not_found",
    "export_expired",
@@ -2690,6 +2691,7 @@
    "prompt_list_invalid",
    "prompt_list_forbidden",
    "unknown_prompt_tag",
+   "prompt_list_hidden",
    "unknown_sort",
    "timezone_required",
    "range_reversed",
@@ -2717,6 +2719,7 @@
    "evidence_not_in_game",
    "evidence_not_in_turn",
    "no_such_warning",
+   "warning_unread",
    "no_drawing"
   ],
   "shape": [
