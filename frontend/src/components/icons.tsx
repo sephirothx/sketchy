@@ -168,6 +168,7 @@ export function TriangleIcon(p: IconProps) { return <IconBase {...p}><path d="M1
 export function CircleIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /></IconBase>; }
 export function UndoIcon(p: IconProps) { return <IconBase {...p}><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></IconBase>; }
 export function TrashIcon(p: IconProps) { return <IconBase {...p}><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></IconBase>; }
+export function WifiOffIcon(p: IconProps) { return <IconBase {...p}><path d="m2 2 20 20" /><path d="M8.5 16.5a5 5 0 0 1 7 0" /><path d="M5 12.9a10 10 0 0 1 5.2-2.8" /><path d="M19 12.9a10 10 0 0 0-2.4-1.7" /><path d="M2 8.8a15 15 0 0 1 4.2-2.6" /><path d="M22 8.8a15 15 0 0 0-11.3-3.8" /><path d="M12 20h.01" /></IconBase>; }
 export function AlertIcon(p: IconProps) { return <IconBase {...p}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></IconBase>; }
 export function AlertCircleIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 8v5" /><path d="M12 16.5h.01" /></IconBase>; }
 export function KeyboardIcon(p: IconProps) { return <IconBase {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01" /><path d="M10 10h.01" /><path d="M14 10h.01" /><path d="M18 10h.01" /><path d="M6 14h.01" /><path d="M18 14h.01" /><path d="M9 14h6" /></IconBase>; }

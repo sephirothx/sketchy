@@ -1,6 +1,7 @@
 /** Decides what the global connection banner should say, and when. */
 
 import type { RoomBindingStatus } from "./roomSessionBinding";
+import { ui } from "../content/ui/index.ts";
 
 export type ConnectionStatus = "connected" | "offline" | "reconnecting" | "failed";
 
@@ -34,4 +35,14 @@ export function resolveConnectionStatus(input: {
 export function connectionBannerDelayMs(status: ConnectionStatus, everConnected: boolean): number {
   if (status !== "reconnecting") return 0;
   return everConnected ? RECONNECT_GRACE_MS : FIRST_CONNECT_GRACE_MS;
+}
+
+/** The sentence for a connection that is not `connected`.
+
+Shared by the banner outside a room and the chip's popover inside one, so the
+two never describe the same outage in different words. */
+export function connectionStatusText(status: Exclude<ConnectionStatus, "connected">): string {
+  if (status === "offline") return ui.connectionStatusBanner.youReDisconnectedCheckYour;
+  if (status === "failed") return ui.connectionStatusBanner.couldnTReconnectToYour;
+  return ui.connectionStatusBanner.connectionLostReconnecting;
 }

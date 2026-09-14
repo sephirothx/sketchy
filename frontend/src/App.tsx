@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import {
   isFriendsPath,
@@ -10,6 +10,7 @@ import "./App.css";
 import { useEmailStateSync } from "./hooks/useEmailStateSync";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
+import { useServerNotices } from "./hooks/useServerNotices";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import { CreateRoomPage } from "./pages/CreateRoomPage";
 import { GameRoomPage } from "./pages/GameRoomPage";
@@ -26,32 +27,20 @@ import { SettingsOverlay } from "./components/SettingsOverlay";
 import { FriendsOverlay } from "./components/FriendsOverlay";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
-import { ConnectionStatusBanner } from "./components/ConnectionStatusBanner";
+import { AppBanners } from "./components/AppBanners";
 import { SettingsSyncNotices } from "./components/SettingsSyncNotices";
 import { FriendInviteNotice } from "./components/FriendInviteNotice";
-import { EmailRecoveryReminder } from "./components/EmailRecoveryReminder";
 import { SuspensionNotice } from "./components/SuspensionNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
 import { ReportsReviewedNotice } from "./components/ReportsReviewedNotice";
 import { RulesPage } from "./pages/RulesPage";
 import { WarningNotice } from "./components/WarningNotice";
-import { XIcon } from "./components/icons";
 import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
 import { useFriendsStore } from "./store/friendsStore";
 import { friendListOwner } from "./lib/friends";
 import { useSettingsStore } from "./store/settingsStore";
 import { socket } from "./lib/socket";
-import {
-  parsePausedNotice,
-  parseShutdownNotice,
-  shutdownSecondsRemaining,
-} from "./lib/shutdownNotice";
-import { onServerFull } from "./lib/socket";
-import { reloadForUpdate } from "./lib/protocol";
-import { onUpdateRequired } from "./lib/updateRequired";
-import type { ServerShutdownNotice } from "./types";
-import { ui } from "./content/ui/index.ts";
 
 /* The router keeps the window scroll across navigations, so submitting a form
    at the bottom of one page would open the next one part-way down. The overlay
@@ -147,83 +136,7 @@ function App() {
     void refreshFriends(myAccountId);
   }, [refreshFriends, myAccountId]);
   useEmailStateSync();
-  const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
-  const [serverFull, setServerFull] = useState<string | null>(null);
-  const [paused, setPaused] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(0);
-  const [restarted, setRestarted] = useState(false);
-  const [updateRequired, setUpdateRequired] = useState(false);
-  // Whether a drain was on screen when the connection dropped, so the "we are
-  // back" line can be shown once - after the notice itself has been cleared.
-  const sawShutdownRef = useRef(false);
-
-  useEffect(() => {
-    const onServerShutdown = (payload: unknown) => {
-      const notice = parseShutdownNotice(payload);
-      if (!notice) return;
-      setShutdownNotice(notice);
-      setSecondsLeft(shutdownSecondsRemaining(notice));
-      setRestarted(false);
-    };
-    // Both notices describe the connection that carried them, and are dropped
-    // when it ends rather than when the next one opens. A server that is
-    // paused or draining says so at the handshake, and socket.io delivers
-    // those buffered events *before* `connect` - so clearing there would erase
-    // what the new server had just said. It also fixes the other direction: a
-    // pause lifted while this client was away sends no notice on reconnect,
-    // so a cached `true` would otherwise claim for ever that rooms are paused.
-    const onDisconnect = () => {
-      setShutdownNotice((current) => {
-        if (current) sawShutdownRef.current = true;
-        return null;
-      });
-      setPaused(false);
-    };
-    // A player whose game vanished mid-round is owed the reason, so a drain
-    // that ended in a restart is reported once the server is back - unless it
-    // is back and *still* draining, which the handshake will have said just
-    // above and which is not a "we are back" story.
-    const onConnect = () => {
-      if (!sawShutdownRef.current) return;
-      sawShutdownRef.current = false;
-      setShutdownNotice((current) => {
-        if (!current) setRestarted(true);
-        return current;
-      });
-    };
-    // A pause is not a version skew and not a drain: the server is still
-    // here, so the banner clears when it is lifted rather than on a reload.
-    const onServerPaused = (payload: unknown) => {
-      const notice = parsePausedNotice(payload);
-      if (notice) setPaused(notice.paused);
-    };
-    socket.on("server_shutdown", onServerShutdown);
-    socket.on("server_paused", onServerPaused);
-    socket.on("disconnect", onDisconnect);
-    socket.on("connect", onConnect);
-    return () => {
-      socket.off("server_shutdown", onServerShutdown);
-      socket.off("server_paused", onServerPaused);
-      socket.off("disconnect", onDisconnect);
-      socket.off("connect", onConnect);
-    };
-  }, []);
-
-  // Being turned away closes the socket immediately, so this is the only
-  // chance to say why: without it the player sees a silent, permanent
-  // disconnection and no reason for it.
-  useEffect(() => onServerFull(setServerFull), []);
-  // The tab is out of date and the one automatic reload did not fix it; the
-  // socket is down for good and every command would be refused, so the only
-  // thing left to offer is a reload the player chooses (#476).
-  useEffect(() => onUpdateRequired(() => setUpdateRequired(true)), []);
-
-  useEffect(() => {
-    if (!shutdownNotice) return;
-    const tick = () => setSecondsLeft(shutdownSecondsRemaining(shutdownNotice));
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [shutdownNotice]);
+  useServerNotices();
 
   // The only call that provisions a guest, so it runs once on arrival and
   // gives every visitor a durable identity before they create or join a room.
@@ -246,48 +159,10 @@ function App() {
 
   return (
     <ToastProvider>
-      {updateRequired && (
-        <div className="server-shutdown-banner is-update-required" role="alert">
-          <span>{ui.app.thisTabOutDateCannotPlay}</span>
-          <button
-            type="button"
-            onClick={() =>
-              reloadForUpdate({
-                storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
-                reload: () => window.location.reload(),
-              })
-            }
-          >
-            {ui.app.reload}
-          </button>
-        </div>
-      )}
-      {serverFull && !updateRequired && (
-        <div className="server-shutdown-banner" role="status" aria-live="polite">
-          {serverFull}
-        </div>
-      )}
-      {paused && !shutdownNotice && (
-        <div className="server-shutdown-banner" role="status" aria-live="polite">
-          {ui.app.newRoomsArePausedMaintenanceGames}
-        </div>
-      )}
-      {shutdownNotice && (
-        <div className="server-shutdown-banner" role="status" aria-live="polite">
-          {ui.app.serverUpdateInProgress({ seconds: secondsLeft })}
-        </div>
-      )}
-      {restarted && (
-        <div className="server-shutdown-banner is-restarted" role="status" aria-live="polite">
-          <span>{ui.app.serverWasUpdatedBackAnyGame}</span>
-          <button type="button" aria-label={ui.app.dismiss} onClick={() => setRestarted(false)}><XIcon size={14} /></button>
-        </div>
-      )}
       {/* Nothing in a production build; the E2E suite's way to crash the app. */}
       <CrashProbe scope="app" />
-      <ConnectionStatusBanner />
+      <AppBanners />
       <SettingsSyncNotices />
-      <EmailRecoveryReminder />
       <SuspensionNotice />
       <WarningNotice />
       <ReportsReviewedNotice />

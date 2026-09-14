@@ -836,9 +836,10 @@ browser storage is cleared. It stays out of rooms entirely: a room lays itself
 out to the viewport rather than flowing beneath a banner, so the note landed on
 the drawing tools, and a note about account hygiene can wait until somebody is
 not mid-game. Being in a room suppresses it without spending it - it returns to
-the lobby rather than counting as seen. The deploy banner deliberately does not
+the lobby rather than counting as seen. The deploy notice deliberately does not
 behave this way, because a game about to be ended under you is worth
-interrupting for.
+interrupting for - in a room it is a chip in the header rather than a banner,
+but it is still there.
 
 Confirming the address ends the reminder everywhere at once - the tab the
 confirmation link opened, every other tab and device the account has open, and
@@ -2407,6 +2408,11 @@ A seated client checks with the server every five seconds that it still holds th
   marked in the end only because it cannot answer the question. A seat's activity and
   its open check belong to one connection, so reconnecting starts a fresh clock —
   reconnecting is itself something a person did.
+- A lost connection is said outside a room with a banner across the top, and inside one
+  with a chip in the room header beside the round and the clock - the same for a planned
+  deploy's countdown. Tapping the chip gives the full sentence. A room is sized to the
+  screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
+  tab, a full server) stack in one box that the screens sized to the viewport make room for.
 - An action that expects an answer - creating a room, joining, starting, voting to restart -
   is never handed to a socket that is not connected. It waits for the connection and is sent
   once, or it times out having been sent at all, so a request reported as failed cannot arrive

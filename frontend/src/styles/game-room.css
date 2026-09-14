@@ -157,6 +157,83 @@
   color: var(--ink);
 }
 
+/* A drain or a dropped connection, said where the round and the clock are
+   (RoomNoticeChips). The chip recipe, as a button: the full sentence is a tap
+   away in the popover below it. */
+.room-notice-chips {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 6px;
+  position: relative;
+}
+
+/* Only the announcer is left when nothing is wrong, and it must not cost the
+   header a gap. */
+.room-notice-chips:not(:has(.room-notice-chip)) {
+  display: contents;
+}
+
+.room-notice-chip {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  min-height: 30px;
+}
+
+.room-notice-popover {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  left: 0;
+  line-height: 1.4;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 10px 12px;
+  position: absolute;
+  top: calc(100% + 8px);
+  width: max-content;
+  z-index: 40;
+}
+
+.room-notice-popover p {
+  margin: 0;
+}
+
+.room-notice-popover .btn {
+  margin-top: 8px;
+}
+
+/* On the phone the chip takes the room code's place - the code is in the ⋯
+   sheet too - and its popover spans the band rather than hanging off a chip
+   that sits near the right edge of a 390px screen. */
+.game-header-mobile:has(.room-notice-chip) .room-copy-button,
+.game-header-mobile:has(.room-notice-chip) .game-header-mark {
+  /* The mark goes too, for the duration: a three-digit countdown in the chip
+     pushed the round chip over it. A notice is temporary; the mark is back
+     the moment it ends. */
+  display: none;
+}
+
+.game-header-mobile {
+  position: relative;
+}
+
+.game-header-mobile .room-notice-chips {
+  position: static;
+}
+
+.game-header-mobile .room-notice-popover {
+  left: 8px;
+  max-width: none;
+  right: 8px;
+  top: calc(100% + 4px);
+  width: auto;
+}
+
 @media (max-width: 600px) {
   .waiting-start-card {
     align-items: stretch;
@@ -947,7 +1024,10 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
    */
   .game-room.game-room-playing {
     position: fixed;
-    top: var(--vv-offset-top, 0px);
+    /* Below the banner stack rather than under it. Only update required, server
+       full and restarted can be banners in a room (placeNotices), but any of
+       them used to cover this shell's header and take its taps. */
+    top: calc(var(--vv-offset-top, 0px) + var(--banner-height));
     left: var(--vv-offset-left, 0px);
     width: var(--vv-width, 100%);
     /* Whichever of the two signals is smaller. They disagree in both
@@ -956,7 +1036,7 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
        visualViewport resize is ever missed, --vv-height goes stale tall and
        dvh is right. Taking the minimum means the dock can never be pushed
        off the bottom of the screen by either. */
-    height: min(var(--vv-height, 100dvh), 100dvh);
+    height: calc(min(var(--vv-height, 100dvh), 100dvh) - var(--banner-height));
     max-width: none;
     margin: 0;
     box-sizing: border-box;

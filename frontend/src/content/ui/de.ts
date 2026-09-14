@@ -1749,6 +1749,15 @@ export const DE: Catalogue = {
     goAwayForABit: "Kurz weggehen",
   },
 
+  roomNoticeChips: {
+    serverUpdate: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Update · ${p.seconds} s` : "Update · jetzt",
+    reconnecting: "Verbinde neu",
+    offline: "Offline",
+    disconnected: "Getrennt",
+    serverUpdateStarted: "Server-Update läuft. Diese Runde endet bald.",
+  },
+
   roomPlayersPanel: {
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "Zuschauer", other: "Zuschauer" }),
