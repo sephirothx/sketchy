@@ -1,5 +1,5 @@
 // Library, profile and operator artboards.
-import { T, P, icon, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark, reactionArt } from './ui.mjs';
+import { T, P, icon, flag, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark, reactionArt } from './ui.mjs';
 
 const backBar = (label = 'Back to lobby') => `
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
@@ -69,6 +69,91 @@ export const PromptStatsPage = `
         ${statRow('funicular', `<span style="font-size: 13px; font-weight: 700; color: ${T.faint}">Not played enough</span>`, '—', '—', '1', true)}
       </tbody>
     </table>
+  </div>
+</div>`;
+
+// ------------------------------------------------------ Community catalogue
+// Cards shaped like the lobby's room card, a reading pane beside them. The card
+// carries only what you choose between; the tags and the prompts are read in
+// the pane, which is why the pane gets the width.
+const catalogueStar = (n, on) => `
+<span style="display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 32px; padding: 4px 11px 4px 9px; border-radius: 999px; border: 1.5px solid ${on ? T.warm : T.lineStrong}; background: ${on ? T.warmSoft : T.card}; color: ${on ? T.warmInk : T.muted}; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums">
+  <span style="display: inline-flex; color: ${on ? T.warm : T.muted}">${icon.star(14, on)}</span>${n}
+</span>`;
+
+const catalogueCard = (name, lang, owner, prompts, stars, { selected = false, starred = false, id } = {}) => `
+<li style="list-style: none; display: grid; gap: 6px; background: ${T.card}; border: 1.5px solid ${selected ? T.primary : T.line}; border-radius: ${T.radius}; padding: 12px 14px 11px 16px; box-shadow: ${selected ? `0 0 0 3px ${T.primarySoft}` : T.shadow}">
+  <span style="font-family: ${T.display}; font-weight: 600; font-size: 16.5px; line-height: 1.22; color: ${T.ink}">${name}</span>
+  <span style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+    <span style="display: flex; align-items: center; gap: 7px; min-width: 0; color: ${T.muted}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums">
+      ${flag[lang]}
+      <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">by ${owner}</span>
+      <span style="color: ${T.faint}">·</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px">${icon.deck(14, id)}${prompts}</span>
+    </span>
+    ${catalogueStar(stars, starred)}
+  </span>
+</li>`;
+
+const cataloguePrompt = (text) => `<li style="list-style: none; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 8px; padding: 5px 10px; font-size: 13.5px; font-weight: 600; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${text}</li>`;
+
+const cataloguePill = (label, on = false, lead = '') => `<span style="display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 9px 15px; border-radius: 999px; border: 1.5px solid ${on ? T.primary : T.lineStrong}; background: ${on ? T.primarySoft : T.card}; color: ${on ? T.primaryInk : T.muted}; font-size: 13px; font-weight: 800">${lead}${label}</span>`;
+
+export const CommunityCataloguePage = `
+<div style="width: 1100px; min-height: 1080px; margin: 0 auto; padding: 26px 24px 48px">
+  ${backBar()}
+  <header style="margin-bottom: 18px">
+    ${sectionLabel('Community')}
+    <h1 style="font-family: ${T.display}; font-weight: 600; font-size: 27px; color: ${T.ink}; margin: 4px 0 3px">Community catalogue</h1>
+    <p style="color: ${T.muted}; font-size: 15px; margin: 0">Lists players published for anyone to play.</p>
+  </header>
+
+  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px">
+    <span style="display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 12px; background: ${T.field}; border: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm}; color: ${T.muted}">${icon.globe(15)}<span style="font-size: 14px; font-weight: 700; color: ${T.ink}">Every language</span>${icon.chevD(13)}</span>
+    ${segmented(['Most starred', 'Newest'], 0)}
+    ${cataloguePill('Starred', false, icon.star(14))}
+    ${cataloguePill('Tags')}
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(290px, 360px) minmax(0, 1fr); gap: 18px; align-items: start">
+    <ul style="margin: 0; padding: 0; display: grid; gap: 10px">
+      ${catalogueCard('Creatures of the deep', 'en', 'Marta', 124, 12, { selected: true, starred: true, id: 'deck-a' })}
+      ${catalogueCard('Dinge in der Werkzeugkiste', 'de', 'Jonas', 31, 9, { id: 'deck-b' })}
+      ${catalogueCard('Cose da cucina', 'it', 'Priya', 58, 6, { id: 'deck-c' })}
+      ${catalogueCard('Very hard nouns', 'en', 'Sam', 200, 3, { id: 'deck-d' })}
+      <li style="list-style: none; display: flex; justify-content: center; padding-top: 4px">${btn.secondary('Show more')}</li>
+    </ul>
+
+    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; box-shadow: ${T.shadow}; padding: 22px 24px 24px">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 14px">
+        <div style="display: grid; gap: 4px">
+          ${sectionLabel('What is in it')}
+          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 22px; color: ${T.ink}; margin: 0; display: flex; align-items: center; gap: 9px">Creatures of the deep ${flag.sized('en', 22)}</h2>
+          <span style="display: flex; align-items: center; gap: 8px; color: ${T.muted}; font-size: 13.5px; font-weight: 700">by Marta <span style="color: ${T.faint}">·</span> <span style="display: inline-flex; align-items: center; gap: 5px">${icon.deck(14, 'deck-pane')}124 prompts</span></span>
+        </div>
+        ${catalogueStar(12, true)}
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px">${chip('Animals', 'primary')}${chip('Nature', 'primary')}${chip('Places', 'primary')}</div>
+      <p style="color: ${T.ink}; font-size: 14.5px; margin: 12px 0 0">Everything that swims, drifts or lurks where the light stops.</p>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; padding-bottom: 16px; border-bottom: 1px solid ${T.line}">
+        ${btn.secondary('Make a copy')}
+        <span style="margin-left: auto">${btn.ghost('Report')}</span>
+      </div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin: 16px 0 10px">
+        ${sectionLabel('Prompts')}
+        <span style="color: ${T.faint}; font-size: 12.5px; font-weight: 700">In the author’s order</span>
+      </div>
+      <ul style="margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+        ${['anglerfish', 'nautilus', 'giant squid', 'lanternfish', 'hagfish', 'sea urchin', 'coelacanth', 'oarfish',
+           'submarine', 'shipwreck', 'narwhal', 'seahorse', 'whale shark', 'kelp forest', 'lighthouse', 'pearl',
+           'stingray', 'harpoon', 'barnacle', 'tide pool', 'message in a bottle', 'diving bell', 'ocean trench', 'bioluminescence']
+          .map(cataloguePrompt).join('')}
+      </ul>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px">
+        <span style="color: ${T.muted}; font-size: 13px; font-weight: 700">24 of 124 shown</span>
+        ${btn.secondary('Explore all 124 prompts', { iconL: icon.search(15) })}
+      </div>
+    </section>
   </div>
 </div>`;
 

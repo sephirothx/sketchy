@@ -49,7 +49,30 @@ function IconBase({ size = 16, strokeWidth = 2, children }: IconBaseProps) {
 }
 
 export function CopyIcon(p: IconProps) { return <IconBase {...p}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></IconBase>; }
+/* A prompt list's size: two cards fanned out of a deck, because prompts are
+ * cards you draw - the way drawing-and-guessing games have always handed them
+ * out. The tilt is what keeps it clear of Copy, two squares squarely offset.
+ *
+ * The back card is masked where the front one lies, with a margin, so its
+ * edge stops short of the front card on any surface. Filling the front card
+ * instead would only work on the one background colour it was filled with. */
+export function DeckIcon(p: IconProps) {
+  const maskId = `${useId()}-deck`;
+  // Not copy: an SVG transform, shared by the front card and its mask.
+  const front = "rotate(-13 8.9 13)";
+  return (
+    <IconBase {...p}>
+      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+        <rect width="24" height="24" fill="white" stroke="none" />
+        <rect x="3.8" y="6" width="10.2" height="14" rx="2" transform={front} fill="black" stroke="black" strokeWidth="4" />
+      </mask>
+      <rect x="9.2" y="2.6" width="10.2" height="14" rx="2" transform="rotate(18 14.3 9.6)" mask={`url(#${maskId})`} />
+      <rect x="3.8" y="6" width="10.2" height="14" rx="2" transform={front} />
+    </IconBase>
+  );
+}
 export function LinkIcon(p: IconProps) { return <IconBase {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></IconBase>; }
+export function StarIcon(p: IconProps) { return <IconBase {...p}><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3Z" /></IconBase>; }
 export function HeartIcon(p: IconProps) { return <IconBase {...p}><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" /></IconBase>; }
 export function EyeIcon(p: IconProps) { return <IconBase {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></IconBase>; }
 export function PencilIcon(p: IconProps) { return <IconBase {...p}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></IconBase>; }

@@ -182,7 +182,7 @@ export type PromptContentReportReason =
 export function submitPromptContentReport(input: {
   promptListId: string;
   promptVersionId?: string;
-  shareCode: string;
+  shareCode?: string;
   reason: PromptContentReportReason;
   details: string;
 }): Promise<{ id: string; status: "pending"; createdAt: string }> {

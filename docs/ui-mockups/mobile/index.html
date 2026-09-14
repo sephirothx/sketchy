@@ -616,6 +616,10 @@ const ic = {
   back:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m14 5-7 7 7 7"/></svg>`,
   plus:`<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
   bulb:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/></svg>`,
+  star:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3Z"/></svg>`,
+  starOn:`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9L12 3Z"/></svg>`,
+  deck:`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><mask id="m-deck" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect width="24" height="24" fill="white" stroke="none"/><rect x="3.8" y="6" width="10.2" height="14" rx="2" transform="rotate(-13 8.9 13)" fill="black" stroke="black" stroke-width="4"/></mask><rect x="9.2" y="2.6" width="10.2" height="14" rx="2" transform="rotate(18 14.3 9.6)" mask="url(#m-deck)"/><rect x="3.8" y="6" width="10.2" height="14" rx="2" transform="rotate(-13 8.9 13)"/></svg>`,
+  search:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>`,
   crown:`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 8.5 6.6 12 12 4.6 17.4 12 21 8.5 19.3 19H4.7L3 8.5Z"/></svg>`,
 };
 </script>
@@ -1891,53 +1895,114 @@ S({ id:'profile', n:'16', group:'Elsewhere', title:'Profile',
       <div class="dock"><button class="btn ghost">Invite Jonas to a room</button></div>
     </div>` }]});
 
-/* ─────────────────────────── 15 · PROMPT STATS ─────────────────────────── */
-S({ id:'stats', n:'17', group:'Elsewhere', title:'Prompt stats',
-  lede:'A 592-row data table, delivered to a phone in full.',
-  variants:[{ name:'Cards + filter sheet', ships:true,
+/* ─────────────────────── 18 · COMMUNITY CATALOGUE ─────────────────────── */
+/* The star that is also the count: filled orange when it is yours. */
+const catStar = (n, on) => `<span style="display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;min-height:30px;padding:3px 10px 3px 8px;border-radius:999px;border:1.5px solid ${on?'var(--warm)':'var(--line-strong)'};background:${on?'var(--warm-soft)':'var(--card)'};color:${on?'var(--warm-ink)':'var(--muted)'};font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums"><span style="display:inline-flex;color:${on?'var(--warm)':'inherit'}">${on?ic.starOn:ic.star}</span>${n}</span>`;
+
+/* A card: the name alone on the first line, everything about it on the second. */
+const catCard = (name, flag, owner, prompts, stars, on) => `
+  <div class="card" style="flex:0 0 auto;padding:11px 12px 10px 14px;display:grid;gap:6px">
+    <div class="disp" style="font-size:16px;line-height:1.22">${name}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span class="muted" style="display:flex;align-items:center;gap:6px;min-width:0;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums">
+        <span style="font-size:14px;line-height:1;flex:0 0 auto">${flag}</span>
+        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">by ${owner}</span>
+        <span class="faint" style="flex:0 0 auto">·</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;flex:0 0 auto">${ic.deck}${prompts}</span>
+      </span>
+      ${catStar(stars, on)}
+    </div>
+  </div>`;
+
+S({ id:'catalogue', n:'18', group:'Elsewhere', title:'Community catalogue',
+  lede:'Other people’s lists, chosen from a card and read on a screen of their own.',
+  variants:[
+  { name:'A · The cards', ships:true,
     bad:[
-      'The page is <b>25 496 px tall</b> on an 844 px screen — thirty screens of scroll, unpaginated.',
-      'Five native <code>&lt;select&gt;</code> menus stacked with inline labels that wrap (“Prompt / list”), taking 200 px before any data.',
-      'The table is <b>wider than the viewport and clipped</b> — the fourth column is cut off at the right edge with no scroll affordance.',
-      'Difficulty is a text string (“Not played enough”) repeated 592 times, which is unreadable as a ranking.'
+      'Drawn against <b>colour tokens that do not exist</b>: every accent read <code>var(--accent, inherit)</code>, but the palette’s accents are <code>--primary</code> and <code>--warm</code>. So nothing had a selected state, a tint, or a card of its own — it looked unstyled because, to the browser, it was.',
+      'Each row stacked <b>four lines of text</b> — name, author, “48 prompts · 12 stars”, tags — with nothing to set one above another, so a list could be read but not scanned.',
+      'The star sat <b>outside the row</b> as a square of its own, because the whole row was a button and a button cannot hold another.'
     ],
     good:[
-      'Rows become cards: word, a <b>difficulty bar</b>, guessed rate, times played. Difficulty is a shape you can scan, not a sentence you have to read.',
-      'All five filters collapse into <b>one Filters chip</b> that opens a sheet, with the active ones shown as removable chips.',
-      'Search is pinned; the list pages 40 at a time with an explicit <code>Load more</code> — no silent truncation, no thirty-screen scroll.',
-      'Sort is a segmented control, because there are only three answers anyone wants.'
+      'Two lines a card: the <b>name alone on the first</b>, and everything about the list on the second, with the star at its end.',
+      'The flag leads that second line — <b>the same place on every card</b> — so a column of lists reads as a column of languages. In a one-language filter it fades into the muted line instead of repeating a stamp down the page.',
+      'The prompt count is a <b>fanned deck</b> and a number: prompts are cards you draw, and an icon needs no plural in seven languages. The open list writes “124 prompts” beside the same deck, which is where it is learnt.',
+      'The star <b>is</b> the count, filled orange when it is yours — one control, so the number and the button cannot disagree. The name is the card’s real button, stretched across it, which is what lets the star sit inside.',
+      'A 16-character author shortens with an ellipsis before the line may wrap. The name never does.'
     ],
     html:`
     <div class="app">
       <div class="sband band">
         <button class="iconbtn ghost">${ic.back}</button>
-        <div class="disp" style="font-size:17px">Prompt stats</div>
-        <span class="sb-sp"></span>
-        <span class="chip on">Filters · 2</span>
+        <div class="disp" style="font-size:17px">Community catalogue</div>
       </div>
-      <div style="padding:11px 14px 0;flex:0 0 auto;display:flex;flex-direction:column;gap:9px;background:var(--card);border-bottom:1.5px solid var(--line);padding-bottom:11px">
-        <div class="gfield" style="min-height:46px;font-size:15px">Find a prompt…</div>
-        <div class="segm"><b class="on">Hardest</b><b>Easiest</b><b>Most picked</b></div>
-        <div class="chips">
-          <span class="chip on">English — Extended ✕</span>
-          <span class="chip on">Last 30 days ✕</span>
-        </div>
+      <div style="flex:0 0 auto;display:flex;gap:7px;padding:10px 14px;background:var(--card);border-bottom:1.5px solid var(--line);overflow:hidden">
+        <span class="chip" style="flex:0 0 auto">Every language</span>
+        <span class="chip on" style="flex:0 0 auto">Most starred</span>
+        <span class="chip" style="flex:0 0 auto">Starred</span>
+        <span class="chip" style="flex:0 0 auto">Tags</span>
       </div>
       <div class="stagearea" style="padding:12px 14px;gap:9px;overflow-y:auto">
-        ${[['accordion',88,'12%','41'],['microscope',74,'31%','58'],['lighthouse',61,'44%','96'],['battery',38,'71%','133'],['puppy',14,'92%','204']].map(([w,d,g,n])=>`
-          <div class="card" style="flex:0 0 auto;padding:12px 14px">
-            <div style="display:flex;align-items:baseline;gap:9px">
-              <div class="disp" style="font-size:18px;flex:1">${w}</div>
-              <span class="muted" style="font-size:12px;font-weight:800;font-variant-numeric:tabular-nums">${g} guessed</span>
-              <span class="faint" style="font-size:12px;font-weight:800;font-variant-numeric:tabular-nums">${n}×</span>
-            </div>
-            <div class="bar-t" style="margin-top:9px"><i style="width:${d}%;background:${d>70?'var(--danger)':d>40?'var(--warm)':'var(--success)'}"></i></div>
-          </div>`).join('')}
-        <button class="btn ghost sm" style="flex:0 0 auto;margin-top:3px">Load 40 more · 592 total</button>
+        ${catCard('Things you’d find at the bottom of a grandmother’s handbag','🇫🇷','MargueriteDurand',212,31,false)}
+        ${catCard('Creatures of the deep','🇬🇧','Marta',124,12,true)}
+        ${catCard('Dinge in der Werkzeugkiste','🇩🇪','Jonas',31,9,false)}
+        ${catCard('Cose da cucina','🇮🇹','Priya',58,6,false)}
+        <button class="btn ghost" style="flex:0 0 auto">Show more</button>
+      </div>
+    </div>` },
+  { name:'B · An open list', ships:true,
+    bad:[
+      'Opening a list showed its prompts as a <b>numbered list in two columns</b>: two dozen one-word bullets, which say nothing about a list at a glance.',
+      'The tags were on the rows, where there was no room for them, and nowhere near the prompts they describe.'
+    ],
+    good:[
+      'There is no second column on a phone, so an open list <b>replaces the cards</b>, with <b>All lists</b> to go back. Nothing is opened for you: the cards are the page until one is tapped.',
+      'Tags, description and prompts all live here, <b>where the reading happens</b> — the prompts as a grid of cells, not bullets.',
+      'Twenty-four are shown and the rest are behind <b>Explore all</b>: a view with search and an A–Z index, because a list can hold 500.',
+      'On a wide screen the same pane stands beside the cards. Before anything is chosen it is a dashed placeholder that asks — it does not open a list nobody picked.'
+    ],
+    html:`
+    <div class="app">
+      <div class="sband band">
+        <button class="iconbtn ghost">${ic.back}</button>
+        <div class="disp" style="font-size:17px">All lists</div>
+      </div>
+      <div class="stagearea" style="padding:14px;gap:12px;overflow-y:auto">
+        <div style="flex:0 0 auto;display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div style="display:grid;gap:4px;min-width:0">
+            <span class="kick">What is in it</span>
+            <div class="disp" style="font-size:20px;line-height:1.15">Creatures of the deep <span style="font-size:17px">🇬🇧</span></div>
+            <span class="muted" style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">by Marta <span class="faint">·</span> <span style="display:inline-flex;align-items:center;gap:4px">${ic.deck}124 prompts</span></span>
+          </div>
+          ${catStar(12, true)}
+        </div>
+        <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px">
+          <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px">Animals</span>
+          <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px">Nature</span>
+          <span class="chip on" style="min-height:26px;padding:2px 10px;font-size:12px">Places</span>
+        </div>
+        <div style="flex:0 0 auto;font-size:14px;line-height:1.45">Everything that swims, drifts or lurks where the light stops.</div>
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1.5px solid var(--line)">
+          <button class="btn ghost" style="width:auto;padding:0 16px;flex:0 0 auto;border:1.5px solid var(--line-strong);min-height:40px;font-size:14px">Make a copy</button>
+          <span style="flex:1"></span>
+          <span class="muted" style="font-size:13.5px;font-weight:800">Report</span>
+        </div>
+        <div style="flex:0 0 auto;display:flex;align-items:baseline;justify-content:space-between">
+          <span class="kick">Prompts</span>
+          <span class="faint" style="font-size:12px;font-weight:700">In the author’s order</span>
+        </div>
+        <div style="flex:0 0 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+          ${['anglerfish','nautilus','giant squid','lanternfish','hagfish','sea urchin','coelacanth','oarfish','submarine','shipwreck','narwhal','seahorse','whale shark','kelp forest','lighthouse','pearl','stingray','harpoon','barnacle','tide pool','message in a bottle','diving bell','ocean trench','bioluminescence']
+            .map(w=>`<span style="background:var(--well);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w}</span>`).join('')}
+        </div>
+        <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span class="muted" style="font-size:12.5px;font-weight:700">24 of 124</span>
+          <button class="btn ghost" style="width:auto;padding:0 14px;border:1.5px solid var(--line-strong);gap:7px;min-height:40px;font-size:14px">${ic.search}Explore all</button>
+        </div>
       </div>
     </div>` }]});
 
-S({ id:'notfound', n:'18', group:'Elsewhere', title:'Page not found',
+S({ id:'notfound', n:'19', group:'Elsewhere', title:'Page not found',
   lede:'A URL with nothing behind it — a mistyped link, a dead bookmark, or a staff page opened by an account that is not staff.',
   variants:[{ name:'Page not found', ships:true,
     bad:[
@@ -1990,7 +2055,7 @@ S({ id:'notfound', n:'18', group:'Elsewhere', title:'Page not found',
       </div>
     </div>` }]});
 
-S({ id:'crash', n:'19', group:'Elsewhere', title:'Crash page',
+S({ id:'crash', n:'20', group:'Elsewhere', title:'Crash page',
   lede:'What a screen shows when its own code throws — before this, a render error was a blank page with no way out and nothing recorded.',
   variants:[{ name:'Crash page', ships:true,
     bad:[
@@ -2137,7 +2202,7 @@ function render(){
       ? 'This is the one that shipped — the artboard is drawn from the build.'
       : 'Drawn as an alternative; the build went the other way.'}</p>` : ''}
     <div class="notes">
-      <div class="note bad"><h3>What it was</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>
+      ${v.bad.length ? `<div class="note bad"><h3>What it was</h3><ul>${v.bad.map(b=>`<li>${b}</li>`).join('')}</ul></div>` : ''}
       <div class="note good"><h3>What it is now</h3><ul>${v.good.map(b=>`<li>${b}</li>`).join('')}</ul></div>
     </div>
     <div class="pager">
