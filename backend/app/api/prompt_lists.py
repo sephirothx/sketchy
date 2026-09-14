@@ -20,8 +20,7 @@ from app.api.serializers import (
 )
 from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import RateLimiter, client_key
-from app.db.models import AuditEvent, User, UserWarning, generate_uuid
-from app.domain_values import AuditTargetType
+from app.db.models import User, UserWarning
 from uuid import UUID
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
@@ -33,6 +32,7 @@ from app.prompt_content import (
 )
 from app.prompts import MAX_PROMPT_LENGTH
 from app.repositories.interfaces import (
+    AuditStamp,
     PromptListConflictError,
     PromptListEntryInput,
     PromptListMutationError,
@@ -277,13 +277,18 @@ def create_prompt_list_router(
             raise Refusal(
                 422, ErrorCode.PROMPT_LIST_INVALID, str(error), field="tag"
             ) from error
+        # A guest holds a session and a user id, and cannot star anything
+        # (R-LIST-12). Passing that id through answered `starredByMe: false`,
+        # which is the registered answer - it says "you have not starred this"
+        # to somebody who cannot, and invites a control that would 403. Only a
+        # registered account is a star requester; everyone else reads null.
         page = await prompt_list_repo.list_community(
             language=language,
             tags=tags,
             sort=sort,
             limit=limit,
             cursor=cursor,
-            requesting_user_id=getattr(request.state, "user_id", None),
+            requesting_user_id=await _star_requester(request),
         )
         return {
             "lists": [
@@ -353,6 +358,14 @@ def create_prompt_list_router(
             raise mutation_error(error) from error
         return owned_prompt_list_payload(updated)
 
+    async def _star_requester(request: Request) -> str | None:
+        """The caller's id if starring is a thing they could do, else None."""
+        user_id = getattr(request.state, "user_id", None)
+        if user_id is None or user_repo is None:
+            return None
+        user = await user_repo.get_by_id(user_id)
+        return None if user is None or user.is_anonymous else user.id
+
     async def require_publisher(request: Request, *, action: str = "publish") -> UserData:
         """R-LIST-12's gate: registered, verified, and not in trouble.
 
@@ -394,25 +407,22 @@ def create_prompt_list_router(
             )
         return user
 
-    async def _audit_publication(
-        request: Request, user: UserData, *, event: str, prompt_list_id: str
-    ) -> None:
+    async def _stamp(request: Request, user: UserData, event: str) -> AuditStamp:
+        """The ledger entry's coordinates, for the repository to write.
+
+        Gathered here and written *there* so the entry commits with the change
+        it describes — the reason `config_store` gives for taking a session
+        rather than a factory. Publishing used to commit, and then a second
+        transaction wrote the ledger; a failure between the two left a list
+        published with nothing to say who published it.
+        """
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        async with session_factory() as session:
-            async with session.begin():
-                session.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type=event,
-                        actor_user_id=UUID(user.id),
-                        target_type=AuditTargetType.PROMPT_LIST.value,
-                        target_id=prompt_list_id,
-                        request_id=request_id,
-                        ip_hash=ip_hash,
-                        details={},
-                        created_at=datetime.now(timezone.utc),
-                    )
-                )
+        return AuditStamp(
+            event_type=event,
+            actor_user_id=user.id,
+            request_id=request_id,
+            ip_hash=ip_hash,
+        )
 
     async def _set_star(prompt_list_id: str, request: Request, *, starred: bool):
         """Starring needs a verified account, for R-LIST-12's reason.
@@ -494,12 +504,10 @@ def create_prompt_list_router(
                 prompt_list_id,
                 published=True,
                 under_review=await read_publication_review(session_factory),
+                audit=await _stamp(request, user, PUBLISHED_EVENT),
             )
         except PromptListMutationError as error:
             raise mutation_error(error) from error
-        await _audit_publication(
-            request, user, event=PUBLISHED_EVENT, prompt_list_id=prompt_list_id
-        )
         return owned_prompt_list_payload(updated)
 
     @router.post("/prompt-lists/mine/{prompt_list_id}/unpublish")
@@ -509,13 +517,13 @@ def create_prompt_list_router(
         user = await require_registered(request)
         try:
             updated = await prompt_list_repo.set_owned_publication(
-                user.id, prompt_list_id, published=False
+                user.id,
+                prompt_list_id,
+                published=False,
+                audit=await _stamp(request, user, UNPUBLISHED_EVENT),
             )
         except PromptListMutationError as error:
             raise mutation_error(error) from error
-        await _audit_publication(
-            request, user, event=UNPUBLISHED_EVENT, prompt_list_id=prompt_list_id
-        )
         return owned_prompt_list_payload(updated)
 
     @router.delete(

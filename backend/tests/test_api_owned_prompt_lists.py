@@ -530,3 +530,88 @@ async def test_editing_a_published_list_leaves_it_published(env):
         row = await session.get(PromptList, UUID(list_id))
     assert row.published_at is not None
     assert row.share_code is None
+
+
+async def test_the_list_of_my_lists_carries_their_tags(env):
+    """The collection endpoint dropped them while the detail route kept them.
+
+    Two paths build an owned list: one loads the current revision and the
+    other counts prompts. Tags were wired into the first only, so a list read
+    back through `/mine` had `tags: []` however it had been saved.
+    """
+    http, users, factory = env
+    account = await users.create_anonymous("Collector")
+    account = await users.claim_account(account.id, "Collector", "test-hash")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={
+            "name": "Tagged",
+            "prompts": [{"prompt": "otter"}],
+            "tags": ["animals", "nature"],
+        },
+    )
+    assert created.json()["tags"] == ["animals", "nature"]
+
+    listing = await http.get("/api/prompt-lists/mine")
+
+    [row] = listing.json()
+    assert row["tags"] == ["animals", "nature"]
+
+
+async def test_publication_and_its_ledger_entry_commit_together(env):
+    """A published list with nothing to say who published it is the failure.
+
+    The mutation used to commit, and a second transaction wrote the ledger;
+    anything failing between the two left exactly that.
+    """
+    http, users, factory = env
+    account = await verified(users, factory, "Ledger")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Audited", "prompts": [{"prompt": "otter"}]},
+    )
+    list_id = created.json()["id"]
+
+    await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+    await http.post(f"/api/prompt-lists/mine/{list_id}/unpublish")
+
+    async with factory() as session:
+        events = (
+            await session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.target_id == list_id)
+                .order_by(AuditEvent.created_at)
+            )
+        ).all()
+    assert [event.event_type for event in events] == [
+        "prompt_list.published",
+        "prompt_list.unpublished",
+    ]
+    assert all(event.actor_user_id == UUID(account.id) for event in events)
+
+
+async def test_a_refused_publish_writes_no_ledger_entry(env):
+    """The ledger records what happened, not what was attempted."""
+    http, users, factory = env
+    account = await verified(users, factory, "Refused")
+    await sign_in(http, factory, account.id)
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Hidden", "prompts": [{"prompt": "otter"}]},
+    )
+    list_id = created.json()["id"]
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(list_id))
+            row.moderation_state = "hidden"
+
+    assert (
+        await http.post(f"/api/prompt-lists/mine/{list_id}/publish")
+    ).status_code == 422
+
+    async with factory() as session:
+        assert await session.scalar(
+            select(func.count(AuditEvent.id)).where(AuditEvent.target_id == list_id)
+        ) == 0

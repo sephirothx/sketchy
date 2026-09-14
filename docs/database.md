@@ -1627,13 +1627,33 @@ without that, fixing a typo would take a list out of the catalogue. Publishing a
 clears `share_code`: a published list is reached by identity, so the bearer capability
 has nothing left to authorize (R-LIST-03).
 
-Unpublishing leaves `moderation_state` alone. Leaving the catalogue is the owner's act
+Unpublishing leaves a **`hidden`** state alone. Leaving the catalogue is the owner's act
 and moderation is somebody else's; if withdrawal cleared a takedown, unpublishing would
-be the way to launder one.
+be the way to launder one. It does release **`under_review`**, which is not a finding:
+on a list, that state is written in exactly one place — a publish under the operator
+switch — so it only ever means "waiting to be published". Once the owner withdraws there
+is nothing left to publish, and keeping the hold left a private list in the moderators'
+queue where it could still be decided on.
 
 The operator switch is `app_config['prompt_lists.publication_review']`
 ([`services/publication_policy.py`](../backend/app/services/publication_policy.py)):
 with it set, a newly published list lands `under_review` instead of `active` and waits.
+A list it holds waits in `GET /api/moderation/prompt-lists`, which is a queue of its own
+rather than an entry in the report queue: nothing was complained about, so there is no
+report to hang it on, and the owner cannot make one (a self-report is refused). Without
+that queue the switch was a trapdoor — held lists were out of the catalogue, unplayable,
+and reachable only by editing the database. "Held" is under review **and** public, one
+predicate the queue, the detail route and the decision share.
+
+A reviewer reads the prompts through `GET /api/moderation/prompt-lists/{id}`, and the
+decision carries the `version` they read. Both are needed. Without the first, a release
+was made from a name and a prompt count, so the switch could not keep out anything it
+was turned on to keep out. Without the second, reading was not enough either: an owner
+can edit a held list, every save is a new revision (R-LIST-05), and a moderator could
+read one revision and release the next — the bait and the switch. A stale version is a
+409, and the audit event records which version was decided on, since the list can be
+edited again afterwards.
+
 It is read per publish rather than cached, because a cached posture is stale exactly
 when it matters — just after an operator turned it on because something is going wrong —
 and it is **not retroactive**, since sweeping already-published lists into a queue would
@@ -1747,10 +1767,18 @@ is what stops a prompt version being deleted out from under a revision a game pi
 `forked_from_revision_id` is written by `fork_published` and nothing else. It names the
 exact revision a copy was taken from, which is what keeps it meaningful: both lists go
 on being edited, so a pointer at the *list* would stop saying anything after the first
-edit on either side. It may end up naming a revision nothing serves — the source was
-hidden or retired afterwards — and that is correct rather than dangling: revisions are
-immutable, and the column records where a copy came from rather than promising it is
-still reachable. A fork gets **new prompt concepts and versions** rather than references
+edit on either side. It may end up naming a revision nothing serves — the source was hidden, and revisions are
+immutable, so the id stays true while the content is out of play. When the source is
+**retired**, the pointer goes: the reclaim sweep deletes unpinned revisions and the
+`SET NULL` clears it.
+
+That is deliberate, and it is why a fork reference is **not** a pin. Pins exist so a
+finished game's provenance survives its content's author tidying up (R-PRIV-05); a fork
+is not a finished game, it is a live list somebody else owns and edits. Counting one as a
+pin would mean an author who deletes their list can never actually remove it once a
+stranger has copied it — the revision would be kept alive for as long as the copy exists,
+which is indefinitely. The copy keeps every prompt it took; it forgets only where they
+came from, because the person they came from asked for the list to go. A fork gets **new prompt concepts and versions** rather than references
 to the source's, so one owner's edit cannot rewrite what the other's list means, and
 hidden versions are left out of the copy entirely.
 
