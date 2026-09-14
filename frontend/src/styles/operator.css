@@ -638,6 +638,40 @@
   }
 }
 
+/* A held list is read in full before it is released, so the prompts get two
+   columns rather than one long scroll between the reviewer and the buttons. */
+.mod-held-description {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+}
+
+.mod-held-prompts {
+  columns: 2;
+  gap: 24px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.mod-held-prompts li {
+  break-inside: avoid;
+  margin-bottom: 6px;
+}
+
+.mod-held-prompt {
+  margin-right: 6px;
+}
+
+.mod-held-aliases {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+@media (max-width: 720px) {
+  .mod-held-prompts {
+    columns: 1;
+  }
+}
+
 .mod-queue {
   align-content: start;
   display: grid;
