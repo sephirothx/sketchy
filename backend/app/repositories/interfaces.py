@@ -409,6 +409,41 @@ class PromptListSummary:
 
 
 @dataclass(frozen=True)
+class CommunityPromptList:
+    """One published list as the community catalogue presents it (R-LIST-14).
+
+    Separate from `PromptListSummary` rather than an extension of it, because
+    the two answer different questions. The official catalogue is localized
+    copy with no owner and no social counter; this carries attribution, a star
+    count and the tags a filter matched. Merging them would leave half the
+    fields null on every row of both.
+    """
+
+    id: str
+    slug: str
+    name: str
+    description: str
+    language: str
+    prompt_count: int
+    owner_display_name: str
+    tags: tuple[str, ...]
+    star_count: int
+    published_at: datetime
+    version: int
+    # Whether *this* caller starred it. Null for a caller who is not signed in,
+    # which is a different answer from "no" and the client shows it as one.
+    starred_by_me: bool | None = None
+
+
+@dataclass(frozen=True)
+class CommunityPromptListPage:
+    """One page of the catalogue, and the cursor for the next."""
+
+    lists: tuple[CommunityPromptList, ...]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
 class PromptListEntryInput:
     """One ordered prompt supplied while creating or revising a player list."""
 
@@ -978,6 +1013,20 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
         """Delete a player-owned list and all of its revisions."""
+        ...
+
+    @abstractmethod
+    async def list_community(
+        self,
+        *,
+        language: str | None = None,
+        tags: Sequence[str] = (),
+        sort: str = "stars",
+        limit: int = 24,
+        cursor: str | None = None,
+        requesting_user_id: str | None = None,
+    ) -> CommunityPromptListPage:
+        """One page of the community catalogue (R-LIST-14)."""
         ...
 
     @abstractmethod

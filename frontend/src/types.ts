@@ -79,6 +79,31 @@ export interface OwnedPromptList extends PromptListSummary {
   prompts: OwnedPromptEntry[];
 }
 
+/**
+ * One row of the community catalogue: a list somebody published.
+ *
+ * Deliberately not an `OwnedPromptList`. The owner is a display name and
+ * nothing more — a stable account id in a public listing is a join key for
+ * anybody who collects the pages — and there are no prompts here, because the
+ * catalogue is a listing rather than a way to read every published list's
+ * contents.
+ */
+export interface CommunityPromptList {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  language: PromptLanguage;
+  promptCount: number;
+  ownerDisplayName: string;
+  tags: string[];
+  starCount: number;
+  /** Null when nobody is signed in: a different answer from `false`. */
+  starredByMe: boolean | null;
+  publishedAt: string;
+  version: number;
+}
+
 /** One entry of the curated list-tag vocabulary owners choose from. */
 export interface PromptTag {
   slug: string;

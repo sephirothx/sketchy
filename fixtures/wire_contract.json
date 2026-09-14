@@ -1607,8 +1607,12 @@
    "isRated",
    "maxPerList",
    "minRatedGuessers",
+   "nextCursor",
    "ratedCount",
    "unratedCount"
+  ],
+  "api.prompt_lists:list_community_prompt_lists": [
+   "nextCursor"
   ],
   "api.prompt_lists:list_prompt_tags": [
    "maxPerList"
@@ -1642,6 +1646,13 @@
   "api.room_presets:_summary_payload": [
    "createdAt",
    "updatedAt"
+  ],
+  "api.serializers:community_prompt_list_payload": [
+   "ownerDisplayName",
+   "promptCount",
+   "publishedAt",
+   "starCount",
+   "starredByMe"
   ],
   "api.serializers:game_detail_payload": [
    "correctGuessTimeSeconds",

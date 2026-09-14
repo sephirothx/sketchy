@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
 from app.api.serializers import (
+    community_prompt_list_payload,
     owned_prompt_list_payload,
     prompt_list_payload,
     prompt_stats_payload,
@@ -25,6 +26,8 @@ from uuid import UUID
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
     MAX_LIST_TAGS,
+    UnknownListTag,
+    clean_list_tags,
     best_supported_prompt_locale,
     validate_prompt_language,
 )
@@ -39,7 +42,10 @@ from app.repositories.interfaces import (
     UserData,
     UserRepository,
 )
-from app.repositories.sqlalchemy import MAX_PROMPTS_PER_OWNED_LIST
+from app.repositories.sqlalchemy import (
+    MAX_COMMUNITY_PAGE,
+    MAX_PROMPTS_PER_OWNED_LIST,
+)
 from app.services.publication_policy import read_publication_review
 from app.domain_values import HintMode, ScoringMode
 
@@ -56,6 +62,7 @@ MAX_PAGE_SIZE = 2000
 DEFAULT_PAGE_SIZE = 2000
 
 SORTS = ("hardest", "easiest", "most-picked")
+COMMUNITY_SORTS = ("stars", "newest")
 
 # The bundled lists top out around 600 prompts, and this reads them whole.
 # Generous for someone browsing, tight enough to be a poor scraping tool.
@@ -65,6 +72,9 @@ share_limiter = RateLimiter(limit=30, window_seconds=60)
 # thing it costs an abuser is the account (R-LIST-12) rather than the request.
 # The limit is here so that account cannot be spent quickly.
 publish_limiter = RateLimiter(limit=10, window_seconds=600)
+# Browsing is cheap and ordinary; this is here so the catalogue is a poor way
+# to enumerate every published list quickly, the way the stats limiter is.
+community_limiter = RateLimiter(limit=120, window_seconds=60)
 
 PUBLISHED_EVENT = "prompt_list.published"
 UNPUBLISHED_EVENT = "prompt_list.unpublished"
@@ -213,6 +223,71 @@ def create_prompt_list_router(
         return {
             "maxPerList": MAX_LIST_TAGS,
             "tags": [{"slug": slug, "name": name} for slug, name in LIST_TAG_VOCABULARY],
+        }
+
+    @router.get("/prompt-lists/community")
+    async def list_community_prompt_lists(
+        request: Request,
+        language: str | None = Query(default=None),
+        tag: list[str] = Query(default_factory=list),
+        sort: str = Query(default="stars"),
+        limit: int = Query(default=24, ge=1, le=MAX_COMMUNITY_PAGE),
+        cursor: str | None = Query(default=None, max_length=32),
+    ):
+        """Published lists, separate from the official catalogue (R-LIST-14).
+
+        Its own route rather than a facet on `/api/prompt-lists`, so that
+        R-LIST-09 keeps holding without a filter having to be right: nobody
+        reading the official catalogue has to ask whether a row was written by
+        a stranger.
+
+        Open to a signed-out caller. A published list is public by its owner's
+        deliberate act, and requiring an account to *look* would make the
+        catalogue useless as a link somebody shares.
+        """
+        if not community_limiter.check(client_key(request)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REQUESTS,
+                "Too many requests. Please wait and try again.",
+            )
+        if language is not None:
+            try:
+                language = validate_prompt_language(language)
+            except ValueError as error:
+                raise Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error)) from error
+        if sort not in COMMUNITY_SORTS:
+            raise Refusal(422, ErrorCode.UNKNOWN_SORT, "Unknown sort.", field="sort")
+        try:
+            tags = clean_list_tags(tag)
+        except UnknownListTag as error:
+            # Refused rather than ignored: dropping a filter answers a
+            # different question than the one asked (R-LIST-18).
+            raise Refusal(
+                422,
+                ErrorCode.UNKNOWN_PROMPT_TAG,
+                str(error),
+                field="tag",
+                params={"tag": error.tag},
+            ) from error
+        except ValueError as error:
+            raise Refusal(
+                422, ErrorCode.PROMPT_LIST_INVALID, str(error), field="tag"
+            ) from error
+        page = await prompt_list_repo.list_community(
+            language=language,
+            tags=tags,
+            sort=sort,
+            limit=limit,
+            cursor=cursor,
+            requesting_user_id=getattr(request.state, "user_id", None),
+        )
+        return {
+            "lists": [
+                community_prompt_list_payload(prompt_list)
+                for prompt_list in page.lists
+            ],
+            "nextCursor": page.next_cursor,
         }
 
     @router.get("/prompt-lists/mine")

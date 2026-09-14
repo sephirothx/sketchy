@@ -1640,6 +1640,16 @@ and it is **not retroactive**, since sweeping already-published lists into a que
 both punish people for a rule that did not exist when they acted and produce, in one
 moment, the backlog this design exists to avoid.
 
+**The catalogue is one predicate, in one place.** Public, active, and not retired —
+served by `ix_prompt_lists_published`, which is partial on exactly those three. A
+takedown or a deletion therefore drops a list out of the catalogue without a second read
+path having to agree, which is the property that made post-hoc moderation defensible in
+the first place. Star counts are a correlated aggregate over `prompt_list_stars` rather
+than a column, and tag filters are one `EXISTS` per tag against the list's **current**
+revision, bounded by `MAX_LIST_TAGS`. Paging is by offset with a ceiling
+(`MAX_COMMUNITY_OFFSET`): nobody reaches page four hundred by reading, so a request that
+deep is a scrape, and a filter is the better answer than a longer scroll.
+
 **`published_at` is the record of an act, not a derived date.** Publishing is
 gated, rate-limited and audited (R-LIST-11, R-LIST-12), so the schema refuses a
 public row that carries no moment it became public — the hole worth closing here
