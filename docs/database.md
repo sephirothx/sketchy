@@ -1640,6 +1640,14 @@ and it is **not retroactive**, since sweeping already-published lists into a que
 both punish people for a rule that did not exist when they acted and produce, in one
 moment, the backlog this design exists to avoid.
 
+**Four grounds admit a list into a room**, checked in the one `_authorize` helper that
+room creation and Start's re-authorization share: bundled, owned by the requester,
+unlisted with its share code supplied, or **published**. The sharing is the point — the
+checks a room is admitted by stay the checks its prompts are drawn under (R-LIST-07), so
+an unpublish or a takedown between the picker and Start refuses the room visibly rather
+than shrinking its pool. A room preset needs nothing of its own: it stores slugs, which
+are resolved through that same helper.
+
 **The catalogue is one predicate, in one place.** Public, active, and not retired —
 served by `ix_prompt_lists_published`, which is partial on exactly those three. A
 takedown or a deletion therefore drops a list out of the catalogue without a second read
