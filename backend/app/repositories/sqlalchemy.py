@@ -2607,7 +2607,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # deep at most, and a keyset cursor over a derived count would have to
         # re-rank on every request anyway. MAX_COMMUNITY_OFFSET is what keeps
         # a deep page from becoming a scan somebody can ask for repeatedly.
-        if offset >= MAX_COMMUNITY_OFFSET:
+        # A shortlist is exempt: every row in it is a list this account starred,
+        # so reading it to the end collects nothing the reader did not choose -
+        # and the room picker does read it to the end, where stopping at the
+        # ceiling would drop the rest without a word.
+        if offset >= MAX_COMMUNITY_OFFSET and not starred_only:
             return CommunityPromptListPage(lists=(), next_cursor=None)
         stmt = stmt.offset(offset).limit(limit + 1)
         async with self._session_factory() as session:

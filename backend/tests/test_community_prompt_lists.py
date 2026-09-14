@@ -473,3 +473,51 @@ async def test_the_starred_filter_needs_an_account(env):
     assert (
         await http.get("/api/prompt-lists/community?starred=true")
     ).status_code == 403
+
+
+async def test_a_shortlist_is_read_whole_past_the_browsing_depth(env, monkeypatch):
+    """The catalogue stops paging at a depth nobody reaches by reading, because
+    past it a request is a scrape. A starred-only read is not: every row in it
+    is one this account chose, and the room picker reads it to the end.
+
+    The ceiling is lowered for the test rather than 481 lists being made; what
+    is under test is which read it applies to, not the number."""
+    import app.repositories.sqlalchemy as repository
+
+    monkeypatch.setattr(repository, "MAX_COMMUNITY_OFFSET", 2)
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    reader = await account(users, "Reader")
+    for index in range(5):
+        listed = await published(
+            prompts,
+            factory,
+            owner.id,
+            f"List {index}",
+            at=PUBLISHED_AT + timedelta(minutes=index),
+            users=users,
+        )
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    PromptListStar(user_id=UUID(reader.id), prompt_list_id=UUID(listed.id))
+                )
+    issued = await create_session(factory, user_id=reader.id, device_label="Test")
+    http.cookies.set(COOKIE_NAME, issued.token)
+
+    async def walk(query: str) -> list[str]:
+        seen: list[str] = []
+        cursor = None
+        for _ in range(10):
+            page = (await http.get(query + (f"&cursor={cursor}" if cursor else ""))).json()
+            seen.extend(row["name"] for row in page["lists"])
+            cursor = page["nextCursor"]
+            if cursor is None:
+                break
+        return seen
+
+    browsing = await walk("/api/prompt-lists/community?sort=newest&limit=1")
+    shortlist = await walk("/api/prompt-lists/community?sort=newest&limit=1&starred=true")
+
+    assert len(browsing) == 2, "browsing still stops at the depth ceiling"
+    assert shortlist == [f"List {index}" for index in (4, 3, 2, 1, 0)]

@@ -1175,6 +1175,7 @@ export const FR: Catalogue = {
     "abstract": "Abstrait",
   },
   communityCataloguePage: {
+    playThisList: "Jouer avec cette liste",
     backToLobby: "Retour au hall",
     loading: "Chargement…",
     communityCatalogue: "Catalogue de la communauté",
@@ -1474,6 +1475,8 @@ export const FR: Catalogue = {
   },
 
   promptListPicker: {
+    listsYouStarred: "Listes avec votre étoile",
+    starredNotAllShown: (p: { shown: number }) => `Seules les ${number(p.shown)} premières listes que vous avez étoilées sont affichées.`,
     languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
       `Cette liste est en ${p.listLanguage} ; ce salon est en ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>

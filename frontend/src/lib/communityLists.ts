@@ -154,3 +154,29 @@ export function groupAlphabetically<T>(
   }
   return groups;
 }
+
+/** Every page of a paged read, followed to its end.
+ *
+ * For a read whose whole answer is wanted at once, like the lists an account
+ * starred: stopping at the first page drops the rest without a word, and the
+ * rest is exactly what a shortlist ordered by popularity would lose - the
+ * lists this account starred that few others did.
+ *
+ * `maxPages` guards against a cursor that never ends. Reaching it is reported
+ * as `complete: false` rather than handed back as if it were everything,
+ * because a partial answer that looks whole is the failure this exists to
+ * prevent. */
+export async function readEveryPage<T>(
+  readPage: (cursor: string | null) => Promise<{ lists: T[]; nextCursor: string | null }>,
+  maxPages: number,
+): Promise<{ lists: T[]; complete: boolean }> {
+  const lists: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const read = await readPage(cursor);
+    lists.push(...read.lists);
+    cursor = read.nextCursor;
+    if (!cursor) return { lists, complete: true };
+  }
+  return { lists, complete: false };
+}
