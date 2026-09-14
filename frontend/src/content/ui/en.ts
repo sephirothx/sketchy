@@ -311,6 +311,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "No such game.",
   no_such_drawing: "No such drawing.",
   drawing_unreadable: "That drawing could not be read.",
+  pinned_drawings_full: "Your pinned drawings are full. Unpin one from your profile first.",
 
   // Prompt lists
   prompt_list_not_found: "Prompt list not found.",

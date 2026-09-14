@@ -34,6 +34,7 @@ from app.domain_values import (
     BugReportScreenshotStatus,
     GAME_OUTCOMES,
     GAME_VISIBILITIES,
+    PROFILE_PIN_SLOTS,
     FINISHED_GAME_HANDOFF_STATES,
     HANDOFF_FAILURE_CODES,
     HANDOFF_PART_STATES,
@@ -3317,6 +3318,70 @@ class TurnDrawingReaction(Base):
         primaryjoin=(
             "GameParticipant.id == foreign(TurnDrawingReaction.participant_id)"
         ),
+    )
+
+
+class ProfileDrawingPin(Base):
+    """One of the drawings an account chose to show on its profile (#440).
+
+    A pin is the pinner's act, not a fact about the drawing, so unlike a
+    reaction it hangs off the **account** rather than a seat: it lives as long
+    as the account wants it there, and a deleted account has no profile left to
+    show anything on. What it points at is a turn, addressed through the same
+    `(game_id, turn_id)` edge the rest of the history graph uses (#512), so a
+    turn from another game can never be named by mistake and the pin goes
+    with its game or its turn through the cascade.
+
+    The cap and the ordering are both in the schema: `position` is `0..5`
+    (`PROFILE_PIN_SLOTS`) and unique per account, so a seventh pin has no slot
+    to sit in whatever writes it. Only a turn from a **public** game may be
+    pinned, and only by somebody who sat in it - checked in the write path,
+    since neither is expressible as a constraint here.
+
+    Erasure is a status on `turn_drawings`, not a row deletion, so the
+    cascade does not cover it: the account-erasure path deletes the pins on
+    the drawings it erases, the way it deletes their reactions.
+    """
+
+    __tablename__ = "profile_drawing_pins"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "position", name="uq_profile_drawing_pins_user_position"
+        ),
+        ForeignKeyConstraint(
+            ["game_id", "turn_id"],
+            ["turn_records.game_id", "turn_records.id"],
+            name="fk_profile_drawing_pins_turn_same_game",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            f"position >= 0 AND position < {PROFILE_PIN_SLOTS}",
+            name="ck_profile_drawing_pins_position",
+        ),
+        # The erasure path and the pinned-drawing read both find pins by turn;
+        # the game index serves the cascade from the game's side.
+        Index("ix_profile_drawing_pins_turn_id", "turn_id"),
+        Index("ix_profile_drawing_pins_game_id", "game_id"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+    turn_record: Mapped[TurnRecord] = relationship(
+        foreign_keys=[game_id, turn_id],
     )
 
 

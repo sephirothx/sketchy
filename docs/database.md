@@ -113,6 +113,8 @@ erDiagram
     game_participants ||--o{ turn_participant_outcomes : "seat"
     turn_records ||--o{ turn_drawing_reactions : "reactions"
     game_participants ||--o{ turn_drawing_reactions : "reactor seat"
+    users ||--o{ profile_drawing_pins : "shelf"
+    turn_records ||--o{ profile_drawing_pins : "pinned"
 
     prompt_concepts ||--o{ prompt_versions : "wordings"
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
@@ -136,7 +138,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
+| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
@@ -1419,6 +1421,33 @@ drawing, upserts or deletes the row, and moves the drawer's `reactions_received`
 Deleting an account deletes the reactions on the drawings it erases; the reactions that
 account *gave* stay, attributed through the tombstoned seat.
 
+### `profile_drawing_pins`
+`user_id` (CASCADE) · `turn_id` — together the **PK** · `game_id` (denormalized) ·
+`position` · `created_at`, with `uq_profile_drawing_pins_user_position` on
+`(user_id, position)`, `ck_profile_drawing_pins_position` holding `position` to `0..5`, and
+`fk_profile_drawing_pins_turn_same_game` on `(game_id, turn_id)` → `turn_records`, CASCADE.
+
+The drawings an account chose to show on its profile (#440): up to six, in the owner's
+order. A pin is the **pinner's act**, not a fact about the drawing, which is why it hangs
+off the account where a reaction hangs off a seat — it lasts as long as the account wants
+it there, and a deleted account has no profile left to show a shelf on. The cap and the
+order are in the schema, not only in the write path: a seventh pin has no slot to sit in,
+whatever writes it. The `game_id` denormalization is the same-game edge the rest of the
+history graph uses (#512), so a turn from another game can never be named by mistake.
+
+What may be pinned is checked by the write, since neither rule is expressible here: a turn
+with a `ready` drawing from a **public** game (R-HIST-25) the pinner sat in — their own
+drawing or another player's, credited through the turn's frozen drawer snapshot. Only a
+`registered` account may pin, so a guest merge never brings a shelf with it.
+
+**Flow.** One write, `set_profile_pins`, replaces the whole shelf with the ordered list
+given: pinning, unpinning and reordering are the same transaction, every turn is checked
+before anything is deleted, and a refused list leaves the shelf as it was. Deleting the
+game or the turn takes the pin through the cascade. Erasing a drawing does not — erasure
+is a status on `turn_drawings`, and no cascade reaches a status — so the account-erasure
+path deletes the pins on the drawings it erases, the way it deletes their reactions, and
+the pins the erased account itself made.
+
 ### `turn_participant_outcomes`
 One row per current or late-arriving non-drawer seat, per turn.
 
@@ -1990,7 +2019,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool |
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly |
-| Game history, turns, outcomes, ledger, drawings, reactions, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
+| Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
 | Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
@@ -2101,6 +2130,8 @@ Deletion:
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;
+- deletes the pins on those erased drawings, and every pin the account itself made — a
+  tombstoned account has no profile to show a shelf on (`profile_drawing_pins` in §6);
 - erases any screenshot on a bug report that account filed, while leaving the report:
   a defect is not un-found by an erasure, and the reporter foreign key detaches;
 

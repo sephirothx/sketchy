@@ -217,6 +217,8 @@ class ErrorCode(StrEnum):
     NO_SUCH_GAME = "no_such_game"
     NO_SUCH_DRAWING = "no_such_drawing"
     DRAWING_UNREADABLE = "drawing_unreadable"
+    # A seventh pin (R-PIN-02); carries `slots`. Nothing was changed.
+    PINNED_DRAWINGS_FULL = "pinned_drawings_full"
 
     # Prompt lists
     PROMPT_LIST_NOT_FOUND = "prompt_list_not_found"

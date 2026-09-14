@@ -1593,6 +1593,9 @@
   "api.profiles:create_profile_router": [
    "hasMore"
   ],
+  "api.profiles:pins_payload": [
+   "turnId"
+  ],
   "api.profiles:reaction_payload": [
    "seatId",
    "turnId"
@@ -2707,6 +2710,7 @@
    "no_such_game",
    "no_such_drawing",
    "drawing_unreadable",
+   "pinned_drawings_full",
    "prompt_list_not_found",
    "prompt_list_conflict",
    "prompt_list_invalid",

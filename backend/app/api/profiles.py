@@ -5,7 +5,7 @@ import logging
 from collections.abc import Callable
 
 from fastapi import APIRouter, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -22,10 +22,11 @@ from app.canvas_storage import (
     UnsupportedStoredDrawingError,
     stored_drawing_wire_payload,
 )
-from app.domain_values import OFFERED_REACTION_EMOJI_CODES
+from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
 from app.repositories.interfaces import (
     DrawingReactionResult,
     GameHistoryRepository,
+    ProfilePinsResult,
     UserRepository,
 )
 
@@ -49,6 +50,32 @@ class ReactionBody(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     emoji: str = Field(min_length=1, max_length=16)
+
+
+class PinsBody(BaseModel):
+    """The whole shelf, in order: the turn ids of the drawings to show (#440).
+
+    Bounded to the slot count here, so a body twice the cap is refused before
+    anything is looked up; the cap itself is answered as a `409` by the route,
+    since "you have no room" is an answer, not a malformed request.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    turnIds: list[str] = Field(max_length=PROFILE_PIN_SLOTS * 2)
+
+    @field_validator("turnIds")
+    @classmethod
+    def _distinct(cls, turn_ids: list[str]) -> list[str]:
+        if len(set(turn_ids)) != len(turn_ids):
+            raise ValueError("a drawing can be pinned once")
+        if any(not 1 <= len(turn_id) <= 64 for turn_id in turn_ids):
+            raise ValueError("not a turn id")
+        return turn_ids
+
+
+def pins_payload(result: ProfilePinsResult) -> dict:
+    return {"pins": [{"turnId": pin.turn_id} for pin in result.pins]}
 
 
 def reaction_payload(result: DrawingReactionResult) -> dict:
@@ -291,5 +318,38 @@ def create_profile_router(
     async def clear_turn_reaction(game_id: str, turn_id: str, request: Request):
         """Take the signed-in player's reaction back."""
         return await _write_reaction(game_id, turn_id, request, None)
+
+    @router.put("/me/pins")
+    async def set_my_pins(body: PinsBody, request: Request):
+        """Replace the signed-in player's pinned drawings with the list given.
+
+        Pinning, unpinning and reordering are the same request: the body is
+        the whole shelf in order, so the six-slot cap and the order fall out
+        of the list itself and the client never has to shuffle positions.
+        Which drawings may be on it (#440): any turn with a ready drawing from
+        a **public** game the caller sat in - their own or another player's,
+        credited to the drawer's frozen name. The repository applies those
+        rules; every refusal is the same 404 (R-HIST-16), so the route never
+        says which of stranger, guest, private game or erased drawing applied.
+        A seventh pin is the one refusal that is not a 404: nothing was
+        hidden from the caller, they are simply out of room.
+        """
+        throttle(request)
+        requesting_user_id = getattr(request.state, "user_id", None)
+        if not requesting_user_id:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        if len(body.turnIds) > PROFILE_PIN_SLOTS:
+            raise Refusal(
+                409,
+                ErrorCode.PINNED_DRAWINGS_FULL,
+                "Your pinned drawings are full.",
+                params={"slots": PROFILE_PIN_SLOTS},
+            )
+        result = await game_history_repo.set_profile_pins(
+            requesting_user_id=requesting_user_id, turn_ids=body.turnIds
+        )
+        if result is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return pins_payload(result)
 
     return router

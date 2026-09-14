@@ -4,11 +4,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+from uuid import UUID
 
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from app.api.errors import install_refusal_handler
 from app.api.profiles import create_profile_router, profile_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
@@ -40,6 +42,7 @@ async def env():
     users = SqlAlchemyUserRepository(session_factory)
     history = SqlAlchemyGameHistoryRepository(session_factory)
     app = FastAPI()
+    install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
     app.include_router(create_profile_router(users, history))
 
@@ -590,6 +593,147 @@ async def test_every_reaction_refusal_is_a_404(env):
         )
     ).status_code == 404
     assert (await http.get(f"/api/games/{game_id}")).json()["turns"][0]["reactions"] == []
+
+
+# ---- pinned drawings (#440)
+
+
+async def _pins_in_store(factory, user_id: str) -> list[tuple[str, int]]:
+    from sqlalchemy import select
+
+    from app.db.models import ProfileDrawingPin
+
+    async with factory() as session:
+        rows = (
+            await session.scalars(
+                select(ProfileDrawingPin)
+                .where(ProfileDrawingPin.user_id == UUID(user_id))
+                .order_by(ProfileDrawingPin.position)
+            )
+        ).all()
+    return [(str(row.turn_id), row.position) for row in rows]
+
+
+async def test_a_participant_pins_reorders_and_unpins_with_one_write(env):
+    """The list is the shelf: pinning another player's drawing, one's own,
+    changing the order and taking one down are all the same request."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    anns_drawing = record_game.last_turn_id
+    await record_game(history, users, winner=bob.id, loser=ann.id, index=1, drawing=_skch())
+    bobs_drawing = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+
+    put = await http.put("/api/me/pins", json={"turnIds": [anns_drawing, bobs_drawing]})
+    assert put.status_code == 200
+    assert put.json() == {"pins": [{"turnId": anns_drawing}, {"turnId": bobs_drawing}]}
+    assert await _pins_in_store(factory, bob.id) == [(anns_drawing, 0), (bobs_drawing, 1)]
+
+    reordered = await http.put("/api/me/pins", json={"turnIds": [bobs_drawing, anns_drawing]})
+    assert reordered.json()["pins"] == [{"turnId": bobs_drawing}, {"turnId": anns_drawing}]
+    assert await _pins_in_store(factory, bob.id) == [(bobs_drawing, 0), (anns_drawing, 1)]
+
+    unpinned = await http.put("/api/me/pins", json={"turnIds": [anns_drawing]})
+    assert unpinned.json() == {"pins": [{"turnId": anns_drawing}]}
+    cleared = await http.put("/api/me/pins", json={"turnIds": []})
+    assert cleared.json() == {"pins": []}
+    assert await _pins_in_store(factory, bob.id) == []
+
+
+async def test_every_pin_refusal_is_a_404_and_leaves_the_shelf_as_it_was(env):
+    """Signed out, a guest, a stranger to the game, a private room's game, a
+    drawing that was never kept, a turn that does not exist: none of them
+    learns which applied (R-HIST-16), and a refused list writes nothing."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    guest = await users.create_anonymous(display_name="Guest")
+    await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    public_turn = record_game.last_turn_id
+    await record_game(
+        history, users, winner=ann.id, loser=bob.id, index=1, drawing=_skch(), visibility="private"
+    )
+    private_turn = record_game.last_turn_id
+    await record_game(history, users, winner=ann.id, loser=bob.id, index=2, drawing=None)
+    unkept_turn = record_game.last_turn_id
+
+    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 404, "signed out"
+    await sign_in_as(http, factory, guest.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 404, "a guest"
+    assert (await http.put("/api/me/pins", json={"turnIds": []})).status_code == 404, "a guest, even clearing"
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 404, "a stranger"
+    assert (await http.put("/api/me/pins", json={"turnIds": []})).status_code == 200, "their own empty shelf"
+
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [public_turn]})).status_code == 200
+    for turn_id, why in (
+        (private_turn, "a private room's game"),
+        (unkept_turn, "a drawing the recap did not keep"),
+        (str(generate_uuid()), "a turn that does not exist"),
+        ("not-a-turn-id", "not an id at all"),
+    ):
+        response = await http.put("/api/me/pins", json={"turnIds": [public_turn, turn_id]})
+        assert response.status_code == 404, why
+        assert await _pins_in_store(factory, bob.id) == [(public_turn, 0)], why
+
+
+async def test_a_seventh_pin_is_refused_as_full_and_a_repeat_as_malformed(env):
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    turns = []
+    for index in range(7):
+        await record_game(history, users, winner=ann.id, loser=bob.id, index=index, drawing=_skch())
+        turns.append(record_game.last_turn_id)
+    await sign_in_as(http, factory, bob.id)
+
+    assert (await http.put("/api/me/pins", json={"turnIds": turns[:6]})).status_code == 200
+    full = await http.put("/api/me/pins", json={"turnIds": turns})
+    assert full.status_code == 409
+    assert full.json()["errorCode"] == "pinned_drawings_full"
+    assert full.json()["params"] == {"slots": 6}
+    assert await _pins_in_store(factory, bob.id) == [(turn, i) for i, turn in enumerate(turns[:6])]
+
+    assert (await http.put("/api/me/pins", json={"turnIds": [turns[0], turns[0]]})).status_code == 422
+    assert (await http.put("/api/me/pins", json={"turnIds": turns * 2})).status_code == 422
+    assert (await http.put("/api/me/pins", json={"turnIds": turns[0]})).status_code == 422
+    assert (await http.put("/api/me/pins", json={})).status_code == 422
+
+
+async def test_an_erased_drawing_keeps_its_pin_row_only_until_the_erasure_path_runs(env):
+    """Erasure is a status change on the drawing, not a row deletion, so no
+    cascade reaches the pin: the write path refuses the turn from then on,
+    and the account-erasure path deletes the row (tests/test_account_data.py)."""
+    from sqlalchemy import select
+
+    from app.db.models import TurnDrawing
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+
+    async with factory() as session:
+        async with session.begin():
+            drawing = await session.scalar(
+                select(TurnDrawing).where(TurnDrawing.turn_id == UUID(turn_id))
+            )
+            drawing.status = "deleted"
+            drawing.payload = None
+            drawing.checksum_sha256 = None
+            drawing.byte_size = None
+            drawing.format_magic = None
+            drawing.format_version = None
+            drawing.deleted_at = datetime.now(timezone.utc)
+    assert await _pins_in_store(factory, bob.id) == [(turn_id, 0)]
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 404
 
 
 # ---- conditional downloads (#604)

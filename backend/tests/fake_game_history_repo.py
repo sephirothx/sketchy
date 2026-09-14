@@ -1,6 +1,7 @@
 """In-memory GameHistoryRepository that records what a finished game wrote."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -19,6 +20,8 @@ from app.repositories.interfaces import (
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
     TurnRecordInput,
+    ProfilePinDetail,
+    ProfilePinsResult,
 )
 
 
@@ -71,6 +74,8 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self.reaction_writes: list[ReactionWrite] = []
         self.reaction_result: DrawingReactionResult | None = None
         self.accept_reactions = False
+        self.pin_writes: list[tuple[str, tuple[str, ...]]] = []
+        self.accept_pins = True
         self.reaction_seat_id = "seat-1"
 
     async def save_game(
@@ -130,6 +135,22 @@ class FakeGameHistoryRepository(GameHistoryRepository):
                 if emoji
                 else ()
             ),
+        )
+
+    async def set_profile_pins(
+        self,
+        *,
+        requesting_user_id: str,
+        turn_ids: Sequence[str],
+    ) -> ProfilePinsResult | None:
+        self.pin_writes.append((requesting_user_id, tuple(turn_ids)))
+        if not self.accept_pins:
+            return None
+        return ProfilePinsResult(
+            pins=tuple(
+                ProfilePinDetail(turn_id=turn_id, game_id="game", position=position)
+                for position, turn_id in enumerate(turn_ids)
+            )
         )
 
     async def get_turn_drawing(

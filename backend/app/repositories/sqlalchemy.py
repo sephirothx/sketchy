@@ -36,6 +36,7 @@ from app.db.models import (
     PromptVersionTag,
     ScoreEvent,
     TurnDrawing,
+    ProfileDrawingPin,
     TurnDrawingReaction,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -55,6 +56,7 @@ from app.domain_values import (
     GAME_OUTCOMES,
     GAME_PROMPT_SOURCE_MODES,
     GAME_VISIBILITIES,
+    PROFILE_PIN_SLOTS,
     GameOutcome,
     GameVisibility,
     PROMPT_OFFER_SOURCE_KINDS,
@@ -112,6 +114,8 @@ from app.repositories.interfaces import (
     TurnDetail,
     TurnDrawingDetail,
     TurnDrawingInput,
+    ProfilePinDetail,
+    ProfilePinsResult,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
     TurnParticipantOutcomeDetail,
@@ -2041,6 +2045,91 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         for row in rows
                     ),
                 )
+
+    async def set_profile_pins(
+        self,
+        *,
+        requesting_user_id: str,
+        turn_ids: Sequence[str],
+    ) -> ProfilePinsResult | None:
+        db_user_id = _optional_entity_id(requesting_user_id)
+        if db_user_id is None:
+            return None
+        db_turn_ids: list[UUID] = []
+        for turn_id in turn_ids:
+            db_turn_id = _optional_entity_id(turn_id)
+            if db_turn_id is None or db_turn_id in db_turn_ids:
+                return None
+            db_turn_ids.append(db_turn_id)
+        if len(db_turn_ids) > PROFILE_PIN_SLOTS:
+            return None
+        async with self._session_factory() as session:
+            async with session.begin():
+                identity_ids = await _identity_ids(session, db_user_id)
+                # Pins belong to the canonical account: a guest cannot pin
+                # (R-PIN-01), so there is never a guest shelf to merge.
+                account = await session.get(User, identity_ids[0])
+                if (
+                    account is None
+                    or account.is_anonymous
+                    or account.state != AccountState.REGISTERED.value
+                ):
+                    return None
+                # Everything a turn has to be, in one query per turn: a seat
+                # for this identity in its game, the game public, the drawing
+                # there to show. Checked before anything is written, so a
+                # refused list leaves the shelf as it was.
+                seated = (
+                    select(GameParticipant.id)
+                    .where(
+                        GameParticipant.game_id == TurnRecord.game_id,
+                        GameParticipant.user_id.in_(identity_ids),
+                    )
+                    .exists()
+                )
+                rows: list[tuple[UUID, UUID]] = []
+                for db_turn_id in db_turn_ids:
+                    game_id = await session.scalar(
+                        select(TurnRecord.game_id)
+                        .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+                        .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                        .where(
+                            TurnRecord.id == db_turn_id,
+                            GameRecord.visibility == GameVisibility.PUBLIC.value,
+                            TurnDrawing.status == TurnDrawingStatus.READY.value,
+                            TurnDrawing.payload.is_not(None),
+                            seated,
+                        )
+                    )
+                    if game_id is None:
+                        return None
+                    rows.append((game_id, db_turn_id))
+                # Replace rather than diff: the unique position per account
+                # would otherwise have to be shuffled through a spare slot.
+                await session.execute(
+                    delete(ProfileDrawingPin).where(
+                        ProfileDrawingPin.user_id == identity_ids[0]
+                    )
+                )
+                for position, (game_id, db_turn_id) in enumerate(rows):
+                    session.add(
+                        ProfileDrawingPin(
+                            user_id=identity_ids[0],
+                            game_id=game_id,
+                            turn_id=db_turn_id,
+                            position=position,
+                        )
+                    )
+        return ProfilePinsResult(
+            pins=tuple(
+                ProfilePinDetail(
+                    turn_id=_public_id(db_turn_id),
+                    game_id=_public_id(game_id),
+                    position=position,
+                )
+                for position, (game_id, db_turn_id) in enumerate(rows)
+            )
+        )
 
     async def get_recent_co_players(
         self,
