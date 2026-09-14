@@ -150,7 +150,6 @@ optional services. Handler domains:
 | [`lobby.py`](../backend/app/handlers/lobby.py) | `watch_lobby`, `unwatch_lobby`, `send_lobby_chat` - joining and leaving the lobby channel, and speaking into it |
 | [`friends.py`](../backend/app/handlers/friends.py) | `add_friend`, `invite_friend`, `join_friend_room` — the two ways into a room nobody named |
 | [`identity.py`](../backend/app/handlers/identity.py) | Resolving the account behind a socket into the name/color it plays under |
-| [`sessions.py`](../backend/app/handlers/sessions.py) | Socket session resolution shared by handler domains |
 | [`payloads.py`](../backend/app/handlers/payloads.py) | Strict typed validation for every inbound command |
 
 **`app/services/game_flow.py` — the orchestrator.**
@@ -158,6 +157,16 @@ Anything that spans domains lives here: starting turns, ending turns, scheduling
 phase and hint timers, removing a player from a running game, emitting canvas sync
 and commit events, and persisting a finished game. When a handler needs to do more
 than answer its own caller, it calls `GameFlowService`.
+
+Handlers import `game_flow`; `game_flow` imports nothing from `app/handlers/`.
+`app.handlers` is the wiring package - importing any module in it imports every handler
+domain, and those import `game_flow` back - so while the service reached up for a
+payload model and two session helpers it was only importable when something had loaded
+`app.handlers` first (#789, R-ENG-18). What a service needs from the
+boundary it declares itself: `room_settings_from_payload` takes the
+`RoomSettingsInput` protocol, which both room-settings payload models satisfy
+structurally, and socket session resolution (`require_current_player`) is a
+`GameFlowService` method rather than a handler helper.
 
 **`app/presenters.py` — pure payload construction.**
 `room_state_payload`, `turn_payload`, `turn_ended_payload`, `session_payload`,
@@ -1669,7 +1678,6 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/handlers/payloads.py`](../backend/app/handlers/payloads.py) | Typed validation for every client-originated Socket.IO command. |
 | [`app/handlers/restart.py`](../backend/app/handlers/restart.py) | Socket.IO handlers for majority-approved active-game restarts. |
 | [`app/handlers/rooms.py`](../backend/app/handlers/rooms.py) | Socket.IO handlers for the rooms domain. |
-| [`app/handlers/sessions.py`](../backend/app/handlers/sessions.py) | Socket session resolution shared by handler domains. |
 | [`app/identifiers.py`](../backend/app/identifiers.py) | Central generation policy for durable entity identifiers. |
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
 | [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
