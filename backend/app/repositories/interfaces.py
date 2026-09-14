@@ -445,6 +445,9 @@ class CommunityPromptList:
     star_count: int
     published_at: datetime
     version: int
+    # How many copies of it still exist - a number, and never who made them
+    # (R-LIST-20). Defaulted so the order of the fields above stays as it was.
+    copy_count: int = 0
     # Whether *this* caller starred it. Null for a caller who is not signed in,
     # which is a different answer from "no" and the client shows it as one.
     starred_by_me: bool | None = None
@@ -520,6 +523,9 @@ class OwnedPromptList:
     # nothing else about it: who starred a list is disclosed to nobody,
     # including them (R-LIST-16).
     star_count: int = 0
+    # How many copies of it still exist, on the same terms as the stars: the
+    # owner gets the number and nothing about who (R-LIST-20).
+    copy_count: int = 0
     # The exact revision this list was forked from, when it was (R-LIST-17).
     # A revision rather than a list, because both go on being edited and a
     # pointer at the list would stop meaning anything after the first edit.

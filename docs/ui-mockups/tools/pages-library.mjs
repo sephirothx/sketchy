@@ -129,7 +129,7 @@ export const CommunityCataloguePage = `
         <div style="display: grid; gap: 4px">
           ${sectionLabel('What is in it')}
           <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 22px; color: ${T.ink}; margin: 0; display: flex; align-items: center; gap: 9px">Creatures of the deep ${flag.sized('en', 22)}</h2>
-          <span style="display: flex; align-items: center; gap: 8px; color: ${T.muted}; font-size: 13.5px; font-weight: 700">by Marta <span style="color: ${T.faint}">·</span> <span style="display: inline-flex; align-items: center; gap: 5px">${icon.deck(14, 'deck-pane')}124 prompts</span></span>
+          <span style="display: flex; align-items: center; gap: 8px; color: ${T.muted}; font-size: 13.5px; font-weight: 700">by Marta <span style="color: ${T.faint}">·</span> <span style="display: inline-flex; align-items: center; gap: 5px">${icon.deck(14, 'deck-pane')}124 prompts</span> <span style="color: ${T.faint}">·</span> <span style="display: inline-flex; align-items: center; gap: 5px">${icon.copy(14)}8 copies</span></span>
         </div>
         ${catalogueStar(12, true)}
       </div>

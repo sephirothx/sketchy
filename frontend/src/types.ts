@@ -76,6 +76,8 @@ export interface OwnedPromptList extends PromptListSummary {
   tags: string[];
   /** How many people starred it. Who they are is disclosed to nobody. */
   starCount: number;
+  /** How many copies of it still exist — a number, never who made them (R-LIST-20). */
+  copyCount: number;
   /**
    * The exact revision this list was copied from, if it was one — a revision
    * rather than a list, because both go on being edited. It may name one that
@@ -106,6 +108,8 @@ export interface CommunityPromptList {
   ownerDisplayName: string;
   tags: string[];
   starCount: number;
+  /** Copies that still exist; a deleted copy stops counting (R-LIST-20). */
+  copyCount: number;
   /** Null when nobody is signed in: a different answer from `false`. */
   starredByMe: boolean | null;
   publishedAt: string;

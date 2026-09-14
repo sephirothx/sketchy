@@ -1764,7 +1764,10 @@ is what stops a prompt version being deleted out from under a revision a game pi
 `prompt_list_revision_tags`: `revision_id` + `tag_id` composite **PK**, indexed on
 `tag_id` for the direction the community catalogue reads (*which lists carry this tag*).
 
-`forked_from_revision_id` is written by `fork_published` and nothing else. It names the
+`forked_from_revision_id` is written by `fork_published` and nothing else, on a copy's
+**first** revision. It is also what a list's copy count is read from (R-LIST-20): the
+lists whose revision one points at any revision of it, not deleted — so the count is a
+question asked of this column, and there is no counter to keep in step. It names the
 exact revision a copy was taken from, which is what keeps it meaningful: both lists go
 on being edited, so a pointer at the *list* would stop saying anything after the first
 edit on either side. It may end up naming a revision nothing serves — the source was hidden, and revisions are

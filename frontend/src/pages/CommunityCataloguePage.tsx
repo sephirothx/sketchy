@@ -6,6 +6,7 @@ import { ANY_LANGUAGE, LanguagePicker } from "../components/LanguagePicker";
 import { PromptContentReportDialog } from "../components/PromptContentReportDialog";
 import {
   BackIcon,
+  CopyIcon,
   DeckIcon,
   Flag,
   SearchIcon,
@@ -302,6 +303,10 @@ export function CommunityCataloguePage() {
     setNotice(null);
     try {
       await forkPromptList(list.id);
+      const counted = <T extends CommunityPromptList>(row: T): T =>
+        row.id === list.id ? { ...row, copyCount: row.copyCount + 1 } : row;
+      setPage((held) => (held ? { ...held, lists: held.lists.map(counted) } : held));
+      setLoaded((held) => (held && held.list.id === list.id ? { ...held, list: counted(held.list) } : held));
       setNotice(ui.communityCataloguePage.copiedToYourLists);
     } catch (forkError) {
       setError(refusalText(forkError, ui.communityCataloguePage.couldNotCopyThatList));
@@ -476,6 +481,11 @@ export function CommunityCataloguePage() {
                   <span className="community-catalogue-count">
                     <DeckIcon size={14} />
                     {ui.communityCataloguePage.promptCount({ count: detail.promptCount })}
+                  </span>
+                  <span className="community-catalogue-dot" aria-hidden="true">·</span>
+                  <span className="community-catalogue-count">
+                    <CopyIcon size={14} />
+                    {ui.communityCataloguePage.copyCount({ count: detail.copyCount })}
                   </span>
                 </p>
               </div>

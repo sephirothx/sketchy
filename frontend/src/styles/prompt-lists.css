@@ -189,7 +189,7 @@
    make it look like the same kind of choice as private-or-unlisted. */
 .prompt-list-publication {
   align-items: center;
-  background: var(--surface-2, transparent);
+  background: var(--well);
   border: 1px solid var(--line);
   border-radius: 10px;
   display: flex;
@@ -205,6 +205,25 @@
 }
 
 .prompt-list-publication button { flex: none; }
+
+/* What the community has done with the list: its stars and its copies. A row
+   of facts in the panel's muted type rather than a sentence, each behind its
+   own icon, so the two numbers can be told apart at a glance. */
+.prompt-list-publication .prompt-list-reach {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 4px 14px;
+  margin-top: 8px;
+}
+
+.prompt-list-reach > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
 
 /* The tag picker wraps rather than scrolls: the vocabulary is fixed and small
    enough to show whole, and a set that scrolled would hide the ones already

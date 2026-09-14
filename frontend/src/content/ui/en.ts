@@ -1210,6 +1210,8 @@ export const EN = {
       counted(p.count, { one: "prompt", other: "prompts" }),
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "star", other: "stars" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "copy", other: "copies" }),
     showMore: "Show more",
     makeACopy: "Make a copy",
     report: "Report",
@@ -1244,6 +1246,10 @@ export const EN = {
     notPublished: "Not published",
     publishedExplainer: "Anyone can find this list, play it, star it, or make a copy of their own.",
     unpublishedExplainer: "Publishing puts this list where anyone can find and play it. You can take it back out at any time.",
+    starCount: (p: { count: number }) =>
+      counted(p.count, { one: "star", other: "stars" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "copy", other: "copies" }),
     publish: "Publish",
     unpublish: "Unpublish",
     promptListPublished: "Prompt list published.",
