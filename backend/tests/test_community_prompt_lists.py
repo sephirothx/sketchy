@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import pytest_asyncio
+from sqlalchemy import select
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -18,7 +19,12 @@ from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import community_limiter, create_prompt_list_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import PromptList, PromptListStar, generate_uuid
+from app.db.models import (
+    PromptList,
+    PromptListStar,
+    PromptVersion,
+    generate_uuid,
+)
 from app.repositories.interfaces import (
     BundledPromptDefinition,
     PromptListEntryInput,
@@ -67,6 +73,7 @@ async def published(
     at: datetime = PUBLISHED_AT,
     stars: int = 0,
     users=None,
+    entries: tuple[PromptListEntryInput, ...] = (PromptListEntryInput(answer="otter"),),
 ):
     """A list in the catalogue, with its stars already given."""
     created = await prompts.create_owned(
@@ -75,7 +82,7 @@ async def published(
         description="",
         language=language,
         visibility="private",
-        prompts=(PromptListEntryInput(answer="otter"),),
+        prompts=entries,
         tags=tags,
     )
     async with factory() as session:
@@ -312,3 +319,157 @@ async def test_an_official_bundled_list_never_reaches_the_catalogue(env):
     response = await http.get("/api/prompt-lists/community")
 
     assert response.json()["lists"] == []
+
+
+async def test_a_published_list_can_be_read_whole(env):
+    """R-LIST-19: choosing from a name and a count is choosing blind."""
+    http, users, prompts, factory = env
+    owner = await account(users, "Cartographer")
+    created = await published(
+        prompts,
+        factory,
+        owner.id,
+        "Seaside",
+        tags=("nature", "places"),
+        users=users,
+        entries=(
+            PromptListEntryInput(answer="lighthouse"),
+            PromptListEntryInput(answer="harbour"),
+        ),
+    )
+
+    response = await http.get(f"/api/prompt-lists/community/{created.id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [entry["prompt"] for entry in body["prompts"]] == ["lighthouse", "harbour"]
+    # Version ids, so one exact prompt can be reported (R-LIST-13); no
+    # concept ids or aliases, which are matching machinery.
+    assert all(entry["promptVersionId"] for entry in body["prompts"])
+    assert body["name"] == "Seaside"
+    assert body["ownerDisplayName"] == "Cartographer"
+    assert body["tags"] == ["nature", "places"]
+    # Text only: a public listing is not the place to hand out identifiers.
+    assert "conceptId" not in response.text and "aliases" not in response.text
+
+
+async def test_the_preview_leaves_out_a_prompt_a_moderator_hid(env):
+    """A hidden version is out of play, so it is not part of what this list
+    would draw - and showing it would put it back in front of people."""
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    created = await published(
+        prompts,
+        factory,
+        owner.id,
+        "Mixed",
+        users=users,
+        entries=(
+            PromptListEntryInput(answer="otter"),
+            PromptListEntryInput(answer="something unpleasant"),
+        ),
+    )
+    async with factory() as session:
+        async with session.begin():
+            version = await session.get(
+                PromptVersion, UUID(created.prompts[1].prompt_version_id)
+            )
+            version.moderation_state = "hidden"
+
+    body = (await http.get(f"/api/prompt-lists/community/{created.id}")).json()
+
+    assert [entry["prompt"] for entry in body["prompts"]] == ["otter"]
+
+
+async def test_the_preview_opens_only_what_the_listing_shows(env):
+    """One predicate for both, so a takedown closes both doors at once."""
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    hidden = await published(prompts, factory, owner.id, "Hidden", users=users)
+    retired = await published(prompts, factory, owner.id, "Retired", users=users)
+    private = await prompts.create_owned(
+        owner.id,
+        name="Private",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    await prompts.upsert_bundled(
+        slug="official",
+        name="Official",
+        description="",
+        language="en",
+        prompts=[
+            BundledPromptDefinition(concept_id=str(generate_uuid()), answer="otter")
+        ],
+        version=1,
+    )
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(PromptList, UUID(hidden.id))).moderation_state = "hidden"
+            (await session.get(PromptList, UUID(retired.id))).deleted_at = PUBLISHED_AT
+            bundled_id = await session.scalar(
+                select(PromptList.id).where(PromptList.slug == "official")
+            )
+
+    for list_id in (hidden.id, retired.id, private.id, str(bundled_id)):
+        response = await http.get(f"/api/prompt-lists/community/{list_id}")
+        assert response.status_code == 404, list_id
+        assert response.json()["errorCode"] == "prompt_list_not_found"
+
+
+async def test_a_signed_out_reader_can_open_one(env):
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    created = await published(prompts, factory, owner.id, "Open", users=users)
+
+    body = (await http.get(f"/api/prompt-lists/community/{created.id}")).json()
+
+    assert [entry["prompt"] for entry in body["prompts"]] == ["otter"]
+    assert body["starredByMe"] is None
+
+
+async def test_the_starred_filter_is_this_account_s_shortlist(env):
+    """What the room picker's Starred group reads."""
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    reader = await account(users, "Reader")
+    kept = await published(prompts, factory, owner.id, "Kept", users=users)
+    await published(prompts, factory, owner.id, "Ignored", users=users)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                PromptListStar(user_id=UUID(reader.id), prompt_list_id=UUID(kept.id))
+            )
+    issued = await create_session(factory, user_id=reader.id, device_label="Test")
+    http.cookies.set(COOKIE_NAME, issued.token)
+
+    everything = await http.get("/api/prompt-lists/community")
+    shortlist = await http.get("/api/prompt-lists/community?starred=true")
+
+    assert sorted(row["name"] for row in everything.json()["lists"]) == [
+        "Ignored",
+        "Kept",
+    ]
+    assert [row["name"] for row in shortlist.json()["lists"]] == ["Kept"]
+    assert shortlist.json()["lists"][0]["starredByMe"] is True
+
+
+async def test_the_starred_filter_needs_an_account(env):
+    """Nobody's shortlist is not everybody's stars."""
+    http, users, prompts, factory = env
+    owner = await account(users, "Author")
+    await published(prompts, factory, owner.id, "Findable", users=users)
+
+    signed_out = await http.get("/api/prompt-lists/community?starred=true")
+    assert signed_out.status_code == 403
+    assert signed_out.json()["errorCode"] == "account_required"
+    assert signed_out.json()["params"] == {"action": "stars"}
+
+    guest = await users.create_anonymous("Guest")
+    issued = await create_session(factory, user_id=guest.id, device_label="Test")
+    http.cookies.set(COOKIE_NAME, issued.token)
+    assert (
+        await http.get("/api/prompt-lists/community?starred=true")
+    ).status_code == 403

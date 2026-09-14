@@ -112,6 +112,14 @@ export interface CommunityPromptList {
   version: number;
 }
 
+/** A community list with what is actually in it (R-LIST-19).
+ *
+ * Entries carry `promptVersionId` for the same reason a share-resolved list
+ * does: it is what lets a reader report one exact prompt. */
+export interface CommunityPromptListDetail extends CommunityPromptList {
+  prompts: SharedPromptEntry[];
+}
+
 /** One entry of the curated list-tag vocabulary owners choose from. */
 export interface PromptTag {
   slug: string;

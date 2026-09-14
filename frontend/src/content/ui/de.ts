@@ -76,6 +76,8 @@ function accountRequired(params: MessageParams): string {
       return "Lege ein Konto an, bevor du die Zwei-Faktor-Authentifizierung einrichtest.";
     case "friends":
       return "Lege ein Konto an, um Freunde hinzuzufügen.";
+    case "stars":
+      return "Für Sterne auf Begriffslisten wird ein Konto benötigt.";
     default:
       return "Lege ein Konto an, um das zu tun.";
   }

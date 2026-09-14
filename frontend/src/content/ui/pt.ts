@@ -76,6 +76,8 @@ function accountRequired(params: MessageParams): string {
       return "Cria uma conta antes de configurares a verificação em dois passos.";
     case "friends":
       return "Cria uma conta para adicionares amigos.";
+    case "stars":
+      return "É preciso uma conta para dar estrelas às listas.";
     default:
       return "Cria uma conta para fazeres isso.";
   }

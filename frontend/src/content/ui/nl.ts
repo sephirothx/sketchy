@@ -76,6 +76,8 @@ function accountRequired(params: MessageParams): string {
       return "Maak een account voordat je tweestapsverificatie instelt.";
     case "friends":
       return "Maak een account om vrienden toe te voegen.";
+    case "stars":
+      return "Voor het geven van een ster is een account nodig.";
     default:
       return "Maak een account om dat te doen.";
   }

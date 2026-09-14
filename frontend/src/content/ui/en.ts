@@ -88,6 +88,8 @@ function accountRequired(params: MessageParams): string {
       return "Create an account before setting up two-factor authentication.";
     case "friends":
       return "Create an account to add friends.";
+    case "stars":
+      return "Create an account to star prompt lists.";
     default:
       return "Create an account to do that.";
   }
