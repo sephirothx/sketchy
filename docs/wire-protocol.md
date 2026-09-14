@@ -581,10 +581,11 @@ code is refused on the way in and still rendered from history. Two kinds of
 drawing accept one. The current turn's, while the phase is `drawing` or
 `turn_results`: the reaction lives on the room until the game's history is
 written. One in the recap, after the game ended: the row exists, so the handler
-writes through the same repository method the REST route uses, and answers
-*"That game is still being saved. Try again in a moment."* inside the window
-between `game_ended` and the history write landing, or *"That game was not
-recorded…"* when there is no row to write to. Guests are told to create an
+writes through the same repository method the REST route uses, and refuses with
+`game_still_saving` inside the window between `game_ended` and the history write
+landing - shown as *"That game is still being saved. Try again in a moment."*, so
+the refusal itself must reach the control with its code - or `game_not_recorded`
+when there is no row to write to. Guests are told to create an
 account; spectators, the drawer (by seat **and** by account), and any turn not
 on screen are refused. The acknowledgement carries `turnId`, `emoji` and the
 new `tally`. Answers to the `action` budget like any other pressed control.

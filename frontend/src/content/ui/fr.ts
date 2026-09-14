@@ -1549,10 +1549,6 @@ export const FR: Catalogue = {
     spectate: "Regarder",
   },
 
-  reactionRequests: {
-    thatReactionCouldNotBeSent: "Cette réaction n’a pas pu être envoyée.",
-  },
-
   recapDrawings: {
     thisDrawingCouldNotBeLoaded: "Ce dessin n’a pas pu être chargé.",
   },

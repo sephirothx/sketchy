@@ -1,7 +1,5 @@
 import { emitWithAck } from "./socket";
 import type { ReactToDrawingResponse } from "../types";
-import { refusalText } from "./refusals.ts";
-import { ui } from "../content/ui/index.ts";
 
 /**
  * React to a drawing the live room is showing - the current turn's, or one in
@@ -18,7 +16,11 @@ export async function sendDrawingReaction(
     emoji,
   });
   if (!response.ok) {
-    throw new Error(refusalText(response, ui.reactionRequests.thatReactionCouldNotBeSent));
+    // The refusal itself, not a sentence written from it: the control writes
+    // the sentence, and one written here reached it as an Error with no code
+    // left to read - so "still being saved, try again in a moment" came out as
+    // the generic "could not be sent", and a player was never told to retry.
+    throw response;
   }
   return response;
 }
