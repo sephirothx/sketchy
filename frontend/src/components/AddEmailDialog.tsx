@@ -4,11 +4,10 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import {
   MAX_EMAIL_LENGTH,
   emailLooksUsable,
-  readEmailState,
   recoveryStatusMessage,
   setEmailAddress,
-  type EmailState,
 } from "../lib/accountRecovery";
+import { useEmailStateStore } from "../store/emailStateStore";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -28,7 +27,8 @@ export function AddEmailDialog({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const titleId = useId();
-  const [state, setState] = useState<EmailState | null>(null);
+  const state = useEmailStateStore((store) => store.state);
+  const refresh = useEmailStateStore((store) => store.refresh);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -36,21 +36,12 @@ export function AddEmailDialog({
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: inputRef });
 
+  // Read afresh on opening, so what is already on the account is current.
+  // A failed read is not worth an error of its own: the form below still
+  // works, it just cannot say what is already there.
   useEffect(() => {
-    let cancelled = false;
-    void readEmailState()
-      .then((current) => {
-        if (!cancelled) setState(current);
-      })
-      .catch(() => {
-        // Not worth an error of its own: the form below still works, it just
-        // cannot say what is already on the account.
-        if (!cancelled) setState(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void refresh();
+  }, [refresh]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -64,6 +55,7 @@ export function AddEmailDialog({
     try {
       const { pendingAddress } = await setEmailAddress(email.trim());
       setSentTo(pendingAddress);
+      void refresh();
     } catch (submitError) {
       setError(
         refusalText(submitError, ui.addEmailDialog.somethingWentWrongPleaseTryAgain),

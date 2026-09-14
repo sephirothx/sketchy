@@ -1,15 +1,14 @@
 import { XIcon } from "./icons";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AddEmailDialog } from "./AddEmailDialog";
 import {
   acknowledgeReminder,
   maskEmail,
-  readEmailState,
   shouldShowRecoveryReminder,
-  type EmailState,
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
+import { useEmailStateStore } from "../store/emailStateStore";
 import { useGameStore } from "../store/gameStore";
 import { ui } from "../content/ui/index.ts";
 
@@ -20,7 +19,12 @@ it again - until they forget their password, when there is nothing anyone can
 do for them. This is the reminder, deliberately shaped as a note rather than a
 gate: it can be closed, and it comes back in a week rather than on every load.
 The interval is kept on the account rather than in the browser, so it does not
-restart on each new device or vanish when storage is cleared. */
+restart on each new device or vanish when storage is cleared.
+
+The state is the shared store's, not a copy read on mount: the address is
+usually confirmed somewhere else - a tab opened from the email, or Settings -
+and a copy kept here went on asking for a confirmation that had already
+happened until the page was reloaded. */
 export function EmailRecoveryReminder() {
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -29,22 +33,12 @@ export function EmailRecoveryReminder() {
   // while somebody is playing - which is exactly what it did, because the room
   // lays itself out to the viewport rather than flowing under a banner.
   const inRoom = useGameStore((state) => state.roomId !== null);
-  const [state, setState] = useState<EmailState | null>(null);
+  const state = useEmailStateStore((store) => store.state);
+  const refresh = useEmailStateStore((store) => store.refresh);
   const [dismissed, setDismissed] = useState(false);
   const [adding, setAdding] = useState(false);
 
   const registered = hasResolved && user !== null && !user.isAnonymous;
-
-  const refresh = useCallback(() => {
-    if (!registered) return;
-    void readEmailState()
-      .then(setState)
-      // A reminder that cannot be fetched is not worth an error: the player
-      // came here to draw.
-      .catch(() => setState(null));
-  }, [registered]);
-
-  useEffect(refresh, [refresh]);
 
   // Guests have nothing to recover yet - claiming the account is the step
   // being asked for there, not an address.
@@ -88,7 +82,7 @@ export function EmailRecoveryReminder() {
           onClose={() => setAdding(false)}
           onSaved={() => {
             setAdding(false);
-            refresh();
+            void refresh();
           }}
         />
       )}

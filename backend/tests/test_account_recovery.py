@@ -49,14 +49,30 @@ PASSWORD = "a-good-password"
 NEW_PASSWORD = "an-even-better-password"
 
 
+@pytest.fixture
+def announced() -> list[str]:
+    """Every account the router said had its email state move, in order."""
+    return []
+
+
 @pytest_asyncio.fixture
-async def env(monkeypatch):
+async def env(monkeypatch, announced):
     monkeypatch.setenv("IP_HASH_SECRET", "recovery-test-secret")
     monkeypatch.delenv("SMTP_HOST", raising=False)
     factory, engine = await create_test_db()
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
-    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+
+    async def record(user_id: str) -> None:
+        announced.append(user_id)
+
+    app.include_router(
+        create_auth_router(
+            SqlAlchemyUserRepository(factory),
+            factory,
+            on_email_state_changed=record,
+        )
+    )
 
     clients: list[AsyncClient] = []
 
@@ -315,6 +331,37 @@ async def test_a_proved_address_ends_the_reminder(env):
         "reminderDue": False,
         "deliveryConfigured": False,
     }
+
+
+async def test_every_tab_hears_when_the_address_state_moves(env, announced):
+    """A standing banner reads the state once; the change comes from elsewhere.
+
+    The confirmation link is opened from a mail client - a new tab, often one
+    with no session at all - so the account has to be named from the token,
+    and the tabs that were already open have to be told.
+    """
+    new_client, factory = env
+    laptop, mail_client = new_client(), new_client()
+    account = await register(laptop, "Tidy")
+
+    offered = await laptop.put("/api/auth/email", json={"email": "tidy@example.com"})
+    assert offered.status_code == 200, offered.text
+    assert announced == [account["id"]]
+
+    assert await verify_via_email(mail_client, factory) == "tidy@example.com"
+    assert announced == [account["id"], account["id"]]
+
+    assert (await laptop.post("/api/auth/email/reminder-seen")).status_code == 200
+    assert announced == [account["id"]] * 3
+
+
+async def test_a_link_that_proves_nothing_announces_nothing(env, announced):
+    new_client, _factory = env
+    refused = await new_client().post(
+        "/api/auth/email/verify", json={"token": "not-a-real-token"}
+    )
+    assert refused.status_code == 400
+    assert announced == []
 
 
 async def test_the_operator_can_reset_without_any_mail_server(env):

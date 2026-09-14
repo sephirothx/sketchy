@@ -12,7 +12,8 @@ import { useGameStore } from "../store/gameStore";
 import { emitWithAck, socket } from "../lib/socket";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { flushSettingsSync, queueSettingsSync } from "../lib/accountSettingsSync";
-import { maskEmail, readEmailState, type EmailState } from "../lib/accountRecovery";
+import { maskEmail } from "../lib/accountRecovery";
+import { useEmailStateStore } from "../store/emailStateStore";
 import { removeAvatar, uploadAvatar } from "../lib/avatars";
 import { TwoFactorDialog } from "./TwoFactorDialog";
 import { roleName } from "../lib/operatorAccess";
@@ -486,23 +487,16 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   // factor is invited to "Set up" another.
   const [twoFactorState, setTwoFactorState] = useState<SecondFactorState | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [email, setEmail] = useState<EmailState | null>(null);
+  // The shared store's, so a confirmation made in another tab - or from the
+  // reminder banner - reaches this row too.
+  const email = useEmailStateStore((state) => state.state);
+  const refreshEmail = useEmailStateStore((state) => state.refresh);
   const [noticeOpen, setNoticeOpen] = useState(signedInHere);
 
   useEffect(() => {
     if (isGuest) return;
-    let active = true;
-    void readEmailState()
-      .then((state) => {
-        if (active) setEmail(state);
-      })
-      .catch(() => {
-        // The row falls back to offering the dialog, which asks for itself.
-      });
-    return () => {
-      active = false;
-    };
-  }, [isGuest, emailOpen]);
+    void refreshEmail();
+  }, [isGuest, emailOpen, refreshEmail]);
 
   // The same shape as the email row above, and re-read when the dialog
   // closes so the label follows what just happened in it.

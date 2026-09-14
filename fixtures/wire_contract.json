@@ -1128,6 +1128,9 @@
   "drawing_reaction": {
    "shape": "object"
   },
+  "email_state_changed": {
+   "shape": "object"
+  },
   "friend_invite_received": {
    "shape": "object"
   },

@@ -10,6 +10,7 @@ import {
   requestPasswordReset,
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
+import { useEmailStateStore } from "../store/emailStateStore";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -49,7 +50,11 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         if (cancelled) return;
         setDone(ui.accountRecoveryPage.addressIsConfirmedYouCan({ address }));
         // The account gained an address; anything showing its state should say so.
+        // Read again rather than trusting the push alone: this tab's socket may
+        // not be up yet, and the banner on this very page read the state in
+        // the same instant the confirmation left - so its answer can predate it.
         void fetchMe();
+        void useEmailStateStore.getState().refresh();
       })
       .catch((confirmError) => {
         if (cancelled) return;
