@@ -1624,6 +1624,7 @@ scripts/
   check-coverage.py   Per-module coverage floors on the risk-critical modules
   check-wire-contract.py  Regenerates fixtures/wire_contract.json and compares it with the base branch
   update-e2e-durations.py  Rebuilds the E2E shard weights from a run's JUnit reports
+  add-prompt.py     Adds a prompt to a bundled list: mints its conceptId, bumps the list version, refuses a taken answer
   brand/            Logo and icon sources, and the scripts that raster them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
