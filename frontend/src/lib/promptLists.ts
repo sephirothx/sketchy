@@ -69,6 +69,27 @@ export function listCommunityPromptLists(
   return apiRequest(`/api/prompt-lists/community${search ? `?${search}` : ""}`);
 }
 
+export interface StarResult {
+  starCount: number;
+  starredByMe: boolean;
+}
+
+/**
+ * Star or unstar a published list (R-LIST-16).
+ *
+ * Idempotent in both directions, so a double click or a retry is safe: the
+ * row is keyed by (account, list), and the response carries the count after
+ * the write rather than a delta to apply.
+ */
+export function setPromptListStarred(
+  id: string,
+  starred: boolean,
+): Promise<StarResult> {
+  return apiRequest(`/api/prompt-lists/${encodeURIComponent(id)}/star`, {
+    method: starred ? "PUT" : "DELETE",
+  });
+}
+
 export function listOwnedPromptLists(): Promise<OwnedPromptList[]> {
   return apiRequest("/api/prompt-lists/mine");
 }

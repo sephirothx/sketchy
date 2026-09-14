@@ -419,6 +419,7 @@ def _to_owned_prompt_list(
     *,
     prompt_count: int | None = None,
     tags: Sequence[str] = (),
+    star_count: int = 0,
 ) -> OwnedPromptList:
     return OwnedPromptList(
         id=_public_id(wl.id),
@@ -435,6 +436,7 @@ def _to_owned_prompt_list(
         updated_at=wl.updated_at,
         prompts=tuple(prompts),
         tags=tuple(tags),
+        star_count=star_count,
     )
 def _bundled_revision_hash(
     *, language: str, prompts: Sequence[BundledPromptDefinition]
@@ -2348,6 +2350,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         self._session_factory = session_factory
 
     @staticmethod
+    def _star_count():
+        """How many rows name this list. Derived, never stored (R-LIST-16)."""
+        return (
+            select(func.count())
+            .select_from(PromptListStar)
+            .where(PromptListStar.prompt_list_id == PromptList.id)
+            .correlate(PromptList)
+            .scalar_subquery()
+        )
+
+    @staticmethod
     def _prompt_count():
         return (
             select(func.count(Prompt.id))
@@ -2513,14 +2526,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         """
         requester_id = _optional_entity_id(requesting_user_id)
         limit = max(1, min(int(limit), MAX_COMMUNITY_PAGE))
-        star_count = (
-            select(func.count())
-            .select_from(PromptListStar)
-            .where(PromptListStar.prompt_list_id == PromptList.id)
-            .correlate(PromptList)
-            .scalar_subquery()
-            .label("star_count")
-        )
+        star_count = self._star_count().label("star_count")
         stmt = (
             select(PromptList, self._prompt_count(), star_count, User.display_name)
             .join(User, User.id == PromptList.owner_user_id)
@@ -2655,7 +2661,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             rows = (
                 await session.execute(
-                    select(PromptList, self._prompt_count())
+                    select(PromptList, self._prompt_count(), self._star_count())
                     .where(
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
@@ -2665,8 +2671,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             ).all()
             return [
-                _to_owned_prompt_list(prompt_list, prompt_count=int(prompt_count))
-                for prompt_list, prompt_count in rows
+                _to_owned_prompt_list(
+                    prompt_list,
+                    prompt_count=int(prompt_count),
+                    star_count=int(stars),
+                )
+                for prompt_list, prompt_count, stars in rows
             ]
 
     async def _owned_with_entries(
@@ -2714,7 +2724,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # the same tags present them the same way (R-LIST-18).
         held = {link.tag.slug for link in (revision.revision_tags if revision else ())}
         tags = tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in held)
-        return _to_owned_prompt_list(prompt_list, entries, tags=tags)
+        stars = await session.scalar(
+            select(func.count())
+            .select_from(PromptListStar)
+            .where(PromptListStar.prompt_list_id == prompt_list.id)
+        )
+        return _to_owned_prompt_list(
+            prompt_list, entries, tags=tags, star_count=int(stars or 0)
+        )
 
     async def get_owned(
         self, owner_user_id: str, prompt_list_id: str
@@ -2953,6 +2970,60 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result
+
+    async def set_star(
+        self, user_id: str, prompt_list_id: str, *, starred: bool
+    ) -> int:
+        """Star or unstar a **published** list (R-LIST-16).
+
+        Published only, and that narrowing is the design rather than a
+        restriction: a star row is durable, so a star on an Unlisted list
+        would be lasting evidence that its owner holds that list's bearer
+        share code - the disclosure R-LIST-03 exists to prevent. Refusing the
+        target removes the problem instead of mitigating it.
+
+        Starring one's own list is allowed. It is a bookmark as much as a
+        vote, and a rule against it would be a rule nobody can enforce anyway
+        - a second account costs nothing, which is what the trust gate on
+        publication is for rather than this.
+        """
+        starrer_id = _optional_entity_id(user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if starrer_id is None or list_id is None:
+            raise PromptListNotFoundError("Prompt list not found.")
+        async with self._session_factory() as session:
+            async with session.begin():
+                await require_live_account(session, starrer_id)
+                target = await session.scalar(
+                    select(PromptList.id).where(
+                        PromptList.id == list_id,
+                        PromptList.visibility == PromptListVisibility.PUBLIC.value,
+                        PromptList.moderation_state
+                        == PromptContentModerationState.ACTIVE.value,
+                        PromptList.deleted_at.is_(None),
+                    )
+                )
+                if target is None:
+                    raise PromptListNotFoundError("Prompt list not found.")
+                existing = await session.get(
+                    PromptListStar, (starrer_id, list_id)
+                )
+                if starred and existing is None:
+                    session.add(
+                        PromptListStar(
+                            user_id=starrer_id, prompt_list_id=list_id
+                        )
+                    )
+                elif not starred and existing is not None:
+                    await session.delete(existing)
+            return int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(PromptListStar)
+                    .where(PromptListStar.prompt_list_id == list_id)
+                )
+                or 0
+            )
 
     async def set_owned_publication(
         self,

@@ -522,7 +522,10 @@ are never in the same listing. A host can pick a published list for a room
 directly, without copying it first — publishing is the owner saying so, and no
 share code stands in front of it. It is admitted on the same check that runs
 again at Start, so a list unpublished or taken down in between refuses the room
-visibly rather than quietly shrinking the pool it draws from.
+visibly rather than quietly shrinking the pool it draws from. A published list
+can be **starred** by anyone with a verified account; the list's owner sees how
+many stars it has and never who gave them, and unpublishing leaves them where
+they are.
 
 Private lists resolve only for their owner. Switching a list to Unlisted creates
 a cryptographically random **Prompt-list share code**; a host must add that code

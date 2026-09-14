@@ -1697,7 +1697,13 @@ the index answers the other direction, *how many starred this*, which the catalo
 once per row and would otherwise scan for.
 
 The composite key is also the idempotency: starring twice writes the same row, so the
-endpoint needs no separate guard.
+endpoint needs no separate guard, and a retried request is safe without one either.
+The count comes back from the write rather than as a delta the client applies, so two
+browsers cannot disagree about it.
+
+**Starring your own list is allowed.** It is a bookmark as much as a vote, and a rule
+against it would be one nobody can enforce — a second account costs nothing, which is
+what the trust gate on publication is for rather than this one.
 
 Only a published list may be starred. A star on an Unlisted list would be a durable
 record that its owner holds that list's bearer share code, which is exactly the

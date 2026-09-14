@@ -74,6 +74,8 @@ export interface OwnedPromptList extends PromptListSummary {
   moderationState: "active" | "under_review" | "hidden";
   /** Curated tag slugs on the list's current revision, in vocabulary order. */
   tags: string[];
+  /** How many people starred it. Who they are is disclosed to nobody. */
+  starCount: number;
   createdAt: string;
   updatedAt: string;
   prompts: OwnedPromptEntry[];
