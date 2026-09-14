@@ -1744,6 +1744,16 @@ is what stops a prompt version being deleted out from under a revision a game pi
 `prompt_list_revision_tags`: `revision_id` + `tag_id` composite **PK**, indexed on
 `tag_id` for the direction the community catalogue reads (*which lists carry this tag*).
 
+`forked_from_revision_id` is written by `fork_published` and nothing else. It names the
+exact revision a copy was taken from, which is what keeps it meaningful: both lists go
+on being edited, so a pointer at the *list* would stop saying anything after the first
+edit on either side. It may end up naming a revision nothing serves — the source was
+hidden or retired afterwards — and that is correct rather than dangling: revisions are
+immutable, and the column records where a copy came from rather than promising it is
+still reachable. A fork gets **new prompt concepts and versions** rather than references
+to the source's, so one owner's edit cannot rewrite what the other's list means, and
+hidden versions are left out of the copy entirely.
+
 **Tags are copied onto every revision, not shared across a list's revisions.** A game
 pins a revision, and a discovery filter that found a list by its tags has to go on
 agreeing with what that revision holds — which it could not if the tags hung off the

@@ -304,6 +304,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Jemand anderes hat diese Liste geändert. Lade sie neu und versuch es noch einmal.",
   prompt_list_invalid: "Diese Begriffsliste konnte nicht gespeichert werden.",
   prompt_list_forbidden: "Diese Begriffsliste kannst du nicht ändern.",
+  prompt_list_allowance_reached: (params: Record<string, unknown>) => {
+    const max = typeof params.max === "number" ? params.max : 25;
+    return `Es gibt bereits ${max} Begriffslisten – mehr kann ein Konto nicht haben. Zuerst muss eine gelöscht werden.`;
+  },
   email_verification_required: (params: Record<string, unknown>) => {
     switch (params.action) {
       case "publish":

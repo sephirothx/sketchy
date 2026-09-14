@@ -304,6 +304,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Otra persona ha cambiado esa lista. Recárgala e inténtalo de nuevo.",
   prompt_list_invalid: "No se pudo guardar esa lista de palabras.",
   prompt_list_forbidden: "Esa lista de palabras no es tuya para cambiarla.",
+  prompt_list_allowance_reached: (params: Record<string, unknown>) => {
+    const max = typeof params.max === "number" ? params.max : 25;
+    return `Ya hay ${max} listas de palabras, el máximo por cuenta. Hay que eliminar una para hacer sitio.`;
+  },
   email_verification_required: (params: Record<string, unknown>) => {
     switch (params.action) {
       case "publish":

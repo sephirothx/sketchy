@@ -76,6 +76,12 @@ export interface OwnedPromptList extends PromptListSummary {
   tags: string[];
   /** How many people starred it. Who they are is disclosed to nobody. */
   starCount: number;
+  /**
+   * The exact revision this list was copied from, if it was one — a revision
+   * rather than a list, because both go on being edited. It may name one that
+   * is no longer served.
+   */
+  forkedFromRevisionId: string | null;
   createdAt: string;
   updatedAt: string;
   prompts: OwnedPromptEntry[];
@@ -619,6 +625,7 @@ export type ErrorCode =
   | "prompt_list_forbidden"
   | "unknown_prompt_tag"
   | "prompt_list_hidden"
+  | "prompt_list_allowance_reached"
   | "unknown_sort"
   | "timezone_required"
   | "range_reversed"

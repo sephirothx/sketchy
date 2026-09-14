@@ -420,6 +420,7 @@ def _to_owned_prompt_list(
     prompt_count: int | None = None,
     tags: Sequence[str] = (),
     star_count: int = 0,
+    forked_from_revision_id: str | None = None,
 ) -> OwnedPromptList:
     return OwnedPromptList(
         id=_public_id(wl.id),
@@ -437,6 +438,7 @@ def _to_owned_prompt_list(
         prompts=tuple(prompts),
         tags=tuple(tags),
         star_count=star_count,
+        forked_from_revision_id=forked_from_revision_id,
     )
 def _bundled_revision_hash(
     *, language: str, prompts: Sequence[BundledPromptDefinition]
@@ -2730,7 +2732,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             .where(PromptListStar.prompt_list_id == prompt_list.id)
         )
         return _to_owned_prompt_list(
-            prompt_list, entries, tags=tags, star_count=int(stars or 0)
+            prompt_list,
+            entries,
+            tags=tags,
+            star_count=int(stars or 0),
+            forked_from_revision_id=(
+                _public_id(revision.forked_from_revision_id)
+                if revision is not None and revision.forked_from_revision_id
+                else None
+            ),
         )
 
     async def get_owned(
@@ -2829,7 +2839,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
                     raise PromptListMutationError(
-                        f"An account can own at most {MAX_OWNED_PROMPT_LISTS} prompt lists."
+                        f"An account can own at most {MAX_OWNED_PROMPT_LISTS} prompt lists.",
+                        code=ErrorCode.PROMPT_LIST_ALLOWANCE_REACHED,
+                        params={"max": MAX_OWNED_PROMPT_LISTS},
                     )
                 list_id = generate_uuid()
                 prompt_list = PromptList(
@@ -2968,6 +2980,132 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 prompt_list.version = next_version
                 prompt_list.updated_at = datetime.now(timezone.utc)
             result = await self._owned_with_entries(session, owner_id, list_id)
+            assert result is not None
+            return result
+
+    async def fork_published(
+        self, user_id: str, prompt_list_id: str
+    ) -> OwnedPromptList:
+        """Copy a published list into a private one of the caller's (R-LIST-17).
+
+        Private on creation whatever the source is: a fork is somebody taking
+        content to work on, and publishing it is a separate act with its own
+        gate (R-LIST-11). Independent from the moment it exists, too - hiding
+        the source afterwards does not reach into the copy, which is why the
+        lineage may end up pointing at a revision that is no longer served.
+
+        The lineage names the exact source **revision**, not the list. Both
+        sides go on being edited, and a pointer at the list would stop meaning
+        anything after the first edit on either.
+        """
+        forker_id = _optional_entity_id(user_id)
+        source_id = _optional_entity_id(prompt_list_id)
+        if forker_id is None or source_id is None:
+            raise PromptListNotFoundError("Prompt list not found.")
+        async with self._session_factory() as session:
+            async with session.begin():
+                await require_live_account(session, forker_id)
+                source = await session.scalar(
+                    select(PromptList).where(
+                        PromptList.id == source_id,
+                        PromptList.visibility == PromptListVisibility.PUBLIC.value,
+                        PromptList.moderation_state
+                        == PromptContentModerationState.ACTIVE.value,
+                        PromptList.deleted_at.is_(None),
+                    )
+                )
+                if source is None:
+                    raise PromptListNotFoundError("Prompt list not found.")
+                # Checked before anything is written, so a refusal at the cap
+                # leaves nothing behind (R-LIST-08's spirit: fail visibly).
+                count = await session.scalar(
+                    select(func.count(PromptList.id)).where(
+                        PromptList.owner_user_id == forker_id,
+                        PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
+                    )
+                )
+                if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
+                    raise PromptListMutationError(
+                        f"An account can own at most {MAX_OWNED_PROMPT_LISTS} "
+                        "prompt lists. Delete one before making a copy.",
+                        code=ErrorCode.PROMPT_LIST_ALLOWANCE_REACHED,
+                        params={"max": MAX_OWNED_PROMPT_LISTS},
+                    )
+                origin = await session.scalar(
+                    select(PromptListRevision)
+                    .where(
+                        PromptListRevision.prompt_list_id == source.id,
+                        PromptListRevision.version == source.version,
+                    )
+                    .options(
+                        selectinload(PromptListRevision.items)
+                        .selectinload(PromptListRevisionItem.prompt_version)
+                        .selectinload(PromptVersion.version_aliases)
+                        .selectinload(PromptVersionAlias.alias),
+                        selectinload(PromptListRevision.revision_tags).selectinload(
+                            PromptListRevisionTag.tag
+                        ),
+                    )
+                )
+                if origin is None:
+                    raise PromptListMutationError(
+                        "That list has no revision to copy."
+                    )
+                # Only what a player may draw. Copying a hidden version would
+                # hand somebody content a moderator took out of play, under a
+                # new owner who never saw the decision (R-LIST-07).
+                entries = tuple(
+                    PromptListEntryInput(
+                        answer=item.prompt_version.canonical_answer,
+                        aliases=tuple(
+                            sorted(
+                                link.alias.answer
+                                for link in item.prompt_version.version_aliases
+                            )
+                        ),
+                    )
+                    for item in origin.items
+                    if item.prompt_version.moderation_state
+                    == PromptContentModerationState.ACTIVE.value
+                )
+                if not entries:
+                    raise PromptListMutationError(
+                        "That list has no usable prompts to copy."
+                    )
+                list_id = generate_uuid()
+                fork = PromptList(
+                    id=list_id,
+                    owner_user_id=forker_id,
+                    slug=f"user-{list_id}",
+                    name=source.name,
+                    description=source.description,
+                    language=source.language,
+                    is_bundled=False,
+                    visibility=PromptListVisibility.PRIVATE.value,
+                    moderation_state=PromptContentModerationState.ACTIVE.value,
+                    version=1,
+                )
+                session.add(fork)
+                await session.flush()
+                await self._write_owned_revision(
+                    session,
+                    prompt_list=fork,
+                    entries=entries,
+                    version=1,
+                    tags=tuple(
+                        slug
+                        for slug in LIST_TAG_SLUG_ORDER
+                        if slug in {link.tag.slug for link in origin.revision_tags}
+                    ),
+                )
+                revision = await session.scalar(
+                    select(PromptListRevision).where(
+                        PromptListRevision.prompt_list_id == list_id
+                    )
+                )
+                revision.forked_from_revision_id = origin.id
+            result = await self._owned_with_entries(session, forker_id, list_id)
             assert result is not None
             return result
 

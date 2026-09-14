@@ -316,6 +316,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Somebody else changed that list. Reload it and try again.",
   prompt_list_invalid: "That prompt list could not be saved.",
   prompt_list_forbidden: "That prompt list is not yours to change.",
+  prompt_list_allowance_reached: (params: Record<string, unknown>) => {
+    const max = typeof params.max === "number" ? params.max : 25;
+    return `You already have ${max} prompt lists, the most an account can keep. Delete one to make room.`;
+  },
   email_verification_required: (params: Record<string, unknown>) => {
     switch (params.action) {
       case "publish":

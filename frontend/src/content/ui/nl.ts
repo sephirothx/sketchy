@@ -304,6 +304,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Iemand anders heeft die lijst gewijzigd. Herlaad hem en probeer het nog eens.",
   prompt_list_invalid: "Deze woordenlijst kon niet opgeslagen worden.",
   prompt_list_forbidden: "Deze woordenlijst is niet van jou om te wijzigen.",
+  prompt_list_allowance_reached: (params: Record<string, unknown>) => {
+    const max = typeof params.max === "number" ? params.max : 25;
+    return `Er zijn al ${max} woordenlijsten, het maximum per account. Er moet er eerst een verwijderd worden.`;
+  },
   email_verification_required: (params: Record<string, unknown>) => {
     switch (params.action) {
       case "publish":
