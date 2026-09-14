@@ -82,6 +82,18 @@ export function parseFriendLists(payload: unknown): FriendLists {
   };
 }
 
+/** Whose friends list the store should hold for *user*: an account id, or `null`.
+
+A guest has an id but no list — both sides of a friendship must be registered
+(R-FRIEND-03) — so a guest maps to `null` exactly as a signed-out tab does.
+That lets the store answer a guest itself instead of asking the server and
+logging the refusal on every anonymous page load. */
+export function friendListOwner(
+  user: { id: string; isAnonymous: boolean } | null | undefined,
+): string | null {
+  return user && !user.isAnonymous ? user.id : null;
+}
+
 export function isFriend(lists: FriendLists, userId: string): boolean {
   return lists.friends.some((entry) => entry.userId === userId);
 }

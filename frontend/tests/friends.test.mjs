@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   NO_FRIENDS,
   friendListChanges,
+  friendListOwner,
   friendsSurface,
   friendsSurfaceIsEmpty,
   isNoFriendListRefusal,
@@ -402,4 +403,20 @@ test("an arrival is still a diff, because an unannounced one leaves a trace", ()
   // still sitting in the list with a badge over it. An acceptance leaves
   // nothing behind, which is why that one is durable and this is not.
   assert.deepEqual(arrived.arrived, [them]);
+});
+
+test("a guest has no friends list for the store to ask about", () => {
+  // A guest has an id, and keying the store on it sent a request the server
+  // always refuses - logged as a console error on every anonymous page load.
+  // Both sides of a friendship are registered (R-FRIEND-03), so the client
+  // can answer this itself.
+  assert.equal(friendListOwner({ id: "guest-1", isAnonymous: true }), null);
+  assert.equal(friendListOwner(null), null);
+  assert.equal(friendListOwner(undefined), null);
+});
+
+test("a registered account owns its friends list", () => {
+  // Registering keeps the guest's id, so the owner goes null -> id and the
+  // store clears its baseline rather than announcing existing requests.
+  assert.equal(friendListOwner({ id: "acct-1", isAnonymous: false }), "acct-1");
 });
