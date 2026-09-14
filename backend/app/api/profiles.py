@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -26,7 +26,9 @@ from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
 from app.repositories.interfaces import (
     DrawingReactionResult,
     GameHistoryRepository,
+    ProfilePinEntry,
     ProfilePinsResult,
+    TurnDrawingDetail,
     UserRepository,
 )
 
@@ -72,6 +74,25 @@ class PinsBody(BaseModel):
         if any(not 1 <= len(turn_id) <= 64 for turn_id in turn_ids):
             raise ValueError("not a turn id")
         return turn_ids
+
+
+def pin_entry_payload(pin: ProfilePinEntry) -> dict:
+    """The shelf's shape mirrors a game-detail turn where the two overlap, so
+    the client's recap metadata is built the same way from either."""
+    return {
+        "turnId": pin.turn_id,
+        "roundNumber": pin.round_number,
+        "turnNumber": pin.turn_number,
+        "drawerDisplayName": pin.drawer_display_name,
+        "drawerNameColor": pin.drawer_name_color,
+        "drawerIsAnonymous": pin.drawer_is_anonymous,
+        "prompt": pin.prompt,
+        "strokeCount": pin.stroke_count,
+        "reactions": [
+            {"seatId": reaction.seat_id, "emoji": reaction.emoji}
+            for reaction in pin.reactions
+        ],
+    }
 
 
 def pins_payload(result: ProfilePinsResult) -> dict:
@@ -235,20 +256,41 @@ def create_profile_router(
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return await _serve_drawing(
+            request,
+            turn_id,
+            checksum_of=lambda: game_history_repo.get_turn_drawing_checksum(
+                game_id, turn_id, requesting_user_id=requesting_user_id
+            ),
+            drawing_of=lambda: game_history_repo.get_turn_drawing(
+                game_id, turn_id, requesting_user_id=requesting_user_id
+            ),
+        )
+
+    async def _serve_drawing(
+        request: Request,
+        turn_id: str,
+        *,
+        checksum_of: Callable[[], Awaitable[str | None]],
+        drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
+    ) -> Response:
+        """The body the two drawing routes share: the conditional answer, the
+        decode, and the refusals. The two differ only in *which* query says
+        the caller may have the bytes - the participant check, or the pin
+        (R-PIN-06) - and each passes its own, so neither can borrow the other's.
+        """
         cache_headers = {
-            # Participant-scoped bytes must never reach a shared cache, and a
-            # browser's own copy is revalidated on every open: an erased
-            # drawing stops being shown at once rather than when a lifetime
-            # runs out.
+            # Reader-scoped bytes must never reach a shared cache, and a
+            # browser's own copy is revalidated on every open: an erased or
+            # unpinned drawing stops being shown at once rather than when a
+            # lifetime runs out.
             "Cache-Control": "private, no-cache",
         }
         if_none_match = request.headers.get("if-none-match")
         if if_none_match is not None:
             # A validator is answered from the metadata alone: the blob is
             # neither read nor decoded for a copy that is still current.
-            checksum = await game_history_repo.get_turn_drawing_checksum(
-                game_id, turn_id, requesting_user_id=requesting_user_id
-            )
+            checksum = await checksum_of()
             if checksum is None:
                 raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
             validator = drawing_validator(checksum)
@@ -256,9 +298,7 @@ def create_profile_router(
                 return Response(
                     status_code=304, headers={**cache_headers, "ETag": validator}
                 )
-        drawing = await game_history_repo.get_turn_drawing(
-            game_id, turn_id, requesting_user_id=requesting_user_id
-        )
+        drawing = await drawing_of()
         if drawing is None:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         try:
@@ -282,6 +322,52 @@ def create_profile_router(
                 **cache_headers,
                 "ETag": drawing_validator(drawing.checksum_sha256),
             },
+        )
+
+    @router.get("/users/{user_id}/pins")
+    async def user_pins(user_id: str, request: Request):
+        """The player's **Pinned drawings**, in their order, for anyone signed in.
+
+        Any session will do, a guest's included (R-PIN-06): the shelf is a
+        deliberate widening of who may see a drawing, by the explicit act of
+        the account that pinned it, and the one thing it keeps out is
+        unauthenticated scraping. A visitor with no session gets the same
+        404 an unknown player does, so the route never says which - and the
+        client renders no shelf at all for a signed-out viewer, not an empty
+        one. Each entry credits the drawer through the turn's frozen snapshot
+        (#387) and carries no game id: a viewer who was not in the game has
+        no page to open, and a private game could not be pinned to begin
+        with (R-PIN-03).
+        """
+        throttle(request)
+        if not getattr(request.state, "user_id", None):
+            raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
+        user = await user_repo.get_by_id(user_id)
+        if user is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
+        pins = await game_history_repo.get_profile_pins(user.id)
+        return {"pins": [pin_entry_payload(pin) for pin in pins]}
+
+    @router.get("/users/{user_id}/pins/{turn_id}/drawing")
+    async def pinned_drawing(user_id: str, turn_id: str, request: Request):
+        """A pinned drawing's bytes, for anyone signed in (R-PIN-06).
+
+        The one other door beside the participant route above, and its own
+        query rather than an `OR` in that one: the join to the pins table is
+        the authorization. Same conditional handling (R-HIST-24) and the same
+        404 for every refusal - signed out, not pinned any more, erased, or a
+        player that does not exist.
+        """
+        throttle(request)
+        if not getattr(request.state, "user_id", None):
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return await _serve_drawing(
+            request,
+            turn_id,
+            checksum_of=lambda: game_history_repo.get_pinned_drawing_checksum(
+                user_id, turn_id
+            ),
+            drawing_of=lambda: game_history_repo.get_pinned_drawing(user_id, turn_id),
         )
 
     async def _write_reaction(

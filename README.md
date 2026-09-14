@@ -71,8 +71,9 @@ keyboard that takes half the screen, and one thumb.
   drawings or another player's, always credited to the drawer's name as it was that day.
   A private room's game cannot be pinned, so a pin never shows what the game list would
   not. Pins go with the game, the turn, or an erased drawing, and with the account that
-  made them. The write path landed first (`PUT /api/me/pins`); the profile shelf and the
-  Pin controls follow in #808–#810.
+  made them. Anyone signed in, guests included, can see a shelf and open its drawings;
+  a signed-out visitor sees no shelf. The routes landed first; the profile shelf and
+  the Pin controls follow in #809 and #810.
 - Friends — registered players add each other from a player's profile or from a
   seat in the same room, and a friendship lets either of them take a seat in a game they
   cannot name: uninvited only where the **host** is a friend, or on a short-lived

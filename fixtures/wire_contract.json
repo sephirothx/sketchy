@@ -1593,6 +1593,16 @@
   "api.profiles:create_profile_router": [
    "hasMore"
   ],
+  "api.profiles:pin_entry_payload": [
+   "drawerDisplayName",
+   "drawerIsAnonymous",
+   "drawerNameColor",
+   "roundNumber",
+   "seatId",
+   "strokeCount",
+   "turnId",
+   "turnNumber"
+  ],
   "api.profiles:pins_payload": [
    "turnId"
   ],

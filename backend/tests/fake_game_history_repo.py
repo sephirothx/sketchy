@@ -21,6 +21,7 @@ from app.repositories.interfaces import (
     TurnDrawingReactionInput,
     TurnRecordInput,
     ProfilePinDetail,
+    ProfilePinEntry,
     ProfilePinsResult,
 )
 
@@ -168,6 +169,19 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         turn_id: str,
         *,
         requesting_user_id: str,
+    ) -> str | None:
+        return None
+
+    async def get_profile_pins(self, profile_user_id: str) -> tuple[ProfilePinEntry, ...]:
+        return ()
+
+    async def get_pinned_drawing(
+        self, profile_user_id: str, turn_id: str
+    ) -> TurnDrawingDetail | None:
+        return None
+
+    async def get_pinned_drawing_checksum(
+        self, profile_user_id: str, turn_id: str
     ) -> str | None:
         return None
 
