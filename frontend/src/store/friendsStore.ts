@@ -191,6 +191,15 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
       set({ ownerId: owner, lists: NO_FRIENDS, loaded: false, pending: null });
     }
     const seq = ++readSeq;
+    if (owner === null) {
+      // Signed out, or a guest: provably no list (R-FRIEND-03), so answer it
+      // here rather than asking the server to refuse and logging that refusal
+      // on every anonymous page load. Claiming the slot keeps a read still in
+      // flight for the previous account from landing afterwards.
+      appliedSeq = seq;
+      set({ lists: NO_FRIENDS, loaded: true });
+      return;
+    }
     // Superseded by an answer that was issued later and already landed, or
     // addressed to somebody who is no longer the one reading.
     const overtaken = () => seq <= appliedSeq || get().ownerId !== owner;
@@ -203,6 +212,8 @@ export const useFriendsStore = create<FriendsStore>((set, get) => ({
       if (overtaken()) return;
       // A guest is refused, and that refusal *is* their answer: they have no
       // friends list, and every control that would use one is hidden anyway.
+      // A guest is normally answered above without asking; this is for a
+      // session that lapsed while the read was in flight.
       //
       // Nothing else is. A timeout, a dropped connection or a 500 says
       // nothing about who this account is friends with, and treating it as

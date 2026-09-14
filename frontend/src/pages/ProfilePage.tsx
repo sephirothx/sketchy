@@ -32,7 +32,7 @@ import {
 } from "../lib/profile";
 import { lastSeenLabel } from "../lib/lastSeen";
 import { useAuthStore } from "../store/authStore";
-import { isFriend, profileFriendActionFor } from "../lib/friends";
+import { friendListOwner, isFriend, profileFriendActionFor } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
@@ -468,7 +468,7 @@ function ProfileView({ userId }: { userId: string }) {
   // as "Add friend", and pressing it accepts (asking back is how you say
   // yes) - so the page would have offered one thing and done another.
   const friendsKnown = useFriendsStore(
-    (s) => s.loaded && s.ownerId === (currentUser?.id ?? null),
+    (s) => s.loaded && s.ownerId === friendListOwner(currentUser),
   );
   const viewerIsFriend = friendsKnown && isFriend(friendLists, userId);
 
