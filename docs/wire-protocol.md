@@ -1890,7 +1890,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (3) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (7) | The export document, pinned by [`fixtures/account_data_export_v7_fields.json`](../fixtures/account_data_export_v7_fields.json) | The export's field surface changes |
+| Data export `schema_version` (8) | The export document, pinned by [`fixtures/account_data_export_v8_fields.json`](../fixtures/account_data_export_v8_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 

@@ -1864,6 +1864,7 @@
    "moderationState",
    "promptVersion",
    "promptVersionId",
+   "publishedAt",
    "shareCode",
    "updatedAt"
   ],
@@ -1950,12 +1951,15 @@
    "mergedAt",
    "nameColor",
    "promptLanguage",
+   "promptListId",
+   "promptListName",
    "requestedByMe",
    "requesterWasActor",
    "requesterWasTarget",
    "respondedAt",
    "revokedAt",
    "soundEffects",
+   "starredAt",
    "timeFormat",
    "updatedAt",
    "userId"

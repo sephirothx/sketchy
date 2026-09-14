@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -143,6 +143,7 @@
     "promptLists[].language",
     "promptLists[].moderationState",
     "promptLists[].name",
+    "promptLists[].publishedAt",
     "promptLists[].revisions",
     "promptLists[].revisions[].contentHash",
     "promptLists[].revisions[].createdAt",
@@ -262,6 +263,10 @@
     "settings.timeFormat",
     "settings.updatedAt",
     "settings.volume",
+    "stars",
+    "stars[].promptListId",
+    "stars[].promptListName",
+    "stars[].starredAt",
     "suspensions",
     "suspensions[].createdAt",
     "suspensions[].expiresAt",

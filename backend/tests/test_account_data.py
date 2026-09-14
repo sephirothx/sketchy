@@ -48,6 +48,7 @@ from app.db.models import (
     PromptConcept,
     PromptContentReport,
     PromptList,
+    PromptListStar,
     RoomMessage,
     RoomPreset,
     ScoreEvent,
@@ -464,8 +465,26 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         visibility="unlisted",
         prompts=(PromptListEntryInput(answer="red panda"),),
     )
+    starred_list = await SqlAlchemyPromptListRepository(factory).create_owned(
+        other.id,
+        name="Somebody else's published list",
+        description="Not the requester's content",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="lighthouse"),),
+    )
     async with factory() as session:
         async with session.begin():
+            published = await session.get(PromptList, UUID(starred_list.id))
+            assert published is not None
+            published.visibility = "public"
+            published.published_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+            session.add(
+                PromptListStar(
+                    user_id=UUID(owner["id"]),
+                    prompt_list_id=UUID(starred_list.id),
+                )
+            )
             session.add(
                 RoomPreset(
                     owner_user_id=UUID(owner["id"]),
@@ -503,8 +522,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 7
-    assert artifact["schemaVersion"] == 7
+    assert status["schemaVersion"] == 8
+    assert artifact["schemaVersion"] == 8
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -557,6 +576,19 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["promptLists"][0]["name"] == "Exported prompts"
     assert artifact["promptLists"][0]["revisions"][0]["prompts"][0]["prompt"] == "red panda"
     assert artifact["roomPresets"][0]["name"] == "Tournament night"
+    # A star names the list, not the person who owns it: the export is the
+    # requester's data, and a stranger's account id would travel further than
+    # it needs to. The "Private Bob" assertion below is what proves it.
+    assert artifact["stars"] == [
+        {
+            "promptListId": starred_list.id,
+            "promptListName": "Somebody else's published list",
+            "starredAt": artifact["stars"][0]["starredAt"],
+        }
+    ]
+    assert other.id not in json.dumps(artifact["stars"])
+    # The owner's own list says whether it is published; this one never was.
+    assert artifact["promptLists"][0]["publishedAt"] is None
     assert artifact["roomPresets"][0]["promptListIds"] == [exported_list.id]
     assert artifact["promptContentReportsSubmitted"][0]["details"] == (
         "Requester-authored prompt report"
@@ -576,7 +608,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "$argon2" not in encoded
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v7_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v8_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -1441,3 +1473,49 @@ async def test_deletion_takes_the_reactions_on_erased_drawings_and_keeps_the_one
     assert kept.emoji == "fire"
     seat = next(p for p in detail.summary.participants if p.seat_id == kept.seat_id)
     assert seat.display_name == "Deleted player"
+
+
+async def test_deletion_takes_the_stars_that_account_gave(env):
+    """A star is disposable social data, and it is the account's own row.
+
+    Stars are facts rather than a counter on the list (R-LIST-16), which is
+    what makes this a cascade and not an arithmetic problem: the row goes and
+    every count that derives from it is right again, with no number left too
+    high anywhere. The list itself is somebody else's and survives untouched.
+    """
+    http, users, _, factory = env
+    owner = await register(http, "StarDeleter")
+    author = await users.create_anonymous("List author")
+    published = await SqlAlchemyPromptListRepository(factory).create_owned(
+        author.id,
+        name="Starred then deleted",
+        description="",
+        language="en",
+        visibility="private",
+        prompts=(PromptListEntryInput(answer="lighthouse"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(published.id))
+            assert row is not None
+            row.visibility = "public"
+            row.published_at = datetime(2026, 9, 1, tzinfo=timezone.utc)
+            session.add(
+                PromptListStar(
+                    user_id=UUID(owner["id"]), prompt_list_id=UUID(published.id)
+                )
+            )
+
+    response = await http.request(
+        "DELETE", "/api/auth/account", json={"password": PASSWORD}
+    )
+    assert response.status_code == 200
+
+    async with factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(PromptListStar)
+            )
+        ) == 0
+        survivor = await session.get(PromptList, UUID(published.id))
+        assert survivor is not None and survivor.visibility == "public"
