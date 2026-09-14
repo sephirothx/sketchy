@@ -55,6 +55,19 @@ class EmailAlreadyInUse(RecoveryError):
 
 
 @dataclass(frozen=True)
+class ConfirmedAddress:
+    """An address that was just proved, and whose account it now belongs to.
+
+    The account comes back with it because the link is presented without a
+    session - often in a tab that has never signed in - so the caller has no
+    other way to know whose open tabs to tell.
+    """
+
+    user_id: UUID
+    address: str
+
+
+@dataclass(frozen=True)
 class EmailState:
     address: str | None
     verified: bool
@@ -206,8 +219,8 @@ async def confirm_email(
     ip_hash: str | None = None,
     request_id: str | None = None,
     now: datetime | None = None,
-) -> str | None:
-    """Accept a proof and record the address. Returns the address, or None."""
+) -> ConfirmedAddress | None:
+    """Accept a proof and record the address. Returns what was proved, or None."""
     async with session_factory() as session:
         async with session.begin():
             record = await consume_token(
@@ -239,7 +252,7 @@ async def confirm_email(
                     details={},
                 )
             )
-            return record.email
+            return ConfirmedAddress(user_id=user.id, address=record.email)
 
 
 async def request_password_reset(

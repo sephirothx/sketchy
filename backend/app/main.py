@@ -172,6 +172,16 @@ async def push_friends_changed(user_id: str) -> None:
     await sio.emit("friends_changed", {}, room=f"user:{user_id}")
 
 
+async def push_email_state_changed(user_id: str) -> None:
+    """Tell an account its recovery address state moved, in every open tab.
+
+    Contentless for the reason `friends_changed` is: `GET /api/auth/email` is
+    the truth, and the address it would otherwise carry is not something to
+    put on a broadcast.
+    """
+    await sio.emit("email_state_changed", {}, room=f"user:{user_id}")
+
+
 def _friend_request_limit() -> int:
     """How many friend requests one account may send in an hour."""
     raw = os.environ.get("FRIEND_REQUEST_LIMIT", "").strip()
@@ -632,6 +642,7 @@ api.include_router(
         on_identity_merged=forget_merged_identities,
         on_profile_changed=forget_presence_identity,
         on_friends_changed=friend_service.announce_to,
+        on_email_state_changed=push_email_state_changed,
         on_export_requested=export_worker.wake,
     )
 )

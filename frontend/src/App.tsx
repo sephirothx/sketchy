@@ -7,6 +7,7 @@ import {
   overlayBackgroundOf,
 } from "./lib/overlayRoutes";
 import "./App.css";
+import { useEmailStateSync } from "./hooks/useEmailStateSync";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
@@ -145,6 +146,7 @@ function App() {
     // account's waiting requests as if they had just arrived.
     void refreshFriends(myAccountId);
   }, [refreshFriends, myAccountId]);
+  useEmailStateSync();
   const [shutdownNotice, setShutdownNotice] = useState<ServerShutdownNotice | null>(null);
   const [serverFull, setServerFull] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);

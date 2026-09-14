@@ -303,6 +303,11 @@ def create_auth_router(
     # the friend service's own announcement, so there is one implementation of
     # "tell them their lists moved" rather than one per caller.
     on_friends_changed: Callable[[Iterable[str]], Awaitable[None]] | None = None,
+    # Called with the account whose recovery address, pending confirmation or
+    # reminder just moved. A standing banner reads that state once, and the
+    # write that changes it usually comes from somewhere else: the confirmation
+    # link opens a new tab, and Settings is a different component.
+    on_email_state_changed: Callable[[str], Awaitable[None]] | None = None,
     on_export_requested: Callable[[], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
@@ -1157,6 +1162,16 @@ def create_auth_router(
             "sessionsRevoked": result.sessions_revoked,
         }
 
+    async def announce_email_state(user_id: str) -> None:
+        # Best effort and after the commit: the write is done, and a tab that
+        # misses this reads the state again the next time its socket connects.
+        if on_email_state_changed is None:
+            return
+        try:
+            await on_email_state_changed(user_id)
+        except Exception:
+            logger.exception("Could not announce email state for %s", user_id)
+
     @router.get("/email")
     async def read_email(request: Request):
         """What this account knows about its own way back in."""
@@ -1190,13 +1205,14 @@ def create_auth_router(
             raise Refusal(409, ErrorCode.EMAIL_IN_USE, str(error)) from error
         except RecoveryError as error:
             raise Refusal(403, ErrorCode.EMAIL_CHANGE_REFUSED, str(error)) from error
+        await announce_email_state(user.id)
         return {"ok": True, "pendingAddress": address}
 
     @router.post("/email/verify")
     async def verify_email(body: TokenBody, request: Request):
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
-            address = await confirm_email(
+            confirmed = await confirm_email(
                 session_factory,
                 token=body.token,
                 ip_hash=ip_hash,
@@ -1204,19 +1220,22 @@ def create_auth_router(
             )
         except EmailAlreadyInUse as error:
             raise Refusal(409, ErrorCode.EMAIL_IN_USE, str(error)) from error
-        if address is None:
+        if confirmed is None:
             raise Refusal(
                 400,
                 ErrorCode.VERIFICATION_LINK_INVALID,
                 "That confirmation link has expired or already been used.",
             )
-        return {"ok": True, "address": address}
+        await announce_email_state(str(confirmed.user_id))
+        return {"ok": True, "address": confirmed.address}
 
     @router.post("/email/reminder-seen")
     async def acknowledge_email_reminder(request: Request):
         """Restart the clock, so the note returns rather than repeats."""
         user = await require_user(request)
         await mark_reminder_shown(session_factory, user_id=UUID(user.id))
+        # Closed in one tab is closed: every other tab is showing the same note.
+        await announce_email_state(user.id)
         return {"ok": True}
 
     @router.post("/password/forgot")

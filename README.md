@@ -842,6 +842,11 @@ the lobby rather than counting as seen. The deploy banner deliberately does not
 behave this way, because a game about to be ended under you is worth
 interrupting for.
 
+Confirming the address ends the reminder everywhere at once - the tab the
+confirmation link opened, every other tab and device the account has open, and
+the **Settings** row - without a reload, and closing the reminder in one tab
+closes it in the others.
+
 The **Email** row in **Settings → Account** is where an address is added,
 replaced or simply looked at. The weekly reminder is a prompt and nothing more;
 a prompt somebody has dismissed is not a place to go back to, so the row is
