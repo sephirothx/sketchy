@@ -65,6 +65,10 @@ async def seed_prompt_lists(
     directory: Path | None = None,
 ) -> list[PromptListSummary]:
     """Scan and upsert all bundled prompt list JSON definitions into the database."""
+    # The list-tag vocabulary is bundled content as much as the lists are
+    # (R-LIST-18), and it is seeded here rather than beside this call so that
+    # startup has one place that makes bundled content present.
+    await repo.seed_list_tags()
     target_dir = directory or DEFAULT_PROMPT_LISTS_DIR
     if not target_dir.is_dir():
         logger.warning("Prompt lists directory not found at %s", target_dir)

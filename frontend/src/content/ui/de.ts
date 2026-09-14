@@ -304,6 +304,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Jemand anderes hat diese Liste geändert. Lade sie neu und versuch es noch einmal.",
   prompt_list_invalid: "Diese Begriffsliste konnte nicht gespeichert werden.",
   prompt_list_forbidden: "Diese Begriffsliste kannst du nicht ändern.",
+  unknown_prompt_tag: (params: Record<string, unknown>) => {
+    const tag = String(params.tag ?? "");
+    return `„${tag}“ ist kein Schlagwort, das eine Liste tragen kann.`;
+  },
   unknown_sort: "Danach kann Sketchy nicht sortieren.",
   timezone_required: "Gib zu diesem Datum eine Zeitzone an.",
   range_reversed: "Der Anfang des Zeitraums muss vor seinem Ende liegen.",
@@ -1126,7 +1130,27 @@ export const DE: Catalogue = {
     report: "Melden",
   },
 
+  promptTags: {
+    "animals": "Tiere",
+    "food-and-drink": "Essen und Trinken",
+    "objects": "Gegenstände",
+    "nature": "Natur",
+    "places": "Orte",
+    "people": "Menschen",
+    "actions": "Tätigkeiten",
+    "sports-and-games": "Sport und Spiele",
+    "transport": "Verkehr",
+    "entertainment": "Unterhaltung",
+    "science-and-technology": "Wissenschaft und Technik",
+    "history-and-culture": "Geschichte und Kultur",
+    "holidays": "Feiertage",
+    "fantasy": "Fantasy",
+    "abstract": "Abstraktes",
+  },
   myPromptListsPage: {
+    tags: "Schlagwörter",
+    tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} von ${p.max} gewählt`,
+    tagsAreHowListsAreFound: "Über Schlagwörter wird diese Liste im Community-Katalog gefunden.",
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "Begriff", other: "Begriffe" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""

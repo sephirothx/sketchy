@@ -500,7 +500,11 @@ in-memory room. A registered host can explicitly send usable quick prompts to
 merely because it was typed. An account may own at most 25 lists and a saved
 list may contain at most 500 prompts. Editing uses optimistic concurrency and
 creates a new immutable revision instead of rewriting the revision a running or
-finished game pinned. The content language cannot change after creation.
+finished game pinned. The content language cannot change after creation. A list
+may carry up to five **Prompt tags**, chosen from a curated vocabulary the server
+serves at `GET /api/prompt-tags` rather than the client guessing at it; the tags
+belong to the revision, so setting them is an edit like any other, and a tag the
+vocabulary does not contain is refused by name rather than quietly dropped.
 
 Private lists resolve only for their owner. Switching a list to Unlisted creates
 a cryptographically random **Prompt-list share code**; a host must add that code

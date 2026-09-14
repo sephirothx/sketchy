@@ -12,11 +12,16 @@ from sqlalchemy.orm import selectinload
 from app.db.models import (
     PromptListRevision,
     PromptListRevisionItem,
+    PromptTag,
     PromptVersion,
 )
 from app.db.seed import DEFAULT_PROMPT_LISTS_DIR as PROMPT_LIST_DIR, seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
-from app.prompt_content import default_prompt_list_slug, prompt_match_key
+from app.prompt_content import (
+    LIST_TAG_VOCABULARY,
+    default_prompt_list_slug,
+    prompt_match_key,
+)
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
     BundledPromptDefinition,
@@ -472,5 +477,47 @@ async def test_a_reseeded_revision_counts_content_moderation_has_hidden():
         expected_counts, expected_total = letter_histogram(members)
         assert revision.letter_counts == expected_counts
         assert revision.letter_total == expected_total
+    finally:
+        await engine.dispose()
+
+
+async def test_seeding_makes_the_tag_vocabulary_present_and_keeps_names_current():
+    """The vocabulary is bundled content, and a rename changes the name only.
+
+    A slug is referenced by every revision tagged with it, so renaming a tag
+    means changing its display name; changing the slug would orphan the rows
+    that already point at it (R-LIST-18).
+    """
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await repo.seed_list_tags()
+        await repo.seed_list_tags()
+
+        async with factory() as session:
+            rows = (
+                await session.scalars(
+                    select(PromptTag).where(
+                        PromptTag.slug.in_([slug for slug, _ in LIST_TAG_VOCABULARY])
+                    )
+                )
+            ).all()
+        assert {row.slug for row in rows} == {
+            slug for slug, _ in LIST_TAG_VOCABULARY
+        }, "seeding twice is seeding once"
+        assert dict((row.slug, row.name) for row in rows) == dict(LIST_TAG_VOCABULARY)
+
+        async with factory() as session:
+            async with session.begin():
+                stale = await session.scalar(
+                    select(PromptTag).where(PromptTag.slug == "animals")
+                )
+                stale.name = "Beasts"
+                stale_id = stale.id
+        await repo.seed_list_tags()
+        async with factory() as session:
+            renamed = await session.get(PromptTag, stale_id)
+        assert renamed.name == "Animals"
+        assert renamed.id == stale_id, "the row is the same row; only the name moved"
     finally:
         await engine.dispose()

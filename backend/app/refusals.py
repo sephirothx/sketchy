@@ -222,6 +222,8 @@ class ErrorCode(StrEnum):
     PROMPT_LIST_CONFLICT = "prompt_list_conflict"
     PROMPT_LIST_INVALID = "prompt_list_invalid"
     PROMPT_LIST_FORBIDDEN = "prompt_list_forbidden"
+    # A tag the curated vocabulary does not hold (R-LIST-18); carries `tag`.
+    UNKNOWN_PROMPT_TAG = "unknown_prompt_tag"
     UNKNOWN_SORT = "unknown_sort"
     TIMEZONE_REQUIRED = "timezone_required"
     RANGE_REVERSED = "range_reversed"

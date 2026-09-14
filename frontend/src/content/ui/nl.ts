@@ -304,6 +304,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Iemand anders heeft die lijst gewijzigd. Herlaad hem en probeer het nog eens.",
   prompt_list_invalid: "Deze woordenlijst kon niet opgeslagen worden.",
   prompt_list_forbidden: "Deze woordenlijst is niet van jou om te wijzigen.",
+  unknown_prompt_tag: (params: Record<string, unknown>) => {
+    const tag = String(params.tag ?? "");
+    return `„${tag}” is geen label dat een lijst kan hebben.`;
+  },
   unknown_sort: "Sketchy kan daar niet op sorteren.",
   timezone_required: "Zet er een tijdzone bij die datum.",
   range_reversed: "Het begin van het bereik moet vóór het einde liggen.",
@@ -1126,7 +1130,27 @@ export const NL: Catalogue = {
     report: "Melden",
   },
 
+  promptTags: {
+    "animals": "Dieren",
+    "food-and-drink": "Eten en drinken",
+    "objects": "Voorwerpen",
+    "nature": "Natuur",
+    "places": "Plaatsen",
+    "people": "Mensen",
+    "actions": "Handelingen",
+    "sports-and-games": "Sport en spel",
+    "transport": "Vervoer",
+    "entertainment": "Amusement",
+    "science-and-technology": "Wetenschap en techniek",
+    "history-and-culture": "Geschiedenis en cultuur",
+    "holidays": "Feestdagen",
+    "fantasy": "Fantasy",
+    "abstract": "Abstract",
+  },
   myPromptListsPage: {
+    tags: "Labels",
+    tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} van ${p.max} gekozen`,
+    tagsAreHowListsAreFound: "Via labels wordt deze lijst in de communitycatalogus gevonden.",
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "woord", other: "woorden" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
-import { PlusIcon, TrashIcon, XIcon } from "../components/icons";
+import { CheckIcon, PlusIcon, TrashIcon, XIcon } from "../components/icons";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
   getOwnedPromptList,
   listOwnedPromptLists,
+  listPromptTags,
   updateOwnedPromptList,
   type PromptListDraft,
 } from "../lib/promptLists";
@@ -18,7 +19,7 @@ import {
 } from "../lib/promptListDrafts";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { useAuthStore } from "../store/authStore";
-import type { OwnedPromptList, PromptLanguage } from "../types";
+import type { OwnedPromptList, PromptLanguage, PromptTag } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -29,7 +30,15 @@ const EMPTY_DRAFT: PromptListDraft = {
   language: "en",
   visibility: "private",
   prompts: [],
+  tags: [],
 };
+
+/** A tag's name in the reader's language. The server's `name` is English and
+kept for logs and API readers; the catalogue owns what a player reads
+(R-I18N-01), keyed by the slug that never changes. */
+function tagName(tag: PromptTag): string {
+  return (ui.promptTags as Record<string, string>)[tag.slug] ?? tag.slug;
+}
 
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
   return {
@@ -42,6 +51,7 @@ function draftFromList(promptList: OwnedPromptList): PromptListDraft {
       prompt: prompt.prompt,
       aliases: prompt.aliases,
     })),
+    tags: promptList.tags,
   };
 }
 
@@ -52,6 +62,8 @@ export function MyPromptListsPage() {
   const isAnonymous = user?.isAnonymous;
   const initialQuickPrompts = (location.state as { quickPrompts?: string } | null)?.quickPrompts;
   const [lists, setLists] = useState<OwnedPromptList[]>([]);
+  const [tagVocabulary, setTagVocabulary] = useState<PromptTag[]>([]);
+  const [maxTags, setMaxTags] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [shareCode, setShareCode] = useState<string | null>(null);
@@ -85,6 +97,25 @@ export function MyPromptListsPage() {
       });
     return () => { cancelled = true; };
   }, [userId, isAnonymous]);
+
+  useEffect(() => {
+    if (!userId || isAnonymous) return;
+    let cancelled = false;
+    // A failure here leaves the tag control hidden rather than showing an
+    // error: tags are optional metadata, and a list still saves without them.
+    void listPromptTags()
+      .then((vocabulary) => {
+        if (cancelled) return;
+        setTagVocabulary(vocabulary.tags);
+        setMaxTags(vocabulary.maxPerList);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId, isAnonymous]);
+
+  // Named once: the chips read it three times, and "at the cap" is the state
+  // the whole control changes shape around.
+  const full = draft.tags.length >= maxTags;
 
   function beginNew() {
     setSelectedId(null);
@@ -180,6 +211,7 @@ export function MyPromptListsPage() {
             description: cleaned.description,
             visibility: cleaned.visibility,
             prompts: cleaned.prompts,
+            tags: cleaned.tags,
           })
         : await createOwnedPromptList(cleaned);
       setSelectedId(saved.id);
@@ -270,6 +302,48 @@ export function MyPromptListsPage() {
                 <option value="unlisted">{ui.myPromptListsPage.anyoneWithCode}</option>
               </select></label>
             </div>
+            {tagVocabulary.length > 0 && <fieldset className="prompt-list-tags">
+              {/* Toggle chips rather than checkboxes: choosing several things
+                  out of a fixed set is what `toggle-chip` is for, and the
+                  room-creation form next door already picks its prompt lists
+                  that way. A tag is also a label you read back at a glance,
+                  which a column of checkbox rows is bad at. */}
+              <legend>{ui.myPromptListsPage.tags}</legend>
+              <div className="prompt-list-tags-head">
+                <p className="prompt-list-tags-hint">{ui.myPromptListsPage.tagsAreHowListsAreFound}</p>
+                <span className={full ? "prompt-list-tags-count is-full" : "prompt-list-tags-count"}>
+                  {ui.myPromptListsPage.tagsChosen({ chosen: draft.tags.length, max: maxTags })}
+                </span>
+              </div>
+              <div className="toggle-chips prompt-list-tag-chips">
+                {tagVocabulary.map((tag) => {
+                  const held = draft.tags.includes(tag.slug);
+                  return <button
+                    type="button"
+                    key={tag.slug}
+                    className={held ? "toggle-chip is-selected" : "toggle-chip"}
+                    aria-pressed={held}
+                    // At the cap the rest go quiet rather than disappearing:
+                    // the vocabulary is the same fifteen either way, and a
+                    // set that shrinks as you pick from it cannot be read.
+                    disabled={!held && full}
+                    onClick={() => setDraft({
+                      ...draft,
+                      tags: held
+                        ? draft.tags.filter((slug) => slug !== tag.slug)
+                        // Vocabulary order, so the chips and the saved list
+                        // read the same way round.
+                        : tagVocabulary
+                            .map((entry) => entry.slug)
+                            .filter((slug) => slug === tag.slug || draft.tags.includes(slug)),
+                    })}
+                  >
+                    {held && <span className="toggle-chip-status"><CheckIcon size={13} /></span>}
+                    <span className="toggle-chip-name">{tagName(tag)}</span>
+                  </button>;
+                })}
+              </div>
+            </fieldset>}
             {draft.visibility === "unlisted" && shareCode && <div className="prompt-list-share-code">
               <span>{ui.myPromptListsPage.shareCode}</span><code>{shareCode}</code>
               <button type="button" className="btn btn-secondary btn-compact" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError(ui.myPromptListsPage.couldNotCopyShareCode))}>{ui.myPromptListsPage.copy}</button>

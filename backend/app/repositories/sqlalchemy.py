@@ -27,6 +27,7 @@ from app.db.models import (
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
+    PromptListRevisionTag,
     PromptTag,
     PromptUsageBatch,
     PromptUsageFact,
@@ -133,12 +134,18 @@ from app.repositories.interfaces import (
     ResolvedPromptSelection,
 )
 from app.prompt_content import (
+    LIST_TAG_VOCABULARY,
+    UnknownListTag,
+    clean_list_tags,
     clean_prompt_aliases,
     normalize_prompt_answer,
     prompt_match_key,
     validate_prompt_language,
 )
 from app.prompts import letter_histogram
+from app.refusals import ErrorCode
+
+LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
@@ -381,6 +388,7 @@ def _to_owned_prompt_list(
     prompts: Sequence[PromptListEntry] = (),
     *,
     prompt_count: int | None = None,
+    tags: Sequence[str] = (),
 ) -> OwnedPromptList:
     return OwnedPromptList(
         id=_public_id(wl.id),
@@ -396,6 +404,7 @@ def _to_owned_prompt_list(
         created_at=wl.created_at,
         updated_at=wl.updated_at,
         prompts=tuple(prompts),
+        tags=tuple(tags),
     )
 def _bundled_revision_hash(
     *, language: str, prompts: Sequence[BundledPromptDefinition]
@@ -2494,7 +2503,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 selectinload(PromptListRevision.items)
                 .selectinload(PromptListRevisionItem.prompt_version)
                 .selectinload(PromptVersion.version_aliases)
-                .selectinload(PromptVersionAlias.alias)
+                .selectinload(PromptVersionAlias.alias),
+                selectinload(PromptListRevision.revision_tags).selectinload(
+                    PromptListRevisionTag.tag
+                ),
             )
         )
         entries = tuple(
@@ -2509,7 +2521,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
             for item in (revision.items if revision else ())
         )
-        return _to_owned_prompt_list(prompt_list, entries)
+        # Vocabulary order rather than insertion order, so two lists carrying
+        # the same tags present them the same way (R-LIST-18).
+        held = {link.tag.slug for link in (revision.revision_tags if revision else ())}
+        tags = tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in held)
+        return _to_owned_prompt_list(prompt_list, entries, tags=tags)
 
     async def get_owned(
         self, owner_user_id: str, prompt_list_id: str
@@ -2578,10 +2594,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         language: str,
         visibility: str,
         prompts: Sequence[PromptListEntryInput],
+        tags: Sequence[str] = (),
     ) -> OwnedPromptList:
         owner_id = _optional_entity_id(owner_user_id)
         if owner_id is None:
             raise PromptListMutationError("Invalid owner.")
+        tag_slugs = self._clean_owned_tags(tags)
         name, description, language, visibility = self._clean_owned_metadata(
             name=name,
             description=description,
@@ -2628,7 +2646,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 session.add(prompt_list)
                 await session.flush()
                 await self._write_owned_revision(
-                    session, prompt_list=prompt_list, entries=entries, version=1
+                    session,
+                    prompt_list=prompt_list,
+                    entries=entries,
+                    version=1,
+                    tags=tag_slugs,
                 )
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
@@ -2644,11 +2666,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         description: str,
         visibility: str,
         prompts: Sequence[PromptListEntryInput],
+        tags: Sequence[str] = (),
     ) -> OwnedPromptList:
         owner_id = _optional_entity_id(owner_user_id)
         list_id = _optional_entity_id(prompt_list_id)
         if owner_id is None or list_id is None:
             raise PromptListNotFoundError("Prompt list not found.")
+        tag_slugs = self._clean_owned_tags(tags)
         async with self._session_factory() as session:
             async with session.begin():
                 await require_live_account(session, owner_id)
@@ -2677,10 +2701,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     raise PromptListConflictError(
                         "This list changed since you opened it. Reload before saving."
                     )
+                current = await self._owned_with_entries(session, owner_id, list_id)
+                assert current is not None
                 metadata_changed = (
                     prompt_list.name != name
                     or prompt_list.description != description
                     or prompt_list.visibility != visibility
+                    # Tags belong to the revision, so changing them is a change
+                    # of content and earns one, exactly as R-LIST-05 says a
+                    # name or visibility change does.
+                    or current.tags != tag_slugs
                 )
                 next_version = prompt_list.version + 1
                 written = await self._write_owned_revision(
@@ -2689,6 +2719,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     entries=entries,
                     version=next_version,
                     force=metadata_changed,
+                    tags=tag_slugs,
                 )
                 if not written:
                     # An exact restatement of what is saved: nothing to
@@ -2737,6 +2768,81 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 await retire_prompt_list(session, prompt_list)
             return True
 
+    async def seed_list_tags(self) -> tuple[str, ...]:
+        """Make the curated vocabulary present, and its display names current.
+
+        Idempotent, and run at startup beside the bundled lists. A slug is
+        never rewritten - revisions reference the row - so this inserts what is
+        missing and refreshes the name on what is there, which is how a tag is
+        renamed (R-LIST-18).
+        """
+        async with self._session_factory() as session:
+            async with session.begin():
+                existing = {
+                    row.slug: row
+                    for row in (
+                        await session.scalars(
+                            select(PromptTag).where(
+                                PromptTag.slug.in_(list(LIST_TAG_SLUG_ORDER))
+                            )
+                        )
+                    ).all()
+                }
+                for slug, name in LIST_TAG_VOCABULARY:
+                    row = existing.get(slug)
+                    if row is None:
+                        session.add(
+                            PromptTag(id=generate_uuid(), slug=slug, name=name)
+                        )
+                    elif row.name != name:
+                        row.name = name
+        return LIST_TAG_SLUG_ORDER
+
+    @staticmethod
+    def _clean_owned_tags(tags: Sequence[str]) -> tuple[str, ...]:
+        try:
+            return clean_list_tags(list(tags))
+        except UnknownListTag as error:
+            raise PromptListMutationError(
+                str(error),
+                code=ErrorCode.UNKNOWN_PROMPT_TAG,
+                params={"tag": error.tag},
+            ) from error
+        except ValueError as error:
+            # Too many tags: unreachable from the API, whose request bound
+            # refuses it first, and from the editor, which disables the box.
+            raise PromptListMutationError(str(error)) from error
+
+    @staticmethod
+    async def _tag_rows(
+        session: AsyncSession, slugs: Sequence[str]
+    ) -> list[PromptTag]:
+        """The `prompt_tags` rows for these slugs, created if seeding has not.
+
+        The vocabulary is seeded at startup, so this normally finds every row.
+        Creating a missing one keeps a list save from depending on that having
+        happened - an unknown slug cannot arrive here, because the vocabulary
+        check ran before the transaction opened.
+        """
+        if not slugs:
+            return []
+        names = dict(LIST_TAG_VOCABULARY)
+        found = {
+            row.slug: row
+            for row in (
+                await session.scalars(
+                    select(PromptTag).where(PromptTag.slug.in_(list(slugs)))
+                )
+            ).all()
+        }
+        for slug in slugs:
+            if slug not in found:
+                row = PromptTag(id=generate_uuid(), slug=slug, name=names[slug])
+                session.add(row)
+                found[slug] = row
+        await session.flush()
+        return [found[slug] for slug in slugs]
+
     async def _write_owned_revision(
         self,
         session: AsyncSession,
@@ -2745,6 +2851,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         entries: Sequence[PromptListEntryInput],
         version: int,
         force: bool = False,
+        tags: Sequence[str] = (),
     ) -> bool:
         """Write the next revision, or say that nothing about the content changed.
 
@@ -2898,6 +3005,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
             for position, (_, prompt_version, _) in enumerate(resolved)
         )
+        # Tags are copied onto every revision rather than shared across them:
+        # a revision is immutable and a game pins one, so a filter that found
+        # a list by its tags has to keep agreeing with what that revision
+        # holds. The rows are added by slug because the caller has already
+        # been held to the vocabulary (`_clean_owned_tags`).
+        for tag_row in await self._tag_rows(session, tags):
+            session.add(
+                PromptListRevisionTag(revision_id=revision.id, tag_id=tag_row.id)
+            )
 
         # The display rows (`prompts`, unique on text within a list). Only a
         # row whose text or version actually changes is written; a row whose

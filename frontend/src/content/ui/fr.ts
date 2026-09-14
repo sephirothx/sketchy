@@ -304,6 +304,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_conflict: "Quelqu’un d’autre a modifié cette liste. Recharge-la et réessaie.",
   prompt_list_invalid: "Cette liste de mots n’a pas pu être enregistrée.",
   prompt_list_forbidden: "Cette liste de mots n’est pas à toi.",
+  unknown_prompt_tag: (params: Record<string, unknown>) => {
+    const tag = String(params.tag ?? "");
+    return `« ${tag} » n’est pas une étiquette qu’une liste peut porter.`;
+  },
   unknown_sort: "Sketchy ne peut pas trier par cela.",
   timezone_required: "Indique un fuseau horaire avec cette date.",
   range_reversed: "Le début de la période doit précéder sa fin.",
@@ -1126,7 +1130,27 @@ export const FR: Catalogue = {
     report: "Signaler",
   },
 
+  promptTags: {
+    "animals": "Animaux",
+    "food-and-drink": "Nourriture et boissons",
+    "objects": "Objets",
+    "nature": "Nature",
+    "places": "Lieux",
+    "people": "Personnes",
+    "actions": "Actions",
+    "sports-and-games": "Sports et jeux",
+    "transport": "Transports",
+    "entertainment": "Divertissement",
+    "science-and-technology": "Sciences et technologies",
+    "history-and-culture": "Histoire et culture",
+    "holidays": "Fêtes",
+    "fantasy": "Fantastique",
+    "abstract": "Abstrait",
+  },
   myPromptListsPage: {
+    tags: "Étiquettes",
+    tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} sur ${p.max} choisies`,
+    tagsAreHowListsAreFound: "Les étiquettes permettent de trouver cette liste dans le catalogue de la communauté.",
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "mot", other: "mots" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""

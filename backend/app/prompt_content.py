@@ -10,6 +10,77 @@ from app.prompts import MAX_PROMPT_LENGTH
 MAX_PROMPT_ALIASES = 20
 MAX_PROMPT_TAGS = 12
 MAX_TAG_SLUG_LENGTH = 32
+
+# How many tags one list may carry. Lower than MAX_PROMPT_TAGS on purpose: a
+# prompt's tags describe one word and can afford to be exhaustive, while a
+# list's are how somebody finds it in the community catalogue, and a list
+# wearing twelve of them is answering every filter rather than the right one.
+MAX_LIST_TAGS = 5
+
+# The vocabulary a list owner chooses from (R-LIST-18). It is a fixed set
+# rather than free text because a tag is player-authored copy displayed in a
+# discovery surface, and the one thing a discovery feature must not do is
+# introduce a second kind of content to moderate. Staff extend this tuple;
+# nothing a request carries can add to it.
+#
+# Slugs are forever - `prompt_tags.slug` is unique and revisions reference the
+# row - so a tag is renamed by changing its display name here, never its slug.
+LIST_TAG_VOCABULARY: tuple[tuple[str, str], ...] = (
+    ("animals", "Animals"),
+    ("food-and-drink", "Food and drink"),
+    ("objects", "Objects"),
+    ("nature", "Nature"),
+    ("places", "Places"),
+    ("people", "People"),
+    ("actions", "Actions"),
+    ("sports-and-games", "Sports and games"),
+    ("transport", "Transport"),
+    ("entertainment", "Entertainment"),
+    ("science-and-technology", "Science and technology"),
+    ("history-and-culture", "History and culture"),
+    ("holidays", "Holidays"),
+    ("fantasy", "Fantasy"),
+    ("abstract", "Abstract"),
+)
+
+LIST_TAG_SLUGS = frozenset(slug for slug, _ in LIST_TAG_VOCABULARY)
+
+
+class UnknownListTag(ValueError):
+    """A tag the curated vocabulary does not hold, kept so a refusal can name it.
+
+    The slug travels as a value (`params.tag`), never inside a sentence: the
+    client writes the sentence in the reader's language (R-I18N-01).
+    """
+
+    def __init__(self, tag: str) -> None:
+        super().__init__(f"Unknown tag: {tag}")
+        self.tag = tag
+
+
+def clean_list_tags(tags: list[str]) -> tuple[str, ...]:
+    """Validate list tags against the curated vocabulary, order preserved.
+
+    Separate from `clean_prompt_tags`, which takes any well-formed slug
+    because bundled prompt content is authored in the repository and reviewed
+    as code. These arrive in a request.
+    """
+    if len(tags) > MAX_LIST_TAGS:
+        raise ValueError(f"A list may carry at most {MAX_LIST_TAGS} tags.")
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        slug = tag.strip().lower()
+        if slug not in LIST_TAG_SLUGS:
+            # Named rather than dropped, for R-LIST-01's reason: a save that
+            # silently discards part of what was sent is worse than one that
+            # refuses.
+            raise UnknownListTag(tag.strip() or tag)
+        if slug not in seen:
+            seen.add(slug)
+            cleaned.append(slug)
+    return tuple(cleaned)
+
 _BCP47 = re.compile(
     r"^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
     r"(?:-[A-Za-z0-9]{5,8})*$"

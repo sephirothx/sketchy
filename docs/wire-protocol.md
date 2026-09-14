@@ -1686,8 +1686,9 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/prompt-lists` | Official catalogue; localized copy selected from `Accept-Language` |
-| `GET` | `/api/prompt-lists/mine` | The caller's own lists |
-| `GET`/`PUT` | `/api/prompt-lists/mine/{prompt_list_id}` | Owner only; `PUT` uses optimistic concurrency and creates a new immutable revision |
+| `GET` | `/api/prompt-tags` | `{tags: [{slug, name}], maxPerList}` — the curated vocabulary a list owner chooses from (R-LIST-18). Unauthenticated and served rather than duplicated in the client, because a client guessing at the set would offer a tag a save then refuses |
+| `GET` | `/api/prompt-lists/mine` | The caller's own lists, each with the `tags` its current revision carries |
+| `GET`/`PUT` | `/api/prompt-lists/mine/{prompt_list_id}` | Owner only; `PUT` uses optimistic concurrency and creates a new immutable revision. `tags` are part of the saved content: setting them earns a revision the way a name or visibility change does (R-LIST-05), and an unknown tag is **refused by name** rather than dropped — `unknown_prompt_tag`, with the slug in `params.tag` so the client can say which, in the reader's language |
 | `POST` | `/api/prompt-lists/shared` | Resolve an Unlisted list by its bearer share code |
 | `GET` | `/api/prompt-lists/{slug}/prompt-stats` | Window (all-time / 30 d / 90 d) and scoring/hint segmentation |
 
