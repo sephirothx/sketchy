@@ -66,33 +66,74 @@ async def test_an_added_prompt_is_a_one_line_change_that_still_seeds(tmp_path):
         await engine.dispose()
 
 
-def test_a_translation_reuses_the_concept_it_translates(tmp_path):
-    directory = lists(tmp_path)
-    english = {p["answer"]: p["conceptId"] for p in prompts(directory, "english_extended")["prompts"]}
-    source = next(answer for answer in english if " " not in answer)
+PLATYPUS = [
+    "english_standard", "platypus",
+    "--translation", "de=Schnabeltier", "--translation", "es=ornitorrinco",
+    "--translation", "fr=ornithorynque", "--translation", "it=ornitorinco",
+    "--translation", "nl=vogelbekdier", "--translation", "pt=ornitorrinco",
+]
 
-    result = run(directory, "german_extended", "Übersetzungstest", "--same-as", f"english_extended:{source}")
+
+def snapshot(directory: Path) -> dict[str, str]:
+    return {path.name: path.read_text(encoding="utf-8") for path in sorted(directory.glob("*.json"))}
+
+
+async def test_a_standard_prompt_lands_in_every_language_at_the_same_place(tmp_path):
+    """Standard is one concept set translated into every language (R-PROMPT-01),
+    so a Standard addition is one concept written to all seven lists."""
+    directory = lists(tmp_path)
+
+    result = run(directory, *PLATYPUS, "--translation-alias", "de=Platypus")
 
     assert result.returncode == 0, result.stderr
-    assert prompts(directory, "german_extended")["prompts"][-1]["conceptId"] == english[source]
+    standard = {path.stem: prompts(directory, path.stem) for path in directory.glob("*_standard.json")}
+    orders = {stem: [p["conceptId"] for p in data["prompts"]] for stem, data in standard.items()}
+    assert all(order == orders["english_standard"] for order in orders.values())
+    assert {data["version"] for data in standard.values()} == {2}
+    english = [p["answer"].casefold() for p in standard["english_standard"]["prompts"]]
+    assert english == sorted(english)
+    german = next(p for p in standard["german_standard"]["prompts"] if p["answer"] == "Schnabeltier")
+    assert german["aliases"] == ["Platypus"]
+
+    factory, engine = await create_test_db()
+    try:
+        await seed_prompt_lists(SqlAlchemyPromptListRepository(factory), directory=directory)
+    finally:
+        await engine.dispose()
 
 
-def test_an_alphabetized_list_stays_alphabetized(tmp_path):
+def test_a_standard_prompt_missing_a_language_is_refused(tmp_path):
     directory = lists(tmp_path)
+    before = snapshot(directory)
 
-    assert run(directory, "english_standard", "Aardvark test").returncode == 0
+    result = run(directory, *PLATYPUS[:-2])
 
-    answers = [p["answer"].casefold() for p in prompts(directory, "english_standard")["prompts"]]
-    assert answers == sorted(answers)
+    assert result.returncode != 0
+    assert "pt" in result.stderr
+    assert snapshot(directory) == before
 
 
-def test_a_key_already_bundled_in_the_language_is_refused(tmp_path):
+def test_a_single_standard_translation_is_refused(tmp_path):
     directory = lists(tmp_path)
-    original = (directory / "german_standard.json").read_text(encoding="utf-8")
+    before = snapshot(directory)
+
+    result = run(directory, "german_standard", "Schnabeltier")
+
+    assert result.returncode != 0
+    assert "english_standard" in result.stderr
+    assert snapshot(directory) == before
+
+
+def test_a_key_already_bundled_in_the_language_is_refused_before_anything_is_written(tmp_path):
+    directory = lists(tmp_path)
+    before = snapshot(directory)
     # "Brezel" is in German Extended; Standard and Extended are played together,
-    # and the match key folds case, so a lowercase copy in Standard collides.
-    result = run(directory, "german_standard", "brezel")
+    # and the match key folds case, so a lowercase German translation collides -
+    # and English Standard, validated first, must not have been written either.
+    args = [arg if arg != "de=Schnabeltier" else "de=brezel" for arg in PLATYPUS]
+
+    result = run(directory, *args)
 
     assert result.returncode != 0
     assert "german_extended" in result.stderr
-    assert (directory / "german_standard.json").read_text(encoding="utf-8") == original
+    assert snapshot(directory) == before

@@ -1883,9 +1883,11 @@ by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape i
 That is why the files are JSON rather than one answer per line (#798): the identity is the
 ID, not the text, and a prompt can carry fields beyond its answer. Add a prompt with
 [`scripts/add-prompt.py`](../scripts/add-prompt.py) rather than by hand — it mints the
-UUIDv7 (or reuses one with `--same-as LIST:ANSWER` for a translation), bumps the list
-`version`, and refuses an answer or alias whose match key is already bundled in that
-language.
+UUIDv7, bumps the list `version`, and refuses an answer or alias whose match key is
+already bundled in that language. An Extended prompt changes one file; a Standard prompt
+is added to all seven Standard lists in one run, with a `--translation` per language,
+because Standard is one concept set in every language (R-PROMPT-01) and
+`tests/test_prompt_list_seeding.py` fails when any language's set differs from English.
 
 - Equal text shares a concept **only** when the files deliberately repeat that ID.
 - Changing capitalization, punctuation, wording, aliases, or editorial metadata requires
