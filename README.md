@@ -490,9 +490,9 @@ fork provenance, structured revision tags, moderation actor/time, and the
 Active/Under review/Hidden moderation state are relational fields with
 portable constraints—never JSON tags or a lossy `is_nsfw` flag. Difficulty and
 content rating remain on the exact immutable prompt version where their
-meaning belongs. The `public` value is reserved for future moderation-approved
-discovery: this v1 baseline intentionally exposes no community discovery,
-favorite/star table, or user-facing fork endpoint.
+meaning belongs. Community discovery — publishing a list, the community
+catalogue, stars, and forking — is specified in R-LIST-11…R-LIST-18 and is
+being built; the sections below describe what the server does today.
 Quick **Custom prompts** remain deliberately ephemeral room input: they are
 not auto-saved, do not acquire an implicit owner/list, and disappear with the
 in-memory room. A registered host can explicitly send usable quick prompts to
