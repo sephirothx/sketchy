@@ -8,7 +8,7 @@ import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Mapping
+from typing import Mapping, Protocol
 
 from app.announcements import Announcement
 from app.auth.avatars import avatar_url
@@ -19,14 +19,6 @@ from app.domain_values import (
     RuntimeEventType,
     TurnEligibilityReason,
     TurnParticipantState,
-)
-from app.handlers.sessions import (
-    existing_player_for_sid as resolve_existing_player_for_sid,
-    require_current_player as resolve_current_player,
-)
-from app.handlers.payloads import (
-    CreateRoomPayload,
-    UpdateRoomSettingsPayload,
 )
 from app.rooms import DrawingRecapEntry, Player, Room, resolve_hint_mode
 from app.services.game_highlights import build_game_highlights
@@ -105,6 +97,34 @@ class RoomPromptResolutionError(ValueError):
     """A safe room-configuration failure for selected prompt content."""
 
 
+class RoomSettingsInput(Protocol):
+    """The settings a validated create or update command carries, as this service reads them.
+
+    Declared here rather than imported from `app/handlers/payloads.py` because a
+    service must not reach up into the transport package: `app.handlers` wires
+    every handler domain on import, and those import this module back (#789).
+    `CreateRoomPayload` and `UpdateRoomSettingsPayload` satisfy it structurally.
+    `None` means "not sent" - keep the room's value. `prompt_language` is
+    creation-only and read with `getattr`, so it is not part of the contract.
+    """
+
+    name: str | None
+    is_public: bool | None
+    max_players: int | None
+    rounds: int | None
+    drawing_seconds: int | None
+    custom_prompts: str | None
+    custom_prompts_only: bool | None
+    hint_mode: str | None
+    scoring_mode: str | None
+    spectators_see_prompt: bool | None
+    hide_masked_prompt: bool | None
+    allowed_tools: list[str] | None
+    color_mode: str | None
+    prompt_list_slugs: list[str] | None
+    prompt_list_share_codes: list[str] | None
+
+
 class GameFlowService:
     """Coordinate workflows that cross handler domains without owning registration."""
 
@@ -115,7 +135,7 @@ class GameFlowService:
 
     async def room_settings_from_payload(
         self,
-        payload: CreateRoomPayload | UpdateRoomSettingsPayload,
+        payload: RoomSettingsInput,
         *,
         fallback: Room | None = None,
         requesting_user_id: str | None = None,
@@ -1441,8 +1461,20 @@ class GameFlowService:
         Guards against duplicate create/join calls from the same connection (e.g. a
         client re-invoking an effect) spawning a duplicate "ghost" player.
         """
-        return await resolve_existing_player_for_sid(self._ctx, sid, room_id)
+        session = await self._ctx.sio.get_session(sid)
+        if not session or session.get("room_id") != room_id:
+            return None
+        room = self._ctx.room_manager.get_room(room_id)
+        if not room:
+            return None
+        player = room.players.get(session.get("player_id"))
+        return player if player and player.sid == sid and player.connected else None
 
     async def require_current_player(self, sid: str) -> tuple[Room, Player] | None:
         """Resolve an authenticated room member and reject superseded sockets."""
-        return await resolve_current_player(self._ctx, sid)
+        session = await self._ctx.sio.get_session(sid) if sid else None
+        room = self._ctx.room_manager.get_room(session.get("room_id")) if session else None
+        player = room.players.get(session.get("player_id")) if room and session else None
+        if not room or not player or not player.connected or player.sid != sid:
+            return None
+        return room, player

@@ -38,6 +38,7 @@ import { XIcon } from "./components/icons";
 import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
 import { useFriendsStore } from "./store/friendsStore";
+import { friendListOwner } from "./lib/friends";
 import { useSettingsStore } from "./store/settingsStore";
 import { socket } from "./lib/socket";
 import {
@@ -137,7 +138,7 @@ function App() {
   // already. Re-read on the account, since registering or signing in replaces
   // whose friends these are - and a guest simply has none.
   const refreshFriends = useFriendsStore((state) => state.refresh);
-  const myAccountId = useAuthStore((state) => state.user?.id ?? null);
+  const myAccountId = useAuthStore((state) => friendListOwner(state.user));
   useEffect(() => {
     // The account is handed over rather than looked up: the store clears its
     // baseline when the owner changes, so signing in never announces the new

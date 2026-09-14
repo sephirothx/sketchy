@@ -22,8 +22,10 @@ starting).
 The cycle #788 fixed was a misplaced import: `app/services/shutdown.py` named
 `ErrorCode` from `app.handlers.refusals`, when the vocabulary has lived in
 `app.refusals` since #760 precisely so that `app/api` and `app/handlers` -
-siblings - can both raise it without either owning it. The one still standing
-is a layering inversion rather than a typo, and is tracked separately.
+siblings - can both raise it without either owning it. The last one, #789, was
+a layering inversion rather than a typo: `app/services/game_flow.py` imported a
+payload model and two session helpers from `app/handlers`, whose package init
+imports every handler domain, which import `game_flow` back.
 """
 from __future__ import annotations
 
@@ -42,9 +44,7 @@ APP_ROOT = BACKEND_ROOT / "app"
 # change which untangles one is told to delete its entry here - an allowlist
 # nobody is forced to revisit rots into a list of things that were fixed years
 # ago and a test that no longer checks them.
-KNOWN_CYCLES = {
-    "app.services.game_flow": "#789",
-}
+KNOWN_CYCLES: dict[str, str] = {}
 
 
 def _module_names() -> list[str]:
