@@ -2736,6 +2736,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     starred_by_me=(
                         None if requester_id is None else prompt_list.id in mine
                     ),
+                    is_mine=(
+                        None
+                        if requester_id is None
+                        else prompt_list.owner_user_id == requester_id
+                    ),
                 )
                 for prompt_list, prompt_count, stars, display_name, copies in rows
             ),
@@ -2815,6 +2820,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             published_at=prompt_list.published_at,
             version=prompt_list.version,
             starred_by_me=starred_by_me,
+            is_mine=(
+                None if requester_id is None else prompt_list.owner_user_id == requester_id
+            ),
             prompts=tuple(
                 PromptListEntry(
                     concept_id=_public_id(item.prompt_version.concept_id),
@@ -3165,6 +3173,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if source is None:
                     raise PromptListNotFoundError("Prompt list not found.")
+                # A copy credits and counts toward the list it came from
+                # (R-LIST-20, R-LIST-21), and neither means anything when the
+                # author is the one copying: the count would be the author's
+                # own button presses, and the credit would name them to
+                # themselves. Their own list is duplicated from My prompt
+                # lists, through the ordinary create, which records nothing.
+                if source.owner_user_id == forker_id:
+                    raise PromptListMutationError(
+                        "That list is already yours. Duplicate it from your own lists instead.",
+                        code=ErrorCode.CANNOT_COPY_OWN_PROMPT_LIST,
+                    )
                 # Checked before anything is written, so a refusal at the cap
                 # leaves nothing behind (R-LIST-08's spirit: fail visibly).
                 count = await session.scalar(

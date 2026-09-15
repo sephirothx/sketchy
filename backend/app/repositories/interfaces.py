@@ -454,6 +454,11 @@ class CommunityPromptList:
     # Whether *this* caller starred it. Null for a caller who is not signed in,
     # which is a different answer from "no" and the client shows it as one.
     starred_by_me: bool | None = None
+    # Whether *this* caller owns it, so the catalogue offers no copy of a
+    # caller's own list (R-LIST-17). Null when nobody is signed in, like the
+    # star. It says nothing to anybody else: every caller learns only about
+    # themselves, and the owner's account id stays out of the payload.
+    is_mine: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -465,9 +470,8 @@ class CommunityPromptListDetail(CommunityPromptList):
     prompt versions are left out: a moderator took them out of play, so they
     are not part of what this list would draw.
 
-    Entries carry their version id for the reason the share-code flow does:
-    it is what lets a reader report one exact prompt rather than the whole
-    list (R-LIST-13).
+    Entries carry their version id: it is what lets a reader report one exact
+    prompt rather than the whole list (R-LIST-13).
     """
 
     prompts: tuple[PromptListEntry, ...] = ()

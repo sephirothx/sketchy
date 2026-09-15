@@ -370,3 +370,35 @@ async def test_reclaiming_a_deleted_source_forgets_where_the_fork_came_from(env)
         "only the pointer goes, and it goes because the author asked for the "
         "list to go"
     )
+
+
+async def test_an_author_cannot_copy_their_own_list(env):
+    """A copy credits and counts toward its original (R-LIST-20, R-LIST-21),
+    and from its own author it would be neither: the count would be the
+    author's own presses and the credit would name them to themselves. The
+    catalogue says so ahead of time with `isMine`, and the route refuses
+    anyway, having written nothing."""
+    http, users, prompts, factory = env
+    author = await account(users, "Author")
+    source = await a_published_list(prompts, factory, author.id)
+    reader = await account(users, "Reader")
+
+    # Signed out: nobody is asked about, so there is no answer.
+    listing = (await http.get("/api/prompt-lists/community")).json()["lists"]
+    assert [row["isMine"] for row in listing] == [None]
+    await sign_in(http, factory, reader.id)
+    assert (await http.get(f"/api/prompt-lists/community/{source.id}")).json()["isMine"] is False
+    await sign_in(http, factory, author.id)
+    listing = (await http.get("/api/prompt-lists/community")).json()["lists"]
+    assert [row["isMine"] for row in listing] == [True]
+    assert (await http.get(f"/api/prompt-lists/community/{source.id}")).json()["isMine"] is True
+
+    response = await http.post(f"/api/prompt-lists/{source.id}/fork")
+
+    assert response.status_code == 422
+    assert response.json()["errorCode"] == "cannot_copy_own_prompt_list"
+    async with factory() as session:
+        owned = await session.scalar(
+            select(func.count(PromptList.id)).where(PromptList.owner_user_id == UUID(author.id))
+        )
+    assert owned == 1, "nothing was written"

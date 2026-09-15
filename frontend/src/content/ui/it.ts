@@ -359,6 +359,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Non puoi segnalare te stesso.",
+  cannot_copy_own_prompt_list: "Questa lista è già tua. Duplicala da Le mie liste di parole.",
   cannot_report_own_prompt_list: "Non puoi segnalare la tua lista di parole.",
   no_reportable_prompt_list: "Nessuna lista di parole segnalabile trovata.",
   prompt_not_in_list: "Questa parola non appartiene a questa lista.",
@@ -1203,6 +1204,8 @@ export const IT: Catalogue = {
     copiedFromADeletedList: "Copiata da una lista che è stata eliminata",
     showMore: "Mostra altro",
     makeACopy: "Fai una copia",
+    thisIsYourList: "Questa lista è tua.",
+    editInMyPromptLists: "Modifica in Le mie liste di parole",
     report: "Segnala",
     signInToStarCopyOrReport: "Serve un account per dare una stella, copiare o segnalare.",
     whatIsInIt: "Che cosa contiene",
@@ -1236,6 +1239,18 @@ export const IT: Catalogue = {
     publishedExplainer: "Chiunque può trovare questa lista, giocarla, darle una stella o farne una propria copia.",
     unpublishedExplainer: "Pubblicandola, chiunque potrà trovare e giocare questa lista. Si può ritirare in qualsiasi momento.",
     saveBeforePublishing: "Salva prima la lista. Resta privata finché non la pubblichi.",
+    publishNeedsAnEmail: "Per pubblicare, aggiungi un indirizzo email al tuo account e confermalo. Resta privato: è ciò che lega una lista pubblicata a una persona reale.",
+    publishNeedsConfirmation: (p: { address: string }) =>
+      `Conferma ${p.address} dall’email che ti abbiamo inviato, poi potrai pubblicare.`,
+    publishNeedsEmailDelivery: "Per pubblicare serve un indirizzo email confermato, e questo server non può inviare email.",
+    addAnEmail: "Aggiungi un’email",
+    changeEmail: "Cambia email",
+    duplicate: "Duplica",
+    duplicateName: (p: { name: string }) => `${p.name} (duplicato)`,
+    listDuplicated: (p: { name: string }) =>
+      `Duplicata come «${p.name}».`,
+    couldNotDuplicateThisList: "Non è stato possibile duplicare questa lista.",
+    reload: "Ricarica",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "stella", other: "stelle" }),
     copyCount: (p: { count: number }) =>

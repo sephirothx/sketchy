@@ -229,6 +229,9 @@ class ErrorCode(StrEnum):
     PROMPT_LIST_HIDDEN = "prompt_list_hidden"
     # R-LIST-04's 25, reached by creating or by forking; carries `max`.
     PROMPT_LIST_ALLOWANCE_REACHED = "prompt_list_allowance_reached"
+    # A copy is somebody else's list taken into yours (R-LIST-17); your own
+    # is duplicated from My prompt lists instead, which credits nobody.
+    CANNOT_COPY_OWN_PROMPT_LIST = "cannot_copy_own_prompt_list"
     UNKNOWN_SORT = "unknown_sort"
     TIMEZONE_REQUIRED = "timezone_required"
     RANGE_REVERSED = "range_reversed"
