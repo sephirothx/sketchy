@@ -1,5 +1,6 @@
 // Library, profile and operator artboards.
 import { T, P, icon, flag, avatar, pname, btn, chip, sectionLabel, segmented, selectBox, input, wordmark, reactionArt } from './ui.mjs';
+import { lighthouseSVG } from './shell.mjs';
 
 const backBar = (label = 'Back to lobby') => `
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px">
@@ -318,6 +319,23 @@ export const ProfilePage = `
     ${smallStat('137', 'reactions received')}
     ${smallStat('41,952', 'total score')}
   </div>
+
+  <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}; margin-bottom: 22px">
+    <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 20px; color: ${T.ink}; margin-bottom: 14px">Pinned drawings</h2>
+    <ul style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px">
+      ${[['lighthouse', P.marta, [['fire', 2], ['heart', 1]]], ['roller coaster', P.bruno, [['laugh', 1]]], ['bow and arrow', P.yuki, []]].map(([prompt, drawer, tally], i) => `
+      <li style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+        <div style="aspect-ratio: 4 / 3; background: ${T.well}; border: 1px solid ${T.line}; border-radius: 10px; overflow: hidden; width: 100%">${lighthouseSVG}</div>
+        <span style="font-weight: 700; color: ${T.ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">${prompt}</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: ${T.muted}">${pname(drawer)}${tally.length ? `<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700">${tally.map(([code, count]) => `<span style="display: inline-flex; align-items: center; gap: 3px">${reactionArt(code, 14)}<span style="font-variant-numeric: tabular-nums; line-height: 1">${count}</span></span>`).join('')}</span>` : ''}</span>
+        <div style="display: flex; align-items: center; gap: 2px">
+          ${btn.iconOnly(icon.chevL(14), 'Move left', 32)}
+          ${btn.iconOnly(icon.chevR(14), 'Move right', 32)}
+          ${btn.ghost('Unpin', { iconL: icon.x(13), style: 'margin-left: auto; min-height: 32px; padding: 4px 8px; font-size: 13px' })}
+        </div>
+      </li>`).join('')}
+    </ul>
+  </section>
 
   <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 20px 22px; box-shadow: ${T.shadow}">
     <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px">

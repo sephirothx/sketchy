@@ -175,6 +175,7 @@ export function KeyboardIcon(p: IconProps) { return <IconBase {...p}><rect x="2"
 export function ChevronDownIcon(p: IconProps) { return <IconBase {...p}><path d="m6 9 6 6 6-6" /></IconBase>; }
 export function ChevronUpIcon(p: IconProps) { return <IconBase {...p}><path d="m6 15 6-6 6 6" /></IconBase>; }
 export function ChevronRightIcon(p: IconProps) { return <IconBase {...p}><path d="m9 6 6 6-6 6" /></IconBase>; }
+export function ChevronLeftIcon(p: IconProps) { return <IconBase {...p}><path d="m15 6-6 6 6 6" /></IconBase>; }
 export function BackIcon(p: IconProps) { return <IconBase {...p}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></IconBase>; }
 export function MedalIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="15" r="5" /><path d="m8.5 10.5-3-7.5" /><path d="m15.5 10.5 3-7.5" /><path d="m9 3 3 6 3-6" /></IconBase>; }
 export function GlobeIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z" /></IconBase>; }

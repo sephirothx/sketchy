@@ -72,8 +72,9 @@ keyboard that takes half the screen, and one thumb.
   A private room's game cannot be pinned, so a pin never shows what the game list would
   not. Pins go with the game, the turn, or an erased drawing, and with the account that
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
-  a signed-out visitor sees no shelf. The routes landed first; the profile shelf and
-  the Pin controls follow in #809 and #810.
+  a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
+  owner moves a drawing left or right and unpins it there, and anyone opens one in
+  the recap gallery. The Pin controls on the recap and in game history follow in #810.
 - Friends — registered players add each other from a player's profile or from a
   seat in the same room, and a friendship lets either of them take a seat in a game they
   cannot name: uninvited only where the **host** is a friend, or on a short-lived
@@ -1618,6 +1619,7 @@ frontend/
     lib/interfaceLocale.ts Which language the interface is read in, and from where
     lib/drawingRules.ts The client's copy of the room's tool and color rules
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
+    lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule and its list arithmetic
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
