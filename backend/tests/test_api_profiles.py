@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api.errors import install_refusal_handler
+from app.api.gallery import create_gallery_router
 from app.api.profiles import create_profile_router, profile_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
@@ -45,6 +46,7 @@ async def env():
     install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
     app.include_router(create_profile_router(users, history))
+    app.include_router(create_gallery_router(history))
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
@@ -557,7 +559,9 @@ async def test_a_participant_reacts_to_a_stored_drawing_and_sees_it_in_the_detai
         "turnId": turn_id,
         "seatId": body["seatId"],
         "emoji": None,
+        "myReaction": None,
         "reactions": [],
+        "reactionCounts": {},
     }
     stats = (await http.get(f"/api/users/{ann.id}/stats")).json()["stats"]
     assert stats["reactionsReceived"] == 0
@@ -593,6 +597,98 @@ async def test_every_reaction_refusal_is_a_404(env):
         )
     ).status_code == 404
     assert (await http.get(f"/api/games/{game_id}")).json()["turns"][0]["reactions"] == []
+
+
+# ---- the gallery door for a reaction (#524)
+
+
+async def test_an_outsider_reacts_through_the_gallery_route_and_is_counted_unnamed(env):
+    """Any registered account may react to a public-game drawing at
+    `/api/gallery/{turn}/reaction` (R-GAL-06): the answer carries no seat, the
+    counts include it, the named list does not (R-REACT-05), a participant's
+    detail shows the count, and the pinned shelf shows the outsider their own
+    pick without naming them to anyone."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    turn_id = record_game.last_turn_id
+    path = f"/api/gallery/{turn_id}/reaction"
+
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    seated = await http.put(f"/api/games/{game_id}/turns/{turn_id}/reaction", json={"emoji": "heart"})
+    bob_seat = seated.json()["seatId"]
+
+    await sign_in_as(http, factory, cid.id)
+    put = await http.put(path, json={"emoji": "wow"})
+    assert put.status_code == 200
+    assert put.json() == {
+        "turnId": turn_id,
+        "seatId": None,
+        "emoji": "wow",
+        "myReaction": "wow",
+        "reactions": [{"seatId": bob_seat, "emoji": "heart"}],
+        "reactionCounts": {"heart": 1, "wow": 1},
+    }
+    [entry] = (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]
+    assert entry["reactions"] == [{"seatId": bob_seat, "emoji": "heart"}]
+    assert entry["reactionCounts"] == {"heart": 1, "wow": 1}
+    assert entry["myReaction"] == "wow" and entry["drawnByMe"] is False
+    stats = (await http.get(f"/api/users/{ann.id}/stats")).json()["stats"]
+    assert stats["reactionsReceived"] == 2
+
+    await sign_in_as(http, factory, ann.id)
+    turn = (await http.get(f"/api/games/{game_id}")).json()["turns"][0]
+    assert turn["reactions"] == [{"seatId": bob_seat, "emoji": "heart"}]
+    assert turn["reactionCounts"] == {"heart": 1, "wow": 1}
+    [entry] = (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]
+    assert entry["myReaction"] is None and entry["drawnByMe"] is True
+
+    await sign_in_as(http, factory, cid.id)
+    cleared = await http.delete(path)
+    assert cleared.status_code == 200
+    assert cleared.json()["reactionCounts"] == {"heart": 1}
+    assert cleared.json()["myReaction"] is None
+
+
+async def test_every_gallery_reaction_refusal_is_a_404(env):
+    """Signed out, a guest, the drawer, a private game, a drawing never kept,
+    an unknown code, an unknown turn: the gallery door never says which."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    guest = await users.create_anonymous(display_name="Guest")
+    await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    public_turn = record_game.last_turn_id
+    await record_game(
+        history, users, winner=ann.id, loser=bob.id, index=1, drawing=_skch(), visibility="private"
+    )
+    private_turn = record_game.last_turn_id
+    await record_game(history, users, winner=ann.id, loser=bob.id, index=2)
+    unkept_turn = record_game.last_turn_id
+
+    assert (await http.put(f"/api/gallery/{public_turn}/reaction", json={"emoji": "heart"})).status_code == 404
+    assert (await http.delete(f"/api/gallery/{public_turn}/reaction")).status_code == 404
+    for user, why in ((guest, "a guest"), (ann, "the drawer")):
+        await sign_in_as(http, factory, user.id)
+        assert (
+            await http.put(f"/api/gallery/{public_turn}/reaction", json={"emoji": "heart"})
+        ).status_code == 404, why
+    await sign_in_as(http, factory, cid.id)
+    for turn, why in (
+        (private_turn, "a private game"),
+        (unkept_turn, "no drawing kept"),
+        (str(generate_uuid()), "no such turn"),
+        ("not-an-id", "not an id"),
+    ):
+        assert (
+            await http.put(f"/api/gallery/{turn}/reaction", json={"emoji": "heart"})
+        ).status_code == 404, why
+    assert (await http.put(f"/api/gallery/{public_turn}/reaction", json={"emoji": "thumbs_down"})).status_code == 404
+    assert (await http.put(f"/api/gallery/{public_turn}/reaction", json={"emoji": 1})).status_code == 422
 
 
 # ---- pinned drawings (#440)
@@ -853,6 +949,9 @@ async def test_the_shelf_credits_the_drawer_as_they_were_and_carries_the_tally(e
         "prompt": "jackpot",
         "strokeCount": 0,
         "reactions": [{"seatId": reacted.json()["seatId"], "emoji": "fire"}],
+        "reactionCounts": {"fire": 1},
+        "myReaction": "fire",
+        "drawnByMe": False,
     }
 
 
@@ -957,6 +1056,7 @@ async def test_the_validator_is_the_same_gzipped_and_a_gzipped_copy_revalidates(
     app.add_middleware(GZipMiddleware, minimum_size=1)
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_profile_router(users, history))
+    app.include_router(create_gallery_router(history))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as gz:
         await sign_in_as(gz, factory, ann.id)
         plain = await gz.get(url, headers={"Accept-Encoding": "identity"})

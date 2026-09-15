@@ -128,7 +128,9 @@ function GameRow({
         ? {
             ...current,
             turns: current.turns.map((turn) =>
-              turn.id === turnId ? { ...turn, reactions: result.reactions } : turn,
+              turn.id === turnId
+                ? { ...turn, reactions: result.reactions, reactionCounts: result.reactionCounts }
+                : turn,
             ),
           }
         : current,
@@ -345,6 +347,7 @@ function GameRow({
                   return (
                     <DrawingReactionControl
                       reactions={asReactions(turn.reactions)}
+                      counts={turn.reactionCounts}
                       myReactorId={detail.mySeatId}
                       eligibility={reactionEligibility({
                         isRegistered: Boolean(currentUser && !currentUser.isAnonymous),
@@ -401,8 +404,8 @@ function GameRow({
                       )}
                     </td>
                     <td>
-                      {turn.reactions.length > 0 ? (
-                        <ReactionTally reactions={turn.reactions} />
+                      {Object.keys(turn.reactionCounts ?? {}).length > 0 ? (
+                        <ReactionTally reactions={turn.reactions} counts={turn.reactionCounts} />
                       ) : (
                         <span className="profile-note">—</span>
                       )}
@@ -723,6 +726,8 @@ function ProfileView({ userId }: { userId: string }) {
                 pins={pins}
                 isOwner={isOwnProfile}
                 disabled={!myPinsLoaded || myPinsPending}
+                viewerIsRegistered={Boolean(currentUser && !currentUser.isAnonymous)}
+                onRequestAccount={() => setAuthMode("claim")}
                 onReorder={async (turnIds) => {
                   // Through the same queue as every Pin control, so a move
                   // and a pin pressed together cannot overwrite each other.

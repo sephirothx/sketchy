@@ -191,8 +191,8 @@ class TurnDrawingInput:
 class TurnDrawingReactionInput:
     """One registered player's reaction to a turn's drawing, as it will be stored.
 
-    `user_id` is not a column - the seat carries identity - but it rides along so
-    the write can check the account exists and credit the projection.
+    A live reaction always has a seat; `user_id` is the seat's account, which
+    the write checks against the seat and stores as the row's key (#524).
     """
 
     turn_id: str
@@ -204,7 +204,12 @@ class TurnDrawingReactionInput:
 
 @dataclass(frozen=True)
 class TurnDrawingReactionDetail:
-    """One reaction as history shows it: the seat that gave it and the code."""
+    """One reaction as history names it: the seat that gave it and the code.
+
+    Only reactions with a seat are listed; the ones given from outside the
+    room (the Gallery, a pinned shelf) are in the counts and nowhere else
+    (R-REACT-05).
+    """
 
     seat_id: str
     emoji: str
@@ -212,12 +217,14 @@ class TurnDrawingReactionDetail:
 
 @dataclass(frozen=True)
 class DrawingReactionResult:
-    """What a reaction write leaves behind: the reactor's seat and the new state."""
+    """What a reaction write leaves behind: the reactor's seat (none from the
+    Gallery), their pick, the seat rows and the per-code counts of every row."""
 
     turn_id: str
-    seat_id: str
+    seat_id: str | None
     emoji: str | None
     reactions: tuple[TurnDrawingReactionDetail, ...]
+    reaction_counts: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -360,6 +367,8 @@ class TurnDetail:
         default_factory=list
     )
     reactions: list[TurnDrawingReactionDetail] = field(default_factory=list)
+    # Every reaction, the seatless ones included, by code (R-REACT-05).
+    reaction_counts: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -398,6 +407,11 @@ class ProfilePinEntry:
     prompt: str
     stroke_count: int
     reactions: tuple[TurnDrawingReactionDetail, ...]
+    reaction_counts: Mapping[str, int] = field(default_factory=dict)
+    # The viewer's own pick and whether the drawing is theirs: per-viewer
+    # facts the shelf needs to offer a picker, disclosing no account id.
+    my_reaction: str | None = None
+    drawn_by_me: bool = False
 
 
 @dataclass(frozen=True)
@@ -863,20 +877,25 @@ class GameHistoryRepository(ABC):
     @abstractmethod
     async def set_drawing_reaction(
         self,
-        game_id: str,
+        game_id: str | None,
         turn_id: str,
         *,
         requesting_user_id: str,
         emoji: str | None,
+        from_gallery: bool = False,
     ) -> DrawingReactionResult | None:
         """Set, change or (with ``None``) remove the requester's reaction.
 
         The first mutable thing on a finished game, and deliberately kept away
-        from the score ledger (R-HIST-11). Every refusal - no such game or
-        turn, the requester was not a seat in it, is a guest, drew the
-        drawing, the drawing was erased, the code is unknown - answers
-        ``None``, so a caller can turn all of them into the same 404
-        (R-HIST-16) without learning which applied.
+        from the score ledger (R-HIST-11). Two doors, one path (R-REACT-08):
+        a participant names the game and must hold a seat in it; from the
+        Gallery (``from_gallery``) the turn alone is named, the drawing must
+        meet the gallery predicate (R-GAL-01), and the caller need not have
+        been there - their seat is written beside the account when they were.
+        Every refusal - no such game or turn, no seat where one is required, a
+        private game where none is, a guest, the drawer by account, an erased
+        drawing, the code is unknown - answers ``None``, so a caller can turn
+        all of them into the same 404 (R-HIST-16) without learning which applied.
         """
         ...
 
@@ -901,13 +920,17 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_profile_pins(self, profile_user_id: str) -> tuple[ProfilePinEntry, ...]:
+    async def get_profile_pins(
+        self, profile_user_id: str, *, viewer_user_id: str | None = None
+    ) -> tuple[ProfilePinEntry, ...]:
         """The shelf of ``profile_user_id``, in the owner's order.
 
         Who may ask is the route's question (any session, R-PIN-06); this
         answers what is there to show: pins whose game is still public and
         whose drawing is still ready. A pin the erasure path has not yet
-        caught up with is left out rather than shown as a hole.
+        caught up with is left out rather than shown as a hole. With a
+        ``viewer_user_id``, each entry also says what that viewer picked and
+        whether the drawing is theirs, so the shelf can offer a picker.
         """
         ...
 

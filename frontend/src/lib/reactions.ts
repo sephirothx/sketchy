@@ -74,6 +74,19 @@ export function compactTally(
   });
 }
 
+/**
+ * The tally a surface shows: the server's per-code counts when it sent them -
+ * they include reactions given from outside the room, which the named list
+ * never carries (R-REACT-05) - and otherwise a count of the list.
+ */
+export function resolveTally(
+  reactions: readonly { emoji: string }[],
+  counts?: Record<string, number> | null,
+): Record<string, number> {
+  if (counts) return { ...counts };
+  return tallyReactions(reactions);
+}
+
 export function totalReactions(tally: Record<string, number>): number {
   return Object.values(tally).reduce((sum, count) => sum + count, 0);
 }

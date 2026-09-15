@@ -1597,6 +1597,9 @@
    "drawerDisplayName",
    "drawerIsAnonymous",
    "drawerNameColor",
+   "drawnByMe",
+   "myReaction",
+   "reactionCounts",
    "roundNumber",
    "seatId",
    "strokeCount",
@@ -1607,6 +1610,8 @@
    "turnId"
   ],
   "api.profiles:reaction_payload": [
+   "myReaction",
+   "reactionCounts",
    "seatId",
    "turnId"
   ],
@@ -1704,6 +1709,7 @@
    "promptOffers",
    "promptSourceKind",
    "promptVersionId",
+   "reactionCounts",
    "roundNumber",
    "ruleSnapshot",
    "ruleSnapshotVersion",

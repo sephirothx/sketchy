@@ -5,7 +5,7 @@ import {
   compactTally,
   myReaction,
   offeredReactions,
-  tallyReactions,
+  resolveTally,
   totalReactions,
   type ReactionEligibility,
 } from "../lib/reactions";
@@ -21,6 +21,17 @@ interface DrawingReactionControlProps {
   reactions: DrawingReaction[];
   /** The seat that is me in these reactions - a room token live, a seat id in history. */
   myReactorId: string | null;
+  /**
+   * The server's per-code counts, when it sent them. They include reactions
+   * given from outside the room, which `reactions` never lists (R-REACT-05).
+   */
+  counts?: Record<string, number> | null;
+  /**
+   * My own pick as the server said it, for a surface where I have no seat to
+   * find myself by (the pinned shelf, the Gallery). `undefined` means "look
+   * me up in `reactions` by `myReactorId`".
+   */
+  mine?: string | null;
   eligibility: ReactionEligibility;
   /** `null` takes my reaction back. Rejections are shown beside the picker. */
   onReact?: (emoji: string | null) => Promise<unknown>;
@@ -75,6 +86,8 @@ const PANEL_RISE_PX = 110;
 export function DrawingReactionControl({
   reactions,
   myReactorId,
+  counts,
+  mine: mineFromServer,
   eligibility,
   onReact,
   onRequestAccount,
@@ -90,10 +103,10 @@ export function DrawingReactionControl({
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const tally = tallyReactions(reactions);
+  const tally = resolveTally(reactions, counts);
   const chips = compactTally(tally);
   const total = totalReactions(tally);
-  const mine = myReaction(reactions, myReactorId);
+  const mine = mineFromServer !== undefined ? mineFromServer : myReaction(reactions, myReactorId);
   const canPick = eligibility === "ok" && Boolean(onReact);
   const canOpen = canPick || (eligibility === "guest" && Boolean(onRequestAccount));
 

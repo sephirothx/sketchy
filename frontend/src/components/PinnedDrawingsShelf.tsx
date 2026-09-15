@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { CanvasSnapshot } from "./CanvasSnapshot";
+import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingRecapGallery } from "./DrawingRecapGallery";
 import { ReactionTally } from "./ReactionTally";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { refusalText } from "../lib/refusals.ts";
-import { fetchPinnedDrawing } from "../lib/profile";
+import { fetchPinnedDrawing, setGalleryReaction } from "../lib/profile";
 import { movePin, pinsAsRecapEntries, withoutPin } from "../lib/pinnedDrawings";
 import type { ProfilePin } from "../lib/pinnedDrawings";
+import { reactionEligibility } from "../lib/reactions";
 import { ui } from "../content/ui/index.ts";
 
 interface PinnedDrawingsShelfProps {
@@ -25,14 +27,20 @@ interface PinnedDrawingsShelfProps {
   onReorder?: (turnIds: string[]) => Promise<void>;
   /** The owner's controls held while the shelf is read or another write is out. */
   disabled?: boolean;
+  /** Whether the viewer may react: a registered account (R-REACT-01). */
+  viewerIsRegistered?: boolean;
+  /** Guests: how to become able to react. */
+  onRequestAccount?: () => void;
 }
 
 /**
  * The drawings a profile chose to show (#440), up to six, in the owner's
  * order. Each is the stored frame replayed small (R-HIST-15 rules out a
  * server-side picture); opening one reuses the recap gallery with the shelf
- * as its entries, and nobody reacts from here - the tally is read-only,
- * because a viewer need not have been in the game.
+ * as its entries. A registered viewer reacts from there through the gallery
+ * door (R-PIN-08, R-GAL-06) - a pinned drawing is a public-game drawing, so
+ * the Gallery shows it already - and the tally counts every reaction while
+ * naming only the room's own.
  */
 export function PinnedDrawingsShelf({
   userId,
@@ -40,11 +48,28 @@ export function PinnedDrawingsShelf({
   isOwner,
   onReorder,
   disabled = false,
+  viewerIsRegistered = false,
+  onRequestAccount,
 }: PinnedDrawingsShelfProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the viewer's own reactions from here left behind, by turn: the
+  // shelf's entries come from the parent, and a reaction changes only these.
+  const [reacted, setReacted] = useState<
+    Record<string, { reactionCounts: Record<string, number>; myReaction: string | null }>
+  >({});
   const turnIds = pins.map((pin) => pin.turnId);
+  const shown = (pin: ProfilePin): ProfilePin =>
+    reacted[pin.turnId] ? { ...pin, ...reacted[pin.turnId] } : pin;
+
+  const react = async (turnId: string, emoji: string | null) => {
+    const result = await setGalleryReaction(turnId, emoji);
+    setReacted((current) => ({
+      ...current,
+      [turnId]: { reactionCounts: result.reactionCounts, myReaction: result.myReaction },
+    }));
+  };
 
   const change = async (next: string[]) => {
     if (!onReorder || busy || disabled) return;
@@ -93,7 +118,7 @@ export function PinnedDrawingsShelf({
                 >
                   {pin.drawerDisplayName}
                 </strong>
-                <ReactionTally reactions={pin.reactions} />
+                <ReactionTally reactions={pin.reactions} counts={shown(pin).reactionCounts} />
               </span>
             </div>
             {isOwner && onReorder && (
@@ -138,9 +163,29 @@ export function PinnedDrawingsShelf({
           initialIndex={openIndex}
           onClose={() => setOpenIndex(null)}
           loadEntry={(entry) => fetchPinnedDrawing(userId, pins[entry.index].turnId)}
-          renderReactions={(entry) => (
-            <ReactionTally reactions={pins[entry.index]?.reactions ?? []} />
-          )}
+          renderReactions={(entry) => {
+            const pin = pins[entry.index];
+            if (!pin) return null;
+            const current = shown(pin);
+            return (
+              <DrawingReactionControl
+                reactions={pin.reactions.map((reaction) => ({
+                  playerId: reaction.seatId,
+                  emoji: reaction.emoji,
+                }))}
+                myReactorId={null}
+                counts={current.reactionCounts}
+                mine={current.myReaction}
+                eligibility={reactionEligibility({
+                  isRegistered: viewerIsRegistered,
+                  isDrawer: pin.drawnByMe,
+                })}
+                onReact={(emoji) => react(pin.turnId, emoji)}
+                onRequestAccount={onRequestAccount}
+                placement="panel"
+              />
+            );
+          }}
         />
       )}
     </>

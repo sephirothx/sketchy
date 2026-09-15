@@ -1388,8 +1388,10 @@ cd backend && .venv/bin/python -m app.services.drawing_storage --batch-size 2000
 ```
 
 ### `turn_drawing_reactions`
-`id` · `game_id` (denormalized) · `turn_id` · `participant_id` (the reactor's **participant
-seat**, indexed) · `emoji` · `set_version` · `created_at` · `updated_at`, with
+`id` · `game_id` (denormalized) · `turn_id` · `user_id` (the reactor's **account**, indexed,
+FK to `users` CASCADE) · `participant_id` (the reactor's **participant seat** when they had
+one, nullable, indexed) · `emoji` · `set_version` · `created_at` · `updated_at`, with
+`uq_turn_drawing_reactions_turn_user` on `(turn_id, user_id)`,
 `uq_turn_drawing_reactions_turn_participant` on `(turn_id, participant_id)`,
 `fk_turn_drawing_reactions_turn_same_game` on `(game_id, turn_id)` and
 `fk_turn_drawing_reactions_seat_same_game` on `(game_id, participant_id)`, both CASCADE.
@@ -1400,13 +1402,18 @@ stored-drawing rule (R-HIST-18) applied to an emoji, so retiring one changes wha
 offered and nothing an old row means. `set_version >= 1` says which version of the set the
 code was chosen from.
 
-- One reaction per registered account per drawing is the unique constraint. A game holds
-  at most one seat per linked account, so no alias resolution sits behind it; guests
-  cannot react, so a guest-to-account merge brings none with it.
-- The reactor is the **seat**, not an account column: the seat already carries the frozen
-  presentation and becomes the **Deleted player** tombstone with everything else, so a
-  deleted reactor's reaction keeps counting. The `game_id` denormalization is what lets
-  both foreign keys say the turn and the seat belong to the same game.
+- One reaction per registered account per drawing is the `(turn, user)` unique constraint.
+  The key became the account with the **Gallery** (#524): anyone signed in may react to a
+  public-game drawing from outside the game, and most of them hold no seat in it. The
+  writer resolves identity aliases before the write, so a person merged from two
+  identities holds one row; guests cannot react, so a guest-to-account merge brings none.
+- The seat rides beside the account when the reactor sat in the game — it carries the
+  frozen presentation that names the reaction in the room and in history, and becomes
+  the **Deleted player** tombstone with everything else — and is null for a reaction
+  given from the Gallery or a pinned shelf, which only counts (R-REACT-05). A deleted
+  account is a tombstoned `users` row, never a removed one, so the account key holds and
+  the reaction keeps counting (R-REACT-10). The `game_id` denormalization is what lets the
+  composite foreign keys say the turn and the seat belong to the same game.
 - Reactions never touch `score_events` (R-HIST-11).
 
 **Flow.** Reactions given while the game is live sit on the `Room` and ride in the

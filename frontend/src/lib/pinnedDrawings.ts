@@ -28,7 +28,13 @@ export interface ProfilePin {
   drawerIsAnonymous: boolean;
   prompt: string;
   strokeCount: number;
+  /** The reactions given by a seat, named; outsiders' are only in the counts. */
   reactions: PinnedReaction[];
+  /** Every reaction by code, the seatless ones included (R-REACT-05). */
+  reactionCounts: Record<string, number>;
+  /** The viewer's own pick, and whether the drawing is theirs: what the picker needs. */
+  myReaction: string | null;
+  drawnByMe: boolean;
 }
 
 export type ShelfPresence = "absent" | "empty" | "shelf";
@@ -111,8 +117,9 @@ export function pinsAsRecapEntries(pins: readonly ProfilePin[]): DrawingRecapMet
     turnId: pin.turnId,
     roundNumber: pin.roundNumber,
     turnNumber: pin.turnNumber,
-    // The shelf knows no seat: the byline is the snapshot, and nobody on
-    // it reacts, so the gallery never needs a drawer id to compare against.
+    // The shelf knows no seat: the byline is the snapshot, and whether the
+    // viewer drew it comes from the server (`drawnByMe`), so the gallery
+    // never needs a drawer id to compare against.
     drawerId: "",
     drawerNickname: pin.drawerDisplayName,
     drawerNameColor: pin.drawerNameColor ?? undefined,
