@@ -755,3 +755,41 @@ async def test_two_shelf_writes_for_one_account_serialize_instead_of_colliding()
             ), "the shelf is whichever list committed last, whole"
     finally:
         await engine.dispose()
+
+
+async def _claimed_from_a_merged_guest(users, factory, name: str) -> tuple[str, str]:
+    """A registered account and the guest identity merged into it: (account, guest)."""
+    account_guest = await users.create_anonymous(name)
+    account = await users.claim_account(account_guest.id, name.lower(), "hash")
+    guest = await users.create_anonymous(f"{name} as guest")
+    async with factory() as session:
+        async with session.begin():
+            guest_row = await session.get(User, UUID(guest.id))
+            guest_row.state = "merged"
+            session.add(IdentityAlias(source_user_id=UUID(guest.id), target_user_id=UUID(account.id)))
+    return account.id, guest.id
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
+async def test_crossed_pin_writes_over_merged_drawers_do_not_deadlock():
+    """A and B played as guests A' and B', since merged. A pins B''s drawing
+    while B pins A''s: each write locks its pinner and the other's guest, and
+    reaching for the guest's account in a second statement made a cycle.
+    Resolved before locking, both complete (#811 review)."""
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        a, a_guest = await _claimed_from_a_merged_guest(users, factory, "Alpha")
+        b, b_guest = await _claimed_from_a_merged_guest(users, factory, "Bravo")
+        history = SqlAlchemyGameHistoryRepository(factory)
+        _, a_guests_turn, b_guests_turn = await _public_game_between(factory, history, b_guest, a_guest)
+
+        for _ in range(5):
+            first, second = await asyncio.gather(
+                history.set_profile_pins(requesting_user_id=a, turn_ids=[str(b_guests_turn)]),
+                history.set_profile_pins(requesting_user_id=b, turn_ids=[str(a_guests_turn)]),
+            )
+            assert first is not None and second is not None, "neither write is a deadlock victim"
+        assert await _pins(factory) == sorted([(UUID(a), b_guests_turn), (UUID(b), a_guests_turn)])
+    finally:
+        await engine.dispose()

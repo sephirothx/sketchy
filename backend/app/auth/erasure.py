@@ -67,10 +67,29 @@ async def erased_identity_ids(
     is gone altogether (retention purged the guest), or when it is a merged
     guest whose account is `deleted` - the alias rows keep `merged` while the
     account they resolve to is the one that carries the state.
+
+    The lock set is the whole identity, resolved **before** locking: the
+    accounts a merged guest resolves to are read first, unlocked, and locked
+    in the same ordered statement as the guests. Discovering them under the
+    first lock and taking them in a second statement gave two writers whose
+    sets cross - A holding {A, B'} then wanting B, B holding {B, A'} then
+    wanting A - a cycle. A merge that lands between the unlocked read and the
+    lock is caught by the state read under it, and its target locked then; a
+    merge needs the account row, so that window is the only one.
     """
-    wanted = sorted({UUID(str(value)) for value in user_ids})
+    wanted = {UUID(str(value)) for value in user_ids}
     if not wanted:
         return set()
+    wanted |= set(
+        (
+            await session.scalars(
+                select(IdentityAlias.target_user_id).where(
+                    IdentityAlias.source_user_id.in_(sorted(wanted))
+                )
+            )
+        ).all()
+    )
+    wanted = sorted(wanted)
     states = dict(
         (
             await session.execute(

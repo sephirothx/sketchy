@@ -2161,7 +2161,12 @@ order ends erased, and the ascending order is what keeps two writers, or a write
 two deletions, from waiting on each other in a cycle. A merged guest resolves to the
 account it was merged into; a row retention has already purged counts as erased.
 
-**The lock set is the whole identity, resolved before locking.** A seat may still carry
+**The lock set is the whole identity, resolved before locking.** `erased_identity_ids`
+reads the accounts its guests were merged into first, unlocked, and locks guests and
+accounts in one ordered statement; a target found only under the lock (a merge that landed
+in between) is locked in a second statement, the one case left. Locking the guests first
+and reaching for their accounts gave two pin writes whose sets crossed a cycle (#811
+review). A seat may still carry
 a guest identity merged into an account mid-game. The finished-game write resolves such
 seats to their accounts first and takes one `FOR UPDATE` over seats and accounts
 together; the deletion reads the guests merged into the account first and takes one
