@@ -2201,7 +2201,7 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 
 Without `TEST_DATABASE_URL` the same fixture hands out fresh in-memory SQLite configured the
 way [`db/__init__.py`](../backend/app/db/__init__.py) configures the application's own
-connections, and checks `PRAGMA foreign_keys` on every connection it opens. A raw
+connections, and checks `PRAGMA foreign_keys` on every connection it opens. The in-memory database is a **named** one in shared-cache mode with one keeper connection held for the engine's lifetime, not a plain `:memory:` — a plain one *is* its connection, and when SQLAlchemy discards that connection (a statement cancelled mid-flight does, and the chat path's block lookup gives up on a slow read by design) the replacement is an empty database, so every later statement in the test fails with "no such table" nowhere near the cause. Seen once on CI in the retention suite; `tests/test_dbfixtures.py` cancels a statement and reads again. A raw
 `create_async_engine` leaves SQLite's enforcement off, and a suite built on one passes
 deletion tests against constraints the database never applied — #612 found two
 deletion paths that only failed once enforcement was real. The schema is the one
