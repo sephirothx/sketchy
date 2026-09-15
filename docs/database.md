@@ -1440,6 +1440,13 @@ with a `ready` drawing from a **public** game (R-HIST-25) the pinner sat in — 
 drawing or another player's, credited through the turn's frozen drawer snapshot. Only a
 `registered` account may pin, so a guest merge never brings a shelf with it.
 
+**Reads.** `get_profile_pins` lists the shelf, joined to the turn, the game and the
+drawing so a pin whose game is no longer public or whose drawing is no longer ready is
+left out rather than shown as a hole. `get_pinned_drawing` and its checksum twin are the
+one other door beside `get_turn_drawing`'s participant check (R-HIST-16): a separate
+query whose authorization is the join to this table, so the two can never loosen each
+other by accident (R-PIN-06).
+
 **Flow.** One write, `set_profile_pins`, replaces the whole shelf with the ordered list
 given: pinning, unpinning and reordering are the same transaction, every turn is checked
 before anything is deleted, and a refused list leaves the shelf as it was. Deleting the

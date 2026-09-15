@@ -116,6 +116,7 @@ from app.repositories.interfaces import (
     TurnDrawingDetail,
     TurnDrawingInput,
     ProfilePinDetail,
+    ProfilePinEntry,
     ProfilePinsResult,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
@@ -2187,6 +2188,128 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         )
                     )
         return rows
+
+    def _pinned_drawing_predicate(self, profile_user_id: UUID, turn_id: UUID):
+        """Everything a pinned-drawing read has to hold, as one predicate the
+        bytes and the validator share: this account pinned this turn, the
+        game is public, the drawing is there to show. Deliberately not the
+        participant subquery `get_turn_drawing` uses - this is the other
+        door (R-PIN-06), and it stays a separate query so a later edit to
+        either cannot loosen the other by accident."""
+        pinned = (
+            select(ProfileDrawingPin.turn_id)
+            .where(
+                ProfileDrawingPin.user_id == profile_user_id,
+                ProfileDrawingPin.turn_id == turn_id,
+                ProfileDrawingPin.game_id == TurnDrawing.game_id,
+            )
+            .exists()
+        )
+        public = (
+            select(GameRecord.id)
+            .where(
+                GameRecord.id == TurnDrawing.game_id,
+                GameRecord.visibility == GameVisibility.PUBLIC.value,
+            )
+            .exists()
+        )
+        return and_(
+            TurnDrawing.turn_id == turn_id,
+            TurnDrawing.status == TurnDrawingStatus.READY.value,
+            TurnDrawing.payload.is_not(None),
+            pinned,
+            public,
+        )
+
+    async def get_profile_pins(self, profile_user_id: str) -> tuple[ProfilePinEntry, ...]:
+        db_profile_user_id = _optional_entity_id(profile_user_id)
+        if db_profile_user_id is None:
+            return ()
+        async with self._session_factory() as session:
+            canonical = await _canonical_user_id(session, db_profile_user_id)
+            rows = (
+                await session.execute(
+                    select(ProfileDrawingPin, TurnRecord)
+                    .join(
+                        TurnRecord,
+                        and_(
+                            TurnRecord.id == ProfileDrawingPin.turn_id,
+                            TurnRecord.game_id == ProfileDrawingPin.game_id,
+                        ),
+                    )
+                    .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+                    .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                    .where(
+                        ProfileDrawingPin.user_id == canonical,
+                        GameRecord.visibility == GameVisibility.PUBLIC.value,
+                        TurnDrawing.status == TurnDrawingStatus.READY.value,
+                        TurnDrawing.payload.is_not(None),
+                    )
+                    .options(selectinload(TurnRecord.reactions))
+                    .order_by(ProfileDrawingPin.position)
+                )
+            ).all()
+        return tuple(
+            ProfilePinEntry(
+                turn_id=_public_id(pin.turn_id),
+                position=pin.position,
+                round_number=turn.round_number,
+                turn_number=turn.turn_number,
+                drawer_display_name=turn.drawer_display_name_snapshot,
+                drawer_name_color=turn.drawer_name_color_snapshot,
+                drawer_is_anonymous=turn.drawer_is_anonymous_snapshot,
+                prompt=turn.prompt,
+                stroke_count=turn.stroke_count,
+                reactions=tuple(
+                    TurnDrawingReactionDetail(
+                        seat_id=_public_id(reaction.participant_id),
+                        emoji=reaction.emoji,
+                    )
+                    for reaction in sorted(
+                        turn.reactions, key=lambda r: (r.created_at, r.id)
+                    )
+                ),
+            )
+            for pin, turn in rows
+        )
+
+    async def get_pinned_drawing(
+        self, profile_user_id: str, turn_id: str
+    ) -> TurnDrawingDetail | None:
+        db_profile_user_id = _optional_entity_id(profile_user_id)
+        db_turn_id = _optional_entity_id(turn_id)
+        if db_profile_user_id is None or db_turn_id is None:
+            return None
+        async with self._session_factory() as session:
+            canonical = await _canonical_user_id(session, db_profile_user_id)
+            row = await session.scalar(
+                select(TurnDrawing).where(
+                    self._pinned_drawing_predicate(canonical, db_turn_id)
+                )
+            )
+        if row is None:
+            return None
+        return TurnDrawingDetail(
+            turn_id=_public_id(row.turn_id),
+            payload=row.payload,
+            checksum_sha256=row.checksum_sha256 or "",
+        )
+
+    async def get_pinned_drawing_checksum(
+        self, profile_user_id: str, turn_id: str
+    ) -> str | None:
+        db_profile_user_id = _optional_entity_id(profile_user_id)
+        db_turn_id = _optional_entity_id(turn_id)
+        if db_profile_user_id is None or db_turn_id is None:
+            return None
+        async with self._session_factory() as session:
+            canonical = await _canonical_user_id(session, db_profile_user_id)
+            checksum = await session.scalar(
+                select(TurnDrawing.checksum_sha256).where(
+                    self._pinned_drawing_predicate(canonical, db_turn_id)
+                )
+            )
+        return checksum or None
 
     async def get_recent_co_players(
         self,

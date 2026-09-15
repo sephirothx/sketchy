@@ -736,6 +736,126 @@ async def test_an_erased_drawing_keeps_its_pin_row_only_until_the_erasure_path_r
     assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 404
 
 
+# ---- the shelf and the pinned-drawing door (#808)
+
+
+async def test_a_signed_in_non_participant_can_fetch_a_pinned_drawing_and_not_an_unpinned_one(env):
+    """The required proof from #440: the pin is the only door, it opens the
+    pinned turn to any session, and it leaves the participant route alone."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    guest = await users.create_anonymous(display_name="Guest")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    pinned_turn = record_game.last_turn_id
+    other_game = await record_game(history, users, winner=ann.id, loser=bob.id, index=1, drawing=_skch())
+    unpinned_turn = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [pinned_turn]})).status_code == 200
+    expected = (await http.get(f"/api/games/{game_id}/turns/{pinned_turn}/drawing")).content
+
+    shelf = f"/api/users/{bob.id}/pins"
+    for viewer, why in ((cid, "a stranger to the game"), (guest, "a guest")):
+        await sign_in_as(http, factory, viewer.id)
+        listed = await http.get(shelf)
+        assert listed.status_code == 200, why
+        [entry] = listed.json()["pins"]
+        assert entry["turnId"] == pinned_turn and entry["prompt"] == "jackpot", why
+        assert entry["drawerDisplayName"] == "Ann" and "gameId" not in entry, why
+        served = await http.get(f"{shelf}/{pinned_turn}/drawing")
+        assert served.status_code == 200 and served.content == expected, why
+        assert served.headers["cache-control"] == "private, no-cache"
+        assert (await http.get(f"{shelf}/{unpinned_turn}/drawing")).status_code == 404, why
+        # The participant route is not widened by the pin.
+        assert (await http.get(f"/api/games/{game_id}/turns/{pinned_turn}/drawing")).status_code == 404, why
+        assert (await http.get(f"/api/games/{other_game}/turns/{unpinned_turn}/drawing")).status_code == 404, why
+        # Nor can the pinned turn be reached through somebody else's shelf.
+        assert (await http.get(f"/api/users/{ann.id}/pins/{pinned_turn}/drawing")).status_code == 404, why
+
+    http.cookies.clear()
+    assert (await http.get(shelf)).status_code == 404, "signed out: no shelf"
+    assert (await http.get(f"{shelf}/{pinned_turn}/drawing")).status_code == 404, "signed out: no bytes"
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.get(f"/api/users/{generate_uuid()}/pins")).status_code == 404, "no such player"
+    assert (await http.get(f"/api/users/{generate_uuid()}/pins/{pinned_turn}/drawing")).status_code == 404
+
+
+async def test_unpinning_and_erasure_close_the_door_at_once_even_for_a_remembered_validator(env):
+    from sqlalchemy import select
+
+    from app.db.models import TurnDrawing
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    first = record_game.last_turn_id
+    await record_game(history, users, winner=ann.id, loser=bob.id, index=1, drawing=_skch())
+    second = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [first, second]})).status_code == 200
+
+    await sign_in_as(http, factory, cid.id)
+    served = await http.get(f"/api/users/{bob.id}/pins/{first}/drawing")
+    tag = served.headers["etag"]
+    assert (
+        await http.get(f"/api/users/{bob.id}/pins/{first}/drawing", headers={"If-None-Match": tag})
+    ).status_code == 304
+
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [second]})).status_code == 200
+    await sign_in_as(http, factory, cid.id)
+    assert (
+        await http.get(f"/api/users/{bob.id}/pins/{first}/drawing", headers={"If-None-Match": tag})
+    ).status_code == 404, "a remembered tag cannot see past an unpin"
+    assert [p["turnId"] for p in (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]] == [second]
+
+    async with factory() as session:
+        async with session.begin():
+            drawing = await session.scalar(select(TurnDrawing).where(TurnDrawing.turn_id == UUID(second)))
+            drawing.status = "deleted"
+            drawing.payload = None
+            drawing.checksum_sha256 = None
+            drawing.byte_size = None
+            drawing.format_magic = None
+            drawing.format_version = None
+            drawing.deleted_at = datetime.now(timezone.utc)
+    assert (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"] == [], "an erased drawing is not a hole"
+    assert (await http.get(f"/api/users/{bob.id}/pins/{second}/drawing")).status_code == 404
+
+
+async def test_the_shelf_credits_the_drawer_as_they_were_and_carries_the_tally(env):
+    """Attribution is the frozen snapshot (#387): a rename after the game
+    changes nothing on the shelf. Reactions ride along read-only."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    reacted = await http.put(f"/api/games/{game_id}/turns/{turn_id}/reaction", json={"emoji": "fire"})
+    assert reacted.status_code == 200
+    await users.update_profile(ann.id, display_name="Annabel")
+
+    [entry] = (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]
+    assert entry == {
+        "turnId": turn_id,
+        "roundNumber": 1,
+        "turnNumber": 1,
+        "drawerDisplayName": "Ann",
+        "drawerNameColor": None,
+        # `record_game` writes the seat without an account state, so the
+        # snapshot says guest: the shelf repeats the snapshot, not the account.
+        "drawerIsAnonymous": True,
+        "prompt": "jackpot",
+        "strokeCount": 0,
+        "reactions": [{"seatId": reacted.json()["seatId"], "emoji": "fire"}],
+    }
+
+
 # ---- conditional downloads (#604)
 
 

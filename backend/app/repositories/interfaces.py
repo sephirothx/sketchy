@@ -382,6 +382,25 @@ class ProfilePinDetail:
 
 
 @dataclass(frozen=True)
+class ProfilePinEntry:
+    """One pinned drawing as the shelf shows it (#440): what the recap shows
+    for a turn, credited through the turn's frozen drawer snapshot (#387), and
+    deliberately **without** the game id - the shelf has no reason to link a
+    game, and a viewer who was not in it has no page to open."""
+
+    turn_id: str
+    position: int
+    round_number: int
+    turn_number: int
+    drawer_display_name: str
+    drawer_name_color: str | None
+    drawer_is_anonymous: bool
+    prompt: str
+    stroke_count: int
+    reactions: tuple[TurnDrawingReactionDetail, ...]
+
+
+@dataclass(frozen=True)
 class ProfilePinsResult:
     """The pinner's whole shelf after a write: the ordered set, never a page."""
 
@@ -879,6 +898,39 @@ class GameHistoryRepository(ABC):
         account, so every refusal can be the same 404 (R-HIST-16). Nothing is
         written on a refusal.
         """
+        ...
+
+    @abstractmethod
+    async def get_profile_pins(self, profile_user_id: str) -> tuple[ProfilePinEntry, ...]:
+        """The shelf of ``profile_user_id``, in the owner's order.
+
+        Who may ask is the route's question (any session, R-PIN-06); this
+        answers what is there to show: pins whose game is still public and
+        whose drawing is still ready. A pin the erasure path has not yet
+        caught up with is left out rather than shown as a hole.
+        """
+        ...
+
+    @abstractmethod
+    async def get_pinned_drawing(
+        self, profile_user_id: str, turn_id: str
+    ) -> TurnDrawingDetail | None:
+        """A pinned drawing's bytes for any signed-in viewer (R-PIN-06).
+
+        The one other door beside `get_turn_drawing`'s participant check
+        (R-HIST-16), and its own query rather than a disjunction in that one:
+        authorization is the join to the pins table - this account pinned
+        this turn - together with the game being public and the drawing
+        ready. Unpinning, erasing or a private game answer ``None`` at once.
+        """
+        ...
+
+    @abstractmethod
+    async def get_pinned_drawing_checksum(
+        self, profile_user_id: str, turn_id: str
+    ) -> str | None:
+        """The validator for `get_pinned_drawing`, under the same query and
+        without the blob (R-HIST-24, R-PLAT-14)."""
         ...
 
     @abstractmethod
