@@ -1,10 +1,13 @@
 import type { DecodedCanvasAction } from "./canvasHistory";
+import { shapeOutlinePoints } from "./canvasGeometry.ts";
+import type { Point } from "./canvasGeometry.ts";
 
 /** How long a replay takes, whatever the drawing: a doodle is not over in a
  * blink and a dense one does not drag. */
 export const REPLAY_MIN_SECONDS = 2.5;
 export const REPLAY_MAX_SECONDS = 9;
-/** What a dot, a shape, a fill or a clear costs, measured in path points. */
+/** What a dot, a fill or a clear costs, measured in stroke segments: the
+ * window of time it takes on the bar before it lands. */
 export const REPLAY_STEP_COST = 12;
 
 export interface ReplayPosition {
@@ -25,9 +28,29 @@ export interface ReplayPlan {
   positionAt(fraction: number): ReplayPosition;
 }
 
+/**
+ * A stroke, as the replay draws it: the points it grows through, closed
+ * for a shape's outline. Null for what lands whole - a dot, a fill, a clear.
+ */
+export function replayStroke(
+  action: DecodedCanvasAction,
+): { points: Point[]; width: number; color: string } | null {
+  if (action.kind === "path" && action.points.length > 1) {
+    return { points: action.points, width: action.width, color: action.color };
+  }
+  if (action.kind === "shape") {
+    const outline = shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape);
+    if (outline.length < 2) return null;
+    return { points: [...outline, outline[0]], width: action.payload.width, color: action.payload.color };
+  }
+  return null;
+}
+
 function cost(action: DecodedCanvasAction): number {
-  // A stroke is measured in segments, which is what the replay draws through.
-  return action.kind === "path" && action.points.length > 1 ? action.points.length - 1 : REPLAY_STEP_COST;
+  // A stroke is measured in segments, which is what the replay draws
+  // through; anything that lands whole takes a fixed window of time.
+  const stroke = replayStroke(action);
+  return stroke ? stroke.points.length - 1 : REPLAY_STEP_COST;
 }
 
 /**
@@ -61,33 +84,28 @@ export function replayPlan(actions: readonly DecodedCanvasAction[]): ReplayPlan 
       if (total === 0 || target >= total) return { action: actions.length, point: 0 };
       let index = 0;
       while (index < actions.length - 1 && before[index + 1] <= target) index += 1;
-      const within = target - before[index];
-      // A stroke sits part way along; anything else is either not yet
-      // landed (before its cost is reached) or landed whole.
-      const action = actions[index];
-      if (action.kind === "path" && action.points.length > 1) {
-        return { action: index, point: Math.min(costs[index], within) };
-      }
-      return within >= costs[index] ? { action: index + 1, point: 0 } : { action: index, point: 0 };
+      // Part way through the action's window: along a stroke, or waiting
+      // for something that lands whole at the window's end.
+      return { action: index, point: Math.min(costs[index], target - before[index]) };
     },
   };
 }
 
 export interface ReplayPainter {
   /** Draw the stretch `from..to` (in segments) of a stroke. */
-  span(action: Extract<DecodedCanvasAction, { kind: "path" }>, from: number, to: number): void;
-  /** Apply a whole action: a dot, a shape, a fill, a clear. */
+  span(stroke: { points: Point[]; width: number; color: string }, from: number, to: number): void;
+  /** Apply a whole action: a dot, a fill, a clear. */
   whole(action: DecodedCanvasAction): void;
 }
 
 /**
  * Advance a replay by `budget` segments, painting what that uncovers, and
- * return the new position with what is left of the budget. A stroke grows
- * part of a segment at a time; a dot, a shape, a fill or a clear lands
- * whole and costs `stepCost`, which a single frame rarely holds - so the
- * budget left can be **negative**, a debt the next frames pay before the
- * next action lands, and the caller carries it over. Pure apart from the
- * painter, so the suite can drive it frame by frame.
+ * return the new position with what is left of the budget. Every action
+ * takes a window of the bar: a stroke or a shape's outline grows through
+ * its window part of a segment at a time, and a dot, a fill or a clear
+ * lands whole when its window is spent - so the bar moves at one pace
+ * whatever is being drawn, which is what makes it read as time. Pure apart
+ * from the painter, so the suite can drive it frame by frame.
  */
 export function stepReplay(
   actions: readonly DecodedCanvasAction[],
@@ -100,26 +118,29 @@ export function stepReplay(
   let left = budget;
   while (left > 0 && index < actions.length) {
     const action = actions[index];
-    if (action.kind === "path" && action.points.length > 1) {
-      const end = action.points.length - 1;
-      const to = Math.min(end, point + left);
-      // A remainder too small to move the position - floating-point dust
-      // left by the subtraction below - would otherwise loop forever. It is
-      // spent, not owed: the frame ends here and the next one carries on.
-      if (to - point < 1e-6) {
-        left = 0;
-        break;
-      }
-      painter.span(action, point, to);
-      left -= to - point;
-      point = to;
-      if (point >= end) {
+    const stroke = replayStroke(action);
+    const end = stroke ? stroke.points.length - 1 : plan.stepCost;
+    const to = Math.min(end, point + left);
+    // A remainder too small to move the position - floating-point dust
+    // left by the subtraction below - would otherwise loop forever. It is
+    // spent, not owed: the frame ends here and the next one carries on.
+    if (to - point < 1e-6) {
+      if (end - point < 1e-6) {
+        // Dust short of the end is the end: finish the action rather than
+        // sit a hair's breadth before it forever.
+        if (!stroke) painter.whole(action);
         index += 1;
         point = 0;
+        continue;
       }
-    } else {
-      painter.whole(action);
-      left -= plan.stepCost;
+      left = 0;
+      break;
+    }
+    if (stroke) painter.span(stroke, point, to);
+    left -= to - point;
+    point = to;
+    if (point >= end) {
+      if (!stroke) painter.whole(action);
       index += 1;
       point = 0;
     }

@@ -5,7 +5,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import {
   applyCanvasAction,
-  applyCanvasPathSpan,
+  applyCanvasStrokeSpan,
   renderCanvasActions,
   renderCanvasActionsUpTo,
 } from "../lib/canvasRenderer";
@@ -100,7 +100,7 @@ export const ReplayCanvas = forwardRef<CanvasRef, ReplayCanvasProps>(function Re
       last = now;
       const budget = carry + (elapsed / 1000) * plan.pointsPerSecond;
       const stepped = stepReplay(actions, plan, cursor.current, budget, {
-        span: (action, from, to) => applyCanvasPathSpan(buffer.data, action, from, to),
+        span: (stroke, from, to) => applyCanvasStrokeSpan(buffer.data, stroke, from, to),
         whole: (action) => applyCanvasAction(buffer.data, action),
       });
       cursor.current = stepped.position;

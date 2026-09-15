@@ -2,6 +2,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
+import { replayStroke } from "./replay.ts";
 import {
   fillWhitePixels,
   floodFillPixels,
@@ -205,20 +206,21 @@ export function applyCanvasAction(
 }
 
 /**
- * Apply the stretch `from..to` of a path, as the stroke grew: what a replay
- * draws frame by frame. The ends are positions along the path in points,
+ * Apply the stretch `from..to` of a stroke, as it grew: what a replay draws
+ * frame by frame. The ends are positions along the stroke in points,
  * fractional between two of them, so a stroke of three long points still
  * grows smoothly rather than in three jumps. Round caps make the joins
  * seamless, and an opaque stroke drawn twice over the same pixels is the
- * same stroke, so a stretch may overlap the one before it.
+ * same stroke, so a stretch may overlap the one before it. A shape's
+ * outline is a stroke like any other here, closed by its caller.
  */
-export function applyCanvasPathSpan(
+export function applyCanvasStrokeSpan(
   pixels: Uint8ClampedArray,
-  action: Extract<DecodedCanvasAction, { kind: "path" }>,
+  stroke: { points: Point[]; width: number; color: string },
   from: number,
   to: number,
 ): void {
-  const points = action.points;
+  const points = stroke.points;
   const last = points.length - 1;
   if (last < 1 || to <= from) return;
   const at = (position: number) => {
@@ -238,8 +240,8 @@ export function applyCanvasPathSpan(
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     stretch.length === 1 ? [stretch[0], stretch[0]] : stretch,
-    action.width / 2,
-    hexToRgba(action.color),
+    stroke.width / 2,
+    hexToRgba(stroke.color),
     false,
   );
 }
@@ -263,7 +265,9 @@ export function renderCanvasActions(
 
 /**
  * Everything up to a replay position, from white: the actions before it
- * whole, and the stroke it sits in as far as it has got. What a scrub shows.
+ * whole, and the one it sits in as far as it has got - a stroke or a
+ * shape's outline part way, nothing yet for what lands whole at the end
+ * of its window. What a scrub shows.
  */
 export function renderCanvasActionsUpTo(
   pixels: Uint8ClampedArray,
@@ -275,7 +279,7 @@ export function renderCanvasActionsUpTo(
     applyCanvasAction(pixels, actions[index]);
   }
   const current = actions[position.action];
-  if (current && current.kind === "path" && current.points.length > 1 && position.point > 0) {
-    applyCanvasPathSpan(pixels, current, 0, position.point);
-  }
+  if (!current || position.point <= 0) return;
+  const stroke = replayStroke(current);
+  if (stroke) applyCanvasStrokeSpan(pixels, stroke, 0, position.point);
 }
