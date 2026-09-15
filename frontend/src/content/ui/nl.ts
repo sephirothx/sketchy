@@ -833,6 +833,7 @@ export const NL: Catalogue = {
     updatedName: (p: { name: string }) =>
       `‘${p.name}’ bijgewerkt.`,
     deleteThisRoomSettingPreset: "Deze kamervoorinstelling verwijderen?",
+    deletePresetDescription: "Kamers die je er al mee hebt gemaakt, veranderen niet.",
     createTheRoom: "de kamer maken",
     noScoring: "Zonder punten",
     public: "Openbaar",
@@ -1269,7 +1270,10 @@ export const NL: Catalogue = {
     published: "Gepubliceerd",
     tags: "Labels",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} van ${p.max} gekozen`,
-    tagsAreHowListsAreFound: "Via labels wordt deze lijst in de communitycatalogus gevonden.",
+    addTag: "Toevoegen",
+    tagsDone: "Klaar",
+    changeTags: "Wijzigen",
+    removeTag: (p: { tag: string }) => `${p.tag} verwijderen`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "woord", other: "woorden" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
@@ -1303,7 +1307,10 @@ export const NL: Catalogue = {
     nothingMatchesThatSearch: "Niets past bij die zoekopdracht.",
     deleteList: "Lijst verwijderen…",
     promptListSaved: "Woordenlijst opgeslagen.",
-    deleteThisPromptListAnd: "Deze woordenlijst en al haar versies verwijderen?",
+    deleteListTitle: (p: { name: string }) =>
+      `‘${p.name}’ verwijderen?`,
+    deleteListDescription: "Hij verdwijnt uit je lijsten en, als hij gepubliceerd is, uit de communitycatalogus. Al gespeelde spellen houden hun woorden.",
+    deleteListConfirm: "Lijst verwijderen",
     promptListDeleted: "Woordenlijst verwijderd.",
     backToLobby: "Terug naar de lobby",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>

@@ -833,6 +833,7 @@ export const PT: Catalogue = {
     updatedName: (p: { name: string }) =>
       `«${p.name}» atualizada.`,
     deleteThisRoomSettingPreset: "Eliminar esta predefinição de sala?",
+    deletePresetDescription: "As salas que já criaste com esta predefinição não são afetadas.",
     createTheRoom: "criar a sala",
     noScoring: "Sem pontuação",
     public: "Pública",
@@ -1269,7 +1270,10 @@ export const PT: Catalogue = {
     published: "Publicada",
     tags: "Etiquetas",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} de ${p.max} escolhidas`,
-    tagsAreHowListsAreFound: "As etiquetas são a forma de encontrar esta lista no catálogo da comunidade.",
+    addTag: "Adicionar",
+    tagsDone: "Concluído",
+    changeTags: "Alterar",
+    removeTag: (p: { tag: string }) => `Remover ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "palavra", other: "palavras" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
@@ -1303,7 +1307,10 @@ export const PT: Catalogue = {
     nothingMatchesThatSearch: "Nada corresponde a essa procura.",
     deleteList: "Eliminar lista…",
     promptListSaved: "Lista de palavras guardada.",
-    deleteThisPromptListAnd: "Eliminar esta lista de palavras e todas as suas revisões?",
+    deleteListTitle: (p: { name: string }) =>
+      `Eliminar «${p.name}»?`,
+    deleteListDescription: "Sai das tuas listas e, se estiver publicada, do catálogo da comunidade. Os jogos já jogados mantêm as suas palavras.",
+    deleteListConfirm: "Eliminar lista",
     promptListDeleted: "Lista de palavras eliminada.",
     backToLobby: "Voltar ao átrio",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { RoomSetupForm } from "../components/RoomSetupForm";
 import { SectionLabel } from "../components/ui/Card";
 import { ClockIcon } from "../components/icons";
@@ -93,6 +94,7 @@ export function CreateRoomPage() {
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presetBusy, setPresetBusy] = useState(false);
+  const [confirmingPresetDelete, setConfirmingPresetDelete] = useState(false);
   const [namingPreset, setNamingPreset] = useState(false);
   // Carries the settings that were in the form before a preset replaced them,
   // so choosing one by accident is recoverable without an Apply step.
@@ -301,7 +303,7 @@ export function CreateRoomPage() {
 
   async function handleDeletePreset() {
     if (!selectedPresetId) return;
-    if (!window.confirm(ui.createRoomPage.deleteThisRoomSettingPreset)) return;
+    setConfirmingPresetDelete(false);
     setPresetBusy(true);
     setError(null);
     try {
@@ -401,7 +403,7 @@ export function CreateRoomPage() {
             <>
               <button type="button" className="auth-link" disabled={presetBusy} onClick={beginNamingPreset}>{ui.createRoomPage.saveAsPreset}</button>
               {selectedPresetId && <button type="button" className="auth-link" disabled={presetBusy} onClick={() => void handleUpdatePreset()}>{ui.createRoomPage.update}</button>}
-              {selectedPresetId && <button type="button" className="auth-link room-preset-delete" disabled={presetBusy} onClick={() => void handleDeletePreset()}>{ui.createRoomPage.delete}</button>}
+              {selectedPresetId && <button type="button" className="auth-link room-preset-delete" disabled={presetBusy} onClick={() => setConfirmingPresetDelete(true)}>{ui.createRoomPage.delete}</button>}
             </>
           )}
           {presetStatus && (
@@ -490,5 +492,15 @@ export function CreateRoomPage() {
       </div>
       <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
     </div>
+    {/* The app's own dialog rather than the browser's: a `window.confirm`
+        is drawn by the platform, in its language and its style, and is the
+        one popup on the page the game did not draw. */}
+    {confirmingPresetDelete && <ConfirmationDialog
+      title={ui.createRoomPage.deleteThisRoomSettingPreset}
+      description={ui.createRoomPage.deletePresetDescription}
+      confirmLabel={ui.createRoomPage.delete}
+      onCancel={() => setConfirmingPresetDelete(false)}
+      onConfirm={() => void handleDeletePreset()}
+    />}
   </main>;
 }

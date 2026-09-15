@@ -844,6 +844,7 @@ export const EN = {
     savedName: (p: { name: string }) => `Saved “${p.name}”.`,
     updatedName: (p: { name: string }) => `Updated “${p.name}”.`,
     deleteThisRoomSettingPreset: "Delete this room-setting preset?",
+    deletePresetDescription: "Rooms you already created with it are not affected.",
     createTheRoom: "create the room",
     noScoring: "No scoring",
     public: "Public",
@@ -1278,7 +1279,10 @@ export const EN = {
     published: "Published",
     tags: "Tags",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} of ${p.max} chosen`,
-    tagsAreHowListsAreFound: "Tags are how somebody finds this list in the community catalogue.",
+    addTag: "Add",
+    tagsDone: "Done",
+    changeTags: "Change",
+    removeTag: (p: { tag: string }) => `Remove ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "prompt", other: "prompts" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
@@ -1312,7 +1316,9 @@ export const EN = {
     nothingMatchesThatSearch: "Nothing matches that search.",
     deleteList: "Delete list…",
     promptListSaved: "Prompt list saved.",
-    deleteThisPromptListAnd: "Delete this prompt list and all of its revisions?",
+    deleteListTitle: (p: { name: string }) => `Delete “${p.name}”?`,
+    deleteListDescription: "It leaves your lists, and the community catalogue if it is published. Games already played keep the prompts they used.",
+    deleteListConfirm: "Delete list",
     promptListDeleted: "Prompt list deleted.",
     backToLobby: "Back to lobby",
     promptsCountOfMaxListPrompts:

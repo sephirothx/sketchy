@@ -833,6 +833,7 @@ export const DE: Catalogue = {
     updatedName: (p: { name: string }) =>
       `„${p.name}“ aktualisiert.`,
     deleteThisRoomSettingPreset: "Diese Raumvorlage löschen?",
+    deletePresetDescription: "Räume, die du damit schon erstellt hast, bleiben unverändert.",
     createTheRoom: "den Raum erstellen",
     noScoring: "Ohne Punkte",
     public: "Öffentlich",
@@ -1269,7 +1270,10 @@ export const DE: Catalogue = {
     published: "Veröffentlicht",
     tags: "Schlagwörter",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} von ${p.max} gewählt`,
-    tagsAreHowListsAreFound: "Über Schlagwörter wird diese Liste im Community-Katalog gefunden.",
+    addTag: "Hinzufügen",
+    tagsDone: "Fertig",
+    changeTags: "Ändern",
+    removeTag: (p: { tag: string }) => `${p.tag} entfernen`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "Begriff", other: "Begriffe" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
@@ -1303,7 +1307,10 @@ export const DE: Catalogue = {
     nothingMatchesThatSearch: "Nichts passt zu dieser Suche.",
     deleteList: "Liste löschen …",
     promptListSaved: "Begriffsliste gespeichert.",
-    deleteThisPromptListAnd: "Diese Begriffsliste mit allen Versionen löschen?",
+    deleteListTitle: (p: { name: string }) =>
+      `„${p.name}“ löschen?`,
+    deleteListDescription: "Sie verschwindet aus deinen Listen und, falls veröffentlicht, aus dem Community-Katalog. Bereits gespielte Runden behalten ihre Begriffe.",
+    deleteListConfirm: "Liste löschen",
     promptListDeleted: "Begriffsliste gelöscht.",
     backToLobby: "Zurück zur Lobby",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>
