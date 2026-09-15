@@ -978,6 +978,15 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
+    async def viewer_gallery_facts(
+        self, turn_ids: Sequence[str], *, viewer_user_id: str
+    ) -> dict[str, tuple[str | None, bool]]:
+        """For each turn, the viewer's own pick and whether the drawing is
+        theirs: what a cached, viewer-agnostic list (the lobby shelf,
+        R-GAL-07) adds per request. Absent turns are absent from the answer."""
+        ...
+
+    @abstractmethod
     async def get_gallery_drawing(self, turn_id: str) -> TurnDrawingDetail | None:
         """A drawing's bytes through the gallery door (R-GAL-06): its own
         query over the gallery predicate, never the participant check."""

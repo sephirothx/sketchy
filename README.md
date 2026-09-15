@@ -716,6 +716,7 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MIGRATION_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `60` | The same three for `python -m app.db.migrate` (`sketchy-migration`); the lock budget covers the deploy advisory lock |
 | `DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `120` | The same three for every operator command (`sketchy-maintenance`): retention, projection rebuilds, drawing verification, exports, mail, metrics, the admin bootstrap and the operator reset |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
+| `GALLERY_SHELF_TTL_SECONDS` | `60` | How long the lobby's This week shelf is served from one snapshot before it is recomputed; `0` recomputes on every open, which only the end-to-end runner wants |
 | `AFK_INACTIVITY_SECONDS` | `300` | How long a seat may send nothing a person sent before the room asks whether anybody is there. Only somebody who has touched nothing at all reaches it: a browser that has seen input answers the check by itself |
 | `AFK_CHECK_SECONDS` | `25` | How long that question stays open before the seat is marked AFK |
 | `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent — which production refuses to start without, since that would put live reset links in the log and send nothing (#466) |
@@ -1609,6 +1610,7 @@ backend/
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
       gallery_ranking.py The Gallery's reaction count and Hot score on each drawing, and their rebuild
+      gallery_shelf.py The lobby's This week shelf: one snapshot a minute, shared by every lobby
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep

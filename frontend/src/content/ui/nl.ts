@@ -1277,6 +1277,8 @@ export const NL: Catalogue = {
     showMore: "Meer tonen",
     openDrawing: (p: { prompt: string; drawer: string }) => `‘${p.prompt}’ van ${p.drawer} openen`,
     byDrawer: (p: { drawer: string }) => `van ${p.drawer}`,
+    seeTheGallery: "Naar de galerij",
+    nothingThisWeek: "Nog geen openbare tekeningen deze week. Speel een openbaar spel en kom terug.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "In de communitycatalogus",
