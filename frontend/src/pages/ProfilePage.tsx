@@ -11,12 +11,17 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
-import { ReactionGlyph } from "../components/ReactionGlyph";
+import { PinnedDrawingsShelf } from "../components/PinnedDrawingsShelf";
+import { ReactionTally } from "../components/ReactionTally";
 import type { DrawingRecapMetadata, DrawingReaction } from "../types";
-import { compactTally, reactionEligibility, tallyReactions } from "../lib/reactions";
+import { reactionEligibility } from "../lib/reactions";
+import { shelfPresence } from "../lib/pinnedDrawings";
+import type { ProfilePin } from "../lib/pinnedDrawings";
 import {
   fetchGameDetail,
   fetchGameDrawing,
+  fetchProfilePins,
+  setMyPins,
   fetchGames,
   fetchProfile,
   formatDuration,
@@ -41,25 +46,6 @@ import { ui } from "../content/ui/index.ts";
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
   return reactions.map((reaction) => ({ playerId: reaction.seatId, emoji: reaction.emoji }));
-}
-
-/** The per-emoji counts of one turn, read-only, for the turn table. */
-function ReactionTallyCell({ reactions }: { reactions: HistoryReaction[] }) {
-  const chips = compactTally(tallyReactions(reactions));
-  if (chips.length === 0) return null;
-  return (
-    <span
-      className="profile-turn-reactions"
-      aria-label={chips.map((chip) => `${chip.label} ${chip.count}`).join(", ")}
-    >
-      {chips.map((chip) => (
-        <span key={chip.code} className="reaction-chip">
-          <ReactionGlyph code={chip.code} size={14} />
-          <span className="reaction-count">{chip.count}</span>
-        </span>
-      ))}
-    </span>
-  );
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
@@ -386,7 +372,7 @@ function GameRow({
                     </td>
                     <td>
                       {turn.reactions.length > 0 ? (
-                        <ReactionTallyCell reactions={turn.reactions} />
+                        <ReactionTally reactions={turn.reactions} />
                       ) : (
                         <span className="profile-note">—</span>
                       )}
@@ -445,9 +431,12 @@ export function ProfilePage() {
 function ProfileView({ userId }: { userId: string }) {
   const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
-  const isOwnProfile = userId === currentUser?.id;
-
   const [subject, setSubject] = useState<PublicProfile | null>(null);
+  // Ownership is decided by the resolved subject, not the route: a history
+  // link may still carry the guest id an account was merged from, which the
+  // profile API resolves to the account. Judged by the route, the owner
+  // following such a link would find their own shelf read-only.
+  const isOwnProfile = Boolean(subject && currentUser && subject.id === currentUser.id);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -457,6 +446,8 @@ function ProfileView({ userId }: { userId: string }) {
   // falling apart should still be findable.
   const [includeAbandoned, setIncludeAbandoned] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `null` until the shelf has been asked for; a signed-out viewer never asks.
+  const [pins, setPins] = useState<ProfilePin[] | null>(null);
   const [reportingPicture, setReportingPicture] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
@@ -494,6 +485,19 @@ function ProfileView({ userId }: { userId: string }) {
         setStats(profile.stats);
         setGames(page.games);
         setHasMore(page.hasMore);
+        // The shelf is a separate question with a separate answer: any
+        // session may ask (R-PIN-06), nobody else, and a failure to load it
+        // is not a failure to load the profile.
+        if (currentUser?.id) {
+          try {
+            const shelf = await fetchProfilePins(userId);
+            if (!cancelled) setPins(shelf.pins);
+          } catch {
+            if (!cancelled) setPins([]);
+          }
+        } else {
+          setPins(null);
+        }
       } catch (loadError) {
         if (cancelled) return;
         setError(
@@ -650,6 +654,29 @@ function ProfileView({ userId }: { userId: string }) {
               <button type="button" onClick={() => setAuthMode("claim")}>
                 {ui.profilePage.createAccount}
               </button>
+            </section>
+          )}
+
+          {pins !== null
+            && shelfPresence({
+              viewerSignedIn: Boolean(currentUser),
+              isOwner: isOwnProfile,
+              count: pins.length,
+            }) !== "absent" && (
+            <section className="panel" data-testid="pinned-drawings-panel">
+              <h2>{ui.profilePage.pinnedDrawings}</h2>
+              <PinnedDrawingsShelf
+                userId={userId}
+                pins={pins}
+                isOwner={isOwnProfile}
+                onReorder={async (turnIds) => {
+                  await setMyPins(turnIds);
+                  // The server answers with ids only; the entries are the
+                  // ones already here, in the order just confirmed.
+                  const byId = new Map(pins.map((pin) => [pin.turnId, pin]));
+                  setPins(turnIds.flatMap((id) => byId.get(id) ?? []));
+                }}
+              />
             </section>
           )}
 

@@ -243,6 +243,111 @@
   border-color: var(--primary-ink);
 }
 
+/* Pinned drawings (#440): up to six frames replayed small, the owner's
+   order, with the owner's move and unpin controls under each. auto-fill so a
+   phone gets two per row and a desktop the whole six. */
+.profile-shelf {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.profile-shelf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.profile-shelf-open {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 10px;
+  display: block;
+  width: 100%;
+}
+
+.profile-shelf-open:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.profile-shelf-canvas {
+  aspect-ratio: 4 / 3;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.profile-shelf-canvas .canvas-wrapper,
+.profile-shelf-canvas .canvas-stack {
+  max-width: none;
+  width: 100%;
+}
+
+.profile-shelf-canvas .canvas-stack {
+  border: 0;
+  border-radius: 0;
+}
+
+.profile-shelf-open:hover .profile-shelf-canvas {
+  border-color: var(--primary-ink);
+}
+
+.profile-shelf-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.profile-shelf-prompt {
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-shelf-byline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.profile-shelf-byline strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-shelf-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.profile-shelf-unpin {
+  margin-left: auto;
+}
+
+.profile-shelf-empty {
+  margin: 0;
+}
+
 /* Prompt stats: how a list's prompts have actually played. */
 .prompt-stats-page {
   margin: 0 auto;

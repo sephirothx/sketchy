@@ -1,5 +1,6 @@
 import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
+import type { ProfilePin } from "./pinnedDrawings";
 
 /**
  * A player as anyone may see them: what a seat in a room already shows, and
@@ -231,6 +232,35 @@ export function setHistoryReaction(
   return emoji === null
     ? apiRequest<HistoryReactionResult>(path, { method: "DELETE" })
     : apiRequest<HistoryReactionResult>(path, { method: "PUT", body: { emoji } });
+}
+
+/** A profile's pinned drawings, in the owner's order (#440). Any session may ask. */
+export function fetchProfilePins(userId: string) {
+  return apiRequest<{ pins: ProfilePin[] }>(
+    `/api/users/${encodeURIComponent(userId)}/pins`,
+  );
+}
+
+/**
+ * A pinned drawing's bytes through the pin route: the one door beside the
+ * participant route, open to any session (R-PIN-06).
+ */
+export function fetchPinnedDrawing(userId: string, turnId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(
+    `/api/users/${encodeURIComponent(userId)}/pins/${encodeURIComponent(turnId)}/drawing`,
+  );
+}
+
+/**
+ * Replace the signed-in player's shelf with `turnIds`, in that order: pin,
+ * unpin and reorder are all this one write (R-PIN-02). A seventh answers
+ * `pinned_drawings_full`; every other refusal is a 404.
+ */
+export function setMyPins(turnIds: string[]) {
+  return apiRequest<{ pins: { turnId: string }[] }>("/api/me/pins", {
+    method: "PUT",
+    body: { turnIds },
+  });
 }
 
 /** The stored drawing for one turn, in the same wire format a live one uses. */
