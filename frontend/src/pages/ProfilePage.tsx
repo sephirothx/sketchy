@@ -431,9 +431,12 @@ export function ProfilePage() {
 function ProfileView({ userId }: { userId: string }) {
   const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
-  const isOwnProfile = userId === currentUser?.id;
-
   const [subject, setSubject] = useState<PublicProfile | null>(null);
+  // Ownership is decided by the resolved subject, not the route: a history
+  // link may still carry the guest id an account was merged from, which the
+  // profile API resolves to the account. Judged by the route, the owner
+  // following such a link would find their own shelf read-only.
+  const isOwnProfile = Boolean(subject && currentUser && subject.id === currentUser.id);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
