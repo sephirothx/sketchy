@@ -8,8 +8,10 @@ import { useServerNoticesStore } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
 
 function connectionLabel(status: Exclude<ConnectionStatus, "connected">): string {
-  if (status === "offline") return ui.roomNoticeChips.offline;
-  if (status === "failed") return ui.roomNoticeChips.disconnected;
+  // "Disconnected", never "offline": the glossary's word for a dropped
+  // connection (R-UX-02).
+  if (status === "offline") return ui.roomNoticeChips.disconnected;
+  if (status === "failed") return ui.roomNoticeChips.rejoinFailed;
   return ui.roomNoticeChips.reconnecting;
 }
 

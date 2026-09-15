@@ -1758,8 +1758,8 @@ export const EN = {
     serverUpdate: (p: { seconds: number }) =>
       p.seconds > 0 ? `Update · ${p.seconds}s` : "Update · now",
     reconnecting: "Reconnecting",
-    offline: "Offline",
     disconnected: "Disconnected",
+    rejoinFailed: "Rejoin failed",
     serverUpdateStarted: "Server update in progress. This game will end soon.",
   },
 

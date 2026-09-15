@@ -1752,8 +1752,8 @@ export const PT: Catalogue = {
     serverUpdate: (p: { seconds: number }) =>
       p.seconds > 0 ? `Atualização · ${p.seconds} s` : "Atualização · agora",
     reconnecting: "A religar",
-    offline: "Sem ligação",
     disconnected: "Desligado",
+    rejoinFailed: "Falha ao voltar",
     serverUpdateStarted: "Atualização do servidor a decorrer. Esta partida termina em breve.",
   },
 
