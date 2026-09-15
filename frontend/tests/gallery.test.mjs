@@ -6,6 +6,7 @@ import {
   galleryEntriesAsRecap,
   galleryFiltersFromParams,
   paramsFromGalleryFilters,
+  galleryAge,
 } from "../src/lib/gallery.ts";
 
 test("an order survives being shared as a link", () => {
@@ -67,4 +68,14 @@ test("entries become recap entries in page order, with no drawer id", () => {
   assert.equal(second.index, 1);
   assert.equal(second.turnId, "t2");
   assert.equal(second.drawerNameColor, undefined);
+});
+
+test("a drawing's age reads in the unit a feed reads in", () => {
+  const now = new Date("2026-09-16T12:00:00Z");
+  assert.equal(galleryAge("2026-09-16T11:59:30Z", now), null);
+  assert.deepEqual(galleryAge("2026-09-16T11:58:00Z", now), { count: 2, unit: "minute" });
+  assert.deepEqual(galleryAge("2026-09-16T09:10:00Z", now), { count: 2, unit: "hour" });
+  assert.deepEqual(galleryAge("2026-09-11T12:00:00Z", now), { count: 5, unit: "day" });
+  // A clock ahead of the server is not a negative age.
+  assert.equal(galleryAge("2026-09-16T12:00:30Z", now), null);
 });

@@ -83,7 +83,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
                     break
                 await stranger.wait_for_timeout(2_000)
                 await stranger.reload()
-            await stranger.locator('[data-testid="gallery-grid"]').wait_for()
+            await stranger.locator('[data-testid="gallery-feed"]').wait_for()
             for card in ours:
                 await expect(card).to_have_count(1)
             # No game id anywhere on the page: nothing to follow into the game.
@@ -168,7 +168,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await checker.goto(BASE_URL)
             await use_guest_name(checker, "GalChecker")
             await checker.goto(f"{BASE_URL}/gallery?sort=new")
-            await checker.locator('[data-testid="gallery-grid"], [data-testid="gallery-signed-out"], .gallery-empty').first.wait_for()
+            await checker.locator('[data-testid="gallery-feed"], [data-testid="gallery-signed-out"], [data-testid="gallery-empty"]').first.wait_for()
             await expect(checker.locator('[data-testid="gallery-card"]').filter(has_text=prompts[0])).to_have_count(0)
             await checker_context.close()
 
@@ -177,7 +177,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             anonymous = await anonymous_context.new_page()
             await anonymous.goto(f"{BASE_URL}/gallery")
             await anonymous.get_by_text("signed-in players", exact=False).wait_for()
-            await expect(anonymous.locator('[data-testid="gallery-grid"]')).to_have_count(0)
+            await expect(anonymous.locator('[data-testid="gallery-feed"]')).to_have_count(0)
             await anonymous.goto(BASE_URL)
             await anonymous.locator(".lobby-rooms-panel").wait_for()
             await expect(anonymous.locator('[data-testid="this-week"]')).to_have_count(0)

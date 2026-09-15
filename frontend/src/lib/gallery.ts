@@ -118,3 +118,31 @@ export function galleryEntriesAsRecap(entries: readonly GalleryEntry[]): Drawing
 export function fetchThisWeek(): Promise<{ entries: GalleryEntry[] }> {
   return apiRequest("/api/gallery/week");
 }
+
+export type GalleryAgeUnit = "minute" | "hour" | "day";
+
+/**
+ * How long ago a drawing's game finished, in the unit a feed reads in: a
+ * fresh one in minutes, an old one in days, never a clock time. `null` for
+ * under a minute, which the caller words as "just now".
+ */
+export function galleryAge(
+  finishedAt: string,
+  now: Date = new Date(),
+): { count: number; unit: GalleryAgeUnit } | null {
+  const seconds = Math.max(0, (now.getTime() - new Date(finishedAt).getTime()) / 1000);
+  if (seconds < 60) return null;
+  const units: [number, GalleryAgeUnit][] = [
+    [60, "minute"],
+    [60, "hour"],
+    [24, "day"],
+  ];
+  let value = seconds;
+  let unit: GalleryAgeUnit = "minute";
+  for (const [size, name] of units) {
+    if (value < size) break;
+    value /= size;
+    unit = name;
+  }
+  return { count: Math.floor(value), unit };
+}
