@@ -1198,6 +1198,8 @@ export const DE: Catalogue = {
       counted(p.count, { one: "Begriff", other: "Begriffe" }),
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "Stern", other: "Sterne" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "Kopie", other: "Kopien" }),
     showMore: "Mehr anzeigen",
     makeACopy: "Kopie anlegen",
     report: "Melden",
@@ -1232,6 +1234,10 @@ export const DE: Catalogue = {
     notPublished: "Nicht veröffentlicht",
     publishedExplainer: "Alle können diese Liste finden, spielen, mit einem Stern markieren oder eine eigene Kopie anlegen.",
     unpublishedExplainer: "Veröffentlichen macht diese Liste für alle auffindbar und spielbar. Sie lässt sich jederzeit wieder zurückziehen.",
+    starCount: (p: { count: number }) =>
+      counted(p.count, { one: "Stern", other: "Sterne" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "Kopie", other: "Kopien" }),
     publish: "Veröffentlichen",
     unpublish: "Zurückziehen",
     promptListPublished: "Begriffsliste veröffentlicht.",

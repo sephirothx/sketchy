@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
-import { CheckIcon, PlusIcon, TrashIcon, XIcon } from "../components/icons";
+import { CheckIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
@@ -79,6 +79,10 @@ export function MyPromptListsPage() {
   const [tagVocabulary, setTagVocabulary] = useState<PromptTag[]>([]);
   const [maxTags, setMaxTags] = useState(0);
   const [published, setPublished] = useState(false);
+  // What the community has done with this list: its stars and its copies.
+  // Numbers only - who starred or copied it is disclosed to nobody, the owner
+  // included (R-LIST-16, R-LIST-20).
+  const [reach, setReach] = useState({ stars: 0, copies: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
   const [shareCode, setShareCode] = useState<string | null>(null);
@@ -137,6 +141,7 @@ export function MyPromptListsPage() {
     setVersion(null);
     setShareCode(null);
     setPublished(false);
+    setReach({ stars: 0, copies: 0 });
     setModerationState("active");
     setPromptModeration({});
     setDraft({ ...EMPTY_DRAFT, prompts: [] });
@@ -154,6 +159,7 @@ export function MyPromptListsPage() {
     try {
       const saved = await setOwnedPromptListPublished(selectedId, !published);
       setPublished(saved.visibility === "public");
+      setReach({ stars: saved.starCount, copies: saved.copyCount });
       setVersion(saved.version);
       setShareCode(saved.shareCode);
       setModerationState(saved.moderationState);
@@ -182,6 +188,7 @@ export function MyPromptListsPage() {
       setVersion(loaded.version);
       setShareCode(loaded.shareCode);
       setPublished(loaded.visibility === "public");
+      setReach({ stars: loaded.starCount, copies: loaded.copyCount });
       setModerationState(loaded.moderationState);
       setPromptModeration(Object.fromEntries(
         loaded.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
@@ -262,6 +269,7 @@ export function MyPromptListsPage() {
       setVersion(saved.version);
       setShareCode(saved.shareCode);
       setPublished(saved.visibility === "public");
+      setReach({ stars: saved.starCount, copies: saved.copyCount });
       setModerationState(saved.moderationState);
       setPromptModeration(Object.fromEntries(
         saved.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
@@ -353,6 +361,14 @@ export function MyPromptListsPage() {
                 <p>{published
                   ? ui.myPromptListsPage.publishedExplainer
                   : ui.myPromptListsPage.unpublishedExplainer}</p>
+                {/* Shown once there is anything to show: a list that was never
+                    published has neither, and a row of zeros under "Not
+                    published" says nothing. A list taken back out keeps what
+                    it gathered, so its numbers stay. */}
+                {(published || reach.stars > 0 || reach.copies > 0) && <p className="prompt-list-reach">
+                  <span><StarIcon size={14} />{ui.myPromptListsPage.starCount({ count: reach.stars })}</span>
+                  <span><CopyIcon size={14} />{ui.myPromptListsPage.copyCount({ count: reach.copies })}</span>
+                </p>}
               </div>
               <button
                 type="button"

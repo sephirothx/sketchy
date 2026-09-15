@@ -1198,6 +1198,8 @@ export const IT: Catalogue = {
       counted(p.count, { one: "parola", other: "parole" }),
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "stella", other: "stelle" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "copia", other: "copie" }),
     showMore: "Mostra altro",
     makeACopy: "Fai una copia",
     report: "Segnala",
@@ -1232,6 +1234,10 @@ export const IT: Catalogue = {
     notPublished: "Non pubblicata",
     publishedExplainer: "Chiunque può trovare questa lista, giocarla, darle una stella o farne una propria copia.",
     unpublishedExplainer: "Pubblicandola, chiunque potrà trovare e giocare questa lista. Si può ritirare in qualsiasi momento.",
+    starCount: (p: { count: number }) =>
+      counted(p.count, { one: "stella", other: "stelle" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "copia", other: "copie" }),
     publish: "Pubblica",
     unpublish: "Ritira",
     promptListPublished: "Lista di parole pubblicata.",

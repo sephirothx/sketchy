@@ -440,6 +440,7 @@ def _to_owned_prompt_list(
     prompt_count: int | None = None,
     tags: Sequence[str] = (),
     star_count: int = 0,
+    copy_count: int = 0,
     forked_from_revision_id: str | None = None,
 ) -> OwnedPromptList:
     return OwnedPromptList(
@@ -458,6 +459,7 @@ def _to_owned_prompt_list(
         prompts=tuple(prompts),
         tags=tuple(tags),
         star_count=star_count,
+        copy_count=copy_count,
         forked_from_revision_id=forked_from_revision_id,
     )
 def _bundled_revision_hash(
@@ -2383,6 +2385,35 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         )
 
     @staticmethod
+    def _copy_count():
+        """How many copies of this list still exist. Derived, never stored
+        (R-LIST-20).
+
+        A copy's first revision names the revision it was taken from, and only
+        its first: that is the one derived from anywhere else. So the count is
+        the lists whose revision one points at *any* revision of this list -
+        any, because an edit moves the source on to a new revision and the
+        copies of the old one are still its copies. A copy that was deleted is
+        not counted, and a copy of a copy counts toward what it was taken from.
+        """
+        copy_revision = aliased(PromptListRevision)
+        source_revision = aliased(PromptListRevision)
+        copy_list = aliased(PromptList)
+        return (
+            select(func.count(func.distinct(copy_revision.prompt_list_id)))
+            .select_from(copy_revision)
+            .join(source_revision, source_revision.id == copy_revision.forked_from_revision_id)
+            .join(copy_list, copy_list.id == copy_revision.prompt_list_id)
+            .where(
+                source_revision.prompt_list_id == PromptList.id,
+                copy_revision.version == 1,
+                copy_list.deleted_at.is_(None),
+            )
+            .correlate(PromptList)
+            .scalar_subquery()
+        )
+
+    @staticmethod
     def _prompt_count():
         return (
             select(func.count(Prompt.id))
@@ -2551,7 +2582,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         limit = max(1, min(int(limit), MAX_COMMUNITY_PAGE))
         star_count = self._star_count().label("star_count")
         stmt = (
-            select(PromptList, self._prompt_count(), star_count, User.display_name)
+            select(
+                PromptList,
+                self._prompt_count(),
+                star_count,
+                User.display_name,
+                self._copy_count(),
+            )
             .join(User, User.id == PromptList.owner_user_id)
             .where(*_published_by_a_player())
         )
@@ -2645,13 +2682,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     owner_display_name=display_name,
                     tags=tags_by_list.get(prompt_list.id, ()),
                     star_count=int(stars),
+                    copy_count=int(copies),
                     published_at=prompt_list.published_at,
                     version=prompt_list.version,
                     starred_by_me=(
                         None if requester_id is None else prompt_list.id in mine
                     ),
                 )
-                for prompt_list, prompt_count, stars, display_name in rows
+                for prompt_list, prompt_count, stars, display_name, copies in rows
             ),
             next_cursor=(
                 _encode_catalogue_cursor(offset + limit) if has_more else None
@@ -2679,6 +2717,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         self._prompt_count(),
                         self._star_count(),
                         User.display_name,
+                        self._copy_count(),
                     )
                     .join(User, User.id == PromptList.owner_user_id)
                     .where(PromptList.id == list_id, *_published_by_a_player())
@@ -2686,7 +2725,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             ).one_or_none()
             if row is None:
                 return None
-            prompt_list, prompt_count, stars, display_name = row
+            prompt_list, prompt_count, stars, display_name, copies = row
             revision = await session.scalar(
                 select(PromptListRevision)
                 .where(
@@ -2720,6 +2759,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             owner_display_name=display_name,
             tags=tags_by_list.get(prompt_list.id, ()),
             star_count=int(stars),
+            copy_count=int(copies),
             published_at=prompt_list.published_at,
             version=prompt_list.version,
             starred_by_me=starred_by_me,
@@ -2774,7 +2814,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         async with self._session_factory() as session:
             rows = (
                 await session.execute(
-                    select(PromptList, self._prompt_count(), self._star_count())
+                    select(
+                        PromptList,
+                        self._prompt_count(),
+                        self._star_count(),
+                        self._copy_count(),
+                    )
                     .where(
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
@@ -2787,16 +2832,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             # collection is capped at 25 lists, but a per-row read here would
             # be the shape that stops being fine the moment the cap moves.
             tags_by_list = await self._current_revision_tags(
-                session, [prompt_list.id for prompt_list, _, _ in rows]
+                session, [prompt_list.id for prompt_list, *_ in rows]
             )
             return [
                 _to_owned_prompt_list(
                     prompt_list,
                     prompt_count=int(prompt_count),
                     star_count=int(stars),
+                    copy_count=int(copies),
                     tags=tags_by_list.get(prompt_list.id, ()),
                 )
-                for prompt_list, prompt_count, stars in rows
+                for prompt_list, prompt_count, stars, copies in rows
             ]
 
     async def _owned_with_entries(
@@ -2860,11 +2906,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 PromptListRevision.version == 1,
             )
         )
+        copies = await session.scalar(
+            select(self._copy_count()).select_from(PromptList).where(PromptList.id == prompt_list.id)
+        )
         return _to_owned_prompt_list(
             prompt_list,
             entries,
             tags=tags,
             star_count=int(stars or 0),
+            copy_count=int(copies or 0),
             forked_from_revision_id=_public_id(origin) if origin else None,
         )
 

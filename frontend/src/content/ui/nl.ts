@@ -1198,6 +1198,8 @@ export const NL: Catalogue = {
       counted(p.count, { one: "woord", other: "woorden" }),
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "ster", other: "sterren" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "kopie", other: "kopieën" }),
     showMore: "Meer tonen",
     makeACopy: "Kopie maken",
     report: "Melden",
@@ -1232,6 +1234,10 @@ export const NL: Catalogue = {
     notPublished: "Niet gepubliceerd",
     publishedExplainer: "Iedereen kan deze lijst vinden, ermee spelen, een ster geven of er een eigen kopie van maken.",
     unpublishedExplainer: "Door te publiceren kan iedereen deze lijst vinden en spelen. Terugtrekken kan op elk moment.",
+    starCount: (p: { count: number }) =>
+      counted(p.count, { one: "ster", other: "sterren" }),
+    copyCount: (p: { count: number }) =>
+      counted(p.count, { one: "kopie", other: "kopieën" }),
     publish: "Publiceren",
     unpublish: "Terugtrekken",
     promptListPublished: "Woordenlijst gepubliceerd.",

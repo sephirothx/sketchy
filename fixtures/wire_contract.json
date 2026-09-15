@@ -1678,6 +1678,7 @@
    "promptVersionId"
   ],
   "api.serializers:community_prompt_list_payload": [
+   "copyCount",
    "ownerDisplayName",
    "promptCount",
    "publishedAt",
@@ -1746,6 +1747,7 @@
   ],
   "api.serializers:owned_prompt_list_payload": [
    "conceptId",
+   "copyCount",
    "createdAt",
    "forkedFromRevisionId",
    "isBundled",

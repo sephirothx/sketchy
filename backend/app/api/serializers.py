@@ -229,6 +229,7 @@ def community_prompt_list_payload(prompt_list: CommunityPromptList) -> dict:
         "ownerDisplayName": prompt_list.owner_display_name,
         "tags": list(prompt_list.tags),
         "starCount": prompt_list.star_count,
+        "copyCount": prompt_list.copy_count,
         "starredByMe": prompt_list.starred_by_me,
         "publishedAt": _timestamp(prompt_list.published_at),
         "version": prompt_list.version,
@@ -269,6 +270,7 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         # The number, and nothing else about it: who starred a list is
         # disclosed to nobody, its owner included (R-LIST-16).
         "starCount": prompt_list.star_count,
+        "copyCount": prompt_list.copy_count,
         # Where this list was copied from, when it was (R-LIST-17). It may
         # name a revision nothing serves any more; that is the point of
         # recording the revision rather than the list.
