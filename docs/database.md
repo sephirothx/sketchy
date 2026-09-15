@@ -2164,7 +2164,10 @@ account it was merged into; a row retention has already purged counts as erased.
 **The lock set is the whole identity, resolved before locking.** `erased_identity_ids`
 reads the accounts its guests were merged into first, unlocked, and locks guests and
 accounts in one ordered statement; a target found only under the lock (a merge that landed
-in between) is locked in a second statement, the one case left. Locking the guests first
+in between) is locked in a second statement by a *shared* holder, the one case left — and
+never by an exclusive one: the pin write abandons that transaction (`LockSetChangedError`)
+and starts again from before the alias read, up to three times, so its set is always
+taken whole. Locking the guests first
 and reaching for their accounts gave two pin writes whose sets crossed a cycle (#811
 review). A seat may still carry
 a guest identity merged into an account mid-game. The finished-game write resolves such

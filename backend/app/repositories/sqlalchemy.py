@@ -76,6 +76,7 @@ from app.auth.avatars import validate_avatar_key
 from app.auth.pending_role import pending_offer
 from app.services.prompt_reclaim import retire_prompt_list
 from app.auth.erasure import (
+    LockSetChangedError,
     TOMBSTONE_SNAPSHOT,
     erased_identity_ids,
     require_live_account,
@@ -152,6 +153,10 @@ from app.prompt_content import (
 )
 from app.prompts import letter_histogram
 from app.refusals import ErrorCode
+
+# How many times a pin write restarts when a merge lands inside the barrier's
+# window between its alias read and its lock (app.auth.erasure).
+PIN_WRITE_LOCK_RETRIES = 3
 
 LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 
@@ -2063,6 +2068,38 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             db_turn_ids.append(db_turn_id)
         if len(db_turn_ids) > PROFILE_PIN_SLOTS:
             return None
+        # The barrier can find, under its lock, a target merged in since its
+        # alias read; it then abandons the transaction rather than lock more
+        # (LockSetChangedError), and the whole write starts again so the
+        # complete set goes into one ordered statement. Bounded: a merge is a
+        # sign-in, and three in a row inside this window is not a real thing.
+        rows: list[tuple[UUID, UUID]] | None = None
+        for attempt in range(PIN_WRITE_LOCK_RETRIES):
+            try:
+                rows = await self._replace_profile_pins(db_user_id, db_turn_ids)
+            except LockSetChangedError:
+                if attempt == PIN_WRITE_LOCK_RETRIES - 1:
+                    raise
+                continue
+            break
+        if rows is None:
+            return None
+        return ProfilePinsResult(
+            pins=tuple(
+                ProfilePinDetail(
+                    turn_id=_public_id(db_turn_id),
+                    game_id=_public_id(game_id),
+                    position=position,
+                )
+                for position, (game_id, db_turn_id) in enumerate(rows)
+            )
+        )
+
+    async def _replace_profile_pins(
+        self, db_user_id: UUID, db_turn_ids: list[UUID]
+    ) -> list[tuple[UUID, UUID]] | None:
+        """One attempt at the whole-shelf write: the barrier, the checks, the
+        rows. `None` for every refusal; the rows written otherwise."""
         async with self._session_factory() as session:
             async with session.begin():
                 identity_ids = await _identity_ids(session, db_user_id)
@@ -2149,16 +2186,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             position=position,
                         )
                     )
-        return ProfilePinsResult(
-            pins=tuple(
-                ProfilePinDetail(
-                    turn_id=_public_id(db_turn_id),
-                    game_id=_public_id(game_id),
-                    position=position,
-                )
-                for position, (game_id, db_turn_id) in enumerate(rows)
-            )
-        )
+        return rows
 
     async def get_recent_co_players(
         self,

@@ -50,6 +50,22 @@ class AccountErasedError(RuntimeError):
     """The account this write is for has been deleted since it was authorized."""
 
 
+class LockSetChangedError(RuntimeError):
+    """An exclusive barrier found, under its lock, an identity it did not lock.
+
+    A merge committed between the unlocked alias read and the lock. Taking the
+    new target in a second statement is what an exclusive holder must never
+    do - two writers whose sets cross would each hold one and want the other -
+    so the transaction is abandoned and the caller starts it again from
+    before alias resolution, where the whole set goes into one statement.
+    """
+
+
+async def _after_alias_resolution() -> None:
+    """A seam for the barrier's proofs: the window between the unlocked alias
+    read and the lock, where a merge can land. Does nothing in the product."""
+
+
 async def erased_identity_ids(
     session: AsyncSession, user_ids: Iterable[UUID], *, exclusive: bool = False
 ) -> set[UUID]:
@@ -90,6 +106,7 @@ async def erased_identity_ids(
         ).all()
     )
     wanted = sorted(wanted)
+    await _after_alias_resolution()
     states = dict(
         (
             await session.execute(
@@ -112,6 +129,11 @@ async def erased_identity_ids(
             ).all()
         )
         unknown_targets = sorted(set(targets.values()) - states.keys())
+        if unknown_targets and exclusive:
+            # Never a second exclusive statement (see LockSetChangedError).
+            raise LockSetChangedError(
+                f"{len(unknown_targets)} identity target(s) merged since the alias read"
+            )
         if unknown_targets:
             states.update(
                 (
