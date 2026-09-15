@@ -37,9 +37,16 @@ import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
  */
 export function AppHeader({
   backLabel,
+  backTo = "/",
   actions,
   languageSwitch = false,
-}: { backLabel?: string; actions?: ReactNode; languageSwitch?: boolean } = {}) {
+}: {
+  backLabel?: string;
+  /** Where the back control goes: the lobby unless a page sits under another. */
+  backTo?: string;
+  actions?: ReactNode;
+  languageSwitch?: boolean;
+} = {}) {
   const navigate = useNavigate();
   const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useOpenSettings();
@@ -51,7 +58,7 @@ export function AppHeader({
           <button
             type="button"
             className="btn btn-ghost header-back-button"
-            onClick={() => navigate("/")}
+            onClick={() => navigate(backTo)}
             aria-label={backLabel}
             title={backLabel}
           >

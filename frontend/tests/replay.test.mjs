@@ -105,3 +105,23 @@ test("a run of dots is paced by the debt each one leaves", () => {
   // Ten dots at the floor of 2.5 s is about 150 frames, not ten.
   assert.ok(frames > 120 && frames < 180, String(frames));
 });
+
+test("a fraction maps back to a position: part way along a stroke, or on a step", () => {
+  const actions = [path(5), { kind: "fill", color: "#ff0000", x: 1, y: 1 }, path(3)];
+  const plan = replayPlan(actions);
+  // 4 segments + a 12-point fill + 2 segments = 18.
+  assert.equal(plan.total, 18);
+  assert.deepEqual(plan.positionAt(0), { action: 0, point: 0 });
+  assert.deepEqual(plan.positionAt(2 / 18), { action: 0, point: 2 });
+  // Inside the fill's cost: the fill has not landed yet.
+  assert.deepEqual(plan.positionAt(10 / 18), { action: 1, point: 0 });
+  // Its cost paid: landed, and the last stroke not yet begun.
+  assert.deepEqual(plan.positionAt(16 / 18), { action: 2, point: 0 });
+  assert.deepEqual(plan.positionAt(17 / 18), { action: 2, point: 1 });
+  assert.deepEqual(plan.positionAt(1), { action: 3, point: 0 });
+  // Round trip: the fraction of a position is the position of the fraction.
+  const back = plan.positionAt(plan.fractionAt(0, 2.5));
+  assert.equal(back.action, 0);
+  assert.ok(Math.abs(back.point - 2.5) < 1e-9);
+  assert.deepEqual(replayPlan([]).positionAt(0.5), { action: 0, point: 0 });
+});

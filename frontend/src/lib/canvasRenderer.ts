@@ -260,3 +260,22 @@ export function renderCanvasActions(
   for (const action of actions) applyCanvasAction(pixels, action);
   context.putImageData(imageData, 0, 0);
 }
+
+/**
+ * Everything up to a replay position, from white: the actions before it
+ * whole, and the stroke it sits in as far as it has got. What a scrub shows.
+ */
+export function renderCanvasActionsUpTo(
+  pixels: Uint8ClampedArray,
+  actions: DecodedCanvasAction[],
+  position: { action: number; point: number },
+): void {
+  fillWhitePixels(pixels);
+  for (let index = 0; index < Math.min(position.action, actions.length); index++) {
+    applyCanvasAction(pixels, actions[index]);
+  }
+  const current = actions[position.action];
+  if (current && current.kind === "path" && current.points.length > 1 && position.point > 0) {
+    applyCanvasPathSpan(pixels, current, 0, position.point);
+  }
+}

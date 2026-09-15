@@ -39,9 +39,10 @@ export function GalleryDrawingPage() {
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
-  const [run, setRun] = useState(1);
-  const [playing, setPlaying] = useState(true);
-  const [progress, setProgress] = useState(0);
+  // Where the picture is: at the end to begin with - the finished drawing,
+  // nothing moving until asked - and wherever the replay or the bar puts it.
+  const [fraction, setFraction] = useState(1);
+  const [playing, setPlaying] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const canvasRef = useRef<CanvasRef | null>(null);
@@ -62,8 +63,8 @@ export function GalleryDrawingPage() {
         }
         setEntry({ reader, entry: fetched });
         setActions(decoded);
-        setRun((count) => count + 1);
-        setPlaying(true);
+        setFraction(1);
+        setPlaying(false);
         setError(null);
       })
       .catch((loadError) => {
@@ -81,12 +82,12 @@ export function GalleryDrawingPage() {
     setEntry({ reader, entry: { ...shown, reactionCounts: result.reactionCounts, myReaction: result.myReaction } });
   };
 
-  const finished = progress >= 1;
+  const atTheEnd = fraction >= 1;
   const age = shown ? galleryAge(shown.finishedAt) : null;
 
   return (
     <div className="page gallery-page gallery-drawing-page">
-      <AppHeader backLabel={ui.galleryPage.backToGallery} languageSwitch />
+      <AppHeader backLabel={ui.galleryPage.backToGallery} backTo="/gallery" languageSwitch />
 
       {signedOut ? (
         <div className="gallery-empty-state" data-testid="gallery-signed-out">
@@ -113,9 +114,9 @@ export function GalleryDrawingPage() {
                 ? <ReplayCanvas
                     ref={canvasRef}
                     actions={actions}
-                    run={run}
+                    fraction={fraction}
                     playing={playing}
-                    onProgress={setProgress}
+                    onFraction={setFraction}
                     onDone={() => setPlaying(false)}
                     downloadPrompt={shown?.prompt ?? null}
                     label={shown
@@ -124,9 +125,10 @@ export function GalleryDrawingPage() {
                   />
                 : <div className="gallery-post-skeleton" />}
             </div>
-            {/* The replay's controls sit on the mat under the picture: how
-                far it has got, and one button that plays, pauses, or plays
-                again - never three buttons for one thing. */}
+            {/* The replay's controls sit on the mat under the picture: one
+                button that plays, pauses, or plays again - never three
+                buttons for one thing - and a bar that says how far it has
+                got and takes the picture anywhere along the way. */}
             <div className="gallery-replay-bar" role="group" aria-label={ui.galleryPage.replay}>
               <button
                 type="button"
@@ -134,30 +136,39 @@ export function GalleryDrawingPage() {
                 disabled={!actions}
                 data-testid="gallery-replay-toggle"
                 onClick={() => {
-                  if (finished) {
-                    setRun((count) => count + 1);
-                    setPlaying(true);
+                  if (playing) {
+                    setPlaying(false);
                   } else {
-                    setPlaying((value) => !value);
+                    if (atTheEnd) setFraction(0);
+                    setPlaying(true);
                   }
                 }}
               >
-                {finished
-                  ? <><UndoIcon size={15} />{ui.galleryPage.playAgain}</>
-                  : playing
-                    ? <><PauseIcon size={15} />{ui.galleryPage.pause}</>
-                    : <><PlayIcon size={15} />{ui.galleryPage.replay}</>}
+                {playing
+                  ? <><PauseIcon size={15} />{ui.galleryPage.pause}</>
+                  : atTheEnd
+                    ? <><UndoIcon size={15} />{ui.galleryPage.replay}</>
+                    : <><PlayIcon size={15} />{ui.galleryPage.play}</>}
               </button>
-              <div
+              <input
+                type="range"
                 className="gallery-replay-track"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(progress * 100)}
-                aria-label={ui.galleryPage.replay}
-              >
-                <div className="gallery-replay-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
-              </div>
+                min={0}
+                max={1000}
+                step={1}
+                value={Math.round(fraction * 1000)}
+                style={{ ["--replay-fill" as string]: `${Math.round(fraction * 100)}%` }}
+                disabled={!actions}
+                aria-label={ui.galleryPage.replayPosition}
+                aria-valuetext={ui.galleryPage.percentDrawn({ percent: Math.round(fraction * 100) })}
+                data-testid="gallery-replay-track"
+                onChange={(change) => {
+                  // Scrubbing takes over from playing: the picture goes where
+                  // the thumb is, and stays there until play is pressed.
+                  setPlaying(false);
+                  setFraction(Number(change.target.value) / 1000);
+                }}
+              />
               <button
                 type="button"
                 className="btn btn-ghost btn-compact"

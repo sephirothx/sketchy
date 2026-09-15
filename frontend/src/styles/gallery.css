@@ -470,9 +470,14 @@
 
    One drawing on its own page: the framed card at the feed's width, the
    replay's controls on the mat between the picture and the words. */
+/* Wide enough for the picture, no wider than the height allows: the card
+   is meant to be seen whole, so its width is capped by what a 4:3 picture
+   plus the mat and the header can have of the viewport - no scrolling
+   (the banner's height is published as --banner-height). */
 .gallery-drawing {
   margin: 0 auto;
-  max-width: 760px;
+  max-width: min(760px, calc((100dvh - var(--banner-height) - 330px) * 4 / 3));
+  min-width: min(100%, 320px);
 }
 
 .gallery-drawing-card {
@@ -512,23 +517,68 @@
   gap: 12px;
 }
 
+/* The bar is a range input, so it is scrubbed, keyed and read the same way
+   everywhere; drawn as the app's own track and thumb. */
 .gallery-replay-track {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  flex: 1 1 auto;
+  height: 28px;
+  margin: 0;
+  min-width: 0;
+}
+
+.gallery-replay-track:disabled { cursor: default; opacity: 0.5; }
+
+/* The part behind the thumb is filled; WebKit has no progress pseudo, so
+   the fill is painted from the input's own --replay-fill. */
+.gallery-replay-track::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, var(--primary) var(--replay-fill), var(--track) var(--replay-fill));
+  border-radius: 999px;
+  height: 6px;
+}
+
+.gallery-replay-track::-moz-range-track {
   background: var(--track);
   border-radius: 999px;
-  flex: 1 1 auto;
   height: 6px;
-  overflow: hidden;
 }
 
-.gallery-replay-fill {
+.gallery-replay-track::-moz-range-progress {
   background: var(--primary);
   border-radius: 999px;
-  height: 100%;
-  transition: width 120ms linear;
+  height: 6px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .gallery-replay-fill { transition: none; }
+.gallery-replay-track::-webkit-slider-thumb {
+  appearance: none;
+  background: var(--card);
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  height: 18px;
+  margin-top: -6px;
+  width: 18px;
+}
+
+.gallery-replay-track::-moz-range-thumb {
+  background: var(--card);
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  height: 18px;
+  width: 18px;
+}
+
+.gallery-replay-track:focus-visible { outline: none; }
+
+.gallery-replay-track:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.gallery-replay-track:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 @media (max-width: 480px) {

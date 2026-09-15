@@ -7,6 +7,12 @@ export const REPLAY_MAX_SECONDS = 9;
 /** What a dot, a shape, a fill or a clear costs, measured in path points. */
 export const REPLAY_STEP_COST = 12;
 
+export interface ReplayPosition {
+  action: number;
+  /** Along a stroke: a position in segments, fractional between two points. */
+  point: number;
+}
+
 export interface ReplayPlan {
   /** The whole drawing, in stroke segments (steps cost `stepCost` each). */
   total: number;
@@ -15,6 +21,8 @@ export interface ReplayPlan {
   seconds: number;
   /** How far along the replay is, 0..1, at the given action and point. */
   fractionAt(action: number, point: number): number;
+  /** The position a fraction of the way through: what a scrub lands on. */
+  positionAt(fraction: number): ReplayPosition;
 }
 
 function cost(action: DecodedCanvasAction): number {
@@ -48,13 +56,21 @@ export function replayPlan(actions: readonly DecodedCanvasAction[]): ReplayPlan 
       if (total === 0 || action >= actions.length) return 1;
       return Math.min(1, (before[action] + Math.min(point, costs[action])) / total);
     },
+    positionAt(fraction) {
+      const target = Math.min(1, Math.max(0, fraction)) * total;
+      if (total === 0 || target >= total) return { action: actions.length, point: 0 };
+      let index = 0;
+      while (index < actions.length - 1 && before[index + 1] <= target) index += 1;
+      const within = target - before[index];
+      // A stroke sits part way along; anything else is either not yet
+      // landed (before its cost is reached) or landed whole.
+      const action = actions[index];
+      if (action.kind === "path" && action.points.length > 1) {
+        return { action: index, point: Math.min(costs[index], within) };
+      }
+      return within >= costs[index] ? { action: index + 1, point: 0 } : { action: index, point: 0 };
+    },
   };
-}
-
-export interface ReplayPosition {
-  action: number;
-  /** Along a stroke: a position in segments, fractional between two points. */
-  point: number;
 }
 
 export interface ReplayPainter {
