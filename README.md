@@ -76,6 +76,18 @@ keyboard that takes half the screen, and one thumb.
   owner moves a drawing left or right and unpins it there, and anyone opens one in
   the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
   profile's game history, for a registered player in a public game.
+- Gallery — every kept drawing from a public-room game, shown at `/gallery` to anyone
+  signed in, guests included, whether or not they were in the game. Ordered by Hot, New
+  or Top, with Top over all time, a month or a week; the measure is reactions. An entry
+  shows the drawing, the prompt, the round and turn, the drawer's name as it was that
+  day, and its reaction counts — never the game, the room or who reacted. Any
+  registered player can react to an entry from the gallery or from a pinned shelf, one
+  reaction per player per drawing; reactions given outside the room count but are not
+  named. The lobby shows "This week": the six most-reacted drawings of the last seven
+  days. A drawing can be reported from the gallery, a moderator can hide one from it
+  without touching the players' own history, and an operator switch can hold the lobby
+  shelf for review while the gallery page publishes freely. A signed-out visitor sees
+  neither the page nor the shelf.
 - Friends — registered players add each other from a player's profile or from a
   seat in the same room, and a friendship lets either of them take a seat in a game they
   cannot name: uninvited only where the **host** is a friend, or on a short-lived
