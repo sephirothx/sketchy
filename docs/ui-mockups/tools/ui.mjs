@@ -180,6 +180,7 @@ export const icon = {
   chevU: (s) => stroke('<path d="m6 15 6-6 6 6"/>', s),
   chevR: (s) => stroke('<path d="m9 6 6 6-6 6"/>', s),
   chevL: (s) => stroke('<path d="m15 6-6 6 6 6"/>', s),
+  pin: (s) => stroke('<path d="M12 17v5"/><path d="M9 3h6l-1 6 3 3H7l3-3-1-6Z"/>', s),
   back: (s) => stroke('<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>', s),
   medal: (s) => stroke('<circle cx="12" cy="15" r="5"/><path d="m8.5 10.5-3-7.5"/><path d="m15.5 10.5 3-7.5"/><path d="m9 3 3 6 3-6"/>', s),
   globe: (s) => stroke('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.3 4 5.5 4 9s-1.5 6.7-4 9c-2.5-2.3-4-5.5-4-9s1.5-6.7 4-9Z"/>', s),

@@ -23,6 +23,8 @@ interface PinnedDrawingsShelfProps {
    * the parent has the server's answer; a rejection is shown by its code.
    */
   onReorder?: (turnIds: string[]) => Promise<void>;
+  /** The owner's controls held while the shelf is read or another write is out. */
+  disabled?: boolean;
 }
 
 /**
@@ -32,14 +34,20 @@ interface PinnedDrawingsShelfProps {
  * as its entries, and nobody reacts from here - the tally is read-only,
  * because a viewer need not have been in the game.
  */
-export function PinnedDrawingsShelf({ userId, pins, isOwner, onReorder }: PinnedDrawingsShelfProps) {
+export function PinnedDrawingsShelf({
+  userId,
+  pins,
+  isOwner,
+  onReorder,
+  disabled = false,
+}: PinnedDrawingsShelfProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const turnIds = pins.map((pin) => pin.turnId);
 
   const change = async (next: string[]) => {
-    if (!onReorder || busy) return;
+    if (!onReorder || busy || disabled) return;
     setBusy(true);
     setError(null);
     try {
@@ -93,7 +101,7 @@ export function PinnedDrawingsShelf({ userId, pins, isOwner, onReorder }: Pinned
                 <button
                   type="button"
                   className="btn btn-ghost btn-icon btn-compact"
-                  disabled={busy || index === 0}
+                  disabled={busy || disabled || index === 0}
                   aria-label={ui.profilePage.moveLeft}
                   title={ui.profilePage.moveLeft}
                   onClick={() => void change(movePin(turnIds, index, -1))}
@@ -103,7 +111,7 @@ export function PinnedDrawingsShelf({ userId, pins, isOwner, onReorder }: Pinned
                 <button
                   type="button"
                   className="btn btn-ghost btn-icon btn-compact"
-                  disabled={busy || index === pins.length - 1}
+                  disabled={busy || disabled || index === pins.length - 1}
                   aria-label={ui.profilePage.moveRight}
                   title={ui.profilePage.moveRight}
                   onClick={() => void change(movePin(turnIds, index, 1))}
@@ -113,7 +121,7 @@ export function PinnedDrawingsShelf({ userId, pins, isOwner, onReorder }: Pinned
                 <button
                   type="button"
                   className="btn btn-ghost btn-compact profile-shelf-unpin"
-                  disabled={busy}
+                  disabled={busy || disabled}
                   onClick={() => void change(withoutPin(turnIds, pin.turnId))}
                 >
                   <XIcon size={14} />

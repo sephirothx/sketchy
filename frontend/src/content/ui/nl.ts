@@ -932,6 +932,14 @@ export const NL: Catalogue = {
       `${p.label}, jouw reactie. Druk om hem te verwijderen`,
   },
 
+  pinControl: {
+    pin: "Vastzetten",
+    pinned: "Vastgezet",
+    pinThisDrawing: "Deze tekening op je profiel vastzetten",
+    unpinThisDrawing: "Deze tekening van je profiel losmaken",
+    thatDrawingCouldNotBePinned: "Deze tekening kon niet worden vastgezet.",
+  },
+
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Tekening van ${p.prompt} door ${p.drawer}`,

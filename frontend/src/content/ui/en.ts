@@ -942,6 +942,14 @@ export const EN = {
       (p: { label: string }) => `${p.label}, your reaction. Press to remove it`,
   },
 
+  pinControl: {
+    pin: "Pin",
+    pinned: "Pinned",
+    pinThisDrawing: "Pin this drawing to your profile",
+    unpinThisDrawing: "Unpin this drawing from your profile",
+    thatDrawingCouldNotBePinned: "That drawing could not be pinned.",
+  },
+
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Drawing of ${p.prompt} by ${p.drawer}`,

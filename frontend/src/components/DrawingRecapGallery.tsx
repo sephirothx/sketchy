@@ -27,6 +27,11 @@ interface DrawingRecapGalleryProps {
    * gallery does not care which.
    */
   renderReactions?: (entry: DrawingRecapMetadata) => ReactNode;
+  /**
+   * A control beside Save image - the Pin toggle (#440). A prop for the same
+   * reason `renderReactions` is: the live room and history bind it differently.
+   */
+  renderActions?: (entry: DrawingRecapMetadata) => ReactNode;
 }
 
 export function DrawingRecapGallery({
@@ -35,6 +40,7 @@ export function DrawingRecapGallery({
   loadEntry,
   initialIndex = 0,
   renderReactions,
+  renderActions,
 }: DrawingRecapGalleryProps) {
   const [position, setPosition] = useState(initialIndex);
   const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
@@ -153,6 +159,7 @@ export function DrawingRecapGallery({
             )}
           </div>
           <div className="drawing-recap-header-actions">
+            {renderActions?.(entry)}
             <button
               type="button"
               className="drawing-recap-download"

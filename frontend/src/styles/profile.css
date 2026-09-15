@@ -243,6 +243,20 @@
   border-color: var(--primary-ink);
 }
 
+/* View and Pin side by side in the turn table's drawing cell. */
+.profile-drawing-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.pin-control.is-pinned {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
 /* Pinned drawings (#440): up to six frames replayed small, the owner's
    order, with the owner's move and unpin controls under each. auto-fill so a
    phone gets two per row and a desktop the whole six. */
