@@ -74,7 +74,8 @@ keyboard that takes half the screen, and one thumb.
   made them. Anyone signed in, guests included, can see a shelf and open its drawings;
   a signed-out visitor sees no shelf. The shelf sits at the top of the profile: the
   owner moves a drawing left or right and unpins it there, and anyone opens one in
-  the recap gallery. The Pin controls on the recap and in game history follow in #810.
+  the recap gallery. **Pin** sits beside a kept drawing on the game-over recap and in the
+  profile's game history, for a registered player in a public game.
 - Friends — registered players add each other from a player's profile or from a
   seat in the same room, and a friendship lets either of them take a seat in a game they
   cannot name: uninvited only where the **host** is a friend, or on a short-lived
@@ -1619,7 +1620,7 @@ frontend/
     lib/interfaceLocale.ts Which language the interface is read in, and from where
     lib/drawingRules.ts The client's copy of the room's tool and color rules
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
-    lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule and its list arithmetic
+    lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule, where Pin is offered, and its list arithmetic
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
@@ -2158,7 +2159,8 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 5. **Turn results** (5s by default): the prompt is revealed and scores update, reactions
    stay open on the drawing, then the next player's turn begins.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
-   shows the final standings.
+   shows the final standings, the highlights, and the drawing recap — where a registered
+   player in a public room can **Pin** a drawing to their profile.
 
 At any point, a seat that has sent nothing a person sent for five minutes is asked
 whether anybody is still there, and marked AFK 25 seconds later if it does not

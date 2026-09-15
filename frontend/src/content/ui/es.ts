@@ -932,6 +932,14 @@ export const ES: Catalogue = {
       `${p.label}, tu reacción. Pulsa para quitarla`,
   },
 
+  pinControl: {
+    pin: "Fijar",
+    pinned: "Fijado",
+    pinThisDrawing: "Fijar este dibujo en tu perfil",
+    unpinThisDrawing: "Quitar este dibujo de tu perfil",
+    thatDrawingCouldNotBePinned: "No se pudo fijar ese dibujo.",
+  },
+
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Dibujo de ${p.prompt} por ${p.drawer}`,

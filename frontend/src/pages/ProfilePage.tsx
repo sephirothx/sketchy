@@ -11,11 +11,15 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
 import { DrawingReactionControl } from "../components/DrawingReactionControl";
+import { PinControl } from "../components/PinControl";
 import { PinnedDrawingsShelf } from "../components/PinnedDrawingsShelf";
 import { ReactionTally } from "../components/ReactionTally";
 import type { DrawingRecapMetadata, DrawingReaction } from "../types";
 import { reactionEligibility } from "../lib/reactions";
-import { shelfPresence } from "../lib/pinnedDrawings";
+import { isPinned, pinEligibility, shelfPresence, withPin, withoutPin } from "../lib/pinnedDrawings";
+import { useToast } from "../lib/toast";
+import { refusalSentence } from "../lib/refusals.ts";
+import { useMyPins, usePinsStore } from "../store/pinsStore";
 import type { ProfilePin } from "../lib/pinnedDrawings";
 import {
   fetchGameDetail,
@@ -111,6 +115,8 @@ function GameRow({
 }) {
   const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
+  const myPins = useMyPins();
+  const { notify } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -129,6 +135,29 @@ function GameRow({
         : current,
     );
   }
+
+  // Pin or unpin one turn: the whole shelf, rewritten (R-PIN-02). The turn
+  // table and the gallery share it, and the shelf above follows the store.
+  const togglePin = async (turnId: string) => {
+    const pinned = isPinned(myPins.turnIds, turnId);
+    const next = pinned ? withoutPin(myPins.turnIds, turnId) : withPin(myPins.turnIds, turnId);
+    if (next === null) {
+      notify(refusalSentence("pinned_drawings_full"), "error");
+      return;
+    }
+    await myPins.replace(next);
+  };
+  const pinControlFor = (turn: GameTurn) => (
+    <PinControl
+      pinned={isPinned(myPins.turnIds, turn.id)}
+      eligibility={pinEligibility({
+        isRegistered: Boolean(currentUser && !currentUser.isAnonymous),
+        isPublicGame: game.visibility === "public",
+        open: turn.drawingStatus === "ready",
+      })}
+      onToggle={() => togglePin(turn.id)}
+    />
+  );
 
   const seat = game.participants.find((p) => p.userId === viewerId);
   const finishedAt = formatTimestamp(game.finishedAt, timeFormat);
@@ -331,6 +360,7 @@ function GameRow({
                     />
                   );
                 }}
+                renderActions={(entry) => pinControlFor(detail.turns[entry.index])}
               />
             )}
             <table className="profile-turns">
@@ -359,13 +389,16 @@ function GameRow({
                     <td>{formatDuration(turn.durationSeconds)}</td>
                     <td>
                       {turn.drawingStatus === "ready" ? (
-                        <button
-                          type="button"
-                          className="profile-drawing-button"
-                          onClick={() => setViewingIndex(turnIndex)}
-                        >
-                          {ui.profilePage.view}
-                        </button>
+                        <span className="profile-drawing-actions">
+                          <button
+                            type="button"
+                            className="profile-drawing-button"
+                            onClick={() => setViewingIndex(turnIndex)}
+                          >
+                            {ui.profilePage.view}
+                          </button>
+                          {pinControlFor(turn)}
+                        </span>
                       ) : (
                         <span className="profile-note">{drawingNote(turn)}</span>
                       )}
@@ -448,6 +481,8 @@ function ProfileView({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null);
   // `null` until the shelf has been asked for; a signed-out viewer never asks.
   const [pins, setPins] = useState<ProfilePin[] | null>(null);
+  const myTurnIds = usePinsStore((s) => s.turnIds);
+  const myPinsLoaded = usePinsStore((s) => s.loaded);
   const [reportingPicture, setReportingPicture] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
@@ -514,6 +549,26 @@ function ProfileView({ userId }: { userId: string }) {
     // on who is asking (#469), so signing in or claiming on this page has
     // to fetch the list again rather than keep the one a stranger got.
   }, [userId, includeAbandoned, currentUser?.id]);
+
+  // The owner's shelf follows the shared store: a pin pressed in the turn
+  // table below, or in a game-over recap in another tab, is a new entry the
+  // shelf has to fetch, since the store holds ids and the shelf shows frames.
+  useEffect(() => {
+    if (!isOwnProfile || !myPinsLoaded || pins === null) return;
+    const shown = pins.map((pin) => pin.turnId);
+    if (shown.length === myTurnIds.length && shown.every((id, i) => id === myTurnIds[i])) return;
+    let cancelled = false;
+    void fetchProfilePins(userId)
+      .then((shelf) => {
+        if (!cancelled) setPins(shelf.pins);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // `pins` is what the effect corrects; listing it would refetch on its own answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnProfile, myPinsLoaded, myTurnIds, userId]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
@@ -672,9 +727,11 @@ function ProfileView({ userId }: { userId: string }) {
                 onReorder={async (turnIds) => {
                   await setMyPins(turnIds);
                   // The server answers with ids only; the entries are the
-                  // ones already here, in the order just confirmed.
+                  // ones already here, in the order just confirmed. The
+                  // store learns the same list so the turn table agrees.
                   const byId = new Map(pins.map((pin) => [pin.turnId, pin]));
                   setPins(turnIds.flatMap((id) => byId.get(id) ?? []));
+                  usePinsStore.getState().adopt(turnIds);
                 }}
               />
             </section>

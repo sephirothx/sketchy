@@ -5,6 +5,7 @@ import {
   PINNED_DRAWING_SLOTS,
   isPinned,
   movePin,
+  pinEligibility,
   pinsAsRecapEntries,
   shelfIsFull,
   shelfPresence,
@@ -46,6 +47,16 @@ test("moving swaps a neighbour and stops at the edges", () => {
   assert.deepEqual(movePin(six, 5, 1), six, "right edge");
   assert.deepEqual(movePin(six, 9, 1), six, "no such index");
   assert.notEqual(movePin(six, 0, 0), six, "always a copy");
+});
+
+test("a Pin control is offered only where the write can succeed", () => {
+  const base = { isRegistered: true, isSpectator: false, isPublicGame: true, open: true };
+  assert.equal(pinEligibility(base), "offered");
+  assert.equal(pinEligibility({ ...base, isRegistered: false }), "hidden", "a guest");
+  assert.equal(pinEligibility({ ...base, isSpectator: true }), "hidden", "a spectator");
+  assert.equal(pinEligibility({ ...base, isPublicGame: false }), "hidden", "a private room");
+  assert.equal(pinEligibility({ ...base, open: false }), "hidden", "a drawing not kept");
+  assert.equal(pinEligibility({ isRegistered: true, isPublicGame: true, open: true }), "offered");
 });
 
 test("recap entries follow shelf order and carry no seat", () => {

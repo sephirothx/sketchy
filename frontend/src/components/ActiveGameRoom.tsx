@@ -12,6 +12,7 @@ import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
+import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
@@ -553,6 +554,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
                     placement="panel"
                     visible={entry.available !== false}
                   />
+                )}
+                renderActions={(entry) => (
+                  <ConnectedPinControl turnId={entry.turnId} visible={entry.available !== false} />
                 )}
               />
             ) : highlightsOpen ? (

@@ -38,6 +38,13 @@ export function refusalCode(problem: unknown): ErrorCode | null {
 response at all, and a server newer than this bundle. Callers pass the
 sentence that fits where they are - "Could not save that preset." - rather
 than a generic apology. */
+/** The player's sentence for a refusal this app decides itself - a shelf
+    already full, a game not yet saved - said the way the server would say it,
+    so the same words appear whoever refused. */
+export function refusalSentence(code: ErrorCode, params: RefusalParams = {}): string {
+  return refusalText({ errorCode: code, params }, "");
+}
+
 export function refusalText(problem: unknown, fallback: string): string {
   const code = refusalCode(problem);
   if (!code) return fallback;

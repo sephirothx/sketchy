@@ -932,6 +932,14 @@ export const DE: Catalogue = {
       `${p.label}, deine Reaktion. Drücken, um sie zu entfernen`,
   },
 
+  pinControl: {
+    pin: "Anheften",
+    pinned: "Angeheftet",
+    pinThisDrawing: "Diese Zeichnung an dein Profil heften",
+    unpinThisDrawing: "Diese Zeichnung von deinem Profil lösen",
+    thatDrawingCouldNotBePinned: "Diese Zeichnung konnte nicht angeheftet werden.",
+  },
+
   drawingRecapGallery: {
     drawingLabel: (p: { prompt: string; drawer: string }) =>
       `Zeichnung von ${p.prompt} von ${p.drawer}`,
