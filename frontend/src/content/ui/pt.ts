@@ -1271,6 +1271,8 @@ export const PT: Catalogue = {
     tags: "Etiquetas",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} de ${p.max} escolhidas`,
     tagsAreHowListsAreFound: "As etiquetas são a forma de encontrar esta lista no catálogo da comunidade.",
+    addTag: "Adicionar etiqueta",
+    removeTag: (p: { tag: string }) => `Remover ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "palavra", other: "palavras" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""

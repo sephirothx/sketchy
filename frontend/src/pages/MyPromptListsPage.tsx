@@ -4,7 +4,8 @@ import { AddEmailDialog } from "../components/AddEmailDialog";
 import { AppHeader } from "../components/AppHeader";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { LanguageFace, LanguagePicker } from "../components/LanguagePicker";
-import { AlertIcon, CheckIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
+import { TagPicker } from "../components/TagPicker";
+import { AlertIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import {
   createOwnedPromptList,
@@ -157,10 +158,6 @@ export function MyPromptListsPage() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [userId, isAnonymous]);
-
-  // Named once: the chips read it three times, and "at the cap" is the state
-  // the whole control changes shape around.
-  const full = draft.tags.length >= maxTags;
 
   function clearMessages() {
     setPublishError(null);
@@ -405,22 +402,37 @@ export function MyPromptListsPage() {
                 state: moderationState.replace("_", " "),
               })}
             </p>}
-            <label>{ui.myPromptListsPage.name}<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-            <label>{ui.myPromptListsPage.description}<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
-            {/* The picker every other language choice uses, flags included. Once
-                the list exists its language is fixed (R-LIST-05), so it shows
-                the same face without the control, as a room does. */}
-            <div className="prompt-list-language">
-              <span className="prompt-list-field-label">{ui.myPromptListsPage.language}</span>
-              {selectedId
-                ? <span className="language-picker-static"><LanguageFace value={draft.language} /></span>
-                : <LanguagePicker
-                  label={ui.myPromptListsPage.language}
-                  value={draft.language}
-                  options={LANGUAGES}
-                  onChange={(next) => setDraft({ ...draft, language: next as PromptLanguage })}
-                />}
+            {/* Name and language share a row when there is room for both, and
+                the language wraps under the name when there is not. */}
+            <div className="prompt-list-name-row">
+              <label>{ui.myPromptListsPage.name}<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+              {/* The picker every other language choice uses, flags included.
+                  Once the list exists its language is fixed (R-LIST-05), so it
+                  shows the same face without the control, as a room does. */}
+              <div className="prompt-list-language">
+                <span className="prompt-list-field-label">{ui.myPromptListsPage.language}</span>
+                {selectedId
+                  ? <span className="language-picker-static"><LanguageFace value={draft.language} /></span>
+                  : <LanguagePicker
+                    label={ui.myPromptListsPage.language}
+                    value={draft.language}
+                    options={LANGUAGES}
+                    onChange={(next) => setDraft({ ...draft, language: next as PromptLanguage })}
+                  />}
+              </div>
             </div>
+            <label>{ui.myPromptListsPage.description}<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+            {/* Beside the other facts about the list rather than below the
+                publication panel: they are what the catalogue is filtered by.
+                Hidden until the vocabulary has loaded - a list saves without
+                tags, so a failed read is not worth an error. */}
+            {tagVocabulary.length > 0 && <TagPicker
+              vocabulary={tagVocabulary}
+              chosen={draft.tags}
+              max={maxTags}
+              nameOf={tagName}
+              onChange={(tags) => setDraft({ ...draft, tags })}
+            />}
             {/* The one place a list's visibility is shown and changed. A list is
                 private or published, and only publishing crosses between the
                 two (R-LIST-02) - so there is no visibility field beside the
@@ -469,48 +481,6 @@ export function MyPromptListsPage() {
                 <AlertIcon size={14} /><span>{publishError}</span>
               </p>}
             </div>
-            {tagVocabulary.length > 0 && <fieldset className="prompt-list-tags">
-              {/* Toggle chips rather than checkboxes: choosing several things
-                  out of a fixed set is what `toggle-chip` is for, and the
-                  room-creation form next door already picks its prompt lists
-                  that way. A tag is also a label you read back at a glance,
-                  which a column of checkbox rows is bad at. */}
-              <legend>{ui.myPromptListsPage.tags}</legend>
-              <div className="prompt-list-tags-head">
-                <p className="prompt-list-tags-hint">{ui.myPromptListsPage.tagsAreHowListsAreFound}</p>
-                <span className={full ? "prompt-list-tags-count is-full" : "prompt-list-tags-count"}>
-                  {ui.myPromptListsPage.tagsChosen({ chosen: draft.tags.length, max: maxTags })}
-                </span>
-              </div>
-              <div className="toggle-chips prompt-list-tag-chips">
-                {tagVocabulary.map((tag) => {
-                  const held = draft.tags.includes(tag.slug);
-                  return <button
-                    type="button"
-                    key={tag.slug}
-                    className={held ? "toggle-chip is-selected" : "toggle-chip"}
-                    aria-pressed={held}
-                    // At the cap the rest go quiet rather than disappearing:
-                    // the vocabulary is the same fifteen either way, and a
-                    // set that shrinks as you pick from it cannot be read.
-                    disabled={!held && full}
-                    onClick={() => setDraft({
-                      ...draft,
-                      tags: held
-                        ? draft.tags.filter((slug) => slug !== tag.slug)
-                        // Vocabulary order, so the chips and the saved list
-                        // read the same way round.
-                        : tagVocabulary
-                            .map((entry) => entry.slug)
-                            .filter((slug) => slug === tag.slug || draft.tags.includes(slug)),
-                    })}
-                  >
-                    {held && <span className="toggle-chip-status"><CheckIcon size={13} /></span>}
-                    <span className="toggle-chip-name">{tagName(tag)}</span>
-                  </button>;
-                })}
-              </div>
-            </fieldset>}
             <div className="prompt-list-bulk-add">
               <label htmlFor="prompt-bulk-input">{ui.myPromptListsPage.addPrompts}</label>
               <textarea
