@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AddEmailDialog } from "../components/AddEmailDialog";
 import { AppHeader } from "../components/AppHeader";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
+import { LanguageFace, LanguagePicker } from "../components/LanguagePicker";
 import { AlertIcon, CheckIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import {
@@ -24,7 +26,6 @@ import {
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
 import { maskEmail } from "../lib/accountRecovery";
-import { promptLanguageLabel } from "../lib/promptLanguages";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
@@ -80,6 +81,7 @@ export function MyPromptListsPage() {
   const { notify } = useToast();
   const emailState = useEmailStateStore((state) => state.state);
   const [addingEmail, setAddingEmail] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const openOnArrival = useRef(arrival?.openListId);
   const [lists, setLists] = useState<OwnedPromptList[]>([]);
   const [tagVocabulary, setTagVocabulary] = useState<PromptTag[]>([]);
@@ -304,7 +306,7 @@ export function MyPromptListsPage() {
 
   async function remove() {
     if (!selectedId || busy) return;
-    if (!window.confirm(ui.myPromptListsPage.deleteThisPromptListAnd)) return;
+    setConfirmingDelete(false);
     setBusy(true);
     clearMessages();
     try {
@@ -405,9 +407,20 @@ export function MyPromptListsPage() {
             </p>}
             <label>{ui.myPromptListsPage.name}<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
             <label>{ui.myPromptListsPage.description}<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
-            <label>{ui.myPromptListsPage.language}<select value={draft.language} disabled={Boolean(selectedId)} onChange={(event) => setDraft({ ...draft, language: event.target.value as PromptLanguage })}>
-              {LANGUAGES.map((language) => <option key={language} value={language}>{promptLanguageLabel(language)}</option>)}
-            </select></label>
+            {/* The picker every other language choice uses, flags included. Once
+                the list exists its language is fixed (R-LIST-05), so it shows
+                the same face without the control, as a room does. */}
+            <div className="prompt-list-language">
+              <span className="prompt-list-field-label">{ui.myPromptListsPage.language}</span>
+              {selectedId
+                ? <span className="language-picker-static"><LanguageFace value={draft.language} /></span>
+                : <LanguagePicker
+                  label={ui.myPromptListsPage.language}
+                  value={draft.language}
+                  options={LANGUAGES}
+                  onChange={(next) => setDraft({ ...draft, language: next as PromptLanguage })}
+                />}
+            </div>
             {/* The one place a list's visibility is shown and changed. A list is
                 private or published, and only publishing crosses between the
                 two (R-LIST-02) - so there is no visibility field beside the
@@ -593,7 +606,7 @@ export function MyPromptListsPage() {
                 </p>
                 : <span />}
               <div className="prompt-list-manager-buttons">
-                {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
+                {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => setConfirmingDelete(true)}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
                 {selectedId && !copiedFrom && moderationState === "active" && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
                 <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
               </div>
@@ -602,6 +615,13 @@ export function MyPromptListsPage() {
         </div>
       )}
     </section>
+    {confirmingDelete && <ConfirmationDialog
+      title={ui.myPromptListsPage.deleteListTitle({ name: lists.find((item) => item.id === selectedId)?.name ?? draft.name })}
+      description={ui.myPromptListsPage.deleteListDescription}
+      confirmLabel={ui.myPromptListsPage.deleteListConfirm}
+      onCancel={() => setConfirmingDelete(false)}
+      onConfirm={() => void remove()}
+    />}
     {addingEmail && <AddEmailDialog
       onClose={() => setAddingEmail(false)}
       onSaved={() => setAddingEmail(false)}

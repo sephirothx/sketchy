@@ -833,6 +833,7 @@ export const IT: Catalogue = {
     updatedName: (p: { name: string }) =>
       `«${p.name}» aggiornato.`,
     deleteThisRoomSettingPreset: "Eliminare questa impostazione predefinita della stanza?",
+    deletePresetDescription: "Le stanze che hai già creato con questa impostazione non cambiano.",
     createTheRoom: "creare la stanza",
     noScoring: "Senza punteggio",
     public: "Pubblica",
@@ -1303,7 +1304,10 @@ export const IT: Catalogue = {
     nothingMatchesThatSearch: "Niente corrisponde a questa ricerca.",
     deleteList: "Elimina lista…",
     promptListSaved: "Lista di parole salvata.",
-    deleteThisPromptListAnd: "Eliminare questa lista di parole e tutte le sue revisioni?",
+    deleteListTitle: (p: { name: string }) =>
+      `Eliminare «${p.name}»?`,
+    deleteListDescription: "Sparisce dalle tue liste e, se pubblicata, dal catalogo della community. Le partite già giocate conservano le loro parole.",
+    deleteListConfirm: "Elimina lista",
     promptListDeleted: "Lista di parole eliminata.",
     backToLobby: "Torna alla lobby",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>

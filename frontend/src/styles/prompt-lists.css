@@ -58,10 +58,21 @@
   margin-top: 24px;
 }
 
+/* The lists scroll on their own. An account can keep 25, and a column of them
+   scrolled away with the form, so opening another list meant scrolling back up
+   past the one being edited. Pinned beside the form and capped at the viewport,
+   it keeps its place while the form scrolls, and scrolls itself when it is the
+   longer of the two. */
 .prompt-list-manager-layout aside {
+  align-content: start;
+  align-self: start;
   display: grid;
   gap: 8px;
-  align-content: start;
+  max-height: calc(var(--app-height) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  position: sticky;
+  top: 16px;
 }
 
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
@@ -91,6 +102,11 @@
   gap: 12px;
 }
 
+/* Language is a picker rather than a native select, so it is not a <label>;
+   its caption takes the labels' type so the field reads as one of them. */
+.prompt-list-language { display: grid; gap: 4px; justify-items: start; }
+
+.prompt-list-field-label,
 .prompt-list-manager-layout form > label {
   font-size: 14px;
   font-weight: 600;
@@ -453,9 +469,14 @@
 @media (max-width: 700px) {
   .prompt-list-manager-card { padding: 18px; }
   .prompt-list-manager-layout { grid-template-columns: 1fr; }
+  /* One column: the lists become a strip above the form, and a strip has
+     nothing to pin beside. */
   .prompt-list-manager-layout aside {
     display: flex;
+    max-height: none;
     overflow-x: auto;
+    overflow-y: visible;
+    position: static;
   }
   .prompt-list-manager-layout aside button { flex: 0 0 180px; }
 }

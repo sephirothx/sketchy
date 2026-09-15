@@ -833,6 +833,7 @@ export const NL: Catalogue = {
     updatedName: (p: { name: string }) =>
       `‘${p.name}’ bijgewerkt.`,
     deleteThisRoomSettingPreset: "Deze kamervoorinstelling verwijderen?",
+    deletePresetDescription: "Kamers die je er al mee hebt gemaakt, veranderen niet.",
     createTheRoom: "de kamer maken",
     noScoring: "Zonder punten",
     public: "Openbaar",
@@ -1303,7 +1304,10 @@ export const NL: Catalogue = {
     nothingMatchesThatSearch: "Niets past bij die zoekopdracht.",
     deleteList: "Lijst verwijderen…",
     promptListSaved: "Woordenlijst opgeslagen.",
-    deleteThisPromptListAnd: "Deze woordenlijst en al haar versies verwijderen?",
+    deleteListTitle: (p: { name: string }) =>
+      `‘${p.name}’ verwijderen?`,
+    deleteListDescription: "Hij verdwijnt uit je lijsten en, als hij gepubliceerd is, uit de communitycatalogus. Al gespeelde spellen houden hun woorden.",
+    deleteListConfirm: "Lijst verwijderen",
     promptListDeleted: "Woordenlijst verwijderd.",
     backToLobby: "Terug naar de lobby",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>

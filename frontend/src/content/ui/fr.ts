@@ -833,6 +833,7 @@ export const FR: Catalogue = {
     updatedName: (p: { name: string }) =>
       `« ${p.name} » mis à jour.`,
     deleteThisRoomSettingPreset: "Supprimer ce préréglage de salon ?",
+    deletePresetDescription: "Les salons déjà créés avec ce préréglage ne changent pas.",
     createTheRoom: "créer le salon",
     noScoring: "Sans score",
     public: "Public",
@@ -1303,7 +1304,10 @@ export const FR: Catalogue = {
     nothingMatchesThatSearch: "Rien ne correspond à cette recherche.",
     deleteList: "Supprimer la liste…",
     promptListSaved: "Liste de mots enregistrée.",
-    deleteThisPromptListAnd: "Supprimer cette liste de mots et toutes ses révisions ?",
+    deleteListTitle: (p: { name: string }) =>
+      `Supprimer « ${p.name} » ?`,
+    deleteListDescription: "Elle quitte tes listes et, si elle est publiée, le catalogue de la communauté. Les parties déjà jouées gardent leurs mots.",
+    deleteListConfirm: "Supprimer la liste",
     promptListDeleted: "Liste de mots supprimée.",
     backToLobby: "Retour au hall",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>

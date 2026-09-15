@@ -833,6 +833,7 @@ export const DE: Catalogue = {
     updatedName: (p: { name: string }) =>
       `„${p.name}“ aktualisiert.`,
     deleteThisRoomSettingPreset: "Diese Raumvorlage löschen?",
+    deletePresetDescription: "Räume, die du damit schon erstellt hast, bleiben unverändert.",
     createTheRoom: "den Raum erstellen",
     noScoring: "Ohne Punkte",
     public: "Öffentlich",
@@ -1303,7 +1304,10 @@ export const DE: Catalogue = {
     nothingMatchesThatSearch: "Nichts passt zu dieser Suche.",
     deleteList: "Liste löschen …",
     promptListSaved: "Begriffsliste gespeichert.",
-    deleteThisPromptListAnd: "Diese Begriffsliste mit allen Versionen löschen?",
+    deleteListTitle: (p: { name: string }) =>
+      `„${p.name}“ löschen?`,
+    deleteListDescription: "Sie verschwindet aus deinen Listen und, falls veröffentlicht, aus dem Community-Katalog. Bereits gespielte Runden behalten ihre Begriffe.",
+    deleteListConfirm: "Liste löschen",
     promptListDeleted: "Begriffsliste gelöscht.",
     backToLobby: "Zurück zur Lobby",
     promptsCountOfMaxListPrompts: (p: { promptsCount: number; MAX_LIST_PROMPTS: number }) =>
