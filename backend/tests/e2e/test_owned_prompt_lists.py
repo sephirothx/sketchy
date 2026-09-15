@@ -1,18 +1,16 @@
-"""A player saves, revises, and shares reusable prompt content."""
+"""A player saves and revises reusable prompt content, and plays it."""
 from playwright.async_api import async_playwright
 
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import register_account
 
 BASE_URL = "http://localhost:8000"
 
 
-async def test_registered_owner_can_manage_and_share_a_prompt_list():
+async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
-        owner_context = await browser.new_context()
-        recipient_context = await browser.new_context()
-        owner = await owner_context.new_page()
-        recipient = await recipient_context.new_page()
+        context = await browser.new_context()
+        owner = await context.new_page()
         try:
             await owner.goto(BASE_URL)
             await register_account(owner, "PromptListOwner")
@@ -20,6 +18,15 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
             await owner.get_by_role("menuitem", name="My prompt lists").click()
             await owner.wait_for_url("**/my-prompt-lists")
             await owner.get_by_role("heading", name="Reusable prompt lists").wait_for()
+
+            # A list is private or published, and publishing is the only way
+            # between them (R-LIST-02): there is no visibility field to set,
+            # and a list that does not exist yet cannot be published.
+            assert await owner.get_by_label("Visibility").count() == 0
+            await owner.get_by_text(
+                "Save the list first. It stays private until you publish it."
+            ).wait_for()
+            assert await owner.get_by_role("button", name="Publish", exact=True).is_disabled()
 
             await owner.get_by_label("Name").fill("Party animals")
             await owner.get_by_label("Description").fill("For Friday games")
@@ -32,57 +39,32 @@ async def test_registered_owner_can_manage_and_share_a_prompt_list():
             await owner.get_by_role("button", name="Save list").click()
             await owner.get_by_text("Prompt list saved.").wait_for()
             await owner.locator("aside").get_by_text("2 prompts · private").wait_for()
+            assert await owner.get_by_role("button", name="Publish", exact=True).is_enabled()
 
-            # A subsequent save creates revision two and a random bearer code.
-            # Re-adding an existing prompt is silently skipped, so the edit here
-            # is a removal plus a fresh batch.
+            # A subsequent save creates revision two and leaves the list
+            # private. Re-adding an existing prompt is silently skipped, so the
+            # edit here is a removal plus a fresh batch.
             await owner.get_by_role("button", name="Remove red panda").click()
             await owner.get_by_label("Add prompts", exact=True).fill("giant panda\ncapybara")
             await owner.get_by_role("button", name="Add to list").click()
             await owner.get_by_text(
                 "Added 1 prompt; skipped 1 already in the list."
             ).wait_for()
-            await owner.get_by_label("Visibility").select_option("unlisted")
             await owner.get_by_role("button", name="Save list").click()
             await owner.get_by_text("Prompt list saved.").wait_for()
-            share_code = (await owner.locator(".prompt-list-share-code code").inner_text()).strip()
-            assert len(share_code) >= 8
+            await owner.locator("aside").get_by_text("2 prompts · private").wait_for()
 
-            # Another browser can add the Unlisted list only by presenting the
-            # code, then create a room whose only selected list is that one.
-            await recipient.goto(BASE_URL)
-            await use_guest_name(recipient, "SharedListGuest")
-            await recipient.get_by_role("button", name="Create room").click()
-            await recipient.wait_for_url("**/create")
-            await recipient.click('summary:has-text("Prompts")')
-            await recipient.get_by_label("Add an unlisted list by code").fill(share_code)
-            await recipient.locator(".prompt-list-share-form").get_by_role(
-                "button", name="Add"
-            ).click()
-            shared_chip = recipient.locator(".toggle-chip").filter(
-                has_text="Party animals"
-            )
-            await shared_chip.wait_for()
-            assert await shared_chip.get_attribute("aria-pressed") == "true"
-
-            # Shared player-authored content can be reported as a whole list or
-            # as one exact immutable prompt version. Submission is post-
-            # moderation, so it does not interrupt this waiting-room flow.
-            await recipient.get_by_role("button", name="Report Party animals").click()
-            await recipient.get_by_label("Content", exact=True).select_option(label="giant panda")
-            await recipient.get_by_label("Reason").select_option("inappropriate")
-            await recipient.get_by_label("What should the moderator know?").fill(
-                "This exact prompt needs review."
-            )
-            await recipient.get_by_role("button", name="Send report").click()
-            await recipient.get_by_text("Report sent for moderator review.").wait_for()
-
-            await recipient.locator(".toggle-chip").filter(
+            # Its owner can play it: a room whose only selected list is this one.
+            await owner.goto(f"{BASE_URL}/create")
+            await owner.click('summary:has-text("Prompts")')
+            owned_chip = owner.locator(".toggle-chip").filter(has_text="Party animals")
+            await owned_chip.click()
+            assert await owned_chip.get_attribute("aria-pressed") == "true"
+            await owner.locator(".toggle-chip").filter(
                 has_text="English — Standard"
             ).click()
-            await recipient.get_by_role("button", name="Create room", exact=True).click()
-            await recipient.locator('[data-testid="waiting-room"]').wait_for()
+            await owner.get_by_role("button", name="Create room", exact=True).click()
+            await owner.locator('[data-testid="waiting-room"]').wait_for()
         finally:
-            await owner_context.close()
-            await recipient_context.close()
+            await context.close()
             await browser.close()

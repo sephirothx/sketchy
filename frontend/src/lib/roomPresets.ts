@@ -17,7 +17,6 @@ export interface RoomPresetSettings {
   colorMode: ColorMode;
   promptLanguage: PromptLanguage;
   promptListSlugs: string[];
-  promptListShareCodes: [];
 }
 
 export interface RoomPresetSummary {

@@ -60,7 +60,6 @@ def _config_payload(preset: RoomPresetConfig) -> dict:
             "colorMode": preset.color_mode,
             "promptLanguage": preset.prompt_language,
             "promptListSlugs": list(preset.prompt_list_slugs),
-            "promptListShareCodes": [],
         },
     }
 

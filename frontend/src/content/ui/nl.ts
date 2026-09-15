@@ -302,7 +302,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Prompt lists
   prompt_list_not_found: "Woordenlijst niet gevonden.",
-  shared_prompt_list_not_found: "Geen gedeelde woordenlijst gevonden.",
   prompt_list_conflict: "Iemand anders heeft die lijst gewijzigd. Herlaad hem en probeer het nog eens.",
   prompt_list_invalid: "Deze woordenlijst kon niet opgeslagen worden.",
   prompt_list_forbidden: "Deze woordenlijst is niet van jou om te wijzigen.",
@@ -821,7 +820,7 @@ export const NL: Catalogue = {
     delete: "Verwijderen",
     undo: "Ongedaan maken",
     saveAsReusableList: "Opslaan als herbruikbare lijst",
-    saveQuickPromptsAsA: "Bewaar snelle woorden als lijst en verwijder gedeelde codes voordat je een voorinstelling opslaat.",
+    saveQuickPromptsAsA: "Bewaar snelle woorden als lijst voordat je een voorinstelling opslaat.",
     appliedName: (p: { name: string }) =>
       `‘${p.name}’ toegepast.`,
     savedName: (p: { name: string }) =>
@@ -1236,6 +1235,7 @@ export const NL: Catalogue = {
     notPublished: "Niet gepubliceerd",
     publishedExplainer: "Iedereen kan deze lijst vinden, ermee spelen, een ster geven of er een eigen kopie van maken.",
     unpublishedExplainer: "Door te publiceren kan iedereen deze lijst vinden en spelen. Terugtrekken kan op elk moment.",
+    saveBeforePublishing: "Sla de lijst eerst op. Hij blijft privé tot je hem publiceert.",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "ster", other: "sterren" }),
     copyCount: (p: { count: number }) =>
@@ -1274,12 +1274,7 @@ export const NL: Catalogue = {
     name: "Naam",
     description: "Beschrijving",
     language: "Taal",
-    visibility: "Zichtbaarheid",
     private: "Privé",
-    anyoneWithCode: "Iedereen met de code",
-    shareCode: "Deelcode",
-    couldNotCopyShareCode: "De deelcode kon niet gekopieerd worden.",
-    copy: "Kopiëren",
     addPrompts: "Woorden toevoegen",
     onePromptPerLineSeparateEntries: "Eén woord per regel\nof scheid invoeren met komma’s",
     addList: "Aan de lijst toevoegen",
@@ -1487,24 +1482,16 @@ export const NL: Catalogue = {
   promptListPicker: {
     listsYouStarred: "Lijsten met jouw ster",
     starredNotAllShown: (p: { shown: number }) => `De eerste ${number(p.shown)} lijsten met jouw ster worden getoond.`,
-    languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
-      `Die lijst is in het ${p.listLanguage}; deze kamer is in het ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>
       `De keuze uit woordenlijsten is niet beschikbaar (${p.reason}). Je huidige keuze blijft staan.`,
     noListsInLanguage: (p: { language: string }) =>
       `Nog geen woordenlijsten in het ${p.language} — deze kamer gebruikt eigen woorden.`,
     howListPlays: (p: { name: string }) => `Hoe woorden uit ${p.name} spelen`,
-    reportList: (p: { name: string }) => `${p.name} melden`,
     failedLoadPromptLists: "Woordenlijsten laden mislukt",
-    couldNotAddThatSharedList: "Deze gedeelde lijst kon niet toegevoegd worden.",
     loadingCuratedPromptLists: "Woordenlijsten laden…",
     promptLists: "Woordenlijsten",
-    addUnlistedListByCode: "Een niet-vermelde lijst toevoegen met een code",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
       `${p.name} (${p.promptCount} woorden)`,
-    adding: "Toevoegen…",
-    add: "Toevoegen",
-    reportSentForModeratorReview: "Melding naar de moderators gestuurd.",
   },
 
   promptStatsPage: {

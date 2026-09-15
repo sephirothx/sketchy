@@ -59,7 +59,6 @@ export interface RoomSetupValues {
   drawingSeconds: number;
   promptLanguage: PromptLanguage;
   promptListSlugs: string[];
-  promptListShareCodes: string[];
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
   scoringMode: ScoringMode;
@@ -123,7 +122,6 @@ export function RoomSetupForm({
     drawingSeconds,
     promptLanguage,
     promptListSlugs,
-    promptListShareCodes,
     allowedTools,
     colorMode,
     scoringMode,
@@ -199,11 +197,8 @@ export function RoomSetupForm({
                   options={languageOptions}
                   onChange={(next) => onChange({
                     promptLanguage: next as PromptLanguage,
-                    // Lists cannot span languages, and the bearer codes that
-                    // authorized the old ones belong to the language being
-                    // left, so neither carries over.
+                    // Lists cannot span languages, so none carries over.
                     promptListSlugs: selectionForLanguage(loadedLists, next),
-                    promptListShareCodes: [],
                   })}
                 />
               )}
@@ -274,8 +269,6 @@ export function RoomSetupForm({
             language={promptLanguage}
             selectedSlugs={promptListSlugs}
             onChange={(slugs) => onChange({ promptListSlugs: slugs })}
-            shareCodes={promptListShareCodes}
-            onShareCodesChange={(codes) => onChange({ promptListShareCodes: codes })}
             onListsLoaded={onListsLoaded}
             extraLists={extraLists}
           />

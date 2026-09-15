@@ -72,6 +72,16 @@ async def register(client: AsyncClient, username: str) -> dict:
     return response.json()
 
 
+async def published(factory, prompt_list_id: str) -> None:
+    """Put a list where a reporter can see it: only a published list can be
+    seen by anyone but its owner, so only a published list is reportable."""
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(prompt_list_id))
+            row.visibility = "public"
+            row.published_at = datetime.now(timezone.utc)
+
+
 async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
     new_client, factory, prompts = env
     owner_http = new_client()
@@ -93,7 +103,6 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
         name="Shared trouble",
         description="",
         language="en",
-        visibility="unlisted",
         prompts=(
             PromptListEntryInput(answer="offensive prompt"),
             PromptListEntryInput(answer="safe prompt"),
@@ -101,25 +110,26 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
     )
     reported_prompt = prompt_list.prompts[0]
 
+    unseen = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={
+            "promptListId": prompt_list.id,
+            "reason": "spam",
+            "details": "Still private",
+        },
+    )
+    assert unseen.status_code == 404
+    await published(factory, prompt_list.id)
+
     self_report = await owner_http.post(
         "/api/prompt-content-reports",
         json={
             "promptListId": prompt_list.id,
-            "shareCode": prompt_list.share_code,
             "reason": "other",
             "details": "self",
         },
     )
     assert self_report.status_code == 422
-    no_capability = await reporter_http.post(
-        "/api/prompt-content-reports",
-        json={
-            "promptListId": prompt_list.id,
-            "reason": "spam",
-            "details": "No code",
-        },
-    )
-    assert no_capability.status_code == 404
 
     submitted = await reporter_http.post(
         "/api/prompt-content-reports",
@@ -127,7 +137,6 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
         json={
             "promptListId": prompt_list.id,
             "promptVersionId": reported_prompt.prompt_version_id,
-            "shareCode": prompt_list.share_code,
             "reason": "hateful_or_abusive",
             "details": "This exact prompt contains abuse.",
         },
@@ -169,9 +178,7 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
         )
     ).status_code == 409
 
-    selection = await prompts.resolve_selection(
-        [prompt_list.slug], share_codes=(prompt_list.share_code,)
-    )
+    selection = await prompts.resolve_selection([prompt_list.slug])
     assert selection.prompts == ("safe prompt",)
 
     async with factory() as session:
@@ -206,7 +213,6 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
         "/api/prompt-content-reports",
         json={
             "promptListId": prompt_list.id,
-            "shareCode": prompt_list.share_code,
             "reason": "spam",
             "details": "The whole list is spam.",
         },
@@ -221,9 +227,7 @@ async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
     )
     assert list_review.status_code == 200
     with pytest.raises(PromptListSelectionError):
-        await prompts.resolve_selection(
-            [prompt_list.slug], share_codes=(prompt_list.share_code,)
-        )
+        await prompts.resolve_selection([prompt_list.slug])
 
     async with factory() as session:
         stored_list = await session.get(PromptList, UUID(prompt_list.id))
@@ -259,15 +263,14 @@ async def test_report_snapshots_survive_owner_deletion(env):
         name="Evidence list",
         description="",
         language="en",
-        visibility="unlisted",
         prompts=(PromptListEntryInput(answer="reported prompt"),),
     )
+    await published(factory, prompt_list.id)
     response = await reporter_http.post(
         "/api/prompt-content-reports",
         json={
             "promptListId": prompt_list.id,
             "promptVersionId": prompt_list.prompts[0].prompt_version_id,
-            "shareCode": prompt_list.share_code,
             "reason": "inappropriate",
             "details": "Retain this evidence.",
         },
@@ -329,15 +332,14 @@ async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
         name="Reported twice",
         description="",
         language="en",
-        visibility="unlisted",
         prompts=(
             PromptListEntryInput(answer="first prompt"),
             PromptListEntryInput(answer="second prompt"),
         ),
     )
+    await published(factory, prompt_list.id)
     body = {
         "promptListId": prompt_list.id,
-        "shareCode": prompt_list.share_code,
         "reason": "spam",
         "details": "Reporting the list itself.",
     }
@@ -400,9 +402,9 @@ async def test_content_reports_about_one_target_are_one_incident(env):
         name="Trouble again",
         description="",
         language="en",
-        visibility="unlisted",
         prompts=(PromptListEntryInput(answer="the reported prompt"),),
     )
+    await published(factory, prompt_list.id)
 
     report_ids = []
     for index in range(3):
@@ -412,7 +414,6 @@ async def test_content_reports_about_one_target_are_one_incident(env):
             "/api/prompt-content-reports",
             json={
                 "promptListId": prompt_list.id,
-                "shareCode": prompt_list.share_code,
                 "reason": "inappropriate" if index else "hateful_or_abusive",
                 "details": f"Complaint {index}.",
             },
@@ -525,7 +526,6 @@ async def test_a_held_publication_is_findable_and_can_be_released(env):
         name="Waiting room",
         description="Held by the switch",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     await prompts.set_owned_publication(
@@ -586,7 +586,6 @@ async def test_a_held_publication_can_be_taken_down_instead(env):
         name="Not fine",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
     held = await prompts.set_owned_publication(
@@ -627,7 +626,6 @@ async def test_a_list_nobody_held_cannot_be_decided_from_this_queue(env):
         name="Ordinary",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
 
@@ -669,7 +667,6 @@ async def staffed_env(env, owner_name: str, moderator_name: str):
         name="Under the switch",
         description="",
         language="en",
-        visibility="private",
         prompts=(
             PromptListEntryInput(answer="otter", aliases=("river otter",)),
             PromptListEntryInput(answer="badger"),
@@ -728,7 +725,6 @@ async def test_an_edit_after_the_reviewer_opened_the_list_refuses_the_decision(e
         expected_version=held.version,
         name="Under the switch",
         description="",
-        visibility="private",
         prompts=(
             PromptListEntryInput(
                 answer="otter", concept_id=created.prompts[0].concept_id
@@ -770,7 +766,6 @@ async def test_the_detail_route_does_not_open_a_list_nobody_held(env):
         name="Nobody's business",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="otter"),),
     )
 

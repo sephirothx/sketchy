@@ -302,7 +302,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Prompt lists
   prompt_list_not_found: "Lista di parole non trovata.",
-  shared_prompt_list_not_found: "Nessuna lista di parole condivisa trovata.",
   prompt_list_conflict: "Qualcun altro ha modificato questa lista. Ricaricala e riprova.",
   prompt_list_invalid: "Non è stato possibile salvare questa lista di parole.",
   prompt_list_forbidden: "Questa lista di parole non è tua da modificare.",
@@ -821,7 +820,7 @@ export const IT: Catalogue = {
     delete: "Elimina",
     undo: "Annulla",
     saveAsReusableList: "Salva come lista riutilizzabile",
-    saveQuickPromptsAsA: "Salva le parole rapide come lista e rimuovi i codici condivisi prima di salvare un’impostazione predefinita.",
+    saveQuickPromptsAsA: "Salva le parole rapide come lista prima di salvare un’impostazione predefinita.",
     appliedName: (p: { name: string }) =>
       `«${p.name}» applicato.`,
     savedName: (p: { name: string }) =>
@@ -1236,6 +1235,7 @@ export const IT: Catalogue = {
     notPublished: "Non pubblicata",
     publishedExplainer: "Chiunque può trovare questa lista, giocarla, darle una stella o farne una propria copia.",
     unpublishedExplainer: "Pubblicandola, chiunque potrà trovare e giocare questa lista. Si può ritirare in qualsiasi momento.",
+    saveBeforePublishing: "Salva prima la lista. Resta privata finché non la pubblichi.",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "stella", other: "stelle" }),
     copyCount: (p: { count: number }) =>
@@ -1274,12 +1274,7 @@ export const IT: Catalogue = {
     name: "Nome",
     description: "Descrizione",
     language: "Lingua",
-    visibility: "Visibilità",
     private: "Privata",
-    anyoneWithCode: "Chiunque abbia il codice",
-    shareCode: "Codice di condivisione",
-    couldNotCopyShareCode: "Non è stato possibile copiare il codice.",
-    copy: "Copia",
     addPrompts: "Aggiungi parole",
     onePromptPerLineSeparateEntries: "Una parola per riga\noppure separa le voci con virgole",
     addList: "Aggiungi alla lista",
@@ -1486,24 +1481,16 @@ export const IT: Catalogue = {
   promptListPicker: {
     listsYouStarred: "Liste con la tua stella",
     starredNotAllShown: (p: { shown: number }) => `Sono mostrate le prime ${number(p.shown)} liste a cui hai dato una stella.`,
-    languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
-      `Questa lista è in ${p.listLanguage}; questa stanza è in ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>
       `La scelta delle liste di parole non è disponibile (${p.reason}). La tua selezione resta invariata.`,
     noListsInLanguage: (p: { language: string }) =>
       `Ancora nessuna lista in ${p.language} — questa stanza usa le sue parole personalizzate.`,
     howListPlays: (p: { name: string }) => `Come si giocano le parole di ${p.name}`,
-    reportList: (p: { name: string }) => `Segnala ${p.name}`,
     failedLoadPromptLists: "Impossibile caricare le liste di parole",
-    couldNotAddThatSharedList: "Non è stato possibile aggiungere questa lista condivisa.",
     loadingCuratedPromptLists: "Caricamento delle liste di parole…",
     promptLists: "Liste di parole",
-    addUnlistedListByCode: "Aggiungi una lista non elencata con un codice",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
       `${p.name} (${p.promptCount} parole)`,
-    adding: "Aggiunta…",
-    add: "Aggiungi",
-    reportSentForModeratorReview: "Segnalazione inviata ai moderatori.",
   },
 
   promptStatsPage: {

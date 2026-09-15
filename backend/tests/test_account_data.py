@@ -462,7 +462,6 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         name="Exported prompts",
         description="Requester-authored content",
         language="en",
-        visibility="unlisted",
         prompts=(PromptListEntryInput(answer="red panda"),),
     )
     starred_list = await SqlAlchemyPromptListRepository(factory).create_owned(
@@ -470,7 +469,6 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         name="Somebody else's published list",
         description="Not the requester's content",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="lighthouse"),),
     )
     async with factory() as session:
@@ -522,8 +520,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 8
-    assert artifact["schemaVersion"] == 8
+    assert status["schemaVersion"] == 9
+    assert artifact["schemaVersion"] == 9
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -608,7 +606,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "$argon2" not in encoded
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v8_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v9_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -742,7 +740,6 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         name="Delete me",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="private prompt"),),
     )
     async with factory() as session:
@@ -834,7 +831,7 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         # (#605); nothing pinned it, so nothing of it survives that.
         retired = await session.scalar(select(PromptList))
         assert retired is not None and retired.deleted_at is not None
-        assert retired.name == "Deleted list" and retired.share_code is None
+        assert retired.name == "Deleted list" and retired.visibility == "private"
         assert await session.scalar(select(func.count(RoomPreset.id))) == 0
     await reclaim_retired_prompt_lists(
         factory, now=datetime.now(timezone.utc) + timedelta(days=2)
@@ -1491,7 +1488,6 @@ async def test_deletion_takes_the_stars_that_account_gave(env):
         name="Starred then deleted",
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="lighthouse"),),
     )
     async with factory() as session:

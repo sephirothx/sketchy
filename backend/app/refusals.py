@@ -220,7 +220,6 @@ class ErrorCode(StrEnum):
 
     # Prompt lists
     PROMPT_LIST_NOT_FOUND = "prompt_list_not_found"
-    SHARED_PROMPT_LIST_NOT_FOUND = "shared_prompt_list_not_found"
     PROMPT_LIST_CONFLICT = "prompt_list_conflict"
     PROMPT_LIST_INVALID = "prompt_list_invalid"
     PROMPT_LIST_FORBIDDEN = "prompt_list_forbidden"

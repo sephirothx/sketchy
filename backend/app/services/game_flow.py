@@ -122,7 +122,6 @@ class RoomSettingsInput(Protocol):
     allowed_tools: list[str] | None
     color_mode: str | None
     prompt_list_slugs: list[str] | None
-    prompt_list_share_codes: list[str] | None
 
 
 class GameFlowService:
@@ -170,13 +169,6 @@ class GameFlowService:
             prompt_list_slugs = list(fallback.prompt_list_slugs)
         else:
             prompt_list_slugs = [default_prompt_list_slug(declared_language)]
-        raw_share_codes = getattr(payload, "prompt_list_share_codes", None)
-        if raw_share_codes is not None:
-            prompt_list_share_codes = list(raw_share_codes)
-        elif fallback is not None:
-            prompt_list_share_codes = list(fallback.prompt_list_share_codes)
-        else:
-            prompt_list_share_codes = []
 
         prompt_list_revision_ids = (
             list(fallback.prompt_list_revision_ids) if fallback else []
@@ -199,11 +191,10 @@ class GameFlowService:
         )
         if not already_pinned and prompt_list_slugs and self._ctx.prompt_list_repo:
             try:
-                if requesting_user_id is not None or prompt_list_share_codes:
+                if requesting_user_id is not None:
                     selection = await self._ctx.prompt_list_repo.authorize_selection(
                         prompt_list_slugs,
                         requesting_user_id=requesting_user_id,
-                        share_codes=prompt_list_share_codes,
                         expected_language=declared_language,
                     )
                 else:
@@ -251,7 +242,6 @@ class GameFlowService:
             "color_mode": value("color_mode"),
             "prompt_language": declared_language,
             "prompt_list_slugs": prompt_list_slugs,
-            "prompt_list_share_codes": prompt_list_share_codes,
             "prompt_list_revision_ids": prompt_list_revision_ids,
             "prompt_pool_size": prompt_pool_size,
             "prompt_letter_counts": prompt_letter_counts,
@@ -270,11 +260,10 @@ class GameFlowService:
         if room.custom_prompts_only or not self._ctx.prompt_list_repo:
             return
         try:
-            if requesting_user_id is not None or room.prompt_list_share_codes:
+            if requesting_user_id is not None:
                 selection = await self._ctx.prompt_list_repo.authorize_selection(
                     list(room.prompt_list_slugs),
                     requesting_user_id=requesting_user_id,
-                    share_codes=room.prompt_list_share_codes,
                     expected_language=room.prompt_language,
                 )
             else:

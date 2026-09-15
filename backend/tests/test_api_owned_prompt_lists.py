@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.errors import install_refusal_handler
-from app.api.prompt_lists import create_prompt_list_router, share_limiter
+from app.api.prompt_lists import create_prompt_list_router
 from app.services.publication_policy import PUBLICATION_REVIEW_KEY
 from app.db.models import (
     AuditEvent,
@@ -48,7 +48,6 @@ async def env():
     install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_prompt_list_router(prompts, users, factory))
-    share_limiter.reset()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as http:
@@ -75,7 +74,7 @@ async def test_guests_cannot_persist_quick_prompts(env):
     assert "Create an account" in response.json()["detail"]
 
 
-async def test_owner_can_create_revise_reuse_and_share_a_list(env):
+async def test_owner_can_create_revise_and_reuse_a_private_list(env):
     http, users, factory = env
     account = await users.create_anonymous("Owner")
     account = await users.claim_account(account.id, "Owner", "test-hash")
@@ -86,7 +85,6 @@ async def test_owner_can_create_revise_reuse_and_share_a_list(env):
         json={
             "name": "Animals",
             "language": "en",
-            "visibility": "private",
             "prompts": [{"prompt": "red panda"}, {"prompt": "otter"}],
         },
     )
@@ -94,7 +92,7 @@ async def test_owner_can_create_revise_reuse_and_share_a_list(env):
     created = created_response.json()
     assert created["version"] == 1
     assert created["promptCount"] == 2
-    assert created["shareCode"] is None
+    assert created["visibility"] == "private"
     assert (
         await http.get(f"/api/prompt-lists/{created['slug']}/prompt-stats")
     ).status_code == 404
@@ -113,8 +111,7 @@ async def test_owner_can_create_revise_reuse_and_share_a_list(env):
         json={
             "expectedVersion": 1,
             "name": "Animals",
-            "description": "Shared with friends",
-            "visibility": "unlisted",
+            "description": "Played with friends",
             "prompts": [
                 {
                     "conceptId": panda["conceptId"],
@@ -128,31 +125,19 @@ async def test_owner_can_create_revise_reuse_and_share_a_list(env):
     assert updated_response.status_code == 200
     updated = updated_response.json()
     assert updated["version"] == 2
-    assert updated["shareCode"]
+    assert updated["visibility"] == "private"
 
     stale = await http.put(
         f"/api/prompt-lists/mine/{created['id']}",
         json={
             "expectedVersion": 1,
             "name": "Stale",
-            "visibility": "private",
             "prompts": [{"prompt": "apple"}],
         },
     )
     assert stale.status_code == 409
 
     http.cookies.clear()
-    shared = await http.post(
-        "/api/prompt-lists/shared", json={"code": updated["shareCode"]}
-    )
-    assert shared.status_code == 200
-    assert shared.json()["slug"] == created["slug"]
-    assert [prompt["prompt"] for prompt in shared.json()["prompts"]] == [
-        "giant panda",
-        "capybara",
-    ]
-    assert all("promptVersionId" in prompt for prompt in shared.json()["prompts"])
-    assert "shareCode" not in shared.json()
     assert (await http.get("/api/prompt-lists")).json() == []
 
 
@@ -210,7 +195,7 @@ async def test_owner_tags_their_list_and_the_tags_ride_the_revision(env):
     assert retagged.status_code == 200
     assert retagged.json()["tags"] == ["animals"]
     # A tag change alone is a change of content and earns its own revision,
-    # exactly as a name or visibility change does.
+    # exactly as a name change does.
     assert retagged.json()["version"] == 2
 
     unchanged = await http.put(
@@ -433,27 +418,40 @@ async def test_a_hidden_list_cannot_be_published_by_its_owner(env):
     assert row.visibility == "private"
 
 
-async def test_publishing_revokes_the_share_code_it_no_longer_needs(env):
-    """A published list is reached by identity, so the bearer capability it
-    was carrying has nothing left to authorize (R-LIST-03)."""
+async def test_a_save_cannot_carry_visibility(env):
+    """A list is private or published, and only publishing crosses between
+    them (R-LIST-02, R-LIST-11). A body that names a visibility is refused
+    rather than ignored, so a client that still sends one finds out."""
     http, users, factory = env
-    account = await verified(users, factory, "Sharer")
+    account = await verified(users, factory, "Chooser")
     await sign_in(http, factory, account.id)
+
     created = await http.post(
         "/api/prompt-lists/mine",
         json={
-            "name": "Was unlisted",
+            "name": "Unlisted",
             "visibility": "unlisted",
             "prompts": [{"prompt": "otter"}],
         },
     )
-    assert created.json()["shareCode"]
-
-    published = await http.post(
-        f"/api/prompt-lists/mine/{created.json()['id']}/publish"
+    assert created.status_code == 422
+    created = await http.post(
+        "/api/prompt-lists/mine",
+        json={"name": "Private", "prompts": [{"prompt": "otter"}]},
     )
-
-    assert published.json()["shareCode"] is None
+    edited = await http.put(
+        f"/api/prompt-lists/mine/{created.json()['id']}",
+        json={
+            "expectedVersion": 1,
+            "name": "Private",
+            "visibility": "public",
+            "prompts": [{"prompt": "otter"}],
+        },
+    )
+    assert edited.status_code == 422
+    async with factory() as session:
+        row = await session.get(PromptList, UUID(created.json()["id"]))
+    assert row.visibility == "private" and row.published_at is None
 
 
 async def test_unpublishing_is_not_a_moderator_s_finding(env):
@@ -511,7 +509,6 @@ async def test_editing_a_published_list_leaves_it_published(env):
         json={
             "expectedVersion": version,
             "name": "Typo fixed",
-            "visibility": "private",
             "prompts": [
                 {
                     "conceptId": created.json()["prompts"][0]["conceptId"],
@@ -529,7 +526,6 @@ async def test_editing_a_published_list_leaves_it_published(env):
     async with factory() as session:
         row = await session.get(PromptList, UUID(list_id))
     assert row.published_at is not None
-    assert row.share_code is None
 
 
 async def test_the_list_of_my_lists_carries_their_tags(env):

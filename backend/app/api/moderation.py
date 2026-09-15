@@ -167,9 +167,6 @@ class PromptContentReportBody(BaseModel):
 
     prompt_list_id: UUID = Field(alias="promptListId")
     prompt_version_id: UUID | None = Field(default=None, alias="promptVersionId")
-    share_code: str | None = Field(
-        default=None, alias="shareCode", min_length=8, max_length=24
-    )
     reason: PromptContentReportReason
     details: str = Field(min_length=1, max_length=MAX_REPORT_DETAILS)
 
@@ -1053,15 +1050,9 @@ def create_moderation_router(
                     prompt_list is None
                     or prompt_list.is_bundled
                     or prompt_list.owner_user_id is None
-                    or (
-                        prompt_list.visibility
-                        != PromptListVisibility.PUBLIC.value
-                        and not (
-                            prompt_list.visibility
-                            == PromptListVisibility.UNLISTED.value
-                            and body.share_code == prompt_list.share_code
-                        )
-                    )
+                    # Only a published list can be seen by anyone but its
+                    # owner, so only a published list can be reported.
+                    or prompt_list.visibility != PromptListVisibility.PUBLIC.value
                 ):
                     raise Refusal(
                         404,

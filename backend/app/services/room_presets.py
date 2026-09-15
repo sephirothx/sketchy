@@ -190,10 +190,6 @@ class RoomPresetService:
             raise RoomPresetError(
                 "Save quick custom prompts as a private prompt list before using a preset"
             )
-        if settings.get("prompt_list_share_codes"):
-            raise RoomPresetError(
-                "Room presets cannot retain another player's shared prompt list"
-            )
 
     @staticmethod
     def _stored_settings(settings: dict) -> dict:

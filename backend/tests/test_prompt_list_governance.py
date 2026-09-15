@@ -1,4 +1,4 @@
-"""Prompt-list governance schema reserved for private/unlisted UGC."""
+"""Prompt-list governance schema for player-owned lists."""
 from __future__ import annotations
 
 import pytest
@@ -39,7 +39,6 @@ async def test_user_list_defaults_are_private_owned_and_actively_moderated():
             await session.refresh(prompt_list)
             assert prompt_list.visibility == "private"
             assert prompt_list.moderation_state == "active"
-            assert prompt_list.share_code is None
             assert prompt_list.created_at is not None
             assert prompt_list.updated_at is not None
 
@@ -48,8 +47,10 @@ async def test_user_list_defaults_are_private_owned_and_actively_moderated():
                 async with session.begin():
                     session.add(
                         PromptList(
-                            slug="unshareable",
-                            name="Unshareable",
+                            # Withdrawn (R-LIST-03): a list is private or
+                            # published, and the schema holds to that.
+                            slug="unlisted",
+                            name="Unlisted",
                             owner_user_id=owner_id,
                             is_bundled=False,
                             visibility="unlisted",
@@ -72,7 +73,7 @@ async def test_user_list_defaults_are_private_owned_and_actively_moderated():
         await engine.dispose()
 
 
-async def test_unlisted_share_provenance_and_tags_are_structured():
+async def test_copy_provenance_and_tags_are_structured():
     factory, engine = await _database()
     try:
         owner_id = generate_uuid()
@@ -85,8 +86,6 @@ async def test_unlisted_share_provenance_and_tags_are_structured():
                     name="Source",
                     owner_user_id=owner_id,
                     is_bundled=False,
-                    visibility="unlisted",
-                    share_code="SOURCE123",
                 )
                 fork = PromptList(
                     slug="fork-list",

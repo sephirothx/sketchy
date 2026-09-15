@@ -244,10 +244,6 @@ export const CreateRoomPage = `
           ${listChip('Extended English', 1284, false)}
           ${listChip('Studio in-jokes', 64, false)}
         </div>
-        <div style="display: flex; align-items: center; gap: 8px">
-          ${input({ placeholder: 'Add an unlisted list by code', style: 'max-width: 260px' })}
-          ${btn.secondary('Add')}
-        </div>
         <details style="border-top: 1.5px solid ${T.line}; padding-top: 14px">
           <summary style="font-size: 14px; font-weight: 800; color: ${T.muted}">Custom prompts for this game <span style="color: ${T.faint}; font-weight: 700">· 3 added</span></summary>
           <div style="display: grid; gap: 8px; margin-top: 12px">

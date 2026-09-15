@@ -202,6 +202,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "d8e9f0a1b2c3",
         "c7d8e9f0a1b2",
         "f8a9b0c1d2e3",
         "b5c6d7e8f9a0",
@@ -620,5 +621,42 @@ async def test_a_picture_report_survives_going_back(tmp_path):
                 )
             ).one()
         assert row[0] == "unscoped"
+    finally:
+        await engine.dispose()
+
+
+async def test_an_unlisted_list_becomes_private(tmp_path):
+    """Unlisted is withdrawn (R-LIST-03). A list that was reachable by its
+    share code falls back to private - the one state its owner certainly
+    agreed to - rather than blocking the new check, and certainly rather than
+    being published by a migration nobody asked."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'unlisted.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "c7d8e9f0a1b2")
+        prompt_list = uuid.uuid4()
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists (id, slug, name, is_bundled,"
+                    " visibility, share_code, version, created_at, updated_at)"
+                    " VALUES (:id, 'was-unlisted', 'Was unlisted', 0, 'unlisted',"
+                    " 'SHARECODE1', 1, datetime('now'), datetime('now'))"
+                ),
+                {"id": prompt_list.hex},
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+
+        async with engine.begin() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "SELECT visibility, published_at FROM prompt_lists"
+                        " WHERE id = :id"
+                    ),
+                    {"id": prompt_list.hex},
+                )
+            ).one()
+        assert tuple(row) == ("private", None)
     finally:
         await engine.dispose()

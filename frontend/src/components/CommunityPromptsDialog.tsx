@@ -5,14 +5,14 @@ import {
   groupAlphabetically,
   type PromptMatch,
 } from "../lib/communityLists";
-import type { CommunityPromptListDetail, SharedPromptEntry } from "../types";
+import type { CommunityPromptListDetail, PublishedPromptEntry } from "../types";
 import { SearchIcon, XIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 
 type Order = "author" | "alphabetical";
 
 interface Found {
-  entry: SharedPromptEntry;
+  entry: PublishedPromptEntry;
   match: PromptMatch | null;
 }
 

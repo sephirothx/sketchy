@@ -3631,10 +3631,6 @@ class PromptList(Base):
             "is_bundled = false OR owner_user_id IS NULL",
             name="ck_prompt_lists_bundled_owner",
         ),
-        CheckConstraint(
-            "visibility != 'unlisted' OR share_code IS NOT NULL",
-            name="ck_prompt_lists_unlisted_share_code",
-        ),
         # Publishing is an act, not a value an edit can carry (R-LIST-11), and
         # this is what makes the two inseparable at rest: a public row without
         # the moment it became public cannot exist, whatever wrote it.
@@ -3700,9 +3696,6 @@ class PromptList(Base):
         server_default=PromptListVisibility.PRIVATE.value,
         nullable=False,
         index=True,
-    )
-    share_code: Mapped[str | None] = mapped_column(
-        String(24), nullable=True, unique=True, index=True
     )
     moderation_state: Mapped[str] = mapped_column(
         String(16),

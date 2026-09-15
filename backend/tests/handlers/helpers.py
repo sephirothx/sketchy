@@ -248,7 +248,7 @@ class StubPromptListRepo:
         return prompt_match_key(prompt, self.language)
 
     async def authorize_selection(
-        self, slugs, *, requesting_user_id=None, share_codes=(), expected_language=None
+        self, slugs, *, requesting_user_id=None, expected_language=None
     ):
         self.reads += 1
         # The live store refuses a selection that is not in the room's declared

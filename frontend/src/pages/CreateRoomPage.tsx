@@ -63,7 +63,6 @@ export function CreateRoomPage() {
     () => useSettingsStore.getState().promptLanguage,
   );
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
-  const [promptListShareCodes, setPromptListShareCodes] = useState<string[]>([]);
   // A list the host arrived with, from the community catalogue's Play. The
   // room takes its language too: a room declares one and its lists must agree
   // with it (R-PROMPT-02), so carrying the slug alone would put a German list
@@ -174,7 +173,6 @@ export function CreateRoomPage() {
       colorMode,
       promptLanguage,
       promptListSlugs,
-      promptListShareCodes: [],
     };
   }
 
@@ -194,7 +192,6 @@ export function CreateRoomPage() {
     // sets both together: a room declares its language before it has lists.
     setPromptLanguage(settings.promptLanguage);
     setPromptListSlugs(settings.promptListSlugs);
-    setPromptListShareCodes([]);
     dispatchCustomPrompts({ type: "reset", value: "", only: false });
   }
 
@@ -208,9 +205,9 @@ export function CreateRoomPage() {
     }
   }
 
-  /** Quick prompts and borrowed share codes are room input, never stored settings. */
+  /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
-    if (customPrompts.analysis.usableCount > 0 || promptListShareCodes.length > 0) {
+    if (customPrompts.analysis.usableCount > 0) {
       return ui.createRoomPage.saveQuickPromptsAsA;
     }
     return null;
@@ -331,7 +328,7 @@ export function CreateRoomPage() {
         nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptLanguage,
-        promptListSlugs, promptListShareCodes,
+        promptListSlugs,
       });
       const session = sessionFrom(response);
       if (session) {
@@ -427,7 +424,6 @@ export function CreateRoomPage() {
         drawingSeconds,
         promptLanguage,
         promptListSlugs,
-        promptListShareCodes,
         allowedTools,
         colorMode,
         scoringMode,
@@ -443,7 +439,6 @@ export function CreateRoomPage() {
         if (patch.drawingSeconds !== undefined) setDrawingSeconds(patch.drawingSeconds);
         if (patch.promptLanguage !== undefined) setPromptLanguage(patch.promptLanguage);
         if (patch.promptListSlugs !== undefined) setPromptListSlugs(patch.promptListSlugs);
-        if (patch.promptListShareCodes !== undefined) setPromptListShareCodes(patch.promptListShareCodes);
         if (patch.allowedTools !== undefined) setAllowedTools(patch.allowedTools);
         if (patch.colorMode !== undefined) setColorMode(patch.colorMode);
         if (patch.scoringMode !== undefined) setScoringMode(patch.scoringMode);

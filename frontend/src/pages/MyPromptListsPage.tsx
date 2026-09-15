@@ -30,7 +30,6 @@ const EMPTY_DRAFT: PromptListDraft = {
   name: "",
   description: "",
   language: "en",
-  visibility: "private",
   prompts: [],
   tags: [],
 };
@@ -42,17 +41,12 @@ function tagName(tag: PromptTag): string {
   return (ui.promptTags as Record<string, string>)[tag.slug] ?? tag.slug;
 }
 
-/** Visibility as a reader says it. The sidebar used to print the stored value -
-"private", "unlisted" - in every locale, and `public` would have joined them. */
+/** Visibility as a reader says it. The sidebar used to print the stored value
+in every locale. A list is private or published (R-LIST-02). */
 function visibilityLabel(visibility: OwnedPromptList["visibility"]): string {
-  switch (visibility) {
-    case "public":
-      return ui.myPromptListsPage.published;
-    case "unlisted":
-      return ui.myPromptListsPage.anyoneWithCode;
-    default:
-      return ui.myPromptListsPage.private;
-  }
+  return visibility === "public"
+    ? ui.myPromptListsPage.published
+    : ui.myPromptListsPage.private;
 }
 
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
@@ -60,7 +54,6 @@ function draftFromList(promptList: OwnedPromptList): PromptListDraft {
     name: promptList.name,
     description: promptList.description,
     language: promptList.language,
-    visibility: promptList.visibility === "public" ? "private" : promptList.visibility,
     prompts: promptList.prompts.map((prompt) => ({
       conceptId: prompt.conceptId,
       prompt: prompt.prompt,
@@ -88,7 +81,6 @@ export function MyPromptListsPage() {
   const [copiedFrom, setCopiedFrom] = useState<CopiedFrom | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
-  const [shareCode, setShareCode] = useState<string | null>(null);
   const [moderationState, setModerationState] = useState<OwnedPromptList["moderationState"]>("active");
   const [promptModeration, setPromptModeration] = useState<Record<string, OwnedPromptList["moderationState"]>>({});
   const [draft, setDraft] = useState<PromptListDraft>(() => ({
@@ -142,7 +134,6 @@ export function MyPromptListsPage() {
   function beginNew() {
     setSelectedId(null);
     setVersion(null);
-    setShareCode(null);
     setPublished(false);
     setReach({ stars: 0, copies: 0 });
     setCopiedFrom(null);
@@ -166,7 +157,6 @@ export function MyPromptListsPage() {
       setReach({ stars: saved.starCount, copies: saved.copyCount });
       setCopiedFrom(saved.copiedFrom);
       setVersion(saved.version);
-      setShareCode(saved.shareCode);
       setModerationState(saved.moderationState);
       setDraft(draftFromList(saved));
       setLists((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
@@ -191,7 +181,6 @@ export function MyPromptListsPage() {
       const loaded = await getOwnedPromptList(id);
       setSelectedId(loaded.id);
       setVersion(loaded.version);
-      setShareCode(loaded.shareCode);
       setPublished(loaded.visibility === "public");
       setReach({ stars: loaded.starCount, copies: loaded.copyCount });
       setCopiedFrom(loaded.copiedFrom);
@@ -266,14 +255,12 @@ export function MyPromptListsPage() {
         ? await updateOwnedPromptList(selectedId, version, {
             name: cleaned.name,
             description: cleaned.description,
-            visibility: cleaned.visibility,
             prompts: cleaned.prompts,
             tags: cleaned.tags,
           })
         : await createOwnedPromptList(cleaned);
       setSelectedId(saved.id);
       setVersion(saved.version);
-      setShareCode(saved.shareCode);
       setPublished(saved.visibility === "public");
       setReach({ stars: saved.starCount, copies: saved.copyCount });
       setCopiedFrom(saved.copiedFrom);
@@ -361,21 +348,21 @@ export function MyPromptListsPage() {
             </p>}
             <label>{ui.myPromptListsPage.name}<input value={draft.name} maxLength={64} required onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
             <label>{ui.myPromptListsPage.description}<input value={draft.description} maxLength={255} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
-            <div className="prompt-list-manager-meta">
-              <label>{ui.myPromptListsPage.language}<select value={draft.language} disabled={Boolean(selectedId)} onChange={(event) => setDraft({ ...draft, language: event.target.value as PromptLanguage })}>
-                {LANGUAGES.map((language) => <option key={language} value={language}>{promptLanguageLabel(language)}</option>)}
-              </select></label>
-              <label>{ui.myPromptListsPage.visibility}<select value={draft.visibility} onChange={(event) => setDraft({ ...draft, visibility: event.target.value as "private" | "unlisted" })}>
-                <option value="private">{ui.myPromptListsPage.private}</option>
-                <option value="unlisted">{ui.myPromptListsPage.anyoneWithCode}</option>
-              </select></label>
-            </div>
-            {selectedId && <div className="prompt-list-publication">
+            <label>{ui.myPromptListsPage.language}<select value={draft.language} disabled={Boolean(selectedId)} onChange={(event) => setDraft({ ...draft, language: event.target.value as PromptLanguage })}>
+              {LANGUAGES.map((language) => <option key={language} value={language}>{promptLanguageLabel(language)}</option>)}
+            </select></label>
+            {/* The one place a list's visibility is shown and changed. A list is
+                private or published, and only publishing crosses between the
+                two (R-LIST-02) - so there is no visibility field beside the
+                others for a save to carry, and nothing for it to misreport. */}
+            <div className="prompt-list-publication">
               <div>
                 <strong>{published ? ui.myPromptListsPage.inCommunityCatalogue : ui.myPromptListsPage.notPublished}</strong>
                 <p>{published
                   ? ui.myPromptListsPage.publishedExplainer
-                  : ui.myPromptListsPage.unpublishedExplainer}</p>
+                  : selectedId
+                    ? ui.myPromptListsPage.unpublishedExplainer
+                    : ui.myPromptListsPage.saveBeforePublishing}</p>
                 {/* Shown once there is anything to show: a list that was never
                     published has neither, and a row of zeros under "Not
                     published" says nothing. A list taken back out keeps what
@@ -388,10 +375,10 @@ export function MyPromptListsPage() {
               <button
                 type="button"
                 className={published ? "btn btn-secondary btn-compact" : "btn btn-primary btn-compact"}
-                disabled={busy}
+                disabled={busy || !selectedId}
                 onClick={() => void togglePublished()}
               >{published ? ui.myPromptListsPage.unpublish : ui.myPromptListsPage.publish}</button>
-            </div>}
+            </div>
             {tagVocabulary.length > 0 && <fieldset className="prompt-list-tags">
               {/* Toggle chips rather than checkboxes: choosing several things
                   out of a fixed set is what `toggle-chip` is for, and the
@@ -434,10 +421,6 @@ export function MyPromptListsPage() {
                 })}
               </div>
             </fieldset>}
-            {draft.visibility === "unlisted" && shareCode && <div className="prompt-list-share-code">
-              <span>{ui.myPromptListsPage.shareCode}</span><code>{shareCode}</code>
-              <button type="button" className="btn btn-secondary btn-compact" onClick={() => void navigator.clipboard.writeText(shareCode).catch(() => setError(ui.myPromptListsPage.couldNotCopyShareCode))}>{ui.myPromptListsPage.copy}</button>
-            </div>}
             <div className="prompt-list-bulk-add">
               <label htmlFor="prompt-bulk-input">{ui.myPromptListsPage.addPrompts}</label>
               <textarea

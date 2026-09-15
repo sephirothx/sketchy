@@ -54,8 +54,7 @@ export interface PromptListSummary {
   promptCount: number;
   isBundled: boolean;
   version: number;
-  visibility?: "private" | "unlisted" | "public";
-  shareCode?: string | null;
+  visibility?: "private" | "public";
 }
 
 export interface OwnedPromptEntry {
@@ -81,9 +80,8 @@ export interface CopiedFrom {
 
 export interface OwnedPromptList extends PromptListSummary {
   id: string;
-  /** `public` is reached by publishing, never by saving (R-LIST-02). */
-  visibility: "private" | "unlisted" | "public";
-  shareCode: string | null;
+  /** Private until published; only publishing changes it (R-LIST-02). */
+  visibility: "private" | "public";
   moderationState: "active" | "under_review" | "hidden";
   /** Curated tag slugs on the list's current revision, in vocabulary order. */
   tags: string[];
@@ -133,10 +131,10 @@ export interface CommunityPromptList {
 
 /** A community list with what is actually in it (R-LIST-19).
  *
- * Entries carry `promptVersionId` for the same reason a share-resolved list
- * does: it is what lets a reader report one exact prompt. */
+ * Entries carry `promptVersionId`: it is what lets a reader report one exact
+ * prompt. */
 export interface CommunityPromptListDetail extends CommunityPromptList {
-  prompts: SharedPromptEntry[];
+  prompts: PublishedPromptEntry[];
   /** Where a published copy came from, or null for an original (R-LIST-21). */
   copiedFrom: CopiedFrom | null;
 }
@@ -147,13 +145,10 @@ export interface PromptTag {
   name: string;
 }
 
-export interface SharedPromptEntry {
+/** One prompt of a published list, as a reader who does not own it sees it. */
+export interface PublishedPromptEntry {
   promptVersionId: string;
   prompt: string;
-}
-
-export interface SharedPromptList extends PromptListSummary {
-  prompts: SharedPromptEntry[];
 }
 
 /** Role-gated queue item returned to a moderator; never part of room state. */
@@ -270,7 +265,6 @@ export interface EditableRoomSettings {
   colorMode: ColorMode;
   promptLanguage: PromptLanguage;
   promptListSlugs?: string[];
-  promptListShareCodes?: string[];
 }
 
 export type GamePhase = "idle" | "choosing_prompt" | "drawing" | "turn_results" | "game_end";
@@ -648,7 +642,6 @@ export type ErrorCode =
   | "no_such_drawing"
   | "drawing_unreadable"
   | "prompt_list_not_found"
-  | "shared_prompt_list_not_found"
   | "prompt_list_conflict"
   | "prompt_list_invalid"
   | "prompt_list_forbidden"

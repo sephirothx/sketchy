@@ -86,7 +86,6 @@ async def a_published_list(prompts, factory, owner_id: str, name: str = "Creatur
         name=name,
         description="",
         language="en",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="octopus"), PromptListEntryInput(answer="narwhal")),
     )
     await set_list(factory, created.id, visibility="public", published_at=PUBLISHED_AT)
@@ -221,7 +220,6 @@ async def test_saving_a_copy_does_not_take_its_credit_away(env):
         expected_version=copy.version,
         name="Completely rewritten",
         description="Nothing like the original",
-        visibility="private",
         prompts=(PromptListEntryInput(answer="lighthouse"),),
     )
 

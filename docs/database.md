@@ -50,7 +50,7 @@ into the future.
 - UUID order improves index locality, but `created_at` and friends remain the
   **authoritative event time**.
 - **They are never capabilities.** Consecutive IDs within one millisecond are guessable
-  from each other by design, so session tokens, room codes, and prompt-list share codes
+  from each other by design, so session tokens, room codes, and invitation tokens
   stay independently random and are never derived from an entity ID.
 
 ### Timestamps
@@ -208,8 +208,8 @@ columns and `CHECK` set as a room's typed settings, with no code, plus `name_key
 
 A preset has **no room code, members, host identity, game, scores, timers, chat, or
 canvas.** Applying one fills the create form but does not enable *Keep this room for
-future games*. Borrowed Unlisted share codes and quick custom prompts are never stored;
-that content must be saved as an owned list first. ≤ 20 per account.
+future games*. Quick custom prompts are never stored; they must be saved as an owned
+list first. ≤ 20 per account.
 
 It stores **no language column either**, although a room declares one (R-PROMPT-02):
 the preset's language is read back from the lists it saved, so the two cannot drift
@@ -689,7 +689,7 @@ guesses, prompt-list revision history, the lists it starred, unexpired authored 
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v8_fields.json`](../fixtures/account_data_export_v8_fields.json).
+pinned by [`fixtures/account_data_export_v9_fields.json`](../fixtures/account_data_export_v9_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1522,8 +1522,7 @@ so a text collision cannot inflate curated statistics or make a bad prompt untra
 The turn row's selected offer, text, source kind, and version are kept identical by both
 database checks and the history writer.
 
-Exact offers are **participant-only** history and private export data. Share codes are
-never stored with them.
+Exact offers are **participant-only** history and private export data.
 
 ### `turn_prompt_offer_sources`
 `offer_id` + `prompt_list_revision_id` composite **PK**. Every list revision that
@@ -1576,14 +1575,13 @@ Deliberately relational rather than a JSON tag blob.
 
 ### `prompt_lists`
 `id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
-`language` · `is_bundled` · `is_copy` · `visibility` (`private \| unlisted \| public`) ·
-`share_code` VARCHAR(24) **unique** · `moderation_state` · `moderated_by_user_id` ·
+`language` · `is_bundled` · `is_copy` · `visibility` (`private \| public`) ·
+`moderation_state` · `moderated_by_user_id` ·
 `moderated_at` · `version` · `published_at` (nullable) · `deleted_at` (indexed,
 nullable) · timestamps.
 
 **Deleting a list retires it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py)):
-`deleted_at` is set, the share code is revoked, the visibility falls back to private
-and the current-display `prompts` rows go, in the same transaction. From then on
+`deleted_at` is set, the visibility falls back to private and the current-display `prompts` rows go, in the same transaction. From then on
 nothing lists, opens, resolves, forks or counts it against the 25-list allowance. The
 revisions stay exactly as long as a finished game pins one (`game_prompt_sources`,
 `turn_prompt_offer_sources`, `prompt_usage_facts`): the `RESTRICT`s there are what
@@ -1597,7 +1595,7 @@ revision before the deletion to finish and write its game (R-LIST-07): the unpin
 revisions and their items, then the list row itself once no revision is left, then the
 prompt versions and concepts that no revision, list, turn, offer, usage fact or content
 report names any more, aliases cascading with them. A list a game pinned stays as a
-non-discoverable tombstone (`deleted_at` set, no share code).
+non-discoverable, private tombstone (`deleted_at` set).
 
 That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
 game's provenance and never lapses, so a list whose every remaining revision is pinned
@@ -1615,17 +1613,15 @@ Account erasure retires the account's lists the same way, with the name and desc
 erased as authored copy.
 
 `ck_prompt_lists_bundled_owner` forbids an owner on a bundled list;
-`ck_prompt_lists_unlisted_share_code` requires a share code for an Unlisted list;
 `ck_prompt_lists_published_at` requires `published_at` on a public one.
 
 **Publication is an act, and the act is what is gated.** `POST .../publish` is its
 own route with its own trust gate (R-LIST-12), rate limit and audit event
 (`prompt_list.published` / `prompt_list.unpublished`, on the `prompt_list` target type
 the ledger already allowed). A `visibility` field on the save would be a way around all
-three, so `update_owned` ignores the visibility a save carries while a list is public —
-without that, fixing a typo would take a list out of the catalogue. Publishing also
-clears `share_code`: a published list is reached by identity, so the bearer capability
-has nothing left to authorize (R-LIST-03).
+three, so a save carries no visibility at all: `create_owned` writes every list private
+and `update_owned` never changes it. Without that, fixing a typo could take a list out of
+the catalogue, or a crafted save could put one in without the gate.
 
 Unpublishing leaves a **`hidden`** state alone. Leaving the catalogue is the owner's act
 and moderation is somebody else's; if withdrawal cleared a takedown, unpublishing would
@@ -1660,9 +1656,9 @@ and it is **not retroactive**, since sweeping already-published lists into a que
 both punish people for a rule that did not exist when they acted and produce, in one
 moment, the backlog this design exists to avoid.
 
-**Four grounds admit a list into a room**, checked in the one `_authorize` helper that
-room creation and Start's re-authorization share: bundled, owned by the requester,
-unlisted with its share code supplied, or **published**. The sharing is the point — the
+**Three grounds admit a list into a room**, checked in the one `_pinned_revisions`
+helper that room creation and Start's re-authorization share: bundled, owned by the
+requester, or **published**. The sharing is the point — the
 checks a room is admitted by stay the checks its prompts are drawn under (R-LIST-07), so
 an unpublish or a takedown between the picker and Start refuses the room visibly rather
 than shrinking its pool. A room preset needs nothing of its own: it stores slugs, which
@@ -1689,18 +1685,24 @@ community catalogue's whole question and the join the star counts hang off.
 The bundled catalogue was backfilled to its own `created_at` rather than to the
 migration's clock: it has been published since it was seeded.
 
-**Governance is schema-first and deny-by-default.** User-owned lists default to
-**Private**; **Unlisted** requires a unique share code; **Public** is reached only by
-publishing (R-LIST-02) — never by an ordinary save, which is what keeps the gate in
-front of it from being optional. `ck_prompt_lists_public_is_bundled` held the value
-for the official catalogue alone until #398 withdrew N-04.
+**Governance is schema-first and deny-by-default.** A user-owned list is **Private** or
+**Public**, and `ck_prompt_lists_visibility` allows nothing else. It starts Private, and
+Public is reached only by publishing (R-LIST-02) — never by an ordinary save, which is
+what keeps the gate in front of it from being optional. `ck_prompt_lists_public_is_bundled`
+held the value for the official catalogue alone until #398 withdrew N-04.
+
+**Unlisted is withdrawn** (R-LIST-03, migration `d8e9f0a1b2c3`). It was a third value
+reachable by anyone holding a random `share_code`, and once publishing existed it was a
+second way to let other people use a list with none of publishing's safeguards: a code
+could be passed on without the trust gate, the audit event or the operator switch, and
+could not be taken back short of making the list private. The migration turns every
+Unlisted list Private — the one state its owner certainly agreed to — and drops the
+column, its unique index and `ck_prompt_lists_unlisted_share_code`. Going back restores
+the column but not the codes: they were capabilities, and minting new ones would grant
+access nobody gave.
 Ownership, fork provenance, revision tags, moderation actor/time, and moderation state
 are relational fields — never JSON tags or a lossy `is_nsfw` flag. Difficulty and content
 rating stay on the exact immutable prompt version where their meaning belongs.
-
-**Share codes are bearer capabilities, not UUIDs.** They are cryptographically random,
-retained only in private in-memory room state, and **never appear in shared room,
-history, preset, or log payloads.**
 
 Limits: an account may own at most **25** lists, and a saved list may contain at most
 **500** prompts.
@@ -1725,10 +1727,9 @@ browsers cannot disagree about it.
 against it would be one nobody can enforce — a second account costs nothing, which is
 what the trust gate on publication is for rather than this one.
 
-Only a published list may be starred. A star on an Unlisted list would be a durable
-record that its owner holds that list's bearer share code, which is exactly the
-disclosure R-LIST-03 exists to prevent — narrowing the target removes the problem
-instead of mitigating it. Unpublishing keeps the rows: the list stops being reachable,
+Only a published list may be starred. A star is durable, and one on a private list would
+be a lasting record that the starrer could see a list nobody but its owner can —
+narrowing the target removes the problem instead of mitigating it. Unpublishing keeps the rows: the list stops being reachable,
 and a later publish finds its stars where it left them.
 
 **Account deletion removes them explicitly**, in `anonymize_account` — the `CASCADE` on

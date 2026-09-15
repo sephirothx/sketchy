@@ -191,7 +191,7 @@ export const MyPromptListsPage = `
     <div style="display: grid; gap: 24px; grid-template-columns: 250px minmax(0, 1fr)">
       <aside style="display: grid; gap: 8px; align-content: start">
         ${listNav('Studio in-jokes', '64 prompts · private', true, chip('1 under review', 'warning'))}
-        ${listNav('Kitchen things', '120 prompts · unlisted', false)}
+        ${listNav('Kitchen things', '120 prompts · published', false)}
         ${listNav('Hard mode', '38 prompts · private', false)}
         <p style="color: ${T.faint}; font-size: 12px; font-weight: 700; padding: 4px 6px">3 of 25 lists used</p>
       </aside>
@@ -213,9 +213,9 @@ export const MyPromptListsPage = `
           </div>
           <div style="display: grid; gap: 6px">
             <span style="font-size: 13.5px; font-weight: 800; color: ${T.ink}">Visibility</span>
-            ${segmented(['Private', 'Unlisted'], 0, { w: 92 })}
+            <span style="display: inline-flex; align-items: center; gap: 8px; min-height: 42px">${chip('Private')} ${btn.secondary('Publish')}</span>
           </div>
-          <p style="color: ${T.faint}; font-size: 12.5px; font-weight: 700; max-width: 300px; padding-bottom: 10px">Unlisted lists get a share code — anyone holding it can use the list in a room.</p>
+          <p style="color: ${T.faint}; font-size: 12.5px; font-weight: 700; max-width: 300px; padding-bottom: 10px">A list stays private until you publish it to the community catalogue.</p>
         </div>
 
         <div style="border-top: 1.5px solid ${T.line}; display: grid; gap: 10px; padding-top: 16px">

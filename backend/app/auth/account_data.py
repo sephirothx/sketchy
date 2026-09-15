@@ -93,8 +93,9 @@ from app.domain_values import (
 # gained `pointsAwarded` and lost `outcomeId`. Additive counts too: the
 # document's field surface changed, and a reader that keys off the version
 # should be able to tell which shape it has. To 5 when the account gained
-# `lastSeenAt` (#469).
-EXPORT_SCHEMA_VERSION = 8
+# `lastSeenAt` (#469). To 9 when a prompt list stopped having a share code
+# and `shareCode` left each list (R-LIST-03).
+EXPORT_SCHEMA_VERSION = 9
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -541,7 +542,6 @@ def _prompt_list_document(prompt_list: PromptList) -> dict:
         "description": prompt_list.description,
         "language": prompt_list.language,
         "visibility": prompt_list.visibility,
-        "shareCode": prompt_list.share_code,
         "moderationState": prompt_list.moderation_state,
         "publishedAt": _timestamp(prompt_list.published_at)
         if prompt_list.published_at

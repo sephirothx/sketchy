@@ -314,7 +314,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Prompt lists
   prompt_list_not_found: "Prompt list not found.",
-  shared_prompt_list_not_found: "No shared prompt list found.",
   prompt_list_conflict: "Somebody else changed that list. Reload it and try again.",
   prompt_list_invalid: "That prompt list could not be saved.",
   prompt_list_forbidden: "That prompt list is not yours to change.",
@@ -835,8 +834,7 @@ export const EN = {
     delete: "Delete",
     undo: "Undo",
     saveAsReusableList: "Save as reusable list",
-    saveQuickPromptsAsA:
-      "Save quick prompts as a list, and remove shared codes, before storing a preset.",
+    saveQuickPromptsAsA: "Save quick prompts as a list before storing a preset.",
     appliedName: (p: { name: string }) => `Applied “${p.name}”.`,
     savedName: (p: { name: string }) => `Saved “${p.name}”.`,
     updatedName: (p: { name: string }) => `Updated “${p.name}”.`,
@@ -1248,6 +1246,7 @@ export const EN = {
     notPublished: "Not published",
     publishedExplainer: "Anyone can find this list, play it, star it, or make a copy of their own.",
     unpublishedExplainer: "Publishing puts this list where anyone can find and play it. You can take it back out at any time.",
+    saveBeforePublishing: "Save the list first. It stays private until you publish it.",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "star", other: "stars" }),
     copyCount: (p: { count: number }) =>
@@ -1286,12 +1285,7 @@ export const EN = {
     name: "Name",
     description: "Description",
     language: "Language",
-    visibility: "Visibility",
     private: "Private",
-    anyoneWithCode: "Anyone with code",
-    shareCode: "Share code",
-    couldNotCopyShareCode: "Could not copy the share code.",
-    copy: "Copy",
     addPrompts: "Add prompts",
     onePromptPerLineSeparateEntries: "One prompt per line\nor separate entries with commas",
     addList: "Add to list",
@@ -1499,24 +1493,16 @@ export const EN = {
   promptListPicker: {
     listsYouStarred: "Lists you starred",
     starredNotAllShown: (p: { shown: number }) => `Showing the first ${number(p.shown)} lists you starred.`,
-    languageMismatch: (p: { listLanguage: string; roomLanguage: string }) =>
-      `That list is in ${p.listLanguage}; this room is in ${p.roomLanguage}.`,
     choicesUnavailable: (p: { reason: string }) =>
       `Prompt-list choices are unavailable (${p.reason}). Your current selection is unchanged.`,
     noListsInLanguage: (p: { language: string }) =>
       `No prompt lists in ${p.language} yet — this room draws on its own custom prompts.`,
     howListPlays: (p: { name: string }) => `How ${p.name} prompts play`,
-    reportList: (p: { name: string }) => `Report ${p.name}`,
     failedLoadPromptLists: "Failed to load prompt lists",
-    couldNotAddThatSharedList: "Could not add that shared list.",
     loadingCuratedPromptLists: "Loading curated prompt lists…",
     promptLists: "Prompt lists",
-    addUnlistedListByCode: "Add an unlisted list by code",
     namePromptCountPrompts:
       (p: { name: string; promptCount: number }) => `${p.name} (${p.promptCount} prompts)`,
-    adding: "Adding…",
-    add: "Add",
-    reportSentForModeratorReview: "Report sent for moderator review.",
   },
 
   promptStatsPage: {

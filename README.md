@@ -24,7 +24,7 @@ keyboard that takes half the screen, and one thumb.
 
 - Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read.
 - The interface is written in all seven supported languages — English, German, Spanish, French, Italian, Dutch, Portuguese — and a language is offered only once its catalogue is **complete**: there is no screen that falls back to English halfway down, because offering a language and finishing it are the same act. Which one you read in comes from your account if you have one, from this browser if you have set it here, from your browser's own languages on a first visit, and English otherwise; it is applied before the first paint, and `<html lang>` follows it so a screen reader picks the right voice. Dates and numbers follow the same language, while the **Time format** setting still decides 12- or 24-hour on top of it. The six non-English catalogues are machine-drafted and awaiting a native reader; the unreviewed count is reported per locale in CI.
-- Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped, keep them Private, or make them Unlisted with a share code. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
+- Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - A **Community catalogue** of prompt lists players published for anyone to play. Browse by language and tag, read every prompt in a list before choosing it, and play it straight away — no account needed to browse or play. With one, **star** a list to keep it on a shortlist the room picker offers, **make a copy** of your own to edit, or report one. Publishing is moderated after the fact, with an operator switch that holds new publications for review instead.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A triangle is dragged from a base corner to its apex — both ends of the drag are corners of it — and the base lies on the row the drag started from, reaching as far past the apex as the start is short of it; drag downwards and the triangle is drawn upside down. A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line. Points go out every 80 ms, each frame relative to the last point sent, the last batch of a stroke carrying its end, and a viewer plays each batch out over the next 80 ms at the screen's own rate rather than painting it in one step, so it sees ink smoothly, up to 80 ms behind the drawer's hand.
@@ -166,7 +166,7 @@ continue to expose canonical UUID strings. UUID order improves index
 locality, but timestamps such as `created_at` remain the authoritative event
 time. Consecutive ids within one millisecond are guessable from each other by
 design, so they are never used as capabilities: security tokens, room codes,
-and share codes remain independently random and are not derived from entity
+and invitation tokens remain independently random and are not derived from entity
 IDs.
 
 All persisted timestamps require timezone-aware inputs and are normalized to
@@ -282,7 +282,7 @@ curated prompt-version ID when applicable, and every list revision containing
 that version. Custom and fallback options have explicit source kinds and null
 curated identities, so collisions cannot inflate curated statistics or make a
 bad prompt untraceable. Exact offers are participant-only history and private
-export data; share codes are never stored with them.
+export data.
 The turn row also carries the selected option's source kind and a nullable
 foreign key directly to its immutable prompt version. Curated turns are
 therefore joinable without text normalization; custom/fallback turns retain
@@ -447,7 +447,7 @@ room is created, it is fixed for the room's life, and every selected list must
 be in it. It is carried into exact and near-match game logic — for the room's
 own quick prompts as much as for list content, so a room typing its own German
 prompts is no longer matched under English rules — and exposed in room
-payloads. Selecting a list never changes it: a list or share code in another
+payloads. Selecting a list never changes it: a list in another
 language is a visible validation failure against the prompt-list field, and an
 empty selection resolves to that language's own Standard list rather than to
 English. A custom-prompts-only room may continue when the list store is
@@ -484,9 +484,9 @@ metadata requires both the same `conceptId` and a higher `promptVersion`.
 Adding/removing/reordering membership requires a higher top-level list
 `version`. Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong
 to that immutable prompt version.
-Prompt-list governance is schema-first and deny-by-default. User-owned lists
-default to **Private**; **Unlisted** requires a unique share code. Official
-bundled lists alone are currently **Public**. Ownership, exact source-revision
+Prompt-list governance is schema-first and deny-by-default. A user-owned list
+is **Private** or **Published** and nothing else: it starts Private, and only
+publishing changes that, never a save. Official bundled lists are always public. Ownership, exact source-revision
 fork provenance, structured revision tags, moderation actor/time, and the
 Active/Under review/Hidden moderation state are relational fields with
 portable constraints—never JSON tags or a lossy `is_nsfw` flag. Difficulty and
@@ -533,22 +533,20 @@ an account starred, so a shortlist replaces hunting for one twice. The catalogue
 by language and tag and sorted by stars or by recency; it is a route of its own
 rather than a filter on the official one, so official content and player content
 are never in the same listing. A host can pick a published list for a room
-directly, without copying it first — publishing is the owner saying so, and no
-share code stands in front of it. It is admitted on the same check that runs
+directly, without copying it first — publishing is the owner saying so. It is admitted on the same check that runs
 again at Start, so a list unpublished or taken down in between refuses the room
 visibly rather than quietly shrinking the pool it draws from. A published list
 can be **starred** by anyone with a verified account; the list's owner sees how
 many stars it has and never who gave them, and unpublishing leaves them where
 they are.
 
-Private lists resolve only for their owner. Switching a list to Unlisted creates
-a cryptographically random **Prompt-list share code**; a host must add that code
-in the prompt picker before the server will resolve the list. These codes are
-bearer capabilities, not UUIDs: they are retained only in private in-memory
-room state and never appear in shared room, history, or log payloads.
-User-owned lists and their prompt stats never enter the public official
-catalogue. A player who resolves an Unlisted list can privately report the
-whole list or one exact immutable prompt version from the picker. Reports use
+Private lists resolve only for their owner. There is no third, link-only state:
+an earlier **Unlisted** visibility let anyone holding a share code play a list,
+and once publishing existed it was a way to share one with none of publishing's
+safeguards, so it was removed. User-owned lists and their prompt stats never
+enter the public official catalogue. A signed-in player can privately report a
+published list, or one exact immutable prompt version in it, from the community
+catalogue. Reports use
 post-moderation: submission preserves a bounded evidence snapshot but does not
 hide content automatically. One reporter may hold one open report per target,
 so reporting the same list twice is refused while the first is unread, while
@@ -1464,10 +1462,9 @@ report text and submitted evidence, but excludes the reported account ID,
 reviewer identity, and internal resolution note.
 
 Player-authored prompt content has a separate, target-specific report flow.
-After resolving an Unlisted list by its bearer code, a signed-in player may use
-`POST /api/prompt-content-reports` to report the list or an exact
-`promptVersionId`; official bundled content, inaccessible content, and
-self-reports are rejected. Reasons are inappropriate, hateful or abusive,
+A signed-in player may use `POST /api/prompt-content-reports` to report a
+published list or an exact `promptVersionId` in one; official bundled content,
+lists that are not published, and self-reports are rejected. Reasons are inappropriate, hateful or abusive,
 sexual content, violence, spam, or other, with up to 2,000 characters of
 detail. Moderators and administrators list and one-time review the queue at
 `/api/moderation/prompt-content-reports`. A resolved review explicitly chooses
@@ -2183,8 +2180,8 @@ erased on account deletion.
 Presets retain stable IDs for active built-in prompt
 lists or lists owned by the preset owner, then resolve their latest authorized
 revision when applied. Deleted, hidden, or no-longer-owned references produce a
-visible error. Borrowed Unlisted-list share codes and quick custom prompts are
-never stored in a preset; save that prompt content as an owned list first. No
+visible error. Quick custom prompts are never stored in a preset; save them as
+an owned list first. No
 built-in preset catalogue or preset sharing exists in v1.
 
 Archiving prevents a new live instance from being created and permanently

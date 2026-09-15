@@ -1,4 +1,3 @@
-import type { PromptLanguage, PromptListSummary } from "../types";
 import type { PromptListDraftEntry } from "./promptLists";
 import { ui } from "../content/ui/index.ts";
 
@@ -91,35 +90,4 @@ export function describePromptMerge(result: PromptMergeResult): string | null {
   if (!skipped.length) return null;
   const kept = ui.promptListDrafts.promptsAdded({ count: result.added });
   return ui.promptListDrafts.keptSkippedSkipped({ kept, skipped: skipped.join(", ") });
-}
-
-export type SharedPromptSelection =
-  | { ok: true; slugs: string[]; shareCodes: string[] }
-  | { ok: false; language: PromptLanguage };
-
-/**
- * Fold a shared list into the room's selection, or refuse it.
- *
- * A shared list used to replace the whole selection when its language differed,
- * which quietly moved the room into that language. The room declares its
- * language now, so a list in another one is simply not for this room: the code
- * is not retained either, since it authorized nothing.
- */
-export function addSharedPromptSelection(
-  selectedSlugs: string[],
-  shareCodes: string[],
-  shared: PromptListSummary,
-  code: string,
-  roomLanguage: PromptLanguage,
-): SharedPromptSelection {
-  if (shared.language !== roomLanguage) {
-    return { ok: false, language: shared.language };
-  }
-  return {
-    ok: true,
-    slugs: selectedSlugs.includes(shared.slug)
-      ? selectedSlugs
-      : [...selectedSlugs, shared.slug],
-    shareCodes: [...new Set([...shareCodes, code.trim()])],
-  };
 }

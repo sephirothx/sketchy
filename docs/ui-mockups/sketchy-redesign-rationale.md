@@ -334,8 +334,8 @@ honesty visible.
   duplicates skipped last paste"* beside the meter.
 - **Language is shown as locked** ("locked after creation", R-LIST-05) instead
   of a select that would reject the change.
-- Visibility is a Private/Unlisted segmented control with the share-code
-  behavior explained in place; **Delete becomes a left-isolated quiet-danger
+- Visibility is a state with one action — Private beside **Publish** — rather
+  than a control a save carries (R-LIST-02); **Delete becomes a left-isolated quiet-danger
   action** with an ellipsis (confirmation implied), no longer Save's neighbor.
 
 ### Profile (`Profile`)
