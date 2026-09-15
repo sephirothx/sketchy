@@ -8,6 +8,12 @@ import { ui } from "../content/ui/index.ts";
 interface PinControlProps {
   pinned: boolean;
   eligibility: PinEligibility;
+  /**
+   * Not yet, though offered: the shelf is still being read, or another
+   * control's write is in flight. Every control is disabled by the same
+   * store flags, so two cannot be pressed together (R-PIN-02).
+   */
+  disabled?: boolean;
   /** Toggle: pin when not pinned, unpin when pinned. Rejections are announced here. */
   onToggle: () => Promise<void>;
 }
@@ -19,13 +25,13 @@ interface PinControlProps {
  * reaction control beside it already tells a guest about accounts, and a
  * second line saying the same would be noise.
  */
-export function PinControl({ pinned, eligibility, onToggle }: PinControlProps) {
+export function PinControl({ pinned, eligibility, disabled = false, onToggle }: PinControlProps) {
   const { notify } = useToast();
   const [busy, setBusy] = useState(false);
   if (eligibility !== "offered") return null;
 
   async function toggle() {
-    if (busy) return;
+    if (busy || disabled) return;
     setBusy(true);
     try {
       await onToggle();
@@ -43,7 +49,7 @@ export function PinControl({ pinned, eligibility, onToggle }: PinControlProps) {
       aria-pressed={pinned}
       aria-label={pinned ? ui.pinControl.unpinThisDrawing : ui.pinControl.pinThisDrawing}
       title={pinned ? ui.pinControl.unpinThisDrawing : ui.pinControl.pinThisDrawing}
-      disabled={busy}
+      disabled={busy || disabled}
       data-testid="pin-toggle"
       onClick={() => void toggle()}
     >

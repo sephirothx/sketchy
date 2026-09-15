@@ -25,7 +25,6 @@ import {
   fetchGameDetail,
   fetchGameDrawing,
   fetchProfilePins,
-  setMyPins,
   fetchGames,
   fetchProfile,
   formatDuration,
@@ -139,17 +138,15 @@ function GameRow({
   // Pin or unpin one turn: the whole shelf, rewritten (R-PIN-02). The turn
   // table and the gallery share it, and the shelf above follows the store.
   const togglePin = async (turnId: string) => {
-    const pinned = isPinned(myPins.turnIds, turnId);
-    const next = pinned ? withoutPin(myPins.turnIds, turnId) : withPin(myPins.turnIds, turnId);
-    if (next === null) {
-      notify(refusalSentence("pinned_drawings_full"), "error");
-      return;
-    }
-    await myPins.replace(next);
+    const done = await myPins.mutate((current) =>
+      isPinned(current, turnId) ? withoutPin(current, turnId) : withPin(current, turnId),
+    );
+    if (!done) notify(refusalSentence("pinned_drawings_full"), "error");
   };
   const pinControlFor = (turn: GameTurn) => (
     <PinControl
       pinned={isPinned(myPins.turnIds, turn.id)}
+      disabled={!myPins.ready || myPins.pending}
       eligibility={pinEligibility({
         isRegistered: Boolean(currentUser && !currentUser.isAnonymous),
         isPublicGame: game.visibility === "public",
@@ -483,6 +480,7 @@ function ProfileView({ userId }: { userId: string }) {
   const [pins, setPins] = useState<ProfilePin[] | null>(null);
   const myTurnIds = usePinsStore((s) => s.turnIds);
   const myPinsLoaded = usePinsStore((s) => s.loaded);
+  const myPinsPending = usePinsStore((s) => s.pending);
   const [reportingPicture, setReportingPicture] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const register = useAuthStore((s) => s.register);
@@ -724,14 +722,15 @@ function ProfileView({ userId }: { userId: string }) {
                 userId={userId}
                 pins={pins}
                 isOwner={isOwnProfile}
+                disabled={!myPinsLoaded || myPinsPending}
                 onReorder={async (turnIds) => {
-                  await setMyPins(turnIds);
+                  // Through the same queue as every Pin control, so a move
+                  // and a pin pressed together cannot overwrite each other.
                   // The server answers with ids only; the entries are the
-                  // ones already here, in the order just confirmed. The
-                  // store learns the same list so the turn table agrees.
+                  // ones already here, in the order just confirmed.
+                  await usePinsStore.getState().mutate(() => turnIds);
                   const byId = new Map(pins.map((pin) => [pin.turnId, pin]));
                   setPins(turnIds.flatMap((id) => byId.get(id) ?? []));
-                  usePinsStore.getState().adopt(turnIds);
                 }}
               />
             </section>

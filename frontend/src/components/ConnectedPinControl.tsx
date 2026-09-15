@@ -42,14 +42,15 @@ export function ConnectedPinControl({ turnId, visible = true }: ConnectedPinCont
     <PinControl
       pinned={pinned}
       eligibility={eligibility}
+      disabled={!pins.ready || pins.pending}
       onToggle={async () => {
-        const next = pinned ? withoutPin(pins.turnIds, turnId) : withPin(pins.turnIds, turnId);
-        if (next === null) {
-          notify(refusalSentence("pinned_drawings_full"), "error");
-          return;
-        }
         try {
-          await pins.replace(next);
+          // Computed when the queue reaches it, from the list as it stands
+          // then: a press that lands beside another cannot forget its pin.
+          const done = await pins.mutate((current) =>
+            isPinned(current, turnId) ? withoutPin(current, turnId) : withPin(current, turnId),
+          );
+          if (!done) notify(refusalSentence("pinned_drawings_full"), "error");
         } catch (failure) {
           if (failure instanceof ApiError && failure.status === 404) {
             notify(refusalSentence("game_still_saving"), "error");
