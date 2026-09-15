@@ -48,6 +48,13 @@ from app.db.models import (
     generate_uuid,
 )
 from app.canvas_storage import prepare_stored_drawing
+from app.services.gallery_ranking import (
+    HOT_HORIZON,
+    MAX_GALLERY_OFFSET,
+    MAX_GALLERY_PAGE,
+    TOP_WINDOWS,
+    hot_score,
+)
 from app.domain_values import (
     AccountState,
     AuditTargetType,
@@ -99,6 +106,8 @@ from app.repositories.interfaces import (
     PromptSample,
     SampledPrompt,
     DrawingReactionResult,
+    GalleryEntry,
+    GalleryPage,
     GameDetail,
     GameHistoryConflictError,
     PromptUsageConflictError,
@@ -346,6 +355,30 @@ async def _identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...
         )
     ).all()
     return (canonical, *aliases)
+
+
+def _gallery_predicate():
+    """What "in the Gallery" means (R-GAL-01), in one place: a public game
+    and a kept, readable drawing. Over `TurnDrawing` joined to `GameRecord`;
+    the third door beside the participant check and the pin predicate, and
+    deliberately its own clauses so an edit to either cannot loosen it."""
+    return (
+        GameRecord.visibility == GameVisibility.PUBLIC.value,
+        TurnDrawing.status == TurnDrawingStatus.READY.value,
+        TurnDrawing.payload.is_not(None),
+    )
+
+
+def _gallery_shows(drawing: TurnDrawing | None) -> bool:
+    """The drawing half of the gallery predicate on a loaded row - the game
+    half is checked by the caller, which has the game. Read off the metadata
+    (`ck_turn_drawings_ready_identity` ties a ready row to its checksum), so
+    the deferred blob is never loaded to answer it."""
+    return (
+        drawing is not None
+        and drawing.status == TurnDrawingStatus.READY.value
+        and drawing.checksum_sha256 is not None
+    )
 
 
 def _reaction_state(
@@ -1589,6 +1622,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # bytes live only in the process that just played the game, so
                 # a row written now and filled in later could never be
                 # completed by any retry.
+                drawing_rows: dict[UUID, TurnDrawing] = {}
                 for drawing in drawings or []:
                     drawing_turn_id = _optional_entity_id(drawing.turn_id)
                     if (
@@ -1604,9 +1638,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             _erased_turn_drawing(drawing_turn_id, record_id)
                         )
                         continue
-                    session.add(
-                        _turn_drawing(drawing, drawing_turn_id, record_id)
-                    )
+                    drawing_row = _turn_drawing(drawing, drawing_turn_id, record_id)
+                    drawing_rows[drawing_turn_id] = drawing_row
+                    session.add(drawing_row)
 
                 # Reactions given while the game was live. They are checked
                 # against the rows being written rather than the database,
@@ -1615,6 +1649,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # that is not in this game, has nothing truthful to point at.
                 reaction_drawer_ids: list[UUID | None] = []
                 seen_reactions: set[tuple[UUID, UUID]] = set()
+                written_reactions: Counter[UUID] = Counter()
                 for reaction in reactions:
                     reaction_turn_id = _optional_entity_id(reaction.turn_id)
                     if (
@@ -1675,6 +1710,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             set_version=reaction.set_version,
                         )
                     )
+                    written_reactions[reaction_turn_id] += 1
+                # The Gallery's projections ride in the same transaction as
+                # the rows they count (R-GAL-05).
+                for drawing_turn_id, drawing_row in drawing_rows.items():
+                    count = written_reactions.get(drawing_turn_id, 0)
+                    drawing_row.reaction_count = count
+                    drawing_row.hot_score = hot_score(count, game_record.finished_at)
 
                 if game_record.score_ledger_version not in (0, 1):
                     raise ValueError("Unsupported score ledger version")
@@ -2005,12 +2047,21 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     .order_by(GameParticipant.id)
                     .limit(1)
                 )
+                # The drawing row, locked: the count and the Hot score kept
+                # on it are set from the rows after this write, and two
+                # reactions landing together must not both count their own.
+                drawing_row = await session.scalar(
+                    select(TurnDrawing)
+                    .where(TurnDrawing.turn_id == db_turn_id)
+                    .options(defer(TurnDrawing.payload))
+                    .with_for_update()
+                )
                 if from_gallery:
                     # The gallery predicate (R-GAL-01): a public game with a
                     # kept drawing. Not a seat - that is the point of the door.
                     if turn.game.visibility != GameVisibility.PUBLIC.value:
                         return None
-                    if not await self._drawing_is_shown(session, db_turn_id):
+                    if not _gallery_shows(drawing_row):
                         return None
                 elif seat is None:
                     return None
@@ -2070,6 +2121,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
                 ).all()
                 details, counts = _reaction_state(rows)
+                if drawing_row is not None:
+                    drawing_row.reaction_count = len(rows)
+                    drawing_row.hot_score = hot_score(len(rows), turn.game.finished_at)
                 return DrawingReactionResult(
                     turn_id=_public_id(db_turn_id),
                     seat_id=_public_id(seat.id) if seat is not None else None,
@@ -2078,21 +2132,127 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     reaction_counts=counts,
                 )
 
-    async def _drawing_is_shown(self, session: AsyncSession, turn_id: UUID) -> bool:
-        """Whether the turn's drawing is kept and readable: the availability
-        half of the gallery predicate (R-GAL-01), checked on the metadata so
-        no blob is read to answer it."""
-        return bool(
-            await session.scalar(
-                select(func.count())
-                .select_from(TurnDrawing)
-                .where(
-                    TurnDrawing.turn_id == turn_id,
-                    TurnDrawing.status == TurnDrawingStatus.READY.value,
-                    TurnDrawing.payload.is_not(None),
+    async def list_gallery(
+        self,
+        *,
+        sort: str = "hot",
+        window: str = "all",
+        limit: int = 24,
+        cursor: str | None = None,
+        requesting_user_id: str | None = None,
+    ) -> GalleryPage:
+        """One page of the Gallery (R-GAL-04).
+
+        One predicate decides what is in it (`_gallery_predicate`), the same
+        one the bytes route and the reaction door read, so a takedown or an
+        erasure drops a drawing out of all three without a second code path
+        agreeing to it. The orders read the projections kept on the row
+        (R-GAL-05) rather than counting reactions, and every order breaks
+        ties by the game's finish and then the turn id, so two reads agree.
+        """
+        if sort not in ("hot", "new", "top") or window not in TOP_WINDOWS:
+            return GalleryPage(entries=(), next_cursor=None)
+        requester_id = _optional_entity_id(requesting_user_id)
+        limit = max(1, min(int(limit), MAX_GALLERY_PAGE))
+        offset = _decode_catalogue_cursor(cursor)
+        # The community catalogue's rule, for the same reason: nobody reaches
+        # this deep by looking, so a deeper page is a scrape.
+        if offset >= MAX_GALLERY_OFFSET:
+            return GalleryPage(entries=(), next_cursor=None)
+        stmt = (
+            select(TurnRecord, GameRecord.finished_at, TurnDrawing.reaction_count)
+            .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+            .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+            .where(*_gallery_predicate())
+            .options(selectinload(TurnRecord.reactions))
+        )
+        now = datetime.now(timezone.utc)
+        if sort == "new":
+            order = (GameRecord.finished_at.desc(), TurnRecord.id.desc())
+        elif sort == "top":
+            since = TOP_WINDOWS[window]
+            if since is not None:
+                stmt = stmt.where(GameRecord.finished_at >= now - since)
+            order = (
+                TurnDrawing.reaction_count.desc(),
+                GameRecord.finished_at.asc(),
+                TurnRecord.id.asc(),
+            )
+        else:
+            stmt = stmt.where(GameRecord.finished_at >= now - HOT_HORIZON)
+            order = (
+                TurnDrawing.hot_score.desc(),
+                GameRecord.finished_at.asc(),
+                TurnRecord.id.asc(),
+            )
+        stmt = stmt.order_by(*order).offset(offset).limit(limit + 1)
+        async with self._session_factory() as session:
+            viewer_ids: tuple[UUID, ...] = (
+                await _identity_ids(session, requester_id) if requester_id else ()
+            )
+            rows = (await session.execute(stmt)).all()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        entries = []
+        for turn, finished_at, _count in rows:
+            _details, counts = _reaction_state(turn.reactions)
+            entries.append(
+                GalleryEntry(
+                    turn_id=_public_id(turn.id),
+                    round_number=turn.round_number,
+                    turn_number=turn.turn_number,
+                    drawer_display_name=turn.drawer_display_name_snapshot,
+                    drawer_name_color=turn.drawer_name_color_snapshot,
+                    drawer_is_anonymous=turn.drawer_is_anonymous_snapshot,
+                    prompt=turn.prompt,
+                    stroke_count=turn.stroke_count,
+                    finished_at=finished_at,
+                    reaction_counts=counts,
+                    my_reaction=next(
+                        (
+                            reaction.emoji
+                            for reaction in turn.reactions
+                            if reaction.user_id in viewer_ids
+                        ),
+                        None,
+                    ),
+                    drawn_by_me=turn.drawer_user_id in viewer_ids,
                 )
             )
+        return GalleryPage(
+            entries=tuple(entries),
+            next_cursor=_encode_catalogue_cursor(offset + limit) if has_more else None,
         )
+
+    async def get_gallery_drawing(self, turn_id: str) -> TurnDrawingDetail | None:
+        db_turn_id = _optional_entity_id(turn_id)
+        if db_turn_id is None:
+            return None
+        async with self._session_factory() as session:
+            row = await session.scalar(
+                select(TurnDrawing)
+                .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
+                .where(TurnDrawing.turn_id == db_turn_id, *_gallery_predicate())
+            )
+        if row is None or row.payload is None:
+            return None
+        return TurnDrawingDetail(
+            turn_id=_public_id(row.turn_id),
+            payload=row.payload,
+            checksum_sha256=row.checksum_sha256 or "",
+        )
+
+    async def get_gallery_drawing_checksum(self, turn_id: str) -> str | None:
+        db_turn_id = _optional_entity_id(turn_id)
+        if db_turn_id is None:
+            return None
+        async with self._session_factory() as session:
+            checksum = await session.scalar(
+                select(TurnDrawing.checksum_sha256)
+                .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
+                .where(TurnDrawing.turn_id == db_turn_id, *_gallery_predicate())
+            )
+        return checksum or None
 
     async def set_profile_pins(
         self,

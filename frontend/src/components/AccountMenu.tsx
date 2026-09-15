@@ -35,6 +35,7 @@ import {
   InfoIcon,
   ChevronDownIcon,
   GearIcon,
+  ImageIcon,
   KeyIcon,
   LeaveIcon,
   PlusIcon,
@@ -289,6 +290,15 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
                 }}
               >
                 {ui.communityCataloguePage.communityCatalogue}
+              </MenuItem>
+              <MenuItem
+                icon={<ImageIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/gallery");
+                }}
+              >
+                {ui.galleryPage.gallery}
               </MenuItem>
             </>
           )}

@@ -1521,6 +1521,8 @@ async def anonymize_account(
                     format_version=None,
                     deleted_at=deleted_at,
                     updated_at=deleted_at,
+                    reaction_count=0,
+                    hot_score=0.0,
                 )
             )
             # An erased drawing takes its reactions with it: they were about
