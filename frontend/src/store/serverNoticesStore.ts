@@ -26,6 +26,8 @@ interface ServerNoticesStore {
   /** The room this tab was in no longer exists, and why (#823). Keyed by code, so
    *  it describes that room only and never the next one. */
   roomEnded: { code: string; reason: RoomEndReason } | null;
+  /** The drain (its `startedAt`) whose opening card this tab already showed (#826). */
+  drainCueSeenFor: string | null;
   set: (partial: Partial<Omit<ServerNoticesStore, "set" | "markRoomEnded">>) => void;
   /** Record that rejoining *code* was refused because the room is gone. */
   markRoomEnded: (code: string) => void;
@@ -41,6 +43,7 @@ export const useServerNoticesStore = create<ServerNoticesStore>((set) => ({
   pauseDue: false,
   lostDuringDrain: false,
   roomEnded: null,
+  drainCueSeenFor: null,
   set: (partial) => set(partial),
   // A drain seen before the loss is what makes this an update rather than a
   // room that simply closed: rooms are process-owned (one worker, no

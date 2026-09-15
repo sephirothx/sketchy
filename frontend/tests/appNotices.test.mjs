@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { placeNotices, roomStage } from "../src/lib/appNotices.ts";
+import { DRAIN_FINAL_SECONDS, drainCue, placeNotices, roomStage } from "../src/lib/appNotices.ts";
 import { useServerNoticesStore } from "../src/store/serverNoticesStore.ts";
 
 const QUIET = {
@@ -121,4 +121,29 @@ test("the end reason is an update when a drain was seen before the loss", () => 
   assert.equal(store.getState().restarted, false);
   store.getState().markRoomEnded("DEF456");
   assert.deepEqual(store.getState().roomEnded, { code: "DEF456", reason: "room-closed" });
+});
+
+const DRAIN = { drainStartedAt: "2026-09-15T10:00:00Z", cueSeenFor: null, secondsLeft: 30, playing: true };
+
+test("a drain opens with a card, once per drain", () => {
+  // #826: the header chip alone went unnoticed mid-turn.
+  assert.deepEqual(drainCue(DRAIN), { card: true, finalCountdown: false });
+  assert.deepEqual(
+    drainCue({ ...DRAIN, cueSeenFor: DRAIN.drainStartedAt }),
+    { card: false, finalCountdown: false },
+  );
+  // A later drain is a new one, and is said again.
+  assert.equal(drainCue({ ...DRAIN, cueSeenFor: "2026-09-14T10:00:00Z" }).card, true);
+  assert.deepEqual(drainCue({ ...DRAIN, drainStartedAt: null }), { card: false, finalCountdown: false });
+});
+
+test("the last seconds are said again, only while a game is being played", () => {
+  const seen = { ...DRAIN, cueSeenFor: DRAIN.drainStartedAt };
+  assert.equal(drainCue({ ...seen, secondsLeft: DRAIN_FINAL_SECONDS + 1 }).finalCountdown, false);
+  assert.equal(drainCue({ ...seen, secondsLeft: DRAIN_FINAL_SECONDS }).finalCountdown, true);
+  assert.equal(drainCue({ ...seen, secondsLeft: 1 }).finalCountdown, true);
+  assert.equal(drainCue({ ...seen, secondsLeft: 0 }).finalCountdown, false);
+  assert.equal(drainCue({ ...seen, secondsLeft: 5, playing: false }).finalCountdown, false);
+  // The card, when it is still up, is the louder of the two and the only one.
+  assert.deepEqual(drainCue({ ...DRAIN, secondsLeft: 5 }), { card: true, finalCountdown: false });
 });

@@ -14,7 +14,7 @@ import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
-import { RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
+import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
 import { RoomMenuSheet } from "../components/RoomMenuSheet";
 import { BottomSheet } from "../components/ui/BottomSheet";
@@ -528,7 +528,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
                 onReload={() => window.location.reload()}
                 onLeave={performLeave}
               />
-            ) : null
+            ) : (
+              <RoomDrainCue playing={roomView === "playing"} />
+            )
           }
           mode={roomView}
           players={

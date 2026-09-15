@@ -853,6 +853,25 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   margin-top: 16px;
 }
 
+/* The drain's opening card (#826) is lighter than a pause: the stage is live
+   underneath, and a tap anywhere puts the card away. */
+.room-stage-overlay.is-drain-cue {
+  background: color-mix(in srgb, var(--paper) 45%, transparent);
+  cursor: pointer;
+}
+
+.room-stage-overlay.is-drain-cue .room-stage-card {
+  border-color: var(--warm);
+  cursor: auto;
+}
+
+.room-stage-overlay.is-drain-cue .room-stage-title {
+  align-items: center;
+  color: var(--warm-ink);
+  display: inline-flex;
+  gap: 8px;
+}
+
 /* A room the server says is gone: the stage is replaced, not covered. */
 .room-ended {
   align-items: center;

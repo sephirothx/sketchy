@@ -25,6 +25,7 @@ import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import type { DrawingReaction } from "../types";
 import type { RoomShellMode } from "./RoomShell";
 import { useRoomStage } from "../hooks/useServerNotices";
+import { DrainFinalCountdown } from "./RoomStageNotice";
 import { ui } from "../content/ui/index.ts";
 
 const NO_REACTIONS: DrawingReaction[] = [];
@@ -231,8 +232,8 @@ export function ConnectedWaitingRoomPanel({
 }
 
 /**
- * What sits on top of the drawing surface: who is choosing, and the reaction
- * control for what is being drawn.
+ * What sits on top of the drawing surface: who is choosing, the reaction
+ * control for what is being drawn, and a planned-deploy drain's last seconds.
  *
  * Its own component, subscribed to the store, so that `GameplayRegion` can hand
  * `Canvas` the same element every time. Built inline it was a new object on
@@ -268,6 +269,7 @@ function CanvasOverlay() {
           placement="canvas"
         />
       )}
+      <DrainFinalCountdown />
     </>
   );
 }

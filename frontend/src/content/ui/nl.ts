@@ -907,6 +907,15 @@ export const NL: Catalogue = {
     keepMyAccount: "Mijn account houden",
   },
 
+  drainCue: {
+    title: "Serverupdate",
+    gameEndsIn: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Dit spel eindigt over ${counted(p.seconds, { one: "seconde", other: "seconden" })}.` : "Dit spel eindigt nu.",
+    noNewGames: "Er kunnen geen nieuwe spellen starten tot de server terug is.",
+    gotIt: "Begrepen",
+    finalCountdown: (p: { seconds: number }) => `Spel eindigt over ${counted(p.seconds, { one: "seconde", other: "seconden" })}`,
+  },
+
   drawingReactionControl: {
     reactionSummary: (p: { total: number; chips: string }) =>
       `${counted(p.total, { one: "reactie", other: "reacties" })}: ${p.chips}`,

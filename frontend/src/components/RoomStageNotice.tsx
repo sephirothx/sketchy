@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
 
+import { ClockIcon } from "./icons";
 import { Button } from "./ui/Button";
-import type { RoomPauseCause } from "../lib/appNotices";
-import type { RoomEndReason } from "../store/serverNoticesStore";
+import { DRAIN_CUE_MS, drainCue, type RoomPauseCause } from "../lib/appNotices";
+import { useDrainSecondsLeft } from "../hooks/useServerNotices";
+import { useServerNoticesStore, type RoomEndReason } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
 
 /** The card over a paused room stage (#823). `roomStage` decides when. */
@@ -66,6 +68,84 @@ export function RoomEndedCard({ reason, onLeave }: { reason: RoomEndReason; onLe
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A planned-deploy drain's opening card, on the stage of a live room (#826).
+
+Its own component so the once-a-second countdown re-renders this and not the
+room around it. */
+export function RoomDrainCue({ playing }: { playing: boolean }) {
+  const notice = useServerNoticesStore((state) => state.shutdownNotice);
+  const cueSeenFor = useServerNoticesStore((state) => state.drainCueSeenFor);
+  const setNotices = useServerNoticesStore((state) => state.set);
+  const secondsLeft = useDrainSecondsLeft();
+  const startedAt = notice?.startedAt ?? null;
+  const cue = drainCue({ drainStartedAt: startedAt, cueSeenFor, secondsLeft, playing });
+
+  // Folds into the header chip by itself: it has said its piece, and the rest
+  // of the window is the player's to finish the turn in.
+  useEffect(() => {
+    if (!cue.card || startedAt === null) return;
+    const timer = window.setTimeout(() => setNotices({ drainCueSeenFor: startedAt }), DRAIN_CUE_MS);
+    return () => window.clearTimeout(timer);
+  }, [cue.card, startedAt, setNotices]);
+
+  if (startedAt === null) return null;
+  const dismiss = () => setNotices({ drainCueSeenFor: startedAt });
+
+  if (cue.card) {
+    return (
+      // A tap anywhere puts it away, so it never stands between somebody and
+      // the canvas for longer than they want it to.
+      <div
+        className="room-stage-overlay is-drain-cue"
+        data-testid="room-drain-cue"
+        onClick={dismiss}
+      >
+        <div className="surface-card room-stage-card" onClick={(event) => event.stopPropagation()}>
+          <h2 className="room-stage-title">
+            <ClockIcon size={18} strokeWidth={2.4} /> {ui.drainCue.title}
+          </h2>
+          <p className="room-stage-body">
+            {playing ? ui.drainCue.gameEndsIn({ seconds: secondsLeft }) : ui.drainCue.noNewGames}
+          </p>
+          <div className="room-stage-actions">
+            <Button variant="primary" onClick={dismiss}>
+              {ui.drainCue.gotIt}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/** The drain's last seconds, pinned to the canvas's top-left corner (#826).
+
+On the canvas rather than across the top of the stage, where it covered the
+drawer's prompt and the guessers' letter tiles - the two things somebody needs
+most in those seconds. The corner opposite the reaction control is the part of a
+drawing least likely to hold anything, and it takes no tap. Mounted only where a
+canvas is, which is only while a game is being played. */
+export function DrainFinalCountdown() {
+  const notice = useServerNoticesStore((state) => state.shutdownNotice);
+  const cueSeenFor = useServerNoticesStore((state) => state.drainCueSeenFor);
+  const secondsLeft = useDrainSecondsLeft();
+  const { finalCountdown } = drainCue({
+    drainStartedAt: notice?.startedAt ?? null,
+    cueSeenFor,
+    secondsLeft,
+    playing: true,
+  });
+  if (!finalCountdown) return null;
+  return (
+    <div className="canvas-drain-final" data-testid="room-drain-final" aria-hidden="true">
+      <ClockIcon size={14} strokeWidth={2.4} />
+      {ui.drainCue.finalCountdown({ seconds: secondsLeft })}
     </div>
   );
 }

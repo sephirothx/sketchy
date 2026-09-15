@@ -907,6 +907,15 @@ export const DE: Catalogue = {
     keepMyAccount: "Konto behalten",
   },
 
+  drainCue: {
+    title: "Server-Update",
+    gameEndsIn: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Diese Runde endet in ${counted(p.seconds, { one: "Sekunde", other: "Sekunden" })}.` : "Diese Runde endet jetzt.",
+    noNewGames: "Neue Runden können erst wieder starten, wenn der Server zurück ist.",
+    gotIt: "Verstanden",
+    finalCountdown: (p: { seconds: number }) => `Runde endet in ${counted(p.seconds, { one: "Sekunde", other: "Sekunden" })}`,
+  },
+
   drawingReactionControl: {
     reactionSummary: (p: { total: number; chips: string }) =>
       `${counted(p.total, { one: "Reaktion", other: "Reaktionen" })}: ${p.chips}`,
