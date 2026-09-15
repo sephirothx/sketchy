@@ -1290,6 +1290,13 @@ export const FR: Catalogue = {
     topOfTheWeek: "Top de la semaine",
     nothingHereYetBody: "Chaque dessin conservé d’une partie publique finit ici.",
     signInBody: "Connectez-vous, ou continuez en invité depuis le salon, pour voir tous les dessins des parties publiques.",
+    backToGallery: "Retour à la galerie",
+    replay: "Rejouer",
+    pause: "Pause",
+    playAgain: "Revoir",
+    saveImage: "Enregistrer l’image",
+    notInTheGallery: "Ce dessin n’est pas dans la galerie",
+    notInTheGalleryBody: "Il a peut-être été effacé ou masqué, ou il n’y a jamais été.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "Dans le catalogue de la communauté",

@@ -158,6 +158,92 @@ export function applyFillAction(
   );
 }
 
+/** Apply one action to a pixel buffer that already holds everything before it. */
+export function applyCanvasAction(
+  pixels: Uint8ClampedArray,
+  action: DecodedCanvasAction,
+): void {
+  if (action.kind === "path" && action.points.length > 0) {
+    rasterizePixelPath(
+      pixels,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+      action.points.length === 1
+        ? [action.points[0], action.points[0]]
+        : action.points,
+      action.width / 2,
+      hexToRgba(action.color),
+      false,
+    );
+  } else if (action.kind === "shape") {
+    rasterizePixelPath(
+      pixels,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+      shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape),
+      action.payload.width / 2,
+      hexToRgba(action.payload.color),
+      true,
+    );
+  } else if (action.kind === "fill") {
+    if (
+      action.x >= 0 && action.x < CANVAS_WIDTH
+      && action.y >= 0 && action.y < CANVAS_HEIGHT
+    ) {
+      floodFillPixels(
+        pixels,
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        action.x,
+        action.y,
+        hexToRgba(action.color),
+      );
+    }
+  } else if (action.kind === "clear") {
+    fillWhitePixels(pixels);
+  }
+}
+
+/**
+ * Apply the stretch `from..to` of a path, as the stroke grew: what a replay
+ * draws frame by frame. The ends are positions along the path in points,
+ * fractional between two of them, so a stroke of three long points still
+ * grows smoothly rather than in three jumps. Round caps make the joins
+ * seamless, and an opaque stroke drawn twice over the same pixels is the
+ * same stroke, so a stretch may overlap the one before it.
+ */
+export function applyCanvasPathSpan(
+  pixels: Uint8ClampedArray,
+  action: Extract<DecodedCanvasAction, { kind: "path" }>,
+  from: number,
+  to: number,
+): void {
+  const points = action.points;
+  const last = points.length - 1;
+  if (last < 1 || to <= from) return;
+  const at = (position: number) => {
+    const index = Math.min(last - 1, Math.max(0, Math.floor(position)));
+    const t = Math.min(1, Math.max(0, position - index));
+    const a = points[index];
+    const b = points[index + 1];
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  };
+  const stretch = [at(from)];
+  for (let index = Math.floor(from) + 1; index <= Math.min(last, Math.floor(to)); index++) {
+    if (index > from && index < to) stretch.push(points[index]);
+  }
+  stretch.push(at(to));
+  rasterizePixelPath(
+    pixels,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+    stretch.length === 1 ? [stretch[0], stretch[0]] : stretch,
+    action.width / 2,
+    hexToRgba(action.color),
+    false,
+  );
+}
+
 /** Replay a whole history onto a blank canvas.
  *
  * Every action is applied to one scratch buffer, written back once at the end.
@@ -171,46 +257,6 @@ export function renderCanvasActions(
   const imageData = context.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
   const pixels = imageData.data;
   fillWhitePixels(pixels);
-  for (const action of actions) {
-    if (action.kind === "path" && action.points.length > 0) {
-      rasterizePixelPath(
-        pixels,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        action.points.length === 1
-          ? [action.points[0], action.points[0]]
-          : action.points,
-        action.width / 2,
-        hexToRgba(action.color),
-        false,
-      );
-    } else if (action.kind === "shape") {
-      rasterizePixelPath(
-        pixels,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape),
-        action.payload.width / 2,
-        hexToRgba(action.payload.color),
-        true,
-      );
-    } else if (action.kind === "fill") {
-      if (
-        action.x >= 0 && action.x < CANVAS_WIDTH
-        && action.y >= 0 && action.y < CANVAS_HEIGHT
-      ) {
-        floodFillPixels(
-          pixels,
-          CANVAS_WIDTH,
-          CANVAS_HEIGHT,
-          action.x,
-          action.y,
-          hexToRgba(action.color),
-        );
-      }
-    } else if (action.kind === "clear") {
-      fillWhitePixels(pixels);
-    }
-  }
+  for (const action of actions) applyCanvasAction(pixels, action);
   context.putImageData(imageData, 0, 0);
 }

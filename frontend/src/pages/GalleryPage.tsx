@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
-import { GalleryPost, GalleryThumbnail, GalleryViewer } from "../components/GalleryDrawings";
+import { GalleryPost, GalleryThumbnail } from "../components/GalleryDrawings";
 import { ReportDrawingDialog } from "../components/ReportDrawingDialog";
 import { ChevronUpIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -63,7 +63,6 @@ export function GalleryPage() {
   const [week, setWeek] = useState<{ reader: string; entries: GalleryEntry[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [reporting, setReporting] = useState<string | null>(null);
   const [pastTheTop, setPastTheTop] = useState(false);
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -143,17 +142,6 @@ export function GalleryPage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  // A reaction changes one entry's counts and the viewer's pick, whichever
-  // page holds it now; a reply for a page no longer on screen is dropped.
-  const reacted = (changed: GalleryEntry) => {
-    setPage((held) => (held
-      ? {
-          ...held,
-          entries: held.entries.map((entry) => (entry.turnId === changed.turnId ? changed : entry)),
-        }
-      : held));
-  };
 
   const sortLabel: Record<GallerySort, string> = {
     hot: ui.galleryPage.hot,
@@ -248,11 +236,11 @@ export function GalleryPage() {
               </button>
             </div>
           : <ul className="gallery-feed" data-testid="gallery-feed">
-              {entries.map((entry, index) => (
+              {entries.map((entry) => (
                 <GalleryPost
                   key={entry.turnId}
                   entry={entry}
-                  onOpen={() => setOpenIndex(index)}
+                  onOpen={() => navigate(`/gallery/${encodeURIComponent(entry.turnId)}`)}
                   onReport={user && !entry.drawnByMe ? () => setReporting(entry.turnId) : undefined}
                 />
               ))}
@@ -324,11 +312,7 @@ export function GalleryPage() {
                         <button
                           type="button"
                           className="gallery-rail-item"
-                          onClick={() => {
-                            const index = entries.findIndex((held) => held.turnId === entry.turnId);
-                            if (index >= 0) setOpenIndex(index);
-                            else applyFilters({ sort: "top", window: "week" });
-                          }}
+                          onClick={() => navigate(`/gallery/${encodeURIComponent(entry.turnId)}`)}
                         >
                           <span className="gallery-rail-thumb"><GalleryThumbnail entry={entry} /></span>
                           <span className="gallery-rail-text">
@@ -365,14 +349,6 @@ export function GalleryPage() {
         </button>
       )}
 
-      {openIndex !== null && entries.length > 0 && (
-        <GalleryViewer
-          entries={entries}
-          openIndex={openIndex}
-          onClose={() => setOpenIndex(null)}
-          onReacted={reacted}
-        />
-      )}
       {reporting && (
         <ReportDrawingDialog turnId={reporting} onClose={() => setReporting(null)} />
       )}

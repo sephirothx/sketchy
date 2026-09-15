@@ -435,3 +435,29 @@ async def test_an_invalidation_during_a_refresh_is_not_lost():
     snapshot = await first
     assert [e.turn_id for e in snapshot.entries] == ["after"] and reads == 2
     assert [e.turn_id for e in (await cache.get()).entries] == ["after"] and reads == 2
+
+
+async def test_one_entry_answers_under_the_listing_predicate(env):
+    """`GET /api/gallery/{turn}` is the drawing page's read: the listing's
+    shape and the viewer's own facts; the Gallery's 404 for a private game,
+    a hidden or unkept drawing, an unknown turn, and no session at all."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    shown = await record_game(history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public", finished_at=NOW - timedelta(hours=1))
+    private = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="private", finished_at=NOW)
+    unkept = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", drawing=False, finished_at=NOW)
+
+    assert (await http.get(f"/api/gallery/{shown.turn_id}")).status_code == 404, "no session"
+    await sign_in_as(http, factory, cid.id)
+    entry = (await http.get(f"/api/gallery/{shown.turn_id}")).json()
+    assert entry["turnId"] == shown.turn_id and entry["prompt"] == "lighthouse"
+    assert entry["reactionCounts"] == {"heart": 1} and entry["myReaction"] is None
+    assert entry["drawnByMe"] is False and "gameId" not in entry
+    await http.put(f"/api/gallery/{shown.turn_id}/reaction", json={"emoji": "wow"})
+    assert (await http.get(f"/api/gallery/{shown.turn_id}")).json()["myReaction"] == "wow"
+    await sign_in_as(http, factory, ann.id)
+    assert (await http.get(f"/api/gallery/{shown.turn_id}")).json()["drawnByMe"] is True
+    for turn in (private.turn_id, unkept.turn_id, str(UUID(int=7)), "not-an-id"):
+        assert (await http.get(f"/api/gallery/{turn}")).status_code == 404, turn

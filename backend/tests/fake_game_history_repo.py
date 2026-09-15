@@ -197,6 +197,11 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     ) -> tuple[str, str | None] | None:
         return None
 
+    async def get_gallery_entry(
+        self, turn_id: str, *, requesting_user_id: str | None = None
+    ):
+        return None
+
     async def viewer_gallery_facts(
         self, turn_ids, *, viewer_user_id: str
     ) -> dict[str, tuple[str | None, bool]]:

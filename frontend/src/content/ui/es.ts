@@ -1290,6 +1290,13 @@ export const ES: Catalogue = {
     topOfTheWeek: "Lo mejor de la semana",
     nothingHereYetBody: "Cada dibujo guardado de una partida pública acaba aquí.",
     signInBody: "Inicia sesión, o sigue como invitado desde el vestíbulo, para ver todos los dibujos de las partidas públicas.",
+    backToGallery: "Volver a la galería",
+    replay: "Reproducir",
+    pause: "Pausa",
+    playAgain: "Ver otra vez",
+    saveImage: "Guardar imagen",
+    notInTheGallery: "Este dibujo no está en la galería",
+    notInTheGalleryBody: "Puede que se haya borrado u ocultado, o que nunca estuviera aquí.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "En el catálogo de la comunidad",

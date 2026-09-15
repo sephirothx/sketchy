@@ -1,0 +1,112 @@
+import type { DecodedCanvasAction } from "./canvasHistory";
+
+/** How long a replay takes, whatever the drawing: a doodle is not over in a
+ * blink and a dense one does not drag. */
+export const REPLAY_MIN_SECONDS = 2.5;
+export const REPLAY_MAX_SECONDS = 9;
+/** What a dot, a shape, a fill or a clear costs, measured in path points. */
+export const REPLAY_STEP_COST = 12;
+
+export interface ReplayPlan {
+  /** The whole drawing, in stroke segments (steps cost `stepCost` each). */
+  total: number;
+  pointsPerSecond: number;
+  stepCost: number;
+  seconds: number;
+  /** How far along the replay is, 0..1, at the given action and point. */
+  fractionAt(action: number, point: number): number;
+}
+
+function cost(action: DecodedCanvasAction): number {
+  // A stroke is measured in segments, which is what the replay draws through.
+  return action.kind === "path" && action.points.length > 1 ? action.points.length - 1 : REPLAY_STEP_COST;
+}
+
+/**
+ * The pace a replay runs at: the drawing's points spread over a duration
+ * that grows with its size between a floor and a ceiling, so every drawing
+ * plays for a few seconds and a stroke's speed is proportional to its
+ * length. Pure, so the suite can hold it to its edges.
+ */
+export function replayPlan(actions: readonly DecodedCanvasAction[]): ReplayPlan {
+  const costs = actions.map(cost);
+  const total = costs.reduce((sum, value) => sum + value, 0);
+  const seconds = Math.min(REPLAY_MAX_SECONDS, Math.max(REPLAY_MIN_SECONDS, total / 220));
+  const pointsPerSecond = Math.max(1, total / seconds);
+  const before: number[] = [];
+  let running = 0;
+  for (const value of costs) {
+    before.push(running);
+    running += value;
+  }
+  return {
+    total,
+    pointsPerSecond,
+    stepCost: REPLAY_STEP_COST,
+    seconds,
+    fractionAt(action, point) {
+      if (total === 0 || action >= actions.length) return 1;
+      return Math.min(1, (before[action] + Math.min(point, costs[action])) / total);
+    },
+  };
+}
+
+export interface ReplayPosition {
+  action: number;
+  /** Along a stroke: a position in segments, fractional between two points. */
+  point: number;
+}
+
+export interface ReplayPainter {
+  /** Draw the stretch `from..to` (in segments) of a stroke. */
+  span(action: Extract<DecodedCanvasAction, { kind: "path" }>, from: number, to: number): void;
+  /** Apply a whole action: a dot, a shape, a fill, a clear. */
+  whole(action: DecodedCanvasAction): void;
+}
+
+/**
+ * Advance a replay by `budget` segments, painting what that uncovers, and
+ * return the new position with what is left of the budget. A stroke grows
+ * part of a segment at a time; a dot, a shape, a fill or a clear lands
+ * whole and costs `stepCost`, which a single frame rarely holds - so the
+ * budget left can be **negative**, a debt the next frames pay before the
+ * next action lands, and the caller carries it over. Pure apart from the
+ * painter, so the suite can drive it frame by frame.
+ */
+export function stepReplay(
+  actions: readonly DecodedCanvasAction[],
+  plan: ReplayPlan,
+  position: ReplayPosition,
+  budget: number,
+  painter: ReplayPainter,
+): { position: ReplayPosition; left: number } {
+  let { action: index, point } = position;
+  let left = budget;
+  while (left > 0 && index < actions.length) {
+    const action = actions[index];
+    if (action.kind === "path" && action.points.length > 1) {
+      const end = action.points.length - 1;
+      const to = Math.min(end, point + left);
+      // A remainder too small to move the position - floating-point dust
+      // left by the subtraction below - would otherwise loop forever. It is
+      // spent, not owed: the frame ends here and the next one carries on.
+      if (to - point < 1e-6) {
+        left = 0;
+        break;
+      }
+      painter.span(action, point, to);
+      left -= to - point;
+      point = to;
+      if (point >= end) {
+        index += 1;
+        point = 0;
+      }
+    } else {
+      painter.whole(action);
+      left -= plan.stepCost;
+      index += 1;
+      point = 0;
+    }
+  }
+  return { position: { action: index, point }, left: index < actions.length ? left : 0 };
+}

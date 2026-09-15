@@ -1290,6 +1290,13 @@ export const NL: Catalogue = {
     topOfTheWeek: "Top van de week",
     nothingHereYetBody: "Elke bewaarde tekening uit een openbaar spel komt hier terecht.",
     signInBody: "Log in, of ga verder als gast vanuit de lobby, om elke tekening uit een openbaar spel te zien.",
+    backToGallery: "Terug naar de galerij",
+    replay: "Afspelen",
+    pause: "Pauze",
+    playAgain: "Nog eens bekijken",
+    saveImage: "Afbeelding opslaan",
+    notInTheGallery: "Deze tekening staat niet in de galerij",
+    notInTheGalleryBody: "Misschien is hij gewist of verborgen, of hij is er nooit geweest.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "In de communitycatalogus",

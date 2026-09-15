@@ -1301,6 +1301,13 @@ export const EN = {
     topOfTheWeek: "Top of the week",
     nothingHereYetBody: "Every drawing kept from a public game ends up here.",
     signInBody: "Sign in, or continue as a guest from the lobby, to see every drawing from a public game.",
+    backToGallery: "Back to gallery",
+    replay: "Replay",
+    pause: "Pause",
+    playAgain: "Watch again",
+    saveImage: "Save image",
+    notInTheGallery: "This drawing is not in the gallery",
+    notInTheGalleryBody: "It may have been erased or hidden, or it was never there.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "In the community catalogue",

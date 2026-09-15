@@ -465,3 +465,75 @@
 @media (max-width: 480px) {
   .gallery-back-to-top { bottom: 20px; right: 16px; }
 }
+
+/* ---------------------------------------------------------- drawing page
+
+   One drawing on its own page: the framed card at the feed's width, the
+   replay's controls on the mat between the picture and the words. */
+.gallery-drawing {
+  margin: 0 auto;
+  max-width: 760px;
+}
+
+.gallery-drawing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 12px 14px;
+}
+
+.gallery-drawing-canvas .gallery-card-canvas,
+.gallery-drawing-canvas .canvas-wrapper { width: 100%; }
+
+.gallery-drawing-canvas .canvas-wrapper,
+.gallery-drawing-canvas .canvas-stack {
+  max-width: none;
+  width: 100%;
+}
+
+.gallery-drawing-canvas .canvas-stack {
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.gallery-drawing-canvas .drawing-canvas {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.gallery-drawing-title { font-size: 24px; }
+
+.gallery-replay-bar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.gallery-replay-track {
+  background: var(--track);
+  border-radius: 999px;
+  flex: 1 1 auto;
+  height: 6px;
+  overflow: hidden;
+}
+
+.gallery-replay-fill {
+  background: var(--primary);
+  border-radius: 999px;
+  height: 100%;
+  transition: width 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-replay-fill { transition: none; }
+}
+
+@media (max-width: 480px) {
+  .gallery-drawing-card { padding: 10px 10px 12px; }
+  .gallery-drawing-title { font-size: 20px; }
+  .gallery-replay-bar { flex-wrap: wrap; }
+  .gallery-replay-track { flex-basis: 100%; order: 3; }
+}

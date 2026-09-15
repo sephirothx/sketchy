@@ -17,6 +17,7 @@ import { GameRoomPage } from "./pages/GameRoomPage";
 import { PromptStatsPage } from "./pages/PromptStatsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { CommunityCataloguePage } from "./pages/CommunityCataloguePage";
+import { GalleryDrawingPage } from "./pages/GalleryDrawingPage";
 import { GalleryPage } from "./pages/GalleryPage";
 import { MyPromptListsPage } from "./pages/MyPromptListsPage";
 import { AccountRecoveryPage } from "./pages/AccountRecoveryPage";
@@ -89,6 +90,7 @@ function AppRoutes() {
         <Route path="/community-lists" element={<CommunityCataloguePage />} />
         <Route path="/community-lists/:listId" element={<CommunityCataloguePage />} />
         <Route path="/gallery" element={<GalleryPage />} />
+        <Route path="/gallery/:turnId" element={<GalleryDrawingPage />} />
         <Route path="/my-prompt-lists" element={<MyPromptListsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/profile/:userId" element={<ProfilePage />} />

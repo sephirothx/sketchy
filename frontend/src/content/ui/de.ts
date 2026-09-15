@@ -1290,6 +1290,13 @@ export const DE: Catalogue = {
     topOfTheWeek: "Top der Woche",
     nothingHereYetBody: "Jede Zeichnung aus einem öffentlichen Spiel landet hier.",
     signInBody: "Melde dich an oder spiel als Gast weiter aus der Lobby, um jede Zeichnung aus einem öffentlichen Spiel zu sehen.",
+    backToGallery: "Zurück zur Galerie",
+    replay: "Abspielen",
+    pause: "Pause",
+    playAgain: "Noch einmal ansehen",
+    saveImage: "Bild speichern",
+    notInTheGallery: "Diese Zeichnung ist nicht in der Galerie",
+    notInTheGalleryBody: "Sie wurde vielleicht gelöscht oder ausgeblendet, oder sie war nie hier.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "Im Community-Katalog",

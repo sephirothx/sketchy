@@ -173,6 +173,8 @@ export function AlertIcon(p: IconProps) { return <IconBase {...p}><path d="M10.3
 export function AlertCircleIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 8v5" /><path d="M12 16.5h.01" /></IconBase>; }
 export function KeyboardIcon(p: IconProps) { return <IconBase {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01" /><path d="M10 10h.01" /><path d="M14 10h.01" /><path d="M18 10h.01" /><path d="M6 14h.01" /><path d="M18 14h.01" /><path d="M9 14h6" /></IconBase>; }
 export function ChevronDownIcon(p: IconProps) { return <IconBase {...p}><path d="m6 9 6 6 6-6" /></IconBase>; }
+export function PlayIcon(p: IconProps) { return <IconBase {...p}><path d="m7 4 13 8-13 8Z" /></IconBase>; }
+export function PauseIcon(p: IconProps) { return <IconBase {...p}><path d="M7 4v16" /><path d="M17 4v16" /></IconBase>; }
 export function ChevronUpIcon(p: IconProps) { return <IconBase {...p}><path d="m6 15 6-6 6 6" /></IconBase>; }
 export function ChevronRightIcon(p: IconProps) { return <IconBase {...p}><path d="m9 6 6 6-6 6" /></IconBase>; }
 export function PinIcon(p: IconProps) { return <IconBase {...p}><path d="M12 17v5" /><path d="M9 3h6l-1 6 3 3H7l3-3-1-6Z" /></IconBase>; }
