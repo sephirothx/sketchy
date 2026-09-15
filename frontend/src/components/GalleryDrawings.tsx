@@ -100,11 +100,11 @@ export function GalleryViewer({
         loadEntry={(entry) => fetchGalleryDrawing(entries[entry.index].turnId)}
         renderActions={(entry) => {
           const shown = entries[entry.index];
-          // Registered viewers only (R-GAL-08): a report is a moderator's
-          // work, and a guest seat is not somebody to answer for one. Never
-          // the drawer's own work - there is nothing to complain to
-          // themselves about.
-          if (!shown || !registered || shown.drawnByMe) return null;
+          // Anyone signed in, a guest included (R-MOD-01): the server takes
+          // a report from every live account, and a guest who sees something
+          // wrong is no less a witness. Never the drawer's own work - there
+          // is nothing to complain to themselves about.
+          if (!shown || !user || shown.drawnByMe) return null;
           return (
             <button
               type="button"

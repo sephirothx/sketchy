@@ -232,3 +232,31 @@ async def test_a_reaction_the_room_gave_counts_beside_an_outsiders(repos):
         assert sorted(row.participant_id is None for row in rows) == [False, True]
     await rebuild_gallery_ranking(factory)
     assert (await _count_and_score(factory, game.turn_id))[0] == 2
+
+
+async def test_the_migration_backfills_both_projections(tmp_path):
+    """A drawing written before the ranking revision gets the count and the
+    score a normal write would have given it, not a zero that sinks it."""
+    from alembic import command as alembic_command
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.db import create_db_engine
+    from tests.test_migrations import _migrate
+
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'ranking.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        users = SqlAlchemyUserRepository(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        ann = await registered(users, "Ann")
+        bob = await registered(users, "Bob")
+        finished = NOW - timedelta(hours=2)
+        game = await record_game(history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public", finished_at=finished)
+        await _migrate(engine, alembic_command.downgrade, "b0c1d2e3f4a5")
+        await _migrate(engine, alembic_command.upgrade, "head")
+        count, score = await _count_and_score(factory, game.turn_id)
+        assert count == 1
+        assert math.isclose(score, hot_score(1, finished))
+    finally:
+        await engine.dispose()
