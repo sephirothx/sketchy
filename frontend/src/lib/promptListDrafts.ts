@@ -1,3 +1,4 @@
+import type { EmailState } from "./accountRecovery";
 import type { PromptListDraftEntry } from "./promptLists";
 import { ui } from "../content/ui/index.ts";
 
@@ -90,4 +91,39 @@ export function describePromptMerge(result: PromptMergeResult): string | null {
   if (!skipped.length) return null;
   const kept = ui.promptListDrafts.promptsAdded({ count: result.added });
   return ui.promptListDrafts.keptSkippedSkipped({ kept, skipped: skipped.join(", ") });
+}
+
+/** The most characters a name may hold, counted as the server counts them:
+by code point, so an emoji is one and never half of one. */
+const MAX_NAME_CHARACTERS = 64;
+
+/** A list's name when it is duplicated, shortened to fit if it has to be.
+
+Counted in code points, not UTF-16 units: `length` and `slice` would count an
+emoji twice, shorten such a name more than the server needs, and could cut one
+in half - a lone surrogate the server cannot store. */
+export function duplicateName(name: string): string {
+  const full = Array.from(ui.myPromptListsPage.duplicateName({ name }));
+  if (full.length <= MAX_NAME_CHARACTERS) return full.join("");
+  const characters = Array.from(name);
+  const suffix = full.slice(characters.length);
+  const kept = characters.slice(0, MAX_NAME_CHARACTERS - suffix.length).join("").trimEnd();
+  return `${kept}${suffix.join("")}`;
+}
+
+/** What stands between this account and publishing, as far as its email goes.
+
+Said before Publish is pressed; the server's gate is still the authority
+(R-LIST-12). Null when nothing does, when the list is already published, or
+when the state has not been read yet - an unknown is not a refusal.
+
+Delivery is asked first: an address can be pending on a server that cannot
+send the message confirming it, and "confirm the email we sent" would be false. */
+export function emailPublishBlocker(
+  state: EmailState | null,
+  published: boolean,
+): "no-address" | "pending" | "undeliverable" | null {
+  if (published || !state || state.verified) return null;
+  if (!state.deliveryConfigured) return "undeliverable";
+  return state.pendingAddress ? "pending" : "no-address";
 }

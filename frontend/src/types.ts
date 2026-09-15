@@ -652,6 +652,7 @@ export type ErrorCode =
   | "prompt_list_hidden"
   | "prompt_list_allowance_reached"
   | "cannot_copy_own_prompt_list"
+  | "cannot_duplicate_prompt_list"
   | "unknown_sort"
   | "timezone_required"
   | "range_reversed"

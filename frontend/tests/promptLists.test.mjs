@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
+import { duplicateName, emailPublishBlocker, promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
   preferredPromptLanguage,
@@ -121,4 +121,33 @@ test("a selection that is not in the room's language is replaced, not kept", () 
   );
   // And a language with nothing to offer says so, rather than borrowing.
   assert.deepEqual(reconcileSelectionForLanguage(lists, "it", ["english_standard"]), []);
+});
+
+test("a duplicate's name fits the server's 64 characters without splitting one", () => {
+  assert.equal(duplicateName("Kitchen things"), "Kitchen things (duplicate)");
+  // An odd number of code units before the emoji puts a UTF-16 cut in the
+  // middle of one; the server counts code points, so an emoji is one of 64.
+  const name = `a${"🦦".repeat(63)}`;
+  const shortened = duplicateName(name);
+  assert.ok(shortened.isWellFormed(), "no lone surrogate");
+  assert.equal(Array.from(shortened).length, 64);
+  assert.ok(shortened.endsWith(" (duplicate)"));
+  assert.equal(shortened, `a${"🦦".repeat(51)} (duplicate)`);
+});
+
+test("the Publish panel names what the email state is keeping it from", () => {
+  const state = (over) => ({
+    address: null, verified: false, pendingAddress: null, reminderDue: false, deliveryConfigured: true, ...over,
+  });
+  assert.equal(emailPublishBlocker(null, false), null, "not read yet is not a refusal");
+  assert.equal(emailPublishBlocker(state({ address: "a@b.test", verified: true }), false), null);
+  assert.equal(emailPublishBlocker(state({}), true), null, "a published list can always be unpublished");
+  assert.equal(emailPublishBlocker(state({}), false), "no-address");
+  assert.equal(emailPublishBlocker(state({ pendingAddress: "a@b.test" }), false), "pending");
+  assert.equal(emailPublishBlocker(state({ deliveryConfigured: false }), false), "undeliverable");
+  // Submitted on a server without mail: nothing was sent, so nothing to confirm.
+  assert.equal(
+    emailPublishBlocker(state({ pendingAddress: "a@b.test", deliveryConfigured: false }), false),
+    "undeliverable",
+  );
 });

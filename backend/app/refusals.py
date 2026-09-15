@@ -232,6 +232,10 @@ class ErrorCode(StrEnum):
     # A copy is somebody else's list taken into yours (R-LIST-17); your own
     # is duplicated from My prompt lists instead, which credits nobody.
     CANNOT_COPY_OWN_PROMPT_LIST = "cannot_copy_own_prompt_list"
+    # A duplicate carries no history, so it is refused where history is the
+    # point: a list under moderation, or a copy of somebody else's list.
+    # Carries `reason`: `moderation` or `copy`.
+    CANNOT_DUPLICATE_PROMPT_LIST = "cannot_duplicate_prompt_list"
     UNKNOWN_SORT = "unknown_sort"
     TIMEZONE_REQUIRED = "timezone_required"
     RANGE_REVERSED = "range_reversed"

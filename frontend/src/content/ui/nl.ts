@@ -360,6 +360,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Reporting, from the reporter's side
   cannot_report_yourself: "Je kunt jezelf niet melden.",
   cannot_copy_own_prompt_list: "Die lijst is al van jou. Dupliceer hem via Mijn woordenlijsten.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Een lijst die je van iemand anders hebt gekopieerd, kan niet gedupliceerd worden, zodat de bronvermelding blijft."
+      : "Een lijst die de moderatie beoordeelt of heeft verborgen, kan niet gedupliceerd worden.",
   cannot_report_own_prompt_list: "Je kunt je eigen woordenlijst niet melden.",
   no_reportable_prompt_list: "Geen meldbare woordenlijst gevonden.",
   prompt_not_in_list: "Dit woord hoort niet bij deze lijst.",

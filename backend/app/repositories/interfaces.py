@@ -1069,6 +1069,13 @@ class PromptListRepository(ABC):
         ...
 
     @abstractmethod
+    async def duplicate_owned(
+        self, owner_user_id: str, prompt_list_id: str, *, name: str
+    ) -> OwnedPromptList:
+        """A new private list of the owner's with this one's active contents."""
+        ...
+
+    @abstractmethod
     async def set_star(
         self, user_id: str, prompt_list_id: str, *, starred: bool
     ) -> int:

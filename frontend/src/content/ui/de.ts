@@ -360,6 +360,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Reporting, from the reporter's side
   cannot_report_yourself: "Du kannst dich nicht selbst melden.",
   cannot_copy_own_prompt_list: "Diese Liste gehört schon dir. Dupliziere sie stattdessen unter Meine Begriffslisten.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Eine Liste, die du von jemand anderem kopiert hast, kann nicht dupliziert werden – so bleibt die Herkunftsangabe erhalten."
+      : "Eine Liste, die die Moderation prüft oder ausgeblendet hat, kann nicht dupliziert werden.",
   cannot_report_own_prompt_list: "Du kannst deine eigene Begriffsliste nicht melden.",
   no_reportable_prompt_list: "Keine meldbare Begriffsliste gefunden.",
   prompt_not_in_list: "Dieser Begriff gehört nicht zu dieser Liste.",

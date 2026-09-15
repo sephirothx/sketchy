@@ -360,6 +360,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Reporting, from the reporter's side
   cannot_report_yourself: "Não te podes denunciar a ti próprio.",
   cannot_copy_own_prompt_list: "Essa lista já é tua. Duplica-a em As minhas listas de palavras.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Uma lista que copiaste de outra pessoa não pode ser duplicada, para manter a atribuição."
+      : "Uma lista que a moderação está a rever ou ocultou não pode ser duplicada.",
   cannot_report_own_prompt_list: "Não podes denunciar a tua própria lista de palavras.",
   no_reportable_prompt_list: "Não foi encontrada nenhuma lista de palavras denunciável.",
   prompt_not_in_list: "Essa palavra não pertence a esta lista.",

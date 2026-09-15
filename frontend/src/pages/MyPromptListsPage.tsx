@@ -7,6 +7,7 @@ import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
+  duplicateOwnedPromptList,
   getOwnedPromptList,
   listOwnedPromptLists,
   listPromptTags,
@@ -16,6 +17,8 @@ import {
 } from "../lib/promptLists";
 import {
   describePromptMerge,
+  duplicateName,
+  emailPublishBlocker,
   mergePromptEntries,
   promptEntriesFromQuickInput,
   MAX_LIST_PROMPTS,
@@ -51,14 +54,6 @@ function visibilityLabel(visibility: OwnedPromptList["visibility"]): string {
   return visibility === "public"
     ? ui.myPromptListsPage.published
     : ui.myPromptListsPage.private;
-}
-
-/** A list's name when it is duplicated, within the 64 a name may hold. */
-function duplicateName(name: string): string {
-  const full = ui.myPromptListsPage.duplicateName({ name });
-  if (full.length <= 64) return full;
-  const suffix = full.slice(name.length);
-  return `${name.slice(0, 64 - suffix.length).trimEnd()}${suffix}`;
 }
 
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
@@ -326,25 +321,20 @@ export function MyPromptListsPage() {
 
   /** A new private list with this one's saved contents, and no history.
 
-  Through the ordinary create, so it records no copy and credits nobody: it is
-  the author's own content twice, which is what "Make a copy" in the catalogue
-  refuses to count (R-LIST-17). It reads the *saved* list rather than the form,
-  so what comes out is what the list is, not an edit nobody saved. A list that
-  is itself a copy is not offered this - a duplicate of it would be the credit
-  R-LIST-21 says its owner cannot remove, one click away. */
+  It records no copy and credits nobody: it is the author's own content twice,
+  which is what "Make a copy" in the catalogue refuses to count (R-LIST-17). The
+  server builds it from the *saved* list, leaving out what a moderator hid, so
+  what comes out is neither an edit nobody saved nor a takedown undone. */
   async function duplicate() {
     if (!selectedId || busy) return;
     setBusy(true);
     clearMessages();
     try {
-      const source = await getOwnedPromptList(selectedId);
-      const created = await createOwnedPromptList({
-        name: duplicateName(source.name),
-        description: source.description,
-        language: source.language,
-        prompts: source.prompts.map((prompt) => ({ prompt: prompt.prompt, aliases: prompt.aliases })),
-        tags: source.tags,
-      });
+      const saved = lists.find((item) => item.id === selectedId);
+      const created = await duplicateOwnedPromptList(
+        selectedId,
+        duplicateName(saved?.name ?? draft.name),
+      );
       show(created);
       setBulkInput("");
       setMergeSummary(null);
@@ -360,17 +350,7 @@ export function MyPromptListsPage() {
     }
   }
 
-  // Why this account cannot publish yet, before it presses anything. The
-  // server's gate is the authority (R-LIST-12); this only says ahead of time
-  // what it would answer. Unknown (not read yet) shows nothing.
-  const publishBlocker: "no-address" | "pending" | "undeliverable" | null =
-    published || !emailState || emailState.verified
-      ? null
-      : emailState.pendingAddress
-        ? "pending"
-        : emailState.deliveryConfigured
-          ? "no-address"
-          : "undeliverable";
+  const publishBlocker = emailPublishBlocker(emailState, published);
 
   return <main className="prompt-list-manager-page">
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
@@ -614,7 +594,7 @@ export function MyPromptListsPage() {
                 : <span />}
               <div className="prompt-list-manager-buttons">
                 {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
-                {selectedId && !copiedFrom && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
+                {selectedId && !copiedFrom && moderationState === "active" && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
                 <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
               </div>
             </div>

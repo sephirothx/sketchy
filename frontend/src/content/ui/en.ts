@@ -372,6 +372,10 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Reporting, from the reporter's side
   cannot_report_yourself: "You cannot report yourself.",
   cannot_copy_own_prompt_list: "That list is already yours. Duplicate it from My prompt lists instead.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "A list you copied from somebody else cannot be duplicated, so its credit stays with it."
+      : "A list a moderator is reviewing or has hidden cannot be duplicated.",
   cannot_report_own_prompt_list: "You cannot report your own prompt list.",
   no_reportable_prompt_list: "No reportable prompt list found.",
   prompt_not_in_list: "That prompt does not belong to this list.",
