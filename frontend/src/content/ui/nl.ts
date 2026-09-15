@@ -1549,10 +1549,6 @@ export const NL: Catalogue = {
     spectate: "Kijken",
   },
 
-  reactionRequests: {
-    thatReactionCouldNotBeSent: "Deze reactie kon niet verstuurd worden.",
-  },
-
   recapDrawings: {
     thisDrawingCouldNotBeLoaded: "Deze tekening kon niet geladen worden.",
   },

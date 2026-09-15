@@ -1548,10 +1548,6 @@ export const IT: Catalogue = {
     spectate: "Guarda",
   },
 
-  reactionRequests: {
-    thatReactionCouldNotBeSent: "Non è stato possibile inviare questa reazione.",
-  },
-
   recapDrawings: {
     thisDrawingCouldNotBeLoaded: "Non è stato possibile caricare questo disegno.",
   },

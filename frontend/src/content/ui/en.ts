@@ -1560,10 +1560,6 @@ export const EN = {
     spectate: "Spectate",
   },
 
-  reactionRequests: {
-    thatReactionCouldNotBeSent: "That reaction could not be sent.",
-  },
-
   recapDrawings: {
     thisDrawingCouldNotBeLoaded: "This drawing could not be loaded.",
   },

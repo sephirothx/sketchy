@@ -45,6 +45,47 @@ async def guess(pages: list[Page], prompt: str) -> None:
         await page.keyboard.press("Enter")
 
 
+# The recap's answer while the finished game is still on its way to the
+# database: the same sentence the server sends, as the reader sees it.
+STILL_SAVING = "That game is still being saved. Try again in a moment."
+
+
+async def react_from_recap(page: Page, emoji: str) -> None:
+    """Pick a reaction on a recap drawing, trying again while the game is saving.
+
+    A recap reaction is a write to the finished game's row, and that row is
+    written by the handoff loop *after* the game ends - so for a moment the
+    server refuses with STILL_SAVING, and the product's own advice is to try
+    again. Everyone reaches the recap well inside that moment here, and on a
+    slow runner the write can outlast a single expectation's timeout: the take
+    back was refused, the heart stayed, and the test failed on code that was
+    working. It retries only that refusal; any other outcome fails loudly.
+
+    Accepted and refused look different on screen: an accepted pick closes the
+    picker, a refused one leaves it open and raises an error toast. The toast
+    is dismissed before the next try, so a toast still fading out from one
+    attempt cannot be mistaken for the answer to the next.
+    """
+    picker = page.locator('[data-testid="reaction-control"] .reaction-picker')
+    refusal = page.get_by_role("alert").filter(has_text=STILL_SAVING)
+    for _ in range(60):
+        if not await picker.count():
+            await page.locator('[data-testid="reaction-toggle"]').click()
+        await page.locator(f'[data-testid="reaction-option-{emoji}"]').click()
+        for _ in range(150):
+            if not await picker.count():
+                return
+            if await refusal.count():
+                await refusal.first.get_by_role("button", name="Dismiss notification").click()
+                await expect(refusal).to_have_count(0)
+                break
+            await asyncio.sleep(0.1)
+        else:
+            raise AssertionError(f"Reacting {emoji} from the recap got no answer within 15 seconds")
+        await asyncio.sleep(0.5)
+    raise AssertionError("The finished game was still saving after 60 attempts to react")
+
+
 def chip(page: Page, code: str):
     return page.locator(
         f'[data-testid="reaction-control"] .reaction-chip[data-emoji="{code}"] .reaction-count'
@@ -133,11 +174,9 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
 
             # From the recap the reaction is a write to the finished game: take
             # it back, then leave a different one, and the drawer sees both.
-            await other.locator('[data-testid="reaction-toggle"]').click()
-            await other.locator('[data-testid="reaction-option-heart"]').click()
+            await react_from_recap(other, "heart")
             await expect(other.locator('[data-testid="reaction-control"] .reaction-chip')).to_have_count(0)
-            await other.locator('[data-testid="reaction-toggle"]').click()
-            await other.locator('[data-testid="reaction-option-wow"]').click()
+            await react_from_recap(other, "wow")
             await expect(chip(other, "wow")).to_have_text("1")
 
             await host.get_by_role("button", name="View drawings", exact=True).click()

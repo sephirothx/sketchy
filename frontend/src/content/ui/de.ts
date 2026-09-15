@@ -1549,10 +1549,6 @@ export const DE: Catalogue = {
     spectate: "Zuschauen",
   },
 
-  reactionRequests: {
-    thatReactionCouldNotBeSent: "Diese Reaktion konnte nicht gesendet werden.",
-  },
-
   recapDrawings: {
     thisDrawingCouldNotBeLoaded: "Diese Zeichnung konnte nicht geladen werden.",
   },
