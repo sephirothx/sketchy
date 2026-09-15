@@ -1200,6 +1200,8 @@ export const NL: Catalogue = {
       counted(p.count, { one: "ster", other: "sterren" }),
     copyCount: (p: { count: number }) =>
       counted(p.count, { one: "kopie", other: "kopieën" }),
+    copiedFrom: "Gekopieerd uit {list} van {owner}",
+    copiedFromADeletedList: "Gekopieerd uit een lijst die is verwijderd",
     showMore: "Meer tonen",
     makeACopy: "Kopie maken",
     report: "Melden",
@@ -1238,6 +1240,8 @@ export const NL: Catalogue = {
       counted(p.count, { one: "ster", other: "sterren" }),
     copyCount: (p: { count: number }) =>
       counted(p.count, { one: "kopie", other: "kopieën" }),
+    copiedFrom: "Gekopieerd uit {list} van {owner}",
+    copiedFromADeletedList: "Gekopieerd uit een lijst die is verwijderd",
     publish: "Publiceren",
     unpublish: "Terugtrekken",
     promptListPublished: "Woordenlijst gepubliceerd.",

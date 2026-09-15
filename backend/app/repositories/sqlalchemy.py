@@ -89,6 +89,7 @@ from app.repositories.interfaces import (
     AuditStamp,
     CommunityPromptList,
     CommunityPromptListDetail,
+    CopiedFrom,
     CommunityPromptListPage,
     AccountAlreadyClaimedError,
     BundledPromptDefinition,
@@ -441,6 +442,7 @@ def _to_owned_prompt_list(
     tags: Sequence[str] = (),
     star_count: int = 0,
     copy_count: int = 0,
+    copied_from: CopiedFrom | None = None,
     forked_from_revision_id: str | None = None,
 ) -> OwnedPromptList:
     return OwnedPromptList(
@@ -460,6 +462,7 @@ def _to_owned_prompt_list(
         tags=tuple(tags),
         star_count=star_count,
         copy_count=copy_count,
+        copied_from=copied_from,
         forked_from_revision_id=forked_from_revision_id,
     )
 def _bundled_revision_hash(
@@ -2385,6 +2388,71 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         )
 
     @staticmethod
+    async def _copied_from(
+        session: AsyncSession, list_ids: Sequence[UUID]
+    ) -> dict[UUID, CopiedFrom]:
+        """What each of these lists was copied from, as it is now (R-LIST-21).
+
+        One query for all of them, whatever the caller is reading. The original
+        is found through the copy's **first** revision - the only one derived
+        from anywhere else - and read as it currently stands: its name and its
+        owner's display name today, since a revision carries no name and an
+        original is free to be renamed. A list that is not a copy is absent.
+
+        Whether it links is the catalogue's own question, asked the way the
+        catalogue asks it (`_published_by_a_player`), so a credit never links to
+        a list the catalogue would refuse to open. A copy whose original is gone
+        - retired, or already reclaimed so the pointer is null - says only that
+        it was copied: `is_copy` is what survives, and it names nothing.
+        """
+        if not list_ids:
+            return {}
+        copy_revision = aliased(PromptListRevision)
+        source_revision = aliased(PromptListRevision)
+        copy_list = aliased(PromptList)
+        source = aliased(PromptList)
+        rows = (
+            await session.execute(
+                select(copy_list.id, source, User.display_name)
+                .select_from(copy_list)
+                .outerjoin(
+                    copy_revision,
+                    (copy_revision.prompt_list_id == copy_list.id)
+                    & (copy_revision.version == 1),
+                )
+                .outerjoin(
+                    source_revision,
+                    source_revision.id == copy_revision.forked_from_revision_id,
+                )
+                .outerjoin(source, source.id == source_revision.prompt_list_id)
+                .outerjoin(User, User.id == source.owner_user_id)
+                .where(copy_list.id.in_(list_ids), copy_list.is_copy.is_(True))
+            )
+        ).all()
+        credits: dict[UUID, CopiedFrom] = {}
+        for list_id, original, display_name in rows:
+            if original is None or original.deleted_at is not None:
+                credits[list_id] = CopiedFrom(status="deleted")
+            elif (
+                original.visibility == PromptListVisibility.PUBLIC.value
+                and original.moderation_state == PromptContentModerationState.ACTIVE.value
+                and not original.is_bundled
+            ):
+                credits[list_id] = CopiedFrom(
+                    status="published",
+                    list_id=_public_id(original.id),
+                    name=original.name,
+                    owner_display_name=display_name,
+                )
+            else:
+                credits[list_id] = CopiedFrom(
+                    status="withdrawn",
+                    name=original.name,
+                    owner_display_name=display_name,
+                )
+        return credits
+
+    @staticmethod
     def _copy_count():
         """How many copies of this list still exist. Derived, never stored
         (R-LIST-20).
@@ -2726,6 +2794,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             if row is None:
                 return None
             prompt_list, prompt_count, stars, display_name, copies = row
+            credit = (await self._copied_from(session, [prompt_list.id])).get(
+                prompt_list.id
+            )
             revision = await session.scalar(
                 select(PromptListRevision)
                 .where(
@@ -2760,6 +2831,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             tags=tags_by_list.get(prompt_list.id, ()),
             star_count=int(stars),
             copy_count=int(copies),
+            copied_from=credit,
             published_at=prompt_list.published_at,
             version=prompt_list.version,
             starred_by_me=starred_by_me,
@@ -2834,12 +2906,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             tags_by_list = await self._current_revision_tags(
                 session, [prompt_list.id for prompt_list, *_ in rows]
             )
+            credits = await self._copied_from(
+                session, [prompt_list.id for prompt_list, *_ in rows]
+            )
             return [
                 _to_owned_prompt_list(
                     prompt_list,
                     prompt_count=int(prompt_count),
                     star_count=int(stars),
                     copy_count=int(copies),
+                    copied_from=credits.get(prompt_list.id),
                     tags=tags_by_list.get(prompt_list.id, ()),
                 )
                 for prompt_list, prompt_count, stars, copies in rows
@@ -2909,12 +2985,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         copies = await session.scalar(
             select(self._copy_count()).select_from(PromptList).where(PromptList.id == prompt_list.id)
         )
+        credits = await self._copied_from(session, [prompt_list.id])
         return _to_owned_prompt_list(
             prompt_list,
             entries,
             tags=tags,
             star_count=int(stars or 0),
             copy_count=int(copies or 0),
+            copied_from=credits.get(prompt_list.id),
             forked_from_revision_id=_public_id(origin) if origin else None,
         )
 
@@ -3265,6 +3343,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     description=source.description,
                     language=source.language,
                     is_bundled=False,
+                    is_copy=True,
                     visibility=PromptListVisibility.PRIVATE.value,
                     moderation_state=PromptContentModerationState.ACTIVE.value,
                     version=1,

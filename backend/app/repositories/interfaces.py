@@ -448,6 +448,9 @@ class CommunityPromptList:
     # How many copies of it still exist - a number, and never who made them
     # (R-LIST-20). Defaulted so the order of the fields above stays as it was.
     copy_count: int = 0
+    # Only an open list carries it; a catalogue row does not show where a list
+    # came from (R-LIST-21).
+    copied_from: CopiedFrom | None = None
     # Whether *this* caller starred it. Null for a caller who is not signed in,
     # which is a different answer from "no" and the client shows it as one.
     starred_by_me: bool | None = None
@@ -526,10 +529,28 @@ class OwnedPromptList:
     # How many copies of it still exist, on the same terms as the stars: the
     # owner gets the number and nothing about who (R-LIST-20).
     copy_count: int = 0
+    # The list this one was copied from, if it was one (R-LIST-21).
+    copied_from: CopiedFrom | None = None
     # The exact revision this list was forked from, when it was (R-LIST-17).
     # A revision rather than a list, because both go on being edited and a
     # pointer at the list would stop meaning anything after the first edit.
     forked_from_revision_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CopiedFrom:
+    """The list a copy was taken from, as it is now (R-LIST-21).
+
+    `published`: in the catalogue, so it is named and linked. `withdrawn`:
+    unpublished by its owner or hidden by a moderator - named, not linked.
+    `deleted`: its author deleted it, so the copy says it was copied and
+    nothing else; `list_id`, `name` and `owner_display_name` are all None.
+    """
+
+    status: str
+    list_id: str | None = None
+    name: str | None = None
+    owner_display_name: str | None = None
 
 
 @dataclass(frozen=True)

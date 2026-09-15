@@ -1675,6 +1675,7 @@
    "updatedAt"
   ],
   "api.serializers:community_prompt_list_detail_payload": [
+   "copiedFrom",
    "promptVersionId"
   ],
   "api.serializers:community_prompt_list_payload": [
@@ -1684,6 +1685,10 @@
    "publishedAt",
    "starCount",
    "starredByMe"
+  ],
+  "api.serializers:copied_from_payload": [
+   "listId",
+   "ownerDisplayName"
   ],
   "api.serializers:game_detail_payload": [
    "correctGuessTimeSeconds",
@@ -1747,6 +1752,7 @@
   ],
   "api.serializers:owned_prompt_list_payload": [
    "conceptId",
+   "copiedFrom",
    "copyCount",
    "createdAt",
    "forkedFromRevisionId",

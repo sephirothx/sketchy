@@ -611,3 +611,48 @@
   flex: 1;
   height: 1px;
 }
+
+/* ------------------------------------------------------------- the credit
+
+   "Copied from Creatures of the deep by Ada" (R-LIST-21). A quiet line under
+   the byline: it says where the list came from, and it is not the list. */
+.community-catalogue-credit,
+.prompt-list-credit {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13.5px;
+  font-weight: 600;
+  gap: 7px;
+  margin: 6px 0 0;
+}
+
+.community-catalogue-credit > svg,
+.prompt-list-credit > svg { color: var(--faint); flex: none; }
+
+.community-catalogue-credit strong,
+.prompt-list-credit strong { color: var(--ink); font-weight: 800; }
+
+/* The original's name links while it is in the catalogue. Indigo and
+   underlined, because it is the only link in a line of muted text, and the
+   visited colour is pinned so a browser's purple never reads as a state. */
+.community-catalogue-credit a,
+.prompt-list-credit a {
+  color: var(--primary-ink);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.community-catalogue-credit a:visited,
+.prompt-list-credit a:visited { color: var(--primary-ink); }
+
+.community-catalogue-credit a:focus-visible,
+.prompt-list-credit a:focus-visible {
+  border-radius: 3px;
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+/* In the editor it opens the form, so it gets the room a field would. */
+.prompt-list-credit { margin: 0 0 12px; }

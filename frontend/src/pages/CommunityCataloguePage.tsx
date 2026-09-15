@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { CommunityPromptsDialog } from "../components/CommunityPromptsDialog";
+import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import { ANY_LANGUAGE, LanguagePicker } from "../components/LanguagePicker";
 import { PromptContentReportDialog } from "../components/PromptContentReportDialog";
 import {
@@ -488,6 +489,12 @@ export function CommunityCataloguePage() {
                     {ui.communityCataloguePage.copyCount({ count: detail.copyCount })}
                   </span>
                 </p>
+                {detail.copiedFrom && <CopiedFromCredit
+                  credit={detail.copiedFrom}
+                  className="community-catalogue-credit"
+                  sentence={ui.communityCataloguePage.copiedFrom}
+                  deletedSentence={ui.communityCataloguePage.copiedFromADeletedList}
+                />}
               </div>
               {starControl(detail)}
             </header>

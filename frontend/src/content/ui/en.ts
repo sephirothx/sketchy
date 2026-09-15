@@ -1212,6 +1212,8 @@ export const EN = {
       counted(p.count, { one: "star", other: "stars" }),
     copyCount: (p: { count: number }) =>
       counted(p.count, { one: "copy", other: "copies" }),
+    copiedFrom: "Copied from {list} by {owner}",
+    copiedFromADeletedList: "Copied from a list that was deleted",
     showMore: "Show more",
     makeACopy: "Make a copy",
     report: "Report",
@@ -1250,6 +1252,8 @@ export const EN = {
       counted(p.count, { one: "star", other: "stars" }),
     copyCount: (p: { count: number }) =>
       counted(p.count, { one: "copy", other: "copies" }),
+    copiedFrom: "Copied from {list} by {owner}",
+    copiedFromADeletedList: "Copied from a list that was deleted",
     publish: "Publish",
     unpublish: "Unpublish",
     promptListPublished: "Prompt list published.",
