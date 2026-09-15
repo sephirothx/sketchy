@@ -1652,6 +1652,21 @@ export const FR: Catalogue = {
     close: "Fermer",
     cancel: "Annuler",
   },
+  reportDrawingDialog: {
+    report: "Signaler",
+    reportThisDrawing: "Signaler ce dessin",
+    nothingHappensYet: "Un modérateur regardera le dessin. Rien n’arrive au joueur avant cela.",
+    anythingElseOptional: "Autre chose ? (facultatif)",
+    anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
+    sendReport: "Envoyer le signalement",
+    sending: "Envoi…",
+    reportSent: "Signalement envoyé",
+    sentWithTheDrawingAttached: "Envoyé, avec le dessin joint.",
+    thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé.",
+    done: "Terminé",
+    cancel: "Annuler",
+    close: "Fermer",
+  },
 
   reportedDrawing: {
     thisDrawingCouldNotBeDecoded: "Ce dessin n’a pas pu être décodé.",

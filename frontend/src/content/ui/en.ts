@@ -1659,6 +1659,21 @@ export const EN = {
     close: "Close",
     cancel: "Cancel",
   },
+  reportDrawingDialog: {
+    report: "Report",
+    reportThisDrawing: "Report this drawing",
+    nothingHappensYet: "A moderator will look at the drawing. Nothing happens to the player until they do.",
+    anythingElseOptional: "Anything else? (optional)",
+    anythingModeratorShouldKnow: "Anything a moderator should know",
+    sendReport: "Send report",
+    sending: "Sending…",
+    reportSent: "Report sent",
+    sentWithTheDrawingAttached: "Sent, with the drawing attached.",
+    thatReportCouldNotBeSent: "That report could not be sent.",
+    done: "Done",
+    cancel: "Cancel",
+    close: "Close",
+  },
 
   reportedDrawing: {
     thisDrawingCouldNotBeDecoded: "This drawing could not be decoded.",

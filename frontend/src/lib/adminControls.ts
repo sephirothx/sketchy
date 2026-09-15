@@ -99,6 +99,25 @@ export function setPromptListReview(
   });
 }
 
+/** Whether the lobby's **This week** shelf waits for a moderator (R-GAL-09).
+ *
+ * The gallery publishes after the fact; this holds only the six drawings on
+ * the lobby's front page until a moderator releases each one. The gallery
+ * page itself is not held. */
+export function readGalleryShelfReview(): Promise<{ review: boolean }> {
+  return apiRequest("/api/admin/gallery-shelf-review");
+}
+
+export function setGalleryShelfReview(
+  review: boolean,
+  reason: string,
+): Promise<{ review: boolean }> {
+  return apiRequest("/api/admin/gallery-shelf-review", {
+    method: "POST",
+    body: { review, reason },
+  });
+}
+
 export function readMaintenance(): Promise<MaintenanceState> {
   return apiRequest("/api/admin/maintenance");
 }
