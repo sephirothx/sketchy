@@ -18,7 +18,9 @@ file-backed concurrency explicitly use fresh temporary files instead.
 from __future__ import annotations
 
 import os
+import sqlite3
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import event
 from sqlalchemy.dialects import postgresql, sqlite
@@ -30,6 +32,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 from app.db import configure_sqlite_connection, get_engine_connect_args
@@ -85,12 +88,48 @@ def create_test_engine(url: str | None = None, *, role: str = "web") -> AsyncEng
     than to one it would never run under.
     """
     resolved = url or os.environ.get("TEST_DATABASE_URL") or SQLITE_MEMORY_URL
+    if resolved == SQLITE_MEMORY_URL:
+        return _memory_engine(role=role)
     engine = create_async_engine(
         resolved, echo=False, connect_args=get_engine_connect_args(resolved, role=role)
     )
     if resolved.startswith("sqlite"):
         event.listen(engine.sync_engine, "connect", configure_sqlite_connection)
         event.listen(engine.sync_engine, "connect", _assert_foreign_keys_enforced)
+    return engine
+
+
+def _memory_engine(*, role: str) -> AsyncEngine:
+    """An in-memory SQLite database that outlives its pooled connection.
+
+    A plain `:memory:` database *is* its connection. The pool holds one, and
+    when SQLAlchemy discards it - a statement cancelled mid-flight does that,
+    and the chat path's block lookup gives up on a slow read by design - the
+    replacement connection is a brand-new empty database, and every later
+    statement in the test fails with "no such table", nowhere near the
+    cancellation that caused it (seen once on CI, in the retention suite).
+
+    So the database is a *named* one in shared-cache mode, and one keeper
+    connection holds it open for the engine's lifetime: a replacement pool
+    connection joins the same database. The pool stays a StaticPool, so the
+    application still sees the one connection it would on `:memory:`, and
+    the keeper runs no statements, so shared-cache table locks never bite.
+    """
+    name = f"file:sketchy-test-{uuid4().hex}?mode=memory&cache=shared"
+    keeper = sqlite3.connect(name, uri=True, check_same_thread=False)
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{name}&uri=true",
+        echo=False,
+        poolclass=StaticPool,
+        connect_args=get_engine_connect_args(SQLITE_MEMORY_URL, role=role),
+    )
+    event.listen(engine.sync_engine, "connect", configure_sqlite_connection)
+    event.listen(engine.sync_engine, "connect", _assert_foreign_keys_enforced)
+
+    @event.listens_for(engine.sync_engine, "engine_disposed")
+    def _release(_: Any) -> None:
+        keeper.close()
+
     return engine
 
 
