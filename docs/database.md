@@ -1292,13 +1292,31 @@ goes with its whole game.
 ### `turn_drawings`
 `turn_id` **PK** (CASCADE) · `game_id` (CASCADE) · `status` · `format_magic` ·
 `format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `object_key` ·
-`unavailable_reason` · `failure_code` · timestamps.
+`unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · timestamps.
 
 `status` ∈ `pending \| ready \| unavailable \| failed \| deleted`.
 `ck_turn_drawings_ready_identity` requires a `ready` row to carry a complete format
 identity, size, checksum, and either inline bytes or an object key.
 `ck_turn_drawings_erased` requires a null payload once unavailable or deleted.
-`byte_size` ≤ 8 MiB.
+`byte_size` ≤ 8 MiB. `ck_turn_drawings_reaction_count` keeps the count non-negative;
+`ix_turn_drawings_gallery_top` `(status, reaction_count)` and `ix_turn_drawings_gallery_hot`
+`(status, hot_score)` serve the **Gallery**'s Top and Hot orders (#524).
+
+`reaction_count` and `hot_score` are the Gallery's **projections** (R-GAL-05): how many
+rows `turn_drawing_reactions` holds for the turn, and reddit's
+`log10(max(n, 1)) + finished_at / 45 000 s`, kept on the row so Top over the whole history
+orders by a column rather than counting on read, and Hot orders by a score that never
+changes for one row except when its count does — the decay is the newer rows' larger
+second term. Every reaction write sets both from the rows **under the row's lock**
+(`SELECT … FOR UPDATE`), so two reactions landing together cannot each count only their
+own; the finished-game write sets them with the row; erasure zeroes them with the bytes.
+They are never the source of truth: `app.services.gallery_ranking` rebuilds both from the
+reaction rows, and a rebuild reproduces exactly what the writes left.
+
+```bash
+cd backend
+.venv/bin/python -m app.services.gallery_ranking
+```
 
 Every drawing from a completed game is kept **for as long as that game, in the same
 transaction that records it**. The stored bytes are the canvas frame itself — the

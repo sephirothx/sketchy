@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.repositories.interfaces import (
     DrawingReactionResult,
+    GalleryPage,
     GameDetail,
     GameHistoryConflictError,
     GameHistoryRepository,
@@ -178,6 +179,23 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self, profile_user_id: str, *, viewer_user_id: str | None = None
     ) -> tuple[ProfilePinEntry, ...]:
         return ()
+
+    async def list_gallery(
+        self,
+        *,
+        sort: str = "hot",
+        window: str = "all",
+        limit: int = 24,
+        cursor: str | None = None,
+        requesting_user_id: str | None = None,
+    ) -> GalleryPage:
+        return GalleryPage(entries=(), next_cursor=None)
+
+    async def get_gallery_drawing(self, turn_id: str) -> TurnDrawingDetail | None:
+        return None
+
+    async def get_gallery_drawing_checksum(self, turn_id: str) -> str | None:
+        return None
 
     async def get_pinned_drawing(
         self, profile_user_id: str, turn_id: str

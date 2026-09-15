@@ -356,6 +356,13 @@ export function LobbyBrowserPage() {
           >
             {ui.communityCataloguePage.communityCatalogue}
           </button>
+          <button
+            type="button"
+            className="lobby-catalogue-link"
+            onClick={() => navigate("/gallery")}
+          >
+            {ui.galleryPage.gallery}
+          </button>
         </div>
 
         {roomsState.loaded && rooms.length > 0 && (

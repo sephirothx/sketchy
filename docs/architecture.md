@@ -1700,6 +1700,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | What the drawing store holds: that it is still readable, and how big it is. |
 | [`app/services/game_flow.py`](../backend/app/services/game_flow.py) | Shared workflows used by the domain-specific Socket.IO handlers. |
 | [`app/services/game_handoff.py`](../backend/app/services/game_handoff.py) | Durable handoff of a finished game into history (#541). |
+| [`app/services/gallery_ranking.py`](../backend/app/services/gallery_ranking.py) | The Gallery's ranking projections (#524): the Hot score, and their rebuild. |
 | [`app/services/game_highlights.py`](../backend/app/services/game_highlights.py) | Pick the few moments from a finished game worth putting on the final screen. |
 | [`app/services/game_history.py`](../backend/app/services/game_history.py) | Turn a finished in-memory game into the rows that record it. |
 | [`app/services/drawing_reactions.py`](../backend/app/services/drawing_reactions.py) | Decide whether, and to which drawing, a room seat may react (#520). |

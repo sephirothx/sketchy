@@ -2976,7 +2976,16 @@ class TurnDrawing(Base):
             "byte_size IS NULL OR (byte_size > 0 AND byte_size <= 8388608)",
             name="ck_turn_drawings_byte_size",
         ),
+        # The Gallery's projections (#524, R-GAL-05): never negative, and a
+        # rebuild reproduces them from the reaction rows.
+        CheckConstraint(
+            "reaction_count >= 0", name="ck_turn_drawings_reaction_count"
+        ),
         Index("ix_turn_drawings_status_created_at", "status", "created_at"),
+        # Top and Hot read the kept drawings in count or score order; the
+        # status prefix keeps an erased or unavailable row out of the scan.
+        Index("ix_turn_drawings_gallery_top", "status", "reaction_count"),
+        Index("ix_turn_drawings_gallery_hot", "status", "hot_score"),
     )
 
     turn_id: Mapped[uuid.UUID] = mapped_column(
@@ -3012,6 +3021,18 @@ class TurnDrawing(Base):
     )
     stored_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # How many reactions the drawing holds, and its Hot score - reddit's
+    # `log10(max(n, 1)) + finished_at / 45 000 s` - kept beside the row so
+    # the Gallery orders by a column rather than counting on read (#524).
+    # Both are disposable projections of `turn_drawing_reactions`: every
+    # reaction write sets them under the row's lock, and
+    # `app.services.gallery_ranking` rebuilds them from the rows (R-GAL-05).
+    reaction_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    hot_score: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default=text("0"), nullable=False
+    )
 
     turn_record: Mapped[TurnRecord] = relationship(
         back_populates="drawing", foreign_keys=[game_id, turn_id]

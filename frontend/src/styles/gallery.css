@@ -1,0 +1,217 @@
+/* The Gallery (#524): every public-game drawing, in one of three orders.
+   The page, its heading block and its sort control follow the community
+   catalogue's recipes; the cards follow the profile's pinned shelf, since
+   both replay a stored frame small. */
+
+/* ------------------------------------------------------------------- page */
+
+.gallery-page {
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 24px 16px 64px;
+}
+
+/* A heading block, not a card. Three stacked panels - title, filters,
+   results - read as three empty boxes before they read as a page. */
+.gallery-head { margin-bottom: 18px; }
+
+.gallery-head h1 {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  margin: 4px 0 3px;
+}
+
+.gallery-head p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 58ch;
+}
+
+/* ---------------------------------------------------------------- filters */
+
+.gallery-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.gallery-sort {
+  background: var(--track);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.gallery-sort button {
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 6px 14px;
+}
+
+.gallery-sort button[aria-pressed="true"] {
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+/* The window, only under Top: a second row of pills rather than a second
+   segment, so the two controls do not read as one six-way choice. */
+.gallery-window {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gallery-pill {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 14px;
+}
+
+.gallery-pill[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.gallery-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* At phone width one column would make every card a full-width frame;
+   two fit at 390px with the page's gutters. */
+@media (max-width: 480px) {
+  .gallery-grid {
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gallery-card-open {
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  display: block;
+  padding: 0;
+  width: 100%;
+}
+
+.gallery-card-open:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.gallery-card-canvas {
+  align-items: center;
+  aspect-ratio: 4 / 3;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+}
+
+.gallery-card-canvas .canvas-wrapper,
+.gallery-card-canvas .canvas-stack {
+  max-width: none;
+  width: 100%;
+}
+
+.gallery-card-canvas .canvas-stack {
+  border: 0;
+  border-radius: 0;
+}
+
+.gallery-card-open:hover .gallery-card-canvas {
+  border-color: var(--primary-ink);
+}
+
+.gallery-card-note {
+  color: var(--muted);
+  font-size: 12.5px;
+  padding: 8px;
+  text-align: center;
+}
+
+.gallery-card-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gallery-card-prompt {
+  color: var(--ink);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-card-byline {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12.5px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gallery-card-byline strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- states */
+
+.gallery-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 18px;
+}
+
+.gallery-empty {
+  color: var(--muted);
+  font-style: italic;
+  margin: 0;
+  padding: 8px 0;
+}

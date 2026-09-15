@@ -422,6 +422,34 @@ class ProfilePinsResult:
 
 
 @dataclass(frozen=True)
+class GalleryEntry:
+    """One drawing as the Gallery shows it (R-GAL-03): what a pin publishes,
+    the game's finish time, and the viewer's own facts - never a game id, a
+    room name or a reactor's name."""
+
+    turn_id: str
+    round_number: int
+    turn_number: int
+    drawer_display_name: str
+    drawer_name_color: str | None
+    drawer_is_anonymous: bool
+    prompt: str
+    stroke_count: int
+    finished_at: datetime
+    reaction_counts: Mapping[str, int]
+    my_reaction: str | None
+    drawn_by_me: bool
+
+
+@dataclass(frozen=True)
+class GalleryPage:
+    """One page of the Gallery, and the cursor for the next."""
+
+    entries: tuple[GalleryEntry, ...]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
 class TurnDrawingDetail:
     """One stored drawing, ready to be handed back in wire form."""
 
@@ -932,6 +960,32 @@ class GameHistoryRepository(ABC):
         ``viewer_user_id``, each entry also says what that viewer picked and
         whether the drawing is theirs, so the shelf can offer a picker.
         """
+        ...
+
+    @abstractmethod
+    async def list_gallery(
+        self,
+        *,
+        sort: str = "hot",
+        window: str = "all",
+        limit: int = 24,
+        cursor: str | None = None,
+        requesting_user_id: str | None = None,
+    ) -> GalleryPage:
+        """One page of the Gallery (R-GAL-01, R-GAL-04): every kept drawing
+        from a public game, in Hot, New or Top order, Top windowed by name.
+        Who may ask is the route's question; this answers what is there."""
+        ...
+
+    @abstractmethod
+    async def get_gallery_drawing(self, turn_id: str) -> TurnDrawingDetail | None:
+        """A drawing's bytes through the gallery door (R-GAL-06): its own
+        query over the gallery predicate, never the participant check."""
+        ...
+
+    @abstractmethod
+    async def get_gallery_drawing_checksum(self, turn_id: str) -> str | None:
+        """The stored checksum under the same predicate, for a validator."""
         ...
 
     @abstractmethod

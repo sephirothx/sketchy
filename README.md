@@ -426,6 +426,15 @@ cd backend
 .venv/bin/python -m app.services.user_stats_projection --user <account-uuid>
 ```
 
+The gallery's reaction count and Hot score on each drawing are the same kind of
+thing: set by every reaction write, rebuilt from the reaction rows on demand,
+never trusted as counters.
+
+```bash
+cd backend
+.venv/bin/python -m app.services.gallery_ranking
+```
+
 ### Recalculable competitive foundation
 
 Finished-game facts—not profile counters—are the source for any future rating,
@@ -1599,6 +1608,7 @@ backend/
       game_handoff.py Durable handoff of a finished game into history: staged whole, replayed by a loop
       game_highlights.py Pure derivation of a finished game's highlights
       drawing_reactions.py Who may react to which drawing, and the room broadcast
+      gallery_ranking.py The Gallery's reaction count and Hot score on each drawing, and their rebuild
       incidents.py Pure grouping of reports of one incident, and their merged thread
       timers.py    Application-owned asynchronous timer lifecycle
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
