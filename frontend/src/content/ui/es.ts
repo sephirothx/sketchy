@@ -1270,7 +1270,8 @@ export const ES: Catalogue = {
     published: "Publicada",
     tags: "Etiquetas",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} de ${p.max} elegidas`,
-    addTag: "Añadir etiqueta",
+    addTag: "Añadir",
+    tagsDone: "Listo",
     changeTags: "Cambiar",
     removeTag: (p: { tag: string }) => `Quitar ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>

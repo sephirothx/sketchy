@@ -18,29 +18,38 @@ interface TagPickerProps {
 }
 
 /**
- * A list's tags: the ones it carries, and a menu for the rest.
+ * A list's tags: the ones it carries, and a panel for choosing them.
  *
- * The whole vocabulary used to stand open as chips, fifteen of them in a
- * bordered box that took more of the editor than the name, the description and
- * the language together - for three choices made once. What a list carries is
- * what is read back, so only that stays on screen; the rest is one "Add tag"
- * away. The menu stays open while choosing, because choosing several is the
- * point, and is the language picker's mechanism: arrow keys through it,
- * Escape closes and hands focus back.
+ * The whole vocabulary used to stand open as chips in a bordered box that took
+ * more of the editor than the name, the description and the language together
+ * - for a handful of choices made once. Now only the chosen tags stay on
+ * screen, and the vocabulary opens on request.
+ *
+ * Three things are placed so that nothing moves or gets cut off:
+ * - The button lives on the label's line, beside the count, so it does not
+ *   travel as chips wrap. When it wrapped with them it could land against
+ *   the pane's right edge, and a menu hung from it ran off the pane, which
+ *   scrolls and so clips.
+ * - The panel hangs from the whole field, spanning its width, so whatever
+ *   the button does it has the room the field has.
+ * - The panel holds chips, the form's own control for choosing several
+ *   things out of a fixed set, so a tag looks the same chosen or not.
  */
 export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPickerProps) {
   const labelId = useId();
-  const menuId = useId();
+  const panelId = useId();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const full = chosen.length >= max;
 
-  useEscapeLayer(open, () => {
+  function close() {
     setOpen(false);
     triggerRef.current?.focus();
-  });
+  }
+
+  useEscapeLayer(open, close);
 
   useEffect(() => {
     if (!open) return;
@@ -52,7 +61,7 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
   }, [open]);
 
   useEffect(() => {
-    if (open && menuRef.current) getFocusableElements(menuRef.current)[0]?.focus();
+    if (open && panelRef.current) getFocusableElements(panelRef.current)[0]?.focus();
   }, [open]);
 
   function toggle(slug: string) {
@@ -66,12 +75,16 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
     );
   }
 
-  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
+  // The chips read left to right and wrap, so every arrow steps through them
+  // in reading order - there is no reliable "row above" in a wrapped line.
+  function handlePanelKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = panelRef.current ? getFocusableElements(panelRef.current) : [];
     if (!items.length) return;
     const index = items.indexOf(document.activeElement as HTMLElement);
     const moves: Record<string, number> = {
+      ArrowRight: (index + 1) % items.length,
       ArrowDown: (index + 1) % items.length,
+      ArrowLeft: (index - 1 + items.length) % items.length,
       ArrowUp: (index - 1 + items.length) % items.length,
       Home: 0,
       End: items.length - 1,
@@ -85,16 +98,29 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
   const bySlug = new Map(vocabulary.map((tag) => [tag.slug, tag]));
 
   return (
-    <div className="tag-picker" role="group" aria-labelledby={labelId}>
-      {/* The count beside the name it counts, where it is read before the
-          chips rather than hunted for after them. */}
+    <div className="tag-picker" ref={rootRef}>
       <div className="tag-picker-head">
         <span id={labelId} className="prompt-list-field-label">{ui.myPromptListsPage.tags}</span>
         <span className={full ? "tag-picker-count is-full" : "tag-picker-count"}>
           {ui.myPromptListsPage.tagsChosen({ chosen: chosen.length, max })}
         </span>
+        {/* At the cap there is nothing left to add, so it says what it still
+            does: the panel is where one tag is swapped for another. Never
+            disabled, so Escape always has this button to hand focus back to. */}
+        <button
+          ref={triggerRef}
+          type="button"
+          className="tag-picker-trigger"
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          onClick={() => (open ? close() : setOpen(true))}
+        >
+          {full
+            ? <><PencilIcon size={12} />{ui.myPromptListsPage.changeTags}</>
+            : <><PlusIcon size={12} />{ui.myPromptListsPage.addTag}</>}
+        </button>
       </div>
-      <div className="tag-picker-row">
+      {chosen.length > 0 && <div className="tag-picker-row">
         {chosen.map((slug) => {
           const tag = bySlug.get(slug);
           if (!tag) return null;
@@ -110,56 +136,44 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
             </span>
           );
         })}
-        <div className="tag-picker-add" ref={rootRef}>
-          {/* At the cap there is nothing left to add, so the button stops
-              saying "Add" and says what it still does: the menu is where one
-              tag is swapped for another. It is never disabled or removed, so
-              Escape always has this button to hand focus back to. */}
-          <button
-            ref={triggerRef}
-            type="button"
-            className="tag-picker-trigger"
-            aria-haspopup="menu"
-            aria-expanded={open}
-            aria-controls={open ? menuId : undefined}
-            onClick={() => setOpen((current) => !current)}
-          >
-            {full
-              ? <><PencilIcon size={13} />{ui.myPromptListsPage.changeTags}</>
-              : <><PlusIcon size={13} />{ui.myPromptListsPage.addTag}</>}
-          </button>
-          {open && (
-            <div
-              id={menuId}
-              ref={menuRef}
-              className="language-picker-list tag-picker-menu"
-              role="menu"
-              aria-labelledby={labelId}
-              onKeyDown={handleMenuKeyDown}
-            >
-              {vocabulary.map((tag) => {
-                const held = chosen.includes(tag.slug);
-                return (
-                  <button
-                    key={tag.slug}
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={held}
-                    className={`language-picker-option${held ? " is-selected" : ""}`}
-                    disabled={!held && full}
-                    onClick={() => toggle(tag.slug)}
-                  >
-                    <span>{nameOf(tag)}</span>
-                    <span className="language-picker-check" aria-hidden="true">
-                      {held && <CheckIcon size={13} />}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+      </div>}
+      {open && (
+        <div
+          id={panelId}
+          ref={panelRef}
+          className="tag-picker-panel"
+          role="group"
+          aria-labelledby={labelId}
+          onKeyDown={handlePanelKeyDown}
+        >
+          <div className="tag-picker-options">
+            {vocabulary.map((tag) => {
+              const held = chosen.includes(tag.slug);
+              return (
+                <button
+                  key={tag.slug}
+                  type="button"
+                  className={held ? "toggle-chip is-selected" : "toggle-chip"}
+                  aria-pressed={held}
+                  // At the cap the rest go quiet rather than disappearing:
+                  // the vocabulary is the same either way, and a set that
+                  // shrinks as you pick from it cannot be read.
+                  disabled={!held && full}
+                  onClick={() => toggle(tag.slug)}
+                >
+                  {held && <span className="toggle-chip-status" aria-hidden="true"><CheckIcon size={12} /></span>}
+                  <span className="toggle-chip-name">{nameOf(tag)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="tag-picker-panel-foot">
+            <button type="button" className="btn btn-secondary btn-compact" onClick={close}>
+              {ui.myPromptListsPage.tagsDone}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1270,7 +1270,8 @@ export const NL: Catalogue = {
     published: "Gepubliceerd",
     tags: "Labels",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} van ${p.max} gekozen`,
-    addTag: "Tag toevoegen",
+    addTag: "Toevoegen",
+    tagsDone: "Klaar",
     changeTags: "Wijzigen",
     removeTag: (p: { tag: string }) => `${p.tag} verwijderen`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>

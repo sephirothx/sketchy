@@ -1279,7 +1279,8 @@ export const EN = {
     published: "Published",
     tags: "Tags",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} of ${p.max} chosen`,
-    addTag: "Add tag",
+    addTag: "Add",
+    tagsDone: "Done",
     changeTags: "Change",
     removeTag: (p: { tag: string }) => `Remove ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>

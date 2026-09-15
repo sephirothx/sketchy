@@ -300,11 +300,11 @@
 .prompt-list-name-row input { min-height: 44px; }
 .prompt-list-language .language-picker-static { align-items: center; display: inline-flex; min-height: 44px; }
 
-/* Tags: what the list carries, then a way to add to it. The vocabulary lives
-   in the menu, so the editor spends one row on three choices, not four. */
-.tag-picker { display: grid; gap: 6px; }
+/* Tags: the label, the count and the button on one line; the chosen tags
+   under it; and, on request, the vocabulary in a panel spanning the field. */
+.tag-picker { display: grid; gap: 6px; position: relative; }
 
-.tag-picker-head { align-items: baseline; display: flex; gap: 10px; }
+.tag-picker-head { align-items: center; display: flex; flex-wrap: wrap; gap: 4px 10px; }
 
 .tag-picker-row {
   align-items: center;
@@ -343,9 +343,8 @@
 
 .tag-picker-remove:hover { background: color-mix(in srgb, var(--primary) 16%, transparent); }
 
-.tag-picker-add { display: inline-flex; position: relative; }
-
-/* Dashed: a place a chip can go, rather than a chip. */
+/* Small and dashed: a place tags can come from, sized to the label's line
+   rather than to the chips. */
 .tag-picker-trigger {
   align-items: center;
   background: none;
@@ -355,18 +354,17 @@
   cursor: pointer;
   display: inline-flex;
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 800;
-  gap: 5px;
-  min-height: 32px;
-  padding: 3px 12px;
+  gap: 4px;
+  min-height: 26px;
+  padding: 1px 10px;
 }
 
-.tag-picker-trigger:hover { border-color: var(--primary); }
+.tag-picker-trigger:hover,
+.tag-picker-trigger[aria-expanded="true"] { border-color: var(--primary); }
 .tag-picker-remove:focus-visible,
 .tag-picker-trigger:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-
-.tag-picker-menu { max-height: min(320px, 55vh); min-width: 230px; }
 
 /* The count changes as you pick, so it is tabular: 1 and 3 are different
    widths in this face, and the number would otherwise shift under the eye. */
@@ -379,6 +377,38 @@
 
 /* At the cap the number is why the button now says Change. */
 .tag-picker-count.is-full { color: var(--warm-ink); }
+
+/* Hung from the whole field, not from the button: it spans the field's
+   width, so it has the room the pane has wherever the button sits, and floats
+   over what follows rather than pushing it down. */
+.tag-picker-panel {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-raised);
+  display: grid;
+  gap: 10px;
+  left: 0;
+  padding: 12px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+}
+
+.tag-picker-options { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* A size down from the room form's chips: these are a list's metadata. */
+.tag-picker-options .toggle-chip {
+  font-size: 13px;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 12px;
+}
+
+.tag-picker-options .toggle-chip:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.tag-picker-panel-foot { display: flex; justify-content: flex-end; }
 
 /* Both halves of the editor follow the rhythm the room-creation prompts field
    set: a rule above, a bold label, a full-width control, muted counts below. */
