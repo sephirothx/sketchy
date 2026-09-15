@@ -20,19 +20,40 @@
 }
 .prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
 
-/* The page is exactly the viewport, and the two panes inside it scroll on
-   their own: the lists on the left, the list being edited on the right. A
-   pinned sidebar was not enough - while the page itself scrolled, the header
-   and the top of the lists went with it, so scrolling the form still moved the
-   lists. Below 700px it is one column and the page scrolls as usual. */
+/* The page fills what the viewport has left, and the two panes inside it
+   scroll on their own: the lists on the left, the list being edited on the
+   right. A pinned sidebar was not enough - while the page itself scrolled, the
+   header and the top of the lists went with it, so scrolling the form still
+   moved the lists. Below 700px it is one column and the page scrolls as usual.
+
+   "What the viewport has left" rather than the viewport: the connection,
+   maintenance and email-recovery banners sit above every page in normal flow,
+   and a page a whole viewport tall pushed the Save bar below the fold by
+   their height and scrolled the document after all. So while this page is
+   mounted the app's root becomes a column exactly the viewport's height, the
+   banners keep their own height, and the page takes the rest. Scoped with
+   :has() so no other page's layout changes. */
+@media (min-width: 701px) {
+  #root:has(> .prompt-list-manager-page) {
+    display: flex;
+    flex-direction: column;
+    height: var(--app-height);
+    min-height: 0;
+  }
+
+  #root:has(> .prompt-list-manager-page) > :not(.prompt-list-manager-page) { flex: none; }
+}
+
 .prompt-list-manager-page {
   box-sizing: border-box;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  height: var(--app-height);
   margin: 0 auto;
   max-width: 1000px;
+  min-height: 0;
   padding: 24px 16px;
+  width: 100%;
 }
 
 .prompt-list-manager-card {
@@ -75,12 +96,18 @@
 }
 
 /* Scrolled by itself; the Save bar is pinned to the bottom of this pane. The
-   inline padding leaves the focus rings and the scrollbar room. */
+   inline padding leaves the focus rings and the scrollbar room.
+
+   Positioned, so it is what absolutely placed things inside it (a visually
+   hidden label, an open panel) are placed against. Without it they were placed
+   against the document at their spot far down the form, and stretched the
+   page past the viewport even though nothing visible was there. */
 .prompt-list-manager-layout > form {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-inline: 3px 8px;
+  position: relative;
 }
 
 /* The lists scroll on their own, so a long column of them neither follows
@@ -93,6 +120,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 2px 6px 2px 2px;
+  position: relative;
 }
 
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
