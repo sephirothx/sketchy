@@ -1753,8 +1753,8 @@ export const FR: Catalogue = {
     serverUpdate: (p: { seconds: number }) =>
       p.seconds > 0 ? `Mise à jour · ${p.seconds} s` : "Mise à jour · maintenant",
     reconnecting: "Reconnexion",
-    offline: "Hors ligne",
     disconnected: "Déconnecté",
+    rejoinFailed: "Retour impossible",
     serverUpdateStarted: "Mise à jour du serveur en cours. Cette partie se terminera bientôt.",
   },
 

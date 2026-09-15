@@ -1753,8 +1753,8 @@ export const NL: Catalogue = {
     serverUpdate: (p: { seconds: number }) =>
       p.seconds > 0 ? `Update · ${p.seconds} s` : "Update · nu",
     reconnecting: "Opnieuw verbinden",
-    offline: "Offline",
     disconnected: "Verbroken",
+    rejoinFailed: "Terugkeren mislukt",
     serverUpdateStarted: "Serverupdate bezig. Dit spel eindigt binnenkort.",
   },
 
