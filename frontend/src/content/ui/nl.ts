@@ -1270,8 +1270,8 @@ export const NL: Catalogue = {
     published: "Gepubliceerd",
     tags: "Labels",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} van ${p.max} gekozen`,
-    tagsAreHowListsAreFound: "Via labels wordt deze lijst in de communitycatalogus gevonden.",
     addTag: "Tag toevoegen",
+    changeTags: "Wijzigen",
     removeTag: (p: { tag: string }) => `${p.tag} verwijderen`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "woord", other: "woorden" })} · ${p.visibility}${

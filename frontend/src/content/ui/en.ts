@@ -1279,8 +1279,8 @@ export const EN = {
     published: "Published",
     tags: "Tags",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} of ${p.max} chosen`,
-    tagsAreHowListsAreFound: "Tags are how somebody finds this list in the community catalogue.",
     addTag: "Add tag",
+    changeTags: "Change",
     removeTag: (p: { tag: string }) => `Remove ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "prompt", other: "prompts" })} · ${p.visibility}${

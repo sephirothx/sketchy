@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { CheckIcon, PlusIcon, XIcon } from "./icons";
+import { CheckIcon, PencilIcon, PlusIcon, XIcon } from "./icons";
 import { getFocusableElements, useEscapeLayer } from "../hooks/useFocusTrap";
 import type { PromptTag } from "../types";
 import { ui } from "../content/ui/index.ts";
@@ -86,7 +86,14 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
 
   return (
     <div className="tag-picker" role="group" aria-labelledby={labelId}>
-      <span id={labelId} className="prompt-list-field-label">{ui.myPromptListsPage.tags}</span>
+      {/* The count beside the name it counts, where it is read before the
+          chips rather than hunted for after them. */}
+      <div className="tag-picker-head">
+        <span id={labelId} className="prompt-list-field-label">{ui.myPromptListsPage.tags}</span>
+        <span className={full ? "tag-picker-count is-full" : "tag-picker-count"}>
+          {ui.myPromptListsPage.tagsChosen({ chosen: chosen.length, max })}
+        </span>
+      </div>
       <div className="tag-picker-row">
         {chosen.map((slug) => {
           const tag = bySlug.get(slug);
@@ -104,10 +111,10 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
           );
         })}
         <div className="tag-picker-add" ref={rootRef}>
-          {/* Never disabled, even at the cap: the menu is also where a tag is
-              swapped for another, and Escape hands focus back to this button,
-              which a disabled button cannot take. At the cap the unchosen rows
-              go quiet instead, and the count beside it says why. */}
+          {/* At the cap there is nothing left to add, so the button stops
+              saying "Add" and says what it still does: the menu is where one
+              tag is swapped for another. It is never disabled or removed, so
+              Escape always has this button to hand focus back to. */}
           <button
             ref={triggerRef}
             type="button"
@@ -115,10 +122,11 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
             aria-haspopup="menu"
             aria-expanded={open}
             aria-controls={open ? menuId : undefined}
-            title={ui.myPromptListsPage.tagsAreHowListsAreFound}
             onClick={() => setOpen((current) => !current)}
           >
-            <PlusIcon size={13} />{ui.myPromptListsPage.addTag}
+            {full
+              ? <><PencilIcon size={13} />{ui.myPromptListsPage.changeTags}</>
+              : <><PlusIcon size={13} />{ui.myPromptListsPage.addTag}</>}
           </button>
           {open && (
             <div
@@ -148,13 +156,9 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
                   </button>
                 );
               })}
-              <p className="tag-picker-foot">{ui.myPromptListsPage.tagsAreHowListsAreFound}</p>
             </div>
           )}
         </div>
-        <span className={full ? "tag-picker-count is-full" : "tag-picker-count"}>
-          {ui.myPromptListsPage.tagsChosen({ chosen: chosen.length, max })}
-        </span>
       </div>
     </div>
   );

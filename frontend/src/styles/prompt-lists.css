@@ -20,16 +20,29 @@
 }
 .prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
 
+/* The page is exactly the viewport, and the two panes inside it scroll on
+   their own: the lists on the left, the list being edited on the right. A
+   pinned sidebar was not enough - while the page itself scrolled, the header
+   and the top of the lists went with it, so scrolling the form still moved the
+   lists. Below 700px it is one column and the page scrolls as usual. */
 .prompt-list-manager-page {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: var(--app-height);
   margin: 0 auto;
   max-width: 1000px;
-  padding: 24px 16px 64px;
+  padding: 24px 16px;
 }
 
 .prompt-list-manager-card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   padding: 16px 20px;
 }
 
@@ -53,26 +66,33 @@
 
 .prompt-list-manager-layout {
   display: grid;
+  flex: 1;
   gap: 24px;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   margin-top: 24px;
+  min-height: 0;
 }
 
-/* The lists scroll on their own. An account can keep 25, and a column of them
-   scrolled away with the form, so opening another list meant scrolling back up
-   past the one being edited. Pinned beside the form and capped at the viewport,
-   it keeps its place while the form scrolls, and scrolls itself when it is the
-   longer of the two. */
-.prompt-list-manager-layout aside {
-  align-content: start;
-  align-self: start;
-  display: grid;
-  gap: 8px;
-  max-height: calc(var(--app-height) - 32px);
+/* Scrolled by itself; the Save bar is pinned to the bottom of this pane. The
+   inline padding leaves the focus rings and the scrollbar room. */
+.prompt-list-manager-layout > form {
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  position: sticky;
-  top: 16px;
+  padding-inline: 3px 8px;
+}
+
+/* The lists scroll on their own, so a long column of them neither follows
+   the form nor has to be scrolled past to reach another list. */
+.prompt-list-manager-layout aside {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 6px 2px 2px;
 }
 
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
@@ -284,6 +304,8 @@
    in the menu, so the editor spends one row on three choices, not four. */
 .tag-picker { display: grid; gap: 6px; }
 
+.tag-picker-head { align-items: baseline; display: flex; gap: 10px; }
+
 .tag-picker-row {
   align-items: center;
   display: flex;
@@ -346,16 +368,6 @@
 
 .tag-picker-menu { max-height: min(320px, 55vh); min-width: 230px; }
 
-.tag-picker-foot {
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-  margin: 4px 0 0;
-  max-width: 230px;
-  padding: 8px 10px 4px;
-}
-
 /* The count changes as you pick, so it is tabular: 1 and 3 are different
    widths in this face, and the number would otherwise shift under the eye. */
 .tag-picker-count {
@@ -363,10 +375,9 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  margin-left: 4px;
 }
 
-/* At the cap the number is the explanation for why the menu's other rows went quiet. */
+/* At the cap the number is why the button now says Change. */
 .tag-picker-count.is-full { color: var(--warm-ink); }
 
 /* Both halves of the editor follow the rhythm the room-creation prompts field
@@ -518,16 +529,15 @@
 .prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
 
 @media (max-width: 700px) {
-  .prompt-list-manager-card { padding: 18px; }
-  .prompt-list-manager-layout { grid-template-columns: 1fr; }
-  /* One column: the lists become a strip above the form, and a strip has
-     nothing to pin beside. */
+  .prompt-list-manager-page { display: block; height: auto; padding-bottom: 64px; }
+  .prompt-list-manager-card { display: block; padding: 18px; }
+  .prompt-list-manager-layout { grid-template-columns: 1fr; grid-template-rows: none; }
+  .prompt-list-manager-layout > form { overflow-y: visible; padding-inline: 0; }
+  /* One column: the lists become a strip above the form. */
   .prompt-list-manager-layout aside {
     display: flex;
-    max-height: none;
     overflow-x: auto;
     overflow-y: visible;
-    position: static;
   }
   .prompt-list-manager-layout aside button { flex: 0 0 180px; }
 }

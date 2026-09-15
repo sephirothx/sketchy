@@ -1270,8 +1270,8 @@ export const IT: Catalogue = {
     published: "Pubblicata",
     tags: "Etichette",
     tagsChosen: (p: { chosen: number; max: number }) => `${p.chosen} di ${p.max} scelte`,
-    tagsAreHowListsAreFound: "Le etichette sono il modo in cui questa lista si trova nel catalogo della community.",
     addTag: "Aggiungi tag",
+    changeTags: "Modifica",
     removeTag: (p: { tag: string }) => `Rimuovi ${p.tag}`,
     listSummary: (p: { prompts: number; visibility: string; moderationState: string | null }) =>
       `${counted(p.prompts, { one: "parola", other: "parole" })} · ${p.visibility}${
