@@ -1277,8 +1277,6 @@ export const NL: Catalogue = {
     showMore: "Meer tonen",
     openDrawing: (p: { prompt: string; drawer: string }) => `‘${p.prompt}’ van ${p.drawer} openen`,
     byDrawer: (p: { drawer: string }) => `van ${p.drawer}`,
-    seeTheGallery: "Naar de galerij",
-    nothingThisWeek: "Nog geen openbare tekeningen deze week. Speel een openbaar spel en kom terug.",
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: { minute: "minuut", hour: "uur", day: "dag" }[p.unit], other: { minute: "minuten", hour: "uur", day: "dagen" }[p.unit] })} geleden`,
     justNow: "zojuist",
     byDrawerPrefix: "van",

@@ -4,7 +4,6 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
-import { ThisWeekShelf } from "../components/ThisWeekShelf";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
@@ -507,8 +506,6 @@ export function LobbyBrowserPage() {
       {/* Two panels that are about the people here rather than the rooms, so
           they sit below the list rather than above it. They stack on a phone
           in the same order: the room browser is what the page is for. */}
-      <ThisWeekShelf />
-
       <div className="lobby-social">
         <LobbyChatPanel />
 

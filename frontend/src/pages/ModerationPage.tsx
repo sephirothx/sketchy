@@ -118,7 +118,7 @@ const FILTERS: { name: Filter; label: string }[] = [
   { name: "players", label: "Player reports" },
   { name: "content", label: "Prompt content" },
   { name: "held", label: "Held publications" },
-  { name: "gallery", label: "Gallery shelf" },
+  { name: "gallery", label: "This week" },
   { name: "bans", label: "Suspensions" },
   { name: "closed", label: "Closed" },
 ];
@@ -438,7 +438,7 @@ export function ModerationPage() {
   // only a list waiting for somebody to read it.
   const [held, setHeld] = useState<HeldPublication[]>([]);
   const [heldDetail, setHeldDetail] = useState<HeldPublicationDetail | null>(null);
-  // The lobby shelf's candidates while the operator switch holds it
+  // This week's candidates while the operator switch holds it
   // (R-GAL-09). Nobody complained about these either: they are the week's
   // most-reacted drawings, waiting for somebody to look before the front
   // page shows them.
@@ -870,7 +870,7 @@ export function ModerationPage() {
                   : filter === "gallery"
                     ? gallery.review
                       ? "Nothing is waiting for the shelf."
-                      : "The lobby shelf is not being held for review. Turn it on in Operations to see candidates here."
+                      : "This week is not being held for review. Turn it on in Operations to see candidates here."
                     : showingClosed
                     ? page > 0
                       ? "No older cases."
@@ -1596,7 +1596,7 @@ export function ModerationPage() {
                           "released",
                           note[galleryCase.turnId],
                         ),
-                      "Released onto the lobby shelf.",
+                      "Released onto This week.",
                     )
                   }
                 >

@@ -1322,13 +1322,13 @@ cd backend
 ```
 
 `gallery_hidden_at` is a moderator's judgement about the lobby (R-GAL-09), not an
-erasure: set, the drawing is out of the Gallery, the lobby shelf, the gallery bytes route
+erasure: set, the drawing is out of the Gallery, This week, the gallery bytes route
 and the gallery reaction door in one act — all four read the one predicate — while its
 bytes stay and the players who were there keep seeing it in their history. Released
 clears it. Audited as `gallery.review_hidden` / `gallery.review_released` with
 `target_type = 'drawing'` and the drawer as the target account, in the same transaction as
 the decision: a hidden drawing with no ledger entry would be a lie, so neither lands
-without the other, and the lobby's cached shelf is recomputed only once both have.
+without the other, and the cached This week shelf is recomputed only once both have.
 
 Every drawing from a completed game is kept **for as long as that game, in the same
 transaction that records it**. The stored bytes are the canvas frame itself — the
@@ -1462,7 +1462,7 @@ account *gave* stay, attributed through the tombstoned seat.
 `turn_id` **PK** (→ `turn_records`, CASCADE) · `decision` ∈ `released \| hidden` ·
 `decided_by_user_id` (→ `users`, SET NULL, indexed) · `decided_at`.
 
-A moderator's answer about one drawing's place on the lobby's **This week** shelf
+A moderator's answer about one drawing's place on the Gallery's **This week** shelf
 (#524, R-GAL-10), one row per turn — a later decision replaces the earlier one, so
 *undecided* is the absence of a row. Read only while `app_config['gallery.shelf_review']`
 is set: then the shelf takes released drawings only, and `GET /api/moderation/gallery`
@@ -1721,7 +1721,7 @@ queue where it could still be decided on.
 The gallery's shelf has a switch of the same shape, `app_config['gallery.shelf_review']`
 ([`services/gallery_shelf.py`](../backend/app/services/gallery_shelf.py)), written by
 `POST /api/admin/gallery-shelf-review` and audited as `gallery.shelf_review_changed`; it
-holds the lobby's **This week** shelf for a moderator's release and nothing else
+holds the Gallery's **This week** for a moderator's release and nothing else
 (R-GAL-10, `gallery_shelf_reviews` in §6).
 
 The operator switch is `app_config['prompt_lists.publication_review']`

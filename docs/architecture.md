@@ -300,7 +300,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Canvas history, generation, sequence, replay budget | `CanvasSession` (memory) | No |
 | Phase/hint/restart/disconnect timers | `TimerManager` (memory) | No |
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
-| The lobby's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
+| The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
 | Quick custom prompts typed into a room | `Room` (memory) | No |
@@ -1702,7 +1702,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/game_flow.py`](../backend/app/services/game_flow.py) | Shared workflows used by the domain-specific Socket.IO handlers. |
 | [`app/services/game_handoff.py`](../backend/app/services/game_handoff.py) | Durable handoff of a finished game into history (#541). |
 | [`app/services/gallery_ranking.py`](../backend/app/services/gallery_ranking.py) | The Gallery's ranking projections (#524): the Hot score, and their rebuild. |
-| [`app/services/gallery_shelf.py`](../backend/app/services/gallery_shelf.py) | The lobby's **This week** shelf (#524, R-GAL-07): Top-week's first six, computed at most once a minute. |
+| [`app/services/gallery_shelf.py`](../backend/app/services/gallery_shelf.py) | The **This week** shelf (#524, R-GAL-07): Top-week's first six, computed at most once a minute. |
 | [`app/services/game_highlights.py`](../backend/app/services/game_highlights.py) | Pick the few moments from a finished game worth putting on the final screen. |
 | [`app/services/game_history.py`](../backend/app/services/game_history.py) | Turn a finished in-memory game into the rows that record it. |
 | [`app/services/drawing_reactions.py`](../backend/app/services/drawing_reactions.py) | Decide whether, and to which drawing, a room seat may react (#520). |

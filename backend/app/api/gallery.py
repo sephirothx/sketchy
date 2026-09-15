@@ -68,7 +68,7 @@ def create_gallery_router(
     *,
     shelf: GalleryShelfCache | None = None,
 ) -> APIRouter:
-    """`shelf` is the process-wide cache of the lobby's shelf; a router built
+    """`shelf` is the process-wide cache of This week; a router built
     without one gets a cache of its own over the repository."""
     router = APIRouter(prefix="/api/gallery")
     shelf_cache = shelf or GalleryShelfCache(
@@ -151,12 +151,12 @@ def create_gallery_router(
 
     @router.get("/week")
     async def this_week(request: Request, response: Response):
-        """The lobby's **This week** shelf (R-GAL-07): Top over the last seven
+        """**This week** (R-GAL-07): Top over the last seven
         days, the first six, from a snapshot recomputed at most once a minute
         and shared by every lobby. The viewer's own facts are added per
         request; the validator names the snapshot and those facts, so a
         remembered copy is answered `304` until either moves. No session is
-        the page's `account_required`, so the lobby renders no shelf at all.
+        the page's `account_required`, so nothing renders a shelf at all.
         """
         throttle(request)
         viewer_id = getattr(request.state, "user_id", None)

@@ -1058,7 +1058,7 @@ def create_moderation_router(
     on_avatar_changed: Callable[[str, str | None], Awaitable[None]] | None = None,
     # The Gallery's repository, for a moderator's decision on a drawing and a
     # report filed from the Gallery (#524); and what to call once a decision
-    # is written, so the lobby's cached shelf does not wait a minute for it.
+    # is written, so the cached This week shelf does not wait a minute for it.
     game_history_repo: GameHistoryRepository | None = None,
     on_gallery_decision: Callable[[], None] | None = None,
 ) -> APIRouter:
@@ -3014,7 +3014,7 @@ def create_moderation_router(
 
     @router.get("/moderation/gallery")
     async def gallery_review_queue(request: Request):
-        """The lobby shelf's review queue (R-GAL-10): whether the switch is
+        """This week's review queue (R-GAL-10): whether the switch is
         set, and the current Top-week candidates nobody has decided. With the
         switch off nothing waits, since the shelf is Top-week directly."""
         async with session_factory() as session:
