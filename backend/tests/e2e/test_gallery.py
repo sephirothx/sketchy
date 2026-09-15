@@ -75,7 +75,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             cards = stranger.locator('[data-testid="gallery-card"]')
             ours = [cards.filter(has_text=prompt) for prompt in prompts]
             for _ in range(20):
-                if all(await card.count() == 1 for card in ours):
+                if all([await card.count() == 1 for card in ours]):
                     break
                 await stranger.wait_for_timeout(2_000)
                 await stranger.reload()
