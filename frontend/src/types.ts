@@ -125,6 +125,9 @@ export interface CommunityPromptList {
   copyCount: number;
   /** Null when nobody is signed in: a different answer from `false`. */
   starredByMe: boolean | null;
+  /** Whether the caller owns it, so their own list offers no copy (R-LIST-17).
+      Null when nobody is signed in, like the star. */
+  isMine: boolean | null;
   publishedAt: string;
   version: number;
 }
@@ -648,6 +651,8 @@ export type ErrorCode =
   | "unknown_prompt_tag"
   | "prompt_list_hidden"
   | "prompt_list_allowance_reached"
+  | "cannot_copy_own_prompt_list"
+  | "cannot_duplicate_prompt_list"
   | "unknown_sort"
   | "timezone_required"
   | "range_reversed"

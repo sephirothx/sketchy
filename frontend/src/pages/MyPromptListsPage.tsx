@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { AddEmailDialog } from "../components/AddEmailDialog";
 import { AppHeader } from "../components/AppHeader";
-import { CheckIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
+import { AlertIcon, CheckIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
+  duplicateOwnedPromptList,
   getOwnedPromptList,
   listOwnedPromptLists,
   listPromptTags,
@@ -15,14 +17,19 @@ import {
 } from "../lib/promptLists";
 import {
   describePromptMerge,
+  duplicateName,
+  emailPublishBlocker,
   mergePromptEntries,
   promptEntriesFromQuickInput,
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
+import { maskEmail } from "../lib/accountRecovery";
 import { promptLanguageLabel } from "../lib/promptLanguages";
+import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
+import { useEmailStateStore } from "../store/emailStateStore";
 import type { CopiedFrom, OwnedPromptList, PromptLanguage, PromptTag } from "../types";
-import { refusalText } from "../lib/refusals.ts";
+import { refusalCode, refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
 const LANGUAGES: PromptLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt"];
@@ -68,7 +75,12 @@ export function MyPromptListsPage() {
   const user = useAuthStore((state) => state.user);
   const userId = user?.id;
   const isAnonymous = user?.isAnonymous;
-  const initialQuickPrompts = (location.state as { quickPrompts?: string } | null)?.quickPrompts;
+  const arrival = location.state as { quickPrompts?: string; openListId?: string } | null;
+  const initialQuickPrompts = arrival?.quickPrompts;
+  const { notify } = useToast();
+  const emailState = useEmailStateStore((state) => state.state);
+  const [addingEmail, setAddingEmail] = useState(false);
+  const openOnArrival = useRef(arrival?.openListId);
   const [lists, setLists] = useState<OwnedPromptList[]>([]);
   const [tagVocabulary, setTagVocabulary] = useState<PromptTag[]>([]);
   const [maxTags, setMaxTags] = useState(0);
@@ -89,8 +101,14 @@ export function MyPromptListsPage() {
   }));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Messages sit where the thing they are about happened: a
+  // success is a toast and goes, a refusal stays beside the control that was
+  // refused. The page is long, and one line above Save at the very bottom
+  // said "could not publish" a screen away from the Publish button.
+  const [listError, setListError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  // `reload` when the refusal was a stale version: reloading is the fix.
+  const [actionError, setActionError] = useState<{ sentence: string; reload: boolean } | null>(null);
   const [bulkInput, setBulkInput] = useState("");
   const [promptSearch, setPromptSearch] = useState("");
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
@@ -101,15 +119,26 @@ export function MyPromptListsPage() {
     let cancelled = false;
     void listOwnedPromptLists()
       .then((loaded) => {
-        if (!cancelled) setLists(loaded);
+        if (cancelled) return;
+        setLists(loaded);
+        // Opened from the catalogue's "Edit in My prompt lists": that list,
+        // if it is still one of this account's.
+        if (openOnArrival.current && loaded.some((item) => item.id === openOnArrival.current)) {
+          void openList(openOnArrival.current);
+        }
+        openOnArrival.current = undefined;
       })
       .catch(() => {
-        if (!cancelled) setError(ui.myPromptListsPage.couldNotLoadYourPromptLists);
+        if (!cancelled) setListError(ui.myPromptListsPage.couldNotLoadYourPromptLists);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
+    // `openList` is read once, for the arrival: the load is keyed on the
+    // account, and re-running it because a handler was redefined would reload
+    // the lists on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isAnonymous]);
 
   useEffect(() => {
@@ -131,6 +160,25 @@ export function MyPromptListsPage() {
   // the whole control changes shape around.
   const full = draft.tags.length >= maxTags;
 
+  function clearMessages() {
+    setPublishError(null);
+    setActionError(null);
+  }
+
+  /** Put a list the server just answered with on screen, whole. */
+  function show(promptList: OwnedPromptList) {
+    setSelectedId(promptList.id);
+    setVersion(promptList.version);
+    setPublished(promptList.visibility === "public");
+    setReach({ stars: promptList.starCount, copies: promptList.copyCount });
+    setCopiedFrom(promptList.copiedFrom);
+    setModerationState(promptList.moderationState);
+    setPromptModeration(Object.fromEntries(
+      promptList.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
+    ));
+    setDraft(draftFromList(promptList));
+  }
+
   function beginNew() {
     setSelectedId(null);
     setVersion(null);
@@ -142,33 +190,26 @@ export function MyPromptListsPage() {
     setDraft({ ...EMPTY_DRAFT, prompts: [] });
     setBulkInput("");
     setMergeSummary(null);
-    setError(null);
-    setNotice(null);
+    clearMessages();
   }
 
   async function togglePublished() {
     if (!selectedId) return;
     setBusy(true);
-    setError(null);
-    setNotice(null);
+    clearMessages();
     try {
       const saved = await setOwnedPromptListPublished(selectedId, !published);
-      setPublished(saved.visibility === "public");
-      setReach({ stars: saved.starCount, copies: saved.copyCount });
-      setCopiedFrom(saved.copiedFrom);
-      setVersion(saved.version);
-      setModerationState(saved.moderationState);
-      setDraft(draftFromList(saved));
+      show(saved);
       setLists((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-      setNotice(saved.visibility === "public"
+      notify(saved.visibility === "public"
         ? ui.myPromptListsPage.promptListPublished
-        : ui.myPromptListsPage.promptListUnpublished);
+        : ui.myPromptListsPage.promptListUnpublished, "success");
     } catch (publishError) {
       // Written from the refusal's code, not the server's words: every reason
       // a publish is refused is something the owner can act on - confirm an
       // address, read a warning, wait for a moderator - so each has its own
       // sentence, in the reader's language (R-I18N-01).
-      setError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
+      setPublishError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
     } finally {
       setBusy(false);
     }
@@ -176,23 +217,13 @@ export function MyPromptListsPage() {
 
   async function openList(id: string) {
     setLoading(true);
-    setError(null);
+    clearMessages();
     try {
-      const loaded = await getOwnedPromptList(id);
-      setSelectedId(loaded.id);
-      setVersion(loaded.version);
-      setPublished(loaded.visibility === "public");
-      setReach({ stars: loaded.starCount, copies: loaded.copyCount });
-      setCopiedFrom(loaded.copiedFrom);
-      setModerationState(loaded.moderationState);
-      setPromptModeration(Object.fromEntries(
-        loaded.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
-      ));
-      setDraft(draftFromList(loaded));
+      show(await getOwnedPromptList(id));
       setBulkInput("");
       setMergeSummary(null);
     } catch {
-      setError(ui.myPromptListsPage.couldNotOpenThatPromptList);
+      setActionError({ sentence: ui.myPromptListsPage.couldNotOpenThatPromptList, reload: false });
     } finally {
       setLoading(false);
     }
@@ -215,7 +246,7 @@ export function MyPromptListsPage() {
     }
     setDraft((current) => ({ ...current, prompts: result.entries }));
     setBulkInput("");
-    setError(null);
+    setActionError(null);
     // Silence on a clean import: the list itself is the feedback. Anything
     // dropped has to be said, or a paste quietly loses entries.
     setMergeSummary(describePromptMerge(result));
@@ -235,12 +266,11 @@ export function MyPromptListsPage() {
   async function save() {
     if (busy) return;
     if (draft.prompts.length === 0) {
-      setError(ui.myPromptListsPage.addAtLeastOnePromptBefore);
+      setActionError({ sentence: ui.myPromptListsPage.addAtLeastOnePromptBefore, reload: false });
       return;
     }
     setBusy(true);
-    setError(null);
-    setNotice(null);
+    clearMessages();
     try {
       const cleaned = {
         ...draft,
@@ -259,22 +289,14 @@ export function MyPromptListsPage() {
             tags: cleaned.tags,
           })
         : await createOwnedPromptList(cleaned);
-      setSelectedId(saved.id);
-      setVersion(saved.version);
-      setPublished(saved.visibility === "public");
-      setReach({ stars: saved.starCount, copies: saved.copyCount });
-      setCopiedFrom(saved.copiedFrom);
-      setModerationState(saved.moderationState);
-      setPromptModeration(Object.fromEntries(
-        saved.prompts.map((prompt) => [prompt.conceptId, prompt.moderationState]),
-      ));
-      setDraft(draftFromList(saved));
+      show(saved);
       setLists((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-      setNotice(ui.myPromptListsPage.promptListSaved);
+      notify(ui.myPromptListsPage.promptListSaved, "success");
     } catch (saveError) {
-      setError(
-        refusalText(saveError, ui.myPromptListsPage.couldNotSaveThisPromptList),
-      );
+      setActionError({
+        sentence: refusalText(saveError, ui.myPromptListsPage.couldNotSaveThisPromptList),
+        reload: refusalCode(saveError) === "prompt_list_conflict",
+      });
     } finally {
       setBusy(false);
     }
@@ -284,18 +306,51 @@ export function MyPromptListsPage() {
     if (!selectedId || busy) return;
     if (!window.confirm(ui.myPromptListsPage.deleteThisPromptListAnd)) return;
     setBusy(true);
-    setError(null);
+    clearMessages();
     try {
       await deleteOwnedPromptList(selectedId);
       setLists((current) => current.filter((item) => item.id !== selectedId));
       beginNew();
-      setNotice(ui.myPromptListsPage.promptListDeleted);
+      notify(ui.myPromptListsPage.promptListDeleted, "success");
     } catch {
-      setError(ui.myPromptListsPage.couldNotDeleteThisPromptList);
+      setActionError({ sentence: ui.myPromptListsPage.couldNotDeleteThisPromptList, reload: false });
     } finally {
       setBusy(false);
     }
   }
+
+  /** A new private list with this one's saved contents, and no history.
+
+  It records no copy and credits nobody: it is the author's own content twice,
+  which is what "Make a copy" in the catalogue refuses to count (R-LIST-17). The
+  server builds it from the *saved* list, leaving out what a moderator hid, so
+  what comes out is neither an edit nobody saved nor a takedown undone. */
+  async function duplicate() {
+    if (!selectedId || busy) return;
+    setBusy(true);
+    clearMessages();
+    try {
+      const saved = lists.find((item) => item.id === selectedId);
+      const created = await duplicateOwnedPromptList(
+        selectedId,
+        duplicateName(saved?.name ?? draft.name),
+      );
+      show(created);
+      setBulkInput("");
+      setMergeSummary(null);
+      setLists((current) => [created, ...current]);
+      notify(ui.myPromptListsPage.listDuplicated({ name: created.name }), "success");
+    } catch (duplicateError) {
+      setActionError({
+        sentence: refusalText(duplicateError, ui.myPromptListsPage.couldNotDuplicateThisList),
+        reload: false,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const publishBlocker = emailPublishBlocker(emailState, published);
 
   return <main className="prompt-list-manager-page">
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
@@ -312,7 +367,9 @@ export function MyPromptListsPage() {
         <div className="prompt-list-manager-layout">
           <aside aria-label={ui.myPromptListsPage.yourPromptLists}>
             {loading && lists.length === 0 && <p>{ui.myPromptListsPage.loading}</p>}
-            {lists.length === 0 && !loading && <p>{ui.myPromptListsPage.noSavedListsYet}</p>}
+            {listError
+              ? <p className="prompt-list-alert is-error" role="alert"><AlertIcon size={14} /><span>{listError}</span></p>
+              : lists.length === 0 && !loading && <p>{ui.myPromptListsPage.noSavedListsYet}</p>}
             {lists.map((item) => <button
               type="button"
               key={item.id}
@@ -360,9 +417,17 @@ export function MyPromptListsPage() {
                 <strong>{published ? ui.myPromptListsPage.inCommunityCatalogue : ui.myPromptListsPage.notPublished}</strong>
                 <p>{published
                   ? ui.myPromptListsPage.publishedExplainer
-                  : selectedId
-                    ? ui.myPromptListsPage.unpublishedExplainer
-                    : ui.myPromptListsPage.saveBeforePublishing}</p>
+                  : publishBlocker === "no-address"
+                    ? ui.myPromptListsPage.publishNeedsAnEmail
+                    : publishBlocker === "pending" && emailState?.pendingAddress
+                      // Masked, as every other place this address is shown
+                      // outside Settings (R-SET-08).
+                      ? ui.myPromptListsPage.publishNeedsConfirmation({ address: maskEmail(emailState.pendingAddress) })
+                      : publishBlocker === "undeliverable"
+                        ? ui.myPromptListsPage.publishNeedsEmailDelivery
+                        : selectedId
+                          ? ui.myPromptListsPage.unpublishedExplainer
+                          : ui.myPromptListsPage.saveBeforePublishing}</p>
                 {/* Shown once there is anything to show: a list that was never
                     published has neither, and a row of zeros under "Not
                     published" says nothing. A list taken back out keeps what
@@ -372,12 +437,24 @@ export function MyPromptListsPage() {
                   <span><CopyIcon size={14} />{ui.myPromptListsPage.copyCount({ count: reach.copies })}</span>
                 </p>}
               </div>
-              <button
-                type="button"
-                className={published ? "btn btn-secondary btn-compact" : "btn btn-primary btn-compact"}
-                disabled={busy || !selectedId}
-                onClick={() => void togglePublished()}
-              >{published ? ui.myPromptListsPage.unpublish : ui.myPromptListsPage.publish}</button>
+              <div className="prompt-list-publication-actions">
+                {(publishBlocker === "no-address" || publishBlocker === "pending") && <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  onClick={() => setAddingEmail(true)}
+                >{publishBlocker === "pending" ? ui.myPromptListsPage.changeEmail : ui.myPromptListsPage.addAnEmail}</button>}
+                <button
+                  type="button"
+                  className={published ? "btn btn-secondary btn-compact" : "btn btn-primary btn-compact"}
+                  disabled={busy || !selectedId || publishBlocker !== null}
+                  onClick={() => void togglePublished()}
+                >{published ? ui.myPromptListsPage.unpublish : ui.myPromptListsPage.publish}</button>
+              </div>
+              {/* A refusal of the act this panel performs belongs in the panel,
+                  not at the bottom of the form a screen away from its button. */}
+              {publishError && <p className="prompt-list-alert is-error prompt-list-publication-error" role="alert">
+                <AlertIcon size={14} /><span>{publishError}</span>
+              </p>}
             </div>
             {tagVocabulary.length > 0 && <fieldset className="prompt-list-tags">
               {/* Toggle chips rather than checkboxes: choosing several things
@@ -501,15 +578,33 @@ export function MyPromptListsPage() {
               </>
             )}
             </div>
-            {error && <p className="auth-error" role="alert">{error}</p>}
-            {notice && <p className="prompt-list-manager-notice" role="status">{notice}</p>}
+            {/* Pinned to the bottom of the viewport, so Save - and whatever
+                stopped it - stays in reach however long the list gets. */}
             <div className="prompt-list-manager-actions">
-              {selectedId && <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
-              <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
+              {actionError
+                ? <p className="prompt-list-alert is-error" role="alert">
+                  <AlertIcon size={14} /><span>{actionError.sentence}</span>
+                  {actionError.reload && selectedId && <button
+                    type="button"
+                    className="prompt-list-alert-action"
+                    disabled={busy}
+                    onClick={() => void openList(selectedId)}
+                  >{ui.myPromptListsPage.reload}</button>}
+                </p>
+                : <span />}
+              <div className="prompt-list-manager-buttons">
+                {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => void remove()}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
+                {selectedId && !copiedFrom && moderationState === "active" && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
+                <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
+              </div>
             </div>
           </form>
         </div>
       )}
     </section>
+    {addingEmail && <AddEmailDialog
+      onClose={() => setAddingEmail(false)}
+      onSaved={() => setAddingEmail(false)}
+    />}
   </main>;
 }

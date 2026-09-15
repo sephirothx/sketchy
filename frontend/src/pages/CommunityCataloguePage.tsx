@@ -509,7 +509,17 @@ export function CommunityCataloguePage() {
                 className="btn btn-primary btn-compact"
                 onClick={() => navigate(`/create?list=${encodeURIComponent(detail.id)}`)}
               >{ui.communityCataloguePage.playThisList}</button>
-              {registered ? <>
+              {registered && detail.isMine ? <>
+                {/* Your own list is edited, not copied or reported: a copy
+                    would count and credit you to yourself (R-LIST-17), and
+                    My prompt lists duplicates it without either. */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  onClick={() => navigate("/my-prompt-lists", { state: { openListId: detail.id } })}
+                >{ui.communityCataloguePage.editInMyPromptLists}</button>
+                <p className="community-catalogue-signed-out">{ui.communityCataloguePage.thisIsYourList}</p>
+              </> : registered ? <>
                 <button
                   type="button"
                   className="btn btn-secondary btn-compact"

@@ -107,6 +107,14 @@ class CreateOwnedPromptListRequest(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=MAX_LIST_TAGS)
 
 
+class DuplicateOwnedPromptListRequest(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    # The client names it, because "(duplicate)" is a word in the reader's
+    # language and the server does not write player-facing words (R-I18N-01).
+    name: str = Field(min_length=1, max_length=64)
+
+
 class UpdateOwnedPromptListRequest(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
@@ -550,6 +558,28 @@ def create_prompt_list_router(
         except PromptListMutationError as error:
             raise mutation_error(error) from error
         return owned_prompt_list_payload(updated)
+
+    @router.post(
+        "/prompt-lists/mine/{prompt_list_id}/duplicate",
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def duplicate_my_prompt_list(
+        prompt_list_id: str, body: DuplicateOwnedPromptListRequest, request: Request
+    ):
+        """A second list of the owner's with this one's contents and no history.
+
+        A route of its own rather than the client re-creating the list from the
+        editor, because the editor shows its owner hidden prompts, and an
+        ordinary create would give them new, active identities (R-LIST-17).
+        """
+        user = await require_registered(request)
+        try:
+            created = await prompt_list_repo.duplicate_owned(
+                user.id, prompt_list_id, name=body.name
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        return owned_prompt_list_payload(created)
 
     @router.delete(
         "/prompt-lists/mine/{prompt_list_id}",

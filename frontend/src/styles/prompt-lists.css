@@ -121,12 +121,67 @@
   margin: 10px 0 4px;
 }
 
+/* The form's actions, pinned to the bottom of the viewport: a list runs to
+   500 prompts, and Save - with whatever stopped it - has to stay in reach
+   without scrolling past all of them. The shadow says it floats over the form
+   rather than ending it. */
 .prompt-list-manager-actions {
   align-items: center;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  bottom: 0;
+  box-shadow: 0 -10px 18px -14px rgba(20, 16, 10, 0.3);
   display: flex;
   gap: 10px;
   justify-content: space-between;
+  padding-block: 10px;
+  position: sticky;
+  z-index: 2;
 }
+
+.prompt-list-manager-buttons {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: end;
+}
+
+/* A refusal, beside what it refused. Icon and words in the danger ink on its
+   soft wash, so it reads as a state rather than as another line of the form. */
+.prompt-list-alert {
+  align-items: flex-start;
+  border-radius: 8px;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  line-height: 1.4;
+  margin: 0;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.prompt-list-alert svg { flex: none; margin-top: 1px; }
+.prompt-list-alert.is-error { background: var(--danger-soft); color: var(--danger); }
+
+/* In the pinned bar the wash would be a second box inside the bar. */
+.prompt-list-manager-actions .prompt-list-alert { background: none; padding: 0; }
+
+.prompt-list-alert-action {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  margin-left: 4px;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prompt-list-alert-action:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* Publication reads as a state with one action, not a value in a select: it is
    an act with a gate behind it, and the only way a list stops being private. */
@@ -136,12 +191,24 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   justify-content: space-between;
   padding: 12px;
 }
 
-.prompt-list-publication p {
+.prompt-list-publication > div:first-child { flex: 1 1 260px; min-width: 0; }
+
+.prompt-list-publication-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prompt-list-publication .prompt-list-publication-error { flex-basis: 100%; }
+
+.prompt-list-publication > div > p {
   color: var(--muted);
   font-size: 13px;
   margin: 4px 0 0;
@@ -381,7 +448,6 @@
   margin: 0;
   padding: 10px 12px;
 }
-.prompt-list-manager-notice { color: var(--success-ink); }
 .prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
 
 @media (max-width: 700px) {

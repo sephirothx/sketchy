@@ -359,6 +359,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Não te podes denunciar a ti próprio.",
+  cannot_copy_own_prompt_list: "Essa lista já é tua. Duplica-a em As minhas listas de palavras.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Uma lista que copiaste de outra pessoa não pode ser duplicada, para manter a atribuição."
+      : "Uma lista que a moderação está a rever ou ocultou não pode ser duplicada.",
   cannot_report_own_prompt_list: "Não podes denunciar a tua própria lista de palavras.",
   no_reportable_prompt_list: "Não foi encontrada nenhuma lista de palavras denunciável.",
   prompt_not_in_list: "Essa palavra não pertence a esta lista.",
@@ -1203,6 +1208,8 @@ export const PT: Catalogue = {
     copiedFromADeletedList: "Copiada de uma lista que foi eliminada",
     showMore: "Mostrar mais",
     makeACopy: "Fazer uma cópia",
+    thisIsYourList: "Esta lista é tua.",
+    editInMyPromptLists: "Editar em As minhas listas de palavras",
     report: "Denunciar",
     signInToStarCopyOrReport: "É preciso uma conta para dar estrelas, copiar ou denunciar.",
     whatIsInIt: "O que contém",
@@ -1236,6 +1243,18 @@ export const PT: Catalogue = {
     publishedExplainer: "Qualquer pessoa pode encontrar esta lista, jogá-la, dar-lhe uma estrela ou fazer uma cópia sua.",
     unpublishedExplainer: "Ao publicar, qualquer pessoa pode encontrar e jogar esta lista. Pode ser retirada a qualquer momento.",
     saveBeforePublishing: "Guarda a lista primeiro. Fica privada até a publicares.",
+    publishNeedsAnEmail: "Para publicar, adiciona um endereço de e-mail à tua conta e confirma-o. Fica privado: é o que liga uma lista publicada a uma pessoa real.",
+    publishNeedsConfirmation: (p: { address: string }) =>
+      `Confirma ${p.address} no e-mail que enviámos e depois já podes publicar.`,
+    publishNeedsEmailDelivery: "Para publicar é preciso um endereço de e-mail confirmado, e este servidor não consegue enviar e-mails.",
+    addAnEmail: "Adicionar um e-mail",
+    changeEmail: "Mudar o e-mail",
+    duplicate: "Duplicar",
+    duplicateName: (p: { name: string }) => `${p.name} (duplicado)`,
+    listDuplicated: (p: { name: string }) =>
+      `Duplicada como «${p.name}».`,
+    couldNotDuplicateThisList: "Não foi possível duplicar esta lista.",
+    reload: "Recarregar",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "estrela", other: "estrelas" }),
     copyCount: (p: { count: number }) =>

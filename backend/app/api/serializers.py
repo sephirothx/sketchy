@@ -231,6 +231,7 @@ def community_prompt_list_payload(prompt_list: CommunityPromptList) -> dict:
         "starCount": prompt_list.star_count,
         "copyCount": prompt_list.copy_count,
         "starredByMe": prompt_list.starred_by_me,
+        "isMine": prompt_list.is_mine,
         "publishedAt": _timestamp(prompt_list.published_at),
         "version": prompt_list.version,
     }
@@ -253,9 +254,8 @@ def copied_from_payload(credit: CopiedFrom | None) -> dict | None:
 def community_prompt_list_detail_payload(prompt_list: CommunityPromptListDetail) -> dict:
     """A catalogue row with the prompts in it (R-LIST-19).
 
-    The same entry shape the share-code flow returns, and for the same reason
-    its docstring gives: a version id is what lets a reader report one exact
-    prompt instead of the whole list. Aliases and concept ids stay out - they
+    A version id is what lets a reader report one exact prompt instead of the
+    whole list. Aliases and concept ids stay out - they
     are matching machinery, and nobody reading a catalogue needs them.
     """
     return {

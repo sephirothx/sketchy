@@ -359,6 +359,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Je kunt jezelf niet melden.",
+  cannot_copy_own_prompt_list: "Die lijst is al van jou. Dupliceer hem via Mijn woordenlijsten.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Een lijst die je van iemand anders hebt gekopieerd, kan niet gedupliceerd worden, zodat de bronvermelding blijft."
+      : "Een lijst die de moderatie beoordeelt of heeft verborgen, kan niet gedupliceerd worden.",
   cannot_report_own_prompt_list: "Je kunt je eigen woordenlijst niet melden.",
   no_reportable_prompt_list: "Geen meldbare woordenlijst gevonden.",
   prompt_not_in_list: "Dit woord hoort niet bij deze lijst.",
@@ -1203,6 +1208,8 @@ export const NL: Catalogue = {
     copiedFromADeletedList: "Gekopieerd uit een lijst die is verwijderd",
     showMore: "Meer tonen",
     makeACopy: "Kopie maken",
+    thisIsYourList: "Dit is jouw lijst.",
+    editInMyPromptLists: "Bewerken in Mijn woordenlijsten",
     report: "Melden",
     signInToStarCopyOrReport: "Een account is nodig om een ster te geven, te kopiëren of te melden.",
     whatIsInIt: "Wat erin zit",
@@ -1236,6 +1243,18 @@ export const NL: Catalogue = {
     publishedExplainer: "Iedereen kan deze lijst vinden, ermee spelen, een ster geven of er een eigen kopie van maken.",
     unpublishedExplainer: "Door te publiceren kan iedereen deze lijst vinden en spelen. Terugtrekken kan op elk moment.",
     saveBeforePublishing: "Sla de lijst eerst op. Hij blijft privé tot je hem publiceert.",
+    publishNeedsAnEmail: "Voeg om te publiceren een e-mailadres toe aan je account en bevestig het. Het blijft privé: zo blijft een gepubliceerde lijst verbonden aan een echt persoon.",
+    publishNeedsConfirmation: (p: { address: string }) =>
+      `Bevestig ${p.address} via de e-mail die we stuurden, daarna kun je publiceren.`,
+    publishNeedsEmailDelivery: "Publiceren vraagt een bevestigd e-mailadres, en deze server kan geen e-mail versturen.",
+    addAnEmail: "Een e-mailadres toevoegen",
+    changeEmail: "E-mailadres wijzigen",
+    duplicate: "Dupliceren",
+    duplicateName: (p: { name: string }) => `${p.name} (duplicaat)`,
+    listDuplicated: (p: { name: string }) =>
+      `Gedupliceerd als ‘${p.name}’.`,
+    couldNotDuplicateThisList: "Deze lijst kon niet gedupliceerd worden.",
+    reload: "Herladen",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "ster", other: "sterren" }),
     copyCount: (p: { count: number }) =>

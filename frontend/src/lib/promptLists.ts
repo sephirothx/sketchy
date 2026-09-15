@@ -155,6 +155,19 @@ export function setOwnedPromptListPublished(
   });
 }
 
+/** A new private list with this one's contents and none of its history.
+
+On the server rather than built here from the editor, because the editor shows
+its owner hidden prompts: a create from those would give them new, active
+identities. The server leaves them out, and refuses a list under moderation or
+one that is itself a copy (R-LIST-17). */
+export function duplicateOwnedPromptList(id: string, name: string): Promise<OwnedPromptList> {
+  return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}/duplicate`, {
+    method: "POST",
+    body: { name },
+  });
+}
+
 export function deleteOwnedPromptList(id: string): Promise<void> {
   return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}`, {
     method: "DELETE",

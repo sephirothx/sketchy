@@ -371,6 +371,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "You cannot report yourself.",
+  cannot_copy_own_prompt_list: "That list is already yours. Duplicate it from My prompt lists instead.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "A list you copied from somebody else cannot be duplicated, so its credit stays with it."
+      : "A list a moderator is reviewing or has hidden cannot be duplicated.",
   cannot_report_own_prompt_list: "You cannot report your own prompt list.",
   no_reportable_prompt_list: "No reportable prompt list found.",
   prompt_not_in_list: "That prompt does not belong to this list.",
@@ -1214,6 +1219,8 @@ export const EN = {
     copiedFromADeletedList: "Copied from a list that was deleted",
     showMore: "Show more",
     makeACopy: "Make a copy",
+    thisIsYourList: "This is your list.",
+    editInMyPromptLists: "Edit in My prompt lists",
     report: "Report",
     signInToStarCopyOrReport: "Sign in to star, copy or report a list.",
     whatIsInIt: "What is in it",
@@ -1247,6 +1254,16 @@ export const EN = {
     publishedExplainer: "Anyone can find this list, play it, star it, or make a copy of their own.",
     unpublishedExplainer: "Publishing puts this list where anyone can find and play it. You can take it back out at any time.",
     saveBeforePublishing: "Save the list first. It stays private until you publish it.",
+    publishNeedsAnEmail: "To publish, add an email address to your account and confirm it. It stays private: it is how a published list stays tied to a real person.",
+    publishNeedsConfirmation: (p: { address: string }) => `Confirm ${p.address} from the email we sent, then you can publish.`,
+    publishNeedsEmailDelivery: "Publishing needs a confirmed email address, and this server cannot send email.",
+    addAnEmail: "Add an email",
+    changeEmail: "Change email",
+    duplicate: "Duplicate",
+    duplicateName: (p: { name: string }) => `${p.name} (duplicate)`,
+    listDuplicated: (p: { name: string }) => `Duplicated as “${p.name}”.`,
+    couldNotDuplicateThisList: "Could not duplicate this list.",
+    reload: "Reload",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "star", other: "stars" }),
     copyCount: (p: { count: number }) =>

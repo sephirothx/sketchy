@@ -2736,6 +2736,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     starred_by_me=(
                         None if requester_id is None else prompt_list.id in mine
                     ),
+                    is_mine=(
+                        None
+                        if requester_id is None
+                        else prompt_list.owner_user_id == requester_id
+                    ),
                 )
                 for prompt_list, prompt_count, stars, display_name, copies in rows
             ),
@@ -2815,6 +2820,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             published_at=prompt_list.published_at,
             version=prompt_list.version,
             starred_by_me=starred_by_me,
+            is_mine=(
+                None if requester_id is None else prompt_list.owner_user_id == requester_id
+            ),
             prompts=tuple(
                 PromptListEntry(
                     concept_id=_public_id(item.prompt_version.concept_id),
@@ -3135,6 +3143,118 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             assert result is not None
             return result
 
+    async def _copy_into_new_list(
+        self,
+        session: AsyncSession,
+        *,
+        owner_id: UUID,
+        source: PromptList,
+        name: str,
+        lineage: bool,
+    ) -> UUID:
+        """Write a new private list holding *source*'s current revision.
+
+        The one place a list's content is carried into another list, shared by
+        a copy of somebody's published list and a duplicate of one's own, so
+        what may be carried is decided once for both: only prompt versions a
+        moderator left active, through the editor's own validation, checked
+        against the owner's allowance before anything is written. `lineage` is
+        the difference - a copy records the revision it came from and is marked
+        as one (R-LIST-17, R-LIST-21); a duplicate records neither.
+        """
+        # Checked before anything is written, so a refusal at the cap
+        # leaves nothing behind (R-LIST-08's spirit: fail visibly).
+        count = await session.scalar(
+            select(func.count(PromptList.id)).where(
+                PromptList.owner_user_id == owner_id,
+                PromptList.is_bundled.is_(False),
+                PromptList.deleted_at.is_(None),
+            )
+        )
+        if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
+            raise PromptListMutationError(
+                f"An account can own at most {MAX_OWNED_PROMPT_LISTS} "
+                "prompt lists. Delete one first.",
+                code=ErrorCode.PROMPT_LIST_ALLOWANCE_REACHED,
+                params={"max": MAX_OWNED_PROMPT_LISTS},
+            )
+        origin = await session.scalar(
+            select(PromptListRevision)
+            .where(
+                PromptListRevision.prompt_list_id == source.id,
+                PromptListRevision.version == source.version,
+            )
+            .options(
+                selectinload(PromptListRevision.items)
+                .selectinload(PromptListRevisionItem.prompt_version)
+                .selectinload(PromptVersion.version_aliases)
+                .selectinload(PromptVersionAlias.alias),
+                selectinload(PromptListRevision.revision_tags).selectinload(
+                    PromptListRevisionTag.tag
+                ),
+            )
+        )
+        if origin is None:
+            raise PromptListMutationError("That list has no revision to copy.")
+        # Only what a player may draw. Carrying a hidden version would hand
+        # content a moderator took out of play to a new list - under a new
+        # owner who never saw the decision, or back to its own author with a
+        # fresh identity and none of the finding (R-LIST-07, R-MOD-11).
+        entries = tuple(
+            PromptListEntryInput(
+                answer=item.prompt_version.canonical_answer,
+                aliases=tuple(
+                    sorted(
+                        link.alias.answer
+                        for link in item.prompt_version.version_aliases
+                    )
+                ),
+            )
+            for item in origin.items
+            if item.prompt_version.moderation_state
+            == PromptContentModerationState.ACTIVE.value
+        )
+        if not entries:
+            raise PromptListMutationError("That list has no usable prompts to copy.")
+        # Through the same validation an editor's save goes through, so the
+        # next thing that carries entries cannot quietly acquire its own rules.
+        entries = self._clean_owned_entries(entries, language=source.language)
+        list_id = generate_uuid()
+        created = PromptList(
+            id=list_id,
+            owner_user_id=owner_id,
+            slug=f"user-{list_id}",
+            name=name,
+            description=source.description,
+            language=source.language,
+            is_bundled=False,
+            is_copy=lineage,
+            visibility=PromptListVisibility.PRIVATE.value,
+            moderation_state=PromptContentModerationState.ACTIVE.value,
+            version=1,
+        )
+        session.add(created)
+        await session.flush()
+        await self._write_owned_revision(
+            session,
+            prompt_list=created,
+            entries=entries,
+            version=1,
+            tags=tuple(
+                slug
+                for slug in LIST_TAG_SLUG_ORDER
+                if slug in {link.tag.slug for link in origin.revision_tags}
+            ),
+        )
+        if lineage:
+            revision = await session.scalar(
+                select(PromptListRevision).where(
+                    PromptListRevision.prompt_list_id == list_id
+                )
+            )
+            revision.forked_from_revision_id = origin.id
+        return list_id
+
     async def fork_published(
         self, user_id: str, prompt_list_id: str
     ) -> OwnedPromptList:
@@ -3165,108 +3285,83 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if source is None:
                     raise PromptListNotFoundError("Prompt list not found.")
-                # Checked before anything is written, so a refusal at the cap
-                # leaves nothing behind (R-LIST-08's spirit: fail visibly).
-                count = await session.scalar(
-                    select(func.count(PromptList.id)).where(
-                        PromptList.owner_user_id == forker_id,
+                # A copy credits and counts toward the list it came from
+                # (R-LIST-20, R-LIST-21), and neither means anything when the
+                # author is the one copying: the count would be the author's
+                # own button presses, and the credit would name them to
+                # themselves. Their own list is duplicated instead.
+                if source.owner_user_id == forker_id:
+                    raise PromptListMutationError(
+                        "That list is already yours. Duplicate it from your own lists instead.",
+                        code=ErrorCode.CANNOT_COPY_OWN_PROMPT_LIST,
+                    )
+                list_id = await self._copy_into_new_list(
+                    session,
+                    owner_id=forker_id,
+                    source=source,
+                    name=source.name,
+                    lineage=True,
+                )
+            result = await self._owned_with_entries(session, forker_id, list_id)
+            assert result is not None
+            return result
+
+    async def duplicate_owned(
+        self, owner_user_id: str, prompt_list_id: str, *, name: str
+    ) -> OwnedPromptList:
+        """A second private list of the owner's, with this one's saved contents.
+
+        No lineage, no copy count, no credit (R-LIST-17): it is the author's own
+        content twice. Done here rather than by the client re-creating the list
+        from what the editor shows, because that shows hidden prompts and hidden
+        lists to their owner, and an ordinary create would give their text new,
+        active identities - a takedown undone by a button. So a list a moderator
+        is holding or hid is refused, hidden prompt versions are left out, and
+        a list that is itself a copy is refused too: a duplicate of it would be
+        the credit R-LIST-21 says its owner cannot remove.
+        """
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            raise PromptListNotFoundError("Prompt list not found.")
+        async with self._session_factory() as session:
+            async with session.begin():
+                await require_live_account(session, owner_id)
+                source = await session.scalar(
+                    select(PromptList).where(
+                        PromptList.id == list_id,
+                        PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
                         PromptList.deleted_at.is_(None),
                     )
                 )
-                if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
-                    raise PromptListMutationError(
-                        f"An account can own at most {MAX_OWNED_PROMPT_LISTS} "
-                        "prompt lists. Delete one before making a copy.",
-                        code=ErrorCode.PROMPT_LIST_ALLOWANCE_REACHED,
-                        params={"max": MAX_OWNED_PROMPT_LISTS},
-                    )
-                origin = await session.scalar(
-                    select(PromptListRevision)
-                    .where(
-                        PromptListRevision.prompt_list_id == source.id,
-                        PromptListRevision.version == source.version,
-                    )
-                    .options(
-                        selectinload(PromptListRevision.items)
-                        .selectinload(PromptListRevisionItem.prompt_version)
-                        .selectinload(PromptVersion.version_aliases)
-                        .selectinload(PromptVersionAlias.alias),
-                        selectinload(PromptListRevision.revision_tags).selectinload(
-                            PromptListRevisionTag.tag
-                        ),
-                    )
-                )
-                if origin is None:
-                    raise PromptListMutationError(
-                        "That list has no revision to copy."
-                    )
-                # Only what a player may draw. Copying a hidden version would
-                # hand somebody content a moderator took out of play, under a
-                # new owner who never saw the decision (R-LIST-07).
-                entries = tuple(
-                    PromptListEntryInput(
-                        answer=item.prompt_version.canonical_answer,
-                        aliases=tuple(
-                            sorted(
-                                link.alias.answer
-                                for link in item.prompt_version.version_aliases
-                            )
-                        ),
-                    )
-                    for item in origin.items
-                    if item.prompt_version.moderation_state
-                    == PromptContentModerationState.ACTIVE.value
-                )
-                if not entries:
-                    raise PromptListMutationError(
-                        "That list has no usable prompts to copy."
-                    )
-                # Through the same validation an editor's save goes through.
-                # A fork built its entries in code and reached
-                # `_write_owned_revision` directly, so every bound the editor
-                # is held to - the 500 ceiling above all - was unenforced on
-                # this path. Sources are capped at 500 themselves now that
-                # bundled lists are out, so this refuses nothing reachable;
-                # it is here so the next thing that copies entries cannot
-                # quietly acquire its own rules.
-                entries = self._clean_owned_entries(
-                    entries, language=source.language
-                )
-                list_id = generate_uuid()
-                fork = PromptList(
-                    id=list_id,
-                    owner_user_id=forker_id,
-                    slug=f"user-{list_id}",
-                    name=source.name,
+                if source is None:
+                    raise PromptListNotFoundError("Prompt list not found.")
+                name, _, _ = self._clean_owned_metadata(
+                    name=name,
                     description=source.description,
                     language=source.language,
-                    is_bundled=False,
-                    is_copy=True,
-                    visibility=PromptListVisibility.PRIVATE.value,
-                    moderation_state=PromptContentModerationState.ACTIVE.value,
-                    version=1,
                 )
-                session.add(fork)
-                await session.flush()
-                await self._write_owned_revision(
-                    session,
-                    prompt_list=fork,
-                    entries=entries,
-                    version=1,
-                    tags=tuple(
-                        slug
-                        for slug in LIST_TAG_SLUG_ORDER
-                        if slug in {link.tag.slug for link in origin.revision_tags}
-                    ),
-                )
-                revision = await session.scalar(
-                    select(PromptListRevision).where(
-                        PromptListRevision.prompt_list_id == list_id
+                if source.moderation_state != PromptContentModerationState.ACTIVE.value:
+                    raise PromptListMutationError(
+                        "A list under moderation cannot be duplicated.",
+                        code=ErrorCode.CANNOT_DUPLICATE_PROMPT_LIST,
+                        params={"reason": "moderation"},
                     )
+                if source.is_copy:
+                    raise PromptListMutationError(
+                        "A copy of somebody else's list cannot be duplicated.",
+                        code=ErrorCode.CANNOT_DUPLICATE_PROMPT_LIST,
+                        params={"reason": "copy"},
+                    )
+                created_id = await self._copy_into_new_list(
+                    session,
+                    owner_id=owner_id,
+                    source=source,
+                    name=name,
+                    lineage=False,
                 )
-                revision.forked_from_revision_id = origin.id
-            result = await self._owned_with_entries(session, forker_id, list_id)
+            result = await self._owned_with_entries(session, owner_id, created_id)
             assert result is not None
             return result
 

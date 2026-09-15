@@ -20,13 +20,18 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
             await owner.get_by_role("heading", name="Reusable prompt lists").wait_for()
 
             # A list is private or published, and publishing is the only way
-            # between them (R-LIST-02): there is no visibility field to set,
-            # and a list that does not exist yet cannot be published.
+            # between them (R-LIST-02): there is no visibility field to set.
+            # This account has no confirmed email, which publishing needs
+            # (R-LIST-12), and the panel says so before Publish is ever
+            # pressed. The E2E server sends no mail, so it cannot offer to add
+            # an address either - an address nobody can confirm unlocks nothing.
             assert await owner.get_by_label("Visibility").count() == 0
-            await owner.get_by_text(
-                "Save the list first. It stays private until you publish it."
+            publication = owner.locator(".prompt-list-publication")
+            await publication.get_by_text(
+                "Publishing needs a confirmed email address, and this server cannot send email."
             ).wait_for()
-            assert await owner.get_by_role("button", name="Publish", exact=True).is_disabled()
+            assert await publication.get_by_role("button", name="Add an email").count() == 0
+            assert await publication.get_by_role("button", name="Publish", exact=True).is_disabled()
 
             await owner.get_by_label("Name").fill("Party animals")
             await owner.get_by_label("Description").fill("For Friday games")
@@ -37,9 +42,10 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
             await owner.get_by_role("button", name="Remove red panda").wait_for()
             await owner.get_by_role("button", name="Remove capybara").wait_for()
             await owner.get_by_role("button", name="Save list").click()
-            await owner.get_by_text("Prompt list saved.").wait_for()
+            await owner.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
             await owner.locator("aside").get_by_text("2 prompts · private").wait_for()
-            assert await owner.get_by_role("button", name="Publish", exact=True).is_enabled()
+            # Saving is not what stands in the way; the address still is.
+            assert await publication.get_by_role("button", name="Publish", exact=True).is_disabled()
 
             # A subsequent save creates revision two and leaves the list
             # private. Re-adding an existing prompt is silently skipped, so the
@@ -51,7 +57,7 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
                 "Added 1 prompt; skipped 1 already in the list."
             ).wait_for()
             await owner.get_by_role("button", name="Save list").click()
-            await owner.get_by_text("Prompt list saved.").wait_for()
+            await owner.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
             await owner.locator("aside").get_by_text("2 prompts · private").wait_for()
 
             # Its owner can play it: a room whose only selected list is this one.

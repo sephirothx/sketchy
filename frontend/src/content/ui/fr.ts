@@ -359,6 +359,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Tu ne peux pas te signaler toi-même.",
+  cannot_copy_own_prompt_list: "Cette liste est déjà à toi. Duplique-la depuis Mes listes de mots.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Une liste copiée depuis quelqu’un d’autre ne peut pas être dupliquée : elle garde ainsi sa mention d’origine."
+      : "Une liste en cours d’examen ou masquée par la modération ne peut pas être dupliquée.",
   cannot_report_own_prompt_list: "Tu ne peux pas signaler ta propre liste de mots.",
   no_reportable_prompt_list: "Aucune liste de mots signalable trouvée.",
   prompt_not_in_list: "Ce mot n’appartient pas à cette liste.",
@@ -1203,6 +1208,8 @@ export const FR: Catalogue = {
     copiedFromADeletedList: "Copiée depuis une liste qui a été supprimée",
     showMore: "Afficher plus",
     makeACopy: "Faire une copie",
+    thisIsYourList: "C’est ta liste.",
+    editInMyPromptLists: "Modifier dans Mes listes de mots",
     report: "Signaler",
     signInToStarCopyOrReport: "Un compte est nécessaire pour donner une étoile, copier ou signaler.",
     whatIsInIt: "Contenu",
@@ -1236,6 +1243,18 @@ export const FR: Catalogue = {
     publishedExplainer: "Tout le monde peut trouver cette liste, y jouer, lui donner une étoile ou en faire sa propre copie.",
     unpublishedExplainer: "Publier cette liste permet à tout le monde de la trouver et d’y jouer. Elle peut être retirée à tout moment.",
     saveBeforePublishing: "Enregistre d’abord la liste. Elle reste privée jusqu’à ce que tu la publies.",
+    publishNeedsAnEmail: "Pour publier, ajoute une adresse e-mail à ton compte et confirme-la. Elle reste privée : c’est ce qui relie une liste publiée à une vraie personne.",
+    publishNeedsConfirmation: (p: { address: string }) =>
+      `Confirme ${p.address} depuis l’e-mail envoyé, puis tu pourras publier.`,
+    publishNeedsEmailDelivery: "Pour publier, il faut une adresse e-mail confirmée, et ce serveur ne peut pas envoyer d’e-mails.",
+    addAnEmail: "Ajouter une adresse e-mail",
+    changeEmail: "Changer d’adresse",
+    duplicate: "Dupliquer",
+    duplicateName: (p: { name: string }) => `${p.name} (doublon)`,
+    listDuplicated: (p: { name: string }) =>
+      `Dupliquée sous « ${p.name} ».`,
+    couldNotDuplicateThisList: "Cette liste n’a pas pu être dupliquée.",
+    reload: "Recharger",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "étoile", other: "étoiles" }),
     copyCount: (p: { count: number }) =>

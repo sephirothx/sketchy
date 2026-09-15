@@ -359,6 +359,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Du kannst dich nicht selbst melden.",
+  cannot_copy_own_prompt_list: "Diese Liste gehört schon dir. Dupliziere sie stattdessen unter Meine Begriffslisten.",
+  cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
+    params.reason === "copy"
+      ? "Eine Liste, die du von jemand anderem kopiert hast, kann nicht dupliziert werden – so bleibt die Herkunftsangabe erhalten."
+      : "Eine Liste, die die Moderation prüft oder ausgeblendet hat, kann nicht dupliziert werden.",
   cannot_report_own_prompt_list: "Du kannst deine eigene Begriffsliste nicht melden.",
   no_reportable_prompt_list: "Keine meldbare Begriffsliste gefunden.",
   prompt_not_in_list: "Dieser Begriff gehört nicht zu dieser Liste.",
@@ -1203,6 +1208,8 @@ export const DE: Catalogue = {
     copiedFromADeletedList: "Kopiert aus einer gelöschten Liste",
     showMore: "Mehr anzeigen",
     makeACopy: "Kopie anlegen",
+    thisIsYourList: "Das ist deine Liste.",
+    editInMyPromptLists: "In Meine Begriffslisten bearbeiten",
     report: "Melden",
     signInToStarCopyOrReport: "Zum Markieren, Kopieren oder Melden wird ein Konto benötigt.",
     whatIsInIt: "Inhalt",
@@ -1236,6 +1243,18 @@ export const DE: Catalogue = {
     publishedExplainer: "Alle können diese Liste finden, spielen, mit einem Stern markieren oder eine eigene Kopie anlegen.",
     unpublishedExplainer: "Veröffentlichen macht diese Liste für alle auffindbar und spielbar. Sie lässt sich jederzeit wieder zurückziehen.",
     saveBeforePublishing: "Speichere die Liste zuerst. Sie bleibt privat, bis du sie veröffentlichst.",
+    publishNeedsAnEmail: "Zum Veröffentlichen füge deinem Konto eine E-Mail-Adresse hinzu und bestätige sie. Sie bleibt privat: So bleibt eine veröffentlichte Liste mit einer echten Person verbunden.",
+    publishNeedsConfirmation: (p: { address: string }) =>
+      `Bestätige ${p.address} über die E-Mail, die wir geschickt haben. Dann kannst du veröffentlichen.`,
+    publishNeedsEmailDelivery: "Zum Veröffentlichen braucht es eine bestätigte E-Mail-Adresse, und dieser Server kann keine E-Mails senden.",
+    addAnEmail: "E-Mail hinzufügen",
+    changeEmail: "E-Mail ändern",
+    duplicate: "Duplizieren",
+    duplicateName: (p: { name: string }) => `${p.name} (Duplikat)`,
+    listDuplicated: (p: { name: string }) =>
+      `Als „${p.name}“ dupliziert.`,
+    couldNotDuplicateThisList: "Diese Liste konnte nicht dupliziert werden.",
+    reload: "Neu laden",
     starCount: (p: { count: number }) =>
       counted(p.count, { one: "Stern", other: "Sterne" }),
     copyCount: (p: { count: number }) =>
