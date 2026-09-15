@@ -25,7 +25,9 @@ from app.auth.erasure import (
 )
 from app.db.models import (
     GameParticipant,
+    GameRecord,
     IdentityAlias,
+    ProfileDrawingPin,
     RoomMessage,
     TurnDrawing,
     TurnDrawingReaction,
@@ -620,5 +622,105 @@ async def test_a_game_write_waits_for_a_deletion_in_flight_then_writes_tombstone
         _, game_id = await asyncio.gather(erase, write)
 
         _assert_erased_only_for(owner_id, *await _seat_rows(factory, game_id))
+    finally:
+        await engine.dispose()
+
+
+async def _public_game_between(factory, history, pinner_id: str, drawer_id: str) -> tuple[str, UUID, UUID]:
+    """A public game the two played, and the turn each drew: (game, drawer's turn, pinner's turn)."""
+    game_id = await record_private_game(history, owner_id=drawer_id, other_id=pinner_id)
+    async with factory() as session:
+        async with session.begin():
+            game = await session.get(GameRecord, UUID(game_id))
+            game.visibility = "public"
+            turns = {
+                turn.drawer_user_id: turn.id
+                for turn in (
+                    await session.scalars(select(TurnRecord).where(TurnRecord.game_id == UUID(game_id)))
+                ).all()
+            }
+    return game_id, turns[UUID(drawer_id)], turns[UUID(pinner_id)]
+
+
+async def _pins(factory) -> list[tuple[UUID, UUID]]:
+    async with factory() as session:
+        rows = (await session.scalars(select(ProfileDrawingPin))).all()
+    return sorted((row.user_id, row.turn_id) for row in rows)
+
+
+async def test_a_pin_authorized_before_a_deletion_is_refused_after_it():
+    """Both accounts a pin is about are behind the barrier: the pinner, whose
+    tombstoned profile must not get a shelf back, and the drawer, whose
+    erased drawing must not be pinned after the fact (#811 review)."""
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        drawer_guest = await users.create_anonymous("Drawer")
+        drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
+        pinner_guest = await users.create_anonymous("Pinner")
+        pinner = await users.claim_account(pinner_guest.id, "pinner", "hash")
+        history = SqlAlchemyGameHistoryRepository(factory)
+        _, drawers_turn, pinners_turn = await _public_game_between(factory, history, pinner.id, drawer.id)
+
+        assert await history.set_profile_pins(
+            requesting_user_id=pinner.id, turn_ids=[str(drawers_turn), str(pinners_turn)]
+        )
+
+        await anonymize_account(factory, user_id=drawer.id)
+        assert await _pins(factory) == [(UUID(pinner.id), pinners_turn)], "the erased drawing's pin went"
+        assert (
+            await history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(drawers_turn)])
+        ) is None, "an erased drawing cannot be pinned after the fact"
+        assert await history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(pinners_turn)])
+
+        await anonymize_account(factory, user_id=pinner.id)
+        assert await _pins(factory) == [], "a tombstoned account keeps no shelf"
+        assert (
+            await history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(pinners_turn)])
+        ) is None, "and gets none back"
+        assert await _pins(factory) == []
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
+async def test_a_pin_write_waits_for_the_drawers_deletion_in_flight_then_refuses(monkeypatch):
+    """The drawer's deletion holds their row FOR UPDATE; a pin of their
+    drawing validated under the shared lock waits, then reads the drawing as
+    erased and writes nothing - no pin outlives the drawing it names."""
+    import app.auth.account_data as account_data
+
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        drawer_guest = await users.create_anonymous("Drawer")
+        drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
+        pinner_guest = await users.create_anonymous("Pinner")
+        pinner = await users.claim_account(pinner_guest.id, "pinner", "hash")
+        history = SqlAlchemyGameHistoryRepository(factory)
+        _, drawers_turn, _ = await _public_game_between(factory, history, pinner.id, drawer.id)
+
+        real = account_data.delete_avatars_for
+        deletion_holds_the_row = asyncio.Event()
+        let_the_deletion_commit = asyncio.Event()
+
+        async def paused(session, identity_ids):
+            deletion_holds_the_row.set()
+            await let_the_deletion_commit.wait()
+            return await real(session, identity_ids)
+
+        monkeypatch.setattr(account_data, "delete_avatars_for", paused)
+        erase = asyncio.create_task(anonymize_account(factory, user_id=drawer.id))
+        await deletion_holds_the_row.wait()
+        write = asyncio.create_task(
+            history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(drawers_turn)])
+        )
+        await asyncio.sleep(0.3)
+        assert not write.done(), "the pin write must wait for the deletion's lock"
+        let_the_deletion_commit.set()
+        _, result = await asyncio.gather(erase, write)
+
+        assert result is None
+        assert await _pins(factory) == []
     finally:
         await engine.dispose()

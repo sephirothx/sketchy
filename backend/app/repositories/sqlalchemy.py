@@ -2066,6 +2066,30 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         async with self._session_factory() as session:
             async with session.begin():
                 identity_ids = await _identity_ids(session, db_user_id)
+                # The erasure barrier (app.auth.erasure), for both accounts a
+                # pin is about. The pinner's: authentication before a deletion
+                # is not authorization after it, and a pin written past the
+                # deletion would put a shelf back on a tombstoned profile.
+                # Each drawer's: their deletion erases the drawing and takes
+                # its pins with it, and a pin validated before that commit
+                # and written after it would outlive the drawing it names.
+                # One shared lock over all of them, ascending, held to the
+                # commit; the checks below run under it and see either the
+                # state before the deletion, which the deletion then erases,
+                # or the state after it, which refuses.
+                drawers = (
+                    await session.execute(
+                        select(TurnRecord.drawer_user_id).where(
+                            TurnRecord.id.in_(db_turn_ids),
+                            TurnRecord.drawer_user_id.is_not(None),
+                        )
+                    )
+                ).scalars().all()
+                erased = await erased_identity_ids(
+                    session, (identity_ids[0], *drawers)
+                )
+                if identity_ids[0] in erased:
+                    return None
                 # Pins belong to the canonical account: a guest cannot pin
                 # (R-PIN-01), so there is never a guest shelf to merge.
                 account = await session.get(User, identity_ids[0])

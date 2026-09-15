@@ -2183,6 +2183,7 @@ What each writer then does with an erased identity:
 | Finished-game write (`save_game`) | Writes the game, the seats, the scores and the turns; the identity's snapshots carry the **Deleted player** tombstone, its drawings are written as `deleted` rows with no payload, reactions *on* those drawings are dropped and reactions it *gave* stay. The payload hash is taken from the input, so a retry of the same game is the same game, not a conflict |
 | Avatar upload, owned-list create/update, bug, player and content reports | Refused (`AccountErasedError`, 401 over HTTP): authentication before the deletion is not authorization after it |
 | Export request | Already locks the account row `FOR UPDATE` and refuses a deleted account |
+| Pin write (`set_profile_pins`) | Locks the pinner **and every drawer** named by the list, shared, ascending. An erased pinner is refused (the uniform 404); an erased drawer's drawing reads `deleted` under the lock and refuses the list, so a pin can neither put a shelf back on a tombstoned profile nor outlive the drawing it names (#811 review) |
 
 SQLite renders neither lock and has one writer at a time, so there the re-read alone
 is the barrier; both lock orders are proven on PostgreSQL in
