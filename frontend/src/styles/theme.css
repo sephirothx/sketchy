@@ -102,6 +102,8 @@
   --vv-offset-top: 0px;
   --vv-offset-left: 0px;
   --app-height: 100dvh;
+  /* height of the top banner stack, written by AppBanners */
+  --banner-height: 0px;
 }
 
 /* Dark: the shipped slate ground (#0f172a / #1e293b / #334155 / #475569 and

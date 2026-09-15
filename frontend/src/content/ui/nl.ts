@@ -1749,6 +1749,15 @@ export const NL: Catalogue = {
     goAwayForABit: "Even weg",
   },
 
+  roomNoticeChips: {
+    serverUpdate: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Update · ${p.seconds} s` : "Update · nu",
+    reconnecting: "Opnieuw verbinden",
+    disconnected: "Verbroken",
+    rejoinFailed: "Terugkeren mislukt",
+    serverUpdateStarted: "Serverupdate bezig. Dit spel eindigt binnenkort.",
+  },
+
   roomPlayersPanel: {
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "toeschouwer", other: "toeschouwers" }),

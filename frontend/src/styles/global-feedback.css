@@ -1,17 +1,24 @@
 /* Global network feedback */
+
+/* Every top-of-page banner, in one stack. One sticky box rather than a sticky
+   banner each, which all stuck to the same top: 0 and covered one another; and
+   its height is published as --banner-height (AppBanners), so the screens that
+   size themselves to the viewport make room instead of going underneath (#797).
+   Above ordinary dialogs, below the confirmation and toast layers. */
+.app-banners {
+  position: sticky;
+  top: 0;
+  z-index: 1150;
+}
+
 .connection-status-banner {
   background: var(--warning-soft);
   border-bottom: 1px solid var(--warning-edge);
   color: var(--warning);
   font-size: 14px;
   font-weight: 800;
-  left: 0;
   padding: 9px 16px;
-  position: sticky;
-  right: 0;
   text-align: center;
-  top: 0;
-  z-index: 1100;
 }
 
 .connection-status-banner.offline {
@@ -31,10 +38,7 @@
   gap: 12px;
   justify-content: center;
   padding: 10px 16px;
-  position: sticky;
   text-align: center;
-  top: 0;
-  z-index: 1150;
 }
 
 /* The update is over by the time this shows, so it reads as information

@@ -1748,6 +1748,15 @@ export const PT: Catalogue = {
     goAwayForABit: "Ausentar-me um bocado",
   },
 
+  roomNoticeChips: {
+    serverUpdate: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Atualização · ${p.seconds} s` : "Atualização · agora",
+    reconnecting: "A religar",
+    disconnected: "Desligado",
+    rejoinFailed: "Falha ao voltar",
+    serverUpdateStarted: "Atualização do servidor a decorrer. Esta partida termina em breve.",
+  },
+
   roomPlayersPanel: {
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "espectador", other: "espectadores" }),

@@ -1754,6 +1754,15 @@ export const EN = {
     goAwayForABit: "Go away for a bit",
   },
 
+  roomNoticeChips: {
+    serverUpdate: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Update · ${p.seconds}s` : "Update · now",
+    reconnecting: "Reconnecting",
+    disconnected: "Disconnected",
+    rejoinFailed: "Rejoin failed",
+    serverUpdateStarted: "Server update in progress. This game will end soon.",
+  },
+
   roomPlayersPanel: {
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "spectator", other: "spectators" }),

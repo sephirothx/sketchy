@@ -13,6 +13,7 @@ import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSugg
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
+import { RoomNoticeChips } from "../components/RoomNoticeChips";
 import { RoomMenuSheet } from "../components/RoomMenuSheet";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import {
@@ -359,6 +360,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             <CopyIcon size={13} />
           </button>
           <GameHeaderStatus />
+          <RoomNoticeChips compact />
           <button
             type="button"
             className="btn btn-icon game-header-menu-button"
@@ -385,6 +387,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               <span>{code}</span>
               <CopyIcon size={13} />
             </button>
+            <RoomNoticeChips compact={false} />
           </div>
           <GameHeaderStatus />
           <div className="game-header-actions">

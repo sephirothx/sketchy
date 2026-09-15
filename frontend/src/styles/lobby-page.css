@@ -1165,8 +1165,10 @@ a.online-player-name:focus-visible {
     overflow: visible;
   }
 
+  /* Less the banner stack above it: a banner is in flow, so a full 100dvh
+     pushed the bottom actions off the screen. */
   .lobby-page {
-    height: 100dvh;
+    height: calc(100dvh - var(--banner-height));
     padding-bottom: 24px;
     display: flex;
     flex-direction: column;

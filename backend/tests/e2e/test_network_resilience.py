@@ -147,14 +147,17 @@ async def test_mid_session_socket_reconnects_to_room():
             # Short timeout for exactly that reason: this is an optional
             # sighting, and locally the reconnect always wins the race, so a
             # long one is time the suite spends never seeing anything.
+            #
+            # In the waiting room it is a header chip rather than a banner
+            # (#797): a room lays itself out to the viewport, and a banner sat
+            # on top of its header.
+            notice = '.room-notice-chip[data-notice="connection"]'
             try:
-                await guest.wait_for_selector(
-                    '.connection-status-banner.offline, .connection-status-banner.reconnecting',
-                    timeout=1500,
-                )
+                await guest.wait_for_selector(notice, timeout=1500)
             except PlaywrightTimeoutError:
                 pass
-            await guest.wait_for_selector(".connection-status-banner", state="hidden", timeout=15000)
+            await guest.wait_for_selector(notice, state="hidden", timeout=15000)
+            assert await guest.locator(".connection-status-banner").count() == 0
 
             await host.wait_for_selector("text=GuestReconnect reconnected", timeout=10000)
 
@@ -215,4 +218,84 @@ async def test_a_dropped_socket_keeps_the_rooms_it_last_knew():
         finally:
             await host_context.close()
             await watcher_context.close()
+            await browser.close()
+
+
+async def test_a_banner_makes_room_for_itself_on_the_pinned_lobby():
+    """A desktop lobby is pinned to the viewport, so a banner above it in flow
+    pushed its bottom off the screen (#797). It makes room for the stack now."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "PinnedLobby")
+            await page.wait_for_selector(".lobby-rooms-panel")
+
+            await context.set_offline(True)
+            await page.wait_for_selector(".connection-status-banner.offline")
+            # Polled rather than read once: the stack's height is published by a
+            # ResizeObserver, which reports after the frame the banner arrived in.
+            await page.wait_for_function(
+                """() => {
+                  const box = document.querySelector('.lobby-page').getBoundingClientRect();
+                  return box.top > 0 && box.bottom <= innerHeight + 1;
+                }""",
+                timeout=5000,
+            )
+            await context.set_offline(False)
+            await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_notice_never_covers_a_phone_room_header():
+    """A phone room is sized to the viewport, and a banner sat on its header and
+    took the taps meant for the room menu (#797). The notice is a header chip
+    there now, with the full sentence a tap away."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(
+            viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "PhoneNotices")
+            await page.click('button:has-text("Create a room")')
+            await page.wait_for_selector(".create-room-page")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            await context.set_offline(True)
+            chip = page.locator('.room-notice-chip[data-notice="connection"]')
+            await chip.wait_for()
+            assert await page.locator(".connection-status-banner").count() == 0
+            menu = page.locator('[data-testid="open-room-menu"]')
+            menu_box = await menu.bounding_box()
+            assert menu_box is not None
+            hit = await page.evaluate(
+                "([x, y]) => document.elementFromPoint(x, y)?.closest('[data-testid=\"open-room-menu\"]') !== null",
+                [menu_box["x"] + menu_box["width"] / 2, menu_box["y"] + menu_box["height"] / 2],
+            )
+            assert hit, "something covers the room menu"
+            await chip.click()
+            await page.wait_for_selector(
+                '.room-notice-popover:has-text("You\u2019re disconnected")'
+            )
+            await context.set_offline(False)
+            await chip.wait_for(state="detached", timeout=10000)
+            assert await page.locator(".room-notice-popover").count() == 0
+            # A notice that comes back starts closed: the card is opened by a
+            # tap, never by the last outage's.
+            await context.set_offline(True)
+            await chip.wait_for()
+            await asyncio.sleep(0.3)
+            assert await page.locator(".room-notice-popover").count() == 0
+            await context.set_offline(False)
+            await chip.wait_for(state="detached", timeout=10000)
+        finally:
+            await context.close()
             await browser.close()
