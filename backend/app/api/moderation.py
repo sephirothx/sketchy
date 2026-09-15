@@ -35,6 +35,7 @@ from app.canvas_storage import (
 from app.api.gallery import gallery_entry_payload
 from app.api.profiles import serve_drawing
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
+from app.repositories.sqlalchemy import apply_gallery_decision
 from app.services.gallery_shelf import read_shelf_review
 from app.services.player_reports import (
     context_around,
@@ -3040,33 +3041,45 @@ def create_moderation_router(
         R-GAL-10). Audited against the drawing; the drawer is the target
         account, so the ledger reads like every other takedown."""
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        async with session_factory() as session:
-            reviewer = await _reviewer(session, request)
-            require_step_up(request)
-        if game_history_repo is None:
-            raise HTTPException(status_code=404, detail="No such drawing.")
-        decided = await game_history_repo.set_gallery_decision(
-            turn_id, decision=body.decision, decided_by_user_id=str(reviewer.id)
-        )
-        if decided is None:
-            raise HTTPException(status_code=404, detail="No such drawing.")
-        decided_turn_id, drawer_user_id = decided
+        try:
+            db_turn_id = UUID(turn_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="No such drawing.") from None
+        now = datetime.now(timezone.utc)
         async with session_factory() as session:
             async with session.begin():
+                reviewer = await _reviewer(session, request)
+                require_step_up(request)
+                # The decision and its audit record are one transaction: a
+                # drawing hidden with no ledger entry, or an entry for a
+                # decision that never landed, would each be a lie.
+                decided = await apply_gallery_decision(
+                    session,
+                    db_turn_id,
+                    decision=body.decision,
+                    decided_by_user_id=reviewer.id,
+                    now=now,
+                )
+                if decided is None:
+                    raise HTTPException(status_code=404, detail="No such drawing.")
+                decided_turn, drawer_user_id = decided
+                decided_turn_id = str(decided_turn)
                 session.add(
                     AuditEvent(
                         id=generate_uuid(),
                         event_type=f"gallery.review_{body.decision}",
                         actor_user_id=reviewer.id,
-                        target_user_id=UUID(drawer_user_id) if drawer_user_id else None,
+                        target_user_id=drawer_user_id,
                         target_type=AuditTargetType.DRAWING.value,
                         target_id=decided_turn_id,
                         request_id=request_id,
                         ip_hash=ip_hash,
                         details={"note": body.note},
-                        created_at=datetime.now(timezone.utc),
+                        created_at=now,
                     )
                 )
+        # Only once the transaction is committed: a shelf recomputed before
+        # the commit would read the drawing as it was.
         if on_gallery_decision is not None:
             on_gallery_decision()
         return {

@@ -1311,7 +1311,10 @@ second term. Every reaction write sets both from the rows **under the row's lock
 (`SELECT … FOR UPDATE`), so two reactions landing together cannot each count only their
 own; the finished-game write sets them with the row; erasure zeroes them with the bytes.
 They are never the source of truth: `app.services.gallery_ranking` rebuilds both from the
-reaction rows, and a rebuild reproduces exactly what the writes left.
+reaction rows, one transaction per batch of rows locked before they are counted, so a
+reaction landing mid-rebuild waits for its batch and then sets the row itself; a rebuild
+reproduces exactly what the writes left. The revision that added the columns backfilled
+both, the score in Python, so a drawing written before it ranks where a later one would.
 
 ```bash
 cd backend
@@ -1323,7 +1326,9 @@ erasure: set, the drawing is out of the Gallery, the lobby shelf, the gallery by
 and the gallery reaction door in one act — all four read the one predicate — while its
 bytes stay and the players who were there keep seeing it in their history. Released
 clears it. Audited as `gallery.review_hidden` / `gallery.review_released` with
-`target_type = 'drawing'` and the drawer as the target account.
+`target_type = 'drawing'` and the drawer as the target account, in the same transaction as
+the decision: a hidden drawing with no ledger entry would be a lie, so neither lands
+without the other, and the lobby's cached shelf is recomputed only once both have.
 
 Every drawing from a completed game is kept **for as long as that game, in the same
 transaction that records it**. The stored bytes are the canvas frame itself — the
