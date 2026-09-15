@@ -58,6 +58,7 @@ from app.db.models import (
     RoomMessage,
     ScoreEvent,
     TurnDrawing,
+    ProfileDrawingPin,
     TurnDrawingReaction,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -1533,6 +1534,23 @@ async def anonymize_account(
                         select(TurnRecord.id).where(
                             TurnRecord.drawer_user_id.in_(identity_ids)
                         )
+                    )
+                )
+            )
+            # Pins go two ways (#440). The ones *on* the erased drawings, for
+            # the reason the reactions did: erasure is a status on the drawing
+            # row, so no cascade reaches them. And the ones this account *made*:
+            # the users row stays, tombstoned, but there is no profile left to
+            # show a shelf on, and a pin is the pinner's choice, not history.
+            await session.execute(
+                delete(ProfileDrawingPin).where(
+                    or_(
+                        ProfileDrawingPin.user_id.in_(identity_ids),
+                        ProfileDrawingPin.turn_id.in_(
+                            select(TurnRecord.id).where(
+                                TurnRecord.drawer_user_id.in_(identity_ids)
+                            )
+                        ),
                     )
                 )
             )

@@ -299,6 +299,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "Dit spel bestaat niet.",
   no_such_drawing: "Deze tekening bestaat niet.",
   drawing_unreadable: "Deze tekening kon niet gelezen worden.",
+  pinned_drawings_full: "Je vastgezette tekeningen zijn vol. Maak er eerst een los in je profiel.",
 
   // Prompt lists
   prompt_list_not_found: "Woordenlijst niet gevonden.",

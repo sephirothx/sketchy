@@ -52,6 +52,7 @@ from app.db.models import (
     RoomMessage,
     RoomPreset,
     ScoreEvent,
+    ProfileDrawingPin,
     TurnDrawing,
     TurnRecord,
     User,
@@ -1470,6 +1471,43 @@ async def test_deletion_takes_the_reactions_on_erased_drawings_and_keeps_the_one
     assert kept.emoji == "fire"
     seat = next(p for p in detail.summary.participants if p.seat_id == kept.seat_id)
     assert seat.display_name == "Deleted player"
+
+
+async def test_deletion_takes_the_pins_on_erased_drawings_and_the_ones_the_account_made(env):
+    """A pin on an erased drawing has nothing left to show; a pin the deleted
+    account made has no profile left to show it on. A pin another player put
+    on their own drawing is neither, and stays."""
+    http, users, history, factory = env
+    owner = await register(http, "PinnedDeleter")
+    other_guest = await users.create_anonymous("Other player")
+    other = await users.claim_account(other_guest.id, "otherplayer", "hashed")
+    game_id = await record_private_game(history, owner_id=owner["id"], other_id=other.id)
+    async with factory() as session:
+        async with session.begin():
+            turns = {
+                turn.drawer_user_id: turn
+                for turn in (
+                    await session.scalars(select(TurnRecord).where(TurnRecord.game_id == UUID(game_id)))
+                ).all()
+            }
+            owner_turn = turns[UUID(owner["id"])]
+            other_turn = turns[UUID(other.id)]
+            # Written directly: the write path would refuse a private game,
+            # and what is under test is the erasure, not the rule.
+            session.add_all(
+                [
+                    ProfileDrawingPin(user_id=UUID(owner["id"]), game_id=UUID(game_id), turn_id=other_turn.id, position=0),
+                    ProfileDrawingPin(user_id=UUID(other.id), game_id=UUID(game_id), turn_id=owner_turn.id, position=0),
+                    ProfileDrawingPin(user_id=UUID(other.id), game_id=UUID(game_id), turn_id=other_turn.id, position=1),
+                ]
+            )
+
+    response = await http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
+    assert response.status_code == 200
+
+    async with factory() as session:
+        remaining = (await session.scalars(select(ProfileDrawingPin))).all()
+    assert [(pin.user_id, pin.turn_id) for pin in remaining] == [(UUID(other.id), other_turn.id)]
 
 
 async def test_deletion_takes_the_stars_that_account_gave(env):

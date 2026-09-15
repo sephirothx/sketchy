@@ -246,6 +246,11 @@ OFFERED_REACTION_EMOJI_CODES = tuple(
 )
 REACTION_SET_VERSION = 1
 
+# How many drawings a profile can pin (#440). A hard cap keeps the shelf a
+# highlight reel rather than an album, and bounds both the read and the payload
+# with no pagination: six is the whole answer, never a page of it.
+PROFILE_PIN_SLOTS = 6
+
 # The recap drops a drawing's bytes once a room exceeds its per-game budget.
 # That turn is stored as unavailable so history matches what players saw.
 DRAWING_UNAVAILABLE_RECAP_BUDGET = "recap_budget"

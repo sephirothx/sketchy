@@ -644,6 +644,7 @@ export type ErrorCode =
   | "no_such_game"
   | "no_such_drawing"
   | "drawing_unreadable"
+  | "pinned_drawings_full"
   | "prompt_list_not_found"
   | "prompt_list_conflict"
   | "prompt_list_invalid"

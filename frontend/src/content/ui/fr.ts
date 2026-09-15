@@ -299,6 +299,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_such_game: "Cette partie n’existe pas.",
   no_such_drawing: "Ce dessin n’existe pas.",
   drawing_unreadable: "Ce dessin n’a pas pu être lu.",
+  pinned_drawings_full: "Tes dessins épinglés sont au complet. Retire-en un de ton profil d’abord.",
 
   // Prompt lists
   prompt_list_not_found: "Liste de mots introuvable.",

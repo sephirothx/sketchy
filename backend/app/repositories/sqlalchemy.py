@@ -36,6 +36,7 @@ from app.db.models import (
     PromptVersionTag,
     ScoreEvent,
     TurnDrawing,
+    ProfileDrawingPin,
     TurnDrawingReaction,
     TurnParticipantOutcome,
     TurnPromptOffer,
@@ -55,6 +56,7 @@ from app.domain_values import (
     GAME_OUTCOMES,
     GAME_PROMPT_SOURCE_MODES,
     GAME_VISIBILITIES,
+    PROFILE_PIN_SLOTS,
     GameOutcome,
     GameVisibility,
     PROMPT_OFFER_SOURCE_KINDS,
@@ -74,6 +76,7 @@ from app.auth.avatars import validate_avatar_key
 from app.auth.pending_role import pending_offer
 from app.services.prompt_reclaim import retire_prompt_list
 from app.auth.erasure import (
+    LockSetChangedError,
     TOMBSTONE_SNAPSHOT,
     erased_identity_ids,
     require_live_account,
@@ -112,6 +115,8 @@ from app.repositories.interfaces import (
     TurnDetail,
     TurnDrawingDetail,
     TurnDrawingInput,
+    ProfilePinDetail,
+    ProfilePinsResult,
     TurnDrawingReactionDetail,
     TurnDrawingReactionInput,
     TurnParticipantOutcomeDetail,
@@ -148,6 +153,10 @@ from app.prompt_content import (
 )
 from app.prompts import letter_histogram
 from app.refusals import ErrorCode
+
+# How many times a pin write restarts when a merge lands inside the barrier's
+# window between its alias read and its lock (app.auth.erasure).
+PIN_WRITE_LOCK_RETRIES = 3
 
 LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 
@@ -2041,6 +2050,143 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         for row in rows
                     ),
                 )
+
+    async def set_profile_pins(
+        self,
+        *,
+        requesting_user_id: str,
+        turn_ids: Sequence[str],
+    ) -> ProfilePinsResult | None:
+        db_user_id = _optional_entity_id(requesting_user_id)
+        if db_user_id is None:
+            return None
+        db_turn_ids: list[UUID] = []
+        for turn_id in turn_ids:
+            db_turn_id = _optional_entity_id(turn_id)
+            if db_turn_id is None or db_turn_id in db_turn_ids:
+                return None
+            db_turn_ids.append(db_turn_id)
+        if len(db_turn_ids) > PROFILE_PIN_SLOTS:
+            return None
+        # The barrier can find, under its lock, a target merged in since its
+        # alias read; it then abandons the transaction rather than lock more
+        # (LockSetChangedError), and the whole write starts again so the
+        # complete set goes into one ordered statement. Bounded: a merge is a
+        # sign-in, and three in a row inside this window is not a real thing.
+        rows: list[tuple[UUID, UUID]] | None = None
+        for attempt in range(PIN_WRITE_LOCK_RETRIES):
+            try:
+                rows = await self._replace_profile_pins(db_user_id, db_turn_ids)
+            except LockSetChangedError:
+                if attempt == PIN_WRITE_LOCK_RETRIES - 1:
+                    raise
+                continue
+            break
+        if rows is None:
+            return None
+        return ProfilePinsResult(
+            pins=tuple(
+                ProfilePinDetail(
+                    turn_id=_public_id(db_turn_id),
+                    game_id=_public_id(game_id),
+                    position=position,
+                )
+                for position, (game_id, db_turn_id) in enumerate(rows)
+            )
+        )
+
+    async def _replace_profile_pins(
+        self, db_user_id: UUID, db_turn_ids: list[UUID]
+    ) -> list[tuple[UUID, UUID]] | None:
+        """One attempt at the whole-shelf write: the barrier, the checks, the
+        rows. `None` for every refusal; the rows written otherwise."""
+        async with self._session_factory() as session:
+            async with session.begin():
+                identity_ids = await _identity_ids(session, db_user_id)
+                # The erasure barrier (app.auth.erasure), for both accounts a
+                # pin is about. The pinner's: authentication before a deletion
+                # is not authorization after it, and a pin written past the
+                # deletion would put a shelf back on a tombstoned profile.
+                # Each drawer's: their deletion erases the drawing and takes
+                # its pins with it, and a pin validated before that commit
+                # and written after it would outlive the drawing it names.
+                # One lock over all of them, ascending, held to the commit;
+                # the checks below run under it and see either the state
+                # before the deletion, which the deletion then erases, or the
+                # state after it, which refuses. Exclusive rather than the
+                # barrier's usual shared lock, because this write must also
+                # serialize with *itself*: two whole-shelf replacements for
+                # one account that both pass a shared lock both delete
+                # nothing and both insert position 0, and the second one
+                # dies on the unique position instead of replacing the first.
+                drawers = (
+                    await session.execute(
+                        select(TurnRecord.drawer_user_id).where(
+                            TurnRecord.id.in_(db_turn_ids),
+                            TurnRecord.drawer_user_id.is_not(None),
+                        )
+                    )
+                ).scalars().all()
+                erased = await erased_identity_ids(
+                    session, (identity_ids[0], *drawers), exclusive=True
+                )
+                if identity_ids[0] in erased:
+                    return None
+                # Pins belong to the canonical account: a guest cannot pin
+                # (R-PIN-01), so there is never a guest shelf to merge.
+                account = await session.get(User, identity_ids[0])
+                if (
+                    account is None
+                    or account.is_anonymous
+                    or account.state != AccountState.REGISTERED.value
+                ):
+                    return None
+                # Everything a turn has to be, in one query per turn: a seat
+                # for this identity in its game, the game public, the drawing
+                # there to show. Checked before anything is written, so a
+                # refused list leaves the shelf as it was.
+                seated = (
+                    select(GameParticipant.id)
+                    .where(
+                        GameParticipant.game_id == TurnRecord.game_id,
+                        GameParticipant.user_id.in_(identity_ids),
+                    )
+                    .exists()
+                )
+                rows: list[tuple[UUID, UUID]] = []
+                for db_turn_id in db_turn_ids:
+                    game_id = await session.scalar(
+                        select(TurnRecord.game_id)
+                        .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+                        .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                        .where(
+                            TurnRecord.id == db_turn_id,
+                            GameRecord.visibility == GameVisibility.PUBLIC.value,
+                            TurnDrawing.status == TurnDrawingStatus.READY.value,
+                            TurnDrawing.payload.is_not(None),
+                            seated,
+                        )
+                    )
+                    if game_id is None:
+                        return None
+                    rows.append((game_id, db_turn_id))
+                # Replace rather than diff: the unique position per account
+                # would otherwise have to be shuffled through a spare slot.
+                await session.execute(
+                    delete(ProfileDrawingPin).where(
+                        ProfileDrawingPin.user_id == identity_ids[0]
+                    )
+                )
+                for position, (game_id, db_turn_id) in enumerate(rows):
+                    session.add(
+                        ProfileDrawingPin(
+                            user_id=identity_ids[0],
+                            game_id=game_id,
+                            turn_id=db_turn_id,
+                            position=position,
+                        )
+                    )
+        return rows
 
     async def get_recent_co_players(
         self,

@@ -50,26 +50,70 @@ class AccountErasedError(RuntimeError):
     """The account this write is for has been deleted since it was authorized."""
 
 
+class LockSetChangedError(RuntimeError):
+    """An exclusive barrier found, under its lock, an identity it did not lock.
+
+    A merge committed between the unlocked alias read and the lock. Taking the
+    new target in a second statement is what an exclusive holder must never
+    do - two writers whose sets cross would each hold one and want the other -
+    so the transaction is abandoned and the caller starts it again from
+    before alias resolution, where the whole set goes into one statement.
+    """
+
+
+async def _after_alias_resolution() -> None:
+    """A seam for the barrier's proofs: the window between the unlocked alias
+    read and the lock, where a merge can land. Does nothing in the product."""
+
+
 async def erased_identity_ids(
-    session: AsyncSession, user_ids: Iterable[UUID]
+    session: AsyncSession, user_ids: Iterable[UUID], *, exclusive: bool = False
 ) -> set[UUID]:
-    """Lock the given identities (shared, ascending) and say which are erased.
+    """Lock the given identities (ascending) and say which are erased.
+
+    Shared by default, the mode for a writer that only reads the accounts.
+    `exclusive` takes `FOR UPDATE` instead, in the same one ordered statement,
+    for a writer that must also serialize with its own kind: the pin write
+    replaces an account's whole shelf, and two of them for one account under
+    shared locks both pass the barrier and collide on the shelf's unique
+    positions. One ordered statement either way, so the barrier's rule that
+    no two transactions take these rows in different orders still holds.
 
     An identity counts as erased when its own row is `deleted`, when the row
     is gone altogether (retention purged the guest), or when it is a merged
     guest whose account is `deleted` - the alias rows keep `merged` while the
     account they resolve to is the one that carries the state.
+
+    The lock set is the whole identity, resolved **before** locking: the
+    accounts a merged guest resolves to are read first, unlocked, and locked
+    in the same ordered statement as the guests. Discovering them under the
+    first lock and taking them in a second statement gave two writers whose
+    sets cross - A holding {A, B'} then wanting B, B holding {B, A'} then
+    wanting A - a cycle. A merge that lands between the unlocked read and the
+    lock is caught by the state read under it, and its target locked then; a
+    merge needs the account row, so that window is the only one.
     """
-    wanted = sorted({UUID(str(value)) for value in user_ids})
+    wanted = {UUID(str(value)) for value in user_ids}
     if not wanted:
         return set()
+    wanted |= set(
+        (
+            await session.scalars(
+                select(IdentityAlias.target_user_id).where(
+                    IdentityAlias.source_user_id.in_(sorted(wanted))
+                )
+            )
+        ).all()
+    )
+    wanted = sorted(wanted)
+    await _after_alias_resolution()
     states = dict(
         (
             await session.execute(
                 select(User.id, User.state)
                 .where(User.id.in_(wanted))
                 .order_by(User.id)
-                .with_for_update(read=True)
+                .with_for_update(read=not exclusive)
             )
         ).all()
     )
@@ -85,6 +129,11 @@ async def erased_identity_ids(
             ).all()
         )
         unknown_targets = sorted(set(targets.values()) - states.keys())
+        if unknown_targets and exclusive:
+            # Never a second exclusive statement (see LockSetChangedError).
+            raise LockSetChangedError(
+                f"{len(unknown_targets)} identity target(s) merged since the alias read"
+            )
         if unknown_targets:
             states.update(
                 (
@@ -92,7 +141,7 @@ async def erased_identity_ids(
                         select(User.id, User.state)
                         .where(User.id.in_(unknown_targets))
                         .order_by(User.id)
-                        .with_for_update(read=True)
+                        .with_for_update(read=not exclusive)
                     )
                 ).all()
             )

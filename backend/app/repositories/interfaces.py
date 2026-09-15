@@ -373,6 +373,22 @@ class PromptOfferDetail:
 
 
 @dataclass(frozen=True)
+class ProfilePinDetail:
+    """One pinned drawing, in shelf order (#440)."""
+
+    turn_id: str
+    game_id: str
+    position: int
+
+
+@dataclass(frozen=True)
+class ProfilePinsResult:
+    """The pinner's whole shelf after a write: the ordered set, never a page."""
+
+    pins: tuple[ProfilePinDetail, ...]
+
+
+@dataclass(frozen=True)
 class TurnDrawingDetail:
     """One stored drawing, ready to be handed back in wire form."""
 
@@ -842,6 +858,26 @@ class GameHistoryRepository(ABC):
         drawing, the drawing was erased, the code is unknown - answers
         ``None``, so a caller can turn all of them into the same 404
         (R-HIST-16) without learning which applied.
+        """
+        ...
+
+    @abstractmethod
+    async def set_profile_pins(
+        self,
+        *,
+        requesting_user_id: str,
+        turn_ids: Sequence[str],
+    ) -> ProfilePinsResult | None:
+        """Replace the requester's pinned drawings with ``turn_ids``, in that order.
+
+        One write for pinning, unpinning and reordering alike: the list is the
+        whole shelf, so the cap and the position uniqueness fall out of its
+        length and its order. The caller bounds the length (R-PIN-02); this
+        checks the rest and answers ``None`` when any turn fails it - unknown,
+        from a game the requester did not sit in, from a **private** game, or
+        with no ready drawing - or when the requester is not a registered
+        account, so every refusal can be the same 404 (R-HIST-16). Nothing is
+        written on a refusal.
         """
         ...
 
