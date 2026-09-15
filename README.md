@@ -2410,7 +2410,12 @@ A seated client checks with the server every five seconds that it still holds th
   reconnecting is itself something a person did.
 - A lost connection is said outside a room with a banner across the top, and inside one
   with a chip in the room header beside the round and the clock - the same for a planned
-  deploy's countdown. Tapping the chip gives the full sentence. A room is sized to the
+  deploy's countdown. Tapping the chip gives the full sentence. An outage that lasts more
+  than a moment also pauses the room: the canvas, chat and guess field dim and stop taking
+  input, the clock holds, and a card says the connection is being restored - while the
+  header's Leave still works. If the server comes back without the room (it restarted, or
+  the room closed meanwhile), the room is replaced by "This game ended", with the reason and
+  a way back to the lobby. A room is sized to the
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
 - An action that expects an answer - creating a room, joining, starting, voting to restart -

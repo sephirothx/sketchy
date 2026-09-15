@@ -10,6 +10,8 @@ while a banner at the top of the page was the only thing that showed it. The
 room header shows two of these as chips now (#797), so the facts are shared and
 each surface decides for itself how to say them. Written only by
 `useServerNotices`; everything else reads. */
+export type RoomEndReason = "server-update" | "room-closed";
+
 interface ServerNoticesStore {
   shutdownNotice: ServerShutdownNotice | null;
   paused: boolean;
@@ -17,7 +19,16 @@ interface ServerNoticesStore {
   serverFull: string | null;
   updateRequired: boolean;
   connection: ConnectionStatus;
-  set: (partial: Partial<Omit<ServerNoticesStore, "set">>) => void;
+  /** The connection has been in trouble for long enough to pause the room's stage. */
+  pauseDue: boolean;
+  /** The connection dropped while a planned-deploy drain was on screen. */
+  lostDuringDrain: boolean;
+  /** The room this tab was in no longer exists, and why (#823). Keyed by code, so
+   *  it describes that room only and never the next one. */
+  roomEnded: { code: string; reason: RoomEndReason } | null;
+  set: (partial: Partial<Omit<ServerNoticesStore, "set" | "markRoomEnded">>) => void;
+  /** Record that rejoining *code* was refused because the room is gone. */
+  markRoomEnded: (code: string) => void;
 }
 
 export const useServerNoticesStore = create<ServerNoticesStore>((set) => ({
@@ -27,5 +38,26 @@ export const useServerNoticesStore = create<ServerNoticesStore>((set) => ({
   serverFull: null,
   updateRequired: false,
   connection: "connected",
+  pauseDue: false,
+  lostDuringDrain: false,
+  roomEnded: null,
   set: (partial) => set(partial),
+  // A drain seen before the loss is what makes this an update rather than a
+  // room that simply closed: rooms are process-owned (one worker, no
+  // snapshots), so a server that went away after draining took the room with
+  // it. The end screen says so, which is why the "server was updated" banner
+  // is spent here rather than shown on top of it.
+  //
+  // The first answer for a room stands: by the next refusal the flags that
+  // named the reason have been spent, and asking again would relabel an update
+  // as a room that merely closed.
+  markRoomEnded: (code) =>
+    set((state) => state.roomEnded?.code === code ? state : ({
+      roomEnded: {
+        code,
+        reason: state.lostDuringDrain || state.restarted ? "server-update" : "room-closed",
+      },
+      restarted: false,
+      lostDuringDrain: false,
+    })),
 }));

@@ -160,6 +160,9 @@ async def test_mid_session_socket_reconnects_to_room():
             assert await guest.locator(".connection-status-banner").count() == 0
 
             await host.wait_for_selector("text=GuestReconnect reconnected", timeout=10000)
+            await guest.wait_for_selector(
+                '[data-testid="room-stage-paused"]', state="hidden", timeout=10000
+            )
 
             await guest.fill(".waiting-chat-form input", "still here after reconnect")
             await guest.click(".waiting-chat-form button")
@@ -273,6 +276,12 @@ async def test_a_notice_never_covers_a_phone_room_header():
             chip = page.locator('.room-notice-chip[data-notice="connection"]')
             await chip.wait_for()
             assert await page.locator(".connection-status-banner").count() == 0
+            # An outage that lasts pauses the stage (#823): a card says why, and
+            # nothing under it takes input - but the header above it still does.
+            paused = page.locator('[data-testid="room-stage-paused"]')
+            await paused.wait_for(timeout=5000)
+            assert await paused.get_attribute("data-cause") == "offline"
+            assert await page.locator(".room-shell-main[inert]").count() == 1
             menu = page.locator('[data-testid="open-room-menu"]')
             menu_box = await menu.bounding_box()
             assert menu_box is not None
@@ -287,6 +296,8 @@ async def test_a_notice_never_covers_a_phone_room_header():
             )
             await context.set_offline(False)
             await chip.wait_for(state="detached", timeout=10000)
+            await paused.wait_for(state="detached", timeout=10000)
+            assert await page.locator(".room-shell-main[inert]").count() == 0
             assert await page.locator(".room-notice-popover").count() == 0
             # A notice that comes back starts closed: the card is opened by a
             # tap, never by the last outage's.

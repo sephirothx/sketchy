@@ -2,6 +2,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { Chip } from "./ui/Chip";
 import { Timer } from "./Timer";
 import { useGameStore } from "../store/gameStore";
+import { useRoomStage } from "../hooks/useServerNotices";
 import { ui } from "../content/ui/index.ts";
 
 /**
@@ -22,6 +23,7 @@ export function GameHeaderStatus() {
   const phaseSeconds = useGameStore((s) => s.phaseSeconds);
   const phaseStartedAt = useGameStore((s) => s.phaseStartedAt);
   const phaseDurationSeconds = useGameStore((s) => s.phaseDurationSeconds);
+  const clockPaused = useRoomStage().kind !== "live";
 
   if (roomState !== "playing" || phase === "idle" || phase === "game_end") {
     return null;
@@ -37,6 +39,7 @@ export function GameHeaderStatus() {
           totalSeconds={phaseSeconds}
           startedAt={phaseStartedAt}
           durationSeconds={phaseDurationSeconds}
+          paused={clockPaused}
         />
       )}
     </div>

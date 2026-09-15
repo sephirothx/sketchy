@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  STAGE_PAUSE_DELAY_MS,
   connectionBannerDelayMs,
   resolveConnectionStatus,
   type ConnectionStatus,
@@ -13,7 +14,9 @@ import {
 } from "../lib/shutdownNotice";
 import { hasEverConnected, onServerFull, socket } from "../lib/socket";
 import { onUpdateRequired } from "../lib/updateRequired";
+import { useGameStore } from "../store/gameStore";
 import { useServerNoticesStore } from "../store/serverNoticesStore";
+import { roomStage, type RoomStage } from "../lib/appNotices";
 
 function currentConnection(): ConnectionStatus {
   return resolveConnectionStatus({
@@ -55,8 +58,9 @@ export function useServerNotices() {
     // pause lifted while this client was away sends no notice on reconnect,
     // so a cached `true` would otherwise claim for ever that rooms are paused.
     const onDisconnect = () => {
-      if (useServerNoticesStore.getState().shutdownNotice) sawShutdownRef.current = true;
-      set({ shutdownNotice: null, paused: false });
+      const draining = useServerNoticesStore.getState().shutdownNotice !== null;
+      if (draining) sawShutdownRef.current = true;
+      set({ shutdownNotice: null, paused: false, ...(draining ? { lostDuringDrain: true } : {}) });
     };
     // A player whose game vanished mid-round is owed the reason, so a drain
     // that ended in a restart is reported once the server is back - unless it
@@ -96,8 +100,8 @@ export function useServerNotices() {
 
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
+    let pauseTimer: ReturnType<typeof setTimeout> | null = null;
     let shown = initialConnection();
-    set({ connection: shown });
 
     const clearPending = () => {
       if (pending === null) return;
@@ -107,8 +111,27 @@ export function useServerNotices() {
 
     const commit = (next: ConnectionStatus) => {
       shown = next;
+      if (next === "connected") {
+        if (pauseTimer !== null) clearTimeout(pauseTimer);
+        pauseTimer = null;
+        set({ connection: next, pauseDue: false });
+        return;
+      }
+      // A rebind that failed is not going to recover by waiting, so its card
+      // is due at once; anything else waits out the pause delay.
+      if (next === "failed") {
+        set({ connection: next, pauseDue: true });
+        return;
+      }
       set({ connection: next });
+      if (pauseTimer === null && !useServerNoticesStore.getState().pauseDue) {
+        pauseTimer = setTimeout(() => {
+          pauseTimer = null;
+          if (shown !== "connected") set({ pauseDue: true });
+        }, STAGE_PAUSE_DELAY_MS);
+      }
     };
+    commit(shown);
 
     const refresh = () => {
       const next = currentConnection();
@@ -138,6 +161,7 @@ export function useServerNotices() {
     refresh();
     return () => {
       clearPending();
+      if (pauseTimer !== null) clearTimeout(pauseTimer);
       socket.off("connect", refresh);
       socket.off("disconnect", refresh);
       socket.off("connect_error", refresh);
@@ -168,4 +192,15 @@ export function useDrainSecondsLeft(): number {
   }, [notice]);
 
   return secondsLeft;
+}
+
+/** The room's stage as `roomStage` decides it, for the room this tab is showing. */
+export function useRoomStage(): RoomStage {
+  const code = useGameStore((state) => state.code);
+  const connection = useServerNoticesStore((state) => state.connection);
+  const pauseDue = useServerNoticesStore((state) => state.pauseDue);
+  const lostDuringDrain = useServerNoticesStore((state) => state.lostDuringDrain);
+  const updateRequired = useServerNoticesStore((state) => state.updateRequired);
+  const roomEnded = useServerNoticesStore((state) => state.roomEnded);
+  return roomStage({ code, connection, pauseDue, lostDuringDrain, updateRequired, roomEnded });
 }

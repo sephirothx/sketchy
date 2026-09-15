@@ -1823,6 +1823,20 @@ export const FR: Catalogue = {
       counted(p.count, { one: "personnalisé", other: "personnalisés" }),
   },
 
+  roomStageNotice: {
+    connectionLost: "Connexion perdue",
+    serverUpdating: "Mise à jour du serveur",
+    reconnectingSeatKept: "Reconnexion… Ta place est gardée un moment.",
+    youReDisconnected: "Tu es déconnecté. Sketchy se reconnectera dès que ta connexion reviendra.",
+    serverIsUpdating: "Le serveur se met à jour, cette partie se termine donc.",
+    couldNotRejoin: "Impossible de revenir dans ce salon",
+    couldNotRejoinDetail: "La connexion est revenue, mais le salon ne t’a pas repris. Recharge pour réessayer, ou retourne au hall.",
+    gameEnded: "Cette partie est terminée",
+    endedServerUpdate: "Le serveur a été mis à jour et la partie en cours n’a pas pu continuer.",
+    endedRoomClosed: "Le salon a fermé pendant que tu étais déconnecté.",
+    backToLobby: "Retour au hall",
+  },
+
   rulesPage: {
     sketchy: "Sketchy",
     theRules: "Les règles",

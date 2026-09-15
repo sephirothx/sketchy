@@ -14,6 +14,8 @@ import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
+import { RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
+import { useRoomStage } from "../hooks/useServerNotices";
 import { RoomMenuSheet } from "../components/RoomMenuSheet";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import {
@@ -60,6 +62,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const clearSession = useGameStore((s) => s.clearSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
   const reset = useGameStore((s) => s.reset);
+  // Paused while the connection is down; ended once the server says the room is gone (#823).
+  const stage = useRoomStage();
 
   const roomState = useGameStore((s) => s.roomState);
   const roomName = useGameStore((s) => s.name);
@@ -512,73 +516,87 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
       {/* Nothing in a production build; the E2E suite's way to crash the room. */}
       <CrashProbe scope="room" />
-      <RoomShell
-        mode={roomView}
-        players={
-          <ConnectedRoomPlayersPanel mode={roomView} />
-        }
-        main={
-          recapOpen && drawingRecap.length > 0 ? (
-            <DrawingRecapGallery
-              entries={drawingRecap}
-              initialIndex={recapIndex}
-              onClose={() => {
-                setRecapOpen(false);
-                setRecapIndex(0);
-              }}
-              loadEntry={loadRecapDrawing}
-              renderReactions={(entry) => (
-                <ConnectedDrawingReactionControl
-                  turnId={entry.turnId}
-                  drawerId={entry.drawerId}
-                  placement="panel"
-                  visible={entry.available !== false}
-                />
-              )}
-            />
-          ) : highlightsOpen ? (
-            <GameHighlightsPanel
-              highlights={gameHighlights}
-              onClose={() => setHighlightsOpen(false)}
-              onOpenDrawing={(index) => {
-                setHighlightsOpen(false);
-                setRecapIndex(index);
-                setRecapOpen(true);
-              }}
-            />
-          ) : roomView === "game-end" && finalScores ? (
-            <GameEndOverlay
-              scores={finalScores}
-              myPlayerId={playerId}
-              scoringMode={scoringMode}
-              onContinue={dismissGameEnd}
-              drawingCount={drawingRecap.length}
-              onViewDrawings={handleViewDrawingsFromGameEnd}
-              highlightCount={gameHighlights.length}
-              onViewHighlights={handleViewHighlightsFromGameEnd}
-            />
-          ) : roomView === "waiting" ? (
-            <ConnectedWaitingRoomPanel
-              finalScores={finalScores}
-              startBusy={startBusy}
-              startError={startError}
-              onStart={() => void handleStartGame()}
-              drawingCount={drawingRecap.length}
-              onViewDrawings={() => setRecapOpen(true)}
-              highlightCount={gameHighlights.length}
-              onViewHighlights={() => setHighlightsOpen(true)}
-            />
-          ) : (
-            <GameplayRegion
-              canvasRef={canvasRef}
-              onOpenPlayers={isMobile ? () => setPlayersSheetOpen(true) : undefined}
-            />
-          )
-        }
-        chat={
-          <ConnectedRoomChatPanel mode={roomView} onFocusChange={setIsInputFocused} />
-        }
-      />
+      {stage.kind === "ended" ? (
+        <RoomEndedCard reason={stage.reason} onLeave={performLeave} />
+      ) : (
+        <RoomShell
+          inert={stage.kind === "paused"}
+          overlay={
+            stage.kind === "paused" ? (
+              <RoomPausedCard
+                cause={stage.cause}
+                onReload={() => window.location.reload()}
+                onLeave={performLeave}
+              />
+            ) : null
+          }
+          mode={roomView}
+          players={
+            <ConnectedRoomPlayersPanel mode={roomView} />
+          }
+          main={
+            recapOpen && drawingRecap.length > 0 ? (
+              <DrawingRecapGallery
+                entries={drawingRecap}
+                initialIndex={recapIndex}
+                onClose={() => {
+                  setRecapOpen(false);
+                  setRecapIndex(0);
+                }}
+                loadEntry={loadRecapDrawing}
+                renderReactions={(entry) => (
+                  <ConnectedDrawingReactionControl
+                    turnId={entry.turnId}
+                    drawerId={entry.drawerId}
+                    placement="panel"
+                    visible={entry.available !== false}
+                  />
+                )}
+              />
+            ) : highlightsOpen ? (
+              <GameHighlightsPanel
+                highlights={gameHighlights}
+                onClose={() => setHighlightsOpen(false)}
+                onOpenDrawing={(index) => {
+                  setHighlightsOpen(false);
+                  setRecapIndex(index);
+                  setRecapOpen(true);
+                }}
+              />
+            ) : roomView === "game-end" && finalScores ? (
+              <GameEndOverlay
+                scores={finalScores}
+                myPlayerId={playerId}
+                scoringMode={scoringMode}
+                onContinue={dismissGameEnd}
+                drawingCount={drawingRecap.length}
+                onViewDrawings={handleViewDrawingsFromGameEnd}
+                highlightCount={gameHighlights.length}
+                onViewHighlights={handleViewHighlightsFromGameEnd}
+              />
+            ) : roomView === "waiting" ? (
+              <ConnectedWaitingRoomPanel
+                finalScores={finalScores}
+                startBusy={startBusy}
+                startError={startError}
+                onStart={() => void handleStartGame()}
+                drawingCount={drawingRecap.length}
+                onViewDrawings={() => setRecapOpen(true)}
+                highlightCount={gameHighlights.length}
+                onViewHighlights={() => setHighlightsOpen(true)}
+              />
+            ) : (
+              <GameplayRegion
+                canvasRef={canvasRef}
+                onOpenPlayers={isMobile ? () => setPlayersSheetOpen(true) : undefined}
+              />
+            )
+          }
+          chat={
+            <ConnectedRoomChatPanel mode={roomView} onFocusChange={setIsInputFocused} />
+          }
+        />
+      )}
     </div>
   );
 }

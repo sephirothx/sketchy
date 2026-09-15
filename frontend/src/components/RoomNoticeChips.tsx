@@ -105,14 +105,12 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
           )}
         </div>
       )}
-      {/* Announced once when a notice arrives, not every second the chip's
-          countdown moves: the chips' own names carry the live sentence for
-          anybody who goes looking. */}
+      {/* Announced once when a drain begins, not every second the chip's
+          countdown moves: the chip's own name carries the live sentence for
+          anybody who goes looking. A lost connection is announced by the card
+          that pauses the stage (RoomStageNotice), so it is not said twice. */}
       <span className="visually-hidden" role="status" aria-live="polite">
-        {[
-          chips.includes("drain") ? ui.roomNoticeChips.serverUpdateStarted : null,
-          chips.includes("connection") && connectionTrouble ? connectionStatusText(connectionTrouble) : null,
-        ].filter(Boolean).join(" ")}
+        {chips.includes("drain") ? ui.roomNoticeChips.serverUpdateStarted : ""}
       </span>
     </div>
   );

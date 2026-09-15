@@ -42,9 +42,9 @@ export interface NoticePlacement {
  * The rest stay banners, and each for a reason. **Update required** means the
  * tab can no longer play at all: nothing underneath it works, and the one thing
  * left to offer is the Reload on the banner. **Server full** and **restarted**
- * are only ever raised outside a room - turned away at the handshake, or
- * back after the room was lost - so a chip would never be the right home for
- * either. **Paused** stops new rooms only; a game already running carries on,
+ * belong outside a room - turned away at the handshake, or back after the room
+ * was lost, which a room says with its own end screen instead - so a chip would
+ * never be the right home for either. **Paused** stops new rooms only; a game already running carries on,
  * so a player in a room is not told about it at all.
  *
  * A drain supersedes the pause, as it always has: the server is going away,
@@ -61,8 +61,56 @@ export function placeNotices(facts: NoticeFacts): NoticePlacement {
   if (facts.serverFull && !facts.updateRequired) banners.push("server-full");
   if (facts.paused && !facts.draining && !facts.inRoom) banners.push("paused");
   if (facts.draining) (facts.inRoom ? chips : banners).push("drain");
-  if (facts.restarted) banners.push("restarted");
+  // Inside a room the end screen says it (roomStage), and says it better.
+  if (facts.restarted && !facts.inRoom) banners.push("restarted");
   if (connectionTrouble) (facts.inRoom ? chips : banners).push("connection");
 
   return { banners, chips };
+}
+
+export type RoomPauseCause = "reconnecting" | "offline" | "server-update" | "failed";
+
+export type RoomStage =
+  | { kind: "live" }
+  | { kind: "paused"; cause: RoomPauseCause }
+  | { kind: "ended"; reason: "server-update" | "room-closed" };
+
+export interface RoomStageFacts {
+  /** The room this tab is showing. */
+  code: string | null;
+  connection: ConnectionStatus;
+  pauseDue: boolean;
+  lostDuringDrain: boolean;
+  updateRequired: boolean;
+  roomEnded: { code: string; reason: "server-update" | "room-closed" } | null;
+}
+
+/**
+ * What the room's stage - players, canvas, chat, the guess field - should be (#823).
+ *
+ * A header chip was the only sign of an outage, and the room went on looking
+ * alive underneath it: the ring kept counting, the guess field and the brush
+ * kept taking input that was going nowhere. And once the server came back
+ * without the room, the player was left on that room for good, told to reload
+ * a page that could not bring it back.
+ *
+ * So trouble that outlasts the pause delay **pauses** the stage: it is dimmed
+ * and inert, the ring stops, and a card says why. The header stays usable,
+ * because Leave and the menu are how somebody gets out of a room that is not
+ * coming back. A room the server says no longer exists is **ended**: the stage
+ * is replaced by a card that says so and why, and offers the lobby.
+ *
+ * An out-of-date tab is left alone - its banner is the explanation, and the
+ * socket it has stopped reopening would otherwise pause the room for ever.
+ */
+export function roomStage(facts: RoomStageFacts): RoomStage {
+  if (facts.roomEnded && facts.code !== null && facts.roomEnded.code === facts.code) {
+    return { kind: "ended", reason: facts.roomEnded.reason };
+  }
+  if (facts.updateRequired || facts.connection === "connected" || !facts.pauseDue) {
+    return { kind: "live" };
+  }
+  if (facts.connection === "failed") return { kind: "paused", cause: "failed" };
+  if (facts.lostDuringDrain) return { kind: "paused", cause: "server-update" };
+  return { kind: "paused", cause: facts.connection };
 }

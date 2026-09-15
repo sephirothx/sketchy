@@ -1822,6 +1822,20 @@ export const ES: Catalogue = {
       counted(p.count, { one: "propia", other: "propias" }),
   },
 
+  roomStageNotice: {
+    connectionLost: "Conexión perdida",
+    serverUpdating: "Actualizando el servidor",
+    reconnectingSeatKept: "Reconectando… Tu sitio se guarda durante un rato.",
+    youReDisconnected: "Te has desconectado. Sketchy se reconectará en cuanto vuelva tu conexión.",
+    serverIsUpdating: "El servidor se está actualizando, así que esta partida termina.",
+    couldNotRejoin: "No se pudo volver a la sala",
+    couldNotRejoinDetail: "La conexión ha vuelto, pero la sala no te ha dejado entrar de nuevo. Recarga para intentarlo otra vez o vuelve al vestíbulo.",
+    gameEnded: "Esta partida ha terminado",
+    endedServerUpdate: "El servidor se actualizó y la partida en curso no pudo continuar.",
+    endedRoomClosed: "La sala se cerró mientras estabas desconectado.",
+    backToLobby: "Volver al vestíbulo",
+  },
+
   rulesPage: {
     sketchy: "Sketchy",
     theRules: "Las reglas",

@@ -24,6 +24,7 @@ import { useAuthStore } from "../store/authStore";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import type { DrawingReaction } from "../types";
 import type { RoomShellMode } from "./RoomShell";
+import { useRoomStage } from "../hooks/useServerNotices";
 import { ui } from "../content/ui/index.ts";
 
 const NO_REACTIONS: DrawingReaction[] = [];
@@ -283,6 +284,7 @@ interface GameplayRegionProps {
 }
 
 export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps) {
+  const clockPaused = useRoomStage().kind !== "live";
   recordRender("gameplay");
   const isMobile = useMediaQuery("(max-width: 900px)");
   const playerId = useGameStore((state) => state.playerId);
@@ -381,6 +383,7 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
               startedAt={phaseStartedAt}
               durationSeconds={phaseDurationSeconds}
               variant="text"
+              paused={clockPaused}
             />
           </span>
         )}
@@ -393,6 +396,7 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
             durationSeconds={phaseDurationSeconds}
             variant="bar"
             silent
+            paused={clockPaused}
           />
         </div>
       )}

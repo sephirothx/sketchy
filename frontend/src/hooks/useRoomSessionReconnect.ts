@@ -8,7 +8,8 @@ import { useGameStore } from "../store/gameStore";
 import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
-import { refusalText } from "../lib/refusals.ts";
+import { refusalCode, refusalText } from "../lib/refusals.ts";
+import { useServerNoticesStore } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
 
 const STALL_GRACE_MS = 2500;
@@ -84,6 +85,17 @@ export function useRoomSessionReconnect() {
       const session = sessionFrom(response);
       if (session) {
         useGameStore.getState().setSession(session);
+        useServerNoticesStore.getState().set({ lostDuringDrain: false });
+        setRoomBindingStatus("ready");
+        return;
+      }
+      // Not a failure to retry: the room is gone - a server that restarted
+      // takes its rooms with it - and asking again finds the same nothing. The
+      // room says so and offers the lobby (#823), rather than a Reload that
+      // cannot bring it back.
+      const refused = refusalCode(response);
+      if (refused === "room_not_found" || refused === "room_ended") {
+        useServerNoticesStore.getState().markRoomEnded(code);
         setRoomBindingStatus("ready");
         return;
       }
@@ -126,6 +138,10 @@ export function useRoomSessionReconnect() {
       options: { forceTransportRestart?: boolean; soft?: boolean } = {},
     ) {
       if (inFlight) return;
+      // A room the server already said is gone is not asked again: the answer
+      // cannot change, and the heartbeat would otherwise keep asking (#823).
+      const ended = useServerNoticesStore.getState().roomEnded;
+      if (ended && ended.code === useGameStore.getState().code) return;
       inFlight = rebindSession(options).finally(() => {
         inFlight = null;
       });

@@ -802,8 +802,65 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   align-items: start;
 }
 
+.room-shell {
+  /* The paused-stage card is positioned over the shell (#823). */
+  position: relative;
+}
+
 .room-shell-main {
   min-width: 0;
+}
+
+/* The stage while the connection is down: still there, visibly not live.
+   The header above the shell stays usable, so Leave and the menu still work. */
+.room-stage-overlay {
+  align-items: center;
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: absolute;
+  z-index: 50;
+}
+
+.room-stage-card {
+  max-width: 380px;
+  padding: 20px 22px;
+  text-align: center;
+  width: 100%;
+}
+
+.room-stage-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  margin: 0 0 6px;
+}
+
+.room-stage-body {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.room-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* A room the server says is gone: the stage is replaced, not covered. */
+.room-ended {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-height: 50vh;
+  padding: 24px 16px;
 }
 
 .room-shell-main-transition {

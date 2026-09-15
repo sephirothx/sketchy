@@ -1828,6 +1828,20 @@ export const EN = {
       `${number(p.count)} custom`,
   },
 
+  roomStageNotice: {
+    connectionLost: "Connection lost",
+    serverUpdating: "Server updating",
+    reconnectingSeatKept: "Reconnecting… Your seat is kept for a short while.",
+    youReDisconnected: "You’re disconnected. Sketchy will reconnect as soon as your connection is back.",
+    serverIsUpdating: "The server is updating, so this game is ending.",
+    couldNotRejoin: "Couldn’t get back into this room",
+    couldNotRejoinDetail: "The connection is back, but the room didn’t take you back. Reload to try again, or head to the lobby.",
+    gameEnded: "This game ended",
+    endedServerUpdate: "The server was updated, and the game in progress couldn’t carry on.",
+    endedRoomClosed: "The room closed while you were disconnected.",
+    backToLobby: "Back to lobby",
+  },
+
   rulesPage: {
     sketchy: "Sketchy",
     theRules: "The rules",
