@@ -126,7 +126,7 @@ async def test_the_translated_core_is_one_concept_per_language():
             translated = json.loads(
                 (PROMPT_LIST_DIR / f"{stem}_standard.json").read_text()
             )["prompts"]
-            assert {entry["conceptId"] for entry in translated} <= english, language
+            assert {entry["conceptId"] for entry in translated} == english, language
             # And the extension is native: its concepts are its own.
             native = json.loads(
                 (PROMPT_LIST_DIR / f"{stem}_extended.json").read_text()

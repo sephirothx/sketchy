@@ -1889,12 +1889,21 @@ by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape i
 **identity-based, not text-keyed**:
 
 ```json
-{"conceptId":"01a02b7b-b42d-7afc-a278-fc0ecc83b994","answer":"anchor","promptVersion":1}
+{"conceptId":"01a02b7b-b42d-7afc-a278-fc0ecc83b994","answer":"anchor"}
 ```
+
+That is why the files are JSON rather than one answer per line (#798): the identity is the
+ID, not the text, and a prompt can carry fields beyond its answer. Add a prompt with
+[`scripts/add-prompt.py`](../scripts/add-prompt.py) rather than by hand — it mints the
+UUIDv7, bumps the list `version`, and refuses an answer or alias whose match key is
+already bundled in that language. An Extended prompt changes one file; a Standard prompt
+is added to all seven Standard lists in one run, with a `--translation` per language,
+because Standard is one concept set in every language (R-PROMPT-01) and
+`tests/test_prompt_list_seeding.py` fails when any language's set differs from English.
 
 - Equal text shares a concept **only** when the files deliberately repeat that ID.
 - Changing capitalization, punctuation, wording, aliases, or editorial metadata requires
-  the **same `conceptId` and a higher `promptVersion`**.
+  the **same `conceptId` and a higher `promptVersion`**. An absent `promptVersion` is 1.
 - Adding, removing, or reordering membership requires a higher top-level list `version`.
 - Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong to the immutable
   prompt version.
