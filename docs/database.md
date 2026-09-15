@@ -138,7 +138,7 @@ erDiagram
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
-| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
+| **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
@@ -1292,7 +1292,7 @@ goes with its whole game.
 ### `turn_drawings`
 `turn_id` **PK** (CASCADE) · `game_id` (CASCADE) · `status` · `format_magic` ·
 `format_version` · `payload` BLOB · `byte_size` · `checksum_sha256` · `object_key` ·
-`unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · timestamps.
+`unavailable_reason` · `failure_code` · `reaction_count` · `hot_score` · `gallery_hidden_at` · timestamps.
 
 `status` ∈ `pending \| ready \| unavailable \| failed \| deleted`.
 `ck_turn_drawings_ready_identity` requires a `ready` row to carry a complete format
@@ -1317,6 +1317,13 @@ reaction rows, and a rebuild reproduces exactly what the writes left.
 cd backend
 .venv/bin/python -m app.services.gallery_ranking
 ```
+
+`gallery_hidden_at` is a moderator's judgement about the lobby (R-GAL-09), not an
+erasure: set, the drawing is out of the Gallery, the lobby shelf, the gallery bytes route
+and the gallery reaction door in one act — all four read the one predicate — while its
+bytes stay and the players who were there keep seeing it in their history. Released
+clears it. Audited as `gallery.review_hidden` / `gallery.review_released` with
+`target_type = 'drawing'` and the drawer as the target account.
 
 Every drawing from a completed game is kept **for as long as that game, in the same
 transaction that records it**. The stored bytes are the canvas frame itself — the
@@ -1445,6 +1452,20 @@ drawing, upserts or deletes the row, and moves the drawer's `reactions_received`
 
 Deleting an account deletes the reactions on the drawings it erases; the reactions that
 account *gave* stay, attributed through the tombstoned seat.
+
+### `gallery_shelf_reviews`
+`turn_id` **PK** (→ `turn_records`, CASCADE) · `decision` ∈ `released \| hidden` ·
+`decided_by_user_id` (→ `users`, SET NULL, indexed) · `decided_at`.
+
+A moderator's answer about one drawing's place on the lobby's **This week** shelf
+(#524, R-GAL-10), one row per turn — a later decision replaces the earlier one, so
+*undecided* is the absence of a row. Read only while `app_config['gallery.shelf_review']`
+is set: then the shelf takes released drawings only, and `GET /api/moderation/gallery`
+lists the current Top-week candidates with no row. The switch holds the shelf and nothing
+else; the Gallery page publishes after the fact for the reasons R-LIST-13 gives against
+pre-approval, and the shelf is held because it is the one place a drawing is put in front
+of everyone who opens the app, chosen by nobody. A hidden decision also sets
+`turn_drawings.gallery_hidden_at`, so it holds whatever the switch says.
 
 ### `profile_drawing_pins`
 `user_id` (CASCADE) · `turn_id` — together the **PK** · `game_id` (denormalized) ·
@@ -1691,6 +1712,12 @@ on a list, that state is written in exactly one place — a publish under the op
 switch — so it only ever means "waiting to be published". Once the owner withdraws there
 is nothing left to publish, and keeping the hold left a private list in the moderators'
 queue where it could still be decided on.
+
+The gallery's shelf has a switch of the same shape, `app_config['gallery.shelf_review']`
+([`services/gallery_shelf.py`](../backend/app/services/gallery_shelf.py)), written by
+`POST /api/admin/gallery-shelf-review` and audited as `gallery.shelf_review_changed`; it
+holds the lobby's **This week** shelf for a moderator's release and nothing else
+(R-GAL-10, `gallery_shelf_reviews` in §6).
 
 The operator switch is `app_config['prompt_lists.publication_review']`
 ([`services/publication_policy.py`](../backend/app/services/publication_policy.py)):

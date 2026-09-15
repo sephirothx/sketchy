@@ -1652,6 +1652,21 @@ export const NL: Catalogue = {
     close: "Sluiten",
     cancel: "Annuleren",
   },
+  reportDrawingDialog: {
+    report: "Melden",
+    reportThisDrawing: "Deze tekening melden",
+    nothingHappensYet: "Een moderator bekijkt de tekening. Tot die tijd gebeurt er niets met de speler.",
+    anythingElseOptional: "Nog iets? (optioneel)",
+    anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
+    sendReport: "Melding versturen",
+    sending: "Versturen…",
+    reportSent: "Melding verstuurd",
+    sentWithTheDrawingAttached: "Verstuurd, met de tekening erbij.",
+    thatReportCouldNotBeSent: "Deze melding kon niet verstuurd worden.",
+    done: "Klaar",
+    cancel: "Annuleren",
+    close: "Sluiten",
+  },
 
   reportedDrawing: {
     thisDrawingCouldNotBeDecoded: "Deze tekening kon niet gedecodeerd worden.",

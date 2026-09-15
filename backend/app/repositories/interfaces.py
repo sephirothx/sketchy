@@ -971,10 +971,27 @@ class GameHistoryRepository(ABC):
         limit: int = 24,
         cursor: str | None = None,
         requesting_user_id: str | None = None,
+        shelf_filter: str | None = None,
     ) -> GalleryPage:
         """One page of the Gallery (R-GAL-01, R-GAL-04): every kept drawing
         from a public game, in Hot, New or Top order, Top windowed by name.
-        Who may ask is the route's question; this answers what is there."""
+        Who may ask is the route's question; this answers what is there.
+        ``shelf_filter`` narrows to the shelf's ``"released"`` drawings or to
+        the ``"undecided"`` ones a moderator has yet to look at (R-GAL-10)."""
+        ...
+
+    @abstractmethod
+    async def set_gallery_decision(
+        self,
+        turn_id: str,
+        *,
+        decision: str,
+        decided_by_user_id: str,
+    ) -> tuple[str, str | None] | None:
+        """Record a moderator's decision on a drawing (R-GAL-09, R-GAL-10):
+        ``"hidden"`` takes it out of the Gallery, ``"released"`` puts it back
+        and onto the shelf. Answers the turn id and the drawer's account id,
+        or ``None`` when no kept drawing has that id."""
         ...
 
     @abstractmethod

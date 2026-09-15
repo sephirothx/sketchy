@@ -11,8 +11,11 @@ import {
   CLOSED_CASES_PAGE_SIZE,
   createUserBan,
   createUserWarning,
+  decideGalleryDrawing,
+  fetchModerationGalleryDrawing,
   fetchReportDrawing,
   listClosedCases,
+  listGalleryReview,
   listModerationReports,
   listHeldPublications,
   listPromptContentReports,
@@ -24,6 +27,7 @@ import {
   reviewHeldPublication,
   reviewPromptContentReport,
   type ContentIncident,
+  type GalleryReviewQueue,
   type HeldPublication,
   type HeldPublicationDetail,
   type IncidentEvidence,
@@ -41,11 +45,12 @@ import {
   type UserBan,
 } from "../lib/moderation";
 import { canModerate } from "../lib/operatorAccess";
+import type { GalleryEntry } from "../lib/gallery";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 
-type Filter = "open" | "players" | "content" | "held" | "bans" | "closed";
-type CaseKind = "incident" | "content" | "held" | "ban";
+type Filter = "open" | "players" | "content" | "held" | "gallery" | "bans" | "closed";
+type CaseKind = "incident" | "content" | "held" | "gallery" | "ban";
 type Selection = { kind: CaseKind; id: string };
 
 type QueueEntry = {
@@ -113,6 +118,7 @@ const FILTERS: { name: Filter; label: string }[] = [
   { name: "players", label: "Player reports" },
   { name: "content", label: "Prompt content" },
   { name: "held", label: "Held publications" },
+  { name: "gallery", label: "Gallery shelf" },
   { name: "bans", label: "Suspensions" },
   { name: "closed", label: "Closed" },
 ];
@@ -132,6 +138,11 @@ function age(value: string): string {
   if (minutes < 60) return `${minutes}m`;
   if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`;
   return `${Math.round(minutes / (60 * 24))}d`;
+}
+
+/** Every reaction a Gallery drawing drew, whatever the emoji. */
+function reactionTotal(entry: GalleryEntry): number {
+  return Object.values(entry.reactionCounts).reduce((sum, count) => sum + count, 0);
 }
 
 function humanize(value: string): string {
@@ -427,6 +438,15 @@ export function ModerationPage() {
   // only a list waiting for somebody to read it.
   const [held, setHeld] = useState<HeldPublication[]>([]);
   const [heldDetail, setHeldDetail] = useState<HeldPublicationDetail | null>(null);
+  // The lobby shelf's candidates while the operator switch holds it
+  // (R-GAL-09). Nobody complained about these either: they are the week's
+  // most-reacted drawings, waiting for somebody to look before the front
+  // page shows them.
+  const [gallery, setGallery] = useState<GalleryReviewQueue>({
+    review: false,
+    waiting: 0,
+    candidates: [],
+  });
   const [openCount, setOpenCount] = useState(0);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
@@ -479,8 +499,9 @@ export function ModerationPage() {
       listUserBans(),
       pending,
       listHeldPublications(),
+      listGalleryReview(),
     ])
-      .then(([caseResult, banResult, pendingResult, heldResult]) => {
+      .then(([caseResult, banResult, pendingResult, heldResult, galleryResult]) => {
         setIncidents(caseResult.players);
         setContent(caseResult.content);
         setHasMore(caseResult.hasMore);
@@ -488,12 +509,15 @@ export function ModerationPage() {
         // Incidents, not reports: the chip counts the work waiting, and
         // five complaints about one thing are one thing to look at.
         setHeld(heldResult.lists);
+        setGallery(galleryResult);
         setOpenCount(
           pendingResult[0].incidents.length
             + pendingResult[1].incidents.length
             // A held list is work waiting too: nobody else is going to
             // complain about it, because it is out of everyone's reach.
-            + heldResult.waiting,
+            + heldResult.waiting
+            // And so is a shelf candidate: the front page waits on it.
+            + galleryResult.waiting,
         );
         setError(null);
       })
@@ -546,6 +570,14 @@ export function ModerationPage() {
       at: publication.publishedAt ?? "",
       dot: "warning",
     }));
+    const galleryEntries: QueueEntry[] = gallery.candidates.map((entry) => ({
+      kind: "gallery",
+      id: entry.turnId,
+      title: entry.prompt,
+      snippet: `by ${entry.drawerDisplayName} · ${reactionTotal(entry)} reactions`,
+      at: entry.finishedAt,
+      dot: "warning",
+    }));
     const banEntries: QueueEntry[] = bans.map((ban) => ({
       kind: "ban",
       id: ban.id,
@@ -561,15 +593,17 @@ export function ModerationPage() {
           ? contentEntries
           : filter === "held"
             ? heldEntries
-            : filter === "bans"
-              ? banEntries
-              // Nothing held is decided yet, so it belongs to "All open" and
-              // never to the archive of what was settled.
-              : showingClosed
-                ? [...playerEntries, ...contentEntries]
-                : [...playerEntries, ...contentEntries, ...heldEntries];
+            : filter === "gallery"
+              ? galleryEntries
+              : filter === "bans"
+                ? banEntries
+                // Nothing held is decided yet, so it belongs to "All open" and
+                // never to the archive of what was settled.
+                : showingClosed
+                  ? [...playerEntries, ...contentEntries]
+                  : [...playerEntries, ...contentEntries, ...heldEntries, ...galleryEntries];
     return entries.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [filter, showingClosed, incidents, content, bans, held]);
+  }, [filter, showingClosed, incidents, content, bans, held, gallery]);
 
   // Derived rather than synced by an effect: whatever is clicked wins while
   // it is still in the queue, and the newest entry stands in otherwise.
@@ -683,6 +717,19 @@ export function ModerationPage() {
     active?.kind === "ban"
       ? bans.find((ban) => ban.id === active.id)
       : undefined;
+  const galleryCase =
+    active?.kind === "gallery"
+      ? gallery.candidates.find((entry) => entry.turnId === active.id)
+      : undefined;
+  // The drawing a player report is about, when it came through the Gallery
+  // door: reported as offensive and naming a turn. Hiding it from the
+  // Gallery is then a third answer beside warning and suspending, because
+  // the drawing may still be on show whatever is decided about the drawer.
+  const reportedGalleryTurnId =
+    playerCase?.status === "pending" && playerCase.reasons.includes("offensive_drawing")
+      ? playerCase.reports.find((report) => report.turnId && report.reason === "offensive_drawing")
+          ?.turnId ?? null
+      : null;
 
   const categoryField = (id: string) => (
     <label className="mod-note mod-category">
@@ -820,7 +867,11 @@ export function ModerationPage() {
               <p className="ops-empty">
                 {filter === "bans"
                   ? "Nobody has been suspended."
-                  : showingClosed
+                  : filter === "gallery"
+                    ? gallery.review
+                      ? "Nothing is waiting for the shelf."
+                      : "The lobby shelf is not being held for review. Turn it on in Operations to see candidates here."
+                    : showingClosed
                     ? page > 0
                       ? "No older cases."
                       : "No case has been decided yet."
@@ -1210,6 +1261,28 @@ export function ModerationPage() {
                         </select>
                       </>
                     )}
+                    {reportedGalleryTurnId && (
+                      <button
+                        type="button"
+                        className="mod-danger-button"
+                        disabled={busy === playerCase.id}
+                        data-testid="gallery-hide-from-report"
+                        onClick={() =>
+                          act(
+                            playerCase.id,
+                            () =>
+                              decideGalleryDrawing(
+                                reportedGalleryTurnId,
+                                "hidden",
+                                note[playerCase.id],
+                              ),
+                            "Hidden from the gallery. The report is still open: decide it above.",
+                          )
+                        }
+                      >
+                        Hide from gallery
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (
@@ -1453,6 +1526,106 @@ export function ModerationPage() {
             </>
           )}
 
+          {galleryCase && (
+            <>
+              <div className="mod-case-head">
+                <div>
+                  <SectionLabel>Shelf candidate</SectionLabel>
+                  <h1>{galleryCase.prompt}</h1>
+                  <p className="mod-case-meta">
+                    {`by ${galleryCase.drawerDisplayName}`}
+                    {galleryCase.drawerIsAnonymous ? " (guest)" : ""}
+                    {` · ${reactionTotal(galleryCase)} reaction${reactionTotal(galleryCase) === 1 ? "" : "s"}`}
+                    {` · round ${galleryCase.roundNumber}, ${galleryCase.strokeCount} stroke${galleryCase.strokeCount === 1 ? "" : "s"}`}
+                    {galleryCase.finishedAt
+                      ? ` · finished ${formatWhen(galleryCase.finishedAt, dateTime)}`
+                      : ""}
+                  </p>
+                </div>
+                <Chip kind="warning">Waiting</Chip>
+              </div>
+
+              <section className="ops-card" aria-label="The drawing">
+                <h2>The drawing</h2>
+                {/* Nobody complained about this drawing: it is on the way to
+                    the lobby's front page because people liked it, and the
+                    picture is the whole of what is being decided. */}
+                <ReportedDrawing
+                  key={galleryCase.turnId}
+                  className="mod-drawing"
+                  testId="mod-gallery-drawing"
+                  load={() => fetchModerationGalleryDrawing(galleryCase.turnId)}
+                  label={`${galleryCase.drawerDisplayName}'s drawing of ${galleryCase.prompt}`}
+                  caption={
+                    <>
+                      They were asked to draw <strong>{galleryCase.prompt}</strong>.
+                    </>
+                  }
+                />
+              </section>
+
+              <label className="mod-note">
+                Decision note
+                <textarea
+                  placeholder="Why, in one line — required to decide"
+                  value={note[galleryCase.turnId] ?? ""}
+                  onChange={(change) =>
+                    setNote((current) => ({
+                      ...current,
+                      [galleryCase.turnId]: change.target.value,
+                    }))
+                  }
+                />
+                <span className="mod-note-hint">
+                  Kept in the append-only audit ledger. Hiding takes the drawing
+                  out of the Gallery as well as off the shelf.
+                </span>
+              </label>
+              <div className="mod-actions">
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  disabled={busy === galleryCase.turnId}
+                  data-testid="gallery-release"
+                  onClick={() =>
+                    act(
+                      galleryCase.turnId,
+                      () =>
+                        decideGalleryDrawing(
+                          galleryCase.turnId,
+                          "released",
+                          note[galleryCase.turnId],
+                        ),
+                      "Released onto the lobby shelf.",
+                    )
+                  }
+                >
+                  Release
+                </button>
+                <button
+                  type="button"
+                  className="mod-danger-button"
+                  disabled={busy === galleryCase.turnId}
+                  data-testid="gallery-hide"
+                  onClick={() =>
+                    act(
+                      galleryCase.turnId,
+                      () =>
+                        decideGalleryDrawing(
+                          galleryCase.turnId,
+                          "hidden",
+                          note[galleryCase.turnId],
+                        ),
+                      "Hidden from the gallery. The players who were there keep it in their history.",
+                    )
+                  }
+                >
+                  Hide from gallery
+                </button>
+              </div>
+            </>
+          )}
+
           {banCase && (
             <>
               <div className="mod-case-head">
@@ -1525,7 +1698,7 @@ export function ModerationPage() {
             </>
           )}
 
-          {!playerCase && !contentCase && !banCase && !heldCase && (
+          {!playerCase && !contentCase && !banCase && !heldCase && !galleryCase && (
             <p className="ops-empty">Nothing selected. The queue is clear.</p>
           )}
         </div>

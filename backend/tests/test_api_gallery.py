@@ -4,14 +4,25 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from sqlalchemy import select
+
 from app.api.errors import install_refusal_handler
 from app.api.gallery import create_gallery_router, gallery_limiter
+from app.api.moderation import create_moderation_router
+from app.api.profiles import create_profile_router
 from app.auth.middleware import SessionAuthMiddleware
+from app.auth.sessions import COOKIE_NAME, create_session, device_label_from_user_agent
+from app.db.models import PlayerReport, PlayerReportDrawingEvidence, User
+from app.domain_values import UserRole
+from app.services import config_store
+from app.services.gallery_shelf import SHELF_REVIEW_KEY, GalleryShelfCache, shelf_reader
+from tests.staffauth import mark_staff_ready
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -27,14 +38,53 @@ async def env():
     gallery_limiter.reset()
     users = SqlAlchemyUserRepository(session_factory)
     history = SqlAlchemyGameHistoryRepository(session_factory)
+    shelf = GalleryShelfCache(shelf_reader(history, session_factory))
     app = FastAPI()
     install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
-    app.include_router(create_gallery_router(history))
+    app.include_router(create_profile_router(users, history))
+    app.include_router(create_gallery_router(history, shelf=shelf))
+    app.include_router(
+        create_moderation_router(
+            session_factory,
+            game_history_repo=history,
+            on_gallery_decision=shelf.invalidate,
+        )
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http:
         yield http, users, history, session_factory
     await engine.dispose()
+
+
+async def _moderator(users, factory, name: str):
+    account = await _registered(users, name)
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(account.id))
+            row.role = UserRole.MODERATOR.value
+    return account
+
+
+async def _as_moderator(http, factory, user_id: str) -> None:
+    """A fresh session, used once, then stepped up (R-AUTH-21).
+
+    The stamp is on sessions, not on the account, and a session's first
+    request from a device it was not issued to drops its step-up - so the
+    session is introduced to the client with one harmless read before it is
+    stamped, the way a real moderator's session has been used before they
+    confirm their authenticator.
+    """
+    issued = await create_session(
+        factory,
+        user_id=user_id,
+        # The label the middleware derives from this client's user agent:
+        # a session used from a browser it was not issued to drops its
+        # step-up, so the session is issued to the one that will use it.
+        device_label=device_label_from_user_agent(http.headers.get("user-agent")),
+    )
+    http.cookies.set(COOKIE_NAME, issued.token)
+    await mark_staff_ready(factory, user_id)
 
 
 NOW = datetime.now(timezone.utc)
@@ -177,3 +227,136 @@ async def test_this_week_is_top_weeks_first_six_from_one_cached_snapshot(env):
     cache.invalidate()
     await cache.get()
     assert reads == 3
+
+
+# ---- moderation (R-GAL-08..10)
+
+
+async def test_hiding_takes_a_drawing_out_of_every_gallery_door_and_nowhere_else(env):
+    """Hidden: gone from the page, the shelf, the bytes and the reaction door in
+    one act; still in the players' own history. Released puts it back."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    mod = await _moderator(users, factory, "Mod")
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(hours=1))
+
+    await sign_in_as(http, factory, mod.id)
+    refused = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "not for the lobby"})
+    assert refused.status_code == 403, "step-up first"
+    await _as_moderator(http, factory, mod.id)
+    decided = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "not for the lobby"})
+    assert decided.status_code == 200, decided.text
+    assert decided.json() == {"turnId": game.turn_id, "decision": "hidden", "hidden": True}
+    assert (await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": ""})).status_code == 422
+    assert (await http.patch("/api/moderation/gallery/not-an-id", json={"decision": "hidden", "note": "x"})).status_code == 404
+    # The reviewer still sees the bytes, hidden or not.
+    assert (await http.get(f"/api/moderation/gallery/{game.turn_id}/drawing")).status_code == 200
+
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.get("/api/gallery?sort=new")).json()["entries"] == []
+    assert (await http.get("/api/gallery/week")).json()["entries"] == []
+    assert (await http.get(f"/api/gallery/{game.turn_id}/drawing")).status_code == 404
+    assert (await http.put(f"/api/gallery/{game.turn_id}/reaction", json={"emoji": "wow"})).status_code == 404
+    assert (await http.get(f"/api/moderation/gallery/{game.turn_id}/drawing")).status_code == 403
+    # A participant keeps their history (R-GAL-09).
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put(f"/api/games/{game.game_id}/turns/{game.turn_id}/reaction", json={"emoji": "wow"})).status_code == 200
+
+    await _as_moderator(http, factory, mod.id)
+    released = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "released", "note": "fine after all"})
+    assert released.json()["hidden"] is False
+    await sign_in_as(http, factory, cid.id)
+    assert [e["turnId"] for e in (await http.get("/api/gallery?sort=new")).json()["entries"]] == [game.turn_id]
+    assert [e["turnId"] for e in (await http.get("/api/gallery/week")).json()["entries"]] == [game.turn_id]
+
+
+async def test_the_switch_holds_the_shelf_and_only_the_shelf(env):
+    """With `gallery.shelf_review` set, the shelf shows released drawings only,
+    the queue lists the undecided Top-week candidates, and the page goes on
+    publishing (R-GAL-10). A hidden drawing stays hidden whatever the switch says."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    mod = await _moderator(users, factory, "Mod")
+    first = await record_game(history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public", finished_at=NOW - timedelta(hours=2))
+    second = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(hours=1))
+
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert queue == {"review": False, "waiting": 0, "candidates": []}
+
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, SHELF_REVIEW_KEY, "1")
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert queue["review"] is True and queue["waiting"] == 2
+    assert [c["turnId"] for c in queue["candidates"]] == [first.turn_id, second.turn_id]
+    assert "gameId" not in queue["candidates"][0]
+
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.get("/api/gallery/week")).json()["entries"] == [], "nothing released yet"
+    assert len((await http.get("/api/gallery?sort=top&window=week")).json()["entries"]) == 2, "the page publishes"
+
+    await _as_moderator(http, factory, mod.id)
+    assert (await http.patch(f"/api/moderation/gallery/{second.turn_id}", json={"decision": "released", "note": "ok"})).status_code == 200
+    assert (await http.patch(f"/api/moderation/gallery/{first.turn_id}", json={"decision": "hidden", "note": "no"})).status_code == 200
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert queue["waiting"] == 0 and queue["candidates"] == []
+
+    await sign_in_as(http, factory, cid.id)
+    assert [e["turnId"] for e in (await http.get("/api/gallery/week")).json()["entries"]] == [second.turn_id]
+    assert [e["turnId"] for e in (await http.get("/api/gallery?sort=new")).json()["entries"]] == [second.turn_id]
+
+    async with factory() as session:
+        async with session.begin():
+            await config_store.drop(session, SHELF_REVIEW_KEY)
+    await _as_moderator(http, factory, mod.id)
+    assert (await http.get("/api/moderation/gallery")).json()["waiting"] == 0
+    # The cache is not told about the switch here (the admin route does that):
+    # the shelf still says what it said, until its minute is up.
+    await sign_in_as(http, factory, cid.id)
+    assert [e["turnId"] for e in (await http.get("/api/gallery/week")).json()["entries"]] == [second.turn_id]
+
+
+async def test_a_report_from_the_gallery_names_the_turn_and_carries_the_drawing(env):
+    """The reporter names the turn; the server names the drawer and copies the
+    stored drawing in as evidence (R-GAL-08). Self, duplicate, hidden, private
+    and unknown are refused the way the rest of reporting refuses."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    mod = await _moderator(users, factory, "Mod")
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    private = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="private", finished_at=NOW)
+    path = f"/api/gallery/{game.turn_id}/report"
+
+    assert (await http.post(path, json={"details": "x"})).status_code == 401
+    await sign_in_as(http, factory, ann.id)
+    assert (await http.post(path, json={"details": "mine"})).status_code == 422, "self"
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.post(f"/api/gallery/{private.turn_id}/report", json={"details": "x"})).status_code == 404
+    assert (await http.post("/api/gallery/not-an-id/report", json={"details": "x"})).status_code == 404
+    assert (await http.post(path, json={"details": "x", "reason": "spam"})).status_code == 422
+
+    filed = await http.post(path, json={"details": "  Not something for a lobby.  "})
+    assert filed.status_code == 201, filed.text
+    assert (await http.post(path, json={"details": "again"})).status_code == 409
+    async with factory() as session:
+        report = await session.scalar(select(PlayerReport).where(PlayerReport.id == UUID(filed.json()["id"])))
+        assert report.reported_user_id == UUID(ann.id)
+        assert report.reporter_user_id == UUID(cid.id)
+        assert str(report.turn_id) == game.turn_id.replace("-", "") or report.turn_id == UUID(game.turn_id)
+        assert report.reason == "offensive_drawing" and report.details == "Not something for a lobby."
+        evidence = await session.get(PlayerReportDrawingEvidence, report.id)
+        assert evidence is not None and evidence.prompt_snapshot == "lighthouse"
+
+    # Hidden since: no longer reportable from the Gallery.
+    await _as_moderator(http, factory, mod.id)
+    hidden = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "reported"})
+    assert hidden.status_code == 200
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.post(path, json={"details": "x"})).status_code == 404

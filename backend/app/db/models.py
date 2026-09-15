@@ -69,6 +69,7 @@ from app.domain_values import (
     PROMPT_LIST_VISIBILITIES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
+    GALLERY_SHELF_DECISIONS,
     REACTION_EMOJI_CODES,
     REPORT_EVIDENCE_ROLES,
     REPORT_REASONS,
@@ -788,7 +789,7 @@ class AuditEvent(Base):
         CheckConstraint(
             "target_type IS NULL OR target_type IN "
             "('user', 'prompt_list', 'prompt_version', 'room', 'app_config', "
-            "'bug_report')",
+            "'bug_report', 'drawing')",
             name="ck_audit_events_target_type",
         ),
         Index("ix_audit_events_target", "target_type", "target_id"),
@@ -3033,6 +3034,12 @@ class TurnDrawing(Base):
     hot_score: Mapped[float] = mapped_column(
         Float, default=0.0, server_default=text("0"), nullable=False
     )
+    # A moderator's judgement about the lobby, not an erasure (R-GAL-09):
+    # set, the drawing leaves the Gallery, the shelf and the gallery routes
+    # in one act while the players who were there keep seeing it.
+    gallery_hidden_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
 
     turn_record: Mapped[TurnRecord] = relationship(
         back_populates="drawing", foreign_keys=[game_id, turn_id]
@@ -3359,6 +3366,38 @@ class TurnDrawingReaction(Base):
         primaryjoin=(
             "GameParticipant.id == foreign(TurnDrawingReaction.participant_id)"
         ),
+    )
+
+
+class GalleryShelfReview(Base):
+    """A moderator's decision about one drawing's place on the lobby's shelf
+    (#524, R-GAL-10): released or hidden, taken from the review queue the
+    `gallery.shelf_review` switch feeds. One row per turn - a later decision
+    replaces the earlier one - so "undecided" is the absence of a row.
+
+    The reviewer is a nullable foreign key set null on deletion, like every
+    other staff reference in history; the audit ledger keeps who decided.
+    """
+
+    __tablename__ = "gallery_shelf_reviews"
+    __table_args__ = (
+        _values_check("decision", GALLERY_SHELF_DECISIONS, "ck_gallery_shelf_reviews_decision"),
+    )
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("turn_records.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    decided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    decided_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
     )
 
 

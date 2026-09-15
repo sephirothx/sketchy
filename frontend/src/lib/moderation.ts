@@ -1,6 +1,7 @@
 import { apiBinaryRequest, apiRequest } from "./api.ts";
 import { emitWithAck } from "./socket.ts";
 import type { GamePhase, ModerationState, PromptLanguage } from "../types";
+import type { GalleryEntry } from "./gallery.ts";
 import { ui } from "../content/ui/index.ts";
 
 export function canCastModerationVote(
@@ -672,6 +673,56 @@ export function reviewPromptContentReport(
     method: "PATCH",
     body: { status, note, ...(moderationState ? { moderationState } : {}) },
   });
+}
+
+/** Report a Gallery drawing as offensive (R-GAL-08).
+
+Addressed by turn, not by drawer: the Gallery names no account, and filing a
+complaint is not a reason to learn one. The server resolves the drawer and
+copies the stored drawing as evidence, so the reason is fixed and nothing
+here has to be trusted. */
+export function reportGalleryDrawing(
+  turnId: string,
+  details: string,
+): Promise<{ id: string; status: ReportStatus; createdAt: string }> {
+  return apiRequest(`/api/gallery/${encodeURIComponent(turnId)}/report`, {
+    method: "POST",
+    body: { details },
+  });
+}
+
+/** The lobby shelf's candidates, while the operator switch holds it (R-GAL-09).
+
+`review` is the switch; with it off `candidates` is empty and nothing waits,
+and the page says so rather than showing an empty queue. */
+export interface GalleryReviewQueue {
+  review: boolean;
+  waiting: number;
+  candidates: GalleryEntry[];
+}
+
+export function listGalleryReview(): Promise<GalleryReviewQueue> {
+  return apiRequest("/api/moderation/gallery");
+}
+
+/** Release a shelf candidate onto the lobby shelf, or hide it from the
+    Gallery altogether (R-GAL-10). A hidden drawing stays in the history of
+    the players who were there; only the public surfaces lose it. */
+export function decideGalleryDrawing(
+  turnId: string,
+  decision: "released" | "hidden",
+  note: string,
+): Promise<{ turnId: string; decision: "released" | "hidden"; hidden: boolean }> {
+  return apiRequest(`/api/moderation/gallery/${encodeURIComponent(turnId)}`, {
+    method: "PATCH",
+    body: { decision, note },
+  });
+}
+
+/** A Gallery drawing's bytes through the moderation door: hidden or not,
+    since a hidden one is exactly what a reviewer may need to look at again. */
+export function fetchModerationGalleryDrawing(turnId: string): Promise<ArrayBuffer> {
+  return apiBinaryRequest(`/api/moderation/gallery/${encodeURIComponent(turnId)}/drawing`);
 }
 
 /** How long a suspension lasts. Permanent is deliberately not the default: most

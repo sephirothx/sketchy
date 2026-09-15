@@ -188,8 +188,14 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         limit: int = 24,
         cursor: str | None = None,
         requesting_user_id: str | None = None,
+        shelf_filter: str | None = None,
     ) -> GalleryPage:
         return GalleryPage(entries=(), next_cursor=None)
+
+    async def set_gallery_decision(
+        self, turn_id: str, *, decision: str, decided_by_user_id: str
+    ) -> tuple[str, str | None] | None:
+        return None
 
     async def viewer_gallery_facts(
         self, turn_ids, *, viewer_user_id: str

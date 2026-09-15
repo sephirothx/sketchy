@@ -4,6 +4,8 @@ import { CanvasSnapshot } from "./CanvasSnapshot";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingRecapGallery } from "./DrawingRecapGallery";
 import { ReactionTally } from "./ReactionTally";
+import { ReportDrawingDialog } from "./ReportDrawingDialog";
+import { FlagIcon } from "./icons";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
@@ -79,6 +81,9 @@ export function GalleryViewer({
   const login = useAuthStore((state) => state.login);
   const registered = Boolean(user && !user.isAnonymous);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  // Which drawing is being reported, by turn: the viewer pages between
+  // entries, and a dialog keyed to the one it was opened on stays about it.
+  const [reporting, setReporting] = useState<string | null>(null);
 
   const react = async (entry: GalleryEntry, emoji: string | null) => {
     const result = await setGalleryReaction(entry.turnId, emoji);
@@ -93,6 +98,25 @@ export function GalleryViewer({
         initialIndex={Math.min(openIndex, entries.length - 1)}
         onClose={onClose}
         loadEntry={(entry) => fetchGalleryDrawing(entries[entry.index].turnId)}
+        renderActions={(entry) => {
+          const shown = entries[entry.index];
+          // Registered viewers only (R-GAL-08): a report is a moderator's
+          // work, and a guest seat is not somebody to answer for one. Never
+          // the drawer's own work - there is nothing to complain to
+          // themselves about.
+          if (!shown || !registered || shown.drawnByMe) return null;
+          return (
+            <button
+              type="button"
+              className="btn btn-ghost btn-compact"
+              data-testid="gallery-report"
+              onClick={() => setReporting(shown.turnId)}
+            >
+              <FlagIcon size={14} />
+              {ui.reportDrawingDialog.report}
+            </button>
+          );
+        }}
         renderReactions={(entry) => {
           const shown = entries[entry.index];
           if (!shown) return null;
@@ -113,6 +137,9 @@ export function GalleryViewer({
           );
         }}
       />
+      {reporting && (
+        <ReportDrawingDialog turnId={reporting} onClose={() => setReporting(null)} />
+      )}
       {authMode && (
         <AuthDialog
           mode={authMode}

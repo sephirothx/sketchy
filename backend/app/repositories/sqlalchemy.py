@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.db.models import (
+    GalleryShelfReview,
     AuditEvent,
     Friendship,
     GameParticipant,
@@ -65,6 +66,7 @@ from app.domain_values import (
     GAME_VISIBILITIES,
     PROFILE_PIN_SLOTS,
     GameOutcome,
+    GalleryShelfDecision,
     GameVisibility,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
@@ -366,6 +368,7 @@ def _gallery_predicate():
         GameRecord.visibility == GameVisibility.PUBLIC.value,
         TurnDrawing.status == TurnDrawingStatus.READY.value,
         TurnDrawing.payload.is_not(None),
+        TurnDrawing.gallery_hidden_at.is_(None),
     )
 
 
@@ -378,6 +381,7 @@ def _gallery_shows(drawing: TurnDrawing | None) -> bool:
         drawing is not None
         and drawing.status == TurnDrawingStatus.READY.value
         and drawing.checksum_sha256 is not None
+        and drawing.gallery_hidden_at is None
     )
 
 
@@ -2140,6 +2144,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         limit: int = 24,
         cursor: str | None = None,
         requesting_user_id: str | None = None,
+        shelf_filter: str | None = None,
     ) -> GalleryPage:
         """One page of the Gallery (R-GAL-04).
 
@@ -2166,6 +2171,23 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             .where(*_gallery_predicate())
             .options(selectinload(TurnRecord.reactions))
         )
+        if shelf_filter == "released":
+            stmt = stmt.where(
+                select(GalleryShelfReview.turn_id)
+                .where(
+                    GalleryShelfReview.turn_id == TurnRecord.id,
+                    GalleryShelfReview.decision == GalleryShelfDecision.RELEASED.value,
+                )
+                .exists()
+            )
+        elif shelf_filter == "undecided":
+            stmt = stmt.where(
+                ~select(GalleryShelfReview.turn_id)
+                .where(GalleryShelfReview.turn_id == TurnRecord.id)
+                .exists()
+            )
+        elif shelf_filter is not None:
+            return GalleryPage(entries=(), next_cursor=None)
         now = datetime.now(timezone.utc)
         if sort == "new":
             order = (GameRecord.finished_at.desc(), TurnRecord.id.desc())
@@ -2223,6 +2245,62 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             entries=tuple(entries),
             next_cursor=_encode_catalogue_cursor(offset + limit) if has_more else None,
         )
+
+    async def set_gallery_decision(
+        self,
+        turn_id: str,
+        *,
+        decision: str,
+        decided_by_user_id: str,
+    ) -> tuple[str, str | None] | None:
+        db_turn_id = _optional_entity_id(turn_id)
+        db_reviewer_id = _optional_entity_id(decided_by_user_id)
+        if db_turn_id is None or db_reviewer_id is None:
+            return None
+        if decision not in (
+            GalleryShelfDecision.RELEASED.value,
+            GalleryShelfDecision.HIDDEN.value,
+        ):
+            return None
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session:
+            async with session.begin():
+                drawing = await session.scalar(
+                    select(TurnDrawing)
+                    .where(
+                        TurnDrawing.turn_id == db_turn_id,
+                        TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    )
+                    .options(defer(TurnDrawing.payload))
+                    .with_for_update()
+                )
+                if drawing is None:
+                    return None
+                turn = await session.get(TurnRecord, db_turn_id)
+                drawing.gallery_hidden_at = (
+                    now if decision == GalleryShelfDecision.HIDDEN.value else None
+                )
+                drawing.updated_at = now
+                review = await session.get(GalleryShelfReview, db_turn_id)
+                if review is None:
+                    session.add(
+                        GalleryShelfReview(
+                            turn_id=db_turn_id,
+                            decision=decision,
+                            decided_by_user_id=db_reviewer_id,
+                            decided_at=now,
+                        )
+                    )
+                else:
+                    review.decision = decision
+                    review.decided_by_user_id = db_reviewer_id
+                    review.decided_at = now
+                drawer = (
+                    _public_id(turn.drawer_user_id)
+                    if turn is not None and turn.drawer_user_id is not None
+                    else None
+                )
+                return _public_id(db_turn_id), drawer
 
     async def viewer_gallery_facts(
         self, turn_ids: Sequence[str], *, viewer_user_id: str

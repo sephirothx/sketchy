@@ -51,6 +51,7 @@ STAFF_ONLY = {
     ("api/moderation.py", "_reviewer"),
     ("api/moderation.py", "create_ban"),
     ("api/moderation.py", "create_warning"),
+    ("api/moderation.py", "decide_gallery_drawing"),
     ("api/moderation.py", "remove_reported_avatar"),
     ("api/moderation.py", "review_prompt_content_report"),
     ("api/moderation.py", "read_held_publication"),

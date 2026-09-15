@@ -20,7 +20,11 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.errors import install_refusal_handler
 from app.api.gallery import create_gallery_router
-from app.services.gallery_shelf import SHELF_SIZE, SHELF_TTL_SECONDS, GalleryShelfCache
+from app.services.gallery_shelf import (
+    SHELF_TTL_SECONDS,
+    GalleryShelfCache,
+    shelf_reader,
+)
 from app.api.profiles import create_profile_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
@@ -198,9 +202,12 @@ def _gallery_shelf_ttl_seconds() -> float:
     return value if value >= 0 else SHELF_TTL_SECONDS
 
 
-async def _read_gallery_shelf(repo):
-    page = await repo.list_gallery(sort="top", window="week", limit=SHELF_SIZE)
-    return page.entries
+# The lobby's This week shelf (R-GAL-07): one snapshot a minute, shared by
+# every lobby, invalidated by a moderator's decision or the review switch.
+gallery_shelf = GalleryShelfCache(
+    shelf_reader(game_history_repo, async_session_factory),
+    ttl_seconds=_gallery_shelf_ttl_seconds(),
+)
 
 
 def _friend_request_limit() -> int:
@@ -684,6 +691,7 @@ api.include_router(
         on_change=announce_pause,
         on_role_changed=push_role_change_to_account,
         request_process_exit=request_process_exit,
+        on_gallery_review_changed=gallery_shelf.invalidate,
     )
 )
 api.include_router(
@@ -694,15 +702,7 @@ api.include_router(
         user_repo, game_history_repo, is_online=handler_context.presence.is_online
     )
 )
-api.include_router(
-    create_gallery_router(
-        game_history_repo,
-        shelf=GalleryShelfCache(
-            lambda: _read_gallery_shelf(game_history_repo),
-            ttl_seconds=_gallery_shelf_ttl_seconds(),
-        ),
-    )
-)
+api.include_router(create_gallery_router(game_history_repo, shelf=gallery_shelf))
 api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )
@@ -741,6 +741,8 @@ api.include_router(
         on_user_banned=remove_banned_account_from_live_rooms,
         on_user_warned=push_warning_to_account,
         on_avatar_changed=refresh_avatar_on_live_surfaces,
+        game_history_repo=game_history_repo,
+        on_gallery_decision=gallery_shelf.invalidate,
     )
 )
 api.include_router(
