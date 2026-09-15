@@ -19,6 +19,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.errors import install_refusal_handler
+from app.api.gallery import create_gallery_router
 from app.api.profiles import create_profile_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
@@ -673,6 +674,7 @@ api.include_router(
         user_repo, game_history_repo, is_online=handler_context.presence.is_online
     )
 )
+api.include_router(create_gallery_router(game_history_repo))
 api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )

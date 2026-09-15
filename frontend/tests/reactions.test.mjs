@@ -9,6 +9,7 @@ import {
   offeredReactions,
   reactionEligibility,
   reactionFor,
+  resolveTally,
   REACTION_GLYPHS,
   REACTION_SET_VERSION,
   RETIRED_REACTION_CODES,
@@ -91,4 +92,18 @@ test("the picker is offered only where pressing it can work", () => {
   // would change that.
   assert.equal(reactionEligibility({ isRegistered: false, isSpectator: true }), "spectator");
   assert.equal(reactionEligibility({ isRegistered: true, open: false }), "closed");
+});
+
+test("the server's counts win over the named list, which never carries an outsider", () => {
+  const named = [{ playerId: "seat-1", emoji: "heart" }];
+  // No counts sent: count what is listed.
+  assert.deepEqual(resolveTally(named), { heart: 1 });
+  assert.deepEqual(resolveTally(named, null), { heart: 1 });
+  // Counts sent: they include the reactions given from the Gallery, which
+  // the list leaves out, so they are the tally even when the list disagrees.
+  assert.deepEqual(resolveTally(named, { heart: 1, wow: 2 }), { heart: 1, wow: 2 });
+  assert.deepEqual(resolveTally(named, {}), {});
+  // A copy, not the caller's object.
+  const counts = { fire: 1 };
+  assert.notEqual(resolveTally([], counts), counts);
 });

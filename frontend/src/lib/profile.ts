@@ -1,5 +1,6 @@
 import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
+import type { ReactionTally } from "../types";
 import type { ProfilePin } from "./pinnedDrawings";
 
 /**
@@ -122,7 +123,10 @@ export interface GameTurn {
   drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;
   promptOffers: PromptOffer[];
   participantOutcomes: TurnParticipantOutcome[];
+  /** The reactions given by a seat, named; the ones from outside the room are only in the counts. */
   reactions: HistoryReaction[];
+  /** Every reaction by code, the seatless ones included (R-REACT-05). */
+  reactionCounts: ReactionTally;
 }
 
 export interface PromptOffer {
@@ -189,9 +193,12 @@ export type GameDetail = GameSummary & {
 
 export interface HistoryReactionResult {
   turnId: string;
-  seatId: string;
+  /** Null when the viewer reacted from outside the room (the gallery door). */
+  seatId: string | null;
   emoji: string | null;
+  myReaction: string | null;
   reactions: HistoryReaction[];
+  reactionCounts: ReactionTally;
 }
 
 export const HISTORY_PAGE_SIZE = 10;
@@ -229,6 +236,21 @@ export function setHistoryReaction(
 ): Promise<HistoryReactionResult> {
   const path =
     `/api/games/${encodeURIComponent(gameId)}/turns/${encodeURIComponent(turnId)}/reaction`;
+  return emoji === null
+    ? apiRequest<HistoryReactionResult>(path, { method: "DELETE" })
+    : apiRequest<HistoryReactionResult>(path, { method: "PUT", body: { emoji } });
+}
+
+/**
+ * Leave, change (PUT) or take back (DELETE) the viewer's reaction to a drawing
+ * the Gallery shows, through the gallery door (R-GAL-06): no game named, no
+ * seat needed. Every refusal is a 404, like the drawing itself.
+ */
+export function setGalleryReaction(
+  turnId: string,
+  emoji: string | null,
+): Promise<HistoryReactionResult> {
+  const path = `/api/gallery/${encodeURIComponent(turnId)}/reaction`;
   return emoji === null
     ? apiRequest<HistoryReactionResult>(path, { method: "DELETE" })
     : apiRequest<HistoryReactionResult>(path, { method: "PUT", body: { emoji } });

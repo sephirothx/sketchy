@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -20,6 +20,7 @@ from app.db.models import (
     TurnDrawing,
     TurnDrawingReaction,
     TurnRecord,
+    User,
     UserStatsDaily,
     generate_uuid,
 )
@@ -91,6 +92,7 @@ async def record_game(
     reactor_is_anonymous=False,
     finished_at=FINISHED_AT,
     game_id=None,
+    visibility="private",
 ) -> Recorded:
     drawer_seat = str(generate_uuid())
     reactor_seat = str(generate_uuid())
@@ -123,6 +125,7 @@ async def record_game(
             player_count=2,
             started_at=finished_at - timedelta(minutes=5),
             finished_at=finished_at,
+            visibility=visibility,
         ),
         [
             GameParticipantInput(
@@ -533,8 +536,10 @@ async def test_taking_a_reaction_back_from_an_erased_projection_row_stays_at_zer
 
 
 async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
-    """Unknown code, second reaction from one seat, a seat from another game,
-    and a negative received count - all refused by the database itself."""
+    """Unknown code, second reaction from one account or one seat, a seat from
+    another game, an account that does not exist, and a negative received count
+    - all refused by the database itself. A row with no seat - a reaction from
+    the Gallery - is accepted (R-REACT-03)."""
     engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'reactions.db'}")
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all, checkfirst=False)
@@ -557,11 +562,13 @@ async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
     game_a, game_b = generate_uuid(), generate_uuid()
     drawer_a, reactor_a, seat_b = generate_uuid(), generate_uuid(), generate_uuid()
     turn_a, turn_b = generate_uuid(), generate_uuid()
+    reactor, outsider = generate_uuid(), generate_uuid()
 
     def reaction(**overrides):
         values = {
             "game_id": game_a,
             "turn_id": turn_a,
+            "user_id": reactor,
             "participant_id": reactor_a,
             "emoji": "heart",
             "set_version": 1,
@@ -572,6 +579,12 @@ async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
     try:
         async with factory() as session:
             async with session.begin():
+                session.add_all(
+                    [
+                        User(id=reactor, display_name="Reactor"),
+                        User(id=outsider, display_name="Outsider"),
+                    ]
+                )
                 session.add_all([game_row(game_a), game_row(game_b)])
                 for gid, sid in ((game_a, drawer_a), (game_a, reactor_a), (game_b, seat_b)):
                     session.add(GameParticipant(id=sid, game_id=gid, final_score=0, final_rank=1))
@@ -589,10 +602,18 @@ async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
                     )
                 session.add(reaction())
 
+        # From outside the room: no seat, a different account. Accepted.
+        async with factory() as session:
+            async with session.begin():
+                session.add(reaction(user_id=outsider, participant_id=None))
+
         for invalid in (
-            reaction(emoji="thumbs_down"),
-            reaction(emoji="fire"),  # the same seat, again
-            reaction(participant_id=seat_b),  # a seat from game B
+            reaction(emoji="thumbs_down", user_id=generate_uuid()),
+            reaction(emoji="fire"),  # the same account and seat, again
+            reaction(emoji="fire", participant_id=None),  # the same account, seatless
+            reaction(emoji="fire", user_id=generate_uuid()),  # the same seat, again
+            reaction(user_id=generate_uuid()),  # an account that does not exist
+            reaction(participant_id=seat_b, user_id=generate_uuid()),  # a seat from game B
             reaction(turn_id=turn_b),  # a turn from game B
             reaction(participant_id=drawer_a, set_version=0),
         ):
@@ -613,3 +634,161 @@ async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
                     )
     finally:
         await engine.dispose()
+
+
+# ------------------------------------------------- the gallery door (#524)
+
+
+async def test_an_outsider_reacts_through_the_gallery_door_and_only_counts(repos):
+    """Anyone registered may react to a public-game drawing from the Gallery
+    (R-GAL-06): the row carries the account and no seat, so the reaction is in
+    the counts and never in the named list (R-REACT-05), and it credits the
+    drawer like any other."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    cid = await registered(users, "Cid")
+    recorded = await record_game(
+        history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public"
+    )
+
+    result = await history.set_drawing_reaction(
+        None, recorded.turn_id, requesting_user_id=cid.id, emoji="wow", from_gallery=True
+    )
+    assert result is not None
+    assert result.seat_id is None and result.emoji == "wow"
+    assert [(r.seat_id, r.emoji) for r in result.reactions] == [
+        (recorded.reactor_seat, "heart")
+    ]
+    assert result.reaction_counts == {"heart": 1, "wow": 1}
+    assert (await users.get_stats(ann.id)).reactions_received == 2
+    async with factory() as session:
+        row = await session.scalar(
+            select(TurnDrawingReaction).where(
+                TurnDrawingReaction.user_id == UUID(cid.id)
+            )
+        )
+        assert row is not None and row.participant_id is None
+
+    # Changed and taken back like a seat's, and the count follows.
+    changed = await history.set_drawing_reaction(
+        None, recorded.turn_id, requesting_user_id=cid.id, emoji="fire", from_gallery=True
+    )
+    assert changed.reaction_counts == {"heart": 1, "fire": 1}
+    removed = await history.set_drawing_reaction(
+        None, recorded.turn_id, requesting_user_id=cid.id, emoji=None, from_gallery=True
+    )
+    assert removed.reaction_counts == {"heart": 1}
+    assert (await users.get_stats(ann.id)).reactions_received == 1
+
+
+async def test_the_gallery_door_refuses_what_the_gallery_does_not_show(repos):
+    """A private game, an erased drawing, a game with no drawing kept, the
+    drawer by account, a guest, an unknown turn: all None (R-GAL-06)."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    cid = await registered(users, "Cid")
+    guest = await users.create_anonymous(display_name="Guest")
+
+    private = await record_game(history, drawer=ann.id, reactor=bob.id)
+    assert (
+        await history.set_drawing_reaction(
+            None, private.turn_id, requesting_user_id=cid.id, emoji="wow", from_gallery=True
+        )
+        is None
+    ), "a private game"
+
+    undrawn = await record_game(
+        history, drawer=ann.id, reactor=bob.id, drawing=False, visibility="public"
+    )
+    assert (
+        await history.set_drawing_reaction(
+            None, undrawn.turn_id, requesting_user_id=cid.id, emoji="wow", from_gallery=True
+        )
+        is None
+    ), "no drawing kept"
+
+    public = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public")
+    for who, why in ((ann, "the drawer"), (guest, "a guest")):
+        assert (
+            await history.set_drawing_reaction(
+                None, public.turn_id, requesting_user_id=who.id, emoji="wow", from_gallery=True
+            )
+            is None
+        ), why
+    assert (
+        await history.set_drawing_reaction(
+            None, str(generate_uuid()), requesting_user_id=cid.id, emoji="wow", from_gallery=True
+        )
+        is None
+    ), "no such turn"
+    # The participant door still needs the game named, and a seat in it.
+    assert (
+        await history.set_drawing_reaction(
+            None, public.turn_id, requesting_user_id=cid.id, emoji="wow"
+        )
+        is None
+    )
+    assert (
+        await history.set_drawing_reaction(
+            public.game_id, public.turn_id, requesting_user_id=cid.id, emoji="wow"
+        )
+        is None
+    )
+
+    async with factory() as session:
+        await session.execute(
+            update(TurnDrawing)
+            .where(TurnDrawing.turn_id == UUID(public.turn_id))
+            .values(
+                status=TurnDrawingStatus.DELETED.value,
+                payload=None,
+                checksum_sha256=None,
+                byte_size=None,
+                format_magic=None,
+                format_version=None,
+                deleted_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+    assert (
+        await history.set_drawing_reaction(
+            None, public.turn_id, requesting_user_id=cid.id, emoji="wow", from_gallery=True
+        )
+        is None
+    ), "erased"
+    async with factory() as session:
+        assert (await session.scalars(select(TurnDrawingReaction))).all() == []
+
+
+async def test_a_participant_holds_one_row_whichever_door_they_use(repos):
+    """A seat that reacts from the Gallery is written with its seat, so history
+    keeps naming it; reacting again through the participant door changes that
+    one row rather than adding a second (R-REACT-03)."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    recorded = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public")
+
+    first = await history.set_drawing_reaction(
+        None, recorded.turn_id, requesting_user_id=bob.id, emoji="laugh", from_gallery=True
+    )
+    assert first.seat_id == recorded.reactor_seat
+    assert [(r.seat_id, r.emoji) for r in first.reactions] == [
+        (recorded.reactor_seat, "laugh")
+    ]
+
+    second = await history.set_drawing_reaction(
+        recorded.game_id, recorded.turn_id, requesting_user_id=bob.id, emoji="fire"
+    )
+    assert [(r.seat_id, r.emoji) for r in second.reactions] == [
+        (recorded.reactor_seat, "fire")
+    ]
+    assert second.reaction_counts == {"fire": 1}
+    async with factory() as session:
+        rows = (await session.scalars(select(TurnDrawingReaction))).all()
+        assert len(rows) == 1
+        assert rows[0].user_id == UUID(bob.id)
+        assert rows[0].participant_id == UUID(recorded.reactor_seat)
+    assert (await users.get_stats(ann.id)).reactions_received == 1

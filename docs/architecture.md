@@ -1619,6 +1619,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/request_limits.py`](../backend/app/request_limits.py) | The ceiling on request bodies, applied before anything reads one. |
 | [`app/api/moderation.py`](../backend/app/api/moderation.py) | Player reports and role-gated moderation actions. |
 | [`app/api/operations.py`](../backend/app/api/operations.py) | Operator-facing views of how the server is behaving. |
+| [`app/api/gallery.py`](../backend/app/api/gallery.py) | The Gallery's REST surface (#524): reactions from outside the game. |
 | [`app/api/profiles.py`](../backend/app/api/profiles.py) | Public profile endpoints: lifetime stats and browsable game history. |
 | [`app/api/prompt_lists.py`](../backend/app/api/prompt_lists.py) | Prompt list discovery, and the usage statistics the games feed back into it. |
 | [`app/api/room_presets.py`](../backend/app/api/room_presets.py) | Authenticated CRUD API for private reusable room-setting presets. |

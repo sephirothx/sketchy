@@ -92,6 +92,9 @@ def pin_entry_payload(pin: ProfilePinEntry) -> dict:
             {"seatId": reaction.seat_id, "emoji": reaction.emoji}
             for reaction in pin.reactions
         ],
+        "reactionCounts": dict(pin.reaction_counts),
+        "myReaction": pin.my_reaction,
+        "drawnByMe": pin.drawn_by_me,
     }
 
 
@@ -100,14 +103,19 @@ def pins_payload(result: ProfilePinsResult) -> dict:
 
 
 def reaction_payload(result: DrawingReactionResult) -> dict:
+    """A reaction write's answer: the seat rows as a list, every row as a
+    count, and the caller's own pick (R-REACT-05). `seatId` is null when the
+    caller reacted from outside the room."""
     return {
         "turnId": result.turn_id,
         "seatId": result.seat_id,
         "emoji": result.emoji,
+        "myReaction": result.emoji,
         "reactions": [
             {"seatId": reaction.seat_id, "emoji": reaction.emoji}
             for reaction in result.reactions
         ],
+        "reactionCounts": dict(result.reaction_counts),
     }
 
 
@@ -340,12 +348,15 @@ def create_profile_router(
         with (R-PIN-03).
         """
         throttle(request)
-        if not getattr(request.state, "user_id", None):
+        viewer_id = getattr(request.state, "user_id", None)
+        if not viewer_id:
             raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
         user = await user_repo.get_by_id(user_id)
         if user is None:
             raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
-        pins = await game_history_repo.get_profile_pins(user.id)
+        pins = await game_history_repo.get_profile_pins(
+            user.id, viewer_user_id=viewer_id
+        )
         return {"pins": [pin_entry_payload(pin) for pin in pins]}
 
     @router.get("/users/{user_id}/pins/{turn_id}/drawing")
