@@ -617,7 +617,7 @@ async def test_an_outsider_reacts_through_the_gallery_route_and_is_counted_unnam
     path = f"/api/gallery/{turn_id}/reaction"
 
     await sign_in_as(http, factory, bob.id)
-    assert (await http.put(f"/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
     seated = await http.put(f"/api/games/{game_id}/turns/{turn_id}/reaction", json={"emoji": "heart"})
     bob_seat = seated.json()["seatId"]
 
