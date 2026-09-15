@@ -191,6 +191,11 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     ) -> GalleryPage:
         return GalleryPage(entries=(), next_cursor=None)
 
+    async def viewer_gallery_facts(
+        self, turn_ids, *, viewer_user_id: str
+    ) -> dict[str, tuple[str | None, bool]]:
+        return {}
+
     async def get_gallery_drawing(self, turn_id: str) -> TurnDrawingDetail | None:
         return None
 

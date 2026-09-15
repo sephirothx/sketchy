@@ -2224,6 +2224,37 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             next_cursor=_encode_catalogue_cursor(offset + limit) if has_more else None,
         )
 
+    async def viewer_gallery_facts(
+        self, turn_ids: Sequence[str], *, viewer_user_id: str
+    ) -> dict[str, tuple[str | None, bool]]:
+        db_viewer_id = _optional_entity_id(viewer_user_id)
+        db_turn_ids = [t for t in (_optional_entity_id(turn_id) for turn_id in turn_ids) if t]
+        if db_viewer_id is None or not db_turn_ids:
+            return {}
+        async with self._session_factory() as session:
+            viewer_ids = await _identity_ids(session, db_viewer_id)
+            drawn = (
+                await session.execute(
+                    select(TurnRecord.id, TurnRecord.drawer_user_id).where(
+                        TurnRecord.id.in_(db_turn_ids)
+                    )
+                )
+            ).all()
+            picks = dict(
+                (
+                    await session.execute(
+                        select(TurnDrawingReaction.turn_id, TurnDrawingReaction.emoji).where(
+                            TurnDrawingReaction.turn_id.in_(db_turn_ids),
+                            TurnDrawingReaction.user_id.in_(viewer_ids),
+                        )
+                    )
+                ).all()
+            )
+        return {
+            _public_id(turn_id): (picks.get(turn_id), drawer_user_id in viewer_ids)
+            for turn_id, drawer_user_id in drawn
+        }
+
     async def get_gallery_drawing(self, turn_id: str) -> TurnDrawingDetail | None:
         db_turn_id = _optional_entity_id(turn_id)
         if db_turn_id is None:

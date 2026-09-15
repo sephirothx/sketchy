@@ -113,12 +113,26 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await host.locator(".profile-turns").wait_for()
             await expect(host.locator(".profile-turns .reaction-count").first).to_have_text("1")
 
-            # No session: no gallery (R-GAL-02).
+            # The lobby's This week shelf shows the same drawings, the
+            # reacted one first (R-GAL-07).
+            # Six at most, so on a server other shards share ours need not
+            # be among them; the order is proven by the route's own test.
+            await host.goto(BASE_URL)
+            shelf = host.locator('[data-testid="this-week"]')
+            await shelf.wait_for()
+            await shelf.locator('[data-testid="gallery-card"]').first.wait_for()
+            shelf_cards = await shelf.locator('[data-testid="gallery-card"]').count()
+            assert 1 <= shelf_cards <= 6, shelf_cards
+
+            # No session: no gallery and no shelf (R-GAL-02).
             anonymous_context = await browser.new_context()
             anonymous = await anonymous_context.new_page()
             await anonymous.goto(f"{BASE_URL}/gallery")
             await anonymous.get_by_text("signed-in players", exact=False).wait_for()
             await expect(anonymous.locator('[data-testid="gallery-grid"]')).to_have_count(0)
+            await anonymous.goto(BASE_URL)
+            await anonymous.locator(".lobby-rooms-panel").wait_for()
+            await expect(anonymous.locator('[data-testid="this-week"]')).to_have_count(0)
             await anonymous_context.close()
         finally:
             await host_context.close()
