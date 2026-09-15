@@ -45,7 +45,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await open_room_settings(host)
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await open_settings_section(host, "Prompts")
-            await host.locator("#custom-prompts").fill("apple\ntree")
+            await host.locator("#custom-prompts").fill("lantern\nkite")
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
             await other.get_by_text("Custom prompts only (2)").wait_for()
@@ -69,23 +69,24 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await use_guest_name(stranger, "GalStranger")
             await register_account(stranger, "galstranger")
             await stranger.goto(f"{BASE_URL}/gallery")
-            grid = stranger.locator('[data-testid="gallery-grid"]')
+            # Other tests' public games share this server, so the page is
+            # read for *these* drawings rather than counted; the history
+            # write lands a moment after the game ends, hence the retries.
             cards = stranger.locator('[data-testid="gallery-card"]')
-            for _ in range(30):
-                if await cards.count() >= 2:
+            ours = [cards.filter(has_text=prompt) for prompt in prompts]
+            for _ in range(20):
+                if all(await card.count() == 1 for card in ours):
                     break
-                await stranger.wait_for_timeout(500)
+                await stranger.wait_for_timeout(2_000)
                 await stranger.reload()
-            await grid.wait_for()
-            await expect(cards).to_have_count(2)
-            texts = " ".join(await cards.all_inner_texts())
-            for prompt in prompts:
-                assert prompt in texts, texts
+            await stranger.locator('[data-testid="gallery-grid"]').wait_for()
+            for card in ours:
+                await expect(card).to_have_count(1)
             # No game id anywhere on the page: nothing to follow into the game.
             assert "/room/" not in await stranger.content()
 
-            # Open the first drawing and react through the gallery door.
-            await cards.first.get_by_role("button").first.click()
+            # Open the first of ours and react through the gallery door.
+            await ours[0].get_by_role("button").first.click()
             await stranger.locator(".drawing-recap").wait_for()
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-fire"]').click()
@@ -96,13 +97,13 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             ).to_have_text("1")
             await stranger.keyboard.press("Escape")
             await expect(stranger.locator(".drawing-recap")).to_have_count(0)
-            await expect(cards.first.locator(".reaction-count")).to_have_text("1")
+            await expect(ours[0].locator(".reaction-count")).to_have_text("1")
 
-            # Top over the week puts the reacted drawing first.
+            # Top over the week still lists it, with its reaction counted.
             await stranger.locator('[data-testid="gallery-sort"]').get_by_role("button", name="Top").click()
             await stranger.locator('[data-testid="gallery-window"]').get_by_role("button", name="This week").click()
-            await expect(cards).to_have_count(2)
-            await expect(cards.first.locator(".reaction-count")).to_have_text("1")
+            await expect(ours[0]).to_have_count(1)
+            await expect(ours[0].locator(".reaction-count")).to_have_text("1")
             await stranger_context.close()
 
             # The drawer sees the stranger's reaction in their own history,

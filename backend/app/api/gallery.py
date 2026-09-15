@@ -18,6 +18,11 @@ GALLERY_SORTS = ("hot", "new", "top")
 # The same ceiling as the profile routes: a human's pace, and enough to make
 # walking turn ids inconvenient.
 gallery_limiter = RateLimiter(limit=120, window_seconds=60)
+# The bytes get a budget of their own: a page of the Gallery replays up to
+# 24 thumbnails and a scroll adds 24 more, so at the listing's ceiling five
+# pages in a minute would refuse the sixth thumbnail. Most of these are
+# `304`s answered from the metadata (R-HIST-24).
+drawing_limiter = RateLimiter(limit=600, window_seconds=60)
 
 
 def gallery_entry_payload(entry: GalleryEntry) -> dict:
@@ -50,8 +55,8 @@ class GalleryReactionBody(BaseModel):
 def create_gallery_router(game_history_repo: GameHistoryRepository) -> APIRouter:
     router = APIRouter(prefix="/api/gallery")
 
-    def throttle(request: Request) -> None:
-        if not gallery_limiter.check(client_key(request)):
+    def throttle(request: Request, limiter: RateLimiter = gallery_limiter) -> None:
+        if not limiter.check(client_key(request)):
             raise Refusal(
                 429,
                 ErrorCode.TOO_MANY_REQUESTS,
@@ -130,7 +135,7 @@ def create_gallery_router(game_history_repo: GameHistoryRepository) -> APIRouter
         query over the gallery predicate, and the participant route's
         conditional handling (R-HIST-24). Every refusal is a 404, signed out
         included."""
-        throttle(request)
+        throttle(request, drawing_limiter)
         if not getattr(request.state, "user_id", None):
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
         return await serve_drawing(
