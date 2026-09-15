@@ -235,10 +235,15 @@ async def test_a_banner_makes_room_for_itself_on_the_pinned_lobby():
 
             await context.set_offline(True)
             await page.wait_for_selector(".connection-status-banner.offline")
-            box = await page.locator(".lobby-page").bounding_box()
-            assert box is not None
-            assert box["y"] > 0, "the banner is not above the lobby"
-            assert box["y"] + box["height"] <= 800 + 1, "the lobby was pushed below the screen"
+            # Polled rather than read once: the stack's height is published by a
+            # ResizeObserver, which reports after the frame the banner arrived in.
+            await page.wait_for_function(
+                """() => {
+                  const box = document.querySelector('.lobby-page').getBoundingClientRect();
+                  return box.top > 0 && box.bottom <= innerHeight + 1;
+                }""",
+                timeout=5000,
+            )
             await context.set_offline(False)
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
         finally:
@@ -283,6 +288,14 @@ async def test_a_notice_never_covers_a_phone_room_header():
             await context.set_offline(False)
             await chip.wait_for(state="detached", timeout=10000)
             assert await page.locator(".room-notice-popover").count() == 0
+            # A notice that comes back starts closed: the card is opened by a
+            # tap, never by the last outage's.
+            await context.set_offline(True)
+            await chip.wait_for()
+            await asyncio.sleep(0.3)
+            assert await page.locator(".room-notice-popover").count() == 0
+            await context.set_offline(False)
+            await chip.wait_for(state="detached", timeout=10000)
         finally:
             await context.close()
             await browser.close()

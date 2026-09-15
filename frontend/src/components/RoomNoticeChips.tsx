@@ -45,7 +45,9 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
     connection,
   });
   // A notice that ends closes its own popover rather than leaving a card that
-  // describes something no longer true.
+  // describes something no longer true - and closes it for good: only hiding
+  // it kept the choice, so the next outage opened the card nobody asked for.
+  if (open !== null && !chips.includes(open)) setOpen(null);
   const openNotice = open !== null && chips.includes(open) ? open : null;
 
   useEffect(() => {
