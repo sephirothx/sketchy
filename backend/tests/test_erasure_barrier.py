@@ -724,3 +724,34 @@ async def test_a_pin_write_waits_for_the_drawers_deletion_in_flight_then_refuses
         assert await _pins(factory) == []
     finally:
         await engine.dispose()
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
+async def test_two_shelf_writes_for_one_account_serialize_instead_of_colliding():
+    """Two tabs replacing the same shelf at once: under a shared lock both
+    delete nothing and both insert position 0, and the second dies on the
+    unique position. Under the exclusive lock the second waits, then replaces
+    the first, and the shelf ends as one of the two lists (#811 review)."""
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        drawer_guest = await users.create_anonymous("Drawer")
+        drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
+        pinner_guest = await users.create_anonymous("Pinner")
+        pinner = await users.claim_account(pinner_guest.id, "pinner", "hash")
+        history = SqlAlchemyGameHistoryRepository(factory)
+        _, drawers_turn, pinners_turn = await _public_game_between(factory, history, pinner.id, drawer.id)
+
+        for _ in range(5):
+            first, second = await asyncio.gather(
+                history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(drawers_turn)]),
+                history.set_profile_pins(requesting_user_id=pinner.id, turn_ids=[str(pinners_turn)]),
+            )
+            assert first is not None and second is not None, "both replacements complete"
+            pins = await _pins(factory)
+            assert pins in (
+                [(UUID(pinner.id), drawers_turn)],
+                [(UUID(pinner.id), pinners_turn)],
+            ), "the shelf is whichever list committed last, whole"
+    finally:
+        await engine.dispose()

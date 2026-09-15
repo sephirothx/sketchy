@@ -2073,10 +2073,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # Each drawer's: their deletion erases the drawing and takes
                 # its pins with it, and a pin validated before that commit
                 # and written after it would outlive the drawing it names.
-                # One shared lock over all of them, ascending, held to the
-                # commit; the checks below run under it and see either the
-                # state before the deletion, which the deletion then erases,
-                # or the state after it, which refuses.
+                # One lock over all of them, ascending, held to the commit;
+                # the checks below run under it and see either the state
+                # before the deletion, which the deletion then erases, or the
+                # state after it, which refuses. Exclusive rather than the
+                # barrier's usual shared lock, because this write must also
+                # serialize with *itself*: two whole-shelf replacements for
+                # one account that both pass a shared lock both delete
+                # nothing and both insert position 0, and the second one
+                # dies on the unique position instead of replacing the first.
                 drawers = (
                     await session.execute(
                         select(TurnRecord.drawer_user_id).where(
@@ -2086,7 +2091,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
                 ).scalars().all()
                 erased = await erased_identity_ids(
-                    session, (identity_ids[0], *drawers)
+                    session, (identity_ids[0], *drawers), exclusive=True
                 )
                 if identity_ids[0] in erased:
                     return None
