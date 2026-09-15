@@ -907,6 +907,15 @@ export const IT: Catalogue = {
     keepMyAccount: "Tieni il mio account",
   },
 
+  drainCue: {
+    title: "Aggiornamento del server",
+    gameEndsIn: (p: { seconds: number }) =>
+      p.seconds > 0 ? `Questa partita finisce tra ${counted(p.seconds, { one: "secondo", other: "secondi" })}.` : "Questa partita sta finendo ora.",
+    noNewGames: "Non possono partire nuove partite finché il server non torna.",
+    gotIt: "Ho capito",
+    finalCountdown: (p: { seconds: number }) => `La partita finisce tra ${counted(p.seconds, { one: "secondo", other: "secondi" })}`,
+  },
+
   drawingReactionControl: {
     reactionSummary: (p: { total: number; chips: string }) =>
       `${counted(p.total, { one: "reazione", other: "reazioni" })}: ${p.chips}`,

@@ -918,6 +918,15 @@ export const EN = {
     keepMyAccount: "Keep my account",
   },
 
+  drainCue: {
+    title: "Server update",
+    gameEndsIn: (p: { seconds: number }) =>
+      p.seconds > 0 ? `This game ends in ${counted(p.seconds, { one: "second", other: "seconds" })}.` : "This game is ending now.",
+    noNewGames: "No new games can start until the server is back.",
+    gotIt: "Got it",
+    finalCountdown: (p: { seconds: number }) => `Game ends in ${counted(p.seconds, { one: "second", other: "seconds" })}`,
+  },
+
   drawingReactionControl: {
     reactionSummary: (p: { total: number; chips: string }) =>
       `${counted(p.total, { one: "reaction", other: "reactions" })}: ${p.chips}`,

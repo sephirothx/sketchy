@@ -114,3 +114,39 @@ export function roomStage(facts: RoomStageFacts): RoomStage {
   if (facts.lostDuringDrain) return { kind: "paused", cause: "server-update" };
   return { kind: "paused", cause: facts.connection };
 }
+
+/** How long the drain's opening card stays before it folds into the header chip. */
+export const DRAIN_CUE_MS = 5000;
+/** The drain's last stretch, when the chip turns red and the stage says so too. */
+export const DRAIN_FINAL_SECONDS = 10;
+
+export interface DrainCueFacts {
+  /** Identifies this drain; a new one is a new cue. */
+  drainStartedAt: string | null;
+  /** The drain whose opening card was already shown. */
+  cueSeenFor: string | null;
+  secondsLeft: number;
+  /** A game is being played, so there is a game for the drain to end. */
+  playing: boolean;
+}
+
+/**
+ * How loudly a drain is said on a live room stage (#826).
+ *
+ * The header chip alone was too easy to miss: it turns up beside the round
+ * while somebody is drawing or typing a guess, and the game ending under them
+ * is the one notice worth breaking their attention for. So the drain **opens**
+ * with a card over the stage, once per drain, which folds into the chip after
+ * `DRAIN_CUE_MS` or a tap - costing no canvas for the rest of the window. Its
+ * **last seconds** are said again, by a line that does not cover the canvas or
+ * take a tap, so a guess can still be finished.
+ *
+ * Only on a live stage: a paused or ended stage already has its own card.
+ */
+export function drainCue(facts: DrainCueFacts): { card: boolean; finalCountdown: boolean } {
+  if (facts.drainStartedAt === null) return { card: false, finalCountdown: false };
+  const card = facts.cueSeenFor !== facts.drainStartedAt;
+  const finalCountdown =
+    !card && facts.playing && facts.secondsLeft > 0 && facts.secondsLeft <= DRAIN_FINAL_SECONDS;
+  return { card, finalCountdown };
+}

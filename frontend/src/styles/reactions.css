@@ -18,6 +18,32 @@
   z-index: 2;
 }
 
+/* A planned-deploy drain's last seconds (#826), in the corner opposite the
+   reaction control: not over the prompt or the letter tiles, and never in the
+   way of a stroke or a tap. Above the reaction control's layer, so the
+   choosing scrim does not hide the game ending. */
+.canvas-drain-final {
+  align-items: center;
+  background: var(--danger-soft);
+  border: 1.5px solid var(--danger);
+  border-radius: 999px;
+  box-shadow: var(--shadow-raised);
+  color: var(--danger);
+  display: inline-flex;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  gap: 6px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  padding: 5px 12px;
+  pointer-events: none;
+  position: absolute;
+  top: 10px;
+  white-space: nowrap;
+  z-index: 3;
+}
+
 /* The drawer's brush must never land on a control they cannot use. */
 .reaction-control-canvas.is-passive {
   pointer-events: none;

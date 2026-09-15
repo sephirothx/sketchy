@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { ClockIcon, WifiOffIcon } from "./icons";
-import { placeNotices, type ChipNotice } from "../lib/appNotices";
+import { DRAIN_FINAL_SECONDS, placeNotices, type ChipNotice } from "../lib/appNotices";
 import { connectionStatusText, type ConnectionStatus } from "../lib/connectionStatus";
 import { useDrainSecondsLeft } from "../hooks/useServerNotices";
 import { useServerNoticesStore } from "../store/serverNoticesStore";
@@ -80,7 +80,11 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
           ? ui.roomNoticeChips.serverUpdate({ seconds: secondsLeft })
           : connectionTrouble ? connectionLabel(connectionTrouble) : "";
         const iconOnly = compact && !isDrain && chips.length > 1;
-        const tone = isDrain ? "warm" : connection === "reconnecting" ? "warning" : "danger";
+        // Red for the drain's last seconds, when the stage says it too (#826).
+        const finalStretch = secondsLeft > 0 && secondsLeft <= DRAIN_FINAL_SECONDS;
+        const tone = isDrain
+          ? finalStretch ? "danger" : "warm"
+          : connection === "reconnecting" ? "warning" : "danger";
         return (
           <button
             key={notice}
