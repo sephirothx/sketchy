@@ -19,6 +19,13 @@ export const FIRST_CONNECT_GRACE_MS = 3000;
  */
 export const RECONNECT_GRACE_MS = 1000;
 
+/**
+ * How much longer, after the notice itself, trouble must last before a room
+ * pauses its stage (#823). The notice already waits out a reconnect, so this is
+ * on top of that: an outage somebody could miss in a blink pauses nothing.
+ */
+export const STAGE_PAUSE_DELAY_MS = 1000;
+
 export function resolveConnectionStatus(input: {
   online: boolean;
   socketConnected: boolean;

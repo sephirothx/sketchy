@@ -15,6 +15,10 @@ interface TimerProps {
   variant?: "ring" | "text" | "bar";
   /** Another Timer instance owns the tick sound and announcements. */
   silent?: boolean;
+  /** Hold the count where it is: the room's stage is paused because the
+      connection is down (#823), and a clock running on regardless says the
+      game is carrying on without anyone. The server resyncs it on return. */
+  paused?: boolean;
 }
 
 /** Green while there is time, amber as it runs down, red for the last 10s. */
@@ -24,12 +28,13 @@ function timerColor(remaining: number, totalSeconds: number): string {
   return "var(--success)";
 }
 
-export function Timer({ totalSeconds, startedAt, durationSeconds, variant = "ring", silent = false }: TimerProps) {
+export function Timer({ totalSeconds, startedAt, durationSeconds, variant = "ring", silent = false, paused = false }: TimerProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
   const [announcement, setAnnouncement] = useState("");
   const prevRemainingRef = useRef<number>(totalSeconds);
 
   useEffect(() => {
+    if (paused) return;
     const compute = () => {
       const elapsed = (Date.now() - startedAt) / 1000;
       const nextVal = Math.max(0, Math.ceil(totalSeconds - elapsed));
@@ -51,7 +56,7 @@ export function Timer({ totalSeconds, startedAt, durationSeconds, variant = "rin
     compute();
     const interval = setInterval(compute, 250);
     return () => clearInterval(interval);
-  }, [totalSeconds, startedAt, silent]);
+  }, [totalSeconds, startedAt, silent, paused]);
 
   if (totalSeconds <= 0) return null;
 

@@ -1823,6 +1823,20 @@ export const DE: Catalogue = {
       `${number(p.count)} eigene`,
   },
 
+  roomStageNotice: {
+    connectionLost: "Verbindung verloren",
+    serverUpdating: "Server-Update",
+    reconnectingSeatKept: "Verbinde neu … Dein Platz bleibt eine Weile frei.",
+    youReDisconnected: "Du bist getrennt. Sketchy verbindet sich neu, sobald deine Verbindung zurück ist.",
+    serverIsUpdating: "Der Server wird aktualisiert, deshalb endet diese Runde.",
+    couldNotRejoin: "Zurück in den Raum ging nicht",
+    couldNotRejoinDetail: "Die Verbindung ist wieder da, aber der Raum hat dich nicht wieder aufgenommen. Lade neu, um es noch einmal zu versuchen, oder geh zur Lobby.",
+    gameEnded: "Diese Runde ist vorbei",
+    endedServerUpdate: "Der Server wurde aktualisiert, und die laufende Runde konnte nicht weitergehen.",
+    endedRoomClosed: "Der Raum wurde geschlossen, während du getrennt warst.",
+    backToLobby: "Zurück zur Lobby",
+  },
+
   rulesPage: {
     sketchy: "Sketchy",
     theRules: "Die Regeln",

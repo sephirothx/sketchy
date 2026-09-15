@@ -195,6 +195,7 @@ the section is what is drawn with a name wherever a player appears.
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | **Room** | The place people play in — created by a host, joined by code or from the lobby, and outliving individual games. | game (for the place), channel, table |
+| **Room ended** | The card that replaces a room the server no longer has — it restarted, or the room closed while the player's connection was down — saying so, why, and offering the lobby. Not **Game over**: there are no standings to show, because the game never finished. While the connection is only *down*, the room is **paused** instead: dimmed and inert under a card, with the header still usable. | game over (for this), dead room, zombie room |
 | **Lobby** | The browsable list of public rooms, with the lobby chat and the list of who is online beside it. **The lobby is one place, and it is not inside a room.** | browser, room list, home |
 | **Online player** | An account with at least one open socket. Not a seat: a player is online whether or not they are in a room, and several tabs of one account are one online player. A visitor who has not chosen a name has no account and is not one. | active user, logged-in user, connected user |
 | **Friend** | An account another account has a mutual, accepted friendship with. Registered accounts only: a guest identity is a browser rather than a person, and is removed after a month of not playing. | contact, buddy, follower |

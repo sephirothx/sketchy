@@ -1823,6 +1823,20 @@ export const NL: Catalogue = {
       `${number(p.count)} eigen`,
   },
 
+  roomStageNotice: {
+    connectionLost: "Verbinding verbroken",
+    serverUpdating: "Server wordt bijgewerkt",
+    reconnectingSeatKept: "Opnieuw verbinden… Je plek blijft even vrij.",
+    youReDisconnected: "Je verbinding is verbroken. Sketchy maakt opnieuw verbinding zodra die terug is.",
+    serverIsUpdating: "De server wordt bijgewerkt, dus dit spel eindigt.",
+    couldNotRejoin: "Terug in deze kamer lukte niet",
+    couldNotRejoinDetail: "De verbinding is terug, maar de kamer liet je niet weer toe. Herlaad om het opnieuw te proberen, of ga naar de lobby.",
+    gameEnded: "Dit spel is afgelopen",
+    endedServerUpdate: "De server is bijgewerkt en het lopende spel kon niet doorgaan.",
+    endedRoomClosed: "De kamer is gesloten terwijl je verbinding weg was.",
+    backToLobby: "Terug naar de lobby",
+  },
+
   rulesPage: {
     sketchy: "Sketchy",
     theRules: "De regels",
