@@ -89,19 +89,33 @@ class GalleryShelfCache:
         self._snapshot: ShelfSnapshot | None = None
         self._read_at = float("-inf")
         self._lock = asyncio.Lock()
+        # Bumped by every invalidation. A read that started before the bump
+        # was taken from the shelf as it was, and must not be installed as
+        # if it were current (#524 review): the hide would wait a minute.
+        self._generation = 0
+
+    def _fresh(self) -> bool:
+        return self._snapshot is not None and self._clock() - self._read_at < self._ttl
 
     async def get(self) -> ShelfSnapshot:
-        if self._snapshot is not None and self._clock() - self._read_at < self._ttl:
+        if self._fresh():
             return self._snapshot
         async with self._lock:
             # Whoever waited on the lock finds the snapshot the first arrival
             # wrote: one read per minute, however many lobbies open at once.
-            if self._snapshot is not None and self._clock() - self._read_at < self._ttl:
+            if self._fresh():
                 return self._snapshot
-            entries = await self._read()
+            while True:
+                generation = self._generation
+                entries = await self._read()
+                if generation == self._generation:
+                    break
+                # Invalidated while the read was out: read again, so the
+                # caller gets the shelf after the decision, not before it.
             self._snapshot = ShelfSnapshot(entries=entries, version=_version_of(entries))
             self._read_at = self._clock()
             return self._snapshot
 
     def invalidate(self) -> None:
+        self._generation += 1
         self._read_at = float("-inf")

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -18,7 +20,14 @@ from app.api.moderation import create_moderation_router
 from app.api.profiles import create_profile_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session, device_label_from_user_agent
-from app.db.models import PlayerReport, PlayerReportDrawingEvidence, User
+from app.db.models import (
+    AuditEvent,
+    GalleryShelfReview,
+    PlayerReport,
+    PlayerReportDrawingEvidence,
+    TurnDrawing,
+    User,
+)
 from app.domain_values import UserRole
 from app.services import config_store
 from app.services.gallery_shelf import SHELF_REVIEW_KEY, GalleryShelfCache, shelf_reader
@@ -337,6 +346,10 @@ async def test_a_report_from_the_gallery_names_the_turn_and_carries_the_drawing(
     assert (await http.post(path, json={"details": "x"})).status_code == 401
     await sign_in_as(http, factory, ann.id)
     assert (await http.post(path, json={"details": "mine"})).status_code == 422, "self"
+    # A guest is a signed-in player (R-MOD-01): their report is taken too.
+    guest = await users.create_anonymous(display_name="Guest")
+    await sign_in_as(http, factory, guest.id)
+    assert (await http.post(path, json={"details": "seen it"})).status_code == 201
     await sign_in_as(http, factory, cid.id)
     assert (await http.post(f"/api/gallery/{private.turn_id}/report", json={"details": "x"})).status_code == 404
     assert (await http.post("/api/gallery/not-an-id/report", json={"details": "x"})).status_code == 404
@@ -360,3 +373,65 @@ async def test_a_report_from_the_gallery_names_the_turn_and_carries_the_drawing(
     assert hidden.status_code == 200
     await sign_in_as(http, factory, bob.id)
     assert (await http.post(path, json={"details": "x"})).status_code == 404
+
+
+async def test_a_decision_and_its_audit_record_commit_together(env, monkeypatch):
+    """The hide, the review row and the ledger entry are one transaction: if
+    the audit cannot be written, nothing was decided."""
+    import app.api.moderation as moderation_module
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    mod = await _moderator(users, factory, "Mod")
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    await _as_moderator(http, factory, mod.id)
+
+    class Refuses:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("the ledger is unavailable")
+
+    monkeypatch.setattr(moderation_module, "AuditEvent", Refuses)
+    # The test transport re-raises what the route raised; a deployment
+    # answers 500. Either way the transaction rolled back.
+    with pytest.raises(RuntimeError):
+        await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "x"})
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, UUID(game.turn_id))
+        assert drawing.gallery_hidden_at is None
+        assert await session.get(GalleryShelfReview, UUID(game.turn_id)) is None
+    monkeypatch.undo()
+
+    decided = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "x"})
+    assert decided.status_code == 200
+    async with factory() as session:
+        assert (await session.get(TurnDrawing, UUID(game.turn_id))).gallery_hidden_at is not None
+        events = (await session.scalars(select(AuditEvent).where(AuditEvent.target_id == game.turn_id))).all()
+        assert [e.event_type for e in events] == ["gallery.review_hidden"]
+
+
+async def test_an_invalidation_during_a_refresh_is_not_lost():
+    """A read that started before a hide holds the shelf as it was; the
+    cache reads again rather than installing it as current."""
+    from app.services.gallery_shelf import GalleryShelfCache
+
+    reads = 0
+    gate = asyncio.Event()
+    entry = lambda turn_id: SimpleNamespace(turn_id=turn_id, reaction_counts={})  # noqa: E731
+    results = [(entry("before"),), (entry("after"),)]
+
+    async def read():
+        nonlocal reads
+        reads += 1
+        if reads == 1:
+            await gate.wait()
+        return results[min(reads, len(results)) - 1]
+
+    cache = GalleryShelfCache(read, ttl_seconds=60)
+    first = asyncio.create_task(cache.get())
+    await asyncio.sleep(0)
+    cache.invalidate()
+    gate.set()
+    snapshot = await first
+    assert [e.turn_id for e in snapshot.entries] == ["after"] and reads == 2
+    assert [e.turn_id for e in (await cache.get()).entries] == ["after"] and reads == 2

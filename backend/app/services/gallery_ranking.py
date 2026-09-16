@@ -48,51 +48,68 @@ def _count_by_turn():
     )
 
 
+async def _rebuild_batch(session: AsyncSession, after: UUID | None) -> tuple[int, UUID | None]:
+    """One batch of rows, locked before they are counted: a reaction landing
+    meanwhile waits for the batch and then sets the row itself, so the count
+    written here is never staler than the rows it was read from."""
+    locked = (
+        select(TurnDrawing.turn_id)
+        .order_by(TurnDrawing.turn_id)
+        .limit(REBUILD_BATCH_ROWS)
+        .with_for_update()
+    )
+    if after is not None:
+        locked = locked.where(TurnDrawing.turn_id > after)
+    turn_ids = list((await session.scalars(locked)).all())
+    if not turn_ids:
+        return 0, None
+    rows = (
+        await session.execute(
+            select(TurnDrawing.turn_id, GameRecord.finished_at, _count_by_turn())
+            .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
+            .where(TurnDrawing.turn_id.in_(turn_ids))
+        )
+    ).all()
+    for turn_id, finished_at, count in rows:
+        await session.execute(
+            update(TurnDrawing)
+            .where(TurnDrawing.turn_id == turn_id)
+            .values(
+                reaction_count=int(count),
+                hot_score=hot_score(int(count), finished_at),
+            )
+        )
+    return len(rows), turn_ids[-1]
+
+
 async def rebuild_gallery_ranking_in_session(session: AsyncSession) -> int:
     """Replace every drawing's count and score with what the reaction rows
-    say, in the caller's transaction. Returns how many rows were written.
-
-    Streamed and written in bounded batches keyed by turn id, so a history of
-    any size rebuilds without binding it whole; a reaction landing meanwhile
-    sets its own row after this read and wins, since the row's write is the
-    later one.
-    """
+    say, in the caller's transaction. Returns how many rows were written."""
     written = 0
     last: UUID | None = None
     while True:
-        statement = (
-            select(TurnDrawing.turn_id, GameRecord.finished_at, _count_by_turn())
-            .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
-            .order_by(TurnDrawing.turn_id)
-            .limit(REBUILD_BATCH_ROWS)
-        )
-        if last is not None:
-            statement = statement.where(TurnDrawing.turn_id > last)
-        rows = (await session.execute(statement)).all()
-        if not rows:
+        count, last = await _rebuild_batch(session, last)
+        if last is None:
             return written
-        for turn_id, finished_at, count in rows:
-            await session.execute(
-                update(TurnDrawing)
-                .where(TurnDrawing.turn_id == turn_id)
-                .values(
-                    reaction_count=int(count),
-                    hot_score=hot_score(int(count), finished_at),
-                )
-            )
-            written += 1
-        last = rows[-1][0]
+        written += count
 
 
 async def rebuild_gallery_ranking(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> int:
-    """Maintenance entry point: the whole rebuild in one transaction, batched
-    only in how it reads; a rebuild is a repair, run rarely and never on a
-    player's request."""
-    async with session_factory() as session:
-        async with session.begin():
-            return await rebuild_gallery_ranking_in_session(session)
+    """Maintenance entry point: one transaction per batch of rows, keyed by
+    turn id, so a rebuild of any history holds each row's lock for one batch
+    and a reaction never waits for the whole run; an interrupted rebuild
+    leaves every finished batch correct and is simply run again."""
+    written = 0
+    last: UUID | None = None
+    while True:
+        async with session_factory() as session:
+            async with session.begin():
+                count, last = await _rebuild_batch(session, last)
+        if last is None:
+            return written
+        written += count
 
 
 async def _run_cli() -> None:
