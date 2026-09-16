@@ -134,7 +134,15 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
 
             await visitor.goto(f"{BASE_URL}/room/{code}")
             await visitor.wait_for_selector("#invite-name")
+
+            # Join with no name is refused in place; typing again takes the
+            # refusal back, rather than leaving the field marked invalid.
+            await visitor.click('button:has-text("Join game")')
+            await visitor.wait_for_selector("#invite-entry-error")
+            assert await visitor.get_attribute("#invite-name", "aria-invalid") == "true"
             await visitor.fill("#invite-name", "InviteDrafter")
+            await visitor.wait_for_selector("#invite-entry-error", state="detached")
+            assert await visitor.get_attribute("#invite-name", "aria-invalid") is None
             await visitor.click('button:has-text("Join game")')
 
             await visitor.wait_for_selector(".room-copy-button")

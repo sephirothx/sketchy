@@ -41,7 +41,7 @@ function DelayedInviteLoader() {
 
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
-  const { state, join } = useRoomEntry(code);
+  const { state, join, setNicknameInput } = useRoomEntry(code);
   const user = useAuthStore((store) => store.user);
   const hasResolved = useAuthStore((store) => store.hasResolved);
   const nameDraft = useAuthStore((store) => store.nameDraft);
@@ -144,7 +144,13 @@ export function InviteEntryPage({ code }: { code: string }) {
                   type="search"
                   inputMode="text"
                   value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
+                  onChange={(event) => {
+                    setNameDraft(event.target.value);
+                    // Also to the entry machine, which drops a refusal about
+                    // the name once the name changes; otherwise the error and
+                    // aria-invalid stay up over a name that is now fine.
+                    setNicknameInput(event.target.value);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !busy && !room.isFull) {
                       event.preventDefault();
