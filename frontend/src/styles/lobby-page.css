@@ -31,6 +31,52 @@
   padding-left: 0;
 }
 
+/* The wordmark is the way home on every page (#580). */
+.header-home-link {
+  border-radius: var(--radius-sm);
+  color: inherit;
+  display: inline-flex;
+}
+
+.header-home-link:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 3px;
+}
+
+/* The page's name after the wordmark: where you are, on a wide screen. */
+.header-crumb {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.header-crumb > svg {
+  color: var(--faint);
+  flex: none;
+}
+
+.header-crumb > span,
+.header-crumb > a {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-crumb > a {
+  text-decoration: none;
+}
+
+.header-crumb > a:hover {
+  text-decoration: underline;
+}
+
 .lobby-columns {
   display: grid;
   grid-template-columns: 1.15fr 1fr;

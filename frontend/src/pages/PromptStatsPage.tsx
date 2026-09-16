@@ -169,7 +169,7 @@ export function PromptStatsPage() {
 
   return (
     <div className="prompt-stats-page">
-      <AppHeader backLabel={ui.promptStatsPage.backToLobby} />
+      <AppHeader title={ui.promptStatsPage.promptStats} backLabel={ui.promptStatsPage.backToLobby} />
 
       <header className="prompt-stats-header">
         <SectionLabel>{ui.promptStatsPage.serverWide}</SectionLabel>

@@ -110,8 +110,8 @@ async def test_friends_are_made_in_the_lobby_and_open_a_private_room():
             await bob.click('button:has-text("Create room")')
             await bob.click('button:has-text("Private")')
             await bob.click('button:has-text("Create room")')
-            await bob.wait_for_selector(".room-copy-button")
-            code = await bob.locator(".room-copy-button").first.get_attribute(
+            await bob.wait_for_selector('[data-testid="room-header"]')
+            code = await bob.locator('[data-testid="room-header"]').get_attribute(
                 "data-room-code"
             )
 
@@ -150,7 +150,7 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
 
             await host.click('button:has-text("Create room")')
             await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".room-copy-button")
+            await host.wait_for_selector('[data-testid="room-header"]')
 
             # The invite card lists friends who are in the lobby.
             invite = host.locator(
@@ -543,8 +543,8 @@ async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
             await cat.click('button:has-text("Create room")')
             await cat.click('button:has-text("Public")')
             await cat.click('button:has-text("Create room")')
-            await cat.wait_for_selector(".room-copy-button")
-            code = await cat.locator(".room-copy-button").first.get_attribute(
+            await cat.wait_for_selector('[data-testid="room-header"]')
+            code = await cat.locator('[data-testid="room-header"]').get_attribute(
                 "data-room-code"
             )
             for page in (ada, bob):
@@ -649,8 +649,8 @@ async def test_the_friend_mark_survives_the_narrow_layout():
             await bob.click('button:has-text("Create room")')
             await bob.click('button:has-text("Public")')
             await bob.click('button:has-text("Create room")')
-            await bob.wait_for_selector(".room-copy-button")
-            code = await bob.locator(".room-copy-button").first.get_attribute(
+            await bob.wait_for_selector('[data-testid="room-header"]')
+            code = await bob.locator('[data-testid="room-header"]').get_attribute(
                 "data-room-code"
             )
             await join_by_code(ada, code)

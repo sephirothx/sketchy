@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { waitingRequestCount } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
@@ -91,9 +90,13 @@ function MenuItem({
  * which was right while every guest entry navigated somewhere - reporting a bug
  * does not, and a guest mid-game is exactly who most needs it.
  */
-export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
+export function AccountMenu({ compact = false, inRoom = false }: {
+  compact?: boolean;
+  /** In a room's bar: the chip keeps its name (the bar hides it when short)
+      but the menu is cut down as a compact one is, for the same reason. */
+  inRoom?: boolean;
+} = {}) {
   const navigate = useNavigate();
-  const isNarrow = useMediaQuery("(max-width: 720px)");
   const openSettings = useOpenSettings();
   const openOverlay = useOpenOverlay();
   const waiting = useFriendsStore((state) => waitingRequestCount(state.lists));
@@ -157,7 +160,7 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
   const shownName = isGuest ? user.displayName : (user.username ?? user.displayName);
   // Cut down rather than absent: a compact guest keeps the actions that do not
   // cost them their seat.
-  const seatBound = isGuest && compact;
+  const seatBound = isGuest && (compact || inRoom);
 
   // The same entry in both branches, fenced off by dividers on either side so
   // it never reads as one of the account actions around it. Offered to guests
@@ -235,13 +238,14 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          {/* On every device: the account lives in Settings now, so the menu
-              that is about the account points there. On a phone the header
-              has no room for a gear beside the wordmark and the chip, so this
-              entry also carries the class the focus-restore looks for. */}
+          {/* Player settings, first, on every device: the gear that sat
+              beside this chip folded into it (#580, variant C). Settings are
+              about you, and the chip is where the things about you live. The
+              class is the one the settings focus-restore and the e2e suite
+              look for. */}
           <MenuItem
             icon={<GearIcon size={16} />}
-            className={isNarrow ? "header-settings-button" : undefined}
+            className="header-settings-button"
             onClick={() => {
               setMenuOpen(false);
               openSettings();

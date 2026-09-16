@@ -318,7 +318,7 @@ export function CommunityCataloguePage() {
 
   return (
     <div className={selectedId ? "page community-catalogue-page has-selection" : "page community-catalogue-page"}>
-      <AppHeader backLabel={ui.communityCataloguePage.backToLobby} languageSwitch />
+      <AppHeader title={ui.communityCataloguePage.communityCatalogue} backLabel={ui.communityCataloguePage.backToLobby} languageSwitch />
 
       {/* A heading block rather than a card. The lobby introduces its list of
           rooms the same way, and three stacked panels - a title, a filter

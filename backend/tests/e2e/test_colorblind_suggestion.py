@@ -4,6 +4,7 @@ from __future__ import annotations
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
+    open_player_settings,
     open_room_settings,
     open_settings_section,
     room_code,
@@ -115,7 +116,7 @@ async def test_dismissed_suggestion_does_not_return_when_preference_changes():
             await suggestion.wait_for(state="hidden")
 
             for desired in (False, True):
-                await player.locator("button.header-settings-button").click()
+                await open_player_settings(player)
                 dialog = player.locator(".settings-modal-card")
                 await dialog.wait_for()
                 await dialog.get_by_role("tab", name="Appearance").click()

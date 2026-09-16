@@ -88,19 +88,51 @@ async def register_account(page, username: str, password: str = "a-good-password
     await page.wait_for_function("() => !document.querySelector('.identity-unclaimed')")
 
 
-async def room_code(page) -> str:
-    """The current room's code, read from the header's copy control.
+ROOM_HEADER = '[data-testid="room-header"]'
 
-    Prefers the stable data-room-code attribute so the helper survives header
-    redesigns; falls back to parsing the visible "Code: XXXXXX" label.
+
+async def room_code(page) -> str:
+    """The current room's code, from the room bar's `data-room-code`.
+
+    The code is not printed in the bar any more (#580) - it is a row of the
+    Room menu - so the attribute is the one place a test reads it from.
     """
-    button = page.locator(".room-copy-button").first
-    await button.wait_for()
-    attr = await button.get_attribute("data-room-code")
-    if attr:
-        return attr.strip()
-    text = await button.inner_text()
-    return text.split("Code:")[1].strip()
+    header = page.locator(ROOM_HEADER)
+    await header.wait_for()
+    return (await header.get_attribute("data-room-code") or "").strip()
+
+
+async def open_room_menu(page):
+    """Open the Room menu - the desktop dropdown or the phone's sheet, which
+    share a test id and hold the same rows - and return it."""
+    menu = page.get_by_test_id("room-menu-sheet")
+    if not await menu.is_visible():
+        await page.get_by_test_id("open-room-menu").click()
+    await menu.wait_for()
+    return menu
+
+
+async def room_menu_action(page, label: str) -> None:
+    """Press one row of the Room menu by the words on it."""
+    menu = await open_room_menu(page)
+    await menu.locator("button", has_text=label).first.click()
+
+
+async def leave_room(page) -> None:
+    """Leave through the Room menu's last row; any confirmation is the caller's."""
+    await room_menu_action(page, "Leave the room")
+
+
+async def open_player_settings(page) -> None:
+    """Open Player settings from the identity chip's menu, where the gear
+    folded in (#580). In a room on a phone the chip is not in the bar, so the
+    Room menu's Settings row is the way in there."""
+    chip = page.locator(".identity-chip").first
+    if await chip.is_visible():
+        await chip.click()
+        await page.locator(".header-settings-button").first.click()
+        return
+    await room_menu_action(page, "Settings")
 
 
 async def open_room_settings(page) -> None:

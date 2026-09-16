@@ -17,7 +17,7 @@ import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
-import { RoomMenuSheet } from "../components/RoomMenuSheet";
+import { RoomMenuDropdown, RoomMenuSheet, type RoomMenuActions } from "../components/RoomMenu";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import {
   ConnectedRoomChatPanel,
@@ -33,14 +33,9 @@ import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import {
-  CopyIcon,
   DotsIcon,
-  Wordmark,
-  DownloadIcon,
-  GearIcon,
-  LeaveIcon,
   MoonIcon,
-  RoundsIcon,
+  Wordmark,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
 import { recordRender } from "../lib/renderDiagnostics";
@@ -303,6 +298,22 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setRoomMenuOpen(false);
   }
 
+  const roomMenuActions: RoomMenuActions = {
+    code,
+    isPlaying: roomView === "playing",
+    isAfk,
+    canProposeRestart: canProposeRestart && !restartVote,
+    restartBusy,
+    restartCooldownSeconds,
+    onCopyLink: () => void handleCopyLink(),
+    onOpenPlayers: isMobile ? () => setPlayersSheetOpen(true) : undefined,
+    onToggleAfk: handleToggleAfk,
+    onSaveImage: () => canvasRef.current?.saveImage(),
+    onOpenSettings: () => openSettings(),
+    onProposeRestart: () => void handleProposeRestart(),
+    onLeave: handleLeave,
+  };
+
   // Both post-game panels are about the *last* game, so a game starting
   // underneath one has to close it - otherwise the player reads last game's
   // screen over live gameplay and misses the start. Keyed on the room going
@@ -342,127 +353,72 @@ export function ActiveGameRoom({ code }: { code: string }) {
           }}
         />
       )}
-      {isMobile ? (
-        /* Phone status band: what the room is, how long is left, and one way
-           in to everything else. The eight-icon strip this replaces put a red
-           Leave a thumb-width from Settings; those live in the ⋯ sheet now. */
-        <header className="game-header game-header-mobile">
-          {/* The mark earns its place even here: this is the only screen a
-              player is on for ten minutes at a stretch, and it is what says
-              which game they are in when they come back to the tab. */}
-          <span className="game-header-mark" aria-hidden="true">
-            <Wordmark size={22} />
-          </span>
-          <button
-            type="button"
-            className="room-copy-button"
-            data-room-code={code}
-            onClick={() => void handleCopyLink()}
-            aria-label={ui.activeGameRoom.copyRoomInviteLink}
-            title={ui.activeGameRoom.clickCopyRoomInviteLink}
-          >
-            <span>{code}</span>
-            <CopyIcon size={13} />
-          </button>
-          <GameHeaderStatus />
-          <RoomNoticeChips compact />
-          <button
-            type="button"
-            className="btn btn-icon game-header-menu-button"
-            onClick={() => setRoomMenuOpen(true)}
-            aria-label={ui.activeGameRoom.roomMenu}
-            aria-haspopup="dialog"
-            title={ui.activeGameRoom.roomMenu}
-            data-testid="open-room-menu"
-          >
-            <DotsIcon size={18} />
-          </button>
-        </header>
-      ) : (
-        <header className="game-header">
+      {/* One bar, three slots (#580): where you are, what is going on, you.
+          The same component on both layouts, so a phone and a desktop can
+          only differ in what they leave out: the room name and the wordmark
+          are accessory and give way first, the clock, the round, the notice
+          chips and the Room menu never do. The room code and every action
+          that used to be an icon here are rows of the Room menu. */}
+      <header
+        className={`game-header${isMobile ? " game-header-mobile" : ""}`}
+        data-testid="room-header"
+        data-room-code={code}
+      >
+        {!isMobile && (
           <div className="game-header-start">
-            {roomName && <span className="game-header-room-name">{roomName}</span>}
+            {/* The way back to the lobby, which from a room is leaving it -
+                so it asks first during a game, as Leave does. */}
             <button
               type="button"
-              className="room-copy-button"
-              data-room-code={code}
-              onClick={() => void handleCopyLink()}
-              title={ui.activeGameRoom.clickCopyRoomInviteLink}
-            >
-              <span>{code}</span>
-              <CopyIcon size={13} />
-            </button>
-            <RoomNoticeChips compact={false} />
-          </div>
-          <GameHeaderStatus />
-          <div className="game-header-actions">
-            {roomView === "playing" && canProposeRestart && !restartVote && (
-              <button
-                type="button"
-                className="btn btn-icon btn-compact game-header-restart-button"
-                disabled={restartBusy || restartCooldownSeconds > 0}
-                onClick={() => void handleProposeRestart()}
-                aria-label={restartCooldownSeconds > 0
-                  ? ui.activeGameRoom.restartVoteAvailableInRestartCooldownSeconds({ restartCooldownSeconds })
-                  : ui.activeGameRoom.proposeRestartingTheGame}
-                title={restartCooldownSeconds > 0
-                  ? ui.activeGameRoom.restartVoteAvailableInRestartCooldownSeconds2({ restartCooldownSeconds })
-                  : ui.activeGameRoom.proposeAVoteToRestart}
-              >
-                <RoundsIcon size={16} />
-                {restartCooldownSeconds > 0 && (
-                  <span className="game-header-restart-count" aria-hidden="true">
-                    {restartCooldownSeconds}
-                  </span>
-                )}
-              </button>
-            )}
-            <AccountMenu compact />
-            <button
-              type="button"
-              className={`game-header-afk-button${isAfk ? " is-afk" : ""}`}
-              aria-pressed={isAfk}
-              onClick={handleToggleAfk}
-              aria-label={isAfk ? ui.activeGameRoom.backFromAfk : ui.activeGameRoom.goAfk}
-              title={isAfk ? ui.activeGameRoom.backFromAfk : ui.activeGameRoom.goAfk}
-            >
-              <MoonIcon size={14} />
-              <span className="header-action-label">{ui.activeGameRoom.afk}</span>
-            </button>
-            {roomView === "playing" && (
-              <button
-                type="button"
-                className="btn btn-icon btn-compact save-image-button game-header-save-button"
-                onClick={() => canvasRef.current?.saveImage()}
-                aria-label={ui.activeGameRoom.saveImage}
-                title={ui.activeGameRoom.saveDrawnImageFile}
-              >
-                <DownloadIcon size={16} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-icon btn-compact header-settings-button"
-              onClick={() => openSettings()}
-              title={ui.activeGameRoom.playerSettings}
-              aria-label={ui.activeGameRoom.playerSettings}
-            >
-              <GearIcon size={16} />
-            </button>
-            <span className="game-header-divider" aria-hidden="true" />
-            <button
-              type="button"
-              className="btn btn-danger-ghost btn-compact game-header-leave-button"
+              className="game-header-home"
               onClick={handleLeave}
-              aria-label={ui.activeGameRoom.leaveRoom}
               title={ui.activeGameRoom.leaveRoom}
+              aria-label={ui.activeGameRoom.leaveRoom}
             >
-              <LeaveIcon size={14} />
-              <span className="header-action-label">{ui.activeGameRoom.leave}</span>
+              <Wordmark size={24} decorative />
             </button>
+            {roomName && <span className="game-header-room-name">{roomName}</span>}
           </div>
-        </header>
-      )}
+        )}
+        <div className="game-header-center">
+          <GameHeaderStatus />
+          <RoomNoticeChips compact={isMobile} />
+          {/* Going AFK is a menu row; being away is worth seeing, because it
+              skips your turns without asking. One click here comes back. */}
+          {isAfk && (
+            <button
+              type="button"
+              className="game-header-away"
+              onClick={handleToggleAfk}
+              aria-label={ui.activeGameRoom.backFromAfk}
+              title={ui.activeGameRoom.backFromAfk}
+            >
+              <MoonIcon size={13} />
+              <span>{ui.roomMenuSheet.away}</span>
+            </button>
+          )}
+        </div>
+        <div className="game-header-actions">
+          {isMobile ? (
+            <button
+              type="button"
+              className="btn btn-icon game-header-menu-button"
+              onClick={() => setRoomMenuOpen(true)}
+              aria-label={ui.activeGameRoom.roomMenu}
+              aria-haspopup="dialog"
+              title={ui.activeGameRoom.roomMenu}
+              data-testid="open-room-menu"
+            >
+              <DotsIcon size={18} />
+            </button>
+          ) : (
+            <>
+              <RoomMenuDropdown actions={roomMenuActions} />
+              <AccountMenu inRoom />
+            </>
+          )}
+        </div>
+      </header>
 
       {roomView === "playing" && restartVote && (
         <RestartVoteBanner
@@ -498,21 +454,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       )}
 
       {roomMenuOpen && (
-        <RoomMenuSheet
-          isPlaying={roomView === "playing"}
-          isAfk={isAfk}
-          canProposeRestart={canProposeRestart && !restartVote}
-          restartBusy={restartBusy}
-          restartCooldownSeconds={restartCooldownSeconds}
-          onDismiss={() => setRoomMenuOpen(false)}
-          onCopyLink={() => void handleCopyLink()}
-          onOpenPlayers={() => setPlayersSheetOpen(true)}
-          onToggleAfk={handleToggleAfk}
-          onSaveImage={() => canvasRef.current?.saveImage()}
-          onOpenSettings={() => openSettings()}
-          onProposeRestart={() => void handleProposeRestart()}
-          onLeave={handleLeave}
-        />
+        <RoomMenuSheet actions={roomMenuActions} onDismiss={() => setRoomMenuOpen(false)} />
       )}
 
       {/* Nothing in a production build; the E2E suite's way to crash the room. */}

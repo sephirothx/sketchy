@@ -352,7 +352,7 @@ export function MyPromptListsPage() {
   const publishBlocker = emailPublishBlocker(emailState, published);
 
   return <main className="prompt-list-manager-page">
-    <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
+    <AppHeader title={ui.myPromptListsPage.reusablePromptLists} backLabel={ui.myPromptListsPage.backToLobby} />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
         <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>

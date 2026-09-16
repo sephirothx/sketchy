@@ -681,6 +681,7 @@ export const PT: Catalogue = {
 
   appHeader: {
     playerSettings: "Definições do jogador",
+    sketchyHome: "Ir para o átrio",
   },
 
   bugReportDialog: {
@@ -1840,6 +1841,7 @@ export const PT: Catalogue = {
   },
 
   roomMenuSheet: {
+    away: "Ausente",
     startTheGameOver: "Recomeçar a partida",
     startOverCooldown: (p: { seconds: number }) => ` · daqui a ${p.seconds}s`,
     room: "Sala",

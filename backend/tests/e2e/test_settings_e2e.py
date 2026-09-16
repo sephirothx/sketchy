@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import register_account, use_guest_name, open_player_settings
 
 BASE_URL = "http://localhost:8000"
 
@@ -76,8 +76,7 @@ async def test_settings_apply_as_they_change_without_a_save():
             # before exercising the colour picker.
             await register_account(page, "SettingsTester")
 
-            await page.wait_for_selector('button.header-settings-button')
-            await page.click('button.header-settings-button')
+            await open_player_settings(page)
             dialog = page.locator('.settings-modal-card')
             await dialog.wait_for(state="visible")
             # A route, not a flag: it can be linked to and it survives a reload.
@@ -167,7 +166,7 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
         try:
             await first_page.goto(BASE_URL)
             await register_account(first_page, username, password)
-            await first_page.click("button.header-settings-button")
+            await open_player_settings(first_page)
 
             dialog = first_page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
@@ -228,7 +227,7 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                 )
                 assert retired == [None, None]
 
-                await fresh_page.click("button.header-settings-button")
+                await open_player_settings(fresh_page)
                 fresh_dialog = fresh_page.locator(".settings-modal-card")
                 await fresh_dialog.wait_for(state="visible")
                 await fresh_dialog.get_by_role("tab", name="Appearance").click()
@@ -273,7 +272,7 @@ async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
             await claim.locator('button[type="submit"]').click()
             await claim.wait_for(state="hidden")
 
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             dialog = page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
 
@@ -321,7 +320,7 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await login.get_by_role("button", name="Log in", exact=True).click()
             await login.wait_for(state="hidden")
 
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             await page.wait_for_selector('[data-testid="settings"]')
             await page.get_by_role("button", name="Change password").click()
             change = page.get_by_role("dialog", name="Change your password")
@@ -365,7 +364,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await page.goto(BASE_URL)
             await use_guest_name(page, "Portrait")
             # Guests keep the grey initial: no picker and no pencil on the disc.
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             dialog = page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
             assert await dialog.get_by_label("Choose a picture").count() == 0
@@ -374,7 +373,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await dialog.wait_for(state="hidden")
 
             await register_account(page, "Portrait")
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             await dialog.wait_for(state="visible")
             # A new account wears a doodle (#579); the pencil opens the menu,
             # and uploading replaces the doodle.
@@ -434,7 +433,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             assert (await seat.get_attribute("src")).endswith(key)
 
             # Removing it returns the initial everywhere.
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             await dialog.wait_for(state="visible")
             await dialog.get_by_role("button", name="Edit picture").click()
             await dialog.get_by_role("menuitem", name="Remove picture").click()
@@ -464,7 +463,7 @@ async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
             await chip_doodle.wait_for(state="attached")
             assert (await chip_doodle.get_attribute("href")).startswith("/avatars/doodles.svg#")
 
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             dialog = page.locator(".settings-modal-card")
             await dialog.wait_for(state="visible")
             await dialog.get_by_role("button", name="Edit picture").click()
@@ -511,7 +510,7 @@ async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
             ).first.wait_for(state="visible")
 
             # Remove takes it back to the initial, and says what it removes.
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             await dialog.wait_for(state="visible")
             await dialog.get_by_role("button", name="Edit picture").click()
             await dialog.get_by_role("menuitem", name="Remove doodle").click()

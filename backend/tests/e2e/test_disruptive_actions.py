@@ -1,5 +1,5 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, use_guest_name, room_menu_action, leave_room
 
 
 BASE_URL = "http://localhost:8000"
@@ -24,7 +24,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            await host_page.click('.room-copy-button')
+            await room_menu_action(host_page, "Copy the invite link")
             await host_page.wait_for_selector(
                 '.app-toast.success:has-text("Invite link copied.")'
             )
@@ -37,7 +37,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
                 })
                 """
             )
-            await host_page.click('.room-copy-button')
+            await room_menu_action(host_page, "Copy the invite link")
             await host_page.wait_for_selector(
                 '.app-toast.error:has-text("Couldn’t copy the link")'
             )
@@ -62,7 +62,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             drawer_page = host_page if await host_page.query_selector('.prompt-choices') else player_page
             guesser_page = player_page if drawer_page == host_page else host_page
 
-            await drawer_page.click('.game-header-leave-button')
+            await leave_room(drawer_page)
             dialog = drawer_page.locator('[role="alertdialog"]')
             assert await dialog.is_visible()
             assert "Leave during your turn?" in await dialog.inner_text()
@@ -82,10 +82,10 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             await drawer_page.keyboard.press("Escape")
             await drawer_page.wait_for_selector('[role="alertdialog"]', state="hidden")
             assert await drawer_page.evaluate(
-                "() => document.activeElement?.classList.contains('game-header-leave-button')"
+                "() => document.activeElement?.getAttribute('data-testid') === 'open-room-menu'"
             )
 
-            await guesser_page.click('.game-header-leave-button')
+            await leave_room(guesser_page)
             generic_dialog = guesser_page.locator('[role="alertdialog"]')
             assert "Leave active game?" in await generic_dialog.inner_text()
             assert "give up your place" in await generic_dialog.inner_text()
@@ -122,7 +122,7 @@ async def test_waiting_room_leave_remains_immediate():
 
             room_code = await get_room_code(page)
             await page.evaluate("window.__sentSocketFrames = []")
-            await page.click('.game-header-leave-button')
+            await leave_room(page)
             await page.wait_for_url(f"{BASE_URL}/")
             assert not await page.is_visible('[role="alertdialog"]')
             await page.wait_for_timeout(100)

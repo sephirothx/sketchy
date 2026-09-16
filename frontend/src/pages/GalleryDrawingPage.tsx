@@ -87,7 +87,7 @@ export function GalleryDrawingPage() {
 
   return (
     <div className="page gallery-page gallery-drawing-page">
-      <AppHeader backLabel={ui.galleryPage.backToGallery} backTo="/gallery" languageSwitch />
+      <AppHeader title={ui.galleryPage.gallery} titleTo="/gallery" backLabel={ui.galleryPage.backToGallery} backTo="/gallery" languageSwitch />
 
       {signedOut ? (
         <div className="gallery-empty-state" data-testid="gallery-signed-out">

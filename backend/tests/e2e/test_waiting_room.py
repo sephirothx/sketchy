@@ -4,6 +4,7 @@ from tests.e2e.lobby_helpers import (
     open_room_settings,
     open_settings_section,
     room_code,
+    room_menu_action,
     save_room_settings,
     use_guest_name,
 )
@@ -164,7 +165,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await waiting_chat_input.press("Enter")
             await host_page.wait_for_selector('text=Hello from the lobby')
 
-            await player_page.click(".game-header-afk-button")
+            await room_menu_action(player_page, "Go away for a bit")
             await host_page.wait_for_selector('.player-row.is-afk:has-text("LobbyPlayer")')
             assert await host_page.is_disabled('.waiting-start-button')
         finally:

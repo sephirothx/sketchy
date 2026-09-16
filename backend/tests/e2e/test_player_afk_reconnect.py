@@ -1,5 +1,5 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, room_menu_action
 
 BASE_URL = "http://localhost:8000"
 
@@ -30,7 +30,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.click('button:has-text("Create room")')
             await page1.click('button:has-text("Create room")')
 
-            await page1.wait_for_selector('.room-copy-button')
+            await page1.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(page1)
 
             # Step 2: Player joins room via Join by code
@@ -38,16 +38,16 @@ async def test_player_afk_and_disconnect_scenario():
             await use_guest_name(page2, "AFKPlayer")
             await join_by_code(page2, code)
 
-            await page2.wait_for_selector('.room-copy-button')
+            await page2.wait_for_selector('[data-testid="room-header"]')
 
             # Step 3: Host verifies 2 players joined in waiting lobby
             await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Player toggles AFK in Browser 2
-            await page2.click(".game-header-afk-button")
+            await room_menu_action(page2, "Go away for a bit")
 
             # Verify the AFK pill reflects the pressed state
-            await page2.wait_for_selector('.game-header-afk-button[aria-pressed="true"]')
+            await page2.wait_for_selector(".game-header-away")
 
             # Step 5: Player closes Browser 2 context
             await context2.close()

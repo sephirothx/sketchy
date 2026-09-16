@@ -71,7 +71,7 @@ export function RulesPage() {
 
   return (
     <main className="ops-page rules-page">
-      <AppHeader backLabel={ui.rulesPage.backToLobby} />
+      <AppHeader title={rules.title} backLabel={ui.rulesPage.backToLobby} />
 
       <header className="rules-masthead">
         <SectionLabel>{ui.rulesPage.sketchy}</SectionLabel>

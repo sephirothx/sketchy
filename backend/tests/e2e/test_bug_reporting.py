@@ -157,12 +157,13 @@ async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
             await join_by_code(guest_page, code)
             await guest_page.wait_for_selector('[data-testid="waiting-room"]')
 
-            # The compact chip only exists in the game layout.
+            # The chip in the room's bar, whose guest menu is cut down to what
+            # keeps the seat.
             await host_page.wait_for_selector('.waiting-start-button:not([disabled])')
             await host_page.click(".waiting-start-button")
             await guest_page.wait_for_selector(".game-layout")
 
-            await guest_page.click(".identity-chip.is-compact")
+            await guest_page.click('[data-testid="room-header"] .identity-chip')
             menu = guest_page.locator(".account-dropdown")
             await menu.wait_for(state="visible")
 
