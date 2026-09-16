@@ -185,6 +185,18 @@
   border-radius: 50%;
 }
 
+/* A doodle (#579) takes the initial's place rather than filling the disc: it
+   is drawn in currentColor, so it wears the disc's ink the way the initial
+   did, and the disc keeps the account colour around it. The same size on
+   every disc, because the sprite squares each doodle on its own extent. */
+.avatar-doodle {
+  display: block;
+  width: 72%;
+  height: 72%;
+  overflow: visible;
+  pointer-events: none;
+}
+
 /* The viewer's own disc wears a ring in the primary colour (#574). An outline
    rather than a border, so the initial and the picture keep their whole disc,
    and offset so the ring floats clear of it instead of thickening its edge.

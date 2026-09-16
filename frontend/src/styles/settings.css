@@ -940,6 +940,79 @@
   color: var(--danger);
 }
 
+/* The doodle picker (#579): every tile is the player's own disc, so what is
+   picked is what everyone sees. The worn one is ringed, the way the viewer's
+   own disc is anywhere else. */
+.doodle-picker-card {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.doodle-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0 14px;
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.doodle-picker-tile {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 10px 4px 8px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.doodle-picker-tile:hover,
+.doodle-picker-tile:focus-visible {
+  background: var(--well);
+  border-color: var(--line);
+}
+
+.doodle-picker-tile[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.doodle-picker-tile:disabled {
+  cursor: progress;
+}
+
+.doodle-picker-tile[aria-busy="true"] .avatar {
+  opacity: 0.55;
+}
+
+/* Hyphenated rather than broken anywhere: "Umbrell/a" reads as a typo, and
+   German and Dutch names ("Marienkäfer", "Lieveheersbeestje") are longer
+   than any English one. */
+.doodle-picker-label {
+  max-width: 100%;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1.2;
+  text-align: center;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+.doodle-picker-tile[aria-pressed="true"] .doodle-picker-label {
+  color: var(--primary-ink);
+}
+
+@media (max-width: 479px) {
+  .doodle-picker-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .settings-you-body {
   display: grid;
   gap: 12px;

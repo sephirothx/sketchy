@@ -82,6 +82,7 @@ from app.domain_values import (
     TURN_PARTICIPANT_STATES,
     TurnDrawingStatus,
 )
+from app.auth.avatar_doodles import random_doodle_key
 from app.auth.avatars import validate_avatar_key
 from app.auth.pending_role import pending_offer
 from app.services.prompt_reclaim import retire_prompt_list
@@ -875,6 +876,11 @@ class SqlAlchemyUserRepository(UserRepository):
                 # Registered players play as their username, so the display
                 # name follows it rather than keeping the old guest nickname.
                 user.display_name = clean_username
+                # A new account starts with a doodle rather than an initial
+                # (R-AVA-09), which its owner can change from Settings. A
+                # guest never had a picture (R-AVA-02), so there is nothing
+                # here to overwrite.
+                user.avatar_key = random_doodle_key()
                 try:
                     await session.flush()
                 except IntegrityError as error:

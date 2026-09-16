@@ -45,6 +45,8 @@ import { useFriendsStore } from "../store/friendsStore";
 import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
 import { ui } from "../content/ui/index.ts";
+import { doodleNameOf } from "../lib/avatarDoodles";
+import { AvatarPicture } from "../components/ui/AvatarPicture";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -608,7 +610,9 @@ function ProfileView({ userId }: { userId: string }) {
             <span className="avatar-frame" aria-hidden="true">
             <span
               className={`profile-avatar avatar avatar-player${
-                !subject.isAnonymous && subject.avatarUrl ? " has-picture" : ""
+                !subject.isAnonymous && subject.avatarUrl && !doodleNameOf(subject.avatarUrl)
+                  ? " has-picture"
+                  : ""
               }`}
               aria-hidden="true"
               style={{
@@ -620,7 +624,7 @@ function ProfileView({ userId }: { userId: string }) {
               }}
             >
               {!subject.isAnonymous && subject.avatarUrl ? (
-                <img src={subject.avatarUrl} alt="" />
+                <AvatarPicture url={subject.avatarUrl} />
               ) : (
                 avatarInitial(shownName)
               )}

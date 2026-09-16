@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -14,6 +16,7 @@ from sqlalchemy import func, select
 
 from app.api.avatars import create_avatar_router
 from app.api.moderation import create_moderation_router
+from app.auth.avatar_doodles import DOODLES
 from app.auth.avatars import (
     AVATAR_REUPLOAD_BLOCKS,
     MAX_AVATAR_BYTES,
@@ -25,7 +28,7 @@ from app.auth.routes import create_auth_router
 from app.db.models import AuditEvent, PlayerReport, UploadedAvatarAsset, User, UserWarning
 from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
-from app.services.avatars import AvatarBlocked, remove_avatar, set_avatar
+from app.services.avatars import AvatarBlocked, choose_doodle, remove_avatar, set_avatar
 from tests.png_fixture import png_bytes
 from tests.webp_fixture import webp_bytes
 
@@ -800,3 +803,152 @@ async def test_a_moderator_is_told_when_the_block_actually_lifts(env):
     # The second starts one, and it is a date.
     second = await report_and_remove(42, "BlockRepB")
     assert second["blockedUntil"] is not None
+
+
+# ---------------------------------------------------------------- doodles (#579)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+async def test_a_registered_player_wears_a_doodle_drawn_from_the_sprite(env):
+    """R-AVA-09: a doodle is a name, and its URL points into the sprite the
+    frontend ships, so nothing is uploaded and nothing is stored but the name."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Doodler")
+    chosen = await http.put("/api/users/me/avatar/doodle", json={"name": "owl"})
+    assert chosen.status_code == 200, chosen.text
+    assert chosen.json() == {
+        "avatarKey": "doodle:owl",
+        "avatarUrl": "/avatars/doodles.svg#owl",
+    }
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] == "/avatars/doodles.svg#owl"
+    new_client.changed.assert_awaited_with(account["id"], "doodle:owl")
+    async with factory() as session:
+        kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
+        assert "avatar.doodle_chosen" in kinds
+        assert (await session.scalars(select(UploadedAvatarAsset))).all() == []
+
+    # A name the picker never offered is refused, and so is a guest.
+    unknown = await http.put("/api/users/me/avatar/doodle", json={"name": "dragon"})
+    assert unknown.status_code == 400
+    assert "No such doodle" in unknown.json()["detail"]
+    guest = new_client()
+    await guest.post("/api/auth/display-name", json={"displayName": "Passing"})
+    refused = await guest.put("/api/users/me/avatar/doodle", json={"name": "fox"})
+    assert refused.status_code == 403
+
+
+async def test_a_new_account_starts_with_a_random_doodle(env):
+    """Claiming an account gives it a doodle it can change later (R-AVA-09);
+    a guest keeps the initial that marks it as one (R-ACCT-05)."""
+    new_client, _ = env
+    http = new_client()
+    guest = (
+        await http.post("/api/auth/display-name", json={"displayName": "Newcomer"})
+    ).json()
+    assert guest["avatarUrl"] is None
+    registered = await register(http, "Newcomer")
+    prefix = "/avatars/doodles.svg#"
+    assert registered["avatarUrl"].startswith(prefix)
+    assert registered["avatarUrl"].removeprefix(prefix) in DOODLES
+
+
+async def test_a_doodle_and_an_upload_replace_each_other(env):
+    """One picture per account, whichever kind: choosing a doodle deletes the
+    uploaded bytes, uploading replaces the doodle, and Remove clears either."""
+    new_client, factory = env
+    http = new_client()
+    await register(http, "Fickle")
+    uploaded = (
+        await http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=4)))
+    ).json()
+    assert (await http.put("/api/users/me/avatar/doodle", json={"name": "fish"})).status_code == 200
+    assert (await http.get(uploaded["avatarUrl"])).status_code == 404
+    async with factory() as session:
+        assert (await session.scalars(select(UploadedAvatarAsset))).all() == []
+
+    again = await http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=4)))
+    assert again.status_code == 200
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] == again.json()["avatarUrl"]
+
+    assert (await http.put("/api/users/me/avatar/doodle", json={"name": "fish"})).status_code == 200
+    assert (await http.delete("/api/users/me/avatar")).status_code == 200
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] is None
+
+
+async def test_a_moderators_block_does_not_keep_a_player_from_a_doodle(env):
+    """The block stops a removed picture coming straight back; one of our own
+    drawings cannot be that picture (R-AVA-09)."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Blocked")
+    await http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=6)))
+    await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
+    await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
+    with pytest.raises(AvatarBlocked):
+        await set_avatar(factory, user_id=account["id"], payload=png_bytes(seed=7))
+    key = await choose_doodle(factory, user_id=account["id"], name="ghost")
+    assert key == "doodle:ghost"
+
+
+async def test_a_doodle_is_not_a_picture_anybody_can_report(env):
+    """A doodle is not player-submitted content: it is refused as a reason
+    exactly as no picture is (R-AVA-06, R-AVA-09)."""
+    new_client, factory = env
+    target_http, reporter_http = new_client(), new_client()
+    target = await register(target_http, "WearsOurs")
+    await register(reporter_http, "Objector")
+    assert (
+        await target_http.put("/api/users/me/avatar/doodle", json={"name": "alien"})
+    ).status_code == 200
+    refused = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "It is a doodle.",
+        },
+    )
+    assert refused.status_code == 422
+    assert "no picture" in refused.json()["detail"]
+    async with factory() as session:
+        assert await session.scalar(select(func.count(PlayerReport.id))) == 0
+
+
+async def test_a_moderators_removal_leaves_a_doodle_where_it_is(env):
+    """A picture reported and then swapped for a doodle: the removal has no
+    upload to take down, so the doodle stays and nothing is claimed removed -
+    though the block still lands, because the report was about an upload."""
+    new_client, factory = env
+    http = new_client()
+    account = await register(http, "Swapped")
+    await choose_doodle(factory, user_id=account["id"], name="kite")
+    removal = await remove_avatar(
+        factory, user_id=account["id"], actor_id=None, by_moderator=True
+    )
+    assert removal.had_one is False
+    async with factory() as session:
+        user = await session.get(User, UUID(account["id"]))
+        assert user.avatar_key == "doodle:kite"
+    # The player's own Remove clears it.
+    await remove_avatar(factory, user_id=account["id"], actor_id=account["id"])
+    async with factory() as session:
+        assert (await session.get(User, UUID(account["id"]))).avatar_key is None
+
+
+def test_the_server_the_client_and_the_sprite_name_the_same_doodles():
+    """A doodle added in one place only is a name the server refuses, a tile
+    the picker cannot draw, or a symbol nobody can pick. All three, in order."""
+    sprite = (REPO_ROOT / "frontend" / "public" / "avatars" / "doodles.svg").read_text(
+        encoding="utf-8"
+    )
+    symbols = tuple(re.findall(r'<symbol id="([a-z]+)"', sprite))
+    client = (REPO_ROOT / "frontend" / "src" / "lib" / "avatarDoodles.ts").read_text(
+        encoding="utf-8"
+    )
+    listed = re.search(r"export const DOODLES = \[(.*?)\] as const", client, re.S)
+    assert listed is not None, "avatarDoodles.ts no longer declares DOODLES"
+    client_names = tuple(re.findall(r'"([a-z]+)"', listed.group(1)))
+    assert symbols == DOODLES
+    assert client_names == DOODLES

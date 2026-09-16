@@ -1,4 +1,4 @@
-"""Uploading, serving and removing a player's picture (#573).
+"""Uploading, serving and removing a player's picture (#573), and wearing a doodle (#579).
 
 Everything that writes an avatar goes through here, so the limits, the
 audit row and the moderator's block are enforced once regardless of which
@@ -15,11 +15,13 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.auth.avatar_doodles import DOODLES, doodle_key
 from app.auth.avatars import (
     avatar_reupload_block,
     AvatarError,
     avatar_key_for,
     inspect_avatar,
+    uploaded_avatar_key,
 )
 from app.db.models import (
     AuditEvent,
@@ -137,6 +139,47 @@ async def set_avatar(
     return key
 
 
+async def choose_doodle(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    user_id: str | UUID,
+    name: str,
+    request_id: str | None = None,
+    ip_hash: str | None = None,
+    now: datetime | None = None,
+) -> str:
+    """Wear one of the deployment's own drawings and return its key (R-AVA-09).
+
+    A doodle is not an upload, so a moderator's block does not apply: the
+    block exists to stop a removed picture coming straight back, and a drawing
+    this deployment made cannot be the picture that was removed. One picture
+    per account still holds - an uploaded one goes, bytes and all.
+    """
+    if name not in DOODLES:
+        raise AvatarError("No such doodle.")
+    at = now or datetime.now(timezone.utc)
+    key = doodle_key(name)
+    db_user_id = UUID(str(user_id))
+    async with session_factory() as session:
+        async with session.begin():
+            user = await _registered(session, db_user_id)
+            await session.execute(
+                delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
+            )
+            user.avatar_key = key
+            user.updated_at = at
+            _audit(
+                session,
+                event_type="avatar.doodle_chosen",
+                actor_id=db_user_id,
+                target_id=db_user_id,
+                details={"key": key},
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
+    return key
+
+
 def _removal_notice(wait: timedelta, until: datetime | None) -> str:
     """What the player is told when a moderator takes their picture down.
 
@@ -221,10 +264,16 @@ async def remove_avatar(
             removed = await session.execute(
                 delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
             )
-            had_one = bool(removed.rowcount) or user.avatar_key is not None
+            had_one = bool(removed.rowcount) or uploaded_avatar_key(user.avatar_key) is not None
             warning_id: UUID | None = None
             blocked_until: datetime | None = None
-            user.avatar_key = None
+            # A moderator takes down an uploaded picture and nothing else. A
+            # player who has swapped the reported picture for one of our
+            # doodles since keeps the doodle: it is not what was reported, and
+            # it is not theirs to have made (R-AVA-09). Their own "Remove"
+            # clears either kind.
+            if not by_moderator or uploaded_avatar_key(user.avatar_key) is not None:
+                user.avatar_key = None
             user.updated_at = at
             wait = None
             if by_moderator:

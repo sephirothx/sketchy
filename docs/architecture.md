@@ -1626,13 +1626,14 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/api/room_presets.py`](../backend/app/api/room_presets.py) | Authenticated CRUD API for private reusable room-setting presets. |
 | [`app/api/serializers.py`](../backend/app/api/serializers.py) | Shared JSON shapes for the REST surface. |
 | [`app/api/user_blocks.py`](../backend/app/api/user_blocks.py) | Persistent block, unblock, and block-list endpoints. |
-| [`app/api/avatars.py`](../backend/app/api/avatars.py) | Uploading and serving player pictures (#573). |
+| [`app/api/avatars.py`](../backend/app/api/avatars.py) | Uploading and serving player pictures (#573), and wearing a doodle (#579). |
 | [`app/api/user_settings.py`](../backend/app/api/user_settings.py) | Registered-account preferences shared across devices. |
 | [`app/auth/__init__.py`](../backend/app/auth/__init__.py) | Opaque session identity, password hashing, and request authentication. |
 | [`app/auth/account_data.py`](../backend/app/auth/account_data.py) | Versioned account exports and history-safe account anonymization. |
 | [`app/auth/admin.py`](../backend/app/auth/admin.py) | Audited command for bootstrapping the first service administrator. |
 | [`app/auth/audit.py`](../backend/app/auth/audit.py) | Privacy-safe request correlation for append-only audit events. |
-| [`app/auth/avatars.py`](../backend/app/auth/avatars.py) | Canonical keys for avatar visuals hosted by the Sketchy deployment. |
+| [`app/auth/avatar_doodles.py`](../backend/app/auth/avatar_doodles.py) | The doodle set a registered player may wear instead of an initial (#579). |
+| [`app/auth/avatars.py`](../backend/app/auth/avatars.py) | What an uploaded avatar may be, and how one is named (#573). |
 | [`app/auth/breached_passwords.py`](../backend/app/auth/breached_passwords.py) | Offline screening for passwords a guesser would reach before a brute force. |
 | [`app/auth/bans.py`](../backend/app/auth/bans.py) | Shared active-ban queries for HTTP, Socket.IO, login, and moderation. |
 | [`app/auth/blocks.py`](../backend/app/auth/blocks.py) | Low-latency lookup cache for directional player blocks. |
@@ -1716,7 +1717,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
 | [`app/services/afk.py`](../backend/app/services/afk.py) | When a person stopped answering, and what the room does about it. |
-| [`app/services/avatars.py`](../backend/app/services/avatars.py) | Uploading, serving and removing a player's picture (#573). |
+| [`app/services/avatars.py`](../backend/app/services/avatars.py) | Uploading, serving and removing a player's picture (#573), and wearing a doodle (#579). |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
 | [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |

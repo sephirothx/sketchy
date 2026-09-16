@@ -1,0 +1,185 @@
+// The doodle set a registered player wears instead of an initial (#579), and
+// the sprite the client draws it from.
+//
+// Source of truth for the drawings. Each is authored on the 24×24 grid the
+// interface icons use (`frontend/src/components/icons.tsx`): one open line at
+// a constant weight, round caps and joins. A dot is a zero-length segment at
+// DOT weight, which is how the icon set already draws one. Everything is
+// `currentColor` with presentation attributes only, because a stylesheet does
+// not follow a symbol through an external `<use>` - that is what lets a disc
+// draw its doodle in its own ink, the colour its initial would have been.
+//
+// `viewBox` is a square centred on the drawing's own extent, so every doodle
+// fills the same fraction of the disc whatever its shape: a wide fish and a
+// tall balloon read at the same size. Node has no bezier bbox maths, so the
+// boxes are measured in a browser and committed here, the way
+// `derive-assets.mjs` keeps the logo's. To re-measure one after a redraw:
+//   <svg viewBox="0 0 24 24" stroke-width="2"><g id="g">…its ink…</g></svg>
+//   const b = document.getElementById('g').getBBox();
+//   // pad by DOT/2 on every side, then square on the longer side, centred.
+//
+// The order is the picker's. The names are the wire's: a key is
+// `doodle:<name>`, and `backend/tests/test_avatars.py` holds this list, the
+// server's (`backend/app/auth/avatar_doodles.py`) and the client's
+// (`frontend/src/lib/avatarDoodles.ts`) together.
+//
+// Run:  node scripts/brand/avatar-doodles.mjs
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const STROKE = 2;
+export const DOT = 2.6;
+
+export const DOODLES = [
+  {
+    name: "fox",
+    viewBox: "2.3 1.9 19.40 19.40",
+    ink: "<path d=\"M4.6 9 6.4 3.2l4.2 3.2M19.4 9l-1.8-5.8-4.2 3.2M4.6 9c0 6.5 3.3 11 7.4 11s7.4-4.5 7.4-11c-2.4 0-4.4-.8-5.2-2H9.8C9 8.2 7 9 4.6 9ZM10.5 14.7h3L12 16.9Z\"/><path d=\"M9.3 12.2h.01M14.7 12.2h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "cat",
+    viewBox: "2.3 2 19.40 19.40",
+    ink: "<path d=\"M6 8.6 5 3.4l4.6 2.8M18 8.6l1-5.2-4.6 2.8M5 12.6a7 7 0 0 1 14 0c0 4.4-3.1 7.4-7 7.4s-7-3-7-7.4ZM12 14.4v1.2M12 15.6c-.6.9-1.7 1-2.4.4M12 15.6c.6.9 1.7 1 2.4.4M3.6 13.4 7 13M3.8 16.2 7 15.4M20.4 13.4 17 13M20.2 16.2 17 15.4\"/><path d=\"M9.4 12h.01M14.6 12h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "owl",
+    viewBox: "1.9 2.1 20.20 20.20",
+    ink: "<path d=\"M4.8 10.6a7.2 7.2 0 0 1 14.4 0v3.2a7.2 7.2 0 0 1-14.4 0ZM9.3 8.3a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6ZM14.7 8.3a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0-4.6ZM12 12.4l-1.2 1.4h2.4L12 12.4ZM5.4 6.4 7.6 4M18.6 6.4 16.4 4M9 20.4l1.4-1.6M15 20.4l-1.4-1.6\"/>",
+  },
+  {
+    name: "frog",
+    viewBox: "1.8 1.9 20.40 20.40",
+    ink: "<path d=\"M3.6 13.8c0-3.9 3.8-6.8 8.4-6.8s8.4 2.9 8.4 6.8c0 3.4-3.1 5.8-8.4 5.8s-8.4-2.4-8.4-5.8ZM8.1 3.2a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4ZM15.9 3.2a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4ZM8.4 15.2c2.3 1.7 4.9 1.7 7.2 0M6.2 19.2 4 21M17.8 19.2 20 21\"/><path d=\"M8.1 6.4h.01M15.9 6.4h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "crab",
+    viewBox: "1.5 4.3 21.00 21.00",
+    ink: "<path d=\"M5.6 15.6c0-3.3 2.9-5.8 6.4-5.8s6.4 2.5 6.4 5.8c0 2.2-2.9 3.6-6.4 3.6s-6.4-1.4-6.4-3.6ZM10.2 16.8c1.1.9 2.5.9 3.6 0M5.8 13.6 4 11.8a2.1 2.1 0 0 1 .1-3.1M2.8 8.2l1.3 1.3 1.5-1.2M18.2 13.6l1.8-1.8a2.1 2.1 0 0 0-.1-3.1M21.2 8.2l-1.3 1.3-1.5-1.2M7 18.6l-1.6 2.2M10 19.4l-.6 2M14 19.4l.6 2M17 18.6l1.6 2.2\"/><path d=\"M9.8 13.8h.01M14.2 13.8h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "penguin",
+    viewBox: "1.4 1.9 21.20 21.20",
+    ink: "<path d=\"M12 3.2c-2.6 0-4.5 2-4.5 4.5 0 1.2.4 1.9.4 2.5 0 .9-2.1 2.1-2.1 5.4 0 3.5 2.7 4.8 6.2 4.8s6.2-1.3 6.2-4.8c0-3.3-2.1-4.5-2.1-5.4 0-.6.4-1.3.4-2.5 0-2.5-1.9-4.5-4.5-4.5ZM10.9 8.7h2.2L12 10.4ZM12 11.8c1.9 0 3.4 1.6 3.4 3.8S13.9 19.2 12 19.2s-3.4-1.4-3.4-3.6 1.5-3.8 3.4-3.8ZM9.8 20.2 7.8 21.8M14.2 20.2l2 1.6\"/><path d=\"M10.5 7.2h.01M13.5 7.2h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "fish",
+    viewBox: "0.5 1.25 22.10 22.10",
+    ink: "<path d=\"M10.6 6.4a5.9 5.9 0 1 0 0 11.8 5.9 5.9 0 0 0 0-11.8ZM16.4 12.3c1.6-1.2 3.2-2 4.9-2.4-.5 3.2-.5 5.6 0 7.2-1.7-.6-3.3-1.6-4.9-3M5.4 13.4c.9.7 1.8.9 2.7.6M10.6 6.4c.4-1.1 1.2-1.9 2.4-2.3M10.6 18.2c.4 1.1 1.2 1.9 2.4 2.3\"/><path d=\"M8 10.4h.01M3.6 7.6h.01M1.8 5.2h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "bear",
+    viewBox: "4.09 5.49 15.81 15.81",
+    ink: "<path d=\"M12 6.8a6.6 6.6 0 1 0 0 13.2 6.6 6.6 0 0 0 0-13.2ZM6.1 10.5A2.5 2.5 0 0 1 9.8 7.3M17.9 10.5A2.5 2.5 0 0 0 14.2 7.3M12 14.6c1.7 0 3.1 1.1 3.1 2.4s-1.4 2.2-3.1 2.2-3.1-.9-3.1-2.2 1.4-2.4 3.1-2.4Z\"/><path d=\"M9.6 12.4h.01M14.4 12.4h.01M12 15.9h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "ladybug",
+    viewBox: "1.5 1.1 21.00 21.00",
+    ink: "<path d=\"M12 7.6a6.6 6.6 0 1 0 0 13.2 6.6 6.6 0 0 0 0-13.2ZM12 7.6v13.2M8.7 6.8a3.7 3.7 0 0 1 6.6 0M10.2 4.4 9.2 2.4M13.8 4.4l1-2\"/><path d=\"M9.2 11.8h.01M14.8 11.8h.01M9.4 16.4h.01M14.6 16.4h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "butterfly",
+    viewBox: "2.39 1.59 19.21 19.21",
+    ink: "<path d=\"M12 8.4C10 5.6 6.8 4.4 4.8 6c-1.9 1.5-1.3 4.6 1.4 6.2M12 8.4c2-2.8 5.2-4 7.2-2.4 1.9 1.5 1.3 4.6-1.4 6.2M6.2 12.2c-1.5 1.7-1 3.9 1 4.7 2 .8 4-.7 4.8-3.5M17.8 12.2c1.5 1.7 1 3.9-1 4.7-2 .8-4-.7-4.8-3.5M12 8.4v8.4M12 8.4l-1.7-2.6M12 8.4l1.7-2.6\"/><path d=\"M10.3 5.4h.01M13.7 5.4h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "turtle",
+    viewBox: "-0.6 1.6 23.60 23.60",
+    ink: "<path d=\"M3.8 17.4c0-4.4 3.3-7.8 7.4-7.8s7.4 3.4 7.4 7.8H3.8ZM8.4 17.4c0-2.6.5-4.7 1.4-6.4M14 17.4c0-2.6-.5-4.7-1.4-6.4M19 7a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4ZM17.4 11.8c-.9 1.2-1.5 2.6-1.8 4.2M3.4 16.6c-1.3-.2-2.2.3-2.7 1.5M6.8 17.4v2.4M15 17.4v2.4\"/><path d=\"M19.8 9h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "alien",
+    viewBox: "1.5 1.5 21.00 21.00",
+    ink: "<path d=\"M12 2.8c4.7 0 8 3.3 8 7.8 0 3.4-1.7 6.4-3.8 8.4-1.4 1.3-2.8 2.2-4.2 2.2s-2.8-.9-4.2-2.2C5.7 17 4 14 4 10.6 4 6.1 7.3 2.8 12 2.8ZM10.8 15.2C8.4 14.6 6.4 13 6 11.2c-.3-1.4.6-2.4 2-2.2 1.9.3 3.2 2.3 2.8 6.2ZM13.2 15.2c2.4-.6 4.4-2.2 4.8-4 .3-1.4-.6-2.4-2-2.2-1.9.3-3.2 2.3-2.8 6.2Z\"/>",
+  },
+  {
+    name: "ghost",
+    viewBox: "2.5 2.5 19.00 19.00",
+    ink: "<path d=\"M4.8 20.2V11a7.2 7.2 0 0 1 14.4 0v9.2l-2.4-2-2.4 2-2.4-2-2.4 2-2.4-2ZM10.6 14.6c.9.8 2 .8 2.9 0\"/><path d=\"M9.6 10.8h.01M14.4 10.8h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "robot",
+    viewBox: "1.8 1.9 20.40 20.40",
+    ink: "<path d=\"M5.6 8.8a2 2 0 0 1 2-2h8.8a2 2 0 0 1 2 2v7.6a2 2 0 0 1-2 2H7.6a2 2 0 0 1-2-2ZM12 6.8V4.4M5.6 11.2H3.8M18.4 11.2h1.8M9.4 15.4h5.2M9 18.4V21M15 18.4V21\"/><path d=\"M12 3.2h.01M9.6 11.2h.01M14.4 11.2h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "rocket",
+    viewBox: "0.6 1.1 22.80 22.80",
+    ink: "<path d=\"M12 2.4c2.7 2.8 4.2 6.2 4.2 9.6 0 2.6-1.2 4.8-4.2 7.2-3-2.4-4.2-4.6-4.2-7.2 0-3.4 1.5-6.8 4.2-9.6ZM12 7.5a2.1 2.1 0 1 0 0 4.2 2.1 2.1 0 0 0 0-4.2ZM7.8 13.2 4.6 17l3.4-.9M16.2 13.2l3.2 3.8-3.4-.9M10.8 20.4 12 22.6l1.2-2.2\"/>",
+  },
+  {
+    name: "kite",
+    viewBox: "1.1 1.3 21.80 21.80",
+    ink: "<path d=\"M12 2.6 18.4 9.4 12 17.8 5.6 9.4ZM12 2.6v15.2M5.6 9.4h12.8M12 17.8c0 2-2.2 2.2-2.2 4M10.8 19.2l-1.6-.6M9.8 21.2l-1.6-.6\"/>",
+  },
+  {
+    name: "boat",
+    viewBox: "2 1.9 20.00 20.00",
+    ink: "<path d=\"M3.6 17.2h16.8l-2.4 3.4H6ZM12 3.2v14M13.2 5.6c2.4 1.8 4 4.3 4.6 6.9h-4.6M10.8 7.6v4.9H6.6Z\"/>",
+  },
+  {
+    name: "balloon",
+    viewBox: "0.9 1.5 22.20 22.20",
+    ink: "<path d=\"M12 2.8c3.4 0 6 2.8 6 6.4 0 3.8-3.4 6.9-6 8.4-2.6-1.5-6-4.6-6-8.4 0-3.6 2.6-6.4 6-6.4ZM10.9 17.6h2.2L12 19.4ZM12 19.4c0 1.7 1.7 1.5 1.7 3M9.4 8.2c0-1.8 1-3.2 2.4-3.6\"/>",
+  },
+  {
+    name: "umbrella",
+    viewBox: "1.5 1.6 21.00 21.00",
+    ink: "<path d=\"M2.8 12.4a9.2 9.2 0 0 1 18.4 0M2.8 12.4c1.5-1.9 3.1-1.9 4.6 0 1.5-1.9 3.1-1.9 4.6 0 1.5-1.9 3.1-1.9 4.6 0 1.5-1.9 3.1-1.9 4.6 0M12 12.4v6.4M12 18.8a2.2 2.2 0 0 1-4.4 0\"/>",
+  },
+  {
+    name: "coffee",
+    viewBox: "2.9 3.8 18.20 18.20",
+    ink: "<path d=\"M5.6 11.4h11v4.2c0 2.4-2 4.4-4.4 4.4H10c-2.4 0-4.4-2-4.4-4.4ZM16.6 12.6c1.8 0 3.2 1.2 3.2 2.8s-1.4 2.8-3.2 2.8M4.2 20.4h13.8M9.2 8.6c1.2-1-1-2 .2-3.2M12 8.6c1.2-1-1-2 .2-3.2M14.8 8.6c1.2-1-1-2 .2-3.2\"/>",
+  },
+  {
+    name: "cactus",
+    viewBox: "2.6 4.9 18.80 18.80",
+    ink: "<path d=\"M9.6 20V8.6a2.4 2.4 0 0 1 4.8 0V20M9.6 14.4H7.4a2.4 2.4 0 0 1-2.4-2.4V9.6M14.4 12.4h2.2A2.4 2.4 0 0 0 19 10V7.4M7.2 20h9.6M8.4 20l.6 2.4h6l.6-2.4\"/>",
+  },
+  {
+    name: "mushroom",
+    viewBox: "2.3 2.28 19.40 19.40",
+    ink: "<path d=\"M3.6 11.6a8.4 7.4 0 0 1 16.8 0ZM10.2 11.6c.5 2 .5 3.6 0 4.9-.5 1.3-.9 2.2-.4 2.8.7.6 3.7.6 4.4 0 .5-.6.1-1.5-.4-2.8-.5-1.3-.5-2.9 0-4.9\"/><path d=\"M8 8h.01M13.6 6.6h.01M16.6 9.2h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "cloud",
+    viewBox: "1.53 1.55 21.43 21.43",
+    ink: "<path d=\"M6.8 18.4h10.8a3.8 3.8 0 0 0 .5-7.6 5.4 5.4 0 0 0-10.4-1.2 4.2 4.2 0 0 0-.9 8.8Z\"/>",
+  },
+  {
+    name: "flower",
+    viewBox: "1.25 1.4 21.50 21.50",
+    ink: "<ellipse cx=\"12\" cy=\"5.4\" rx=\"2\" ry=\"2.7\" transform=\"rotate(0 12 9.8)\"/><ellipse cx=\"12\" cy=\"5.4\" rx=\"2\" ry=\"2.7\" transform=\"rotate(72 12 9.8)\"/><ellipse cx=\"12\" cy=\"5.4\" rx=\"2\" ry=\"2.7\" transform=\"rotate(144 12 9.8)\"/><ellipse cx=\"12\" cy=\"5.4\" rx=\"2\" ry=\"2.7\" transform=\"rotate(216 12 9.8)\"/><ellipse cx=\"12\" cy=\"5.4\" rx=\"2\" ry=\"2.7\" transform=\"rotate(288 12 9.8)\"/><circle cx=\"12\" cy=\"9.8\" r=\"1.8\"/><path d=\"M12 14.6V21.6\"/><path d=\"M12 20.6c-1.8 0-3.1-1.1-3.5-3 1.8 0 3.1 1 3.5 3Z\"/>",
+  },
+  {
+    name: "donut",
+    viewBox: "1.9 1.9 20.20 20.20",
+    ink: "<path d=\"M12 3.2a8.8 8.8 0 1 0 0 17.6 8.8 8.8 0 0 0 0-17.6ZM12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6M8.1 6.7l1.3 1.3M15.9 6.7l-1.3 1.3M6.6 13.6l1.8-.5M16.2 15.4l1.2-1.3\"/><path d=\"M12 6.6h.01M9.8 16.4h.01M17 9.6h.01\" stroke-width=\"2.6\"/>",
+  },
+  {
+    name: "icecream",
+    viewBox: "1.6 2.1 20.80 20.80",
+    ink: "<path d=\"M6.4 10.6a5.6 5.6 0 0 1 11.2 0ZM6.4 10.6h11.2L12 21.6ZM10.2 13.4l3.4 3.8M12 5V3.6\"/><path d=\"M12 3.4h.01\" stroke-width=\"2.6\"/>",
+  },
+];
+
+const here = dirname(fileURLToPath(import.meta.url));
+const out = join(here, "..", "..", "frontend", "public", "avatars", "doodles.svg");
+
+const sprite = [
+  "<!-- Generated by scripts/brand/avatar-doodles.mjs - edit the drawings there. -->",
+  '<svg xmlns="http://www.w3.org/2000/svg">',
+  ...DOODLES.map(
+    ({ name, viewBox, ink }) =>
+      `  <symbol id="${name}" viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="${STROKE}" stroke-linecap="round" stroke-linejoin="round">${ink}</symbol>`,
+  ),
+  "</svg>",
+  "",
+].join("\n");
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, sprite);
+  console.log(`wrote ${DOODLES.length} doodles to frontend/public/avatars/doodles.svg`);
+}

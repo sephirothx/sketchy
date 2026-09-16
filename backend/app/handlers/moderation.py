@@ -17,6 +17,7 @@ from app.handlers.payloads import (
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.avatars import uploaded_avatar_key
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import User
 from app.domain_values import ReportReason, ReportScope
@@ -211,8 +212,12 @@ async def report_player(ctx: HandlerContext, sid, data):
             about_picture = payload.reason == ReportReason.INAPPROPRIATE_AVATAR.value
             reported_avatar_key = None
             if about_picture:
-                reported_avatar_key = await session.scalar(
-                    select(User.avatar_key).where(User.id == UUID(target.user_id))
+                # A doodle is not something the player put up, so it is no
+                # picture to report (R-AVA-09).
+                reported_avatar_key = uploaded_avatar_key(
+                    await session.scalar(
+                        select(User.avatar_key).where(User.id == UUID(target.user_id))
+                    )
                 )
                 if reported_avatar_key is None:
                     return {

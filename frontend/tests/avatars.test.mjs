@@ -62,3 +62,19 @@ test("the client's limits are the server's", () => {
   assert.equal(AVATAR_SIZE, 256);
   assert.equal(MAX_AVATAR_BYTES, 128 * 1024);
 });
+
+test("a doodle URL names a doodle, and nothing else does (#579)", async () => {
+  const { DOODLES, doodleNameOf, isUploadedPicture } = await import("../src/lib/avatarDoodles.ts");
+  assert.equal(doodleNameOf("/avatars/doodles.svg#fox"), "fox");
+  assert.equal(doodleNameOf(`/avatars/doodles.svg#${DOODLES.at(-1)}`), DOODLES.at(-1));
+  // A fragment the set does not have is not a doodle, and neither is an
+  // uploaded picture's content address or no picture at all.
+  assert.equal(doodleNameOf("/avatars/doodles.svg#dragon"), null);
+  assert.equal(doodleNameOf("/api/avatars/" + "a".repeat(64) + ".webp"), null);
+  assert.equal(doodleNameOf(null), null);
+
+  // Only an upload is something to report (R-AVA-09): a doodle is ours.
+  assert.equal(isUploadedPicture("/api/avatars/" + "a".repeat(64) + ".png"), true);
+  assert.equal(isUploadedPicture("/avatars/doodles.svg#owl"), false);
+  assert.equal(isUploadedPicture(null), false);
+});

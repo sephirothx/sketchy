@@ -376,8 +376,10 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await register_account(page, "Portrait")
             await page.click("button.header-settings-button")
             await dialog.wait_for(state="visible")
-            # No picture yet: the pencil on the disc goes straight to the picker.
+            # A new account wears a doodle (#579); the pencil opens the menu,
+            # and uploading replaces the doodle.
             assert await dialog.get_by_role("button", name="Edit picture").count() == 1
+            await dialog.locator(".settings-you .avatar svg.avatar-doodle").wait_for(state="visible")
             await dialog.get_by_label("Choose a picture").set_input_files(str(source))
             # The file opens the crop dialog first; nothing is sent until it is used.
             crop = page.get_by_role("dialog", name="Frame your picture")
@@ -398,7 +400,8 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await dialog.locator(".settings-you .avatar img").wait_for(state="visible")
             await dialog.get_by_role("button", name="Edit picture").click()
             menu = dialog.get_by_role("menu", name="Picture")
-            assert await menu.get_by_role("menuitem", name="Change picture").count() == 1
+            assert await menu.get_by_role("menuitem", name="Pick a doodle").count() == 1
+            assert await menu.get_by_role("menuitem", name="Upload a picture").count() == 1
             assert await menu.get_by_role("menuitem", name="Remove picture").count() == 1
             await page.keyboard.press("Escape")
             await menu.wait_for(state="hidden")
@@ -438,6 +441,78 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await dialog.locator(".settings-you .avatar img").wait_for(state="hidden")
             await dialog.get_by_role("button", name="Close settings").click()
             await page.locator(".player-list .avatar img").first.wait_for(state="hidden")
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
+    """#579: claiming an account gives it one of our doodles, drawn through the
+    sprite in the disc's ink; Settings picks another, which the chip and the
+    seat wear at once, and Remove takes it back to the initial."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "Doodler")
+            # A guest keeps the initial (R-ACCT-05).
+            assert await page.locator(".identity-avatar svg.avatar-doodle").count() == 0
+            await register_account(page, "Doodler")
+            chip_doodle = page.locator(".identity-avatar svg.avatar-doodle use")
+            await chip_doodle.wait_for(state="attached")
+            assert (await chip_doodle.get_attribute("href")).startswith("/avatars/doodles.svg#")
+
+            await page.click("button.header-settings-button")
+            dialog = page.locator(".settings-modal-card")
+            await dialog.wait_for(state="visible")
+            await dialog.get_by_role("button", name="Edit picture").click()
+            await dialog.get_by_role("menuitem", name="Pick a doodle").click()
+            picker = page.get_by_role("dialog", name="Pick a doodle")
+            await picker.wait_for(state="visible")
+            # The one worn now is marked, and focus starts on it.
+            worn = picker.locator('.doodle-picker-tile[aria-pressed="true"]')
+            assert await worn.count() == 1
+            assert await page.evaluate(
+                "document.activeElement?.getAttribute('aria-pressed')"
+            ) == "true"
+            async with page.expect_response(
+                lambda response: response.url.endswith("/api/users/me/avatar/doodle")
+                and response.request.method == "PUT"
+            ) as chosen:
+                await picker.get_by_role("button", name="Butterfly", exact=True).click()
+            response = await chosen.value
+            assert response.status == 200, await response.text()
+            assert (await response.json())["avatarKey"] == "doodle:butterfly"
+            await picker.wait_for(state="hidden")
+
+            await dialog.locator(
+                '.settings-you .avatar svg.avatar-doodle[data-doodle="butterfly"]'
+            ).wait_for(state="visible")
+            await dialog.get_by_role("button", name="Close settings").click()
+            await dialog.wait_for(state="hidden")
+            await page.locator(
+                '.identity-avatar svg.avatar-doodle[data-doodle="butterfly"]'
+            ).wait_for(state="visible")
+
+            # The seat wears it too, drawn the same way.
+            await page.click('button:has-text("Create room")')
+            await page.click('button:has-text("Create room")')
+            await page.locator(
+                '.player-list .avatar svg.avatar-doodle[data-doodle="butterfly"]'
+            ).first.wait_for(state="visible")
+
+            # Remove takes it back to the initial, and says what it removes.
+            await page.click("button.header-settings-button")
+            await dialog.wait_for(state="visible")
+            await dialog.get_by_role("button", name="Edit picture").click()
+            await dialog.get_by_role("menuitem", name="Remove doodle").click()
+            await dialog.locator(".settings-you .avatar svg.avatar-doodle").wait_for(state="hidden")
+            await dialog.get_by_role("button", name="Close settings").click()
+            await page.locator(".player-list .avatar svg.avatar-doodle").first.wait_for(
+                state="hidden"
+            )
         finally:
             await context.close()
             await browser.close()

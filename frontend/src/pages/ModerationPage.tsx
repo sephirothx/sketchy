@@ -48,6 +48,8 @@ import { canModerate } from "../lib/operatorAccess";
 import type { GalleryEntry } from "../lib/gallery";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
+import { doodleNameOf } from "../lib/avatarDoodles";
+import { AvatarPicture } from "../components/ui/AvatarPicture";
 
 type Filter = "open" | "players" | "content" | "held" | "gallery" | "bans" | "closed";
 type CaseKind = "incident" | "content" | "held" | "gallery" | "ban";
@@ -1061,11 +1063,20 @@ export function ModerationPage() {
                           <span>Picture</span>
                           {/* Shown at the size a player list shows it, and
                               at full size on hover: the case may be about it. */}
-                          <img
-                            className="mod-context-avatar"
-                            src={playerCase.reportedPlayer.avatarUrl}
-                            alt={`${playerCase.reportedPlayer.displayName}'s picture`}
-                          />
+                          <span
+                            className={`mod-context-avatar${
+                              doodleNameOf(playerCase.reportedPlayer.avatarUrl) ? " is-doodle" : ""
+                            }`}
+                          >
+                            <AvatarPicture
+                              url={playerCase.reportedPlayer.avatarUrl}
+                              label={
+                                doodleNameOf(playerCase.reportedPlayer.avatarUrl)
+                                  ? `${playerCase.reportedPlayer.displayName}'s doodle (ours, not reportable)`
+                                  : `${playerCase.reportedPlayer.displayName}'s picture`
+                              }
+                            />
+                          </span>
                         </div>
                       )}
                       <div className="mod-context-row">

@@ -1,7 +1,8 @@
-"""Uploading and serving player pictures (#573).
+"""Uploading and serving player pictures (#573), and wearing a doodle (#579).
 
-Three routes: the owner sets or removes their own picture, and anybody may
-fetch a picture by its content address. The address is the SHA-256 of the
+Four routes: the owner uploads a picture, picks a doodle, or removes either,
+and anybody may fetch an uploaded picture by its content address. A doodle is
+never fetched from here - its URL points into the sprite the frontend ships. The address is the SHA-256 of the
 bytes, so a fetched picture can be cached for ever - a changed picture is a
 different URL - and served with sniffing disabled, as an image and nothing
 else.
@@ -27,7 +28,13 @@ from app.auth.avatars import (
 )
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.repositories.interfaces import UserRepository
-from app.services.avatars import AvatarBlocked, read_avatar, remove_avatar, set_avatar
+from app.services.avatars import (
+    AvatarBlocked,
+    choose_doodle,
+    read_avatar,
+    remove_avatar,
+    set_avatar,
+)
 
 # Base64 of the largest picture accepted, plus a little slack for padding.
 MAX_AVATAR_BASE64 = ((MAX_AVATAR_BYTES + 2) // 3) * 4 + 8
@@ -38,6 +45,12 @@ class AvatarUploadBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     image: str = Field(min_length=1, max_length=MAX_AVATAR_BASE64)
+
+
+class DoodleBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=32)
 
 
 def create_avatar_router(
@@ -108,6 +121,26 @@ def create_avatar_router(
             raise Refusal(403, ErrorCode.PICTURE_REFUSED, str(error)) from error
         except AvatarError as error:
             raise Refusal(400, ErrorCode.UNSUPPORTED_PICTURE_TYPE, str(error)) from error
+        await announce(user.id, key)
+        return {"avatarKey": key, "avatarUrl": avatar_url(key)}
+
+    @router.put("/api/users/me/avatar/doodle")
+    async def pick_doodle(body: DoodleBody, request: Request):
+        # No rate limit of its own: a doodle is one column on the account row,
+        # nothing is stored, and there is nothing in it to churn (R-AVA-09).
+        user = await require_registered(request)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        try:
+            key = await choose_doodle(
+                session_factory,
+                user_id=user.id,
+                name=body.name,
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
+        except AvatarError as error:
+            # Only a modified client names a doodle the picker never offered.
+            raise Refusal(400, ErrorCode.INVALID_PAYLOAD, str(error)) from error
         await announce(user.id, key)
         return {"avatarKey": key, "avatarUrl": avatar_url(key)}
 
