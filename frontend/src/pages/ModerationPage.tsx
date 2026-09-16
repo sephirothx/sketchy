@@ -1795,7 +1795,11 @@ export function ModerationPage() {
                       type="button"
                       className="mod-queue-item"
                       onClick={() => {
-                        if (filter !== "closed") changeFilter("closed");
+                        // Always, even from Closed: these are the newest
+                        // decisions, so they are on its first page, and a
+                        // moderator reading an older page would otherwise
+                        // stay there with the click matching nothing.
+                        changeFilter("closed");
                         setSelected({ kind: entry.kind, id: entry.id });
                       }}
                     >
