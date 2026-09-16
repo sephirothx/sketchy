@@ -1,4 +1,4 @@
-"""The lobby's **This week** shelf (#524, R-GAL-07): Top-week's first six, computed at most once a minute."""
+"""The **This week** shelf (#524, R-GAL-07): Top-week's first six, computed at most once a minute."""
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +25,7 @@ SHELF_TTL_SECONDS = 60.0
 
 @dataclass(frozen=True)
 class ShelfSnapshot:
-    """What the lobby shows, and a version that names exactly this list:
+    """What the shelf shows, and a version that names exactly this list:
     the turn ids and their counts, so a validator changes when they do."""
 
     entries: tuple[GalleryEntry, ...]
@@ -41,7 +41,7 @@ def _version_of(entries: tuple[GalleryEntry, ...]) -> str:
 
 
 async def read_shelf_review(session_factory: async_sessionmaker[AsyncSession]) -> bool:
-    """Whether the lobby's shelf waits for a moderator's release."""
+    """Whether This week waits for a moderator's release."""
     return await config_store.read_one(session_factory, SHELF_REVIEW_KEY) == "1"
 
 
@@ -67,7 +67,7 @@ def shelf_reader(
 
 class GalleryShelfCache:
     """One process-wide snapshot of the shelf, recomputed at most once a
-    minute and shared by every lobby that opens (R-GAL-07, #462).
+    minute and shared by every reader that opens it (R-GAL-07, #462).
 
     The viewer's own facts - their pick, whether a drawing is theirs - are
     deliberately not here: the snapshot is the same for everyone, and the

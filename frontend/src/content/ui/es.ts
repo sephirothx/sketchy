@@ -1277,8 +1277,6 @@ export const ES: Catalogue = {
     showMore: "Ver más",
     openDrawing: (p: { prompt: string; drawer: string }) => `Abrir «${p.prompt}» de ${p.drawer}`,
     byDrawer: (p: { drawer: string }) => `de ${p.drawer}`,
-    seeTheGallery: "Ver la galería",
-    nothingThisWeek: "Todavía no hay dibujos públicos esta semana. Juega una partida pública y vuelve.",
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `hace ${counted(p.count, { one: { minute: "minuto", hour: "hora", day: "día" }[p.unit], other: { minute: "minutos", hour: "horas", day: "días" }[p.unit] })}`,
     justNow: "ahora mismo",
     byDrawerPrefix: "de",

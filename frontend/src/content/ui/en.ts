@@ -1288,8 +1288,6 @@ export const EN = {
     showMore: "Show more",
     openDrawing: (p: { prompt: string; drawer: string }) => `Open “${p.prompt}” by ${p.drawer}`,
     byDrawer: (p: { drawer: string }) => `by ${p.drawer}`,
-    seeTheGallery: "See the gallery",
-    nothingThisWeek: "No public drawings this week yet. Play a public game and come back.",
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: p.unit, other: `${p.unit}s` })} ago`,
     justNow: "just now",
     byDrawerPrefix: "by",

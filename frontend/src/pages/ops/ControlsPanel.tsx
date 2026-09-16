@@ -280,10 +280,10 @@ export function ControlsPanel() {
         </div>
       </section>
 
-      <section className="ops-card" aria-label="Gallery shelf">
+      <section className="ops-card" aria-label="Gallery · This week">
         <div className="ops-card-head">
           <div>
-            <h2>Gallery shelf</h2>
+            <h2>Gallery · This week</h2>
             <p className="ops-card-note">
               The gallery publishes after the fact. Holding the shelf means the
               six drawings on the lobby&rsquo;s front page are released by a
@@ -310,12 +310,12 @@ export function ControlsPanel() {
               run(
                 () => setGalleryShelfReview(!shelfReview, shelfReason),
                 shelfReview
-                  ? "The lobby shelf shows the week's top drawings again."
-                  : "The lobby shelf now waits for a moderator's release.",
+                  ? "This week shows the week's top drawings again."
+                  : "This week now waits for a moderator's release.",
               )
             }
           >
-            {shelfReview ? "Stop holding the shelf" : "Hold the lobby shelf"}
+            {shelfReview ? "Stop holding This week" : "Hold This week"}
           </button>
         </div>
       </section>
