@@ -1,27 +1,71 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { SCRATCH_PAD_COLORS, padPoint } from "../src/lib/scratchPad.ts";
-import { PALETTE_COLORS } from "../src/lib/drawingRules.ts";
+import { ScratchSheet } from "../src/lib/scratchPad.ts";
+import {
+  encodeFill,
+  encodePathEnd,
+  encodePathPoints,
+  encodePathStart,
+  encodeShape,
+} from "../src/lib/liveDrawing.ts";
 
-// Squashed on purpose: a different scale on each axis, so neither can stand in for the other.
-const rect = { left: 100, top: 50, width: 200, height: 300 };
+function stroke(sheet, from, to) {
+  assert.ok(sheet.apply(encodePathStart({ ...from, color: "#000000", width: 6 })));
+  assert.ok(sheet.apply(encodePathPoints({ points: [to], previous: from })));
+  assert.ok(sheet.apply(encodePathEnd()));
+}
 
-test("a pointer maps onto the pad's full 800 x 600 sheet however small it is drawn", () => {
-  assert.deepEqual(padPoint(100, 50, rect), { x: 0, y: 0 });
-  assert.deepEqual(padPoint(200, 200, rect), { x: 400, y: 300 });
-  assert.deepEqual(padPoint(150, 125, rect), { x: 200, y: 150 });
+test("every tool the game has lands on the sheet as the game's own actions", () => {
+  const sheet = new ScratchSheet();
+  stroke(sheet, { x: 0.1, y: 0.1 }, { x: 0.5, y: 0.5 });
+  assert.ok(sheet.apply(encodeShape({
+    shape: "ellipse",
+    from: { x: 0.2, y: 0.2 },
+    to: { x: 0.4, y: 0.4 },
+    color: "#ed1c24",
+    width: 4,
+  })));
+  assert.ok(sheet.apply(encodeFill({ x: 0.9, y: 0.9, color: "#1234de" })));
+  assert.deepEqual(sheet.actions.map((action) => action.kind), ["path", "shape", "fill"]);
+  assert.equal(sheet.actions[0].points.length, 2);
 });
 
-test("a captured pointer past the edge draws along it, not off it", () => {
-  assert.deepEqual(padPoint(20, 10, rect), { x: 0, y: 0 });
-  assert.deepEqual(padPoint(900, 900, rect), { x: 799, y: 599 });
+test("undo takes back the last action, and a clear is an action it can take back", () => {
+  const sheet = new ScratchSheet();
+  stroke(sheet, { x: 0.1, y: 0.1 }, { x: 0.5, y: 0.5 });
+  stroke(sheet, { x: 0.6, y: 0.1 }, { x: 0.9, y: 0.5 });
+  assert.ok(sheet.undo());
+  assert.equal(sheet.actions.length, 1);
+
+  assert.ok(sheet.clear());
+  assert.equal(sheet.actions.at(-1).kind, "clear");
+  assert.equal(sheet.clear(), false, "a sheet that is already clear is not cleared again");
+  assert.ok(sheet.undo());
+  assert.deepEqual(sheet.actions.map((action) => action.kind), ["path"]);
+
+  assert.ok(sheet.undo());
+  assert.equal(sheet.undo(), false, "nothing left to take back");
 });
 
-test("a pad with no size yet maps everything to the corner rather than to NaN", () => {
-  assert.deepEqual(padPoint(10, 10, { left: 0, top: 0, width: 0, height: 0 }), { x: 0, y: 0 });
+test("points with no path open are refused rather than joined to the last stroke", () => {
+  const sheet = new ScratchSheet();
+  assert.equal(sheet.apply(encodePathEnd()), false);
+  assert.deepEqual(sheet.actions, []);
 });
 
-test("the pad's colors are the game's own swatches", () => {
-  for (const color of SCRATCH_PAD_COLORS) assert.ok(PALETTE_COLORS.includes(color), color);
+test("a change is announced to every other pad on the sheet, not back to its own", () => {
+  const sheet = new ScratchSheet();
+  const seen = [];
+  const drawnOn = () => seen.push("drawnOn");
+  const other = (actions) => seen.push(`other:${actions.length}`);
+  const unsubscribe = sheet.subscribe(drawnOn);
+  sheet.subscribe(other);
+  stroke(sheet, { x: 0.1, y: 0.1 }, { x: 0.5, y: 0.5 });
+  sheet.changed(drawnOn);
+  assert.deepEqual(seen, ["other:1"]);
+
+  unsubscribe();
+  sheet.changed(other);
+  assert.deepEqual(seen, ["other:1"]);
 });

@@ -16,8 +16,12 @@ INKED_PIXELS = """(canvas) => {
 }"""
 
 
+CLEAR = ".clear-button, .toolbar-mobile-clear"
+UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo last stroke']"
+
+
 async def scribble(page: Page, pad_selector: str) -> None:
-    canvas = page.locator(f"{pad_selector} .scratch-pad-canvas")
+    canvas = page.locator(f"{pad_selector} .drawing-canvas")
     box = await canvas.bounding_box()
     assert box is not None
     await page.mouse.move(box["x"] + box["width"] * 0.2, box["y"] + box["height"] * 0.3)
@@ -27,7 +31,7 @@ async def scribble(page: Page, pad_selector: str) -> None:
 
 
 async def inked(page: Page, pad_selector: str) -> int:
-    return await page.locator(f"{pad_selector} .scratch-pad-canvas").evaluate(INKED_PIXELS)
+    return await page.locator(f"{pad_selector} .drawing-canvas").evaluate(INKED_PIXELS)
 
 
 async def test_the_lobby_offers_the_pad_while_offline_and_keeps_it_when_the_connection_returns():
@@ -55,8 +59,11 @@ async def test_the_lobby_offers_the_pad_while_offline_and_keeps_it_when_the_conn
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
             assert await inked(page, pad) == drawn
 
-            await page.click(f'{pad} [data-testid="scratch-pad-clear"]')
+            # The game's own toolbar: a clear, then an undo that takes it back.
+            await page.locator(pad).locator(CLEAR).click()
             assert await inked(page, pad) == 0
+            await page.locator(pad).locator(UNDO).click()
+            assert await inked(page, pad) == drawn
             await page.click('.scratch-pad-dialog button:has-text("Close")')
             await page.wait_for_selector(".scratch-pad-dialog", state="detached")
         finally:

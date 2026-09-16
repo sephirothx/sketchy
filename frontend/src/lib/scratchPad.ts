@@ -1,42 +1,73 @@
 /**
- * The scratch pad (#829): a canvas that is only ever the player's own.
+ * The scratch pad's drawing (#829, #591): the game's own canvas history, with
+ * nobody on the other end of it.
  *
- * Nothing drawn on it leaves the tab - no socket, no storage, no history - so
- * it can be offered exactly where the game cannot be played: while the
- * connection is down. That is also why it is not the game canvas. R-UX-08
- * holds that a room must never look live while it is not, and a pad that
- * looked like the stage would be the screen lying about what it is.
+ * The pad draws with the game's canvas and toolbar - every tool, the palette,
+ * undo and clear - so it takes the same frames the game sends a server, and
+ * keeps them in the same `ClientCanvasHistory` a viewer mirrors. What it never
+ * does is send them: there is no socket, no storage and no other player, which
+ * is what lets it be offered where the game cannot be played, while the
+ * connection is down. Nothing leaves the tab, so there is nothing to moderate.
+ *
+ * One sheet per tab. A connection that drops twice finds the first drawing
+ * still there, and a reload - the tab starting over - does not. Two pads can be
+ * on screen at once, the waiting room's under the paused card's, so a change
+ * made on one is announced to the others: a pad left showing an older drawing
+ * would put it back the next time it was drawn on.
  */
 
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
-import type { Point } from "./canvasGeometry.ts";
+import { ClientCanvasHistory, type DecodedCanvasAction } from "./canvasHistory.ts";
+import { decodeLiveDrawing, encodeClear, type DrawingFrame } from "./liveDrawing.ts";
 
-/** Black and three of the palette's primaries: enough to draw with, too few to fuss over. */
-export const SCRATCH_PAD_COLORS: readonly string[] = ["#000000", "#ed1c24", "#1234de", "#22b14c"];
+type SheetListener = (actions: DecodedCanvasAction[]) => void;
 
-/** In canvas pixels, the same 800 × 600 sheet the game draws on. */
-export const SCRATCH_PAD_BRUSH_WIDTH = 8;
+export class ScratchSheet {
+  private readonly history = new ClientCanvasHistory();
+  private readonly listeners = new Set<SheetListener>();
 
-export interface PadRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
+  constructor() {
+    // A history only takes actions once it has a generation; the pad's is
+    // the first and only one, since nothing ever replaces it from outside.
+    this.history.reset([0, 1, 0, 0]);
+  }
+
+  get actions(): DecodedCanvasAction[] {
+    return this.history.actions;
+  }
+
+  /** A frame the canvas would have sent. False when it does not apply - no
+  path open, undecodable, or a clear of a sheet that is already clear. */
+  apply(frame: DrawingFrame): boolean {
+    const packet = decodeLiveDrawing(frame, this.history.openPathLastPoint());
+    if (!packet || packet.event === "draw_move_relative") return false;
+    return this.history.apply(packet);
+  }
+
+  clear(): boolean {
+    return this.apply(encodeClear());
+  }
+
+  /** Takes back the last action, a clear included, as the game's undo does. */
+  undo(): boolean {
+    // The sequence only has to be newer than the last one confirmed, and on a
+    // sheet nobody confirms anything that stays 0.
+    return this.history.prepareUndo(1) !== null;
+  }
+
+  subscribe(listener: SheetListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /** Tell every other pad on screen to redraw from the sheet. */
+  changed(source: SheetListener): void {
+    for (const listener of this.listeners) {
+      if (listener !== source) listener(this.history.actions);
+    }
+  }
 }
 
-/**
- * Where a pointer at (`clientX`, `clientY`) lands on the pad's sheet.
- *
- * The canvas keeps its 800 × 600 backing store however small it is drawn, so
- * a saved pad is the same size as a saved drawing. Clamped to the sheet: a
- * pointer captured past the edge keeps drawing along it rather than off it.
- */
-export function padPoint(clientX: number, clientY: number, rect: PadRect): Point {
-  if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
-  const x = ((clientX - rect.left) / rect.width) * CANVAS_WIDTH;
-  const y = ((clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
-  return {
-    x: Math.min(CANVAS_WIDTH - 1, Math.max(0, x)),
-    y: Math.min(CANVAS_HEIGHT - 1, Math.max(0, y)),
-  };
-}
+/** This tab's sheet. */
+export const scratchSheet = new ScratchSheet();

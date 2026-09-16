@@ -33,6 +33,8 @@ interface DrawingSettings {
   brushWidth: number;
   tool: DrawTool;
   brushCursor: string;
+  /** No turn's point budget applies: the scratch pad, which no server replays. */
+  unbudgeted?: boolean;
 }
 
 interface CanvasPointerInput {
@@ -58,12 +60,13 @@ export function useCanvasPointerInput(
     brushWidth,
     tool,
     brushCursor,
+    unbudgeted = false,
   } = settings;
   // Painting locally past the point budget would put pixels on screen that
   // the server never accepted, and they would vanish at the next replay. Read
   // straight from the store: the handlers below are rebuilt every render, so
   // they always close over the current answer.
-  const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+  const strokeAvailable = useCanvasBudgetStore((state) => unbudgeted || state.strokeAvailable);
   // Server-decided, so a deployment can tune the trade between bandwidth and
   // how smooth a stroke looks to everyone who is not drawing it.
   const { flushIntervalMs } = useClientConfig();
@@ -393,17 +396,14 @@ export function useCanvasPointerInput(
     inputActiveRef.current = false;
   }, [protocol]);
 
-  useEffect(() => {
-    registerCanvasCommandHandlers({
-      clear: () => {
-        if (!inputActiveRef.current) protocol.requestClear();
-      },
-      undo: () => {
-        if (!inputActiveRef.current) protocol.requestUndo();
-      },
-    });
-    return () => registerCanvasCommandHandlers(null);
-  }, [protocol]);
+  useEffect(() => registerCanvasCommandHandlers({
+    clear: () => {
+      if (!inputActiveRef.current) protocol.requestClear();
+    },
+    undo: () => {
+      if (!inputActiveRef.current) protocol.requestUndo();
+    },
+  }), [protocol]);
 
   useEffect(() => {
     if (isDrawer) return;

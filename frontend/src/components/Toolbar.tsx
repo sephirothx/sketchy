@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
@@ -88,6 +88,12 @@ interface ToolbarProps {
   onBrushWidthChange: (width: number) => void;
   tool: DrawTool;
   onToolChange: (tool: DrawTool) => void;
+  /**
+   * For the scratch pad (#829): every tool and colour whatever room this is,
+   * no turn's budget, and drawn where it is mounted rather than in the phone
+   * room's dock - which is under the card the pad sits on.
+   */
+  scratchPad?: boolean;
 }
 
 export function Toolbar({
@@ -97,16 +103,19 @@ export function Toolbar({
   onBrushWidthChange,
   tool,
   onToolChange,
+  scratchPad = false,
 }: ToolbarProps) {
   recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
-  const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
-  const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
+  const fillAvailable = useCanvasBudgetStore((state) => scratchPad || state.fillAvailable);
+  const strokeAvailable = useCanvasBudgetStore((state) => scratchPad || state.strokeAvailable);
   // The room's drawing rules. The server refuses a tool or color the host took
   // away, so everything below only spares the drawer from meeting that refusal
   // as a stroke that disappears.
-  const allowedTools = useGameStore((state) => state.allowedTools) ?? DEFAULT_ALLOWED_TOOLS;
-  const colorMode = useGameStore((state) => state.colorMode) ?? DEFAULT_COLOR_MODE;
+  const roomTools = useGameStore((state) => state.allowedTools);
+  const roomColorMode = useGameStore((state) => state.colorMode);
+  const allowedTools = (scratchPad ? null : roomTools) ?? DEFAULT_ALLOWED_TOOLS;
+  const colorMode = (scratchPad ? null : roomColorMode) ?? DEFAULT_COLOR_MODE;
   const tools = useMemo(
     () => TOOLS.filter((entry) => isToolAllowed(entry.value, allowedTools)),
     [allowedTools],
@@ -163,10 +172,13 @@ export function Toolbar({
   }
 
   const labelPrefix = tool === "eraser" ? ui.toolbar.eraser : ui.toolbar.brush;
-  const sizePickerId = "brush-size-popover";
-  const mobileToolPanelId = "toolbar-mobile-tool-panel";
-  const mobileColorPanelId = "toolbar-mobile-color-panel";
-  const mobileSizePanelId = "toolbar-mobile-size-panel";
+  // Two toolbars can be mounted at once (the game's and the pad's), so the
+  // popovers' ids are this one's own.
+  const idBase = useId();
+  const sizePickerId = `brush-size-popover${idBase}`;
+  const mobileToolPanelId = `toolbar-mobile-tool-panel${idBase}`;
+  const mobileColorPanelId = `toolbar-mobile-color-panel${idBase}`;
+  const mobileSizePanelId = `toolbar-mobile-size-panel${idBase}`;
   const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
   const defaultIdx = tool === "eraser" ? 6 : 2;
   const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
@@ -211,6 +223,11 @@ export function Toolbar({
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      // A toolbar under a card that has taken the stage - the paused game's,
+      // with the scratch pad's own toolbar on it - is not the one being used,
+      // and answering too would undo twice.
+      const root = cardRef.current ?? mobileToolbarRef.current;
+      if (root?.closest("[inert]")) return;
 
       const kb = useSettingsStore.getState().keyBindings;
       const key = e.key.toLowerCase();
@@ -301,7 +318,7 @@ export function Toolbar({
   );
 
   if (compact) {
-    const dock = isMobile && typeof document !== "undefined"
+    const dock = isMobile && !scratchPad && typeof document !== "undefined"
       ? document.getElementById("room-shell-dock")
       : null;
     // Collapsed controls, as before: one chip opens the tools, one the

@@ -1931,7 +1931,6 @@ export const EN = {
     drawWhileYouWait: "Draw while you wait",
     canvasLabel: "Scratch pad. Only you can see what you draw here.",
     onlyYou: "Only you can see this. Nothing is sent.",
-    clear: "Clear",
     save: "Save",
     close: "Close",
   },

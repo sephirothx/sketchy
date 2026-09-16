@@ -3,6 +3,7 @@ export type RenderRegion =
   | "roomShell"
   | "gameplay"
   | "canvas"
+  | "scratchPad"
   | "toolbar"
   | "chat"
   | "players";

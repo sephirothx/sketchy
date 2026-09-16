@@ -1,142 +1,64 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { PointerEvent as ReactPointerEvent } from "react";
 
-import { DownloadIcon, TrashIcon } from "./icons";
+import { ScratchPadCanvas, type CanvasRef } from "./Canvas";
+import { DownloadIcon } from "./icons";
+import { Toolbar } from "./Toolbar";
 import { ModalShell } from "./ui/ModalShell";
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../lib/canvasHistory";
-import type { Point } from "../lib/canvasGeometry";
-import { saveCanvasImage } from "../lib/canvasDownload";
-import { hexToRgba } from "../lib/canvasPixels";
-import { fillWhite, rasterizePolyline } from "../lib/canvasRenderer";
-import { SCRATCH_PAD_BRUSH_WIDTH, SCRATCH_PAD_COLORS, padPoint } from "../lib/scratchPad";
+import type { DrawTool } from "../types";
 import { ui } from "../content/ui/index.ts";
 
 /**
- * What this tab has drawn on the pad so far. One sheet per tab, whichever card
- * the pad is shown on: a connection that drops twice finds the first drawing
- * still there, and a reload - which is the tab starting over - does not.
+ * The scratch pad (#829, #591): the game's canvas and toolbar, with nothing
+ * sent. Game-sized wherever it is shown, because it is for drawing on.
+ *
+ * The tools start where a turn starts them - black brush, 6px, a 24px eraser -
+ * and are this pad's own, so what somebody picks up here is not what they hold
+ * when their turn comes.
  */
-let sheet: HTMLCanvasElement | null = null;
-
-function keepSheet(canvas: HTMLCanvasElement): void {
-  if (!sheet) {
-    sheet = document.createElement("canvas");
-    sheet.width = CANVAS_WIDTH;
-    sheet.height = CANVAS_HEIGHT;
-  }
-  sheet.getContext("2d")?.drawImage(canvas, 0, 0);
-}
-
-/** The scratch pad (#829): a brush, four colors, Clear and Save, and nothing sent. */
 export function ScratchPad() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const contextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const strokeRef = useRef<{ pointerId: number; last: Point } | null>(null);
-  const [color, setColor] = useState(SCRATCH_PAD_COLORS[0]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d", { willReadFrequently: true });
-    if (!canvas || !context) return;
-    fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
-    if (sheet) context.drawImage(sheet, 0, 0);
-    contextRef.current = context;
-    // The card the pad sits on can go at any moment - the connection is back -
-    // and a stroke in progress then never sees its pointerup.
-    return () => keepSheet(canvas);
-  }, []);
-
-  function paint(points: Point[]): void {
-    const context = contextRef.current;
-    if (context) rasterizePolyline(context, points, SCRATCH_PAD_BRUSH_WIDTH / 2, hexToRgba(color));
-  }
-
-  function onPointerDown(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (strokeRef.current) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    const point = padPoint(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
-    strokeRef.current = { pointerId: event.pointerId, last: point };
-    paint([point, point]);
-  }
-
-  function onPointerMove(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    const stroke = strokeRef.current;
-    if (!stroke || stroke.pointerId !== event.pointerId) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    // A fast pen reports several samples per frame; drawing only the last one
-    // turns a curve into a polygon.
-    const samples = event.nativeEvent.getCoalescedEvents?.() ?? [];
-    const points = (samples.length ? samples : [event.nativeEvent]).map((sample) =>
-      padPoint(sample.clientX, sample.clientY, rect),
-    );
-    paint([stroke.last, ...points]);
-    stroke.last = points[points.length - 1];
-  }
-
-  function onPointerEnd(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (strokeRef.current?.pointerId !== event.pointerId) return;
-    strokeRef.current = null;
-    keepSheet(event.currentTarget);
-  }
-
-  function clear(): void {
-    const canvas = canvasRef.current;
-    const context = contextRef.current;
-    if (!canvas || !context) return;
-    fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
-    keepSheet(canvas);
-  }
+  const canvasRef = useRef<CanvasRef | null>(null);
+  const [color, setColor] = useState("#000000");
+  const [tool, setTool] = useState<DrawTool>("brush");
+  const [brushWidth, setBrushWidth] = useState(6);
+  const [eraserWidth, setEraserWidth] = useState(24);
+  const width = tool === "eraser" ? eraserWidth : brushWidth;
 
   return (
     <div className="scratch-pad" data-testid="scratch-pad">
-      <canvas
+      <ScratchPadCanvas
         ref={canvasRef}
-        className="scratch-pad-canvas"
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        role="img"
-        aria-label={ui.scratchPad.canvasLabel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
+        isDrawer
+        color={color}
+        brushWidth={width}
+        tool={tool}
+        downloadPrompt="scratch-pad"
+        label={ui.scratchPad.canvasLabel}
       />
-      <div className="scratch-pad-tools">
-        <div className="scratch-pad-colors" role="group" aria-label={ui.toolbar.chooseColor}>
-          {SCRATCH_PAD_COLORS.map((swatch) => (
-            <button
-              key={swatch}
-              type="button"
-              className={`color-swatch${swatch === color ? " selected" : ""}`}
-              style={{ backgroundColor: swatch }}
-              aria-label={ui.toolbar.colorOption({ color: swatch })}
-              aria-pressed={swatch === color}
-              onClick={() => setColor(swatch)}
-            />
-          ))}
-        </div>
+      {/* Its own column: the toolbar picks its arrangement from the width of
+          the element it sits in. */}
+      <div className="scratch-pad-toolbar">
+        <Toolbar
+          scratchPad
+          color={color}
+          onColorChange={setColor}
+          brushWidth={width}
+          onBrushWidthChange={(next) => (tool === "eraser" ? setEraserWidth(next) : setBrushWidth(next))}
+          tool={tool}
+          onToolChange={setTool}
+        />
+      </div>
+      <div className="scratch-pad-foot">
+        <p className="scratch-pad-note">{ui.scratchPad.onlyYou}</p>
         <button
           type="button"
           className="btn btn-ghost btn-compact"
-          data-testid="scratch-pad-clear"
-          onClick={clear}
-        >
-          <TrashIcon size={15} />
-          {ui.scratchPad.clear}
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-compact"
-          onClick={() => saveCanvasImage(canvasRef.current, "scratch-pad")}
+          onClick={() => canvasRef.current?.saveImage()}
         >
           <DownloadIcon size={15} />
           {ui.scratchPad.save}
         </button>
       </div>
-      <p className="scratch-pad-note">{ui.scratchPad.onlyYou}</p>
     </div>
   );
 }
@@ -147,13 +69,13 @@ export function ScratchPadDialog({ onClose }: { onClose: () => void }) {
   // inside it would be stacked under the page it is meant to cover.
   return createPortal(
     <ModalShell ariaLabel={ui.scratchPad.title} cardClassName="scratch-pad-dialog" onDismiss={onClose}>
-      <h3 className="modal-title">{ui.scratchPad.title}</h3>
-      <ScratchPad />
-      <div className="scratch-pad-dialog-actions">
+      <div className="scratch-pad-dialog-head">
+        <h3 className="modal-title">{ui.scratchPad.title}</h3>
         <button type="button" className="btn btn-secondary btn-compact" onClick={onClose}>
           {ui.scratchPad.close}
         </button>
       </div>
+      <ScratchPad />
     </ModalShell>,
     document.body,
   );
