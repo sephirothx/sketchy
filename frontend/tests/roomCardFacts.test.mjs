@@ -69,3 +69,48 @@ test("only the settings that differ from a new room's are named, in a fixed orde
     "1 custom prompt only",
   ]);
 });
+
+test("a room's six facts come in one order, and only the choices are marked changed", async () => {
+  const { roomFacts, otherRoomRules } = await import("../src/lib/roomCardFacts.ts");
+  const facts = roomFacts({
+    ...standard,
+    playerCount: 2,
+    scoringMode: "pressure",
+    customPromptCount: 40,
+    promptListSlugs: ["en-standard"],
+  });
+  assert.deepEqual(facts.map((fact) => fact.key), ["players", "rounds", "drawing-time", "scoring", "hints", "prompts"]);
+  assert.deepEqual(
+    facts.map((fact) => [fact.value, fact.changed]),
+    [
+      ["2 of 8", false],
+      ["3", false],
+      ["90s", false],
+      ["Pressure", true],
+      ["Timed hints", false],
+      ["English · 40 custom", true],
+    ],
+  );
+  assert.deepEqual(otherRoomRules(standard), []);
+  assert.deepEqual(
+    otherRoomRules({ ...standard, allowedTools: ["brush"], spectatorsSeePrompt: true }),
+    ["Brush only", "Spectators see the prompt"],
+  );
+});
+
+test("a room on several lists but no custom prompts says how many lists", async () => {
+  const { roomFacts } = await import("../src/lib/roomCardFacts.ts");
+  const prompts = roomFacts({ ...standard, promptListSlugs: ["a", "b"] }).find((fact) => fact.key === "prompts");
+  assert.deepEqual([prompts.value, prompts.changed], ["English · 2 lists", true]);
+});
+
+test("a room on a single list other than its language's Standard one is marked, not passed off as the default", async () => {
+  const { roomFacts } = await import("../src/lib/roomCardFacts.ts");
+  const promptsOf = (slugs) => roomFacts({ ...standard, promptListSlugs: slugs }).find((fact) => fact.key === "prompts");
+  const standardOnly = promptsOf(["english_standard"]);
+  assert.deepEqual([standardOnly.value, standardOnly.changed], ["English", false]);
+  const community = promptsOf(["community-0f3a"]);
+  assert.deepEqual([community.value, community.changed], ["English · 1 list", true]);
+  const extended = promptsOf(["english_extended"]);
+  assert.deepEqual([extended.value, extended.changed], ["English · 1 list", true]);
+});

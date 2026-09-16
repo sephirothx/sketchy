@@ -1064,36 +1064,18 @@ export const IT: Catalogue = {
   inviteEntryPage: {
     haveAnAccount: "Hai già un account?",
     roomCode: (p: { code: string }) => `Stanza ${p.code}`,
-    hereCount: (p: { here: number; capacity: number; full: boolean }) =>
-      `${p.here}/${p.capacity} qui${p.full ? " · piena" : ""}`,
     checkingYourInvite: "Controllo del tuo invito…",
     loadingRoomDetails: "Caricamento dei dettagli della stanza.",
     roomUnavailable: "Stanza non disponibile",
     backLobby: "Torna alla lobby",
-    players: "Giocatori",
-    rounds: "Round",
-    drawTime: "Tempo di disegno",
-    scoring: "Punteggio",
     roomRules: "Regole della stanza",
     thisGameAlreadyProgressJoiningAs: "Questa partita è già in corso. Entrando come giocatore ti tocca un turno successivo.",
     playerSlotsAreFullSpectatingStill: "I posti da giocatore sono pieni. Puoi ancora guardare.",
-    promptDetailsHidden: "Dettagli della parola nascosti",
-    timedHints: "Indizi a tempo",
-    buyableLetterHints: "Indizi di lettere acquistabili",
-    wheelOfFortune: "Ruota della fortuna",
-    noLetterHints: "Nessun indizio di lettere",
     publicRoom: "Stanza pubblica",
     privateInvite: "Invito privato",
     inProgress: "In corso",
     waiting: "In attesa",
-    full: " · Piena",
-    noScoring: "Senza punteggio",
-    pressure: "Pressione",
-    default: "Standard",
-    everyToolAndColor: "Tutti gli strumenti e i colori",
     spectatorsCanSeeThePrompt: "Gli spettatori vedono la parola",
-    spectatorsGuessAlong: "Anche gli spettatori indovinano",
-    defaultPromptList: "Lista di parole standard",
     roomFull: "Stanza piena",
     joining: "Ingresso…",
     joinGameInProgress: "Entra nella partita in corso",
@@ -1842,6 +1824,17 @@ export const IT: Catalogue = {
     nicknameRule: "Usa da 3 a 16 caratteri: lettere, numeri, trattini o trattini bassi. Niente spazi.",
   },
 
+  roomFacts: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} personalizzate`,
+    customOnlyShort: (p: { count: number }) =>
+      `solo ${number(p.count)} personalizzate`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "lista", other: "liste" }),
+    also: "Inoltre",
+    spectatorsSeeThePrompt: "Gli spettatori vedono la parola",
+  },
+
   roomMenuSheet: {
     away: "Assente",
     startTheGameOver: "Ricomincia la partita",
@@ -2315,13 +2308,6 @@ export const IT: Catalogue = {
   },
 
   waitingRoomPanel: {
-    customShort: (p: { count: number }) =>
-      `${number(p.count)} personalizzate`,
-    customOnlyShort: (p: { count: number }) =>
-      `solo ${number(p.count)} personalizzate`,
-    listsShort: (p: { count: number }) =>
-      counted(p.count, { one: "lista", other: "liste" }),
-    also: "Inoltre",
     editRoomRules: "Modifica le regole della stanza",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "round" }),
@@ -2348,7 +2334,6 @@ export const IT: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Entra nella mia stanza di Sketchy: ${p.code}`,
     inviteLink: "Link d’invito",
-    spectatorsSeeThePrompt: "Gli spettatori vedono la parola",
     publicRoom: "Stanza pubblica",
     privateRoom: "Stanza privata",
     betweenGames: "tra una partita e l’altra",

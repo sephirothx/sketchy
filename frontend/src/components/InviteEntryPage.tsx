@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
-import { describeDrawingRules } from "../lib/drawingRules";
-import type { RoomSummary } from "../types";
 import { AppHeader } from "./AppHeader";
+import { RoomFacts } from "./RoomFacts";
 import { AuthDialog } from "./AccountMenu";
 import { EyeIcon, XIcon } from "./icons";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
@@ -12,14 +11,6 @@ import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
 
 const INVITE_LOADING_DELAY_MS = 250;
-
-function hintModeLabel(room: RoomSummary) {
-  if (room.hideMaskedPrompt) return ui.inviteEntryPage.promptDetailsHidden;
-  if (room.hintMode === "checkpoints") return ui.inviteEntryPage.timedHints;
-  if (room.hintMode === "purchase") return ui.inviteEntryPage.buyableLetterHints;
-  if (room.hintMode === "wheel") return ui.inviteEntryPage.wheelOfFortune;
-  return ui.inviteEntryPage.noLetterHints;
-}
 
 function DelayedInviteLoader() {
   const [visible, setVisible] = useState(false);
@@ -85,37 +76,13 @@ export function InviteEntryPage({ code }: { code: string }) {
             </span>
           </div>
 
-          <p className="invite-room-headline">
-            {ui.inviteEntryPage.hereCount({
-              here: room.playerCount,
-              capacity: room.maxPlayers,
-              full: room.isFull,
-            })}
-          </p>
-
-          {/* The room's rules, open. They used to fold on a phone because
-              380px of them pushed Join off the bottom of the screen; the
-              answer is docked now (#592), so they can take the room they
-              want and the host who chose them is not second-guessed. */}
-          <dl className="invite-room-facts">
-            <div><dt>{ui.inviteEntryPage.players}</dt><dd>{room.playerCount}/{room.maxPlayers}{room.isFull ? ui.inviteEntryPage.full : ""}</dd></div>
-            <div><dt>{ui.inviteEntryPage.rounds}</dt><dd>{room.rounds}</dd></div>
-            <div><dt>{ui.inviteEntryPage.drawTime}</dt><dd>{room.drawingSeconds}s</dd></div>
-            <div><dt>{ui.inviteEntryPage.scoring}</dt><dd>{room.scoringMode === "none" ? ui.inviteEntryPage.noScoring : room.scoringMode === "pressure" ? ui.inviteEntryPage.pressure : ui.inviteEntryPage.default}</dd></div>
-          </dl>
-
-          <ul className="invite-rule-list" aria-label={ui.inviteEntryPage.roomRules}>
-            <li>{hintModeLabel(room)}</li>
-            <li>{describeDrawingRules(room.allowedTools, room.colorMode) ?? ui.inviteEntryPage.everyToolAndColor}</li>
-            <li>{room.spectatorsSeePrompt ? ui.inviteEntryPage.spectatorsCanSeeThePrompt : ui.inviteEntryPage.spectatorsGuessAlong}</li>
-            <li>
-              {room.customPromptCount > 0
-                ? (room.customPromptsOnly
-                  ? ui.inviteEntryPage.customPromptsOnly({ count: room.customPromptCount })
-                  : ui.inviteEntryPage.customPromptsPlusDefaults({ count: room.customPromptCount }))
-                : ui.inviteEntryPage.defaultPromptList}
-            </li>
-          </ul>
+          {/* The room's six facts, as the waiting room will show them a
+              moment from now (#580): the same strip, so following a link
+              and arriving are one picture of the room. Players is one of
+              them, which is why the "N here" line above them went. Rules the
+              host left on their defaults are not spelled out; what is
+              unusual is tinted, and anything else changed is one line. */}
+          <RoomFacts room={room} />
 
           {room.state === "playing" && (
             <p className="invite-callout">{ui.inviteEntryPage.thisGameAlreadyProgressJoiningAs}</p>

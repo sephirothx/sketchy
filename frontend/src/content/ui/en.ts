@@ -1075,36 +1075,18 @@ export const EN = {
   inviteEntryPage: {
     haveAnAccount: "Have an account?",
     roomCode: (p: { code: string }) => `Room ${p.code}`,
-    hereCount: (p: { here: number; capacity: number; full: boolean }) =>
-      `${p.here}/${p.capacity} here${p.full ? " · full" : ""}`,
     checkingYourInvite: "Checking your invite…",
     loadingRoomDetails: "Loading room details.",
     roomUnavailable: "Room unavailable",
     backLobby: "Back to lobby",
-    players: "Players",
-    rounds: "Rounds",
-    drawTime: "Draw time",
-    scoring: "Scoring",
     roomRules: "Room rules",
     thisGameAlreadyProgressJoiningAs: "This game is already in progress. Joining as a player adds you to a future turn.",
     playerSlotsAreFullSpectatingStill: "Player slots are full. Spectating is still open.",
-    promptDetailsHidden: "Prompt details hidden",
-    timedHints: "Timed hints",
-    buyableLetterHints: "Buyable letter hints",
-    wheelOfFortune: "Wheel of Fortune",
-    noLetterHints: "No letter hints",
     publicRoom: "Public room",
     privateInvite: "Private invite",
     inProgress: "In progress",
     waiting: "Waiting",
-    full: " · Full",
-    noScoring: "No scoring",
-    pressure: "Pressure",
-    default: "Default",
-    everyToolAndColor: "Every tool and color",
     spectatorsCanSeeThePrompt: "Spectators can see the prompt",
-    spectatorsGuessAlong: "Spectators guess along",
-    defaultPromptList: "Default prompt list",
     roomFull: "Room full",
     joining: "Joining…",
     joinGameInProgress: "Join game in progress",
@@ -1845,6 +1827,17 @@ export const EN = {
     nicknameRule: "Use 3-16 characters: letters, numbers, hyphens or underscores. No spaces.",
   },
 
+  roomFacts: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} custom`,
+    customOnlyShort: (p: { count: number }) =>
+      `${number(p.count)} custom only`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "list", other: "lists" }),
+    also: "Also",
+    spectatorsSeeThePrompt: "Spectators see the prompt",
+  },
+
   roomMenuSheet: {
     away: "Away",
     startTheGameOver: "Start the game over",
@@ -2324,13 +2317,6 @@ export const EN = {
   },
 
   waitingRoomPanel: {
-    customShort: (p: { count: number }) =>
-      `${number(p.count)} custom`,
-    customOnlyShort: (p: { count: number }) =>
-      `${number(p.count)} custom only`,
-    listsShort: (p: { count: number }) =>
-      counted(p.count, { one: "list", other: "lists" }),
-    also: "Also",
     editRoomRules: "Edit room rules",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "rounds" }),
@@ -2357,7 +2343,6 @@ export const EN = {
       "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,
     inviteLink: "Invite link",
-    spectatorsSeeThePrompt: "Spectators see the prompt",
     publicRoom: "Public room",
     privateRoom: "Private room",
     betweenGames: "between games",

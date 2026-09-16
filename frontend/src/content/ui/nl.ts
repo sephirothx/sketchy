@@ -1064,36 +1064,18 @@ export const NL: Catalogue = {
   inviteEntryPage: {
     haveAnAccount: "Heb je al een account?",
     roomCode: (p: { code: string }) => `Kamer ${p.code}`,
-    hereCount: (p: { here: number; capacity: number; full: boolean }) =>
-      `${p.here}/${p.capacity} hier${p.full ? " · vol" : ""}`,
     checkingYourInvite: "Je uitnodiging controleren…",
     loadingRoomDetails: "Kamergegevens laden.",
     roomUnavailable: "Kamer niet beschikbaar",
     backLobby: "Terug naar de lobby",
-    players: "Spelers",
-    rounds: "Rondes",
-    drawTime: "Tekentijd",
-    scoring: "Punten",
     roomRules: "Kamerregels",
     thisGameAlreadyProgressJoiningAs: "Dit spel is al bezig. Als speler kom je in een latere beurt aan de beurt.",
     playerSlotsAreFullSpectatingStill: "De spelersplekken zijn vol. Toekijken kan nog wel.",
-    promptDetailsHidden: "Woorddetails verborgen",
-    timedHints: "Hints op tijd",
-    buyableLetterHints: "Letterhints om te kopen",
-    wheelOfFortune: "Rad van fortuin",
-    noLetterHints: "Geen letterhints",
     publicRoom: "Openbare kamer",
     privateInvite: "Privé-uitnodiging",
     inProgress: "Bezig",
     waiting: "Wachten",
-    full: " · Vol",
-    noScoring: "Zonder punten",
-    pressure: "Druk",
-    default: "Standaard",
-    everyToolAndColor: "Alle gereedschappen en kleuren",
     spectatorsCanSeeThePrompt: "Toeschouwers zien het woord",
-    spectatorsGuessAlong: "Toeschouwers raden mee",
-    defaultPromptList: "Standaard woordenlijst",
     roomFull: "Kamer vol",
     joining: "Deelnemen…",
     joinGameInProgress: "Meedoen aan lopend spel",
@@ -1841,6 +1823,17 @@ export const NL: Catalogue = {
     nicknameRule: "Gebruik 3–16 tekens: letters, cijfers, streepjes of lage streepjes. Geen spaties.",
   },
 
+  roomFacts: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} eigen`,
+    customOnlyShort: (p: { count: number }) =>
+      `alleen ${number(p.count)} eigen`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "lijst", other: "lijsten" }),
+    also: "Ook",
+    spectatorsSeeThePrompt: "Toeschouwers zien het woord",
+  },
+
   roomMenuSheet: {
     away: "Afwezig",
     startTheGameOver: "Het spel opnieuw beginnen",
@@ -2314,13 +2307,6 @@ export const NL: Catalogue = {
   },
 
   waitingRoomPanel: {
-    customShort: (p: { count: number }) =>
-      `${number(p.count)} eigen`,
-    customOnlyShort: (p: { count: number }) =>
-      `alleen ${number(p.count)} eigen`,
-    listsShort: (p: { count: number }) =>
-      counted(p.count, { one: "lijst", other: "lijsten" }),
-    also: "Ook",
     editRoomRules: "Kamerregels bewerken",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "ronde", other: "rondes" }),
@@ -2347,7 +2333,6 @@ export const NL: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
     inviteLink: "Uitnodigingslink",
-    spectatorsSeeThePrompt: "Toeschouwers zien het woord",
     publicRoom: "Openbare kamer",
     privateRoom: "Privékamer",
     betweenGames: "tussen spellen door",
