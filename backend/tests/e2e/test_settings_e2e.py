@@ -477,30 +477,37 @@ async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
             assert await page.evaluate(
                 "document.activeElement?.getAttribute('aria-pressed')"
             ) == "true"
+            # The sign-up doodle is random, so one run in 26 it is already the
+            # butterfly - whose tile is then named "Butterfly Wearing", which
+            # the exact name never matched. Pick the fox on that run instead.
+            if await worn.get_attribute("data-doodle") == "butterfly":
+                target, label = "fox", "Fox"
+            else:
+                target, label = "butterfly", "Butterfly"
             async with page.expect_response(
                 lambda response: response.url.endswith("/api/users/me/avatar/doodle")
                 and response.request.method == "PUT"
             ) as chosen:
-                await picker.get_by_role("button", name="Butterfly", exact=True).click()
+                await picker.get_by_role("button", name=label, exact=True).click()
             response = await chosen.value
             assert response.status == 200, await response.text()
-            assert (await response.json())["avatarKey"] == "doodle:butterfly"
+            assert (await response.json())["avatarKey"] == f"doodle:{target}"
             await picker.wait_for(state="hidden")
 
             await dialog.locator(
-                '.settings-you .avatar svg.avatar-doodle[data-doodle="butterfly"]'
+                f'.settings-you .avatar svg.avatar-doodle[data-doodle="{target}"]'
             ).wait_for(state="visible")
             await dialog.get_by_role("button", name="Close settings").click()
             await dialog.wait_for(state="hidden")
             await page.locator(
-                '.identity-avatar svg.avatar-doodle[data-doodle="butterfly"]'
+                f'.identity-avatar svg.avatar-doodle[data-doodle="{target}"]'
             ).wait_for(state="visible")
 
             # The seat wears it too, drawn the same way.
             await page.click('button:has-text("Create room")')
             await page.click('button:has-text("Create room")')
             await page.locator(
-                '.player-list .avatar svg.avatar-doodle[data-doodle="butterfly"]'
+                f'.player-list .avatar svg.avatar-doodle[data-doodle="{target}"]'
             ).first.wait_for(state="visible")
 
             # Remove takes it back to the initial, and says what it removes.
