@@ -482,8 +482,18 @@ async def test_a_claimed_guests_drawing_can_still_be_reported(env):
     assert again.status_code == 409, again.text
     assert (await http.post("/api/reports", json={"reportedUserId": owner.id, "reason": "harassment", "details": "again"})).status_code == 409
 
+    # The same on the reporter's side: a guest who complained and then
+    # claimed an account is still the one person who already complained.
+    guest_reporter = await users.create_anonymous(display_name="Passerby")
+    await sign_in_as(http, factory, guest_reporter.id)
+    assert (await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "hm"})).status_code == 201
+    await users.merge_guest_into_account(guest_reporter.id, cid.id)
     await sign_in_as(http, factory, cid.id)
+    assert (await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "again"})).status_code == 409
+
     assert (await http.get(f"/api/gallery/{game.turn_id}")).status_code == 200, "still in the Gallery"
+    dee = await _registered(users, "Dee")
+    await sign_in_as(http, factory, dee.id)
     filed = await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "hm"})
     assert filed.status_code == 201, filed.text
     async with factory() as session:

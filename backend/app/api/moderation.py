@@ -38,6 +38,7 @@ from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
 from app.repositories.sqlalchemy import apply_gallery_decision
 from app.services.gallery_shelf import read_shelf_review
 from app.services.player_reports import (
+    canonical_user_id,
     context_around,
     decided_incident_report_ids,
     drawing_evidence_for_report,
@@ -52,7 +53,6 @@ from app.auth.warnings import pending_warning_payload
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     AuditEvent,
-    IdentityAlias,
     GameRecord,
     TurnDrawing,
     PlayerReport,
@@ -2943,12 +2943,7 @@ def create_moderation_router(
                 # way every other read of history resolves a merged identity.
                 drawer_id = turn.drawer_user_id
                 if drawer_id is not None:
-                    canonical = await session.scalar(
-                        select(IdentityAlias.target_user_id).where(
-                            IdentityAlias.source_user_id == drawer_id
-                        )
-                    )
-                    drawer_id = canonical or drawer_id
+                    drawer_id = await canonical_user_id(session, drawer_id)
                 target = await session.get(User, drawer_id) if drawer_id is not None else None
                 if target is None or target.state in {
                     AccountState.MERGED.value,
