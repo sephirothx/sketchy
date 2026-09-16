@@ -1926,7 +1926,6 @@ export const PT: Catalogue = {
     drawWhileYouWait: "Desenha enquanto esperas",
     canvasLabel: "Bloco de rascunho. Só tu vês o que desenhas aqui.",
     onlyYou: "Só tu vês isto. Nada é enviado.",
-    clear: "Limpar",
     save: "Guardar",
     close: "Fechar",
   },

@@ -2480,9 +2480,10 @@ A seated client checks with the server every five seconds that it still holds th
   the room closed meanwhile), the room is replaced by "This game ended", with the reason and
   a way back to the lobby. While the connection is down there is a scratch pad to draw on - on
   the paused room's card, behind "Draw while you wait" on the lobby's banner, and in the
-  waiting room. It is only
-  ever yours: nothing on it is sent or stored, it keeps its drawing for as long as the tab is
-  open, and Save downloads it as a picture. A room is sized to the
+  waiting room. It is the
+  game's canvas and toolbar at full size, every tool and color, but only ever yours: nothing
+  on it is sent or stored, it keeps its drawing for as long as the tab is open, and Save
+  downloads it as a picture. A room is sized to the
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
