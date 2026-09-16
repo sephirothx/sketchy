@@ -1928,7 +1928,6 @@ export const FR: Catalogue = {
     title: "Bloc-notes",
     drawWhileYouWait: "Dessine en attendant",
     canvasLabel: "Bloc-notes. Toi seul vois ce que tu dessines ici.",
-    onlyYou: "Toi seul vois ceci. Rien n’est envoyé.",
     save: "Enregistrer",
     close: "Fermer",
     backToTheRoom: "Retour au salon",

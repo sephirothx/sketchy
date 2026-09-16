@@ -1926,7 +1926,6 @@ export const DE: Catalogue = {
     title: "Notizblock",
     drawWhileYouWait: "Zeichnen, während du wartest",
     canvasLabel: "Notizblock. Was du hier zeichnest, siehst nur du.",
-    onlyYou: "Nur du siehst das. Nichts wird gesendet.",
     save: "Speichern",
     close: "Schließen",
     backToTheRoom: "Zurück zum Raum",

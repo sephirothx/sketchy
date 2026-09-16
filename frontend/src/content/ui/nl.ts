@@ -1926,7 +1926,6 @@ export const NL: Catalogue = {
     title: "Kladblok",
     drawWhileYouWait: "Teken terwijl je wacht",
     canvasLabel: "Kladblok. Alleen jij ziet wat je hier tekent.",
-    onlyYou: "Alleen jij ziet dit. Er wordt niets verstuurd.",
     save: "Opslaan",
     close: "Sluiten",
     backToTheRoom: "Terug naar de kamer",

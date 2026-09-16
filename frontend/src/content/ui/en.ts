@@ -1930,7 +1930,6 @@ export const EN = {
     title: "Scratch pad",
     drawWhileYouWait: "Draw while you wait",
     canvasLabel: "Scratch pad. Only you can see what you draw here.",
-    onlyYou: "Only you can see this. Nothing is sent.",
     save: "Save",
     close: "Close",
     backToTheRoom: "Back to the room",
