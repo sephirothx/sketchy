@@ -791,6 +791,20 @@
     flex: 0 1 auto;
     min-width: 0;
   }
+
+  /* The wordmark gives way, not the controls: with a back arrow on its left
+     and a flag on its right the lettering has less than its natural width at
+     390px, and an SVG with a fixed width overlapped the flag instead of
+     shrinking. It scales down with the room the lead has. */
+  .lobby-header-lead {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .lobby-wordmark svg {
+    height: auto;
+    max-width: 100%;
+  }
 }
 
 .auth-optional {

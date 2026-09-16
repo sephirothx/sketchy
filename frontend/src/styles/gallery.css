@@ -95,34 +95,179 @@
   color: var(--primary-ink);
 }
 
-/* ------------------------------------------------------------------ cards */
+/* ----------------------------------------------------------------- layout
 
-.gallery-grid {
+   One column of framed posts, the picture the whole of each, with a sticky
+   rail beside it on a wide screen; below 900px the rail folds away and the
+   sort sits under the title, stuck to the top while the feed scrolls. */
+
+.gallery-layout {
+  align-items: start;
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.gallery-layout.is-narrow {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gallery-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.gallery-column .gallery-head { margin-bottom: 0; }
+
+.gallery-sticky-sort {
+  background: var(--paper);
+  margin: -10px 0 -6px;
+  padding: 8px 0;
+  position: sticky;
+  top: var(--banner-height);
+  z-index: 2;
+}
+
+.gallery-sticky-sort .gallery-filters { margin-bottom: 0; }
+
+.gallery-sticky-sort .gallery-sort { display: flex; }
+
+.gallery-sticky-sort .gallery-sort button { flex: 1 1 0; }
+
+/* Stuck under whatever banner the app is showing (its height is published
+   as --banner-height by AppBanners), not under the banner. */
+.gallery-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: calc(var(--banner-height) + 24px);
+}
+
+.gallery-rail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.gallery-rail-card .gallery-filters {
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 0;
+}
+
+.gallery-rail-card .gallery-sort { align-self: flex-start; }
+
+.gallery-rail-head {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.gallery-rail-head h2 {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.gallery-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-/* At phone width one column would make every card a full-width frame;
-   two fit at 390px with the page's gutters. */
-@media (max-width: 480px) {
-  .gallery-grid {
-    gap: 10px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.gallery-rail-item {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-body);
+  gap: 10px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
 }
 
-.gallery-card {
+.gallery-rail-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.gallery-rail-thumb {
+  display: block;
+  flex: 0 0 64px;
+  width: 64px;
+}
+
+.gallery-rail-thumb .gallery-card-canvas { border-radius: 8px; }
+
+.gallery-rail-text {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 1px;
   min-width: 0;
 }
 
-.gallery-card-open {
+.gallery-rail-prompt {
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-rail-byline {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* A text-shaped control, for the sentence that offers another order. */
+.gallery-link {
+  background: none;
+  border: 0;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.gallery-link:hover { color: var(--primary-ink); }
+
+/* ------------------------------------------------------------------ posts */
+
+.gallery-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The framed card: the picture on a mat, the words on the mat below it. */
+.gallery-post {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 12px 14px;
+}
+
+.gallery-post-open {
   background: none;
   border: 0;
   border-radius: 10px;
@@ -132,11 +277,64 @@
   width: 100%;
 }
 
-.gallery-card-open:focus-visible {
+.gallery-post-open:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
+.gallery-post-open .gallery-card-canvas { border-radius: 10px; }
+
+.gallery-post-open:hover .gallery-card-canvas { border-color: var(--primary-ink); }
+
+.gallery-post-mat {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.gallery-post-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gallery-post-prompt {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-post-byline {
+  color: var(--muted);
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.gallery-post-dot { margin: 0 5px; }
+
+.gallery-post-age {
+  color: var(--faint);
+  font-weight: 700;
+}
+
+.gallery-post-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.gallery-post-report.btn-icon.btn-compact { width: 34px; height: 34px; }
+
+/* The picture's frame: the stored frame replayed at the card's width. */
 .gallery-card-canvas {
   align-items: center;
   aspect-ratio: 4 / 3;
@@ -160,10 +358,6 @@
   border-radius: 0;
 }
 
-.gallery-card-open:hover .gallery-card-canvas {
-  border-color: var(--primary-ink);
-}
-
 .gallery-card-note {
   color: var(--muted);
   font-size: 12.5px;
@@ -171,42 +365,84 @@
   text-align: center;
 }
 
-.gallery-card-caption {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+/* Loading: a frame that keeps the post's height, so nothing jumps. */
+.gallery-post-skeleton {
+  aspect-ratio: 4 / 3;
+  background: var(--track);
+  border-radius: 14px;
+  width: 100%;
 }
 
-.gallery-card-prompt {
-  color: var(--ink);
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.gallery-card-byline {
-  align-items: center;
-  color: var(--muted);
-  display: flex;
-  font-size: 12.5px;
-  gap: 8px;
-  min-width: 0;
-}
-
-.gallery-card-byline strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+@media (max-width: 480px) {
+  .gallery-post { padding: 10px 10px 12px; }
+  .gallery-post-prompt { font-size: 19px; }
+  .gallery-feed { gap: 18px; }
 }
 
 /* ---------------------------------------------------------------- states */
 
 .gallery-more {
+  align-items: center;
   display: flex;
   justify-content: center;
-  padding-top: 18px;
+  padding: 4px 0;
+}
+
+.gallery-loading {
+  align-items: center;
+  color: var(--faint);
+  display: inline-flex;
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 700;
+  gap: 10px;
+}
+
+.gallery-spinner {
+  animation: gallery-spin 0.9s linear infinite;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  height: 16px;
+  width: 16px;
+}
+
+@keyframes gallery-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-spinner { animation: none; }
+}
+
+.gallery-end,
+.gallery-empty-state {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 0 8px;
+  text-align: center;
+}
+
+.gallery-empty-state {
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 14px;
+  padding: 36px 16px;
+}
+
+.gallery-empty-state .btn { margin-top: 6px; }
+
+.gallery-end-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.gallery-end-body {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+  max-width: 40ch;
 }
 
 .gallery-empty {
@@ -214,6 +450,20 @@
   font-style: italic;
   margin: 0;
   padding: 8px 0;
+}
+
+/* Offered once the reader is past the top, over everything, in the corner
+   the thumb reaches; the icon button's recipe, raised. */
+.gallery-back-to-top {
+  bottom: 24px;
+  box-shadow: var(--shadow-raised);
+  position: fixed;
+  right: 24px;
+  z-index: 3;
+}
+
+@media (max-width: 480px) {
+  .gallery-back-to-top { bottom: 20px; right: 16px; }
 }
 
 /* ---------------------------------------------------------- lobby shelf
