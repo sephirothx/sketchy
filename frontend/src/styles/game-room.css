@@ -6,6 +6,9 @@
   padding: 16px;
 }
 
+/* The room's bar (#580): where you are, what is going on, you. Three
+   tracks, the middle one sized to its content and the two beside it equal,
+   so the clock sits in the middle of the screen whatever the room is called. */
 .game-header {
   display: grid;
   /* minmax(0, 1fr) lets the side tracks shrink below min-content, so the
@@ -20,9 +23,27 @@
 .game-header-start {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   grid-column: 1;
+}
+
+/* The wordmark, as the way back to the lobby - which from a room is Leave. */
+.game-header-home {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+}
+
+.game-header-home:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
 }
 
 .game-header-room-name {
@@ -34,66 +55,104 @@
   text-overflow: ellipsis;
 }
 
+.game-header-center {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  grid-column: 2;
+  justify-content: center;
+  min-width: 0;
+}
+
 /* Pinned to column 3 so an empty status slot (waiting room, game end)
    can't pull the actions into the middle track. */
 .game-header-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   grid-column: 3;
   justify-self: end;
   flex-wrap: nowrap;
 }
 
-.game-header-divider {
-  width: 1.5px;
-  height: 22px;
-  background: var(--line);
-  margin: 0 3px;
-  flex: none;
-}
-
-/* AFK is a toggle pill: quiet until pressed, warm while away. */
-.game-header-afk-button {
-  display: inline-flex;
+/* Away is a state, shown while it lasts; going away is a Room menu row. */
+.game-header-away {
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  padding: 7px 13px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--muted);
-  min-height: 38px;
-  cursor: pointer;
-}
-
-.game-header-afk-button.is-afk {
   background: var(--warning-soft);
-  border-color: var(--warning-edge);
+  border: 1.5px solid var(--warning-edge);
+  border-radius: 999px;
   color: var(--warning);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 800;
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 11px;
 }
 
-.game-header-restart-button {
+.room-menu {
   position: relative;
 }
 
-.game-header-restart-count {
-  font-size: 11px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.game-header-save-button {
+.game-header-menu-button {
   flex: 0 0 auto;
+  gap: 6px;
+  min-height: 38px;
 }
 
-/* The phone's status band: room code, round + countdown ring, and one way in
-   to everything else. What it replaces lined up eight icon buttons in a 44px
-   strip, with a red Leave one thumb-width from Settings. */
+.room-menu-dropdown {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-raised);
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 264px;
+  z-index: 60;
+}
+
+.room-menu-dropdown .sheet-menu-item {
+  font-size: 14px;
+  min-height: 42px;
+}
+
+/* The code the invite link carries, beside the row that copies it. */
+.room-menu-code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  margin-left: 8px;
+}
+
+/* A short desktop window gives way in a fixed order: the room's name, then
+   the identity chip's name (the avatar stays), then the wordmark. The clock,
+   the round, the notice chips and the Room menu never do. */
+@media (max-width: 1100px) {
+  .game-header-room-name {
+    display: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .game-header-actions .identity-name,
+  .game-header-actions .identity-chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 950px) {
+  .game-header-home {
+    display: none;
+  }
+}
+
+/* The phone's bar: the round and the clock, any notice, and the Room menu -
+   one control. What it replaces lined up eight icon buttons in a 44px strip,
+   with a red Leave one thumb-width from Settings. */
 .game-header-mobile {
   align-items: center;
   display: flex;
@@ -101,61 +160,21 @@
   grid-template-columns: none;
   margin-bottom: 8px;
   min-height: 56px;
+  position: relative;
 }
 
-.game-header-mobile .game-header-status {
-  display: flex;
+.game-header-mobile .game-header-center {
   flex: 1 1 auto;
-  grid-column: auto;
-  justify-content: flex-end;
-  min-width: 0;
+  justify-content: flex-start;
 }
 
-.game-header-menu-button {
-  flex: 0 0 auto;
+.game-header-mobile .game-header-actions {
+  margin-left: auto;
+}
+
+.game-header-mobile .game-header-menu-button {
   min-height: 44px;
   min-width: 44px;
-}
-
-.game-header-mark {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-/* The code is the one thing here that has to stay readable, so the mark is
-   what gives ground first when the room name and the round chip crowd it. */
-@media (max-width: 380px) {
-  .game-header-mark {
-    display: none;
-  }
-}
-
-/* The code pill doubles as the invite-copy control. */
-.room-copy-button {
-  background: var(--card);
-  color: var(--muted);
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: none;
-  transition: all 0.15s ease;
-}
-
-.room-copy-button svg {
-  color: var(--faint);
-}
-
-.room-copy-button:hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
 }
 
 /* A drain or a dropped connection, said where the round and the clock are
@@ -208,21 +227,8 @@
   margin-top: 8px;
 }
 
-/* On the phone the chip takes the room code's place - the code is in the ⋯
-   sheet too - and its popover spans the band rather than hanging off a chip
-   that sits near the right edge of a 390px screen. */
-.game-header-mobile:has(.room-notice-chip) .room-copy-button,
-.game-header-mobile:has(.room-notice-chip) .game-header-mark {
-  /* The mark goes too, for the duration: a three-digit countdown in the chip
-     pushed the round chip over it. A notice is temporary; the mark is back
-     the moment it ends. */
-  display: none;
-}
-
-.game-header-mobile {
-  position: relative;
-}
-
+/* On the phone the popover spans the band rather than hanging off a chip that
+   sits in the middle of a 390px screen. */
 .game-header-mobile .room-notice-chips {
   position: static;
 }
@@ -251,26 +257,6 @@
   .game-header {
     gap: 8px;
     margin-bottom: 8px;
-  }
-
-  .game-header-actions {
-    gap: 4px;
-  }
-
-  .game-header-room-name {
-    display: none;
-  }
-
-  .header-action-label {
-    display: none;
-  }
-
-  .game-header-afk-button {
-    padding: 7px 9px;
-  }
-
-  .room-copy-button {
-    padding: 6px 8px;
   }
 }
 
@@ -488,8 +474,7 @@
   color: var(--danger);
 }
 
-.restart-vote-actions button:focus-visible,
-.game-header-restart-button:focus-visible {
+.restart-vote-actions button:focus-visible {
   outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
@@ -1304,11 +1289,15 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
     display: none;
   }
 
-  /* The bar comes back when the keyboard takes the band away; the number does
-     not. A depleting rule says "running out" at a glance, which is the whole
-     of what a guesser does with it — and the digits cost a line of canvas. */
+  /* When the keyboard takes the band away, the bar comes back and so does the
+     number (#580): the ring is gone with the band, and a guesser typing
+     against the clock wants the seconds, not only a depleting rule. */
   .game-room.guess-focused .guess-timer-bar {
     display: block;
+  }
+
+  .game-room.guess-focused .turn-bar-clock {
+    display: inline;
   }
 
   /* Masked letters at a size worth reading. 19x26 was below the floor for a
@@ -1857,7 +1846,6 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
   display: flex;
   align-items: center;
   gap: 10px;
-  grid-column: 2;
 }
 
 .prompt-display {

@@ -47,7 +47,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await use_guest_name(spectator_page, "InviteSpectator")
             assert await spectator_page.locator("#invite-name").count() == 0
             await spectator_page.click('button:has-text("Spectate")')
-            await spectator_page.wait_for_selector(".room-copy-button")
+            await spectator_page.wait_for_selector('[data-testid="room-header"]')
             spectator_indicator = host_page.locator('[data-testid="spectator-indicator"]')
             await spectator_indicator.wait_for()
             assert await spectator_indicator.locator(
@@ -89,13 +89,13 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await player_page.evaluate("() => { window.__notReloaded = true; }")
             await player_page.fill("#invite-name", "InvitePlayer")
             await player_page.press("#invite-name", "Enter")
-            await player_page.wait_for_selector(".room-copy-button")
+            await player_page.wait_for_selector('[data-testid="room-header"]')
             assert await player_page.evaluate("() => window.__notReloaded === true")
             await host_page.wait_for_selector(
                 '[data-testid="room-active-players"] >> text=InvitePlayer'
             )
             await player_page.reload()
-            await player_page.wait_for_selector(".room-copy-button")
+            await player_page.wait_for_selector('[data-testid="room-header"]')
             assert not await player_page.is_visible(".invite-card")
 
             # Once active-player capacity is full, spectating remains available.
@@ -105,7 +105,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             assert await full_room_page.is_visible("text=Spectating is still open.")
             await use_guest_name(full_room_page, "LateSpectator")
             await full_room_page.click('button:has-text("Spectate")')
-            await full_room_page.wait_for_selector(".room-copy-button")
+            await full_room_page.wait_for_selector('[data-testid="room-header"]')
         finally:
             await host_context.close()
             await spectator_context.close()
@@ -145,7 +145,7 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
             assert await visitor.get_attribute("#invite-name", "aria-invalid") is None
             await visitor.click('button:has-text("Join game")')
 
-            await visitor.wait_for_selector(".room-copy-button")
+            await visitor.wait_for_selector('[data-testid="room-header"]')
             await host.get_by_text("InviteDrafter", exact=True).wait_for()
         finally:
             await host_context.close()

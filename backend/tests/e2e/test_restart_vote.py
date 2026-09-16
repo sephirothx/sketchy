@@ -1,5 +1,5 @@
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings
+from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings, room_menu_action, open_room_menu
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
@@ -65,7 +65,7 @@ async def test_players_approve_restart_without_losing_room_context():
             await player_page.wait_for_selector(".game-layout")
             await third_page.wait_for_selector(".game-layout")
 
-            await host_page.click(".game-header-restart-button")
+            await room_menu_action(host_page, "Start the game over")
             host_vote = host_page.get_by_test_id("restart-vote-banner")
             player_vote = player_page.get_by_test_id("restart-vote-banner")
             third_vote = third_page.get_by_test_id("restart-vote-banner")
@@ -144,7 +144,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await host_page.wait_for_selector(".game-layout")
             await player_page.wait_for_selector(".game-layout")
 
-            await host_page.click(".game-header-restart-button")
+            await room_menu_action(host_page, "Start the game over")
             player_vote = player_page.get_by_test_id("restart-vote-banner")
             await player_vote.wait_for()
             await player_vote.locator('button:has-text("Keep playing")').click()
@@ -158,11 +158,12 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await host_page.wait_for_selector(
                 '[data-testid="restart-vote-banner"]', state="detached"
             )
-            restart_button = host_page.locator(".game-header-restart-button")
+            # The Room menu's row waits out the cooldown, and says for how long.
+            menu = await open_room_menu(host_page)
+            restart_button = menu.locator("button", has_text="Start the game over")
             assert await restart_button.is_disabled()
-            assert "Restart vote available in" in (
-                await restart_button.get_attribute("aria-label") or ""
-            )
+            assert " in " in await restart_button.inner_text()
+            await host_page.keyboard.press("Escape")
             assert await host_page.is_visible(
                 "canvas.drawing-canvas, .prompt-choices, [data-testid=choosing-prompt-status]"
             )

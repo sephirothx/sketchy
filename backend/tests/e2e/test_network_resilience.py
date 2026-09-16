@@ -118,13 +118,13 @@ async def test_mid_session_socket_reconnects_to_room():
             await use_guest_name(host, "HostReconnect")
             await host.click('button:has-text("Create room")')
             await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".room-copy-button")
+            await host.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(host)
 
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "GuestReconnect")
             await join_by_code(guest, code)
-            await guest.wait_for_selector(".room-copy-button")
+            await guest.wait_for_selector('[data-testid="room-header"]')
 
             # Drop the transport at the socket itself rather than via offline
             # emulation: the frontend is same-origin with the backend, and

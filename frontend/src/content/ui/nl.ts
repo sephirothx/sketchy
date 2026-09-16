@@ -681,6 +681,7 @@ export const NL: Catalogue = {
 
   appHeader: {
     playerSettings: "Spelerinstellingen",
+    sketchyHome: "Naar de lobby",
   },
 
   bugReportDialog: {
@@ -1841,6 +1842,7 @@ export const NL: Catalogue = {
   },
 
   roomMenuSheet: {
+    away: "Afwezig",
     startTheGameOver: "Het spel opnieuw beginnen",
     startOverCooldown: (p: { seconds: number }) => ` · over ${p.seconds}s`,
     room: "Kamer",

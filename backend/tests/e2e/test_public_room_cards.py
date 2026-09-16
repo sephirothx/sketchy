@@ -173,7 +173,7 @@ async def test_a_typed_name_is_enough_to_join_without_pressing_play_as_guest():
             await card.get_by_role("button", name="Join", exact=True).click()
 
             await visitor.wait_for_selector('[data-testid="waiting-room"]')
-            assert await visitor.get_by_text("DraftVisitor", exact=True).is_visible()
+            assert await visitor.get_by_test_id("room-active-players").get_by_text("DraftVisitor", exact=True).is_visible()
             await host.get_by_text("DraftVisitor", exact=True).wait_for()
         finally:
             await host_context.close()
@@ -195,7 +195,7 @@ async def test_a_wide_row_never_hides_a_rule_it_has_not_counted():
         visitor = await visitor_context.new_page()
         try:
             await host.goto(BASE_URL)
-            await use_guest_name(host, "RulesHost")
+            await use_guest_name(host, "ManyRulesHost")
             await host.click('button:has-text("Create room")')
             await host.fill('input[placeholder="Leave blank for a random name!"]', "Many rules")
             await host.click('summary:has-text("Prompts")')

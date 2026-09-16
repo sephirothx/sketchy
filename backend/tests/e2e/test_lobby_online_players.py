@@ -49,7 +49,7 @@ async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
             # took it in appears anywhere in the list.
             await subject.click('button:has-text("Create room")')
             await subject.click('button:has-text("Create room")')
-            await subject.wait_for_selector(".room-copy-button")
+            await subject.wait_for_selector('[data-testid="room-header"]')
             await expect(
                 row_for(watcher, "PresenceSubject").locator(".online-player-status")
             ).to_have_text("In a game", timeout=SETTLE_MS)

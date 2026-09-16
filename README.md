@@ -2476,11 +2476,19 @@ A seated client checks with the server every five seconds that it still holds th
   the countdown in the corner of the canvas. An outage that lasts more
   than a moment also pauses the room: the canvas, chat and guess field dim and stop taking
   input, the clock holds, and a card says the connection is being restored - while the
-  header's Leave still works. If the server comes back without the room (it restarted, or
+  Room menu's Leave still works. If the server comes back without the room (it restarted, or
   the room closed meanwhile), the room is replaced by "This game ended", with the reason and
   a way back to the lobby. A room is sized to the
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
+- One bar on every screen, in three places: where you are (the wordmark, which is the way
+  home, and in a room the room's name), what is going on (the round and the clock, a
+  server notice, and an *Away* chip while you are away), and you (your chip, whose menu opens
+  Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
+  go away, save the drawing, start over, settings, and Leave last in red - a dropdown on a
+  desktop and the ⋯ sheet on a phone, with the same rows. A short window gives way in a fixed
+  order: the room's name, then your chip's name, then the wordmark; the clock and the menu
+  never do. On a desktop the waiting room's invite copies the link; a phone shares it.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
   from a 1500px window and 1960px from 2100px - and on a desktop it fills the window's
   height, with the players and chat running top to bottom. The canvas grows with it up to

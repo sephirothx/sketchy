@@ -7,8 +7,3 @@
   max-width: 800px;
 }
 
-/* Sizing comes from .btn.btn-icon in the room header. */
-.save-image-button:hover {
-  color: var(--ink);
-  border-color: var(--line-strong);
-}

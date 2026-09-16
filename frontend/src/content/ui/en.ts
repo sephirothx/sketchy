@@ -691,6 +691,7 @@ export const EN = {
 
   appHeader: {
     playerSettings: "Player settings",
+    sketchyHome: "Go to the lobby",
   },
 
   bugReportDialog: {
@@ -1845,6 +1846,7 @@ export const EN = {
   },
 
   roomMenuSheet: {
+    away: "Away",
     startTheGameOver: "Start the game over",
     startOverCooldown: (p: { seconds: number }) => ` · in ${p.seconds}s`,
     room: "Room",

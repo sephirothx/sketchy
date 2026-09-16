@@ -4,7 +4,7 @@ import asyncio
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name, open_player_settings
 
 BASE_URL = "http://localhost:8000"
 
@@ -37,7 +37,7 @@ async def test_guest_session_survives_a_reload_without_any_stored_credential():
 
             await page.reload()
             await page.wait_for_selector('[data-testid="waiting-room"]')
-            assert code in await page.inner_text(".room-copy-button")
+            assert await room_code(page) == code
             name = page.locator(".player-name .colored-player-name").first
             assert "is-guest" in (await name.get_attribute("class"))
         finally:
@@ -130,7 +130,7 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             await guest.goto(BASE_URL)
             await use_guest_name(guest, "Wanderer")
 
-            await guest.click(".header-settings-button")
+            await open_player_settings(guest)
             await guest.wait_for_selector(".settings-you")
             # Guests are pinned to grey, so there is no palette and no chip on
             # the disc; the account-only rows below are locked with a reason.
@@ -322,7 +322,7 @@ async def test_player_can_download_then_delete_account_from_settings():
             await register_account(page, "AccountDataE2E")
             # Both live in Settings > Account now: the identity menu is
             # navigation, and deleting an account is not navigation.
-            await page.click("button.header-settings-button")
+            await open_player_settings(page)
             await page.wait_for_selector('[data-testid="settings"]')
             await page.locator('.settings-row button:has-text("Request export")').click()
             dialog = page.locator(".account-data-dialog")

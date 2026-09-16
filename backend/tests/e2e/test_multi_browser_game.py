@@ -96,7 +96,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await page1.click('button:has-text("Create room")')
 
             # Wait for navigation to room waiting panel
-            await page1.wait_for_selector('.room-copy-button')
+            await page1.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(page1)
             assert len(code) > 0
 
@@ -113,7 +113,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await join_by_code(page2, code)
 
             # Wait for Browser 2 to enter waiting panel
-            await page2.wait_for_selector('.room-copy-button')
+            await page2.wait_for_selector('[data-testid="room-header"]')
 
             # Step 3: Host verifies 2 players joined in waiting panel
             await page1.wait_for_selector('[data-testid="waiting-room"]')
@@ -492,6 +492,9 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             mobile_input = next_guesser.locator('.chat-input input')
             await mobile_input.focus()
             await next_guesser.wait_for_selector('.game-room.guess-focused')
+            # The keyboard hides the bar and its ring, so the prompt row says
+            # the seconds instead (#580, R-UX-11).
+            await next_guesser.locator('.turn-bar-clock').wait_for(state="visible")
             next_word = await next_drawer.locator('.prompt-reveal').inner_text()
             await next_guesser.evaluate(WATCH_TURN_RESULTS)
             await mobile_input.fill(next_word)

@@ -94,9 +94,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // The first three are what everyone wants to know; the rest appear only
   // when the host has moved them off their defaults, which is when they are
   // worth a line. Eight chips said all of it always, and spent 250px doing it.
-  // The OS share sheet is how a code actually reaches a group chat. Where
-  // there is none — every desktop browser but Safari — copying the link is
-  // the same job done by hand.
+  // The OS share sheet is how a code actually reaches a group chat on a
+  // phone. On a desktop it is the wrong control even where it exists (Safari,
+  // Edge): the link is going to be pasted into a chat window beside this
+  // one, so the button there just copies it (#580). A phone without a share
+  // sheet copies too.
+  const offersShare = isNarrow && typeof navigator !== "undefined" && typeof navigator.share === "function";
   async function shareInvite() {
     const url = window.location.href;
     if (navigator.share) {
@@ -149,9 +152,19 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
         )}
         <div className="waiting-invite-actions">
-          <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
-            {ui.waitingRoomPanel.shareLink}
-          </Button>
+          {offersShare ? (
+            <Button variant="primary" iconLeft={<LinkIcon size={15} />} onClick={() => void shareInvite()}>
+              {ui.waitingRoomPanel.shareLink}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              iconLeft={<LinkIcon size={15} />}
+              onClick={() => void copyToClipboard(window.location.href, ui.waitingRoomPanel.inviteLink)}
+            >
+              {ui.roomMenuSheet.copyInviteLink}
+            </Button>
+          )}
           {/* A button of its own, not a link pretending to be one: it is the
               other half of the same job as Share, on a card whose whole
               purpose is these two. */}
