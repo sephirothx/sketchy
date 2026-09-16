@@ -1645,6 +1645,19 @@ export const PT: Catalogue = {
     joining: "A entrar…",
     join: "Entrar",
     spectate: "Assistir",
+    waiting: "À espera",
+    seatsOpen: (p: { count: number }) =>
+      plural(p.count, { one: `${number(p.count)} livre`, other: `${number(p.count)} livres` }),
+    noSeatsOpen: "Sem lugares livres",
+    watching: (p: { count: number }) => `${number(p.count)} a ver`,
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} min`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} min`,
+    standardRules: "Regras padrão",
+    moreRules: (p: { count: number }) => `+${number(p.count)} mais`,
+    columnRoom: "Sala",
+    columnSeats: "Lugares",
+    columnLength: "Duração",
+    columnHouseRules: "Regras da sala",
   },
 
   recapDrawings: {

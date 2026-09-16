@@ -29,6 +29,9 @@
     --canvas-cap: 1000px;
     --room-players-width: 290px;
     --room-chat-width: 340px;
+    /* The lobby's people column: wider than the room's chat, because on the
+       lobby it holds two lists and the rooms are one to a row. */
+    --lobby-people-width: 420px;
   }
 }
 
@@ -38,6 +41,7 @@
     --canvas-cap: 1180px;
     --room-players-width: 320px;
     --room-chat-width: 380px;
+    --lobby-people-width: 480px;
   }
 }
 .lobby-page {

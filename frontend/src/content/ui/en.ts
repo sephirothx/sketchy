@@ -1654,6 +1654,18 @@ export const EN = {
     joining: "Joining…",
     join: "Join",
     spectate: "Spectate",
+    waiting: "Waiting",
+    seatsOpen: (p: { count: number }) => `${number(p.count)} open`,
+    noSeatsOpen: "No seats open",
+    watching: (p: { count: number }) => `${number(p.count)} watching`,
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} min`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} min`,
+    standardRules: "Standard rules",
+    moreRules: (p: { count: number }) => `+${number(p.count)} more`,
+    columnRoom: "Room",
+    columnSeats: "Seats",
+    columnLength: "Length",
+    columnHouseRules: "House rules",
   },
 
   recapDrawings: {

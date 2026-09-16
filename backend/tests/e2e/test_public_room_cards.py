@@ -65,6 +65,30 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             for dropped in ("Waiting", "No scoring", "Custom prompts only"):
                 assert await card.get_by_text(dropped, exact=True).count() == 0, dropped
 
+            # A wide lobby has a row a room, and the width to say what the
+            # card leaves out (#581): whether it is waiting, its open seats,
+            # how long a game runs, and only the rules that differ from a new
+            # room's - still nobody's name.
+            wide_context = await browser.new_context(viewport={"width": 1600, "height": 900})
+            try:
+                wide = await wide_context.new_page()
+                await wide.goto(BASE_URL)
+                await use_guest_name(wide, "CardWideVisitor")
+                row = wide.locator('.public-room-card.is-row', has_text="Room cards")
+                await row.wait_for()
+                assert await wide.locator(".room-list-columns").get_by_text("House rules").is_visible()
+                assert await row.get_by_text("Waiting", exact=True).is_visible()
+                assert "1/3 · 2 open" in await row.locator(".public-room-seats").inner_text()
+                # Two to three players, two rounds of 90s plus 24s a turn.
+                assert await row.get_by_text("~8–11 min", exact=True).is_visible()
+                rules = row.locator(".public-room-rules")
+                assert await rules.get_by_text("No scoring", exact=True).is_visible()
+                assert await rules.get_by_text("2 custom prompts only", exact=True).is_visible()
+                assert await rules.get_by_text("Standard rules", exact=True).count() == 0
+                assert "CardHost" not in await row.inner_text()
+            finally:
+                await wide_context.close()
+
             await player.goto(BASE_URL)
             await use_guest_name(player, "CardPlayer")
             await join_by_code(player, code)
