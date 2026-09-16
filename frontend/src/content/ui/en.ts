@@ -1067,11 +1067,10 @@ export const EN = {
   },
 
   inviteEntryPage: {
+    haveAnAccount: "Have an account?",
     roomCode: (p: { code: string }) => `Room ${p.code}`,
     hereCount: (p: { here: number; capacity: number; full: boolean }) =>
       `${p.here}/${p.capacity} here${p.full ? " · full" : ""}`,
-    roomSummary: (p: { rounds: number; seconds: number; hintMode: string }) =>
-      `${counted(p.rounds, { one: "round", other: "rounds" })} · ${p.seconds}s · ${p.hintMode}`,
     checkingYourInvite: "Checking your invite…",
     loadingRoomDetails: "Loading room details.",
     roomUnavailable: "Room unavailable",

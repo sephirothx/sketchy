@@ -74,8 +74,8 @@ export function useRoomEntry(code: string) {
     const machine = machineRef.current;
     if (!machine) return;
     // The machine checks the nickname before it calls anything, and a
-    // first-time visitor's is empty: the invite screen has no field of its
-    // own, so the name they typed is sitting in the shared draft. Becoming
+    // first-time visitor's is empty: the invite screen's name field writes
+    // the shared draft, not the machine, so the name they typed is there. Becoming
     // somebody is what fills it in - and the machine survives that now, so
     // the name can simply be handed to it.
     if (needsIdentity(useAuthStore.getState().user)) {

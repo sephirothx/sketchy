@@ -32,10 +32,10 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
 
             # Previewing a private invite does not join the room.
             await spectator_page.goto(invite_url)
-            # No name field here any more: the account already carries a
-            # name, shown and editable in the header.
-            assert await spectator_page.locator("#invite-nickname").count() == 0
-            await spectator_page.wait_for_selector(".first-run, .identity-chip")
+            # A cold visitor is asked for a name in the join dock itself, not
+            # in a separate first-run block with a button of its own.
+            await spectator_page.wait_for_selector("#invite-name")
+            assert await spectator_page.locator(".first-run").count() == 0
 
             assert await spectator_page.is_visible("text=Invite Test Room")
             assert await spectator_page.is_visible("text=Private invite")
@@ -43,8 +43,9 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await host_page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Visitors can explicitly spectate.
-            # The invite screen no longer asks for a name - the account has one.
+            # A visitor who already has a name is not asked for one again.
             await use_guest_name(spectator_page, "InviteSpectator")
+            assert await spectator_page.locator("#invite-name").count() == 0
             await spectator_page.click('button:has-text("Spectate")')
             await spectator_page.wait_for_selector(".room-copy-button")
             spectator_indicator = host_page.locator('[data-testid="spectator-indicator"]')
@@ -79,28 +80,27 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             assert not await host_page.is_visible('[data-testid="spectator-indicator"]')
 
             # Visitors can join as a player, and valid stored tokens reconnect on reload.
-            # This one names itself through the first-run block on the invite
-            # screen rather than through use_guest_name, because that is the
-            # cold path an invite link actually lands on: the block ships its
-            # own <form>, and putting it inside another one used to leave the
-            # submit unhandled, so the browser navigated and the page reloaded
-            # with the typed name thrown away.
+            # This one names itself in the invite dock rather than through
+            # use_guest_name, because that is the cold path an invite link
+            # actually lands on, and presses Enter: the dock is not a <form>,
+            # and a native submit would reload the page and drop the name.
             await player_page.goto(invite_url)
-            await player_page.wait_for_selector(".first-run")
+            await player_page.wait_for_selector("#invite-name")
             await player_page.evaluate("() => { window.__notReloaded = true; }")
-            await player_page.fill(".first-run-guest-row input", "InvitePlayer")
-            await player_page.click(".first-run-guest-submit")
-            await player_page.wait_for_selector(".identity-chip")
-            assert await player_page.evaluate("() => window.__notReloaded === true")
-            await player_page.click('button:has-text("Join game")')
+            await player_page.fill("#invite-name", "InvitePlayer")
+            await player_page.press("#invite-name", "Enter")
             await player_page.wait_for_selector(".room-copy-button")
+            assert await player_page.evaluate("() => window.__notReloaded === true")
+            await host_page.wait_for_selector(
+                '[data-testid="room-active-players"] >> text=InvitePlayer'
+            )
             await player_page.reload()
             await player_page.wait_for_selector(".room-copy-button")
             assert not await player_page.is_visible(".invite-card")
 
             # Once active-player capacity is full, spectating remains available.
             await full_room_page.goto(invite_url)
-            await full_room_page.wait_for_selector(".first-run, .identity-chip")
+            await full_room_page.wait_for_selector("#invite-name")
             assert await full_room_page.is_disabled('button:has-text("Room full")')
             assert await full_room_page.is_visible("text=Spectating is still open.")
             await use_guest_name(full_room_page, "LateSpectator")
@@ -115,9 +115,8 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
 
 
 async def test_a_typed_name_is_enough_to_join_from_an_invite():
-    """The invite screen has no nickname field of its own: the name goes into
-    the first-run block, and pressing Join must mean what pressing that
-    block's own button means."""
+    """The name typed in the invite dock is saved by Join itself: there is no
+    separate button to press first."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
@@ -133,10 +132,17 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = await get_room_code(host)
 
-            # Typed and left sitting: no "Play as guest" press.
             await visitor.goto(f"{BASE_URL}/room/{code}")
-            await visitor.wait_for_selector(".first-run-guest-row input")
-            await visitor.fill(".first-run-guest-row input", "InviteDrafter")
+            await visitor.wait_for_selector("#invite-name")
+
+            # Join with no name is refused in place; typing again takes the
+            # refusal back, rather than leaving the field marked invalid.
+            await visitor.click('button:has-text("Join game")')
+            await visitor.wait_for_selector("#invite-entry-error")
+            assert await visitor.get_attribute("#invite-name", "aria-invalid") == "true"
+            await visitor.fill("#invite-name", "InviteDrafter")
+            await visitor.wait_for_selector("#invite-entry-error", state="detached")
+            assert await visitor.get_attribute("#invite-name", "aria-invalid") is None
             await visitor.click('button:has-text("Join game")')
 
             await visitor.wait_for_selector(".room-copy-button")

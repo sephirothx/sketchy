@@ -516,6 +516,43 @@
   color: var(--danger);
 }
 
+.invite-name-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.invite-name-input::placeholder {
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.invite-account-line {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.invite-account-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .invite-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -523,8 +560,17 @@
   margin-top: 14px;
 }
 
+.invite-name-input + .invite-actions,
+.invite-name-input + .invite-form-error + .invite-actions {
+  margin-top: 10px;
+}
+
 .invite-primary-button,
 .invite-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 44px;
   border-radius: var(--radius-sm);
   padding: 10px 16px;
@@ -616,6 +662,62 @@
 
   .invite-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── The invite's answer, docked (#592) ────────────────────────────────
+   On a phone the name and the two ways in sit in a bar fixed to the bottom
+   of the screen, the lobby's own dock pattern, so the one decision this page
+   exists for is under the thumb at first paint while the room's rules above
+   take whatever room they need. Join takes the width; Spectate keeps its
+   word rather than shrinking to an eye nobody reads as "watch". */
+@media (max-width: 720px) {
+  .invite-entry-page {
+    padding-bottom: 180px;
+  }
+
+  .invite-join-form {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1.5px solid var(--line);
+    background: var(--card);
+    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+  }
+
+  /* Beats the narrow rule below that stacks the two and turns Spectate into
+     a text link: in the dock they share one row, as two real buttons. */
+  .invite-join-form .invite-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-top: 10px;
+  }
+
+  .invite-join-form .invite-actions > .invite-primary-button {
+    width: auto;
+  }
+
+  .invite-join-form .invite-actions > .invite-secondary-button {
+    background: var(--card);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: var(--shadow);
+    text-decoration: none;
+  }
+
+  .invite-join-form .invite-actions:first-child {
+    margin-top: 0;
+  }
+
+  .invite-join-form .invite-primary-button {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .invite-join-form .invite-secondary-button {
+    min-height: 48px;
   }
 }
 
@@ -722,39 +824,6 @@
   color: var(--ink);
 }
 
-.invite-details > summary {
-  align-items: center;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex;
-  gap: 8px;
-  list-style: none;
-  min-height: 44px;
-  padding: 4px 2px;
-}
-
-.invite-details > summary::-webkit-details-marker { display: none; }
-
-.invite-details > summary::after {
-  color: var(--faint);
-  content: "▸";
-  margin-left: auto;
-  transition: transform 140ms ease;
-}
-
-.invite-details[open] > summary::after {
-  transform: rotate(90deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .invite-details > summary::after { transition: none; }
-}
-
-.invite-details-summary {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-}
 
 @media (max-width: 900px) {
   /* Spectating is a real choice for someone arriving mid-game, just not the

@@ -1056,11 +1056,10 @@ export const FR: Catalogue = {
   },
 
   inviteEntryPage: {
+    haveAnAccount: "Tu as déjà un compte ?",
     roomCode: (p: { code: string }) => `Salon ${p.code}`,
     hereCount: (p: { here: number; capacity: number; full: boolean }) =>
       `${p.here}/${p.capacity} ici${p.full ? " · complet" : ""}`,
-    roomSummary: (p: { rounds: number; seconds: number; hintMode: string }) =>
-      `${counted(p.rounds, { one: "manche", other: "manches" })} · ${p.seconds}s · ${p.hintMode}`,
     checkingYourInvite: "Vérification de ton invitation…",
     loadingRoomDetails: "Chargement des détails du salon.",
     roomUnavailable: "Salon indisponible",
