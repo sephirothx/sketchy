@@ -1,4 +1,5 @@
 import { useClock } from "../hooks/useClock";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "../components/AppHeader";
 import { NotFoundPage } from "./NotFoundPage";
@@ -114,6 +115,9 @@ function DecisionCard({
     </section>
   );
 }
+
+/** How many decisions the wide screen's third column shows. */
+const RECENT_DECISIONS = 8;
 
 const FILTERS: { name: Filter; label: string }[] = [
   { name: "open", label: "All open" },
@@ -450,6 +454,13 @@ export function ModerationPage() {
     candidates: [],
   });
   const [openCount, setOpenCount] = useState(0);
+  // The newest decisions, for the third column a wide screen has room for
+  // (#581). Fetched only there: the Closed queue is the same stream, paged.
+  const showsRecentDecisions = useMediaQuery("(min-width: 1500px)");
+  const [recent, setRecent] = useState<{ players: ModerationIncident[]; content: ContentIncident[] }>({
+    players: [],
+    content: [],
+  });
   const [selected, setSelected] = useState<Selection | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
   // Optional, so nothing here refuses to proceed without it: what it buys is
@@ -502,8 +513,10 @@ export function ModerationPage() {
       pending,
       listHeldPublications(),
       listGalleryReview(),
+      showsRecentDecisions ? listClosedCases({ limit: RECENT_DECISIONS, offset: 0 }) : null,
     ])
-      .then(([caseResult, banResult, pendingResult, heldResult, galleryResult]) => {
+      .then(([caseResult, banResult, pendingResult, heldResult, galleryResult, recentResult]) => {
+        if (recentResult) setRecent({ players: recentResult.players, content: recentResult.content });
         setIncidents(caseResult.players);
         setContent(caseResult.content);
         setHasMore(caseResult.hasMore);
@@ -524,7 +537,7 @@ export function ModerationPage() {
         setError(null);
       })
       .catch(fail);
-  }, [allowed, showingClosed, page, fail]);
+  }, [allowed, showingClosed, page, fail, showsRecentDecisions]);
 
   useEffect(load, [load]);
 
@@ -606,6 +619,37 @@ export function ModerationPage() {
                   : [...playerEntries, ...contentEntries, ...heldEntries, ...galleryEntries];
     return entries.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }, [filter, showingClosed, incidents, content, bans, held, gallery]);
+
+  // A page counts decisions, and one decision can close a player incident and
+  // a content one together, so the merged list is cut back to the count.
+  const recentDecisions = useMemo<QueueEntry[]>(() => {
+    const entries: QueueEntry[] = [
+      ...recent.players.map((incident): QueueEntry => ({
+        kind: "incident",
+        id: incident.id,
+        title: incident.reportedPlayer?.displayName ?? "Deleted player",
+        snippet: incident.reasons.map(humanize).join(" · "),
+        at: decidedAt(incident),
+        dot: "neutral",
+        outcome: incident.outcome,
+      })),
+      ...recent.content.map((incident): QueueEntry => ({
+        kind: "content",
+        id: incident.id,
+        title:
+          incident.targetType === "prompt"
+            ? `Prompt “${incident.prompt}”`
+            : `List “${incident.listName}”`,
+        snippet: incident.reasons.map(humanize).join(" · "),
+        at: decidedAt(incident),
+        dot: "neutral",
+        outcome: incident.outcome,
+      })),
+    ];
+    return entries
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+      .slice(0, RECENT_DECISIONS);
+  }, [recent]);
 
   // Derived rather than synced by an effect: whatever is clicked wins while
   // it is still in the queue, and the newest entry stands in otherwise.
@@ -1726,6 +1770,49 @@ export function ModerationPage() {
             <p className="ops-empty">Nothing selected. The queue is clear.</p>
           )}
         </div>
+
+        {/* The newest decisions beside the case, on a screen wide enough to
+            keep them there (#581): what was just done is the context for the
+            next thing to decide, and the Closed queue that holds them is a
+            click and a scroll away from the open one. Opening one switches
+            to that queue, where the case is, rather than showing a closed case
+            beside an open queue. */}
+        {showsRecentDecisions && (
+          <aside className="ops-card mod-recent" aria-labelledby="mod-recent-title">
+            <div className="mod-queue-head">
+              <div>
+                <SectionLabel>Closed</SectionLabel>
+                <h2 id="mod-recent-title">Recent decisions</h2>
+              </div>
+            </div>
+            {recentDecisions.length === 0 ? (
+              <p className="ops-empty">No case has been decided yet.</p>
+            ) : (
+              <ol className="mod-recent-list">
+                {recentDecisions.map((entry) => (
+                  <li key={`${entry.kind}:${entry.id}`}>
+                    <button
+                      type="button"
+                      className="mod-queue-item"
+                      onClick={() => {
+                        if (filter !== "closed") changeFilter("closed");
+                        setSelected({ kind: entry.kind, id: entry.id });
+                      }}
+                    >
+                      <span className="mod-queue-dot is-neutral" aria-hidden="true" />
+                      <span className="mod-queue-item-text">
+                        <strong>{entry.title}</strong>
+                        {entry.outcome && <OutcomeChip outcome={entry.outcome} />}
+                        <span>{entry.snippet}</span>
+                      </span>
+                      <time dateTime={entry.at}>{age(entry.at)}</time>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </aside>
+        )}
       </div>
     </main>
   );

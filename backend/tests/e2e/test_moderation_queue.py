@@ -151,6 +151,22 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await pager.wait_for()
             assert await pager.get_by_role("button", name="Newer").is_disabled()
             assert await pager.get_by_role("button", name="Older").is_disabled()
+
+            # A wide screen keeps the newest decisions in a column beside the
+            # case (#581), whatever queue is open; opening one there moves to
+            # Closed, where the case lives, and shows its decision.
+            await moderator_page.set_viewport_size({"width": 1600, "height": 900})
+            await moderator_page.get_by_role("button", name="All open").click()
+            recent = moderator_page.get_by_role("complementary", name="Recent decisions")
+            entry = recent.locator(".mod-queue-item", has_text=names[drawer])
+            await entry.wait_for()
+            assert await entry.locator(".chip", has_text="Dismissed").count() == 1
+            await entry.click()
+            await moderator_page.locator(
+                '.mod-filter-pill[aria-pressed="true"]', has_text="Closed"
+            ).wait_for()
+            await moderator_page.locator('[data-testid="mod-decision"]').wait_for()
+            assert await moderator_page.locator(".mod-case h1").inner_text() == names[drawer]
         finally:
             for context in contexts:
                 await context.close()

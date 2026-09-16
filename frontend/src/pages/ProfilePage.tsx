@@ -745,7 +745,11 @@ function ProfileView({ userId }: { userId: string }) {
             </section>
           )}
 
-          <section className="panel">
+          {/* Beside each other on a wide screen (#581): the history is the
+              long read, and the numbers stay in view while it scrolls. The
+              statistics come first here, so they are still read first. */}
+          <div className="profile-columns">
+          <section className="panel profile-statistics">
             <h2>{ui.profilePage.statistics}</h2>
             <div className="profile-stats">
               <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
@@ -765,7 +769,7 @@ function ProfileView({ userId }: { userId: string }) {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel profile-history">
             <div className="profile-history-head">
               <h2>{ui.profilePage.gameHistory}</h2>
               <label className="profile-history-filter">
@@ -801,6 +805,7 @@ function ProfileView({ userId }: { userId: string }) {
               </button>
             )}
           </section>
+          </div>
         </>
       )}
 
