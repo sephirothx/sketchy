@@ -1393,6 +1393,7 @@ export const PT: Catalogue = {
   },
 
   notFoundPage: {
+    pageNotFound: "Página não encontrada",
     nobodyDrewThisPage: "Ninguém desenhou esta página",
     thatLinkDoesnTLeadAnywhere: "Essa ligação não leva a lado nenhum no Sketchy.",
     backLobby: "Voltar ao átrio",
