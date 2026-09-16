@@ -1270,6 +1270,7 @@ export const IT: Catalogue = {
     allTime: "Da sempre",
     thisMonth: "Questo mese",
     thisWeek: "Questa settimana",
+    nothingThisWeek: "Ancora nessun disegno pubblico questa settimana. Gioca una partita pubblica e torna.",
     nothingHereYet: "Qui non c’è ancora niente. Gioca una partita pubblica e torna.",
     signInToSeeTheGallery: "La galleria è per i giocatori che hanno effettuato l’accesso. Accedi o continua come ospite dalla lobby.",
     couldNotLoadTheGallery: "Non è stato possibile caricare la galleria.",
