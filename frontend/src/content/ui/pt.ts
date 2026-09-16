@@ -1277,6 +1277,8 @@ export const PT: Catalogue = {
     showMore: "Mostrar mais",
     openDrawing: (p: { prompt: string; drawer: string }) => `Abrir «${p.prompt}» de ${p.drawer}`,
     byDrawer: (p: { drawer: string }) => `de ${p.drawer}`,
+    seeTheGallery: "Ver a galeria",
+    nothingThisWeek: "Ainda não há desenhos públicos esta semana. Joga uma partida pública e volta.",
   },
   myPromptListsPage: {
     inCommunityCatalogue: "No catálogo da comunidade",

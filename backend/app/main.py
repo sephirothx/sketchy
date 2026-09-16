@@ -20,6 +20,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.errors import install_refusal_handler
 from app.api.gallery import create_gallery_router
+from app.services.gallery_shelf import SHELF_SIZE, SHELF_TTL_SECONDS, GalleryShelfCache
 from app.api.profiles import create_profile_router
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
@@ -181,6 +182,25 @@ async def push_email_state_changed(user_id: str) -> None:
     put on a broadcast.
     """
     await sio.emit("email_state_changed", {}, room=f"user:{user_id}")
+
+
+def _gallery_shelf_ttl_seconds() -> float:
+    """How long the lobby's This week shelf is served from one snapshot
+    (R-GAL-07). Tunable so the end-to-end runner can see a reaction land on
+    the shelf without waiting a minute; a deployment keeps the default."""
+    raw = os.environ.get("GALLERY_SHELF_TTL_SECONDS", "").strip()
+    if not raw:
+        return SHELF_TTL_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return SHELF_TTL_SECONDS
+    return value if value >= 0 else SHELF_TTL_SECONDS
+
+
+async def _read_gallery_shelf(repo):
+    page = await repo.list_gallery(sort="top", window="week", limit=SHELF_SIZE)
+    return page.entries
 
 
 def _friend_request_limit() -> int:
@@ -674,7 +694,15 @@ api.include_router(
         user_repo, game_history_repo, is_online=handler_context.presence.is_online
     )
 )
-api.include_router(create_gallery_router(game_history_repo))
+api.include_router(
+    create_gallery_router(
+        game_history_repo,
+        shelf=GalleryShelfCache(
+            lambda: _read_gallery_shelf(game_history_repo),
+            ttl_seconds=_gallery_shelf_ttl_seconds(),
+        ),
+    )
+)
 api.include_router(
     create_prompt_list_router(prompt_list_repo, user_repo, async_session_factory)
 )

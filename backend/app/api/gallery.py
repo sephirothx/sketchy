@@ -1,19 +1,30 @@
 """The Gallery's REST surface (#524): reactions from outside the game."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request
+from dataclasses import replace
+import hashlib
+
+from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.errors import Refusal
-from app.api.profiles import reaction_payload, serve_drawing
+from app.api.profiles import reaction_payload, serve_drawing, validator_matches
 from app.api.serializers import _timestamp as serialize_timestamp
 from app.auth.rate_limit import RateLimiter, client_key
 from app.domain_values import OFFERED_REACTION_EMOJI_CODES
 from app.refusals import ErrorCode
 from app.repositories.interfaces import GalleryEntry, GameHistoryRepository
 from app.services.gallery_ranking import MAX_GALLERY_PAGE, TOP_WINDOWS
+from app.services.gallery_shelf import SHELF_SIZE, GalleryShelfCache
 
 GALLERY_SORTS = ("hot", "new", "top")
+
+
+async def _read_shelf(game_history_repo: GameHistoryRepository):
+    page = await game_history_repo.list_gallery(
+        sort="top", window="week", limit=SHELF_SIZE
+    )
+    return page.entries
 
 # The same ceiling as the profile routes: a human's pace, and enough to make
 # walking turn ids inconvenient.
@@ -52,8 +63,17 @@ class GalleryReactionBody(BaseModel):
     emoji: str = Field(min_length=1, max_length=16)
 
 
-def create_gallery_router(game_history_repo: GameHistoryRepository) -> APIRouter:
+def create_gallery_router(
+    game_history_repo: GameHistoryRepository,
+    *,
+    shelf: GalleryShelfCache | None = None,
+) -> APIRouter:
+    """`shelf` is the process-wide cache of the lobby's shelf; a router built
+    without one gets a cache of its own over the repository."""
     router = APIRouter(prefix="/api/gallery")
+    shelf_cache = shelf or GalleryShelfCache(
+        lambda: _read_shelf(game_history_repo)
+    )
 
     def throttle(request: Request, limiter: RateLimiter = gallery_limiter) -> None:
         if not limiter.check(client_key(request)):
@@ -128,6 +148,48 @@ def create_gallery_router(game_history_repo: GameHistoryRepository) -> APIRouter
             "entries": [gallery_entry_payload(entry) for entry in page.entries],
             "nextCursor": page.next_cursor,
         }
+
+    @router.get("/week")
+    async def this_week(request: Request, response: Response):
+        """The lobby's **This week** shelf (R-GAL-07): Top over the last seven
+        days, the first six, from a snapshot recomputed at most once a minute
+        and shared by every lobby. The viewer's own facts are added per
+        request; the validator names the snapshot and those facts, so a
+        remembered copy is answered `304` until either moves. No session is
+        the page's `account_required`, so the lobby renders no shelf at all.
+        """
+        throttle(request)
+        viewer_id = getattr(request.state, "user_id", None)
+        if not viewer_id:
+            raise Refusal(
+                403,
+                ErrorCode.ACCOUNT_REQUIRED,
+                "Sign in to see this week's drawings.",
+                params={"action": "gallery"},
+            )
+        snapshot = await shelf_cache.get()
+        facts = await game_history_repo.viewer_gallery_facts(
+            [entry.turn_id for entry in snapshot.entries], viewer_user_id=viewer_id
+        )
+        entries = [
+            gallery_entry_payload(
+                replace(
+                    entry,
+                    my_reaction=facts.get(entry.turn_id, (None, False))[0],
+                    drawn_by_me=facts.get(entry.turn_id, (None, False))[1],
+                )
+            )
+            for entry in snapshot.entries
+        ]
+        validator = 'W/"' + snapshot.version + "-" + hashlib.sha256(
+            repr(sorted(facts.items())).encode()
+        ).hexdigest()[:12] + '"'
+        headers = {"Cache-Control": "private, no-cache", "ETag": validator}
+        if_none_match = request.headers.get("if-none-match")
+        if if_none_match is not None and validator_matches(if_none_match, validator):
+            return Response(status_code=304, headers=headers)
+        response.headers.update(headers)
+        return {"entries": entries}
 
     @router.get("/{turn_id}/drawing")
     async def gallery_drawing(turn_id: str, request: Request):

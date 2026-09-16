@@ -2,6 +2,7 @@
 through the third door, and every refusal."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest_asyncio
@@ -107,3 +108,72 @@ async def test_the_third_door_closes_with_the_predicate(env):
         assert (
             await http.get(f"/api/gallery/{turn}/drawing", headers={"If-None-Match": 'W/"x"'})
         ).status_code == 404
+
+
+# ---- the lobby's shelf (R-GAL-07)
+
+
+async def test_this_week_is_top_weeks_first_six_from_one_cached_snapshot(env):
+    """Six at most, the most reacted this week first, computed once a minute
+    for everyone, with the viewer's own facts added per request and a
+    validator that answers 304 until the shelf or those facts move."""
+    from app.services.gallery_shelf import GalleryShelfCache
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    games = [
+        await record_game(
+            history, drawer=ann.id, reactor=bob.id, visibility="public",
+            finished_at=NOW - timedelta(hours=i + 1),
+        )
+        for i in range(8)
+    ]
+    await record_game(history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public", finished_at=NOW - timedelta(days=9))
+    await history.set_drawing_reaction(None, games[3].turn_id, requesting_user_id=cid.id, emoji="fire", from_gallery=True)
+
+    assert (await http.get("/api/gallery/week")).status_code == 403
+
+    await sign_in_as(http, factory, bob.id)
+    first = await http.get("/api/gallery/week")
+    assert first.status_code == 200
+    ids = [entry["turnId"] for entry in first.json()["entries"]]
+    assert len(ids) == 6 and ids[0] == games[3].turn_id
+    assert first.json()["entries"][0]["reactionCounts"] == {"fire": 1}
+    assert first.headers["cache-control"] == "private, no-cache"
+    validator = first.headers["etag"]
+    again = await http.get("/api/gallery/week", headers={"If-None-Match": validator})
+    assert again.status_code == 304 and again.content == b""
+
+    # The snapshot is shared: a reaction landing now is not on the shelf
+    # until the minute is up, but the viewer's own facts are theirs at once.
+    await sign_in_as(http, factory, cid.id)
+    mine = await http.get("/api/gallery/week")
+    assert mine.json()["entries"][0]["myReaction"] == "fire"
+    assert mine.headers["etag"] != validator
+    await sign_in_as(http, factory, ann.id)
+    theirs = await http.get("/api/gallery/week")
+    assert theirs.json()["entries"][0]["drawnByMe"] is True
+    assert theirs.json()["entries"][0]["myReaction"] is None
+
+    # The cache itself: one read for many callers, then one more after the ttl.
+    reads = 0
+
+    async def read():
+        nonlocal reads
+        reads += 1
+        return (await history.list_gallery(sort="top", window="week", limit=6)).entries
+
+    now = [1000.0]
+    cache = GalleryShelfCache(read, ttl_seconds=60, clock=lambda: now[0])
+    snapshots = await asyncio.gather(*(cache.get() for _ in range(5)))
+    assert reads == 1 and len({s.version for s in snapshots}) == 1
+    now[0] += 59
+    assert (await cache.get()).version == snapshots[0].version and reads == 1
+    now[0] += 2
+    await cache.get()
+    assert reads == 2
+    cache.invalidate()
+    await cache.get()
+    assert reads == 3

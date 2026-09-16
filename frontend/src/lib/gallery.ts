@@ -109,3 +109,12 @@ export function galleryEntriesAsRecap(entries: readonly GalleryEntry[]): Drawing
     available: true,
   }));
 }
+
+/**
+ * The lobby's **This week** shelf (R-GAL-07): Top-week's first six, from a
+ * snapshot the server recomputes at most once a minute. One read on open;
+ * the browser revalidates the validator it was given, never polls.
+ */
+export function fetchThisWeek(): Promise<{ entries: GalleryEntry[] }> {
+  return apiRequest("/api/gallery/week");
+}

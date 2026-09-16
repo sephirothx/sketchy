@@ -215,3 +215,20 @@
   margin: 0;
   padding: 8px 0;
 }
+
+/* ---------------------------------------------------------- lobby shelf
+
+   This week in the lobby (R-GAL-07): six cards at most, on one row where
+   the width allows, three to a row on a phone. The cards are the Gallery's
+   own, so a drawing looks the same here and there. */
+.lobby-week-panel { margin-bottom: 16px; }
+
+.lobby-week-grid {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+@media (max-width: 480px) {
+  .lobby-week-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
