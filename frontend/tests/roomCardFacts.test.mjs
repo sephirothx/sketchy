@@ -103,3 +103,14 @@ test("a room on several lists but no custom prompts says how many lists", async 
   const prompts = roomFacts({ ...standard, promptListSlugs: ["a", "b"] }).find((fact) => fact.key === "prompts");
   assert.deepEqual([prompts.value, prompts.changed], ["English · 2 lists", true]);
 });
+
+test("a room on a single list other than its language's Standard one is marked, not passed off as the default", async () => {
+  const { roomFacts } = await import("../src/lib/roomCardFacts.ts");
+  const promptsOf = (slugs) => roomFacts({ ...standard, promptListSlugs: slugs }).find((fact) => fact.key === "prompts");
+  const standardOnly = promptsOf(["english_standard"]);
+  assert.deepEqual([standardOnly.value, standardOnly.changed], ["English", false]);
+  const community = promptsOf(["community-0f3a"]);
+  assert.deepEqual([community.value, community.changed], ["English · 1 list", true]);
+  const extended = promptsOf(["english_extended"]);
+  assert.deepEqual([extended.value, extended.changed], ["English · 1 list", true]);
+});

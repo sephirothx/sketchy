@@ -83,14 +83,19 @@ export interface RoomFact {
     prompts are marked when the host moved them off a new room's default, so
     an unusual room reads as one before anybody joins it. */
 export function roomFacts(room: RoomFactsInput): RoomFact[] {
-  const lists = room.promptListSlugs?.length ?? 0;
+  const slugs = room.promptListSlugs ?? [];
+  const lists = slugs.length;
+  // A room plays its language's Standard list unless the host chose otherwise:
+  // several lists, or a single other one (a community list, a private one,
+  // Extended). Either is a prompt configuration worth marking.
+  const nonDefaultLists = lists > 1 || (lists === 1 && !slugs[0].endsWith("_standard"));
   const prompts = [
     promptLanguageLabel(room.promptLanguage),
     room.customPromptCount > 0
       ? room.customPromptsOnly
         ? ui.roomFacts.customOnlyShort({ count: room.customPromptCount })
         : ui.roomFacts.customShort({ count: room.customPromptCount })
-      : lists > 1
+      : nonDefaultLists
         ? ui.roomFacts.listsShort({ count: lists })
         : null,
   ].filter(Boolean).join(" · ");
@@ -121,7 +126,7 @@ export function roomFacts(room: RoomFactsInput): RoomFact[] {
       key: "prompts",
       label: ui.roomSetupForm.prompts,
       value: prompts,
-      changed: room.customPromptCount > 0 || lists > 1,
+      changed: room.customPromptCount > 0 || nonDefaultLists,
     },
   ];
 }
