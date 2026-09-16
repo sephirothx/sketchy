@@ -1377,11 +1377,15 @@
     display: none;
   }
 
-  /* The bar comes back when the keyboard takes the band away; the number does
-     not. A depleting rule says "running out" at a glance, which is the whole
-     of what a guesser does with it — and the digits cost a line of canvas. */
+  /* When the keyboard takes the band away, the bar comes back and so does the
+     number (#580): the ring is gone with the band, and a guesser typing
+     against the clock wants the seconds, not only a depleting rule. */
   .game-room.guess-focused .guess-timer-bar {
     display: block;
+  }
+
+  .game-room.guess-focused .turn-bar-clock {
+    display: inline;
   }
 
   /* Masked letters at a size worth reading. 19x26 was below the floor for a
@@ -1866,12 +1870,6 @@
 .turn-bar .prompt-display {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-/* The bar's ring is the clock (#580); this numeral is its stand-in only while
-   the guess keyboard hides the bar, so the time is never on screen twice. */
-.game-room:not(.guess-focused) .turn-bar-clock {
-  display: none;
 }
 
 .turn-bar-clock {

@@ -1393,6 +1393,7 @@ export const NL: Catalogue = {
   },
 
   notFoundPage: {
+    pageNotFound: "Pagina niet gevonden",
     nobodyDrewThisPage: "Deze pagina heeft niemand getekend",
     thatLinkDoesnTLeadAnywhere: "Die link leidt nergens heen op Sketchy.",
     backLobby: "Terug naar de lobby",

@@ -492,6 +492,9 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             mobile_input = next_guesser.locator('.chat-input input')
             await mobile_input.focus()
             await next_guesser.wait_for_selector('.game-room.guess-focused')
+            # The keyboard hides the bar and its ring, so the prompt row says
+            # the seconds instead (#580, R-UX-11).
+            await next_guesser.locator('.turn-bar-clock').wait_for(state="visible")
             next_word = await next_drawer.locator('.prompt-reveal').inner_text()
             await next_guesser.evaluate(WATCH_TURN_RESULTS)
             await mobile_input.fill(next_word)

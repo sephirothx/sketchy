@@ -1401,6 +1401,7 @@ export const EN = {
   },
 
   notFoundPage: {
+    pageNotFound: "Page not found",
     nobodyDrewThisPage: "Nobody drew this page",
     thatLinkDoesnTLeadAnywhere: "That link doesn’t lead anywhere on Sketchy.",
     backLobby: "Back to lobby",
