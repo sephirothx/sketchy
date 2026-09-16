@@ -1600,7 +1600,9 @@ def create_moderation_router(
             ip_hash=ip_hash,
         )
         if on_avatar_changed is not None:
-            await on_avatar_changed(str(report.reported_user_id), None)
+            # What is left, not a blanket None: a doodle the removal left in
+            # place must stay on the player's live seats (R-AVA-09).
+            await on_avatar_changed(str(report.reported_user_id), outcome.avatar_key)
         # After the commit, so a socket can never announce a notice a
         # rolled-back transaction never wrote - the rule the warning route
         # above follows for the same reason.

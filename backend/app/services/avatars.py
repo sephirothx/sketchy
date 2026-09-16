@@ -207,6 +207,9 @@ class AvatarRemoval:
     had_one: bool
     warning_id: UUID | None = None
     blocked_until: datetime | None = None
+    # What the account wears once the removal is done: None, or a doodle a
+    # moderator's removal left in place (R-AVA-09). What live seats are told.
+    avatar_key: str | None = None
 
 
 async def _prior_moderator_removals(session: AsyncSession, user_id: UUID) -> int:
@@ -274,6 +277,7 @@ async def remove_avatar(
             # clears either kind.
             if not by_moderator or uploaded_avatar_key(user.avatar_key) is not None:
                 user.avatar_key = None
+            remaining_key = user.avatar_key
             user.updated_at = at
             wait = None
             if by_moderator:
@@ -334,7 +338,10 @@ async def remove_avatar(
                     )
                 )
     return AvatarRemoval(
-        had_one=had_one, warning_id=warning_id, blocked_until=blocked_until
+        had_one=had_one,
+        warning_id=warning_id,
+        blocked_until=blocked_until,
+        avatar_key=remaining_key,
     )
 
 

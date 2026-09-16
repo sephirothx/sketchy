@@ -952,3 +952,40 @@ def test_the_server_the_client_and_the_sprite_name_the_same_doodles():
     client_names = tuple(re.findall(r'"([a-z]+)"', listed.group(1)))
     assert symbols == DOODLES
     assert client_names == DOODLES
+
+
+async def test_a_removal_that_leaves_a_doodle_tells_live_seats_the_doodle(env):
+    """A picture reported and then swapped for a doodle: the removal keeps the
+    doodle on the account, and live seats must be told the doodle rather than
+    a blanket None, or rooms would draw the initial until a reconnect."""
+    new_client, factory = env
+    target_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    target = await register(target_http, "Switcher")
+    await register(reporter_http, "Noticer")
+    moderator = await register(moderator_http, "Warden")
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(moderator["id"]))
+            row.role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    await target_http.post("/api/users/me/avatar", json=encoded(png_bytes(seed=8)))
+    report = await reporter_http.post(
+        "/api/reports",
+        json={
+            "reportedUserId": target["id"],
+            "reason": "inappropriate_avatar",
+            "details": "Before they swapped it.",
+        },
+    )
+    assert report.status_code == 201
+    assert (
+        await target_http.put("/api/users/me/avatar/doodle", json={"name": "cloud"})
+    ).status_code == 200
+
+    removed = await moderator_http.post(
+        f"/api/moderation/reports/{report.json()['id']}/remove-avatar"
+    )
+    assert removed.status_code == 200
+    assert removed.json()["removed"] is False
+    assert (await target_http.get("/api/auth/me")).json()["avatarUrl"] == "/avatars/doodles.svg#cloud"
+    new_client.changed.assert_awaited_with(target["id"], "doodle:cloud")
