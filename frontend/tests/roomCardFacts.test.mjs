@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { gameLength, gameMinutes, houseRules } from "../src/lib/roomCardFacts.ts";
+import { gameLength, gameMinutes, changedRoomRules } from "../src/lib/roomCardFacts.ts";
 
 const standard = {
   id: "r1",
@@ -38,13 +38,13 @@ test("the range runs from the seats taken, never fewer than two, to a full room"
   assert.deepEqual(gameLength({ ...standard, playerCount: 8 }), { low: 46, high: 46 });
 });
 
-test("a room on standard settings has no house rules to show", () => {
-  assert.deepEqual(houseRules(standard), []);
+test("a room on standard settings has no room rules to show", () => {
+  assert.deepEqual(changedRoomRules(standard), []);
 });
 
 test("only the settings that differ from a new room's are named, in a fixed order", () => {
   assert.deepEqual(
-    houseRules({
+    changedRoomRules({
       ...standard,
       spectatorsSeePrompt: true,
       customPromptCount: 40,
@@ -61,11 +61,11 @@ test("only the settings that differ from a new room's are named, in a fixed orde
       "Spectators can see the prompt",
     ],
   );
-  assert.deepEqual(houseRules({ ...standard, scoringMode: "none", hideMaskedPrompt: true }), [
+  assert.deepEqual(changedRoomRules({ ...standard, scoringMode: "none", hideMaskedPrompt: true }), [
     "No scoring",
     "Hidden prompt",
   ]);
-  assert.deepEqual(houseRules({ ...standard, customPromptCount: 1, customPromptsOnly: true }), [
+  assert.deepEqual(changedRoomRules({ ...standard, customPromptCount: 1, customPromptsOnly: true }), [
     "1 custom prompt only",
   ]);
 });

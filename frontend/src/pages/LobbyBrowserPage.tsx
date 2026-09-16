@@ -496,7 +496,7 @@ export function LobbyBrowserPage() {
                 <span>{ui.publicRoomCard.columnRoom}</span>
                 <span>{ui.publicRoomCard.columnSeats}</span>
                 <span>{ui.publicRoomCard.columnLength}</span>
-                <span>{ui.publicRoomCard.columnHouseRules}</span>
+                <span>{ui.publicRoomCard.columnRoomRules}</span>
               </div>
             )}
             {filteredRooms.map((room) => (

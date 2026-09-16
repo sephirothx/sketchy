@@ -1658,7 +1658,7 @@ export const NL: Catalogue = {
     columnRoom: "Kamer",
     columnSeats: "Plaatsen",
     columnLength: "Duur",
-    columnHouseRules: "Huisregels",
+    columnRoomRules: "Kamerregels",
   },
 
   recapDrawings: {

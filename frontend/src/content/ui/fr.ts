@@ -1660,7 +1660,7 @@ export const FR: Catalogue = {
     columnRoom: "Salon",
     columnSeats: "Places",
     columnLength: "Durée",
-    columnHouseRules: "Règles du salon",
+    columnRoomRules: "Règles du salon",
   },
 
   recapDrawings: {

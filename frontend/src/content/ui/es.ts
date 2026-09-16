@@ -1657,7 +1657,7 @@ export const ES: Catalogue = {
     columnRoom: "Sala",
     columnSeats: "Plazas",
     columnLength: "Duración",
-    columnHouseRules: "Reglas de la sala",
+    columnRoomRules: "Reglas de la sala",
   },
 
   recapDrawings: {

@@ -1665,7 +1665,7 @@ export const EN = {
     columnRoom: "Room",
     columnSeats: "Seats",
     columnLength: "Length",
-    columnHouseRules: "House rules",
+    columnRoomRules: "Room rules",
   },
 
   recapDrawings: {

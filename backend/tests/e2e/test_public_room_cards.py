@@ -53,7 +53,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await card.wait_for()
             # The card carries what decides whether to tap, and nothing else:
             # name, prompt language, how full, and how long a game runs. The
-            # house rules it used to list as a chip apiece are one tap away on
+            # room rules it used to list as a chip apiece are one tap away on
             # the other side of Join, and on a phone they pushed the next room
             # off the screen.
             assert await card.get_by_text("1/3", exact=True).is_visible()
@@ -76,7 +76,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
                 await use_guest_name(wide, "CardWideVisitor")
                 row = wide.locator('.public-room-card.is-row', has_text="Room cards")
                 await row.wait_for()
-                assert await wide.locator(".room-list-columns").get_by_text("House rules").is_visible()
+                assert await wide.locator(".room-list-columns").get_by_text("Room rules").is_visible()
                 assert await row.get_by_text("Waiting", exact=True).is_visible()
                 assert "1/3 · 2 open" in await row.locator(".public-room-seats").inner_text()
                 # Two to three players, two rounds of 90s plus 24s a turn.
@@ -175,6 +175,58 @@ async def test_a_typed_name_is_enough_to_join_without_pressing_play_as_guest():
             await visitor.wait_for_selector('[data-testid="waiting-room"]')
             assert await visitor.get_by_text("DraftVisitor", exact=True).is_visible()
             await host.get_by_text("DraftVisitor", exact=True).wait_for()
+        finally:
+            await host_context.close()
+            await visitor_context.close()
+            await browser.close()
+
+
+async def test_a_wide_row_never_hides_a_rule_it_has_not_counted():
+    """Past three changed rules a row folds the rest into "+N more". The chips
+    used to be clipped at two lines, and in French at 1500px that clip took
+    the third rule and the "+2" with it: a room with five rules read as a room
+    with two. The row may take a third line instead."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        visitor_context = await browser.new_context(viewport={"width": 1500, "height": 900})
+        await visitor_context.add_init_script("localStorage.setItem('sketchy_locale', 'fr')")
+        host = await host_context.new_page()
+        visitor = await visitor_context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, "RulesHost")
+            await host.click('button:has-text("Create room")')
+            await host.fill('input[placeholder="Leave blank for a random name!"]', "Many rules")
+            await host.click('summary:has-text("Prompts")')
+            await host.fill('#custom-prompts', "apple, pear, plum")
+            await host.click('summary:has-text("Drawing")')
+            await host.get_by_role("button", name="Fill", exact=True).click()
+            await host.get_by_role("button", name="Shapes", exact=True).click()
+            await host.get_by_role("button", name="Black and white").click()
+            await host.click('summary:has-text("Scoring and hints")')
+            await host.get_by_role("button", name="Pressure").click()
+            await host.get_by_role("button", name="Wheel of Fortune").click()
+            await host.get_by_role("switch", name="Spectators can see the prompt").check()
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+
+            await visitor.goto(BASE_URL)
+            await use_guest_name(visitor, "RulesVisitor")
+            row = visitor.locator(".public-room-card.is-row", has_text="Many rules")
+            await row.wait_for()
+            rules = row.locator(".public-room-rules")
+            assert await rules.locator(".chip").count() == 4
+            more = rules.locator(".public-room-rules-more")
+            assert "+2" in await more.inner_text()
+            # Inside what the row shows, not only in the DOM.
+            box, row_box = await more.bounding_box(), await row.bounding_box()
+            assert box["y"] + box["height"] <= row_box["y"] + row_box["height"]
+            assert await more.evaluate(
+                "(chip) => { const list = chip.parentElement.getBoundingClientRect();"
+                " const own = chip.getBoundingClientRect();"
+                " return own.bottom <= list.bottom + 0.5 && own.top >= list.top - 0.5; }"
+            )
         finally:
             await host_context.close()
             await visitor_context.close()

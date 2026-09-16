@@ -39,7 +39,7 @@ export function gameLength(
     short labels, in a fixed order: scoring, hints, drawing, prompts, then
     spectators. Empty for a room on standard settings, which the row says once
     rather than as six grey chips that would hide the room that is unusual. */
-export function houseRules(room: RoomSummary): string[] {
+export function changedRoomRules(room: RoomSummary): string[] {
   const rules: string[] = [];
   if (room.scoringMode === "pressure") rules.push(ui.roomSetup.pressureScoring);
   if (room.scoringMode === "none") rules.push(ui.roomSetup.noScoring);
