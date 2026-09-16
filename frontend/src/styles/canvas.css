@@ -7,3 +7,71 @@
   max-width: 800px;
 }
 
+
+/* ------------------------------------------------------------ scratch pad */
+/* The scratch pad (#829): a sheet only this tab sees. Paper-white like the game
+   canvas, because it is paper, but small and on a card: never the stage. */
+.scratch-pad {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.scratch-pad-canvas {
+  aspect-ratio: 4 / 3;
+  background: #ffffff;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: crosshair;
+  display: block;
+  max-width: 100%;
+  touch-action: none;
+  width: 100%;
+}
+
+/* Wraps only in the longest languages on the narrowest card, and then the
+   buttons keep to the right edge rather than starting a ragged second line. */
+.scratch-pad-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+.scratch-pad-colors {
+  display: flex;
+  gap: 7px;
+  margin-right: auto;
+  padding-left: 3px;
+}
+
+.scratch-pad-tools .btn-compact {
+  gap: 5px;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
+
+.scratch-pad-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  text-align: left;
+}
+
+.room-stage-card.has-scratch-pad {
+  max-width: 440px;
+  padding-inline: 16px;
+}
+
+.modal-card.scratch-pad-dialog {
+  max-width: 480px;
+  width: min(480px, calc(100vw - 32px));
+  padding: 20px;
+}
+
+.scratch-pad-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}

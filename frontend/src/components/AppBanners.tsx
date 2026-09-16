@@ -114,11 +114,11 @@ export function AppBanners() {
               </div>
             );
           case "connection":
-            return connection === "connected" ? null : (
-              <ConnectionStatusBanner key={notice} status={connection} />
-            );
+            // Rendered below, outside the list: the pad it opens outlives the banner.
+            return null;
         }
       })}
+      <ConnectionStatusBanner status={banners.includes("connection") ? connection : "connected"} />
       <EmailRecoveryReminder />
     </div>
   );

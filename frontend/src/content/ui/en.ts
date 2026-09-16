@@ -1926,6 +1926,16 @@ export const EN = {
       `${number(p.count)} custom`,
   },
 
+  scratchPad: {
+    title: "Scratch pad",
+    drawWhileYouWait: "Draw while you wait",
+    canvasLabel: "Scratch pad. Only you can see what you draw here.",
+    onlyYou: "Only you can see this. Nothing is sent.",
+    clear: "Clear",
+    save: "Save",
+    close: "Close",
+  },
+
   roomStageNotice: {
     connectionLost: "Connection lost",
     serverUpdating: "Server updating",

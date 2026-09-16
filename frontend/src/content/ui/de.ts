@@ -1922,6 +1922,16 @@ export const DE: Catalogue = {
       `${number(p.count)} eigene`,
   },
 
+  scratchPad: {
+    title: "Notizblock",
+    drawWhileYouWait: "Zeichnen, während du wartest",
+    canvasLabel: "Notizblock. Was du hier zeichnest, siehst nur du.",
+    onlyYou: "Nur du siehst das. Nichts wird gesendet.",
+    clear: "Leeren",
+    save: "Speichern",
+    close: "Schließen",
+  },
+
   roomStageNotice: {
     connectionLost: "Verbindung verloren",
     serverUpdating: "Server-Update",

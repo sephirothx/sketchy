@@ -1,13 +1,21 @@
 import { useEffect, useRef } from "react";
 
 import { ClockIcon } from "./icons";
+import { ScratchPad } from "./ScratchPad";
 import { Button } from "./ui/Button";
 import { DRAIN_CUE_MS, drainCue, type RoomPauseCause } from "../lib/appNotices";
 import { useDrainSecondsLeft } from "../hooks/useServerNotices";
 import { useServerNoticesStore, type RoomEndReason } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
 
-/** The card over a paused room stage (#823). `roomStage` decides when. */
+/**
+ * The card over a paused room stage (#823). `roomStage` decides when.
+ *
+ * While the connection is what is being waited for, the card carries the
+ * scratch pad (#829): the seat is held and there is nothing else to do. Not
+ * for the other two causes - a server update is ending the game, and a refused
+ * rejoin is a decision to make, not a wait.
+ */
 export function RoomPausedCard({
   cause,
   onReload,
@@ -27,11 +35,15 @@ export function RoomPausedCard({
         : cause === "offline"
           ? ui.roomStageNotice.youReDisconnected
           : ui.roomStageNotice.reconnectingSeatKept;
+  const waiting = cause === "offline" || cause === "reconnecting";
   return (
     <div className="room-stage-overlay" data-testid="room-stage-paused" data-cause={cause}>
-      <div className="surface-card room-stage-card" role="status" aria-live="polite">
-        <h2 className="room-stage-title">{title}</h2>
-        <p className="room-stage-body">{body}</p>
+      <div className={`surface-card room-stage-card${waiting ? " has-scratch-pad" : ""}`}>
+        <div role="status" aria-live="polite">
+          <h2 className="room-stage-title">{title}</h2>
+          <p className="room-stage-body">{body}</p>
+        </div>
+        {waiting && <ScratchPad />}
         {cause === "failed" && (
           <div className="room-stage-actions">
             <Button variant="secondary" onClick={onLeave}>
