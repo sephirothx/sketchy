@@ -118,8 +118,8 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             assert not await player_page.evaluate("window.__inviteLoaderSeen")
             # The room's facts as cells (#580): two rounds of 90s here.
             facts = player_page.get_by_test_id("waiting-facts")
-            assert await facts.locator('[data-fact="rounds"] .waiting-fact-value').inner_text() == "2"
-            assert await facts.locator('[data-fact="drawing-time"] .waiting-fact-value').inner_text() == "90s"
+            assert await facts.locator('[data-fact="rounds"] .room-fact-text').inner_text() == "2"
+            assert await facts.locator('[data-fact="drawing-time"] .room-fact-text').inner_text() == "90s"
             assert not await player_page.is_visible('.room-settings-editor')
             # A guest gets the facts, not a way in.
             assert await player_page.locator(".waiting-rules-edit").count() == 0
@@ -136,11 +136,11 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await host_page.fill('#custom-prompts', "artichoke\nzeppelin")
             assert await host_page.inner_text('.room-settings-save') == "Save settings"
             # Nothing has left the host's screen yet.
-            assert await facts.locator('[data-fact="rounds"] .waiting-fact-value').inner_text() == "2"
+            assert await facts.locator('[data-fact="rounds"] .room-fact-text').inner_text() == "2"
 
             await save_room_settings(host_page)
             await player_page.wait_for_selector(
-                '[data-fact="rounds"] .waiting-fact-value:text-is("4")'
+                '[data-fact="rounds"] .room-fact-text:text-is("4")'
             )
 
             # ...and the lobby chat is not narrating the save.

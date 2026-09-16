@@ -446,3 +446,90 @@
   line-height: 0;
   width: 13px;
 }
+
+/* ── A room's six facts ─────────────────────────────────────────────────────
+   One strip for every place that describes a room (#580): the waiting room
+   and the invite page (RoomFacts). The label comes first in the markup, as a
+   definition list wants, and below the value on screen. */
+.room-facts {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+}
+
+.room-fact {
+  align-content: start;
+  border-left: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  min-width: 0;
+  padding: 11px 6px 10px;
+  text-align: center;
+}
+
+.room-fact:first-child {
+  border-left: 0;
+}
+
+.room-fact-label {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+  order: 2;
+}
+
+.room-fact-value {
+  color: var(--ink);
+  display: grid;
+  font-size: 14.5px;
+  font-weight: 800;
+  gap: 4px;
+  justify-items: center;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.room-fact-icon {
+  color: var(--faint);
+  display: inline-flex;
+}
+
+/* Moved off a new room's default: the one tint says "this room is unusual". */
+.room-fact.is-changed {
+  background: var(--primary-soft);
+}
+
+.room-fact.is-changed .room-fact-icon,
+.room-fact.is-changed .room-fact-value {
+  color: var(--primary-ink);
+}
+
+.room-facts-also {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  font-weight: 700;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+@media (max-width: 720px) {
+  .room-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .room-fact:nth-child(4) {
+    border-left: 0;
+  }
+
+  .room-fact:nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+}

@@ -478,53 +478,11 @@
   color: var(--warning);
 }
 
-.invite-room-facts {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin: 0 0 18px;
-}
 
-.invite-room-facts > div {
-  min-width: 0;
-  padding: 12px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--well);
-}
 
-.invite-room-facts dt {
-  margin-bottom: 4px;
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 700;
-}
 
-.invite-room-facts dd {
-  margin: 0;
-  color: var(--ink);
-  font-size: 0.92rem;
-  font-weight: 800;
-}
 
-.invite-rule-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 0 0 22px;
-  padding: 0;
-  list-style: none;
-}
 
-.invite-rule-list li {
-  padding: 4px 11px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--well);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
 
 .invite-callout,
 .invite-notice,
@@ -535,6 +493,16 @@
   font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.4;
+}
+
+/* The room's six facts (RoomFacts), with the room below them. */
+.invite-card .room-facts-also {
+  margin-top: 10px;
+}
+
+.invite-card .room-facts + *,
+.invite-card .room-facts-also {
+  margin-bottom: 18px;
 }
 
 .invite-callout {
@@ -702,9 +670,6 @@
     gap: 12px;
   }
 
-  .invite-room-facts {
-    grid-template-columns: 1fr 1fr;
-  }
 
   .invite-actions {
     grid-template-columns: 1fr;
@@ -859,16 +824,7 @@
    The most common way anyone first meets this game is a link in a group
    chat. Cold at 390 x 844 the Join button used to sit at y 839 — below the
    fold, under 380px of room configuration and a 315px account decision. */
-.invite-room-headline {
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 700;
-  margin: 0 0 4px;
-}
 
-.invite-room-headline strong {
-  color: var(--ink);
-}
 
 
 @media (max-width: 900px) {
