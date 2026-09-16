@@ -1327,25 +1327,27 @@ a.online-player-name:focus-visible {
   }
 }
 
-/* The lobby on a wide window (#581): three columns instead of one.
+/* The lobby on a wide window (#581): the rooms beside the people.
 
    Rooms, who is online and the chat were one 960px column, so on a 2560px
    monitor 62% of the width was empty and the two people panels sat under the
    rooms, where scrolling the list carried them away. From the shell's 1600px
-   step they are columns of their own, at the widths the room gives its
-   players and its chat, and the room list becomes a grid of two cards across,
-   three at the 1960px step.
+   step the people panels are a column of their own beside the rooms, at the
+   width the room gives its chat: who is online above, the chat under it with
+   the larger share of the height, since it is the one that grows. The rooms
+   keep the rest of the width, three cards across, four at the 1960px step -
+   the same card width, about 380-400px, either way.
 
    Every row is placed by hand, because a gap would also open above a first-run
    block or an error that is not there. So the rows have no gap and each item
    above the columns brings its own margin, the header keeping the 16px the
-   pinned lobby's gap added to its own 26. The people panels come after the
-   rooms in the markup, chat first; on screen the chat takes the far column,
-   where it is in the room as well. */
+   pinned lobby's gap added to its own 26. The chat comes first in the markup,
+   which is the order a phone stacks them in; on this column the list of
+   people is the short one, so it goes on top. */
 @media (min-width: 1500px) {
   .lobby-page {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--room-players-width) var(--room-chat-width);
+    grid-template-columns: minmax(0, 1fr) var(--room-chat-width);
     grid-template-rows: auto auto auto minmax(0, 1fr);
     column-gap: 16px;
     row-gap: 0;
@@ -1373,28 +1375,31 @@ a.online-player-name:focus-visible {
     grid-row: 4;
   }
 
-  .lobby-social {
-    display: contents;
+  .lobby-page > .lobby-social {
+    grid-column: 2;
+    grid-row: 4;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: stretch;
+    min-height: 0;
   }
 
   .lobby-social > .lobby-online-panel {
-    grid-column: 2;
-    grid-row: 4;
+    grid-row: 1;
   }
 
   .lobby-social > .lobby-chat-panel {
-    grid-column: 3;
-    grid-row: 4;
+    grid-row: 2;
   }
 
   .lobby-rooms-panel .room-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 2100px) {
   .lobby-rooms-panel .room-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
