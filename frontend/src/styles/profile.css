@@ -630,3 +630,38 @@
   object-fit: cover;
   width: 128px;
 }
+
+/* ------------------------------------------------------- wide screens (#581)
+   The profile and the prompt stats were 900px columns on every monitor. From
+   1200px the profile puts its history beside its statistics, which stay in
+   view while the history scrolls, and the stats table gets the room its
+   columns want. Both stop at the base 1240px shell: a game-history row or a
+   table of prompts read across 1960px is harder to follow, not easier. */
+@media (min-width: 1200px) {
+  .profile-page,
+  .prompt-stats-page {
+    max-width: 1272px;
+  }
+
+  .profile-columns {
+    align-items: start;
+    display: grid;
+    gap: 16px;
+    grid-template-areas: "history statistics";
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+
+  .profile-columns > .panel {
+    margin-bottom: 0;
+  }
+
+  .profile-columns > .profile-history {
+    grid-area: history;
+  }
+
+  .profile-columns > .profile-statistics {
+    grid-area: statistics;
+    position: sticky;
+    top: calc(var(--banner-height) + 16px);
+  }
+}

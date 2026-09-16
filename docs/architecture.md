@@ -1861,6 +1861,15 @@ sticky card beside it — the chips, the running-time estimate and Create room �
 and the page renders one or the other (`useMediaQuery`), so there is never a
 second Create button.
 
+The pages people read stop at the base shell. From 1200px the profile puts its
+game history beside its statistics, which stay in view (sticky) while the
+history scrolls, and the prompt stats table and My prompt lists widen to 1240px;
+a history row or a table of prompts read across 1960px is harder to follow, not
+easier. The operator pages — operations, moderation, bug reports — take the full
+steps, and moderation gains a third column from 1500px with the eight newest
+decisions from the closed-cases stream (R-MOD-15), fetched only when the column
+is shown; opening one switches to the Closed queue, where the case is.
+
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 
 The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-404-source.svg` is the artwork of record, and the generator writes `frontend/src/components/notFoundArt.ts` and `docs/ui-mockups/tools/notFoundArt.mjs` from it. Unlike the wordmark it keeps literal colours rather than tokens — it hangs on the canvas sheet, which is `white` in both themes (`.canvas-stack`), so ink that answered to the theme would only get weaker on the one ground it ever sits on. The generator maps each authored fill onto a chosen colour — mostly the same-family swatch the game's own drawing palette (`COLOR_PAIRS` in `lib/drawingRules.ts`) held when the drawing was made, so the doodle is close to a drawing a player could have made — and it refuses to run if a re-export introduces a fill it has no mapping for. That map is a copy of the palette rather than a view of it, and #702 has since moved one of the swatches it names; the ink stays as it was drawn, because re-tinting finished artwork to chase a swatch would change a picture for no reason a reader could see.
