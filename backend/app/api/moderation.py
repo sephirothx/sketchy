@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -51,6 +51,7 @@ from app.auth.warnings import pending_warning_payload
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     AuditEvent,
+    IdentityAlias,
     GameRecord,
     TurnDrawing,
     PlayerReport,
@@ -2940,11 +2941,18 @@ def create_moderation_router(
                 if row is None:
                     raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
                 turn, drawing = row
-                target = (
-                    await session.get(User, turn.drawer_user_id)
-                    if turn.drawer_user_id is not None
-                    else None
-                )
+                # The turn keeps the identity that drew it; a guest who has
+                # since claimed an account is reached through the alias, the
+                # way every other read of history resolves a merged identity.
+                drawer_id = turn.drawer_user_id
+                if drawer_id is not None:
+                    canonical = await session.scalar(
+                        select(IdentityAlias.target_user_id).where(
+                            IdentityAlias.source_user_id == drawer_id
+                        )
+                    )
+                    drawer_id = canonical or drawer_id
+                target = await session.get(User, drawer_id) if drawer_id is not None else None
                 if target is None or target.state in {
                     AccountState.MERGED.value,
                     AccountState.DELETED.value,
@@ -3099,23 +3107,28 @@ def create_moderation_router(
         except ValueError:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from None
 
+        # A public game's kept drawing, hidden from the Gallery or not - but
+        # never a private game's: those are the players' own (R-HIST-16), the
+        # queue never lists them, and a turn id is not a permission.
+        def staff_readable():
+            return (
+                select(TurnDrawing)
+                .join(GameRecord, GameRecord.id == TurnDrawing.game_id)
+                .where(
+                    TurnDrawing.turn_id == db_turn_id,
+                    TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    GameRecord.visibility == GameVisibility.PUBLIC.value,
+                )
+            )
+
         async def checksum_of():
             async with session_factory() as session:
-                return await session.scalar(
-                    select(TurnDrawing.checksum_sha256).where(
-                        TurnDrawing.turn_id == db_turn_id,
-                        TurnDrawing.status == TurnDrawingStatus.READY.value,
-                    )
-                )
+                row = await session.scalar(staff_readable().options(defer(TurnDrawing.payload)))
+                return row.checksum_sha256 if row is not None else None
 
         async def drawing_of():
             async with session_factory() as session:
-                row = await session.scalar(
-                    select(TurnDrawing).where(
-                        TurnDrawing.turn_id == db_turn_id,
-                        TurnDrawing.status == TurnDrawingStatus.READY.value,
-                    )
-                )
+                row = await session.scalar(staff_readable())
             if row is None or row.payload is None:
                 return None
             return TurnDrawingDetail(
