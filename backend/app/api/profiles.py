@@ -140,6 +140,64 @@ def validator_matches(if_none_match: str, validator: str) -> bool:
     return any(bare(tag) == bare(validator) for tag in if_none_match.split(",") if tag.strip())
 
 
+async def serve_drawing(
+    request: Request,
+    turn_id: str,
+    *,
+    checksum_of: Callable[[], Awaitable[str | None]],
+    drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
+) -> Response:
+    """The body the drawing routes share: the conditional answer, the decode,
+    and the refusals. They differ only in *which* query says the caller may
+    have the bytes - the participant check, the pin (R-PIN-06) or the gallery
+    predicate (R-GAL-06) - and each passes its own, so none can borrow another's.
+    """
+    cache_headers = {
+        # Reader-scoped bytes must never reach a shared cache, and a
+        # browser's own copy is revalidated on every open: an erased or
+        # unpinned drawing stops being shown at once rather than when a
+        # lifetime runs out.
+        "Cache-Control": "private, no-cache",
+    }
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match is not None:
+        # A validator is answered from the metadata alone: the blob is
+        # neither read nor decoded for a copy that is still current.
+        checksum = await checksum_of()
+        if checksum is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        validator = drawing_validator(checksum)
+        if validator_matches(if_none_match, validator):
+            return Response(
+                status_code=304, headers={**cache_headers, "ETag": validator}
+            )
+    drawing = await drawing_of()
+    if drawing is None:
+        raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+    try:
+        payload = stored_drawing_wire_payload(
+            drawing.payload, checksum=drawing.checksum_sha256 or None
+        )
+    except UnsupportedStoredDrawingError as error:
+        # A build older than the row it is reading. Answer as though the
+        # drawing is absent rather than claiming it is broken.
+        logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
+        raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
+    except CorruptStoredDrawingError as error:
+        logger.error("Stored drawing %s failed its checksum", turn_id)
+        raise Refusal(
+            500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
+        ) from error
+    return Response(
+        content=payload,
+        media_type="application/octet-stream",
+        headers={
+            **cache_headers,
+            "ETag": drawing_validator(drawing.checksum_sha256),
+        },
+    )
+
+
 def create_profile_router(
     user_repo: UserRepository,
     game_history_repo: GameHistoryRepository,
@@ -264,7 +322,7 @@ def create_profile_router(
         requesting_user_id = getattr(request.state, "user_id", None)
         if not requesting_user_id:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-        return await _serve_drawing(
+        return await serve_drawing(
             request,
             turn_id,
             checksum_of=lambda: game_history_repo.get_turn_drawing_checksum(
@@ -273,63 +331,6 @@ def create_profile_router(
             drawing_of=lambda: game_history_repo.get_turn_drawing(
                 game_id, turn_id, requesting_user_id=requesting_user_id
             ),
-        )
-
-    async def _serve_drawing(
-        request: Request,
-        turn_id: str,
-        *,
-        checksum_of: Callable[[], Awaitable[str | None]],
-        drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
-    ) -> Response:
-        """The body the two drawing routes share: the conditional answer, the
-        decode, and the refusals. The two differ only in *which* query says
-        the caller may have the bytes - the participant check, or the pin
-        (R-PIN-06) - and each passes its own, so neither can borrow the other's.
-        """
-        cache_headers = {
-            # Reader-scoped bytes must never reach a shared cache, and a
-            # browser's own copy is revalidated on every open: an erased or
-            # unpinned drawing stops being shown at once rather than when a
-            # lifetime runs out.
-            "Cache-Control": "private, no-cache",
-        }
-        if_none_match = request.headers.get("if-none-match")
-        if if_none_match is not None:
-            # A validator is answered from the metadata alone: the blob is
-            # neither read nor decoded for a copy that is still current.
-            checksum = await checksum_of()
-            if checksum is None:
-                raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-            validator = drawing_validator(checksum)
-            if validator_matches(if_none_match, validator):
-                return Response(
-                    status_code=304, headers={**cache_headers, "ETag": validator}
-                )
-        drawing = await drawing_of()
-        if drawing is None:
-            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-        try:
-            payload = stored_drawing_wire_payload(
-                drawing.payload, checksum=drawing.checksum_sha256 or None
-            )
-        except UnsupportedStoredDrawingError as error:
-            # A build older than the row it is reading. Answer as though the
-            # drawing is absent rather than claiming it is broken.
-            logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
-            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
-        except CorruptStoredDrawingError as error:
-            logger.error("Stored drawing %s failed its checksum", turn_id)
-            raise Refusal(
-                500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
-            ) from error
-        return Response(
-            content=payload,
-            media_type="application/octet-stream",
-            headers={
-                **cache_headers,
-                "ETag": drawing_validator(drawing.checksum_sha256),
-            },
         )
 
     @router.get("/users/{user_id}/pins")
@@ -372,7 +373,7 @@ def create_profile_router(
         throttle(request)
         if not getattr(request.state, "user_id", None):
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-        return await _serve_drawing(
+        return await serve_drawing(
             request,
             turn_id,
             checksum_of=lambda: game_history_repo.get_pinned_drawing_checksum(

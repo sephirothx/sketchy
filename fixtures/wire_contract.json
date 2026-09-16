@@ -1378,6 +1378,25 @@
    "nameColor",
    "userId"
   ],
+  "api.gallery:create_gallery_router": [
+   "nextCursor"
+  ],
+  "api.gallery:gallery": [
+   "nextCursor"
+  ],
+  "api.gallery:gallery_entry_payload": [
+   "drawerDisplayName",
+   "drawerIsAnonymous",
+   "drawerNameColor",
+   "drawnByMe",
+   "finishedAt",
+   "myReaction",
+   "reactionCounts",
+   "roundNumber",
+   "strokeCount",
+   "turnId",
+   "turnNumber"
+  ],
   "api.moderation:_ban_payload": [
    "bannedByUserId",
    "createdAt",
