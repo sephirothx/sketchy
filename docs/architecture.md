@@ -1846,7 +1846,7 @@ it. Below 640px tall the room is the ordinary scrolling page again.
 
 The lobby takes the steps from 1500px: the rooms and the people become two
 columns, who is online stacked over the chat in a column of its own
-(`--lobby-people-width`, 420 and 480px), the chat taking the larger share of the
+(`--lobby-people-width`, growing with the window from 420 to 460px, and to 580px on the widest screens), the chat taking the larger share of the
 height. The rooms are one to a row, and `PublicRoomCard` draws the row layout
 there: seats as dots, the game's length as a range, and only the rules that
 differ from a new room's, lined up in columns under headings. Those facts are
