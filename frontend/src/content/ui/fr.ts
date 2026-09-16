@@ -1931,6 +1931,7 @@ export const FR: Catalogue = {
     onlyYou: "Toi seul vois ceci. Rien n’est envoyé.",
     save: "Enregistrer",
     close: "Fermer",
+    backToTheRoom: "Retour au salon",
   },
 
   roomStageNotice: {

@@ -1933,6 +1933,7 @@ export const EN = {
     onlyYou: "Only you can see this. Nothing is sent.",
     save: "Save",
     close: "Close",
+    backToTheRoom: "Back to the room",
   },
 
   roomStageNotice: {

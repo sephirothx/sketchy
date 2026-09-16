@@ -1928,6 +1928,7 @@ export const ES: Catalogue = {
     onlyYou: "Solo tú lo ves. No se envía nada.",
     save: "Guardar",
     close: "Cerrar",
+    backToTheRoom: "Volver a la sala",
   },
 
   roomStageNotice: {

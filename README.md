@@ -2496,9 +2496,9 @@ A seated client checks with the server every five seconds that it still holds th
   never do. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
-  cells, so the rules read the same before joining as after. Below that, the waiting room has a
-  scratch pad to draw on while nobody else has arrived - only yours, like the one an outage
-  shows, and the same drawing on both.
+  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait" swaps
+  the column for a scratch pad at a turn's size - only yours, like the one an outage shows,
+  and the same drawing on both - with the room code and Start kept in a strip above it.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
   from a 1500px window and 1960px from 2100px - and on a desktop it fills the window's
   height, with the players and chat running top to bottom. The canvas grows with it up to

@@ -107,12 +107,13 @@ async def test_a_paused_room_carries_the_pad_and_the_tab_keeps_the_drawing():
 
 
 async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_over():
-    """#591: the waiting room offered a disabled Start and nothing else. And two
-    pads can be on screen at once - the room's, and the paused card's over it -
-    so what is drawn on one has to be what the other shows afterwards."""
+    """#591: the waiting room offered a disabled Start and nothing else. The pad
+    takes the column from one button in view, fits it without scrolling, and
+    gives it back. And two pads can be on screen at once - the room's, and the
+    paused card's over it - so what is drawn on one is what the other shows."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
-        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        context = await browser.new_context(viewport={"width": 1280, "height": 800})
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
@@ -122,8 +123,20 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
 
-            room_pad = '.waiting-pad-card [data-testid="scratch-pad"]'
-            await page.locator(room_pad).scroll_into_view_if_needed()
+            await page.click('[data-testid="open-waiting-pad"]')
+            room_pad = '.waiting-room.is-drawing [data-testid="scratch-pad"]'
+            await page.wait_for_selector(room_pad)
+            assert await page.locator(".waiting-rules-card").count() == 0
+            assert await page.evaluate("document.activeElement?.dataset.testid") == "close-waiting-pad"
+            # Start stays one press away, and nothing of the pad is below the fold.
+            assert await page.locator(".waiting-pad-strip .waiting-start-button").count() == 1
+            bottom = await page.evaluate(
+                "document.querySelector('.waiting-room.is-drawing .scratch-pad').getBoundingClientRect().bottom"
+            )
+            assert bottom <= 800, f"the pad runs to {bottom}px on an 800px window"
+            canvas_box = await page.locator(f"{room_pad} .drawing-canvas").bounding_box()
+            assert canvas_box is not None and canvas_box["width"] >= 600
+
             await scribble(page, room_pad)
             first = await inked(page, room_pad)
             assert first > 100
@@ -140,10 +153,10 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
             # Cleared on the card, so cleared in the room: the room's pad must not
             # keep the older sheet it was showing underneath.
             assert await inked(page, room_pad) == 0
-            # And it still draws. Not compared with the first scribble: the
-            # pointer's samples, so the pixels, vary with how busy the machine is.
-            await scribble(page, room_pad)
-            assert await inked(page, room_pad) > 100
+
+            await page.click('[data-testid="close-waiting-pad"]')
+            await page.wait_for_selector(".waiting-rules-card")
+            assert await page.evaluate("document.activeElement?.dataset.testid") == "open-waiting-pad"
         finally:
             await context.close()
             await browser.close()

@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
+import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
 import { RoomFacts } from "./RoomFacts";
 import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
@@ -71,6 +71,20 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // nickname on the page twice.
   const isNarrow = useMediaQuery("(max-width: 900px)");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The scratch pad in place of the column (#591). Focus follows the swap:
+  // the control that made it lands on the one that undoes it, and back.
+  const [drawing, setDrawing] = useState(false);
+  const drawButtonRef = useRef<HTMLButtonElement | null>(null);
+  const backButtonRef = useRef<HTMLButtonElement | null>(null);
+  const swapped = useRef(false);
+  useEffect(() => {
+    if (!swapped.current) return;
+    (drawing ? backButtonRef : drawButtonRef).current?.focus();
+  }, [drawing]);
+  function swapTo(nextDrawing: boolean) {
+    swapped.current = true;
+    setDrawing(nextDrawing);
+  }
   const activePlayers = players.filter((player) => !player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
@@ -115,6 +129,83 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       }
     }
     await copyToClipboard(url, ui.waitingRoomPanel.inviteLink);
+  }
+
+  const startButton = (big: boolean) => (
+    <button
+      type="button"
+      className={`btn btn-warm${big ? " btn-big" : ""} waiting-start-button`}
+      disabled={!canStart || props.startBusy}
+      onClick={props.onStart}
+      title={canStart ? undefined : startBlockedReason}
+    >
+      <PlayIcon size={big ? 17 : 15} />
+      {props.startBusy
+        ? ui.waitingRoomPanel.starting
+        : canStart
+          ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
+          : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
+    </button>
+  );
+  const waitingForHost = (
+    <p className="waiting-start-waiting">
+      {host
+        ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
+        host: (
+          <span
+            className={playerNameClass(host.isAnonymous)}
+            style={playerNameStyle(host.nameColor, host.isAnonymous)}
+          >
+            {host.nickname}
+          </span>
+        ),
+      })}</>
+        : ui.waitingRoomPanel.waitingForAHost}
+    </p>
+  );
+  const drawButton = (
+    <button
+      ref={drawButtonRef}
+      type="button"
+      className="btn btn-secondary waiting-draw-button"
+      data-testid="open-waiting-pad"
+      onClick={() => swapTo(true)}
+    >
+      <BrushIcon size={15} />
+      {ui.scratchPad.drawWhileYouWait}
+    </button>
+  );
+
+  // Something to do while nobody else is here yet (#591). The first screen a
+  // new host reaches is a wait they do not control - the link is in a group
+  // chat nobody has opened - and it offered a disabled Start and nothing else.
+  // The scratch pad takes the whole column, at a turn's size and with a turn's
+  // toolbar, rather than sitting in a card a scroll below Start. What stays is
+  // one strip: the way back, the code, and Start - so a second player
+  // arriving mid-drawing is one press from a game, not two.
+  if (drawing) {
+    return (
+      <main className="waiting-room is-drawing" data-testid="waiting-room">
+        <div className="waiting-pad-strip">
+          <button
+            ref={backButtonRef}
+            type="button"
+            className="btn btn-secondary btn-compact waiting-pad-back"
+            data-testid="close-waiting-pad"
+            onClick={() => swapTo(false)}
+          >
+            <BackIcon size={15} />
+            {ui.scratchPad.backToTheRoom}
+          </button>
+          {code && (
+            <span className="waiting-pad-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</span>
+          )}
+          {isHost ? startButton(false) : waitingForHost}
+        </div>
+        {props.startError && <p className="waiting-start-error">{props.startError}</p>}
+        <ScratchPad />
+      </main>
+    );
   }
 
   return (
@@ -271,50 +362,16 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 {ui.waitingRoomPanel.editRoomRules}
               </button>
               {props.startError && <p className="waiting-start-error">{props.startError}</p>}
-              <button
-                type="button"
-                className="btn btn-warm btn-big waiting-start-button"
-                disabled={!canStart || props.startBusy}
-                onClick={props.onStart}
-                title={canStart ? undefined : startBlockedReason}
-              >
-                <PlayIcon size={17} />
-                {props.startBusy
-                  ? ui.waitingRoomPanel.starting
-                  : canStart
-                    ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
-                    : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
-              </button>
+              {drawButton}
+              {startButton(true)}
             </>
           ) : (
-            <p className="waiting-start-waiting">
-              {host
-                ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
-                host: (
-                  <span
-                    className={playerNameClass(host.isAnonymous)}
-                    style={playerNameStyle(host.nameColor, host.isAnonymous)}
-                  >
-                    {host.nickname}
-                  </span>
-                ),
-              })}</>
-                : ui.waitingRoomPanel.waitingForAHost}
-            </p>
+            <>
+              {waitingForHost}
+              {drawButton}
+            </>
           )}
         </div>
-      </section>
-
-      {/* Something to do while nobody else is here yet (#591). The first screen a
-          new host reaches is a wait they do not control - the link is in a
-          group chat nobody has opened - and it offered a disabled Start and
-          nothing else. The scratch pad, because it is only ever this player's:
-          no strokes on the wire, nothing to moderate, and nothing a player
-          arriving mid-drawing walks in on. Last, so it never stands between
-          anybody and Start. */}
-      <section className="waiting-card waiting-pad-card" aria-labelledby="waiting-pad-title">
-        <h2 id="waiting-pad-title" className="waiting-card-kicker">{ui.scratchPad.drawWhileYouWait}</h2>
-        <ScratchPad />
       </section>
 
       {settingsOpen && (

@@ -1929,6 +1929,7 @@ export const DE: Catalogue = {
     onlyYou: "Nur du siehst das. Nichts wird gesendet.",
     save: "Speichern",
     close: "Schließen",
+    backToTheRoom: "Zurück zum Raum",
   },
 
   roomStageNotice: {

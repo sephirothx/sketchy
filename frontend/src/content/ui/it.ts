@@ -1930,6 +1930,7 @@ export const IT: Catalogue = {
     onlyYou: "Lo vedi solo tu. Non viene inviato nulla.",
     save: "Salva",
     close: "Chiudi",
+    backToTheRoom: "Torna alla stanza",
   },
 
   roomStageNotice: {

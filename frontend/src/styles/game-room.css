@@ -543,11 +543,6 @@
 .waiting-card h2 { font-size: 18px; }
 .waiting-card-kicker { color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: .09em; margin: 0 0 5px; text-transform: uppercase; }
 
-/* The scratch pad's card (#591): a heading that reads as a kicker, and the
-   pad at the column's width, as the canvas is in a turn. */
-.waiting-card h2.waiting-card-kicker { color: var(--faint); font-family: inherit; font-size: 11.5px; font-weight: 800; }
-.waiting-pad-card { text-align: center; }
-
 /* Which room this is. Out of the invite card, which is about getting people
    into it rather than naming it. */
 .waiting-room-head { text-align: center; }
@@ -701,6 +696,61 @@
 
 .waiting-rules-footer .waiting-start-waiting {
   flex: 1 1 auto;
+}
+
+/* The scratch pad in place of the column (#591): one strip - back, the code,
+   Start - over a pad at a turn's size. */
+.waiting-room.is-drawing {
+  align-content: start;
+  gap: 0;
+}
+
+.waiting-pad-strip {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 0 auto;
+  max-width: var(--scratch-pad-width, 800px);
+  width: 100%;
+}
+
+.waiting-pad-code {
+  color: var(--primary-ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: .12em;
+}
+
+.waiting-pad-strip .waiting-start-button {
+  margin-left: auto;
+  width: auto;
+}
+
+.waiting-pad-strip .waiting-start-waiting {
+  flex: 1 1 auto;
+  text-align: right;
+}
+
+.waiting-room.is-drawing > .waiting-start-error {
+  margin: 8px auto 0;
+  max-width: var(--scratch-pad-width, 800px);
+  width: 100%;
+}
+
+/* On a pinned desktop room the drawing is held to what the column's height
+   leaves once the strip, the toolbar and the note are counted, so none of it
+   is below the fold. The column is a size container only while it holds the
+   pad: size containment on a column sized by its content would collapse it. */
+@media (min-width: 901px) and (min-height: 640px) {
+  .room-shell-main:has(> .room-shell-main-transition > .waiting-room.is-drawing) {
+    container-type: size;
+  }
+
+  .waiting-room.is-drawing {
+    --scratch-pad-width: max(320px, min(100cqw, calc((100cqh - 252px) * 4 / 3)));
+  }
 }
 
 .waiting-rules-footer .waiting-start-error {
