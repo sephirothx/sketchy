@@ -22,6 +22,7 @@ from app.db.models import User
 from app.domain_values import ReportReason, ReportScope
 from app.rooms import majority_of
 from app.services.player_reports import (
+    canonical_user_id,
     context_around,
     drawing_from_live_room,
     evidence_from_live_room,
@@ -187,13 +188,17 @@ async def report_player(ctx: HandlerContext, sid, data):
                 await require_live_account(session, reporter.user_id)
             except AccountErasedError:
                 return {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": "Sign in first."}
+            # The seat keeps the identity that sat down; a guest who has
+            # claimed an account since is reported as that account, the id
+            # every other door writes, so the unique index sees one pair.
+            reported_id = await canonical_user_id(session, UUID(target.user_id))
             # The same rule the REST path and content reports carry: saying it
             # again while a moderator has yet to look adds no evidence and
             # buries the queue.
             already_open = await open_report_id(
                 session,
                 reporter_user_id=UUID(reporter.user_id),
-                reported_user_id=UUID(target.user_id),
+                reported_user_id=reported_id,
             )
             if already_open is not None:
                 return {
@@ -217,6 +222,7 @@ async def report_player(ctx: HandlerContext, sid, data):
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),
+                # The lines were said from the seat, under the seat's id.
                 reported_user_id=UUID(target.user_id),
                 reporter_user_id=UUID(reporter.user_id),
             )
@@ -229,7 +235,7 @@ async def report_player(ctx: HandlerContext, sid, data):
             report = record_player_report(
                 session,
                 reporter_user_id=UUID(reporter.user_id),
-                reported_user_id=UUID(target.user_id),
+                reported_user_id=reported_id,
                 # The live room's game has no history row until it is
                 # persisted, so the report points at the turn and game only
                 # once the evidence itself names them.

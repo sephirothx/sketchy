@@ -291,9 +291,16 @@ async def open_report_id(
     )
 
 
-async def _identity_set(session: AsyncSession, user_id: UUID) -> list[UUID]:
-    """The canonical account behind `user_id` and every identity merged into it."""
-    canonical = (
+async def canonical_user_id(session: AsyncSession, user_id: UUID) -> UUID:
+    """The account behind `user_id`: itself, or the one a guest merged into.
+
+    New reports are written against this rather than the id a room seat or
+    a turn still carries, so two doors reporting the same person in the
+    same instant - a room seat by its guest id, the Gallery by the account -
+    write the same `(reporter, reported)` pair and the partial unique index
+    decides between them, as it does for one door on its own.
+    """
+    return (
         await session.scalar(
             select(IdentityAlias.target_user_id).where(
                 IdentityAlias.source_user_id == user_id
@@ -301,6 +308,11 @@ async def _identity_set(session: AsyncSession, user_id: UUID) -> list[UUID]:
         )
         or user_id
     )
+
+
+async def _identity_set(session: AsyncSession, user_id: UUID) -> list[UUID]:
+    """The canonical account behind `user_id` and every identity merged into it."""
+    canonical = await canonical_user_id(session, user_id)
     merged = (
         await session.scalars(
             select(IdentityAlias.source_user_id).where(
