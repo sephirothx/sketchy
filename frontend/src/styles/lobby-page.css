@@ -43,7 +43,7 @@
   outline-offset: 3px;
 }
 
-/* The page's name after the wordmark: where you are, on a wide screen. */
+/* The way up from a nested page, after the wordmark, on a wide screen. */
 .header-crumb {
   align-items: center;
   color: var(--muted);
@@ -62,7 +62,6 @@
   flex: none;
 }
 
-.header-crumb > span,
 .header-crumb > a {
   color: var(--ink);
   overflow: hidden;

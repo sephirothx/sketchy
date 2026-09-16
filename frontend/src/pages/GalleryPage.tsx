@@ -310,7 +310,7 @@ export function GalleryPage() {
 
   return (
     <div className="page gallery-page">
-      <AppHeader title={ui.galleryPage.gallery} backLabel={ui.galleryPage.backToLobby} languageSwitch />
+      <AppHeader backLabel={ui.galleryPage.backToLobby} languageSwitch />
 
       {signedOut ? (
         <>

@@ -61,11 +61,7 @@ export function InviteEntryPage({ code }: { code: string }) {
 
   return (
     <div className="invite-entry-page">
-      {/* The room somebody's link points at, once the preview has said it. */}
-      <AppHeader
-        title={state.status === "preview" || state.status === "joining" ? state.room.name : undefined}
-        backLabel={ui.inviteEntryPage.backLobby}
-      />
+      <AppHeader backLabel={ui.inviteEntryPage.backLobby} />
 
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">
