@@ -122,14 +122,20 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // room uses. The three that are a choice rather than a number are tinted
   // when the host moved them off a new room's default, so an unusual room
   // reads as one before anybody starts it.
+  // A room's lists are its language's Standard one unless the host chose
+  // otherwise: several lists, or a single other one (a community list, a
+  // private one, Extended). Either is a prompt configuration worth marking.
+  const listSlugs = props.promptListSlugs ?? [];
+  const nonDefaultLists = listSlugs.length > 1
+    || (listSlugs.length === 1 && !listSlugs[0].endsWith("_standard"));
   const promptsValue = [
     promptLanguageLabel(props.promptLanguage),
     props.customPromptCount > 0
       ? props.customPromptsOnly
         ? ui.waitingRoomPanel.customOnlyShort({ count: props.customPromptCount })
         : ui.waitingRoomPanel.customShort({ count: props.customPromptCount })
-      : props.promptListSlugs && props.promptListSlugs.length > 1
-        ? ui.waitingRoomPanel.listsShort({ count: props.promptListSlugs.length })
+      : nonDefaultLists
+        ? ui.waitingRoomPanel.listsShort({ count: listSlugs.length })
         : null,
   ].filter(Boolean).join(" · ");
   const facts: { key: string; icon: ReactNode; label: string; value: string; changed?: boolean }[] = [
@@ -162,7 +168,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       icon: <DeckIcon size={18} />,
       label: ui.roomSetupForm.prompts,
       value: promptsValue,
-      changed: props.customPromptCount > 0 || Boolean(props.promptListSlugs && props.promptListSlugs.length > 1),
+      changed: props.customPromptCount > 0 || nonDefaultLists,
     },
   ];
   // What else the host changed, said once and only when there is something.
