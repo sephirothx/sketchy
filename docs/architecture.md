@@ -1801,14 +1801,48 @@ at the bottom of the screen. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md)
 is the reference for all of it.
 
 Above the breakpoint the toolbar stays in the canvas column, and that column
-is never wide enough for its four groups on one line (293px at a 901px window,
-632px at the room's cap). So the toolbar does not wrap; it measures itself
+is rarely wide enough for its four groups on one line (293px at a 901px window,
+658px at the base shell, 938px at the 1600px step; only the widest step's 1228px
+fits them). So the toolbar does not wrap; it measures itself
 (`useToolbarLayout`) and takes the first arrangement in
 [`lib/toolbarLayout.ts`](../frontend/src/lib/toolbarLayout.ts) that fits whole.
 Where not even the palette fits, it renders the phone's chip strip, in the
 column rather than through the dock. It is measured instead of given
 breakpoints because the width it needs changes with the language, the host's
 tools and colour mode, and the size readout.
+
+### The desktop layout
+
+Above the breakpoint the width a page may use comes in three steps, set once as
+tokens on `:root` in
+[`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css)
+and read by every screen that has a shell: `--shell-width` (1240, 1600 and 1960px,
+at windows of 1500 and 2100px), `--canvas-cap` (760, 1000, 1180px) and the room's
+two side columns, `--room-players-width` and `--room-chat-width` (#581). Before
+them every page was pinned to one column chosen for a 1440px laptop, and the
+drawing was 632 × 474 on every monitor. They are media queries rather than
+container queries on purpose: a size container is also the containing block for
+every `position: fixed` descendant, and the room's sheets are fixed.
+
+The canvas cap is the one of these with a reason outside layout. The backing
+store stays 800 × 600 because `draw_fill` is pixel-addressed against that grid
+on the wire ([`wire-protocol.md`](wire-protocol.md)), so a larger canvas on screen is the same bitmap scaled up;
+1180px is a 1.48× upscale, about where crayon-weight strokes start to soften, and
+past it the width goes to the side columns (R-UX-10). Rendering the store into a
+device-pixel backing canvas would lift that ceiling without touching the fill
+grid; it is client-only and not done.
+
+A room above the breakpoint and at least 640px tall is pinned to the viewport,
+like the desktop lobby: `.game-room` is `100dvh` less `--banner-height`, the
+players and chat panels run the full height and scroll inside themselves, and
+the waiting room, game-over panel and recap scroll inside the middle column.
+In play the canvas is sized from whichever cap binds first — the column's
+width, `--canvas-cap`, or the height the prompt and the toolbar leave. The
+wrapper is 4:3 from its width and is the one flex item allowed to shrink; the
+drawing inside it keeps 4:3 by giving up width, through `100cqh` on the
+wrapper, the same mechanism as the phone. `.canvas-area` is capped at the
+column rather than sized to it, because the turn-results scrim is `inset: 0` on
+it. Below 640px tall the room is the ordinary scrolling page again.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 
