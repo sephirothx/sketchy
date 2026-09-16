@@ -559,7 +559,7 @@ enough. Lists held that way wait in a moderation queue of their own, where a
 moderator releases them into the catalogue or takes them down; it is separate
 from the report queue because nothing was reported — they were held by a policy,
 not an accusation. Players browse published lists at **Community catalogue**, reached from the
-lobby and from the account menu, and open one to read every prompt in it before
+account menu, and open one to read every prompt in it before
 playing or copying it — filtered by language and tag, sorted by stars or by
 recency, and narrowed to the lists that account starred. Browsing works without
 an account; starring, copying and reporting need one. **Play** opens the room form

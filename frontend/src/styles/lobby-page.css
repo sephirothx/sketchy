@@ -147,10 +147,19 @@
 .lobby-rooms-heading {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 12px;
   margin-bottom: 14px;
+}
+
+/* The title and its count read as one label; the actions sit at the far end,
+   and wrap beneath it together rather than one at a time. */
+.lobby-rooms-actions {
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .lobby-rooms-heading h2 {
@@ -167,6 +176,11 @@
 .room-list {
   display: grid;
   gap: 12px;
+  /* Cards keep their own height. A grid stretches its rows to fill a taller
+     container by default, and on the pinned desktop lobby the list is one:
+     a single public room became a 280px card with its name and Join button
+     floating in the middle (#594). */
+  align-content: start;
   /* Positioned on purpose, and load-bearing once this scrolls.
      `.visually-hidden` is `position: absolute`, and with no positioned
      ancestor inside the list its containing block is the document - so the

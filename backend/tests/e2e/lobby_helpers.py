@@ -142,8 +142,8 @@ async def join_by_code(page, code: str, *, spectate: bool = False) -> None:
     of those copies, and the step that is actually interesting to a test is
     "this player joined that room".
     """
-    # The header says "Join by code"; a phone has no header actions and its
-    # thumb dock says "Join with a code". Whichever is on screen is the one.
+    # The rooms heading says "Join by code"; a phone has no heading actions and
+    # its thumb dock says "Join with a code". Whichever is on screen is the one.
     await page.locator(
         'button:visible:has-text("Join by code"), button:visible:has-text("Join with a code")'
     ).first.click()
