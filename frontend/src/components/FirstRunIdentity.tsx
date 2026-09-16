@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useAuthStore } from "../store/authStore";
+import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
@@ -54,9 +54,11 @@ export function FirstRunIdentity() {
   // name that was just chosen.
   if (!hasResolved) return null;
 
-  // Once there is a name, or an account, this never appears again.
-  const needsIdentity = !user || (user.isAnonymous && !user.displayName);
-  if (!needsIdentity) return null;
+  // Once there is a name, or an account, this never appears again - unless
+  // the name is a guest's that somebody online took while they were away
+  // (R-ACCT-09), who is asked for another here before they can play.
+  if (!needsIdentity(user)) return null;
+  const takenName = user?.nameInUse ? user.displayName : null;
 
   async function playAsGuest(event: React.FormEvent) {
     event.preventDefault();
@@ -156,6 +158,11 @@ export function FirstRunIdentity() {
       className="first-run"
       aria-labelledby={`${fieldId}-heading`}
     >
+      {takenName && (
+        <p className="first-run-name-in-use" role="status">
+          {ui.firstRunIdentity.nameInUse({ name: takenName })}
+        </p>
+      )}
       {isNarrow ? [guest, account] : [account, divider, guest]}
       {mode && (
         <AuthDialog

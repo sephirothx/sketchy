@@ -44,7 +44,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
 
             code = await get_room_code(host_page)
             await player_page.goto(BASE_URL)
-            await use_guest_name(player_page, "SafePlayer")
+            await use_guest_name(player_page, "LeavePlayer")
             await join_by_code(player_page, code)
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
 

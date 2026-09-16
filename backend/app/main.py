@@ -676,6 +676,7 @@ api.include_router(
         on_friends_changed=friend_service.announce_to,
         on_email_state_changed=push_email_state_changed,
         on_export_requested=export_worker.wake,
+        presence=handler_context.presence,
     )
 )
 api.include_router(

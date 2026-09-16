@@ -22,11 +22,13 @@ from app.handlers.payloads import (
     parse_payload,
 )
 from app.handlers.identity import (
+    NAME_IN_USE_MESSAGE,
     IdentityError,
     resolve_colorblind_safe_preference,
     resolve_identity,
 )
 from app.presenters import editable_room_settings_payload, session_payload
+from app.services.guest_names import online_guest_holding
 from app.domain_values import RuntimeEventType
 from app.services.game_flow import RoomPromptResolutionError
 from app.services.room_quotas import RoomQuotaExceeded
@@ -230,7 +232,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
             "resolving who is entering",
         )
     except IdentityError as error:
-        return {"ok": False, "errorCode": ErrorCode.INVALID_NICKNAME, "error": str(error), "field": "nickname"}
+        return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     if not identity.user_id:
@@ -664,7 +666,7 @@ async def _seat_in_room(
             "resolving who is entering",
         )
     except IdentityError as error:
-        return {"ok": False, "errorCode": ErrorCode.INVALID_NICKNAME, "error": str(error), "field": "nickname"}
+        return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
 
@@ -926,6 +928,20 @@ async def rename_player(ctx: HandlerContext, sid, data):
                 "error": "That name belongs to a registered player.",
                 "field": "nickname",
             }
+    # One guest name per person online (R-ACCT-09). Keeping the name, or only
+    # its case, is a standing claim rather than a new choice.
+    if await online_guest_holding(
+        nickname,
+        claimant_id=player.user_id,
+        registry=ctx.presence,
+        user_repo=ctx.user_repo,
+        choosing=nickname.lower() != player.nickname.lower(),
+    ):
+        return {
+            "ok": False, "errorCode": ErrorCode.NAME_IN_USE,
+            "error": NAME_IN_USE_MESSAGE,
+            "field": "nickname",
+        }
 
     previous = player.nickname
     if previous == nickname:

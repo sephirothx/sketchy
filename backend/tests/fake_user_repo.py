@@ -87,6 +87,18 @@ class FakeUserRepository(UserRepository):
             None,
         )
 
+    async def find_guest_named(self, name, among_user_ids):
+        target = name.strip().lower()
+        among = set(among_user_ids)
+        return next(
+            (
+                u.id
+                for u in self.users.values()
+                if u.id in among and u.is_anonymous and (u.display_name or "").lower() == target
+            ),
+            None,
+        )
+
     async def get_credentials_by_username(self, username: str) -> UserCredentials | None:
         user = await self.get_by_username(username)
         if not user or user.id not in self.password_hashes:

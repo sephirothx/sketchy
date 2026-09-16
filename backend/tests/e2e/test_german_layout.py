@@ -55,7 +55,9 @@ async def test_german_does_not_push_any_screen_sideways(viewport):
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
-            await use_guest_name(page, "LangeWorte")
+            # One name per viewport: both run at once, and a guest name is
+            # unique among the people online (R-ACCT-09).
+            await use_guest_name(page, f"LangeWorte{viewport['width']}")
 
             # The lobby, which is the widest thing a visitor sees first.
             assert await page.evaluate("document.documentElement.lang") == "de"

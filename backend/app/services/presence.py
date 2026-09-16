@@ -25,12 +25,15 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
+from collections.abc import Callable
 from collections.abc import Mapping
 from dataclasses import dataclass
 import logging
 import os
+import time
 
 from app.auth.avatars import avatar_url
+from app.auth.names import fold_guest_name
 from app.repositories.interfaces import UserRepository
 from app.services.lobby_rooms import (
     EMPTY_ROOMS,
@@ -55,6 +58,13 @@ STATUS_PLAYING = "playing"
 # rows is not a user interface. The list is capped and the true total ships
 # beside it, so a cap is never mistaken for a quiet server.
 DEFAULT_LIST_LIMIT = 100
+# How long an account keeps its place in the arrival order after its last
+# socket closes. Arrival decides which of two guests online under one name
+# keeps it (R-ACCT-09), and a reload closes the socket before the page asks
+# who it is: without this, reloading handed the name to whoever had arrived
+# second. Long enough for a reload or a transport bounce, short enough that
+# somebody who has actually left does not hold a name for them.
+ARRIVAL_GRACE_SECONDS = 30
 # A fixed tick, not a trailing debounce: a trailing debounce under continuous
 # churn never fires at all, while a tick has a bounded worst case of one
 # broadcast per interval however much is moving. It also absorbs the flicker
@@ -248,9 +258,16 @@ class PresenceRegistry:
     provisions a guest.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] = time.monotonic) -> None:
         self._sids_by_user: dict[str, set[str]] = {}
         self._user_by_sid: dict[str, str] = {}
+        # When each online account arrived, as a sequence number, and the
+        # place an account that just went offline would get back if it
+        # returned within `ARRIVAL_GRACE_SECONDS` (see `arrival_of`).
+        self._clock = clock
+        self._next_arrival = 0
+        self._arrival_by_user: dict[str, int] = {}
+        self._departures: dict[str, tuple[int, float]] = {}
 
     def note_socket_opened(self, sid: str, user_id: str | None) -> bool:
         """Record a socket. True when that account was not online before.
@@ -273,6 +290,8 @@ class PresenceRegistry:
         sids = self._sids_by_user.setdefault(user_id, set())
         was_offline = not sids
         sids.add(sid)
+        if was_offline:
+            self._arrival_by_user[user_id] = self._returning_arrival(user_id)
         return was_offline
 
     def note_socket_closed(self, sid: str) -> bool:
@@ -293,7 +312,40 @@ class PresenceRegistry:
         if sids:
             return False
         del self._sids_by_user[user_id]
+        arrival = self._arrival_by_user.pop(user_id, None)
+        if arrival is not None:
+            self._departures[user_id] = (arrival, self._clock())
         return True
+
+    def _returning_arrival(self, user_id: str) -> int:
+        """The arrival an account coming online gets: its old place when it
+        left moments ago, a new place at the end otherwise."""
+        departed = self._departures.pop(user_id, None)
+        if departed is not None and self._clock() - departed[1] <= ARRIVAL_GRACE_SECONDS:
+            return departed[0]
+        self._next_arrival += 1
+        return self._next_arrival
+
+    def arrival_of(self, user_id: str | None) -> int | None:
+        """When this account arrived, for comparing with another's.
+
+        Online, its arrival. Offline for less than `ARRIVAL_GRACE_SECONDS`,
+        the arrival it would get back - which is what lets a reloading page
+        ask who it is before its socket reopens and still be first. None for
+        an account that is neither.
+        """
+        if not user_id:
+            return None
+        arrival = self._arrival_by_user.get(user_id)
+        if arrival is not None:
+            return arrival
+        departed = self._departures.get(user_id)
+        if departed is None:
+            return None
+        if self._clock() - departed[1] > ARRIVAL_GRACE_SECONDS:
+            del self._departures[user_id]
+            return None
+        return departed[0]
 
     def rekey(self, source_user_id: str, target_user_id: str) -> None:
         """Move every socket of a merged guest onto the account it became.
@@ -320,10 +372,14 @@ class PresenceRegistry:
         if source_user_id == target_user_id:
             return
         sids = self._sids_by_user.pop(source_user_id, set())
+        source_arrival = self._arrival_by_user.pop(source_user_id, None)
         if not sids:
             return
         for sid in sids:
             self._user_by_sid[sid] = target_user_id
+        if target_user_id not in self._sids_by_user and source_arrival is not None:
+            # The account the guest became arrives when the guest did.
+            self._arrival_by_user[target_user_id] = source_arrival
         self._sids_by_user.setdefault(target_user_id, set()).update(sids)
 
     def is_online(self, user_id: str | None) -> bool:
@@ -337,8 +393,30 @@ class PresenceRegistry:
         """
         return self._user_by_sid.get(sid)
 
+    def recently_departed_ids(self) -> list[str]:
+        """Accounts offline for less than `ARRIVAL_GRACE_SECONDS`.
+
+        Still holding their guest name (R-ACCT-09): a reload is not leaving,
+        and a name taken in the moment between the old page and the new one
+        would be taken from somebody who never went.
+        """
+        now = self._clock()
+        expired = [
+            user_id
+            for user_id, (_, departed_at) in self._departures.items()
+            if now - departed_at > ARRIVAL_GRACE_SECONDS
+        ]
+        for user_id in expired:
+            del self._departures[user_id]
+        return list(self._departures)
+
     def online_user_ids(self) -> list[str]:
-        return list(self._sids_by_user)
+        """Every online account, in the order they arrived.
+
+        The order is load-bearing (see `services/guest_names.py`): of two
+        guests online under one name, the one who arrived first keeps it.
+        """
+        return sorted(self._sids_by_user, key=lambda user_id: self._arrival_by_user.get(user_id, 0))
 
     @property
     def online_accounts(self) -> int:
@@ -393,18 +471,31 @@ def build_snapshot(
     """
     online = registry.online_user_ids()
     seated = seated_accounts(room_manager)
-    entries = [
-        PresenceEntry(
-            user_id=user_id,
-            display_name=identity.display_name,
-            name_color=identity.name_color,
-            is_anonymous=identity.is_anonymous,
-            status=STATUS_PLAYING if user_id in seated else STATUS_LOBBY,
-            avatar_key=identity.avatar_key,
+    entries = []
+    # Arrival order, so the first guest under a name is the one listed. A
+    # guest who came back to find their name taken is asked for a new one
+    # before they can play (R-ACCT-09), and until they choose it the list
+    # shows one person under that name, not two.
+    guest_names: set[str] = set()
+    for user_id in online:
+        identity = identities.get(user_id)
+        if identity is None:
+            continue
+        if identity.is_anonymous:
+            folded = fold_guest_name(identity.display_name)
+            if folded in guest_names:
+                continue
+            guest_names.add(folded)
+        entries.append(
+            PresenceEntry(
+                user_id=user_id,
+                display_name=identity.display_name,
+                name_color=identity.name_color,
+                is_anonymous=identity.is_anonymous,
+                status=STATUS_PLAYING if user_id in seated else STATUS_LOBBY,
+                avatar_key=identity.avatar_key,
+            )
         )
-        for user_id in online
-        if (identity := identities.get(user_id)) is not None
-    ]
     entries.sort(key=sort_key)
     return PresenceSnapshot(
         revision=revision,

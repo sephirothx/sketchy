@@ -601,6 +601,24 @@
   box-shadow: var(--shadow);
 }
 
+/* A guest who came back to find their name taken by somebody online who
+   arrived first (R-ACCT-09): said above the field that fixes it. */
+.first-run-name-in-use,
+.invite-name-in-use {
+  background: var(--warning-soft);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+}
+
+.invite-name-in-use {
+  margin-bottom: 10px;
+}
+
 .first-run-heading {
   margin: 0 0 4px;
   font-family: var(--font-display);

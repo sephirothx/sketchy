@@ -75,6 +75,8 @@ from app.auth.recovery import (
     reset_password,
 )
 from app.api.serializers import user_payload
+from app.services.guest_names import online_guest_holding
+from app.services.presence import PresenceRegistry
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
@@ -309,6 +311,10 @@ def create_auth_router(
     # link opens a new tab, and Settings is a different component.
     on_email_state_changed: Callable[[str], Awaitable[None]] | None = None,
     on_export_requested: Callable[[], None] | None = None,
+    # Who is online, for the one guest name per person online rule
+    # (R-ACCT-09). None where there are no sockets to be online on - the
+    # rule then has nobody to hold a name against.
+    presence: PresenceRegistry | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -595,6 +601,24 @@ def create_auth_router(
                 "That name belongs to a registered player.",
             )
 
+    async def refuse_a_name_in_use(
+        name: str, claimant_id: str | None, *, choosing: bool = True
+    ) -> None:
+        """A guest may not choose a name another guest online is using."""
+        holder = await online_guest_holding(
+            name,
+            claimant_id=claimant_id,
+            registry=presence,
+            user_repo=user_repo,
+            choosing=choosing,
+        )
+        if holder is not None:
+            raise Refusal(
+                409,
+                ErrorCode.NAME_IN_USE,
+                "Someone online is already playing under that name.",
+            )
+
     async def require_user(request: Request):
         user_id = getattr(request.state, "user_id", None)
         user = await user_repo.get_by_id(user_id) if user_id else None
@@ -655,7 +679,22 @@ def create_auth_router(
                         ).total_seconds()
                     ),
                 )
-        return user_payload(refreshed or user)
+        payload = user_payload(refreshed or user)
+        if user.is_anonymous and user.display_name:
+            # A guest who comes back to find somebody online under their name
+            # arrived second, and is asked for another before playing
+            # (R-ACCT-09). Said here, where the page first learns who it is.
+            payload["nameInUse"] = (
+                await online_guest_holding(
+                    user.display_name,
+                    claimant_id=user.id,
+                    registry=presence,
+                    user_repo=user_repo,
+                    choosing=False,
+                )
+                is not None
+            )
+        return payload
 
     @router.get("/nickname-available")
     async def nickname_available(request: Request, name: str = ""):
@@ -670,6 +709,18 @@ def create_auth_router(
             return {
                 "available": False,
                 "reason": "That name belongs to a registered player.",
+            }
+        holder = await online_guest_holding(
+            candidate,
+            claimant_id=getattr(request.state, "user_id", None),
+            registry=presence,
+            user_repo=user_repo,
+            choosing=True,
+        )
+        if holder is not None:
+            return {
+                "available": False,
+                "reason": "Someone online is already playing under that name.",
             }
         return {"available": True, "reason": None}
 
@@ -697,6 +748,7 @@ def create_auth_router(
             # the uniqueness rule held everywhere except the one place an
             # account is created.
             await refuse_a_registered_name(name)
+            await refuse_a_name_in_use(name, None)
             await throttle(provision_limiter, request)
             if not await daily_provision_limiter.check(GLOBAL_PROVISION_KEY):
                 logger.warning("guest provisioning is at its daily ceiling")
@@ -733,6 +785,14 @@ def create_auth_router(
             )
 
         await refuse_a_registered_name(name)
+        # Keeping the name you have, or changing only its case, is not
+        # choosing somebody else's - unless somebody who arrived first holds
+        # it, which is the one thing that asked this guest to rename at all.
+        await refuse_a_name_in_use(
+            name,
+            user.id,
+            choosing=name.lower() != (user.display_name or "").lower(),
+        )
 
         updated = await user_repo.update_profile(user.id, display_name=name)
         if on_profile_changed is not None:

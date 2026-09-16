@@ -149,9 +149,9 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
                 await guest.inner_text("#settings-name-error")
             )
 
-            await guest.fill("#settings-display-name", "Marta")
+            await guest.fill("#settings-display-name", "Martina")
             await guest.click('.settings-you button:has-text("Save")')
-            await guest.wait_for_selector('.identity-name:has-text("Marta")')
+            await guest.wait_for_selector('.identity-name:has-text("Martina")')
         finally:
             await owner_context.close()
             await guest_context.close()

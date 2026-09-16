@@ -133,6 +133,11 @@ export function InviteEntryPage({ code }: { code: string }) {
           <div className="invite-join-form">
             {asksForName && (
               <>
+                {user?.nameInUse && (
+                  <p className="invite-name-in-use" role="status">
+                    {ui.firstRunIdentity.nameInUse({ name: user.displayName })}
+                  </p>
+                )}
                 <label htmlFor="invite-name" className="visually-hidden">
                   {ui.firstRunIdentity.whatShouldWeCallYou}
                 </label>

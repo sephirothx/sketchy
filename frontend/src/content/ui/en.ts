@@ -167,6 +167,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   already_a_player: "You are already a player.",
   registered_name_fixed: "Registered players play as their username.",
   name_taken_by_account: "That name belongs to a registered player.",
+  name_in_use: "Someone online is already playing under that name. Choose another.",
   guests_cannot_choose_color: "Create an account to choose a name color.",
   suggestion_inactive: "This suggestion is no longer active.",
   drawing_not_found: "Drawing not found.",
@@ -982,6 +983,8 @@ export const EN = {
   },
 
   firstRunIdentity: {
+    nameInUse: (p: { name: string }) =>
+      `Someone online is already playing as “${p.name}”. Choose another name to keep playing.`,
     couldNotSaveThatNamePlease: "Could not save that name. Please try again.",
     keepYourUsernameYourStatsEvery: "Keep your username and your stats on every device.",
     createAccount: "Create an account",

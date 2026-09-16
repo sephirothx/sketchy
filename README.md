@@ -786,6 +786,13 @@ it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
 name of their choosing; setting a username and password later claims that same
 account, so stats collected as a guest carry over.
 
+A guest name is unique among the people online, ignoring case: nobody can choose a
+name a guest who is online is using, and it comes free again shortly after they leave. A
+guest who comes back to find their name taken by somebody who arrived first is
+asked for another before they can play, and the online list shows one person under
+each name. It is not reserved for good the way a username is, because guest
+accounts are never deleted and every common name would soon be gone.
+
 A password must be at least twelve characters, and is checked against more than
 its length before it is ever hashed: a short password written twice, a word with
 a year on the end, a row of keys walked to its end, or anything built out of your
