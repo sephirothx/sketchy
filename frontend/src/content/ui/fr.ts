@@ -843,6 +843,8 @@ export const FR: Catalogue = {
     leaveBlankForARandom: "Laisse vide pour un nom au hasard !",
     creating: "Création…",
     createRoom2: "Créer le salon",
+    yourRoom: "Ton salon",
+    aRandomName: "Un nom aléatoire",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "joueur", other: "joueurs" }),
     roundCount: (p: { count: number }) =>

@@ -843,6 +843,8 @@ export const NL: Catalogue = {
     leaveBlankForARandom: "Laat leeg voor een willekeurige naam!",
     creating: "Maken…",
     createRoom2: "Kamer maken",
+    yourRoom: "Jouw kamer",
+    aRandomName: "Een willekeurige naam",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "speler", other: "spelers" }),
     roundCount: (p: { count: number }) =>

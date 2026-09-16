@@ -854,6 +854,8 @@ export const EN = {
     leaveBlankForARandom: "Leave blank for a random name!",
     creating: "Creating…",
     createRoom2: "Create room",
+    yourRoom: "Your room",
+    aRandomName: "A random name",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "player", other: "players" }),
     roundCount: (p: { count: number }) =>

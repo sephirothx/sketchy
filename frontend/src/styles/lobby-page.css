@@ -1327,6 +1327,77 @@ a.online-player-name:focus-visible {
   }
 }
 
+/* The lobby on a wide window (#581): three columns instead of one.
+
+   Rooms, who is online and the chat were one 960px column, so on a 2560px
+   monitor 62% of the width was empty and the two people panels sat under the
+   rooms, where scrolling the list carried them away. From the shell's 1600px
+   step they are columns of their own, at the widths the room gives its
+   players and its chat, and the room list becomes a grid of two cards across,
+   three at the 1960px step.
+
+   Every row is placed by hand, because a gap would also open above a first-run
+   block or an error that is not there. So the rows have no gap and each item
+   above the columns brings its own margin, the header keeping the 16px the
+   pinned lobby's gap added to its own 26. The people panels come after the
+   rooms in the markup, chat first; on screen the chat takes the far column,
+   where it is in the room as well. */
+@media (min-width: 1500px) {
+  .lobby-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--room-players-width) var(--room-chat-width);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 0;
+    max-width: calc(var(--shell-width) + 32px);
+  }
+
+  .lobby-page > .lobby-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin-bottom: 42px;
+  }
+
+  .lobby-page > .first-run {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .lobby-page > .lobby-action-error {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .lobby-page > .lobby-rooms-panel {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .lobby-social {
+    display: contents;
+  }
+
+  .lobby-social > .lobby-online-panel {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
+  .lobby-social > .lobby-chat-panel {
+    grid-column: 3;
+    grid-row: 4;
+  }
+
+  .lobby-rooms-panel .room-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 2100px) {
+  .lobby-rooms-panel .room-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* Friends, on the rows they belong to. */
 .online-player-actions {
   display: flex;

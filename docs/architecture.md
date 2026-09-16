@@ -1844,6 +1844,17 @@ wrapper, the same mechanism as the phone. `.canvas-area` is capped at the
 column rather than sized to it, because the turn-results scrim is `inset: 0` on
 it. Below 640px tall the room is the ordinary scrolling page again.
 
+The lobby takes the steps from 1500px: rooms, who is online and the chat
+become three columns, the two people panels at the room's side-column widths
+and the chat on the far side as it is in the room, and the room list becomes a
+grid two cards across, three at the widest step. Every row of that grid is
+placed by hand with no row gap, because a gap would open above a first-run
+block or an error that is not there. Create a room does not widen its form,
+which is read down a column: from 1200px the summary strip under it becomes a
+sticky card beside it — the chips, the running-time estimate and Create room —
+and the page renders one or the other (`useMediaQuery`), so there is never a
+second Create button.
+
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 
 The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-404-source.svg` is the artwork of record, and the generator writes `frontend/src/components/notFoundArt.ts` and `docs/ui-mockups/tools/notFoundArt.mjs` from it. Unlike the wordmark it keeps literal colours rather than tokens — it hangs on the canvas sheet, which is `white` in both themes (`.canvas-stack`), so ink that answered to the theme would only get weaker on the one ground it ever sits on. The generator maps each authored fill onto a chosen colour — mostly the same-family swatch the game's own drawing palette (`COLOR_PAIRS` in `lib/drawingRules.ts`) held when the drawing was made, so the doodle is close to a drawing a player could have made — and it refuses to run if a re-export introduces a fill it has no mapping for. That map is a copy of the palette rather than a view of it, and #702 has since moved one of the swatches it names; the ink stays as it was drawn, because re-tinting finished artwork to chase a swatch would change a picture for no reason a reader could see.
