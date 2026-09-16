@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
@@ -25,11 +24,9 @@ import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
  * beside a wordmark is what used to push this header onto two rows, and
  * settings is the one of them nobody opens mid-session.
  *
- * `actions` is where a page puts its own primary controls - the lobby's
- * *Create room* and *Join by code*. They are the page's, not the chrome's, so
- * they are passed in rather than known about here; and a phone gets none of
- * them, because that is the same two-row problem the gear was moved for. The
- * lobby keeps its thumb dock for those.
+ * A page's own actions are not the chrome's and do not live here: the lobby's
+ * *Create room* and *Join by code* sit beside its room list (#594), and a phone
+ * has them in the lobby's thumb dock.
  *
  * `languageSwitch` is the exception, shown at every width: the language you
  * read in, as a flag. It is the one control a visitor who cannot read the
@@ -38,13 +35,11 @@ import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
 export function AppHeader({
   backLabel,
   backTo = "/",
-  actions,
   languageSwitch = false,
 }: {
   backLabel?: string;
   /** Where the back control goes: the lobby unless a page sits under another. */
   backTo?: string;
-  actions?: ReactNode;
   languageSwitch?: boolean;
 } = {}) {
   const navigate = useNavigate();
@@ -71,7 +66,6 @@ export function AppHeader({
         </h1>
       </div>
       <div className="lobby-header-actions">
-        {!isNarrow && actions}
         {languageSwitch && <InterfaceLanguageButton />}
         {!isNarrow && (
           <button

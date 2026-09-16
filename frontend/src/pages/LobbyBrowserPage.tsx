@@ -307,20 +307,7 @@ export function LobbyBrowserPage() {
 
   return (
     <div className="lobby-page">
-      <AppHeader
-        languageSwitch
-        actions={
-          <>
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              onClick={() => setCodeSheetOpen(true)}
-            >
-              {ui.lobbyBrowserPage.joinByCode}
-            </button>
-          </>
-        }
-      />
+      <AppHeader languageSwitch />
 
       {criticalError && (
         <RemovedFromRoomDialog
@@ -341,19 +328,29 @@ export function LobbyBrowserPage() {
           <span className="lobby-rooms-count">
             {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
           </span>
-          {/* Beside the list it adds to, rather than in the header: a room
-              made here is a card in this panel. The catalogue and the Gallery
-              are in the account menu. A phone has the dock instead. */}
+          {/* The two ways into a room, beside the list of rooms rather than in
+              the header - the pair a phone's dock already holds, in the same
+              order of weight. The header is left to the person: language,
+              settings, account. The catalogue and the Gallery are in the
+              account menu. */}
           {!isNarrow && (
-            <Button
-              variant="primary"
-              compact
-              className="lobby-rooms-create"
-              iconLeft={<PlusIcon size={15} />}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              {ui.lobbyBrowserPage.createRoom}
-            </Button>
+            <div className="lobby-rooms-actions">
+              <button
+                type="button"
+                className="btn btn-secondary btn-compact"
+                onClick={() => setCodeSheetOpen(true)}
+              >
+                {ui.lobbyBrowserPage.joinByCode}
+              </button>
+              <Button
+                variant="primary"
+                compact
+                iconLeft={<PlusIcon size={15} />}
+                onClick={() => void handleOpenCreateRoom()}
+              >
+                {ui.lobbyBrowserPage.createRoom}
+              </Button>
+            </div>
           )}
         </div>
 
