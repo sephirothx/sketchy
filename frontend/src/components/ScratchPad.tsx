@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ScratchPadCanvas, type CanvasRef } from "./Canvas";
-import { DownloadIcon } from "./icons";
 import { Toolbar } from "./Toolbar";
 import { ModalShell } from "./ui/ModalShell";
 import type { DrawTool } from "../types";
@@ -46,18 +45,8 @@ export function ScratchPad() {
           onBrushWidthChange={(next) => (tool === "eraser" ? setEraserWidth(next) : setBrushWidth(next))}
           tool={tool}
           onToolChange={setTool}
+          onSave={() => canvasRef.current?.saveImage()}
         />
-      </div>
-      <div className="scratch-pad-foot">
-        <p className="scratch-pad-note">{ui.scratchPad.onlyYou}</p>
-        <button
-          type="button"
-          className="btn btn-ghost btn-compact"
-          onClick={() => canvasRef.current?.saveImage()}
-        >
-          <DownloadIcon size={15} />
-          {ui.scratchPad.save}
-        </button>
       </div>
     </div>
   );

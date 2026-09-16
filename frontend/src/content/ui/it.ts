@@ -1927,7 +1927,6 @@ export const IT: Catalogue = {
     title: "Blocco appunti",
     drawWhileYouWait: "Disegna mentre aspetti",
     canvasLabel: "Blocco appunti. Solo tu vedi quello che disegni qui.",
-    onlyYou: "Lo vedi solo tu. Non viene inviato nulla.",
     save: "Salva",
     close: "Chiudi",
   },

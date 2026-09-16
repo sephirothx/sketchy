@@ -1925,7 +1925,6 @@ export const ES: Catalogue = {
     title: "Bloc de notas",
     drawWhileYouWait: "Dibuja mientras esperas",
     canvasLabel: "Bloc de notas. Solo tú ves lo que dibujas aquí.",
-    onlyYou: "Solo tú lo ves. No se envía nada.",
     save: "Guardar",
     close: "Cerrar",
   },

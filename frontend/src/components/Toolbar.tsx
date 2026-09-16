@@ -25,6 +25,7 @@ import {
   BrushIcon,
   ChevronDownIcon,
   CircleIcon,
+  DownloadIcon,
   EraserIcon,
   FillIcon,
   RectIcon,
@@ -94,6 +95,8 @@ interface ToolbarProps {
    * room's dock - which is under the card the pad sits on.
    */
   scratchPad?: boolean;
+  /** A Save beside Undo and Clear, for a canvas with no room menu to save it from. */
+  onSave?: () => void;
 }
 
 export function Toolbar({
@@ -104,6 +107,7 @@ export function Toolbar({
   tool,
   onToolChange,
   scratchPad = false,
+  onSave,
 }: ToolbarProps) {
   recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
@@ -393,6 +397,17 @@ export function Toolbar({
             >
               <TrashIcon size={18} />
             </button>
+            {onSave && (
+              <button
+                type="button"
+                className="toolbar-mobile-chip toolbar-mobile-save"
+                aria-label={ui.scratchPad.save}
+                title={ui.scratchPad.save}
+                onClick={onSave}
+              >
+                <DownloadIcon size={18} />
+              </button>
+            )}
           </div>
 
           {mobilePanel === "tool" && (
@@ -556,6 +571,17 @@ export function Toolbar({
           <TrashIcon size={18} />
           <span className="toolbar-action-label">{ui.toolbar.clear}</span>
         </button>
+        {onSave && (
+          <button
+            className="toolbar-action-button save-button"
+            onClick={onSave}
+            title={ui.scratchPad.save}
+            aria-label={ui.scratchPad.save}
+          >
+            <DownloadIcon size={18} />
+            <span className="toolbar-action-label">{ui.scratchPad.save}</span>
+          </button>
+        )}
       </div>
     ),
   };
