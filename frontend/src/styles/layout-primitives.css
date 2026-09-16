@@ -1,4 +1,51 @@
 /* Layout shells */
+
+/* The desktop width steps (#581). Every page used to be pinned to one column
+   chosen for a 1440px laptop, so a 2560px monitor drew the same layout with
+   more empty paper around it, and the drawing stayed at 632 x 474 on every
+   screen. Three steps: the shell, the canvas's presentation cap, and the
+   room's two side columns move together.
+
+   The canvas cap stops at 1180 on purpose. The canvas's backing store is
+   800 x 600 and has to stay there - `draw_fill` is pixel-addressed against
+   that grid on the wire - so a bigger canvas on screen is an upscale of the
+   same bitmap. 1180 is 1.48x, about where crayon-weight strokes start to go
+   soft; past it the width goes to the side columns instead (R-UX-10).
+
+   Viewport media queries rather than container queries: a size container
+   is also the containing block for every `position: fixed` descendant, and
+   the room's sheets and the invite dock are fixed. Phones are untouched -
+   everything here is at or above 1240px of content. */
+:root {
+  --shell-width: 1240px;
+  --canvas-cap: 760px;
+  --room-players-width: 250px;
+  --room-chat-width: 300px;
+}
+
+@media (min-width: 1500px) {
+  :root {
+    --shell-width: 1600px;
+    --canvas-cap: 1000px;
+    --room-players-width: 290px;
+    --room-chat-width: 340px;
+    /* The lobby's people column: wider than the room's chat, because on the
+       lobby it holds two lists and the rooms are one to a row. It grows with
+       the window rather than jumping, so the narrowest windows of the step
+       keep the width their room rows need. */
+    --lobby-people-width: clamp(420px, 28vw, 460px);
+  }
+}
+
+@media (min-width: 2100px) {
+  :root {
+    --shell-width: 1960px;
+    --canvas-cap: 1180px;
+    --room-players-width: 320px;
+    --room-chat-width: 380px;
+    --lobby-people-width: clamp(520px, 26vw, 580px);
+  }
+}
 .lobby-page {
   max-width: 960px;
   margin: 0 auto;

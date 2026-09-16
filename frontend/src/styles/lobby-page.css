@@ -1327,6 +1327,259 @@ a.online-player-name:focus-visible {
   }
 }
 
+/* The lobby on a wide window (#581): the rooms beside the people.
+
+   Rooms, who is online and the chat were one 960px column, so on a 2560px
+   monitor 62% of the width was empty and the two people panels sat under the
+   rooms, where scrolling the list carried them away. From the shell's 1600px
+   step the people panels are a column of their own beside the rooms: who is
+   online above, the chat under it with the larger share of the height, since
+   it is the one that grows. The rooms are one to a row, with their facts in
+   columns (see `.public-room-card.is-row`): a grid of cards with two rooms in
+   it was mostly empty panel.
+
+   Every row is placed by hand, because a gap would also open above a first-run
+   block or an error that is not there. So the rows have no gap and each item
+   above the columns brings its own margin, the header keeping the 16px the
+   pinned lobby's gap added to its own 26. The chat comes first in the markup,
+   which is the order a phone stacks them in; on this column the list of
+   people is the short one, so it goes on top. */
+@media (min-width: 1500px) {
+  .lobby-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--lobby-people-width);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 0;
+    max-width: calc(var(--shell-width) + 32px);
+  }
+
+  .lobby-page > .lobby-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin-bottom: 42px;
+  }
+
+  .lobby-page > .first-run {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .lobby-page > .lobby-action-error {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .lobby-page > .lobby-rooms-panel {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .lobby-page > .lobby-social {
+    grid-column: 2;
+    grid-row: 4;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .lobby-social > .lobby-online-panel {
+    grid-row: 1;
+  }
+
+  .lobby-social > .lobby-chat-panel {
+    grid-row: 2;
+  }
+}
+
+/* ── A room to a row (#581) ──────────────────────────────────────────────
+   The wide lobby's room row, and the headings over its columns. One set of
+   columns for both, so a fact sits under its heading in every row. The
+   actions column is a fixed width rather than `auto`: a full room has no
+   Join, and an `auto` column sized per row would shift every other column
+   of that one row. */
+.room-list.is-rows {
+  --room-row-columns: minmax(0, 1fr) 170px 110px minmax(0, 1.25fr) 196px;
+  gap: 10px;
+}
+
+.room-list-columns {
+  color: var(--faint);
+  column-gap: 18px;
+  display: grid;
+  font-size: 11px;
+  font-weight: 800;
+  grid-template-columns: var(--room-row-columns);
+  letter-spacing: 0.09em;
+  padding: 0 20px;
+  text-transform: uppercase;
+}
+
+.public-room-card.is-row {
+  align-items: center;
+  column-gap: 18px;
+  display: grid;
+  grid-template-columns: var(--room-row-columns);
+  padding: 14px 18px;
+  row-gap: 0;
+}
+
+.public-room-row-room {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-width: 0;
+}
+
+.public-room-card.is-row .public-room-name {
+  margin: 0;
+}
+
+/* Says what the buttons will do, as the card's flags do: a full room has no
+   Join, and joining one in progress puts you in a later turn. */
+.public-room-status {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.public-room-status.is-waiting {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.public-room-status.is-playing {
+  background: var(--warm-soft);
+  color: var(--warm-ink);
+}
+
+.public-room-status.is-full {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.public-room-seats {
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 6px;
+  justify-items: start;
+  margin: -6px -8px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.public-room-seats:hover {
+  background: var(--well);
+  color: var(--ink);
+}
+
+.public-room-seats small {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  gap: 0 4px;
+}
+
+.public-room-seats small > svg {
+  transition: transform 140ms ease;
+}
+
+.public-room-seats.is-open small > svg {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-room-seats small > svg { transition: none; }
+}
+
+/* One dot a seat, eight to a line, so a 16-seat room is two tidy lines. */
+.public-room-seat-pips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: calc(8 * 10px + 7 * 3px);
+}
+
+.public-room-seat-pips > i {
+  background: var(--line-strong);
+  border-radius: 50%;
+  height: 10px;
+  width: 10px;
+}
+
+.public-room-seat-pips > i.is-taken {
+  background: var(--primary);
+}
+
+.public-room-length {
+  display: grid;
+  gap: 3px;
+}
+
+.public-room-length strong {
+  color: var(--ink);
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.public-room-length small {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* Past three changed rules the rest fold into "+N more", which keeps most
+   rows to the two lines the name and status already take. The chips wrap
+   rather than being clipped at two lines: in a language with longer labels
+   that clipping hid the third rule and the "+N more" after it, so a room
+   with five rules read as a room with two. A single rule longer than the
+   column is cut rather than pushing the row wider. */
+.public-room-rules {
+  align-content: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.public-room-rules > .chip {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-room-rules > .public-room-rules-more {
+  flex: none;
+}
+
+.public-room-card.is-row .public-room-actions {
+  flex-direction: row;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.public-room-card.is-row .public-room-roster {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+}
+
 /* Friends, on the rows they belong to. */
 .online-player-actions {
   display: flex;

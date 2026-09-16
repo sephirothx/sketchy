@@ -378,6 +378,66 @@ details.form-section > .form-section-body {
   flex: none;
 }
 
+/* -------------------------------------------------- wide: form and preview */
+/* From 1200px the summary strip becomes a card beside the form (#581), and it
+   stays in view while the form scrolls. The form keeps the 780px it had: it is
+   read down a column, and wider fields would not make it any faster to fill. */
+@media (min-width: 1200px) {
+  .create-room-page {
+    max-width: calc(780px + 16px + 340px + 32px);
+  }
+
+  .create-room-layout {
+    align-items: start;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
+
+.create-room-preview {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  position: sticky;
+  top: calc(var(--banner-height) + 16px);
+}
+
+.create-room-preview .section-label {
+  margin: 0;
+}
+
+.create-room-preview-name {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: -8px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.create-room-preview-name.is-random {
+  color: var(--muted);
+}
+
+.create-room-preview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.create-room-preview .create-room-submit {
+  width: 100%;
+}
+
 /* -------------------------------------------------- shared control recipes */
 .segmented-control-field,
 .room-choice-group { border: 0; margin: 0; min-width: 0; padding: 0; }

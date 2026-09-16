@@ -843,6 +843,8 @@ export const ES: Catalogue = {
     leaveBlankForARandom: "¡Déjalo en blanco para un nombre al azar!",
     creating: "Creando…",
     createRoom2: "Crear sala",
+    yourRoom: "Tu sala",
+    aRandomName: "Un nombre aleatorio",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "jugador", other: "jugadores" }),
     roundCount: (p: { count: number }) =>
@@ -1643,6 +1645,19 @@ export const ES: Catalogue = {
     joining: "Uniéndote…",
     join: "Unirse",
     spectate: "Mirar",
+    waiting: "Esperando",
+    seatsOpen: (p: { count: number }) =>
+      plural(p.count, { one: `${number(p.count)} libre`, other: `${number(p.count)} libres` }),
+    noSeatsOpen: "Sin plazas libres",
+    watching: (p: { count: number }) => `${number(p.count)} mirando`,
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} min`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} min`,
+    standardRules: "Reglas estándar",
+    moreRules: (p: { count: number }) => `+${number(p.count)} más`,
+    columnRoom: "Sala",
+    columnSeats: "Plazas",
+    columnLength: "Duración",
+    columnRoomRules: "Reglas de la sala",
   },
 
   recapDrawings: {

@@ -2474,6 +2474,18 @@ A seated client checks with the server every five seconds that it still holds th
   a way back to the lobby. A room is sized to the
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
+- Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
+  from a 1500px window and 1960px from 2100px - and on a desktop it fills the window's
+  height, with the players and chat running top to bottom. The canvas grows with it up to
+  1180 × 885, 3.5× the area it had on a 2560px monitor; the drawing itself stays 800 × 600,
+  so past that size it would only get blurrier, and the extra width goes to the players and
+  the chat instead. From 1500px the lobby puts the rooms beside who is online and the chat,
+  stacked in a column, with one room to a row: its open seats, how long a game
+  will take, and any rules that differ from the defaults, lined up in columns; from 1200px Create a room keeps
+  a card beside the form with what you are about to create, how long it runs, and the
+  Create room button, in view however far down the form you are. A profile puts its game
+  history beside its statistics, and moderators get the newest decisions in a column
+  beside the case they are reading.
 - An action that expects an answer - creating a room, joining, starting, voting to restart -
   is never handed to a socket that is not connected. It waits for the connection and is sent
   once, or it times out having been sent at all, so a request reported as failed cannot arrive
