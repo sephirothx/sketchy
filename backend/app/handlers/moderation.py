@@ -18,13 +18,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.erasure import AccountErasedError, require_live_account
-from app.db.models import PlayerReport, User
-from app.domain_values import ReportReason, ReportScope, ReportStatus
+from app.db.models import User
+from app.domain_values import ReportReason, ReportScope
 from app.rooms import majority_of
 from app.services.player_reports import (
     context_around,
     drawing_from_live_room,
     evidence_from_live_room,
+    open_report_id,
     record_player_report,
 )
 from app.handlers.refusals import ErrorCode
@@ -189,12 +190,10 @@ async def report_player(ctx: HandlerContext, sid, data):
             # The same rule the REST path and content reports carry: saying it
             # again while a moderator has yet to look adds no evidence and
             # buries the queue.
-            already_open = await session.scalar(
-                select(PlayerReport.id).where(
-                    PlayerReport.reporter_user_id == UUID(reporter.user_id),
-                    PlayerReport.reported_user_id == UUID(target.user_id),
-                    PlayerReport.status == ReportStatus.PENDING.value,
-                )
+            already_open = await open_report_id(
+                session,
+                reporter_user_id=UUID(reporter.user_id),
+                reported_user_id=UUID(target.user_id),
             )
             if already_open is not None:
                 return {

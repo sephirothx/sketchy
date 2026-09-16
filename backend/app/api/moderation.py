@@ -42,6 +42,7 @@ from app.services.player_reports import (
     decided_incident_report_ids,
     drawing_evidence_for_report,
     drawing_evidence_payload,
+    open_report_id,
     record_player_report,
     CapturedDrawing,
 )
@@ -1369,12 +1370,8 @@ def create_moderation_router(
                 # send; this bounds how many times the same person may be
                 # reported by the same reporter, which is the noise a queue
                 # actually drowns in. Same rule as content reports.
-                already_open = await session.scalar(
-                    select(PlayerReport.id).where(
-                        PlayerReport.reporter_user_id == db_reporter_id,
-                        PlayerReport.reported_user_id == target.id,
-                        PlayerReport.status == ReportStatus.PENDING.value,
-                    )
+                already_open = await open_report_id(
+                    session, reporter_user_id=db_reporter_id, reported_user_id=target.id
                 )
                 if already_open is not None:
                     raise Refusal(
@@ -2962,12 +2959,8 @@ def create_moderation_router(
                     raise Refusal(
                         422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself."
                     )
-                already_open = await session.scalar(
-                    select(PlayerReport.id).where(
-                        PlayerReport.reporter_user_id == db_reporter_id,
-                        PlayerReport.reported_user_id == target.id,
-                        PlayerReport.status == ReportStatus.PENDING.value,
-                    )
+                already_open = await open_report_id(
+                    session, reporter_user_id=db_reporter_id, reported_user_id=target.id
                 )
                 if already_open is not None:
                     raise Refusal(

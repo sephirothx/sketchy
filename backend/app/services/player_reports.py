@@ -27,6 +27,7 @@ from sqlalchemy.orm import undefer
 from app.canvas_storage import prepare_stored_drawing
 from app.db.models import (
     AuditEvent,
+    IdentityAlias,
     PlayerReport,
     PlayerReportDrawingEvidence,
     PlayerReportMessageEvidence,
@@ -34,7 +35,7 @@ from app.db.models import (
     UserBlock,
     generate_uuid,
 )
-from app.domain_values import AuditTargetType, ReportScope
+from app.domain_values import AuditTargetType, ReportScope, ReportStatus
 from app.game import Phase
 from app.rooms import Room
 
@@ -262,6 +263,44 @@ async def notice_drawings(
         {"reportId": str(row.report_id), **(drawing_evidence_payload(row) or {})}
         for row in rows
     ]
+
+
+async def open_report_id(
+    session: AsyncSession, *, reporter_user_id: UUID, reported_user_id: UUID
+) -> UUID | None:
+    """The pending report this reporter already holds against this person.
+
+    R-MOD-05 is one open report per reporter and *person*, and a person may
+    be more than one row: a guest who claims an account keeps the guest id
+    on everything it did, linked to the account through `identity_aliases`.
+    A report filed against the guest stays on the guest id, so a check that
+    compared only the canonical id would let the same complaint be filed
+    once more after the merge - which is what the partial unique index,
+    keyed on raw ids, cannot see either. The check is made over the whole
+    identity set: the canonical account and every identity merged into it.
+    """
+    canonical = (
+        await session.scalar(
+            select(IdentityAlias.target_user_id).where(
+                IdentityAlias.source_user_id == reported_user_id
+            )
+        )
+        or reported_user_id
+    )
+    merged = (
+        await session.scalars(
+            select(IdentityAlias.source_user_id).where(
+                IdentityAlias.target_user_id == canonical
+            )
+        )
+    ).all()
+    return await session.scalar(
+        select(PlayerReport.id).where(
+            PlayerReport.reporter_user_id == reporter_user_id,
+            PlayerReport.reported_user_id.in_([canonical, *merged]),
+            PlayerReport.status == ReportStatus.PENDING.value,
+        )
+    )
 
 
 def record_player_report(
