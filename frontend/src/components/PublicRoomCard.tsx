@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { promptLanguageLabel } from "../lib/promptLanguages";
-import { gameLength, houseRules } from "../lib/roomCardFacts";
+import { gameLength, changedRoomRules } from "../lib/roomCardFacts";
 import { emitWithAck } from "../lib/socket";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
@@ -26,8 +26,10 @@ interface PublicRoomCardProps {
 }
 
 /** How many changed rules a row shows before folding the rest into "+N more",
-    so a row stays two lines tall - the height its name and status already
-    give it - however unusual the room is. */
+    so an unusual room's row stays about the height its name and status
+    already give it. The chips wrap rather than clip, so a language with
+    longer labels can take a third line, but never hides a rule it has not
+    counted. */
 const ROW_RULES_SHOWN = 3;
 
 /**
@@ -37,7 +39,7 @@ const ROW_RULES_SHOWN = 3;
  * The card's facts are the ones that decide whether to tap: what it is called,
  * what language the prompts are in, how full it is, and how long a game will
  * take (rounds x drawing time). Everything else it used to carry — a chip per
- * house rule, a capacity meter, the spectator count — priced the room rather
+ * room rule, a capacity meter, the spectator count — priced the room rather
  * than described it, and on a phone it pushed the next room off the screen.
  *
  * The row is where those come back (#581). From 1500px each room has the full
@@ -155,7 +157,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card
 
   if (layout === "row") {
     const length = gameLength(room);
-    const rules = houseRules(room);
+    const rules = changedRoomRules(room);
     const shownRules = rules.slice(0, ROW_RULES_SHOWN);
     const foldedRules = rules.slice(ROW_RULES_SHOWN);
     const open = Math.max(0, room.maxPlayers - room.playerCount);
@@ -200,7 +202,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card
             {ui.publicRoomCard.roundCount({ count: room.rounds })} · {room.drawingSeconds}s
           </small>
         </div>
-        <ul className="public-room-rules" aria-label={ui.publicRoomCard.columnHouseRules}>
+        <ul className="public-room-rules" aria-label={ui.publicRoomCard.columnRoomRules}>
           {rules.length === 0 && <li className="chip chip-neutral">{ui.publicRoomCard.standardRules}</li>}
           {shownRules.map((rule) => <li key={rule} className="chip chip-primary">{rule}</li>)}
           {foldedRules.length > 0 && (

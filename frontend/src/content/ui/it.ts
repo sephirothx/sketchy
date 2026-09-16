@@ -1659,7 +1659,7 @@ export const IT: Catalogue = {
     columnRoom: "Stanza",
     columnSeats: "Posti",
     columnLength: "Durata",
-    columnHouseRules: "Regole della stanza",
+    columnRoomRules: "Regole della stanza",
   },
 
   recapDrawings: {

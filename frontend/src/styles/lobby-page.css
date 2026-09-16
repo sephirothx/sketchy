@@ -1540,9 +1540,12 @@ a.online-player-name:focus-visible {
   font-weight: 700;
 }
 
-/* Two lines at most, the height the row's name and status already take: past
-   three changed rules the rest fold into "+N more", and a single rule longer
-   than the column is cut rather than pushing the row wider. */
+/* Past three changed rules the rest fold into "+N more", which keeps most
+   rows to the two lines the name and status already take. The chips wrap
+   rather than being clipped at two lines: in a language with longer labels
+   that clipping hid the third rule and the "+N more" after it, so a room
+   with five rules read as a room with two. A single rule longer than the
+   column is cut rather than pushing the row wider. */
 .public-room-rules {
   align-content: center;
   display: flex;
@@ -1550,9 +1553,7 @@ a.online-player-name:focus-visible {
   gap: 5px;
   list-style: none;
   margin: 0;
-  max-height: calc(2 * 26px + 5px);
   min-width: 0;
-  overflow: hidden;
   padding: 0;
 }
 
