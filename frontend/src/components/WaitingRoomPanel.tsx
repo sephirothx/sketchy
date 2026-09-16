@@ -6,6 +6,7 @@ import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
 import { RoomFacts } from "./RoomFacts";
+import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
@@ -302,6 +303,18 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </p>
           )}
         </div>
+      </section>
+
+      {/* Something to do while nobody else is here yet (#591). The first screen a
+          new host reaches is a wait they do not control - the link is in a
+          group chat nobody has opened - and it offered a disabled Start and
+          nothing else. The scratch pad, because it is only ever this player's:
+          no strokes on the wire, nothing to moderate, and nothing a player
+          arriving mid-drawing walks in on. Last, so it never stands between
+          anybody and Start. */}
+      <section className="waiting-card waiting-pad-card" aria-labelledby="waiting-pad-title">
+        <h2 id="waiting-pad-title" className="waiting-card-kicker">{ui.scratchPad.drawWhileYouWait}</h2>
+        <ScratchPad />
       </section>
 
       {settingsOpen && (

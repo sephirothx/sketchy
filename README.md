@@ -2479,7 +2479,8 @@ A seated client checks with the server every five seconds that it still holds th
   Room menu's Leave still works. If the server comes back without the room (it restarted, or
   the room closed meanwhile), the room is replaced by "This game ended", with the reason and
   a way back to the lobby. While the connection is down there is a scratch pad to draw on - on
-  the paused room's card, and behind "Draw while you wait" on the lobby's banner. It is only
+  the paused room's card, behind "Draw while you wait" on the lobby's banner, and in the
+  waiting room. It is only
   ever yours: nothing on it is sent or stored, it keeps its drawing for as long as the tab is
   open, and Save downloads it as a picture. A room is sized to the
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
@@ -2494,7 +2495,9 @@ A seated client checks with the server every five seconds that it still holds th
   never do. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
-  cells, so the rules read the same before joining as after.
+  cells, so the rules read the same before joining as after. Below that, the waiting room has a
+  scratch pad to draw on while nobody else has arrived - only yours, like the one an outage
+  shows, and the same drawing on both.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
   from a 1500px window and 1960px from 2100px - and on a desktop it fills the window's
   height, with the players and chat running top to bottom. The canvas grows with it up to

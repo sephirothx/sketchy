@@ -19,6 +19,14 @@ import { ui } from "../content/ui/index.ts";
  */
 let sheet: HTMLCanvasElement | null = null;
 
+/**
+ * Every pad on screen, redrawn from the sheet when another one changes it.
+ * Two can be mounted at once - the waiting room's, and the paused card's over
+ * it (#591) - and a pad left showing an older sheet would put that back the
+ * next time it was drawn on.
+ */
+const pads = new Map<HTMLCanvasElement, CanvasRenderingContext2D>();
+
 function keepSheet(canvas: HTMLCanvasElement): void {
   if (!sheet) {
     sheet = document.createElement("canvas");
@@ -26,9 +34,12 @@ function keepSheet(canvas: HTMLCanvasElement): void {
     sheet.height = CANVAS_HEIGHT;
   }
   sheet.getContext("2d")?.drawImage(canvas, 0, 0);
+  for (const [other, context] of pads) {
+    if (other !== canvas) context.drawImage(sheet, 0, 0);
+  }
 }
 
-/** The scratch pad (#829): a brush, four colors, Clear and Save, and nothing sent. */
+/** The scratch pad (#829, #591): a brush, four colors, Clear and Save, and nothing sent. */
 export function ScratchPad() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -42,9 +53,13 @@ export function ScratchPad() {
     fillWhite(context, CANVAS_WIDTH, CANVAS_HEIGHT);
     if (sheet) context.drawImage(sheet, 0, 0);
     contextRef.current = context;
+    pads.set(canvas, context);
     // The card the pad sits on can go at any moment - the connection is back -
     // and a stroke in progress then never sees its pointerup.
-    return () => keepSheet(canvas);
+    return () => {
+      pads.delete(canvas);
+      keepSheet(canvas);
+    };
   }, []);
 
   function paint(points: Point[]): void {

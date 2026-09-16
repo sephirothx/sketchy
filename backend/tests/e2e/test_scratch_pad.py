@@ -1,4 +1,4 @@
-"""The scratch pad (#829): something to draw on while the connection is down."""
+"""The scratch pad (#829, #591): something to draw on while the connection is down, and while a room waits for players."""
 
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import use_guest_name
@@ -94,6 +94,47 @@ async def test_a_paused_room_carries_the_pad_and_the_tab_keeps_the_drawing():
             assert await inked(page, pad) == drawn
             await context.set_offline(False)
             await page.wait_for_selector('[data-testid="room-stage-paused"]', state="detached", timeout=10000)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_over():
+    """#591: the waiting room offered a disabled Start and nothing else. And two
+    pads can be on screen at once - the room's, and the paused card's over it -
+    so what is drawn on one has to be what the other shows afterwards."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "PadHost")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector(".create-room-page")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            room_pad = '.waiting-pad-card [data-testid="scratch-pad"]'
+            await page.locator(room_pad).scroll_into_view_if_needed()
+            await scribble(page, room_pad)
+            first = await inked(page, room_pad)
+            assert first > 100
+
+            await context.set_offline(True)
+            paused_pad = '[data-testid="room-stage-paused"] [data-testid="scratch-pad"]'
+            await page.wait_for_selector(paused_pad, timeout=5000)
+            assert await inked(page, paused_pad) == first
+            await page.click(f'{paused_pad} [data-testid="scratch-pad-clear"]')
+            assert await inked(page, paused_pad) == 0
+
+            await context.set_offline(False)
+            await page.wait_for_selector('[data-testid="room-stage-paused"]', state="detached", timeout=10000)
+            # Cleared on the card, so cleared in the room: the room's pad must not
+            # keep the older sheet it was showing underneath.
+            assert await inked(page, room_pad) == 0
+            await scribble(page, room_pad)
+            assert await inked(page, room_pad) == first
         finally:
             await context.close()
             await browser.close()

@@ -543,6 +543,13 @@
 .waiting-card h2 { font-size: 18px; }
 .waiting-card-kicker { color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: .09em; margin: 0 0 5px; text-transform: uppercase; }
 
+/* The scratch pad's card (#591). A heading that reads as a kicker, and a pad
+   held to a sketchbook's size: the full 880px column would make it the
+   biggest thing in the room, bigger than what it is waiting for. */
+.waiting-card h2.waiting-card-kicker { color: var(--faint); font-family: inherit; font-size: 11.5px; font-weight: 800; }
+.waiting-pad-card { text-align: center; }
+.waiting-pad-card .scratch-pad { margin: 8px auto 0; max-width: 440px; }
+
 /* Which room this is. Out of the invite card, which is about getting people
    into it rather than naming it. */
 .waiting-room-head { text-align: center; }

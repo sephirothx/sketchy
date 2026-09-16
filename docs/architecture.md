@@ -1786,8 +1786,10 @@ recorded once per room code and stops the rebind loop, because the reason is rea
 flags (a drain seen before the loss) that the first answer spends. A pause while the connection
 is what is being waited for carries the scratch pad
 ([`ScratchPad.tsx`](../frontend/src/components/ScratchPad.tsx), #829), as does the
-connection banner outside a room: a canvas with no protocol behind it at all, whose one
-module-level sheet is the only state it keeps.
+connection banner outside a room and the waiting room (#591): a canvas with no protocol
+behind it at all, whose one module-level sheet is the only state it keeps. Every mounted
+pad redraws from that sheet when another changes it, because the waiting room's pad sits
+under the paused card's.
 
 The canvas is 4:3 because 800 × 600 is baked into the wire protocol, so on a
 portrait phone it can never exceed about a third of the height. It is sized from
