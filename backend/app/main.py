@@ -386,6 +386,10 @@ async def remove_deleted_account_from_live_rooms(user_id: str) -> None:
     block_service.clear()
     forget_presence_identity(user_id)
     handler_context.lobby_chat.drop_author(user_id)
+    # Erasure took the account's drawings out of the Gallery; a cached
+    # This week that still names one would show its prompt and byline for
+    # up to a minute after the bytes had gone (R-GAL-07).
+    gallery_shelf.invalidate()
     # Marked before the first await, not partway through. Every step below
     # yields, closing a socket waits at that socket's seating gate, and an
     # entry that reads the mark in one of those gaps is an entry that seats an

@@ -62,7 +62,9 @@ export function GalleryPage() {
   >(null);
   const [week, setWeek] = useState<{ reader: string; entries: GalleryEntry[] } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ view: string; text: string } | null>(null);
+  // Which view a failed automatic page load belongs to (see `showMore`).
+  const [stalledView, setStalledView] = useState<string | null>(null);
   const [reporting, setReporting] = useState<string | null>(null);
   const [pastTheTop, setPastTheTop] = useState(false);
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -76,18 +78,22 @@ export function GalleryPage() {
   useEffect(() => {
     if (!hasResolved || signedOut) return;
     let cancelled = false;
+    const askedView = `${reader}\u0000${filterKey}`;
     const asked = galleryFiltersFromParams(new URLSearchParams(filterKey));
     void fetchGallery(asked, null)
       .then((fetched) => {
         if (cancelled) return;
         setPage({ key: filterKey, reader, entries: fetched.entries, cursor: fetched.nextCursor });
-        setError(null);
+        // A fresh first page is a fresh start for this view's paging too.
+        setStalledView((held) => (held === askedView ? null : held));
+        setFailure(null);
       })
       .catch((loadError) => {
-        if (!cancelled) setError(refusalText(loadError, ui.galleryPage.couldNotLoadTheGallery));
+        if (!cancelled) setFailure({ view: askedView, text: refusalText(loadError, ui.galleryPage.couldNotLoadTheGallery) });
       });
     return () => { cancelled = true; };
   }, [filterKey, reader, hasResolved, signedOut]);
+
 
   // The rail's This week: the lobby shelf's own read, once. A failure leaves
   // the card out rather than putting an error beside a feed that works.
@@ -105,35 +111,49 @@ export function GalleryPage() {
   }, [setSearchParams]);
 
   // One request at a time, held in a ref so the observer below never has to
-  // be rebuilt around it; and whether an automatic load failed, which stops
-  // the automatic loading until the reader asks again.
+  // be rebuilt around it; and which view a failed automatic load belongs to,
+  // which stops the automatic loading of *that* view until the reader asks
+  // again - another order is another feed, and starts clean.
   const inFlight = useRef(false);
-  const [stalled, setStalled] = useState(false);
+  const view = `${reader}\u0000${filterKey}`;
+  const stalled = stalledView === view;
+  // An error belongs to the view it happened in; another view starts clean.
+  const error = failure?.view === view ? failure.text : null;
+  // What the page is asking for right now, readable from a reply that comes
+  // back later: a page that lands after the reader changed the order or
+  // signed out describes rows that are no longer on screen, and is dropped.
+  const askingRef = useRef(view);
+  useEffect(() => {
+    askingRef.current = view;
+  }, [view]);
 
   const showMore = useCallback(async () => {
     if (!cursor || inFlight.current) return;
+    const asked = view;
     inFlight.current = true;
     setBusy(true);
     try {
       const fetched = await fetchGallery(filters, cursor);
+      if (askingRef.current !== asked) return;
       setPage((held) => (held && held.key === filterKey && held.reader === reader
         ? { ...held, entries: [...held.entries, ...fetched.entries], cursor: fetched.nextCursor }
         : held));
-      setStalled(false);
-      setError(null);
+      setStalledView(null);
+      setFailure(null);
     } catch (moreError) {
+      if (askingRef.current !== asked) return;
       // A failed page is not retried on its own: the sentinel is still on
       // screen, and an observer that asked again would ask forever. The
       // reader gets a button instead.
-      setStalled(true);
-      setError(refusalText(moreError, ui.galleryPage.couldNotLoadTheGallery));
+      setStalledView(asked);
+      setFailure({ view: asked, text: refusalText(moreError, ui.galleryPage.couldNotLoadTheGallery) });
     } finally {
       inFlight.current = false;
       setBusy(false);
     }
     // `filters` is derived from `filterKey`; the key is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, filterKey, reader]);
+  }, [cursor, view, filterKey, reader]);
 
   // Loads the next page as the end of the feed comes into view, until a load
   // fails. Without an IntersectionObserver the Show more button below does

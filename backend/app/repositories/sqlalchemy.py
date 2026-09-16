@@ -2612,6 +2612,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             GameRecord.visibility == GameVisibility.PUBLIC.value,
                             TurnDrawing.status == TurnDrawingStatus.READY.value,
                             TurnDrawing.payload.is_not(None),
+                            TurnDrawing.gallery_hidden_at.is_(None),
                             seated,
                         )
                     )
@@ -2664,6 +2665,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             TurnDrawing.turn_id == turn_id,
             TurnDrawing.status == TurnDrawingStatus.READY.value,
             TurnDrawing.payload.is_not(None),
+            # A drawing a moderator hid from the Gallery is hidden from every
+            # shelf that shows it to strangers (R-GAL-09): a pin is not a way
+            # around a takedown any more than around a private game.
+            TurnDrawing.gallery_hidden_at.is_(None),
             pinned,
             public,
         )
@@ -2699,6 +2704,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         GameRecord.visibility == GameVisibility.PUBLIC.value,
                         TurnDrawing.status == TurnDrawingStatus.READY.value,
                         TurnDrawing.payload.is_not(None),
+                        TurnDrawing.gallery_hidden_at.is_(None),
                     )
                     .order_by(ProfileDrawingPin.position)
                 )

@@ -1322,8 +1322,9 @@ cd backend
 ```
 
 `gallery_hidden_at` is a moderator's judgement about the lobby (R-GAL-09), not an
-erasure: set, the drawing is out of the Gallery, This week, the gallery bytes route
-and the gallery reaction door in one act — all four read the one predicate — while its
+erasure: set, the drawing is out of the Gallery, This week, the gallery bytes route,
+the gallery reaction door and every pinned shelf in one act — all of them read the flag —
+and it cannot be newly pinned, while its
 bytes stay and the players who were there keep seeing it in their history. Released
 clears it. Audited as `gallery.review_hidden` / `gallery.review_released` with
 `target_type = 'drawing'` and the drawer as the target account, in the same transaction as

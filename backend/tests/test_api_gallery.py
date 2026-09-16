@@ -461,3 +461,75 @@ async def test_one_entry_answers_under_the_listing_predicate(env):
     assert (await http.get(f"/api/gallery/{shown.turn_id}")).json()["drawnByMe"] is True
     for turn in (private.turn_id, unkept.turn_id, str(UUID(int=7)), "not-an-id"):
         assert (await http.get(f"/api/gallery/{turn}")).status_code == 404, turn
+
+
+async def test_a_claimed_guests_drawing_can_still_be_reported(env):
+    """The turn keeps the guest identity that drew it; once that guest has
+    merged into an account the report reaches the account, not a 404."""
+    http, users, history, factory = env
+    guest = await users.create_anonymous(display_name="Sketcher")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    owner = await _registered(users, "Owner")
+    game = await record_game(history, drawer=guest.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    await users.merge_guest_into_account(guest.id, owner.id)
+
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.get(f"/api/gallery/{game.turn_id}")).status_code == 200, "still in the Gallery"
+    filed = await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "hm"})
+    assert filed.status_code == 201, filed.text
+    async with factory() as session:
+        report = await session.scalar(select(PlayerReport).where(PlayerReport.id == UUID(filed.json()["id"])))
+        assert report.reported_user_id == UUID(owner.id)
+    # The owner of the merged identity cannot report their own drawing.
+    await sign_in_as(http, factory, owner.id)
+    assert (await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "mine"})).status_code == 422
+
+
+async def test_a_hidden_drawing_leaves_every_shelf_and_cannot_be_pinned(env):
+    """Hidden from the Gallery is hidden from a profile's pins too: the shelf
+    drops it, its bytes are a 404 through the pin door, and a new pin of it
+    is refused (R-GAL-09, R-PIN-06)."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    cid = await _registered(users, "Cid")
+    mod = await _moderator(users, factory, "Mod")
+    game = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    other = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(hours=1))
+
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [game.turn_id]})).status_code == 200
+    await sign_in_as(http, factory, cid.id)
+    assert len((await http.get(f"/api/users/{bob.id}/pins")).json()["pins"]) == 1
+    assert (await http.get(f"/api/users/{bob.id}/pins/{game.turn_id}/drawing")).status_code == 200
+
+    await _as_moderator(http, factory, mod.id)
+    assert (await http.patch(f"/api/moderation/gallery/{game.turn_id}", json={"decision": "hidden", "note": "no"})).status_code == 200
+    assert (await http.patch(f"/api/moderation/gallery/{other.turn_id}", json={"decision": "hidden", "note": "no"})).status_code == 200
+
+    await sign_in_as(http, factory, cid.id)
+    assert (await http.get(f"/api/users/{bob.id}/pins")).json()["pins"] == []
+    assert (await http.get(f"/api/users/{bob.id}/pins/{game.turn_id}/drawing")).status_code == 404
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [game.turn_id, other.turn_id]})).status_code == 404, "a hidden drawing cannot be pinned"
+    # The participant's own history still has it (R-GAL-09).
+    assert (await http.get(f"/api/games/{game.game_id}/turns/{game.turn_id}/drawing")).status_code == 200
+
+
+async def test_the_staff_bytes_route_serves_public_games_only(env):
+    """A reviewer reads a hidden public drawing, and never a private game's:
+    the queue lists no private drawing, and a turn id is not a permission."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    mod = await _moderator(users, factory, "Mod")
+    public = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    private = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="private", finished_at=NOW)
+    await _as_moderator(http, factory, mod.id)
+    assert (await http.patch(f"/api/moderation/gallery/{public.turn_id}", json={"decision": "hidden", "note": "no"})).status_code == 200
+    assert (await http.get(f"/api/moderation/gallery/{public.turn_id}/drawing")).status_code == 200
+    assert (await http.get(f"/api/moderation/gallery/{private.turn_id}/drawing")).status_code == 404
+    assert (
+        await http.get(f"/api/moderation/gallery/{private.turn_id}/drawing", headers={"If-None-Match": 'W/"x"'})
+    ).status_code == 404
