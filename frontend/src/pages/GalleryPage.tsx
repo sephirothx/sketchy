@@ -61,7 +61,9 @@ export function GalleryPage() {
     { key: string; reader: string; entries: GalleryEntry[]; cursor: string | null } | null
   >(null);
   const [week, setWeek] = useState<{ reader: string; entries: GalleryEntry[] } | null>(null);
-  const [busy, setBusy] = useState(false);
+  // The views with an automatic page on its way; the button below is
+  // disabled while the current one is among them.
+  const [loadingViews, setLoadingViews] = useState<ReadonlySet<string>>(() => new Set());
   const [failure, setFailure] = useState<{ view: string; text: string } | null>(null);
   // Which view a failed automatic page load belongs to (see `showMore`).
   const [stalledView, setStalledView] = useState<string | null>(null);
@@ -111,14 +113,15 @@ export function GalleryPage() {
   }, [setSearchParams]);
 
   // One request at a time *per view*, held in a ref so the observer below
-  // never has to be rebuilt around it. Keyed by view rather than a single
+  // never has to be rebuilt around it. A set of views rather than a single
   // flag: a page still on its way for an abandoned order must not stop the
   // new order's first automatic load, which the sentinel asks for once and
-  // does not ask for again while it stays on screen. Below: which view a
+  // does not ask for again while it stays on screen - and coming back to
+  // the abandoned order must not ask for its page twice. Below: which view a
   // failed automatic load belongs to, which stops the automatic loading of
   // *that* view until the reader asks again - another order is another
   // feed, and starts clean.
-  const inFlight = useRef<string | null>(null);
+  const inFlight = useRef(new Set<string>());
   const view = `${reader}\u0000${filterKey}`;
   const stalled = stalledView === view;
   // An error belongs to the view it happened in; another view starts clean.
@@ -132,10 +135,10 @@ export function GalleryPage() {
   }, [view]);
 
   const showMore = useCallback(async () => {
-    if (!cursor || inFlight.current === view) return;
+    if (!cursor || inFlight.current.has(view)) return;
     const asked = view;
-    inFlight.current = asked;
-    setBusy(true);
+    inFlight.current.add(asked);
+    setLoadingViews((held) => new Set(held).add(asked));
     try {
       const fetched = await fetchGallery(filters, cursor);
       if (askingRef.current !== asked) return;
@@ -152,10 +155,13 @@ export function GalleryPage() {
       setStalledView(asked);
       setFailure({ view: asked, text: refusalText(moreError, ui.galleryPage.couldNotLoadTheGallery) });
     } finally {
-      // Only this view's token, and the spinner only when nothing newer is
-      // still on its way: another view may have started its own page.
-      if (inFlight.current === asked) inFlight.current = null;
-      if (inFlight.current === null) setBusy(false);
+      // Only this view's own entry: other views' pages stay on their way.
+      inFlight.current.delete(asked);
+      setLoadingViews((held) => {
+        const next = new Set(held);
+        next.delete(asked);
+        return next;
+      });
     }
     // `filters` is derived from `filterKey`; the key is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -292,7 +298,7 @@ export function GalleryPage() {
               ? <button
                   type="button"
                   className="btn btn-secondary btn-compact"
-                  disabled={busy}
+                  disabled={loadingViews.has(view)}
                   data-testid="gallery-show-more"
                   onClick={() => void showMore()}
                 >{stalled ? ui.galleryPage.tryAgain : ui.galleryPage.showMore}</button>

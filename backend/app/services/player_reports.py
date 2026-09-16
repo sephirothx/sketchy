@@ -273,19 +273,33 @@ async def open_report_id(
     R-MOD-05 is one open report per reporter and *person*, and a person may
     be more than one row: a guest who claims an account keeps the guest id
     on everything it did, linked to the account through `identity_aliases`.
-    A report filed against the guest stays on the guest id, so a check that
-    compared only the canonical id would let the same complaint be filed
-    once more after the merge - which is what the partial unique index,
-    keyed on raw ids, cannot see either. The check is made over the whole
-    identity set: the canonical account and every identity merged into it.
+    A report filed against a guest stays on the guest id, and so does one
+    filed *by* a guest, so a check that compared canonical ids only would
+    let the same complaint be filed once more after either side merges -
+    which is what the partial unique index, keyed on raw ids, cannot see
+    either. Both sides are read as whole identity sets: the canonical
+    account and every identity merged into it.
     """
+    reporters = await _identity_set(session, reporter_user_id)
+    reported = await _identity_set(session, reported_user_id)
+    return await session.scalar(
+        select(PlayerReport.id).where(
+            PlayerReport.reporter_user_id.in_(reporters),
+            PlayerReport.reported_user_id.in_(reported),
+            PlayerReport.status == ReportStatus.PENDING.value,
+        )
+    )
+
+
+async def _identity_set(session: AsyncSession, user_id: UUID) -> list[UUID]:
+    """The canonical account behind `user_id` and every identity merged into it."""
     canonical = (
         await session.scalar(
             select(IdentityAlias.target_user_id).where(
-                IdentityAlias.source_user_id == reported_user_id
+                IdentityAlias.source_user_id == user_id
             )
         )
-        or reported_user_id
+        or user_id
     )
     merged = (
         await session.scalars(
@@ -294,13 +308,7 @@ async def open_report_id(
             )
         )
     ).all()
-    return await session.scalar(
-        select(PlayerReport.id).where(
-            PlayerReport.reporter_user_id == reporter_user_id,
-            PlayerReport.reported_user_id.in_([canonical, *merged]),
-            PlayerReport.status == ReportStatus.PENDING.value,
-        )
-    )
+    return [canonical, *merged]
 
 
 def record_player_report(
