@@ -26,7 +26,7 @@ export function NotFoundPage() {
     <div className="not-found-page">
       {/* No back control: the card carries the one way out, and two of
           them side by side is the same offer made twice. */}
-      <AppHeader title={ui.notFoundPage.pageNotFound} />
+      <AppHeader />
       <main className="surface-card not-found-card">
         <div className="not-found-canvas">
           <NotFoundDoodle />

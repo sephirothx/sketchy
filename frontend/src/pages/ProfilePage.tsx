@@ -447,7 +447,7 @@ export function ProfilePage() {
   if (!userId) {
     return (
       <div className="profile-page">
-        <AppHeader title={ui.accountMenu.myProfile} backLabel={ui.profilePage.backToLobby} />
+        <AppHeader backLabel={ui.profilePage.backToLobby} />
         <p className="profile-note">
           {hasResolved ? ui.profilePage.noSuchProfile : ui.profilePage.loading}
         </p>
@@ -594,10 +594,7 @@ function ProfileView({ userId }: { userId: string }) {
 
   return (
     <div className="profile-page">
-      {/* Whose profile, as the crumb: the page's own heading is the same name
-          further down, so on a phone - where the crumb is dropped - it is
-          still said. */}
-      <AppHeader title={shownName || undefined} backLabel={ui.profilePage.backToLobby} />
+      <AppHeader backLabel={ui.profilePage.backToLobby} />
 
       {!subject && !error && <p className="profile-note">{ui.profilePage.loading}</p>}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}

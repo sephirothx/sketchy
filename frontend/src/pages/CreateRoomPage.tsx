@@ -404,7 +404,7 @@ export function CreateRoomPage() {
   );
 
   return <main className="create-room-page">
-    <AppHeader title={ui.createRoomPage.createRoom} backLabel={ui.createRoomPage.backToLobby} />
+    <AppHeader backLabel={ui.createRoomPage.backToLobby} />
     <div className="create-room-heading-row">
       <div className="create-room-heading">
         <SectionLabel>{ui.createRoomPage.roomSetup}</SectionLabel>

@@ -11,17 +11,18 @@ import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
  * The shared page chrome outside a room (#580): where you are on the left, you
  * on the right.
  *
- * Where you are is the wordmark, which always goes back to the lobby, then the
- * page's name as a crumb. The crumb is what this bar lacked: every sub-page
- * drew the same back button, wordmark, gear and chip, so the bar never said
- * which page it was. It is accessory - a phone drops it, and the page's own
- * heading says the same thing further down.
+ * Where you are is the wordmark, which always goes back to the lobby. The
+ * page's name is the page's own heading, a few pixels below, and is not said
+ * again here: a crumb repeating it on every sub-page put the same words twice
+ * on one screen. A page that sits under another (a Gallery drawing) gets a
+ * crumb anyway, because there it does something the heading cannot - it is
+ * the link back to its parent.
  *
- * On a desktop there is no back button: the wordmark is the way home, and a
- * page under another (a Gallery drawing) makes its crumb the link to its
- * parent. On a phone the arrow comes back, beside the wordmark rather than in
- * place of it - the invite page is the one screen a first-time visitor may
- * arrive on from a link, and it has to say whose site it is.
+ * On a desktop there is no back button: the wordmark is the way home and the
+ * crumb the way up. On a phone the arrow comes back, beside the wordmark
+ * rather than in place of it - the invite page is the one screen a
+ * first-time visitor may arrive on from a link, and it has to say whose site
+ * it is.
  *
  * You is the identity chip, and nothing beside it: Player settings are the
  * first row of the chip's menu on every width, where the gear used to sit one
@@ -38,16 +39,14 @@ import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
  * other, and a phone is where Settings is furthest away.
  */
 export function AppHeader({
-  title,
-  titleTo,
+  parent,
   backLabel,
   backTo = "/",
   languageSwitch = false,
 }: {
-  /** The page's name, shown after the wordmark on a wide screen. */
-  title?: string;
-  /** Where the crumb goes, for a page that sits under another. */
-  titleTo?: string;
+  /** The page this one sits under, as a crumb linking back to it on a wide
+      screen. Only for nested pages: a page's own name is its heading. */
+  parent?: { label: string; to: string };
   /** Names the phone's back arrow. */
   backLabel?: string;
   /** Where the back arrow goes: the lobby unless a page sits under another. */
@@ -92,23 +91,19 @@ export function AppHeader({
             <Wordmark size={34} />
           </a>
         </h1>
-        {title && !isNarrow && (
+        {parent && !isNarrow && (
           <p className="header-crumb">
             <ChevronRightIcon size={14} />
-            {titleTo ? (
-              <a
-                href={titleTo}
-                onClick={(event) => {
-                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-                  event.preventDefault();
-                  navigate(titleTo);
-                }}
-              >
-                {title}
-              </a>
-            ) : (
-              <span>{title}</span>
-            )}
+            <a
+              href={parent.to}
+              onClick={(event) => {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                event.preventDefault();
+                navigate(parent.to);
+              }}
+            >
+              {parent.label}
+            </a>
           </p>
         )}
       </div>
