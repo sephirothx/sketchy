@@ -1750,7 +1750,7 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `playerName.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts` |
 | `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenuSheet.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
@@ -1802,14 +1802,74 @@ at the bottom of the screen. [`ui-mockups/mobile/`](ui-mockups/mobile/README.md)
 is the reference for all of it.
 
 Above the breakpoint the toolbar stays in the canvas column, and that column
-is never wide enough for its four groups on one line (293px at a 901px window,
-632px at the room's cap). So the toolbar does not wrap; it measures itself
+is rarely wide enough for its four groups on one line (293px at a 901px window,
+658px at the base shell, 938px at the 1600px step; only the widest step's 1228px
+fits them). So the toolbar does not wrap; it measures itself
 (`useToolbarLayout`) and takes the first arrangement in
 [`lib/toolbarLayout.ts`](../frontend/src/lib/toolbarLayout.ts) that fits whole.
 Where not even the palette fits, it renders the phone's chip strip, in the
 column rather than through the dock. It is measured instead of given
 breakpoints because the width it needs changes with the language, the host's
 tools and colour mode, and the size readout.
+
+### The desktop layout
+
+Above the breakpoint the width a page may use comes in three steps, set once as
+tokens on `:root` in
+[`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css)
+and read by every screen that has a shell: `--shell-width` (1240, 1600 and 1960px,
+at windows of 1500 and 2100px), `--canvas-cap` (760, 1000, 1180px) and the room's
+two side columns, `--room-players-width` and `--room-chat-width` (#581). Before
+them every page was pinned to one column chosen for a 1440px laptop, and the
+drawing was 632 × 474 on every monitor. They are media queries rather than
+container queries on purpose: a size container is also the containing block for
+every `position: fixed` descendant, and the room's sheets are fixed.
+
+The canvas cap is the one of these with a reason outside layout. The backing
+store stays 800 × 600 because `draw_fill` is pixel-addressed against that grid
+on the wire ([`wire-protocol.md`](wire-protocol.md)), so a larger canvas on screen is the same bitmap scaled up;
+1180px is a 1.48× upscale, about where crayon-weight strokes start to soften, and
+past it the width goes to the side columns (R-UX-10). Rendering the store into a
+device-pixel backing canvas would lift that ceiling without touching the fill
+grid; it is client-only and not done.
+
+A room above the breakpoint and at least 640px tall is pinned to the viewport,
+like the desktop lobby: `.game-room` is `100dvh` less `--banner-height`, the
+players and chat panels run the full height and scroll inside themselves, and
+the waiting room, game-over panel and recap scroll inside the middle column.
+In play the canvas is sized from whichever cap binds first — the column's
+width, `--canvas-cap`, or the height the prompt and the toolbar leave. The
+wrapper is 4:3 from its width and is the one flex item allowed to shrink; the
+drawing inside it keeps 4:3 by giving up width, through `100cqh` on the
+wrapper, the same mechanism as the phone. `.canvas-area` is capped at the
+column rather than sized to it, because the turn-results scrim is `inset: 0` on
+it. Below 640px tall the room is the ordinary scrolling page again.
+
+The lobby takes the steps from 1500px: the rooms and the people become two
+columns, who is online stacked over the chat in a column of its own
+(`--lobby-people-width`, growing with the window from 420 to 460px, and to 580px on the widest screens), the chat taking the larger share of the
+height. The rooms are one to a row, and `PublicRoomCard` draws the row layout
+there: seats as dots, the game's length as a range, and only the rules that
+differ from a new room's, lined up in columns under headings. Those facts are
+computed from the `RoomSummary` the list already carries
+([`lib/roomCardFacts.ts`](../frontend/src/lib/roomCardFacts.ts)), so the row
+asks the server for nothing more and still names no player; the length uses
+the Create page's own per-turn allowance so the two never disagree. Every row of that grid is
+placed by hand with no row gap, because a gap would open above a first-run
+block or an error that is not there. Create a room does not widen its form,
+which is read down a column: from 1200px the summary strip under it becomes a
+sticky card beside it — the chips, the running-time estimate and Create room —
+and the page renders one or the other (`useMediaQuery`), so there is never a
+second Create button.
+
+The pages people read stop at the base shell. From 1200px the profile puts its
+game history beside its statistics, which stay in view (sticky) while the
+history scrolls, and the prompt stats table and My prompt lists widen to 1240px;
+a history row or a table of prompts read across 1960px is harder to follow, not
+easier. The operator pages — operations, moderation, bug reports — take the full
+steps, and moderation gains a third column from 1500px with the eight newest
+decisions from the closed-cases stream (R-MOD-15), fetched only when the column
+is shown; opening one switches to the Closed queue, where the case is.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 

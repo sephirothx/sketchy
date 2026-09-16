@@ -844,6 +844,8 @@ export const NL: Catalogue = {
     leaveBlankForARandom: "Laat leeg voor een willekeurige naam!",
     creating: "Maken…",
     createRoom2: "Kamer maken",
+    yourRoom: "Jouw kamer",
+    aRandomName: "Een willekeurige naam",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "speler", other: "spelers" }),
     roundCount: (p: { count: number }) =>
@@ -1647,6 +1649,19 @@ export const NL: Catalogue = {
     joining: "Deelnemen…",
     join: "Meedoen",
     spectate: "Kijken",
+    waiting: "Wacht",
+    seatsOpen: (p: { count: number }) => `${number(p.count)} vrij`,
+    noSeatsOpen: "Geen plaatsen vrij",
+    watching: (p: { count: number }) =>
+      plural(p.count, { one: `${number(p.count)} kijkt mee`, other: `${number(p.count)} kijken mee` }),
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} min`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} min`,
+    standardRules: "Standaardregels",
+    moreRules: (p: { count: number }) => `+${number(p.count)} meer`,
+    columnRoom: "Kamer",
+    columnSeats: "Plaatsen",
+    columnLength: "Duur",
+    columnRoomRules: "Kamerregels",
   },
 
   recapDrawings: {

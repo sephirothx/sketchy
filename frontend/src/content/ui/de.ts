@@ -844,6 +844,8 @@ export const DE: Catalogue = {
     leaveBlankForARandom: "Leer lassen für einen Zufallsnamen!",
     creating: "Wird erstellt …",
     createRoom2: "Raum erstellen",
+    yourRoom: "Dein Raum",
+    aRandomName: "Ein zufälliger Name",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "Spieler", other: "Spieler" }),
     roundCount: (p: { count: number }) =>
@@ -1647,6 +1649,19 @@ export const DE: Catalogue = {
     joining: "Trete bei …",
     join: "Beitreten",
     spectate: "Zuschauen",
+    waiting: "Wartet",
+    seatsOpen: (p: { count: number }) => `${number(p.count)} frei`,
+    noSeatsOpen: "Keine Plätze frei",
+    watching: (p: { count: number }) =>
+      plural(p.count, { one: `${number(p.count)} schaut zu`, other: `${number(p.count)} schauen zu` }),
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} Min.`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} Min.`,
+    standardRules: "Standardregeln",
+    moreRules: (p: { count: number }) => `+${number(p.count)} weitere`,
+    columnRoom: "Raum",
+    columnSeats: "Plätze",
+    columnLength: "Dauer",
+    columnRoomRules: "Raumregeln",
   },
 
   recapDrawings: {

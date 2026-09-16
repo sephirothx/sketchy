@@ -5,6 +5,7 @@ import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { RoomSetupForm } from "../components/RoomSetupForm";
 import { SectionLabel } from "../components/ui/Card";
 import { ClockIcon } from "../components/icons";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import type { PromptListSummary } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
@@ -351,14 +352,15 @@ export function CreateRoomPage() {
 
   // The form's own collapsed summaries live with the form. What is left here
   // is the one the dock carries, which is about the room as a whole.
-  const scoringSummary = `${scoringMode === "none" ? ui.createRoomPage.noScoring : scoringNameFor(scoringMode)} · ${hintLabelFor(hintMode, hideMaskedPrompt)}`;
-  const footerSummary = [
+  const summaryParts = [
     isPublic ? ui.createRoomPage.public : ui.createRoomPage.private,
     ui.createRoomPage.playerCount({ count: maxPlayers }),
     ui.createRoomPage.roundCount({ count: rounds }),
     `${drawingSeconds}s`,
-    scoringSummary,
-  ].join(" · ");
+    scoringMode === "none" ? ui.createRoomPage.noScoring : scoringNameFor(scoringMode),
+    hintLabelFor(hintMode, hideMaskedPrompt),
+  ];
+  const footerSummary = summaryParts.join(" · ");
 
   // A rough but honest running-time estimate: each turn is the drawing time
   // plus prompt choice and results, and every player draws once per round.
@@ -367,6 +369,39 @@ export function CreateRoomPage() {
   const fullMinutes = estimateMinutes(maxPlayers);
   const halfPlayers = Math.floor(maxPlayers / 2);
   const halfMinutes = estimateMinutes(halfPlayers);
+
+  // From 1200px the summary is a card beside the form rather than a strip
+  // under it (#581): the form is a column you work down, and on a wide screen
+  // what you are about to create, and the button that creates it, can stay
+  // in view the whole way down instead of waiting at the bottom. One or the
+  // other is rendered, never both, so the page has one Create button.
+  const isWide = useMediaQuery("(min-width: 1200px)");
+
+  const durationNote = (
+    <p className="create-room-duration">
+      <ClockIcon size={17} />
+      <span>
+        {fill(ui.createRoomPage.setupTiming, {
+          full: (
+            <strong>
+              {ui.createRoomPage.setupTimingFull({ minutes: fullMinutes })}
+            </strong>
+          ),
+          capacity: <strong>{maxPlayers}</strong>,
+        })}
+        {halfPlayers >= 2 && halfPlayers < maxPlayers
+          && fill(
+            ui.createRoomPage.setupTimingHalf({ players: halfPlayers }),
+            { half: <strong>{halfMinutes}</strong> },
+          )}
+        .
+      </span>
+    </p>
+  );
+
+  const submitButton = (
+    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
+  );
 
   return <main className="create-room-page">
     <AppHeader backLabel={ui.createRoomPage.backToLobby} />
@@ -420,6 +455,9 @@ export function CreateRoomPage() {
     </div>
     {error && <p className="create-room-error" role="alert">{error}</p>}
 
+    {/* The form keeps its place in the tree either side of the breakpoint,
+        so resizing across it does not remount it and fold its sections. */}
+    <div className="create-room-layout">
     <RoomSetupForm
       values={{
         name: roomName,
@@ -466,35 +504,32 @@ export function CreateRoomPage() {
           {ui.createRoomPage.saveAsReusableList}
         </button>
       ) : undefined}
-      durationNote={
-        <p className="create-room-duration">
-          <ClockIcon size={17} />
-          <span>
-            {fill(ui.createRoomPage.setupTiming, {
-              full: (
-                <strong>
-                  {ui.createRoomPage.setupTimingFull({ minutes: fullMinutes })}
-                </strong>
-              ),
-              capacity: <strong>{maxPlayers}</strong>,
-            })}
-            {halfPlayers >= 2 && halfPlayers < maxPlayers
-              && fill(
-                ui.createRoomPage.setupTimingHalf({ players: halfPlayers }),
-                { half: <strong>{halfMinutes}</strong> },
-              )}
-            .
-          </span>
-        </p>
-      }
+      durationNote={isWide ? undefined : durationNote}
     />
 
-    <div className="create-room-footer">
-      <div className="create-room-footer-info">
-        <span className="create-room-footer-summary">{footerSummary}</span>
-      </div>
-      <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
+    {isWide && (
+      <aside className="create-room-preview" aria-labelledby="create-room-preview-title">
+        <SectionLabel id="create-room-preview-title">{ui.createRoomPage.yourRoom}</SectionLabel>
+        <p className={`create-room-preview-name${roomName.trim() ? "" : " is-random"}`}>
+          {roomName.trim() || ui.createRoomPage.aRandomName}
+        </p>
+        <ul className="create-room-preview-chips">
+          {summaryParts.map((part) => <li key={part} className="chip chip-neutral">{part}</li>)}
+        </ul>
+        {durationNote}
+        {submitButton}
+      </aside>
+    )}
     </div>
+
+    {!isWide && (
+      <div className="create-room-footer">
+        <div className="create-room-footer-info">
+          <span className="create-room-footer-summary">{footerSummary}</span>
+        </div>
+        {submitButton}
+      </div>
+    )}
     {/* The app's own dialog rather than the browser's: a `window.confirm`
         is drawn by the platform, in its language and its style, and is the
         one popup on the page the game did not draw. */}

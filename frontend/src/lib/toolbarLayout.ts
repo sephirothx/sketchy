@@ -2,9 +2,10 @@
  * How the desktop drawing toolbar arranges its four groups in the width it has.
  *
  * The groups are the tools, the size, the palette and the canvas actions, and
- * the room's middle column never gives them one line: it runs from 293px at a
- * 901px window to 632px at the room's 1240px cap, against roughly 1050px for
- * all four side by side. Left to `flex-wrap` they broke wherever the pixels
+ * the room's middle column rarely gives them one line: it runs from 293px at a
+ * 901px window to 658px at the room's base 1240px shell and 938px at the
+ * 1600px step, against roughly 1050px for all four side by side - only the
+ * widest step's 1228px column has room for that (#581). Left to `flex-wrap` they broke wherever the pixels
  * ran out, so a divider could end a line or sit on one of its own, and below
  * about 426px the palette spilled out of the card (#781). The toolbar now
  * takes the first of a few arrangements, each designed to be seen, that fits

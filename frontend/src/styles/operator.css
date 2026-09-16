@@ -1,9 +1,11 @@
 /* Operator pages: the Server operations dashboard and the Moderation
    queue/case view, per docs/ui-mockups (AdminOps, Moderation). */
 
+/* The operator pages follow the shell steps (#581): their tables, charts and
+   master-detail layouts are what a wide monitor is for. */
 .ops-page {
   margin: 0 auto;
-  max-width: 1100px;
+  max-width: calc(var(--shell-width) + 32px);
   padding: 24px 16px 48px;
 }
 
@@ -636,6 +638,34 @@
   .mod-layout {
     grid-template-columns: 1fr;
   }
+}
+
+/* A third column from 1500px: the newest decisions (#581). */
+@media (min-width: 1500px) {
+  .mod-layout {
+    grid-template-columns: 300px minmax(0, 1fr) 300px;
+  }
+}
+
+.mod-recent {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  position: sticky;
+  top: calc(var(--banner-height) + 16px);
+}
+
+.mod-recent-list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mod-recent-list .mod-queue-item {
+  width: 100%;
 }
 
 /* A held list is read in full before it is released, so the prompts get two

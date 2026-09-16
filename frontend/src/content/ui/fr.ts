@@ -844,6 +844,8 @@ export const FR: Catalogue = {
     leaveBlankForARandom: "Laisse vide pour un nom au hasard !",
     creating: "Création…",
     createRoom2: "Créer le salon",
+    yourRoom: "Ton salon",
+    aRandomName: "Un nom aléatoire",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "joueur", other: "joueurs" }),
     roundCount: (p: { count: number }) =>
@@ -1647,6 +1649,21 @@ export const FR: Catalogue = {
     joining: "Connexion au salon…",
     join: "Rejoindre",
     spectate: "Regarder",
+    waiting: "En attente",
+    seatsOpen: (p: { count: number }) =>
+      plural(p.count, { one: `${number(p.count)} libre`, other: `${number(p.count)} libres` }),
+    noSeatsOpen: "Aucune place libre",
+    watching: (p: { count: number }) =>
+      plural(p.count, { one: `${number(p.count)} regarde`, other: `${number(p.count)} regardent` }),
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} min`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} min`,
+    standardRules: "Règles standard",
+    moreRules: (p: { count: number }) =>
+      plural(p.count, { one: `+${number(p.count)} autre`, other: `+${number(p.count)} autres` }),
+    columnRoom: "Salon",
+    columnSeats: "Places",
+    columnLength: "Durée",
+    columnRoomRules: "Règles du salon",
   },
 
   recapDrawings: {

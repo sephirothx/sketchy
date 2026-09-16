@@ -1,6 +1,7 @@
 /* Game room */
 .game-room {
-  max-width: 1240px;
+  /* The shell token is the content width; the padding sits outside it. */
+  max-width: calc(var(--shell-width) + 32px);
   margin: 0 auto;
   padding: 16px;
 }
@@ -537,7 +538,11 @@
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr);
-  margin: 0;
+  /* The same measure as the drawing recap's card. The column is 1228px wide
+     on a 2560px monitor (#581), and a settings row with Edit a full screen
+     away from what it edits is harder to read, not easier. */
+  margin: 0 auto;
+  max-width: 880px;
   padding: 0 0 32px;
   width: 100%;
 }
@@ -797,7 +802,7 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
 
 .room-shell {
   display: grid;
-  grid-template-columns: 252px minmax(0, 1fr) 292px;
+  grid-template-columns: var(--room-players-width) minmax(0, 1fr) var(--room-chat-width);
   gap: 16px;
   align-items: start;
 }
@@ -959,6 +964,114 @@ button.waiting-settings-row:hover { border-color: var(--line-strong); }
 
 .room-chat-panel .chat-messages-container {
   margin-top: 0;
+}
+
+/* The room as a screen rather than a page (#581, R-UX-01).
+
+   Above the phone breakpoint the room is pinned to the viewport, the way the
+   desktop lobby already is: the players and the chat run the full height and
+   scroll inside themselves, and the canvas takes the height that is left.
+   Before this both side panels stopped at their content - the chat was
+   capped outright at 520px - and on a 1440px-tall monitor everything ended at
+   y 615, with the rest of the window empty below it.
+
+   Sized from whichever cap binds first, like the phone's canvas: the column's
+   width, the canvas cap, or the height the prompt and the toolbar leave.
+   `container-type: size` is on the wrapper only, never on anything holding
+   the turn-results overlay, which is positioned against `.canvas-area`.
+
+   A short window keeps the ordinary page, for the same reason the lobby does:
+   below 640px the pinned panels would each be a few rows tall. */
+@media (min-width: 901px) and (min-height: 640px) {
+  .game-room {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--banner-height));
+    overflow: hidden;
+  }
+
+  .game-room > .game-header {
+    flex: none;
+  }
+
+  .room-shell {
+    align-items: stretch;
+    flex: 1 1 auto;
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .room-shell-players,
+  .room-shell-chat {
+    min-height: 0;
+    position: static;
+  }
+
+  .room-shell-players > .sidebar-box,
+  .room-shell-chat > .sidebar-box {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .room-shell-players > .sidebar-box {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .room-shell-chat .room-chat-panel.guess-chat {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  /* The waiting room, the game-over panel and the recap are documents; they
+     scroll inside the column rather than moving the page. */
+  .room-shell-main {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .game-room-playing .room-shell-main {
+    overflow: visible;
+  }
+
+  .game-room-playing .room-shell-main-transition {
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* Capped rather than sized to the column: the turn-results scrim is
+     `inset: 0` on this box, and a full-height box put it over the empty
+     paper under the drawing as well. The cap is still what the canvas
+     shrinks against when the window is short. */
+  .game-room-playing .canvas-area {
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  .game-room-playing .canvas-area > * {
+    flex: none;
+  }
+
+  /* Its own box is 4:3 from the column's width, so with room to spare it is
+     exactly the drawing; when the height runs out it is the one thing that
+     gives, and the drawing inside keeps 4:3 by giving up width instead. */
+  .game-room-playing .canvas-area > .canvas-wrapper {
+    aspect-ratio: 4 / 3;
+    container-type: size;
+    flex: 0 1 auto;
+    max-width: var(--canvas-cap);
+    min-height: 0;
+  }
+
+  .game-room-playing .canvas-area .canvas-stack {
+    max-width: none;
+    width: min(100cqw, calc(100cqh * 4 / 3));
+  }
 }
 
 .room-chat-drawer-note {

@@ -735,3 +735,12 @@
     width: 100%;
   }
 }
+
+/* The list and the editor share the width a wide window has (#581), up to the
+   base 1240px shell: the prompts are a column of short lines either way, and
+   what grows is the room the editor's fields and the list rail get. */
+@media (min-width: 1200px) {
+  .prompt-list-manager-page {
+    max-width: 1272px;
+  }
+}
