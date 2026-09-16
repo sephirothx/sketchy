@@ -2314,6 +2314,14 @@ export const NL: Catalogue = {
   },
 
   waitingRoomPanel: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} eigen`,
+    customOnlyShort: (p: { count: number }) =>
+      `alleen ${number(p.count)} eigen`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "lijst", other: "lijsten" }),
+    also: "Ook",
+    editRoomRules: "Kamerregels bewerken",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "ronde", other: "rondes" }),
     needMorePlayers: (p: { count: number }) =>
@@ -2333,20 +2341,12 @@ export const NL: Catalogue = {
     host: "Gastheer",
     friend: "Vriend",
     invite: "Uitnodigen",
-    edit: "Bewerken",
     viewHighlights: "Hoogtepunten bekijken",
     viewDrawings: "Tekeningen bekijken",
     spectatorsAfkAndDisconnectedPlayers: "Toeschouwers, afwezige en losgekoppelde spelers tellen niet mee voor de twee actieve spelers die een spel nodig heeft.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
     inviteLink: "Uitnodigingslink",
-    customPromptsOnlyCustomPromptCount: (p: { customPromptCount: number }) =>
-      `Alleen eigen woorden (${p.customPromptCount})`,
-    customPromptCountCustomPromptsCuratedLists: (p: { customPromptCount: number }) =>
-      `${p.customPromptCount} eigen woorden + samengestelde lijsten`,
-    promptListSlugsCountCuratedPromptLists: (p: { promptListSlugsCount: number }) =>
-      `${p.promptListSlugsCount} samengestelde woordenlijsten`,
-    noScoring: "Zonder punten",
     spectatorsSeeThePrompt: "Toeschouwers zien het woord",
     publicRoom: "Openbare kamer",
     privateRoom: "Privékamer",

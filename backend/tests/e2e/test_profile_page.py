@@ -60,7 +60,7 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await host.locator("#custom-prompts").fill("apple\ntree")
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
-            await guest.get_by_text("Custom prompts only (2)").wait_for()
+            await guest.locator('[data-fact="prompts"]', has_text="2 custom only").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]

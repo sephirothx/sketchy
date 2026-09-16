@@ -182,6 +182,7 @@ export function ConnectedWaitingRoomPanel({
 }: ConnectedWaitingRoomPanelProps) {
   const name = useGameStore((state) => state.name);
   const code = useGameStore((state) => state.code);
+  const promptLanguage = useGameStore((state) => state.promptLanguage);
   const maxPlayers = useGameStore((state) => state.maxPlayers);
   const isPublic = useGameStore((state) => state.isPublic);
   const rounds = useGameStore((state) => state.rounds);
@@ -204,6 +205,7 @@ export function ConnectedWaitingRoomPanel({
       name={name}
       code={code}
       maxPlayers={maxPlayers}
+      promptLanguage={promptLanguage}
       isPublic={isPublic}
       rounds={rounds}
       drawingSeconds={drawingSeconds}

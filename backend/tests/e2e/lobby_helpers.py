@@ -137,7 +137,7 @@ async def open_player_settings(page) -> None:
 
 async def open_room_settings(page) -> None:
     """Open the host's room-settings editor, which lives in a modal."""
-    await page.locator(".waiting-settings-row").click()
+    await page.locator(".waiting-rules-edit").click()
     await page.wait_for_selector(".room-settings-editor")
 
 

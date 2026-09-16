@@ -52,7 +52,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await host.locator("#custom-prompts").fill("lantern\nkite")
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
-            await other.get_by_text("Custom prompts only (2)").wait_for()
+            await other.locator('[data-fact="prompts"]', has_text="2 custom only").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, other]

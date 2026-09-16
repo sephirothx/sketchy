@@ -2488,7 +2488,9 @@ A seated client checks with the server every five seconds that it still holds th
   go away, save the drawing, start over, settings, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows. A short window gives way in a fixed
   order: the room's name, then your chip's name, then the wordmark; the clock and the menu
-  never do. On a desktop the waiting room's invite copies the link; a phone shares it.
+  never do. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
+  drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
+  Edit and an orange Start in the same card.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
   from a 1500px window and 1960px from 2100px - and on a desktop it fills the window's
   height, with the players and chat running top to bottom. The canvas grows with it up to

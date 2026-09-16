@@ -2314,6 +2314,14 @@ export const DE: Catalogue = {
   },
 
   waitingRoomPanel: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} eigene`,
+    customOnlyShort: (p: { count: number }) =>
+      `nur ${number(p.count)} eigene`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "Liste", other: "Listen" }),
+    also: "Außerdem",
+    editRoomRules: "Raumregeln bearbeiten",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "Runde", other: "Runden" }),
     needMorePlayers: (p: { count: number }) =>
@@ -2333,20 +2341,12 @@ export const DE: Catalogue = {
     host: "Gastgeber",
     friend: "Freund",
     invite: "Einladen",
-    edit: "Bearbeiten",
     viewHighlights: "Höhepunkte ansehen",
     viewDrawings: "Zeichnungen ansehen",
     spectatorsAfkAndDisconnectedPlayers: "Zuschauer, AFK- und getrennte Spieler zählen nicht zu den zwei aktiven Spielern, die ein Spiel braucht.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Komm in meinen Sketchy-Raum: ${p.code}`,
     inviteLink: "Einladungslink",
-    customPromptsOnlyCustomPromptCount: (p: { customPromptCount: number }) =>
-      `Nur eigene Begriffe (${p.customPromptCount})`,
-    customPromptCountCustomPromptsCuratedLists: (p: { customPromptCount: number }) =>
-      `${p.customPromptCount} eigene Begriffe + kuratierte Listen`,
-    promptListSlugsCountCuratedPromptLists: (p: { promptListSlugsCount: number }) =>
-      `${p.promptListSlugsCount} kuratierte Begriffslisten`,
-    noScoring: "Ohne Punkte",
     spectatorsSeeThePrompt: "Zuschauer sehen den Begriff",
     publicRoom: "Öffentlicher Raum",
     privateRoom: "Privater Raum",

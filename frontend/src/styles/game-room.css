@@ -660,40 +660,128 @@
   width: 46px;
 }
 
-/* ── The settings line ───────────────────────────────────────────────────
-   One row that opens the editor, where eight chips used to restate what the
-   host chose a minute ago. */
-.waiting-settings-row {
-  align-items: center;
-  display: flex;
-  font: inherit;
-  gap: 12px;
-  justify-content: space-between;
-  min-height: 58px;
-  text-align: left;
-  width: 100%;
+/* ── Room rules and Start ─────────────────────────────────────────────────
+   The room's six facts as a strip of cells (#580), then what else the host
+   changed, then Edit and Start in the card's footer. */
+.waiting-facts {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
 }
 
-button.waiting-settings-row { cursor: pointer; }
-
-button.waiting-settings-row:hover { border-color: var(--line-strong); }
-
-.waiting-settings-summary {
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.35;
+.waiting-fact {
+  align-content: start;
+  border-left: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  justify-items: center;
   min-width: 0;
+  padding: 11px 6px 10px;
+  text-align: center;
 }
 
-.waiting-settings-edit {
+.waiting-fact:first-child {
+  border-left: 0;
+}
+
+.waiting-fact-icon {
+  color: var(--faint);
+  display: inline-flex;
+  margin-bottom: 2px;
+}
+
+.waiting-fact-value {
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 800;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.waiting-fact-label {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* Moved off a new room's default: the one tint says "this room is unusual". */
+.waiting-fact.is-changed {
+  background: var(--primary-soft);
+}
+
+.waiting-fact.is-changed .waiting-fact-icon,
+.waiting-fact.is-changed .waiting-fact-value {
+  color: var(--primary-ink);
+}
+
+.waiting-rules-also {
   align-items: center;
   color: var(--muted);
-  display: inline-flex;
-  flex: none;
-  font-size: 13px;
-  font-weight: 800;
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  font-weight: 700;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+/* Qualified with the start card's own class, which carries the phone's dock
+   below and a column layout of its own further down this file. */
+.waiting-rules-footer.waiting-start-card {
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  justify-content: space-between;
+}
+
+@media (min-width: 901px) {
+  .waiting-rules-footer.waiting-start-card {
+    border-top: 1.5px solid var(--line);
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+}
+
+.waiting-rules-footer .waiting-start-button {
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* On the phone's dock Start takes the width Edit leaves. */
+@media (max-width: 900px) {
+  .waiting-rules-footer .waiting-start-button {
+    flex: 1 1 auto;
+    width: auto;
+  }
+}
+
+.waiting-rules-footer .waiting-start-waiting {
+  flex: 1 1 auto;
+}
+
+.waiting-rules-footer .waiting-start-error {
+  flex-basis: 100%;
+  margin: 0;
+  order: 3;
+}
+
+@media (max-width: 720px) {
+  .waiting-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .waiting-fact:nth-child(4) {
+    border-left: 0;
+  }
+
+  .waiting-fact:nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
 }
 
 .waiting-ready-count { background: var(--well); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 4px 11px; white-space: nowrap; }

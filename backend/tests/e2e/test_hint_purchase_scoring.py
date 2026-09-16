@@ -61,7 +61,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await host.locator("#custom-prompts").fill("elephant")
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
-            await guest.get_by_text("Custom prompts only (1)").wait_for()
+            await guest.locator('[data-fact="prompts"]', has_text="1 custom only").wait_for()
             await guest.get_by_text("Buy letters", exact=True).wait_for()
             await host.get_by_role("button", name="Start game").click()
 

@@ -2324,6 +2324,14 @@ export const EN = {
   },
 
   waitingRoomPanel: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} custom`,
+    customOnlyShort: (p: { count: number }) =>
+      `${number(p.count)} custom only`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "list", other: "lists" }),
+    also: "Also",
+    editRoomRules: "Edit room rules",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "rounds" }),
     needMorePlayers: (p: { count: number }) =>
@@ -2343,20 +2351,12 @@ export const EN = {
     host: "Host",
     friend: "Friend",
     invite: "Invite",
-    edit: "Edit",
     viewHighlights: "View highlights",
     viewDrawings: "View drawings",
     spectatorsAfkAndDisconnectedPlayers:
       "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,
     inviteLink: "Invite link",
-    customPromptsOnlyCustomPromptCount:
-      (p: { customPromptCount: number }) => `Custom prompts only (${p.customPromptCount})`,
-    customPromptCountCustomPromptsCuratedLists:
-      (p: { customPromptCount: number }) => `${p.customPromptCount} custom prompts + curated lists`,
-    promptListSlugsCountCuratedPromptLists:
-      (p: { promptListSlugsCount: number }) => `${p.promptListSlugsCount} curated prompt lists`,
-    noScoring: "No scoring",
     spectatorsSeeThePrompt: "Spectators see the prompt",
     publicRoom: "Public room",
     privateRoom: "Private room",

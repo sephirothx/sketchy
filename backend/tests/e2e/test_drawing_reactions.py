@@ -120,7 +120,7 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
             await host.locator("#custom-prompts").fill("apple\ntree\nsun")
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
-            await other.get_by_text("Custom prompts only (3)").wait_for()
+            await other.locator('[data-fact="prompts"]', has_text="3 custom only").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, other, guest]
