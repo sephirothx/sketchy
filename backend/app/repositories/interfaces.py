@@ -981,6 +981,15 @@ class GameHistoryRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_gallery_entry(
+        self, turn_id: str, *, requesting_user_id: str | None = None
+    ) -> GalleryEntry | None:
+        """One Gallery entry by turn, under the gallery predicate (R-GAL-01),
+        with the viewer's own facts; ``None`` for anything the Gallery does
+        not show, so the route can answer its one 404."""
+        ...
+
+    @abstractmethod
     async def set_gallery_decision(
         self,
         turn_id: str,

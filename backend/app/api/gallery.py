@@ -191,6 +191,22 @@ def create_gallery_router(
         response.headers.update(headers)
         return {"entries": entries}
 
+    @router.get("/{turn_id}")
+    async def gallery_entry(turn_id: str, request: Request):
+        """One entry, for the drawing's own page (`/gallery/{turn_id}`): the
+        listing's shape, under the listing's predicate, and its 404 for
+        everything else - signed out included, since a stranger with a link
+        must learn nothing from it (R-GAL-02, R-GAL-06)."""
+        throttle(request)
+        if not getattr(request.state, "user_id", None):
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        entry = await game_history_repo.get_gallery_entry(
+            turn_id, requesting_user_id=request.state.user_id
+        )
+        if entry is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        return gallery_entry_payload(entry)
+
     @router.get("/{turn_id}/drawing")
     async def gallery_drawing(turn_id: str, request: Request):
         """A gallery drawing's bytes: the third door (R-GAL-06), with its own

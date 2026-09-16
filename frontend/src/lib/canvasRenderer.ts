@@ -2,6 +2,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
+import { replayStroke } from "./replay.ts";
 import {
   fillWhitePixels,
   floodFillPixels,
@@ -158,6 +159,93 @@ export function applyFillAction(
   );
 }
 
+/** Apply one action to a pixel buffer that already holds everything before it. */
+export function applyCanvasAction(
+  pixels: Uint8ClampedArray,
+  action: DecodedCanvasAction,
+): void {
+  if (action.kind === "path" && action.points.length > 0) {
+    rasterizePixelPath(
+      pixels,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+      action.points.length === 1
+        ? [action.points[0], action.points[0]]
+        : action.points,
+      action.width / 2,
+      hexToRgba(action.color),
+      false,
+    );
+  } else if (action.kind === "shape") {
+    rasterizePixelPath(
+      pixels,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT,
+      shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape),
+      action.payload.width / 2,
+      hexToRgba(action.payload.color),
+      true,
+    );
+  } else if (action.kind === "fill") {
+    if (
+      action.x >= 0 && action.x < CANVAS_WIDTH
+      && action.y >= 0 && action.y < CANVAS_HEIGHT
+    ) {
+      floodFillPixels(
+        pixels,
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        action.x,
+        action.y,
+        hexToRgba(action.color),
+      );
+    }
+  } else if (action.kind === "clear") {
+    fillWhitePixels(pixels);
+  }
+}
+
+/**
+ * Apply the stretch `from..to` of a stroke, as it grew: what a replay draws
+ * frame by frame. The ends are positions along the stroke in points,
+ * fractional between two of them, so a stroke of three long points still
+ * grows smoothly rather than in three jumps. Round caps make the joins
+ * seamless, and an opaque stroke drawn twice over the same pixels is the
+ * same stroke, so a stretch may overlap the one before it. A shape's
+ * outline is a stroke like any other here, closed by its caller.
+ */
+export function applyCanvasStrokeSpan(
+  pixels: Uint8ClampedArray,
+  stroke: { points: Point[]; width: number; color: string },
+  from: number,
+  to: number,
+): void {
+  const points = stroke.points;
+  const last = points.length - 1;
+  if (last < 1 || to <= from) return;
+  const at = (position: number) => {
+    const index = Math.min(last - 1, Math.max(0, Math.floor(position)));
+    const t = Math.min(1, Math.max(0, position - index));
+    const a = points[index];
+    const b = points[index + 1];
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  };
+  const stretch = [at(from)];
+  for (let index = Math.floor(from) + 1; index <= Math.min(last, Math.floor(to)); index++) {
+    if (index > from && index < to) stretch.push(points[index]);
+  }
+  stretch.push(at(to));
+  rasterizePixelPath(
+    pixels,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+    stretch.length === 1 ? [stretch[0], stretch[0]] : stretch,
+    stroke.width / 2,
+    hexToRgba(stroke.color),
+    false,
+  );
+}
+
 /** Replay a whole history onto a blank canvas.
  *
  * Every action is applied to one scratch buffer, written back once at the end.
@@ -171,46 +259,27 @@ export function renderCanvasActions(
   const imageData = context.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
   const pixels = imageData.data;
   fillWhitePixels(pixels);
-  for (const action of actions) {
-    if (action.kind === "path" && action.points.length > 0) {
-      rasterizePixelPath(
-        pixels,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        action.points.length === 1
-          ? [action.points[0], action.points[0]]
-          : action.points,
-        action.width / 2,
-        hexToRgba(action.color),
-        false,
-      );
-    } else if (action.kind === "shape") {
-      rasterizePixelPath(
-        pixels,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape),
-        action.payload.width / 2,
-        hexToRgba(action.payload.color),
-        true,
-      );
-    } else if (action.kind === "fill") {
-      if (
-        action.x >= 0 && action.x < CANVAS_WIDTH
-        && action.y >= 0 && action.y < CANVAS_HEIGHT
-      ) {
-        floodFillPixels(
-          pixels,
-          CANVAS_WIDTH,
-          CANVAS_HEIGHT,
-          action.x,
-          action.y,
-          hexToRgba(action.color),
-        );
-      }
-    } else if (action.kind === "clear") {
-      fillWhitePixels(pixels);
-    }
-  }
+  for (const action of actions) applyCanvasAction(pixels, action);
   context.putImageData(imageData, 0, 0);
+}
+
+/**
+ * Everything up to a replay position, from white: the actions before it
+ * whole, and the one it sits in as far as it has got - a stroke or a
+ * shape's outline part way, nothing yet for what lands whole at the end
+ * of its window. What a scrub shows.
+ */
+export function renderCanvasActionsUpTo(
+  pixels: Uint8ClampedArray,
+  actions: DecodedCanvasAction[],
+  position: { action: number; point: number },
+): void {
+  fillWhitePixels(pixels);
+  for (let index = 0; index < Math.min(position.action, actions.length); index++) {
+    applyCanvasAction(pixels, actions[index]);
+  }
+  const current = actions[position.action];
+  if (!current || position.point <= 0) return;
+  const stroke = replayStroke(current);
+  if (stroke) applyCanvasStrokeSpan(pixels, stroke, 0, position.point);
 }

@@ -119,6 +119,11 @@ export function fetchThisWeek(): Promise<{ entries: GalleryEntry[] }> {
   return apiRequest("/api/gallery/week");
 }
 
+/** One entry for its own page. Every refusal is the Gallery's 404. */
+export function fetchGalleryEntry(turnId: string): Promise<GalleryEntry> {
+  return apiRequest(`/api/gallery/${encodeURIComponent(turnId)}`);
+}
+
 export type GalleryAgeUnit = "minute" | "hour" | "day";
 
 /**

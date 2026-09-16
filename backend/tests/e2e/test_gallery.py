@@ -89,9 +89,12 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             # No game id anywhere on the page: nothing to follow into the game.
             assert "/room/" not in await stranger.content()
 
-            # Open the first of ours and react through the gallery door.
+            # Open the first of ours: its own page, where the drawing replays
+            # and the picker lives; react through the gallery door.
             await ours[0].get_by_role("button").first.click()
-            await stranger.locator(".drawing-recap").wait_for()
+            await stranger.locator('[data-testid="gallery-drawing-page"]').wait_for()
+            assert "/gallery/" in stranger.url
+            await stranger.locator('[data-testid="gallery-drawing-canvas"] canvas').wait_for()
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-fire"]').click()
             await expect(
@@ -99,14 +102,9 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
                     '[data-testid="reaction-control"] .reaction-chip[data-emoji="fire"] .reaction-count'
                 )
             ).to_have_text("1")
-            await stranger.keyboard.press("Escape")
-            await expect(stranger.locator(".drawing-recap")).to_have_count(0)
-            await expect(ours[0].locator(".reaction-count")).to_have_text("1")
 
             # Report it from the Gallery (R-GAL-08): the turn is named, the
             # drawing is copied in, and the drawer is resolved by the server.
-            await ours[0].get_by_role("button").first.click()
-            await stranger.locator(".drawing-recap").wait_for()
             await stranger.locator('[data-testid="gallery-report"]').click()
             dialog = stranger.locator('[data-testid="report-drawing-dialog"]')
             await dialog.wait_for()
@@ -114,8 +112,11 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await dialog.locator('[data-testid="report-drawing-send"]').click()
             await dialog.get_by_role("button", name="Done").wait_for()
             await dialog.get_by_role("button", name="Done").click()
-            await stranger.keyboard.press("Escape")
-            await expect(stranger.locator(".drawing-recap")).to_have_count(0)
+
+            # Back to the feed, which shows the reaction on the card.
+            await stranger.go_back()
+            await stranger.locator('[data-testid="gallery-feed"]').wait_for()
+            await expect(ours[0].locator(".reaction-count")).to_have_text("1")
 
             # Top over the week still lists it, with its reaction counted.
             await stranger.locator('[data-testid="gallery-sort"]').get_by_role("button", name="Top").click()

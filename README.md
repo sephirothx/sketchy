@@ -80,7 +80,10 @@ keyboard that takes half the screen, and one thumb.
   signed in, guests included, whether or not they were in the game: a feed of framed
   drawings, one to a row, that loads more as you scroll, with the sort and This week in a
   rail beside it on a wide screen and the sort under the title on a phone. Ordered by
-  Hot, New or Top, with Top over all time, a month or a week; the measure is reactions. An entry
+  Hot, New or Top, with Top over all time, a month or a week; the measure is reactions.
+  Opening a drawing is a page of its own with a link to share, where the drawing is
+  replayed stroke by stroke the way the room saw it drawn, over a few seconds whatever
+  its size, with a pause and a watch-again; the reaction picker and Report live there. An entry
   shows the drawing, the prompt, the round and turn, the drawer's name as it was that
   day, and its reaction counts — never the game, the room or who reacted. Any
   registered player can react to an entry from the gallery or from a pinned shelf, one

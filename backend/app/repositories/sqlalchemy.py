@@ -2371,6 +2371,46 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             next_cursor=_encode_catalogue_cursor(offset + limit) if has_more else None,
         )
 
+    async def get_gallery_entry(
+        self, turn_id: str, *, requesting_user_id: str | None = None
+    ) -> GalleryEntry | None:
+        db_turn_id = _optional_entity_id(turn_id)
+        if db_turn_id is None:
+            return None
+        requester_id = _optional_entity_id(requesting_user_id)
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(TurnRecord, GameRecord.finished_at)
+                    .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+                    .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                    .where(TurnRecord.id == db_turn_id, *_gallery_predicate())
+                )
+            ).first()
+            if row is None:
+                return None
+            turn, finished_at = row
+            viewer_ids: tuple[UUID, ...] = (
+                await _identity_ids(session, requester_id) if requester_id else ()
+            )
+            summary = (await _reaction_summaries(session, [turn.id], viewer_ids)).get(
+                turn.id, _NO_REACTIONS
+            )
+        return GalleryEntry(
+            turn_id=_public_id(turn.id),
+            round_number=turn.round_number,
+            turn_number=turn.turn_number,
+            drawer_display_name=turn.drawer_display_name_snapshot,
+            drawer_name_color=turn.drawer_name_color_snapshot,
+            drawer_is_anonymous=turn.drawer_is_anonymous_snapshot,
+            prompt=turn.prompt,
+            stroke_count=turn.stroke_count,
+            finished_at=finished_at,
+            reaction_counts=summary.counts,
+            my_reaction=summary.my_reaction,
+            drawn_by_me=turn.drawer_user_id in viewer_ids,
+        )
+
     async def set_gallery_decision(
         self,
         turn_id: str,
