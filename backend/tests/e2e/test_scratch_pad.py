@@ -113,7 +113,10 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
     paused card's over it - so what is drawn on one is what the other shows."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
-        context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            permissions=["clipboard-read", "clipboard-write"],
+        )
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
@@ -130,6 +133,11 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
             assert await page.evaluate("document.activeElement?.dataset.testid") == "close-waiting-pad"
             # Start stays one press away, and nothing of the pad is below the fold.
             assert await page.locator(".waiting-pad-strip .waiting-start-button").count() == 1
+            # The code copies from the strip in one press.
+            await page.click('[data-testid="copy-waiting-pad-code"]')
+            await page.wait_for_selector('.app-toast.success:has-text("Room code copied.")')
+            copied = await page.evaluate("navigator.clipboard.readText()")
+            assert copied == await page.locator('[data-testid="copy-waiting-pad-code"]').get_attribute("data-code")
             bottom = await page.evaluate(
                 "document.querySelector('.waiting-room.is-drawing .scratch-pad').getBoundingClientRect().bottom"
             )

@@ -197,8 +197,21 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <BackIcon size={15} />
             {ui.scratchPad.backToTheRoom}
           </button>
+          {/* The code is what somebody asks for while you draw ("what was it
+              again?"), so it copies in one press, as the header's chip used to. */}
           {code && (
-            <span className="waiting-pad-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</span>
+            <button
+              type="button"
+              className="room-copy-button waiting-pad-code"
+              data-testid="copy-waiting-pad-code"
+              data-code={code}
+              title={ui.waitingRoomPanel.copyCode}
+              onClick={() => void copyToClipboard(code, ui.waitingRoomPanel.roomCode)}
+            >
+              <span className="visually-hidden">{ui.waitingRoomPanel.copyCode}: </span>
+              <span>{code}</span>
+              <CopyIcon size={14} />
+            </button>
           )}
           {isHost ? startButton(false) : waitingForHost}
         </div>
