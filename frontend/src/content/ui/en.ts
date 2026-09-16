@@ -1286,6 +1286,7 @@ export const EN = {
     couldNotLoadTheGallery: "Could not load the gallery.",
     couldNotLoadThisDrawing: "Could not load this drawing.",
     showMore: "Show more",
+    tryAgain: "Try again",
     openDrawing: (p: { prompt: string; drawer: string }) => `Open “${p.prompt}” by ${p.drawer}`,
     byDrawer: (p: { drawer: string }) => `by ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: p.unit, other: `${p.unit}s` })} ago`,

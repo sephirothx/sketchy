@@ -1275,6 +1275,7 @@ export const FR: Catalogue = {
     couldNotLoadTheGallery: "La galerie n’a pas pu être chargée.",
     couldNotLoadThisDrawing: "Impossible de charger ce dessin.",
     showMore: "Afficher plus",
+    tryAgain: "Réessayer",
     openDrawing: (p: { prompt: string; drawer: string }) => `Ouvrir « ${p.prompt} » par ${p.drawer}`,
     byDrawer: (p: { drawer: string }) => `par ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `il y a ${counted(p.count, { one: { minute: "minute", hour: "heure", day: "jour" }[p.unit], other: { minute: "minutes", hour: "heures", day: "jours" }[p.unit] })}`,
