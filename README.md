@@ -1289,7 +1289,19 @@ to 256 pixels and encodes it as WebP (PNG where the browser cannot) before it is
 sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
 `/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
-picture is a new address. Guests keep the grey initial. A picture can be
+picture is a new address. Guests keep the grey initial.
+
+Instead of a picture, a registered player can wear a **doodle** — one of 26 line
+drawings Sketchy ships, picked from the same menu (*Pick a doodle*). A new account
+starts with a random one. A doodle is drawn in the disc's own ink, so it carries the
+player's name color, and it is nothing but a name on the account: nothing is
+uploaded, so there is nothing to report or remove, and a moderator's upload block
+does not stop anyone choosing one. Choosing a doodle deletes an uploaded picture, and
+uploading replaces a doodle. The drawings live in
+`scripts/brand/avatar-doodles.mjs`, which writes the sprite
+`frontend/public/avatars/doodles.svg`.
+
+A picture can be
 reported - from the lobby's row menu, from a profile, or from a room - and a
 moderator can remove it through the report.
 
@@ -1668,7 +1680,7 @@ scripts/
   check-coverage.py   Per-module coverage floors on the risk-critical modules
   check-wire-contract.py  Regenerates fixtures/wire_contract.json and compares it with the base branch
   update-e2e-durations.py  Rebuilds the E2E shard weights from a run's JUnit reports
-  brand/            Logo and icon sources, and the scripts that raster them
+  brand/            Logo, icon and doodle sources, and the scripts that derive and raster them
 .githooks/
   pre-push          Opt-in local copy of the artifact scan, before anything leaves the machine
 AGENTS.md         Repository instructions: what to read, what to check, the invariants

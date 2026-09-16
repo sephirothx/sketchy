@@ -5,6 +5,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { isUploadedPicture } from "../lib/avatarDoodles";
 
 /** Report what an account itself carries: its name, or its picture.
 
@@ -45,7 +46,9 @@ export function ReportAccountDialog({
   const titleId = useId();
   const reasons: { value: ReportReason; label: string }[] = [
     { value: "inappropriate_name", label: ui.reportAccountDialog.inappropriateName },
-    ...(avatarUrl
+    // A doodle is our drawing rather than something the player put up, so
+    // it is no more a picture to complain about than no picture (R-AVA-09).
+    ...(isUploadedPicture(avatarUrl)
       ? [{ value: "inappropriate_avatar" as ReportReason, label: ui.reportAccountDialog.inappropriatePicture }]
       : []),
   ];

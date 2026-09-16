@@ -48,6 +48,8 @@ import { canModerate } from "../lib/operatorAccess";
 import type { GalleryEntry } from "../lib/gallery";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
+import { doodleNameOf, isUploadedPicture } from "../lib/avatarDoodles";
+import { AvatarPicture } from "../components/ui/AvatarPicture";
 
 type Filter = "open" | "players" | "content" | "held" | "gallery" | "bans" | "closed";
 type CaseKind = "incident" | "content" | "held" | "gallery" | "ban";
@@ -1061,11 +1063,20 @@ export function ModerationPage() {
                           <span>Picture</span>
                           {/* Shown at the size a player list shows it, and
                               at full size on hover: the case may be about it. */}
-                          <img
-                            className="mod-context-avatar"
-                            src={playerCase.reportedPlayer.avatarUrl}
-                            alt={`${playerCase.reportedPlayer.displayName}'s picture`}
-                          />
+                          <span
+                            className={`mod-context-avatar${
+                              doodleNameOf(playerCase.reportedPlayer.avatarUrl) ? " is-doodle" : ""
+                            }`}
+                          >
+                            <AvatarPicture
+                              url={playerCase.reportedPlayer.avatarUrl}
+                              label={
+                                doodleNameOf(playerCase.reportedPlayer.avatarUrl)
+                                  ? `${playerCase.reportedPlayer.displayName}'s doodle (ours, not reportable)`
+                                  : `${playerCase.reportedPlayer.displayName}'s picture`
+                              }
+                            />
+                          </span>
                         </div>
                       )}
                       <div className="mod-context-row">
@@ -1157,7 +1168,11 @@ export function ModerationPage() {
                         Resolve
                       </button>
                     )}
-                    {playerCase.reportedUserId && playerCase.reportedPlayer?.avatarUrl && (
+                    {/* Only an upload: a doodle is ours, and a removal would find
+                        nothing to take down while still counting against the
+                        player's upload ladder (R-AVA-09). */}
+                    {playerCase.reportedUserId &&
+                      isUploadedPicture(playerCase.reportedPlayer?.avatarUrl) && (
                       <button
                         type="button"
                         className="btn btn-danger-ghost"
@@ -1170,12 +1185,21 @@ export function ModerationPage() {
                             // cost them is read from the answer rather than
                             // asserted here (R-AVA-08).
                             (outcome) => {
-                              const until = (
-                                outcome as { blockedUntil?: string | null } | null
-                              )?.blockedUntil;
+                              const answer = outcome as {
+                                removed?: boolean;
+                                blockedUntil?: string | null;
+                              } | null;
+                              const until = answer?.blockedUntil;
+                              // The picture can change between loading the case
+                              // and pressing this; the answer says whether
+                              // anything was actually taken down.
+                              const head =
+                                answer?.removed === false
+                                  ? "There was no uploaded picture left to remove."
+                                  : "Picture removed.";
                               return until
-                                ? `Picture removed. They cannot upload another until ${formatWhen(until, dateTime)}.`
-                                : "Picture removed. They can upload another one straight away.";
+                                ? `${head} They cannot upload another until ${formatWhen(until, dateTime)}.`
+                                : `${head} They can upload another one straight away.`;
                             },
                           )
                         }

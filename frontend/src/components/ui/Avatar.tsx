@@ -1,13 +1,15 @@
 import type { CSSProperties } from "react";
 
+import { doodleNameOf } from "../../lib/avatarDoodles";
 import { CrownMarkIcon, FriendMarkIcon } from "../icons";
+import { AvatarPicture } from "./AvatarPicture";
 
 interface AvatarProps {
   name: string;
   /** The account color; ignored for guests, who use the theme's guest fill. */
   nameColor?: string;
-  /** The uploaded picture (#573). Never set for a guest: the grey initial is
-      what marks a name as unclaimed (R-ACCT-05). */
+  /** The uploaded picture (#573) or the doodle (#579). Never set for a guest:
+      the grey initial is what marks a name as unclaimed (R-ACCT-05). */
   avatarUrl?: string | null;
   isAnonymous?: boolean;
   /** The room's host: a gold crown on the disc's top-right edge (#574). */
@@ -20,8 +22,10 @@ interface AvatarProps {
 }
 
 /**
- * Round avatar: the uploaded picture when the account has one, otherwise the
- * initial. Light theme fills with the account color and a white initial; dark
+ * Round avatar: the uploaded picture or the doodle when the account has one,
+ * otherwise the initial. A doodle takes the initial's place and its ink, so it
+ * sits on the same disc in the same colour; a picture fills the disc.
+ * Light theme fills with the account color and a white initial; dark
  * theme pastelizes the same color via color-mix (see primitives.css) with a
  * dark initial, so arbitrary account colors stay legible on the slate ground.
  * Guests use the fixed guest fill per theme.
@@ -58,13 +62,14 @@ export function Avatar({
   if (!isAnonymous && nameColor) style["--player-color"] = nameColor;
   const variant = isAnonymous || !nameColor ? "avatar-guest" : "avatar-player";
   const picture = !isAnonymous && avatarUrl ? avatarUrl : null;
+  const filled = picture && !doodleNameOf(picture) ? " has-picture" : "";
   const disc = (
     <span
       aria-hidden="true"
-      className={`avatar ${variant}${picture ? " has-picture" : ""}${isSelf ? " is-self" : ""}`}
+      className={`avatar ${variant}${filled}${isSelf ? " is-self" : ""}`}
       style={style}
     >
-      {picture ? <img src={picture} alt="" width={size} height={size} /> : initial}
+      {picture ? <AvatarPicture url={picture} /> : initial}
     </span>
   );
   if (!isHost && !isFriend) return disc;

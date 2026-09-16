@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import { AVATAR_SIZE, MAX_AVATAR_BYTES, type CropRect } from "./avatarCrop.ts";
+import type { DoodleName } from "./avatarDoodles.ts";
 import { ui } from "../content/ui/index.ts";
 
 export { AVATAR_SIZE, MAX_AVATAR_BYTES };
@@ -88,6 +89,13 @@ export function encodePicture(
 
 export function uploadAvatar(base64: string): Promise<{ avatarKey: string; avatarUrl: string }> {
   return apiRequest("/api/users/me/avatar", { method: "POST", body: { image: base64 } });
+}
+
+/** Wear one of our doodles instead of a picture (#579). */
+export function chooseDoodle(
+  name: DoodleName,
+): Promise<{ avatarKey: string; avatarUrl: string }> {
+  return apiRequest("/api/users/me/avatar/doodle", { method: "PUT", body: { name } });
 }
 
 export function removeAvatar(): Promise<{ ok: boolean }> {

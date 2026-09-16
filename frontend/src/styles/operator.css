@@ -1619,11 +1619,31 @@
 
 /* The picture a report may be about, at list size; full size on hover. */
 .mod-context-avatar {
+  display: inline-block;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  object-fit: cover;
+  overflow: hidden;
   transition: transform 0.15s ease;
+}
+
+/* A doodle is ours, not the player's, so it is shown for context on a plain
+   disc - in the ink every theme gives a guest's initial - rather than as a
+   picture to judge. */
+.mod-context-avatar.is-doodle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--guest-avatar);
+  color: var(--avatar-ink);
+}
+
+.mod-context-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .mod-context-avatar:hover {

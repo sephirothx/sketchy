@@ -18,7 +18,7 @@ from sqlalchemy.orm import defer, selectinload
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
-from app.auth.avatars import avatar_url
+from app.auth.avatars import avatar_url, uploaded_avatar_key
 from app.services.avatars import remove_avatar
 from app.auth.rate_limit import (
     PersistentRateLimiter,
@@ -1415,7 +1415,10 @@ def create_moderation_router(
                 about_account = about_picture or (
                     body.reason == ReportReason.INAPPROPRIATE_NAME
                 )
-                if about_picture and target.avatar_key is None:
+                # A doodle counts as no picture here: it is this deployment's
+                # own drawing, not something the player put up (R-AVA-09).
+                uploaded = uploaded_avatar_key(target.avatar_key)
+                if about_picture and uploaded is None:
                     raise Refusal(
                         422,
                         ErrorCode.NO_PICTURE_TO_REPORT,
@@ -1423,7 +1426,7 @@ def create_moderation_router(
                     )
                 # Only a complaint about the picture names one. A name report
                 # has no picture to have changed.
-                reported_avatar_key = target.avatar_key if about_picture else None
+                reported_avatar_key = uploaded if about_picture else None
                 # Where the complaint happened, and so which incident it
                 # belongs to (#620). Read off the evidence the checks above
                 # already proved comes from one place: all-lobby or one room
@@ -1597,7 +1600,9 @@ def create_moderation_router(
             ip_hash=ip_hash,
         )
         if on_avatar_changed is not None:
-            await on_avatar_changed(str(report.reported_user_id), None)
+            # What is left, not a blanket None: a doodle the removal left in
+            # place must stay on the player's live seats (R-AVA-09).
+            await on_avatar_changed(str(report.reported_user_id), outcome.avatar_key)
         # After the commit, so a socket can never announce a notice a
         # rolled-back transaction never wrote - the rule the warning route
         # above follows for the same reason.

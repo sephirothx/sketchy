@@ -33,6 +33,8 @@ import { AddEmailDialog } from "./AddEmailDialog";
 import { SessionManagerDialog } from "./SessionManagerDialog";
 import { AccountDataDialog } from "./AccountDataDialog";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
+import { AvatarDoodleDialog } from "./AvatarDoodleDialog";
+import { doodleNameOf } from "../lib/avatarDoodles";
 import { PictureCropDialog } from "./PictureCropDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
@@ -305,19 +307,24 @@ function EmailAddressStatus({
 }
 
 /**
- * The pencil on the disc's corner. With no picture it opens the file picker;
- * with one it opens a two-item menu, because "Remove" needs a home once the
- * picture row is gone. The menu is a real menu: Escape, outside click and
- * the arrow keys all work, the way the account menu's do.
+ * The pencil on the disc's corner. It opens a menu - pick one of our doodles,
+ * upload a picture, and remove whichever the account wears, when it wears one
+ * (#579). The menu is a real menu: Escape, outside click and the arrow keys
+ * all work, the way the account menu's do.
  */
 function PictureEditChip({
-  hasPicture,
+  hasAvatar,
+  wearsDoodle,
   busy,
+  onPickDoodle,
   onChoose,
   onRemove,
 }: {
-  hasPicture: boolean;
+  hasAvatar: boolean;
+  /** Whether what "Remove" would take off is one of our doodles. */
+  wearsDoodle: boolean;
   busy: boolean;
+  onPickDoodle: () => void;
   onChoose: (file: File | undefined) => void;
   onRemove: () => void;
 }) {
@@ -374,14 +381,14 @@ function PictureEditChip({
         disabled={busy}
         aria-label={ui.settingsOverlay.editPicture}
         title={ui.settingsOverlay.editPicture}
-        aria-haspopup={hasPicture ? "menu" : undefined}
-        aria-expanded={hasPicture ? open : undefined}
-        aria-controls={hasPicture && open ? menuId : undefined}
-        onClick={() => (hasPicture ? setOpen((shown) => !shown) : pick())}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((shown) => !shown)}
       >
         <PencilIcon size={14} />
       </button>
-      {hasPicture && open && (
+      {open && (
         <div
           ref={menuRef}
           id={menuId}
@@ -391,22 +398,35 @@ function PictureEditChip({
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >
-          <button type="button" role="menuitem" onClick={pick}>
-            <ImageIcon size={15} />
-            {ui.settingsOverlay.changePicture}
-          </button>
           <button
             type="button"
             role="menuitem"
-            className="is-danger"
             onClick={() => {
               setOpen(false);
-              onRemove();
+              onPickDoodle();
             }}
           >
-            <TrashIcon size={15} />
-            {ui.settingsOverlay.removePicture}
+            <BrushIcon size={15} />
+            {ui.settingsOverlay.pickDoodle}
           </button>
+          <button type="button" role="menuitem" onClick={pick}>
+            <ImageIcon size={15} />
+            {ui.settingsOverlay.uploadPicture}
+          </button>
+          {hasAvatar && (
+            <button
+              type="button"
+              role="menuitem"
+              className="is-danger"
+              onClick={() => {
+                setOpen(false);
+                onRemove();
+              }}
+            >
+              <TrashIcon size={15} />
+              {wearsDoodle ? ui.settingsOverlay.removeDoodle : ui.settingsOverlay.removePicture}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -435,6 +455,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const [pictureError, setPictureError] = useState<string | null>(null);
   // A chosen file opens the crop dialog; the dialog uploads what was framed.
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [doodlesOpen, setDoodlesOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
 
   async function usePicture(base64: string) {
@@ -623,8 +644,10 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
             />
             {!isGuest && (
               <PictureEditChip
-                hasPicture={Boolean(user?.avatarUrl)}
+                hasAvatar={Boolean(user?.avatarUrl)}
+                wearsDoodle={doodleNameOf(user?.avatarUrl) !== null}
                 busy={pictureBusy}
+                onPickDoodle={() => setDoodlesOpen(true)}
                 onChoose={(file) => {
                   if (file) setPendingFile(file);
                 }}
@@ -886,6 +909,14 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         <TwoFactorDialog onClose={() => setTwoFactorOpen(false)} />
       )}
       {dataOpen && <AccountDataDialog onClose={() => setDataOpen(false)} />}
+      {doodlesOpen && (
+        <AvatarDoodleDialog
+          name={user?.displayName ?? ""}
+          nameColor={nameColor}
+          currentUrl={user?.avatarUrl}
+          onClose={() => setDoodlesOpen(false)}
+        />
+      )}
       {pendingFile && (
         <PictureCropDialog
           file={pendingFile}

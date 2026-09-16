@@ -1290,6 +1290,10 @@
    "avatarKey",
    "avatarUrl"
   ],
+  "api.avatars:pick_doodle": [
+   "avatarKey",
+   "avatarUrl"
+  ],
   "api.avatars:upload_avatar": [
    "avatarKey",
    "avatarUrl"

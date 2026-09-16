@@ -48,6 +48,8 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
+import { doodleNameOf } from "../lib/avatarDoodles";
+import { AvatarPicture } from "./ui/AvatarPicture";
 
 function MenuItem({
   icon,
@@ -192,12 +194,14 @@ export function AccountMenu({ compact = false }: { compact?: boolean } = {}) {
         }
       >
         <span
-          className={`identity-avatar avatar-player${!isGuest && user.avatarUrl ? " has-picture" : ""}`}
+          className={`identity-avatar avatar-player${
+            !isGuest && user.avatarUrl && !doodleNameOf(user.avatarUrl) ? " has-picture" : ""
+          }`}
           aria-hidden="true"
           style={{ "--player-color": identityColor(shownName, isGuest, user.nameColor) } as CSSProperties}
         >
           {!isGuest && user.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" />
+            <AvatarPicture url={user.avatarUrl} />
           ) : (
             avatarInitial(shownName)
           )}

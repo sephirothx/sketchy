@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from app.auth.avatar_doodles import random_doodle_key
+
 from app.repositories.interfaces import (
     AccountAlreadyClaimedError,
     IdentityMergeError,
@@ -107,7 +109,8 @@ class FakeUserRepository(UserRepository):
             username=username,
             display_name=username,
             name_color=user.name_color,
-            avatar_key=user.avatar_key,
+            # As the real repository does: a new account starts with a doodle.
+            avatar_key=random_doodle_key(),
             is_anonymous=False,
             created_at=user.created_at,
             updated_at=_now(),
