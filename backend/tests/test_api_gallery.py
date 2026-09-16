@@ -472,7 +472,15 @@ async def test_a_claimed_guests_drawing_can_still_be_reported(env):
     cid = await _registered(users, "Cid")
     owner = await _registered(users, "Owner")
     game = await record_game(history, drawer=guest.id, reactor=bob.id, visibility="public", finished_at=NOW)
+    # Bob complains while the drawer is still a guest; the report keeps the
+    # guest id. Once the guest has merged, the same complaint from Bob is the
+    # same open report (R-MOD-05), not a second one against the account.
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "hm"})).status_code == 201
     await users.merge_guest_into_account(guest.id, owner.id)
+    again = await http.post(f"/api/gallery/{game.turn_id}/report", json={"details": "again"})
+    assert again.status_code == 409, again.text
+    assert (await http.post("/api/reports", json={"reportedUserId": owner.id, "reason": "harassment", "details": "again"})).status_code == 409
 
     await sign_in_as(http, factory, cid.id)
     assert (await http.get(f"/api/gallery/{game.turn_id}")).status_code == 200, "still in the Gallery"

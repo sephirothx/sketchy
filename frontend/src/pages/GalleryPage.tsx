@@ -110,11 +110,15 @@ export function GalleryPage() {
     setSearchParams(paramsFromGalleryFilters(next), { replace: true });
   }, [setSearchParams]);
 
-  // One request at a time, held in a ref so the observer below never has to
-  // be rebuilt around it; and which view a failed automatic load belongs to,
-  // which stops the automatic loading of *that* view until the reader asks
-  // again - another order is another feed, and starts clean.
-  const inFlight = useRef(false);
+  // One request at a time *per view*, held in a ref so the observer below
+  // never has to be rebuilt around it. Keyed by view rather than a single
+  // flag: a page still on its way for an abandoned order must not stop the
+  // new order's first automatic load, which the sentinel asks for once and
+  // does not ask for again while it stays on screen. Below: which view a
+  // failed automatic load belongs to, which stops the automatic loading of
+  // *that* view until the reader asks again - another order is another
+  // feed, and starts clean.
+  const inFlight = useRef<string | null>(null);
   const view = `${reader}\u0000${filterKey}`;
   const stalled = stalledView === view;
   // An error belongs to the view it happened in; another view starts clean.
@@ -128,9 +132,9 @@ export function GalleryPage() {
   }, [view]);
 
   const showMore = useCallback(async () => {
-    if (!cursor || inFlight.current) return;
+    if (!cursor || inFlight.current === view) return;
     const asked = view;
-    inFlight.current = true;
+    inFlight.current = asked;
     setBusy(true);
     try {
       const fetched = await fetchGallery(filters, cursor);
@@ -148,8 +152,10 @@ export function GalleryPage() {
       setStalledView(asked);
       setFailure({ view: asked, text: refusalText(moreError, ui.galleryPage.couldNotLoadTheGallery) });
     } finally {
-      inFlight.current = false;
-      setBusy(false);
+      // Only this view's token, and the spinner only when nothing newer is
+      // still on its way: another view may have started its own page.
+      if (inFlight.current === asked) inFlight.current = null;
+      if (inFlight.current === null) setBusy(false);
     }
     // `filters` is derived from `filterKey`; the key is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
