@@ -44,6 +44,11 @@ from app.domain_values import AccountState, GRANTABLE_ROLES, UserRole
 from app.game import Phase
 from app.rooms import RoomManager
 from app.services import config_store
+from app.services.gallery_shelf import (
+    SHELF_REVIEW_EVENT,
+    SHELF_REVIEW_KEY,
+    read_shelf_review,
+)
 from app.services.publication_policy import (
     PUBLICATION_REVIEW_EVENT,
     PUBLICATION_REVIEW_KEY,
@@ -144,6 +149,9 @@ def create_admin_controls_router(
     on_change=None,
     on_role_changed=None,
     request_process_exit=None,
+    # Called once the gallery shelf's review switch moves, so the cached
+    # shelf is recomputed under the new posture rather than a minute later.
+    on_gallery_review_changed=None,
 ) -> APIRouter:
     """`context` is the live `HandlerContext`; rooms are process-owned.
 
@@ -310,6 +318,54 @@ def create_admin_controls_router(
                         created_at=datetime.now(timezone.utc),
                     )
                 )
+        return {"review": body.review}
+
+    @router.get("/api/admin/gallery-shelf-review")
+    async def read_gallery_shelf_review(request: Request):
+        await require_admin(request)
+        return {"review": await read_shelf_review(session_factory)}
+
+    @router.post("/api/admin/gallery-shelf-review")
+    async def set_gallery_shelf_review(
+        request: Request,
+        body: PublicationReviewRequest,
+        admin: User = Depends(require_admin_action),
+    ):
+        """Hold the lobby's This week shelf for review, or stop (R-GAL-10).
+
+        The Gallery page publishes after the fact either way, for the reasons
+        the publication switch above gives; the shelf is held because it is
+        the one place a drawing is put in front of everyone who opens the
+        app, chosen by nobody. With it on, the shelf shows only drawings a
+        moderator released and the moderation queue lists the candidates.
+        """
+        if body.review == await read_shelf_review(session_factory):
+            return {"review": body.review}
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        async with session_factory() as session:
+            async with session.begin():
+                if body.review:
+                    await config_store.put(session, SHELF_REVIEW_KEY, "1")
+                else:
+                    await config_store.drop(session, SHELF_REVIEW_KEY)
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type=SHELF_REVIEW_EVENT,
+                        actor_user_id=admin.id,
+                        target_type=AuditTargetType.APP_CONFIG.value,
+                        target_id=SHELF_REVIEW_KEY,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={
+                            "review": body.review,
+                            **({"reason": body.reason} if body.reason else {}),
+                        },
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+        if on_gallery_review_changed is not None:
+            on_gallery_review_changed()
         return {"review": body.review}
 
     # ------------------------------------------------------------------ rooms

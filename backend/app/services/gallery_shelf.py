@@ -7,7 +7,17 @@ from dataclasses import dataclass
 import hashlib
 import time
 
-from app.repositories.interfaces import GalleryEntry
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.repositories.interfaces import GalleryEntry, GameHistoryRepository
+from app.services import config_store
+
+# The operator switch (R-GAL-10): set, the shelf shows only released
+# drawings and the moderation queue lists the undecided candidates. The page
+# publishes after the fact either way. Read per shelf recompute, never cached
+# beyond the shelf's own minute, for the reason the publication switch is not.
+SHELF_REVIEW_KEY = "gallery.shelf_review"
+SHELF_REVIEW_EVENT = "gallery.shelf_review_changed"
 
 SHELF_SIZE = 6
 SHELF_TTL_SECONDS = 60.0
@@ -28,6 +38,31 @@ def _version_of(entries: tuple[GalleryEntry, ...]) -> str:
         digest.update(entry.turn_id.encode())
         digest.update(repr(sorted(entry.reaction_counts.items())).encode())
     return digest.hexdigest()[:24]
+
+
+async def read_shelf_review(session_factory: async_sessionmaker[AsyncSession]) -> bool:
+    """Whether the lobby's shelf waits for a moderator's release."""
+    return await config_store.read_one(session_factory, SHELF_REVIEW_KEY) == "1"
+
+
+def shelf_reader(
+    repo: GameHistoryRepository,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> Callable[[], Awaitable[tuple[GalleryEntry, ...]]]:
+    """The read behind the cache: Top-week's first six, released ones only
+    while the switch is set. A hidden drawing is out either way (R-GAL-01)."""
+
+    async def read() -> tuple[GalleryEntry, ...]:
+        review = await read_shelf_review(session_factory)
+        page = await repo.list_gallery(
+            sort="top",
+            window="week",
+            limit=SHELF_SIZE,
+            shelf_filter="released" if review else None,
+        )
+        return page.entries
+
+    return read
 
 
 class GalleryShelfCache:

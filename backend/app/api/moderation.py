@@ -32,12 +32,17 @@ from app.canvas_storage import (
     UnsupportedStoredDrawingError,
     stored_drawing_wire_payload,
 )
+from app.api.gallery import gallery_entry_payload
+from app.api.profiles import serve_drawing
+from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
+from app.services.gallery_shelf import read_shelf_review
 from app.services.player_reports import (
     context_around,
     decided_incident_report_ids,
     drawing_evidence_for_report,
     drawing_evidence_payload,
     record_player_report,
+    CapturedDrawing,
 )
 from app.auth.sessions import revoke_all_sessions
 from app.auth.step_up import require_step_up
@@ -46,6 +51,7 @@ from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     AuditEvent,
     GameRecord,
+    TurnDrawing,
     PlayerReport,
     PlayerReportDrawingEvidence,
     PlayerReportMessageEvidence,
@@ -75,6 +81,9 @@ from app.services.incidents import (
 )
 from app.domain_values import (
     AccountState,
+    TurnDrawingStatus,
+    GameVisibility,
+    GalleryShelfDecision,
     AuditTargetType,
     EmailTemplate,
     PromptContentModerationState,
@@ -177,6 +186,40 @@ class PromptContentReportBody(BaseModel):
         if not cleaned:
             raise ValueError("details cannot be blank")
         return cleaned
+
+
+class GalleryReportBody(BaseModel):
+    """A report from the Gallery names the turn in the path and says only
+    why in words: the reason is always the drawing (R-GAL-08)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    details: str = Field(default="", max_length=MAX_REPORT_DETAILS)
+
+    @field_validator("details")
+    @classmethod
+    def clean_details(cls, value: str) -> str:
+        return value.strip()
+
+
+class GalleryDecisionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["released", "hidden"]
+    note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("A decision needs a note.")
+        return cleaned
+
+
+# How many undecided Top-week drawings the shelf's review queue shows: the
+# six the shelf would take, and a second six behind them.
+REVIEW_CANDIDATES = 12
 
 
 class PublicationReviewBody(BaseModel):
@@ -1012,6 +1055,11 @@ def create_moderation_router(
     # Called with the account whose picture a moderator took down, so live
     # seats and the lobby's identity cache stop showing it.
     on_avatar_changed: Callable[[str, str | None], Awaitable[None]] | None = None,
+    # The Gallery's repository, for a moderator's decision on a drawing and a
+    # report filed from the Gallery (#524); and what to call once a decision
+    # is written, so the lobby's cached shelf does not wait a minute for it.
+    game_history_repo: GameHistoryRepository | None = None,
+    on_gallery_decision: Callable[[], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
     report_limiter = PersistentRateLimiter(
@@ -2836,5 +2884,235 @@ def create_moderation_router(
                 if warning.acknowledged_at is None:
                     warning.acknowledged_at = datetime.now(timezone.utc)
             return {"ok": True}
+
+    # ------------------------------------------------------------ the Gallery
+
+    @router.post("/gallery/{turn_id}/report", status_code=201)
+    async def report_gallery_drawing(
+        turn_id: str, body: GalleryReportBody, request: Request
+    ):
+        """Report a drawing from the Gallery (R-GAL-08).
+
+        The reporter names the **turn** and nothing else: the server resolves
+        the drawer from it, so filing a complaint is not a way to learn an
+        account id (R-MOD-02). The turn's stored drawing is copied in as the
+        evidence, the way a live report copies the canvas (R-MOD-14): a
+        moderator sees exactly what was reported even after the drawer
+        erases it. Only a drawing the Gallery shows can be reported from it;
+        everything else is the Gallery's 404.
+        """
+        reporter_id = getattr(request.state, "user_id", None)
+        if not reporter_id:
+            raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
+        if not await report_limiter.check(client_key(request)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REPORTS,
+                "Too many reports. Please wait before sending another.",
+            )
+        db_reporter_id = UUID(reporter_id)
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        try:
+            db_turn_id = UUID(turn_id)
+        except ValueError:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from None
+        async with session_factory() as session:
+            async with session.begin():
+                try:
+                    await require_live_account(session, db_reporter_id)
+                except AccountErasedError:
+                    raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
+                row = (
+                    await session.execute(
+                        select(TurnRecord, TurnDrawing)
+                        .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
+                        .join(GameRecord, GameRecord.id == TurnRecord.game_id)
+                        .where(
+                            TurnRecord.id == db_turn_id,
+                            GameRecord.visibility == GameVisibility.PUBLIC.value,
+                            TurnDrawing.status == TurnDrawingStatus.READY.value,
+                            TurnDrawing.payload.is_not(None),
+                            TurnDrawing.gallery_hidden_at.is_(None),
+                        )
+                    )
+                ).first()
+                if row is None:
+                    raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+                turn, drawing = row
+                target = (
+                    await session.get(User, turn.drawer_user_id)
+                    if turn.drawer_user_id is not None
+                    else None
+                )
+                if target is None or target.state in {
+                    AccountState.MERGED.value,
+                    AccountState.DELETED.value,
+                }:
+                    raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+                if target.id == db_reporter_id:
+                    raise Refusal(
+                        422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself."
+                    )
+                already_open = await session.scalar(
+                    select(PlayerReport.id).where(
+                        PlayerReport.reporter_user_id == db_reporter_id,
+                        PlayerReport.reported_user_id == target.id,
+                        PlayerReport.status == ReportStatus.PENDING.value,
+                    )
+                )
+                if already_open is not None:
+                    raise Refusal(
+                        409,
+                        ErrorCode.ALREADY_REPORTED,
+                        (
+                            "You have already reported this player, and a "
+                            "moderator has not reviewed it yet."
+                        ),
+                    )
+                captured = CapturedDrawing(
+                    turn_id=turn.id,
+                    round_number=turn.round_number,
+                    prompt=turn.prompt,
+                    action_count=turn.stroke_count,
+                    payload=drawing.payload,
+                    format_magic=drawing.format_magic or "",
+                    format_version=drawing.format_version or 0,
+                    checksum_sha256=drawing.checksum_sha256 or "",
+                )
+                report = record_player_report(
+                    session,
+                    reporter_user_id=db_reporter_id,
+                    reported_user_id=target.id,
+                    game_id=turn.game_id,
+                    turn_id=turn.id,
+                    scope=ReportScope.UNSCOPED,
+                    room_instance_id=None,
+                    reason=ReportReason.OFFENSIVE_DRAWING.value,
+                    details=body.details,
+                    messages=[],
+                    drawing=captured,
+                    request_id=request_id,
+                    ip_hash=ip_hash,
+                )
+                try:
+                    await session.flush()
+                except IntegrityError as error:
+                    raise Refusal(
+                        409,
+                        ErrorCode.ALREADY_REPORTED,
+                        (
+                            "You have already reported this player, and a "
+                            "moderator has not reviewed it yet."
+                        ),
+                    ) from error
+            return {
+                "id": str(report.id),
+                "status": report.status,
+                "createdAt": report.created_at.isoformat(),
+            }
+
+    @router.get("/moderation/gallery")
+    async def gallery_review_queue(request: Request):
+        """The lobby shelf's review queue (R-GAL-10): whether the switch is
+        set, and the current Top-week candidates nobody has decided. With the
+        switch off nothing waits, since the shelf is Top-week directly."""
+        async with session_factory() as session:
+            await _reviewer(session, request)
+        review = await read_shelf_review(session_factory)
+        candidates = ()
+        if review and game_history_repo is not None:
+            page = await game_history_repo.list_gallery(
+                sort="top", window="week", limit=REVIEW_CANDIDATES, shelf_filter="undecided"
+            )
+            candidates = page.entries
+        return {
+            "review": review,
+            "waiting": len(candidates),
+            "candidates": [gallery_entry_payload(entry) for entry in candidates],
+        }
+
+    @router.patch("/moderation/gallery/{turn_id}")
+    async def decide_gallery_drawing(
+        turn_id: str, body: GalleryDecisionBody, request: Request
+    ):
+        """Hide a drawing from the Gallery, or release it - onto the shelf
+        under the switch, and back into the Gallery if it was hidden (R-GAL-09,
+        R-GAL-10). Audited against the drawing; the drawer is the target
+        account, so the ledger reads like every other takedown."""
+        request_id, ip_hash = await audit_coordinates(request, session_factory)
+        async with session_factory() as session:
+            reviewer = await _reviewer(session, request)
+            require_step_up(request)
+        if game_history_repo is None:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        decided = await game_history_repo.set_gallery_decision(
+            turn_id, decision=body.decision, decided_by_user_id=str(reviewer.id)
+        )
+        if decided is None:
+            raise HTTPException(status_code=404, detail="No such drawing.")
+        decided_turn_id, drawer_user_id = decided
+        async with session_factory() as session:
+            async with session.begin():
+                session.add(
+                    AuditEvent(
+                        id=generate_uuid(),
+                        event_type=f"gallery.review_{body.decision}",
+                        actor_user_id=reviewer.id,
+                        target_user_id=UUID(drawer_user_id) if drawer_user_id else None,
+                        target_type=AuditTargetType.DRAWING.value,
+                        target_id=decided_turn_id,
+                        request_id=request_id,
+                        ip_hash=ip_hash,
+                        details={"note": body.note},
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+        if on_gallery_decision is not None:
+            on_gallery_decision()
+        return {
+            "turnId": decided_turn_id,
+            "decision": body.decision,
+            "hidden": body.decision == GalleryShelfDecision.HIDDEN.value,
+        }
+
+    @router.get("/moderation/gallery/{turn_id}/drawing")
+    async def gallery_drawing_for_staff(turn_id: str, request: Request):
+        """A kept drawing's bytes for a reviewer, hidden or not: the queue
+        has to show what it asks a decision about."""
+        async with session_factory() as session:
+            await _reviewer(session, request)
+        try:
+            db_turn_id = UUID(turn_id)
+        except ValueError:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from None
+
+        async def checksum_of():
+            async with session_factory() as session:
+                return await session.scalar(
+                    select(TurnDrawing.checksum_sha256).where(
+                        TurnDrawing.turn_id == db_turn_id,
+                        TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    )
+                )
+
+        async def drawing_of():
+            async with session_factory() as session:
+                row = await session.scalar(
+                    select(TurnDrawing).where(
+                        TurnDrawing.turn_id == db_turn_id,
+                        TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    )
+                )
+            if row is None or row.payload is None:
+                return None
+            return TurnDrawingDetail(
+                turn_id=str(row.turn_id),
+                payload=row.payload,
+                checksum_sha256=row.checksum_sha256 or "",
+            )
+
+        return await serve_drawing(
+            request, turn_id, checksum_of=checksum_of, drawing_of=drawing_of
+        )
 
     return router

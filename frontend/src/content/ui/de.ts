@@ -1652,6 +1652,21 @@ export const DE: Catalogue = {
     close: "Schließen",
     cancel: "Abbrechen",
   },
+  reportDrawingDialog: {
+    report: "Melden",
+    reportThisDrawing: "Diese Zeichnung melden",
+    nothingHappensYet: "Ein Moderator sieht sich die Zeichnung an. Bis dahin passiert mit dem Spieler nichts.",
+    anythingElseOptional: "Sonst noch etwas? (optional)",
+    anythingModeratorShouldKnow: "Alles, was ein Moderator wissen sollte",
+    sendReport: "Meldung senden",
+    sending: "Wird gesendet …",
+    reportSent: "Meldung gesendet",
+    sentWithTheDrawingAttached: "Gesendet, mit der Zeichnung im Anhang.",
+    thatReportCouldNotBeSent: "Diese Meldung konnte nicht gesendet werden.",
+    done: "Fertig",
+    cancel: "Abbrechen",
+    close: "Schließen",
+  },
 
   reportedDrawing: {
     thisDrawingCouldNotBeDecoded: "Diese Zeichnung konnte nicht dekodiert werden.",

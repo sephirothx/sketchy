@@ -510,6 +510,8 @@ class AuditTargetType(StrEnum):
     PROMPT_LIST = "prompt_list"
     PROMPT_VERSION = "prompt_version"
     ROOM = "room"
+    # A turn's drawing, hidden from or released to the Gallery (#524).
+    DRAWING = "drawing"
     APP_CONFIG = "app_config"
     BUG_REPORT = "bug_report"
 
@@ -607,3 +609,14 @@ DEFAULT_USER_KEY_BINDINGS = {
     "brushIncrease": ["]"],
     "undo": ["z"],
 }
+
+
+class GalleryShelfDecision(StrEnum):
+    """A moderator's answer about one drawing's place in the Gallery (#524):
+    released onto the lobby's shelf, or hidden from the Gallery altogether."""
+
+    RELEASED = "released"
+    HIDDEN = "hidden"
+
+
+GALLERY_SHELF_DECISIONS = tuple(decision.value for decision in GalleryShelfDecision)

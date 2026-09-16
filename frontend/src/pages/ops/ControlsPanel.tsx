@@ -15,9 +15,11 @@ import {
   roleSearchStatus,
   searchPlayers,
   shutdownBlocked,
+  readGalleryShelfReview,
   readLiveRooms,
   readMaintenance,
   readPromptListReview,
+  setGalleryShelfReview,
   setMaintenance,
   setPromptListReview,
   setPlayerRole,
@@ -37,9 +39,11 @@ button in a row of sliders is a button pressed by accident. */
 export function ControlsPanel() {
   const [maintenance, setMaintenanceState] = useState<MaintenanceState | null>(null);
   const [publicationReview, setPublicationReview] = useState<boolean | null>(null);
+  const [shelfReview, setShelfReview] = useState<boolean | null>(null);
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
   const [reason, setReason] = useState("");
   const [reviewReason, setReviewReason] = useState("");
+  const [shelfReason, setShelfReason] = useState("");
   const [shutdownReason, setShutdownReason] = useState("");
   const [drainSeconds, setDrainSeconds] = useState("");
   const [confirmingShutdown, setConfirmingShutdown] = useState(false);
@@ -79,6 +83,11 @@ export function ControlsPanel() {
       .then((state) => setPublicationReview(state.review))
       .catch((failure) =>
         fail(failure, "Could not read the publication-review setting."),
+      );
+    void readGalleryShelfReview()
+      .then((state) => setShelfReview(state.review))
+      .catch((failure) =>
+        fail(failure, "Could not read the gallery-shelf-review setting."),
       );
     void readLiveRooms()
       .then((result) => setRooms(result.rooms))
@@ -267,6 +276,46 @@ export function ControlsPanel() {
             }
           >
             {publicationReview ? "Stop holding publications" : "Hold new publications"}
+          </button>
+        </div>
+      </section>
+
+      <section className="ops-card" aria-label="Gallery shelf">
+        <div className="ops-card-head">
+          <div>
+            <h2>Gallery shelf</h2>
+            <p className="ops-card-note">
+              The gallery publishes after the fact. Holding the shelf means the
+              six drawings on the lobby&rsquo;s front page are released by a
+              moderator first; the gallery page is not held.
+            </p>
+          </div>
+        </div>
+        <div className="ops-filters">
+          <label htmlFor="ops-shelf-reason">Reason</label>
+          <input
+            id="ops-shelf-reason"
+            value={shelfReason}
+            placeholder="front page abuse"
+            onChange={(change) => setShelfReason(change.target.value)}
+          />
+          <button
+            type="button"
+            className={
+              shelfReview ? "btn btn-primary btn-compact" : "btn btn-secondary btn-compact"
+            }
+            disabled={busy || shelfReview === null}
+            data-testid="ops-gallery-shelf-review"
+            onClick={() =>
+              run(
+                () => setGalleryShelfReview(!shelfReview, shelfReason),
+                shelfReview
+                  ? "The lobby shelf shows the week's top drawings again."
+                  : "The lobby shelf now waits for a moderator's release.",
+              )
+            }
+          >
+            {shelfReview ? "Stop holding the shelf" : "Hold the lobby shelf"}
           </button>
         </div>
       </section>

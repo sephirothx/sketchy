@@ -1497,11 +1497,15 @@
    "promptCount",
    "publishedAt",
    "reportIds",
+   "turnId",
    "userId"
   ],
   "api.moderation:create_warning": [
    "createdAt",
    "userId"
+  ],
+  "api.moderation:decide_gallery_drawing": [
+   "turnId"
   ],
   "api.moderation:list_closed_cases": [
    "hasMore"
@@ -1524,6 +1528,9 @@
   ],
   "api.moderation:remove_reported_avatar": [
    "blockedUntil"
+  ],
+  "api.moderation:report_gallery_drawing": [
+   "createdAt"
   ],
   "api.moderation:reports_reviewed": [
    "reportIds"

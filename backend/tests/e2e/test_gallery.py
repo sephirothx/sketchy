@@ -1,10 +1,13 @@
 """The Gallery (#524) end to end: two players finish a public game, and a
 third account that was never in it finds the drawing on `/gallery`, opens
 it, and reacts - counted, unnamed. A visitor with no session sees no
-gallery at all."""
+gallery at all. A report filed from the Gallery reaches the moderation
+queue with its drawing, and a moderator hides the drawing from there."""
 from __future__ import annotations
 
 from playwright.async_api import async_playwright, expect
+
+from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import (
     BASE_URL,
     join_by_code,
@@ -15,6 +18,7 @@ from tests.e2e.lobby_helpers import (
     save_room_settings,
     use_guest_name,
 )
+from tests.e2e.staff_helpers import set_role
 from tests.e2e.test_pinned_drawings import scribble
 from tests.e2e.test_profile_page import choose_prompt
 
@@ -99,6 +103,20 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await expect(stranger.locator(".drawing-recap")).to_have_count(0)
             await expect(ours[0].locator(".reaction-count")).to_have_text("1")
 
+            # Report it from the Gallery (R-GAL-08): the turn is named, the
+            # drawing is copied in, and the drawer is resolved by the server.
+            await ours[0].get_by_role("button").first.click()
+            await stranger.locator(".drawing-recap").wait_for()
+            await stranger.locator('[data-testid="gallery-report"]').click()
+            dialog = stranger.locator('[data-testid="report-drawing-dialog"]')
+            await dialog.wait_for()
+            await dialog.locator("textarea").fill("Not for a lobby.")
+            await dialog.locator('[data-testid="report-drawing-send"]').click()
+            await dialog.get_by_role("button", name="Done").wait_for()
+            await dialog.get_by_role("button", name="Done").click()
+            await stranger.keyboard.press("Escape")
+            await expect(stranger.locator(".drawing-recap")).to_have_count(0)
+
             # Top over the week still lists it, with its reaction counted.
             await stranger.locator('[data-testid="gallery-sort"]').get_by_role("button", name="Top").click()
             await stranger.locator('[data-testid="gallery-window"]').get_by_role("button", name="This week").click()
@@ -123,6 +141,36 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await shelf.locator('[data-testid="gallery-card"]').first.wait_for()
             shelf_cards = await shelf.locator('[data-testid="gallery-card"]').count()
             assert 1 <= shelf_cards <= 6, shelf_cards
+
+            # A moderator finds the report with its drawing, and hides the
+            # drawing from the gallery from there (R-GAL-09); the stranger's
+            # gallery loses it, the drawer's own history keeps it.
+            moderator_context = await browser.new_context()
+            moderator = await moderator_context.new_page()
+            await moderator.goto(BASE_URL)
+            await use_guest_name(moderator, "GalModerator")
+            await register_account(moderator, "galmoderator")
+            await set_role("galmoderator", UserRole.MODERATOR.value)
+            await moderator.goto(f"{BASE_URL}/moderation")
+            case = moderator.locator(".mod-queue-item", has_text="Gal")
+            await case.first.wait_for()
+            await case.first.click()
+            figure = moderator.locator('[data-testid="mod-drawing"]')
+            await figure.wait_for()
+            await figure.locator("canvas").wait_for()
+            await moderator.locator(".mod-note textarea").fill("Not for the lobby.")
+            await moderator.locator('[data-testid="gallery-hide-from-report"]').click()
+            await moderator.wait_for_selector('[role="status"]:has-text("Hidden from the gallery")')
+            await moderator_context.close()
+
+            checker_context = await browser.new_context()
+            checker = await checker_context.new_page()
+            await checker.goto(BASE_URL)
+            await use_guest_name(checker, "GalChecker")
+            await checker.goto(f"{BASE_URL}/gallery?sort=new")
+            await checker.locator('[data-testid="gallery-grid"], [data-testid="gallery-signed-out"], .gallery-empty').first.wait_for()
+            await expect(checker.locator('[data-testid="gallery-card"]').filter(has_text=prompts[0])).to_have_count(0)
+            await checker_context.close()
 
             # No session: no gallery and no shelf (R-GAL-02).
             anonymous_context = await browser.new_context()
