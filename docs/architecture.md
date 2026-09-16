@@ -1844,10 +1844,10 @@ wrapper, the same mechanism as the phone. `.canvas-area` is capped at the
 column rather than sized to it, because the turn-results scrim is `inset: 0` on
 it. Below 640px tall the room is the ordinary scrolling page again.
 
-The lobby takes the steps from 1500px: rooms, who is online and the chat
-become three columns, the two people panels at the room's side-column widths
-and the chat on the far side as it is in the room, and the room list becomes a
-grid two cards across, three at the widest step. Every row of that grid is
+The lobby takes the steps from 1500px: the rooms and the people become two
+columns, who is online stacked over the chat at the room's chat width, the chat
+taking the larger share of the height, and the room list becomes a grid three
+cards across, four at the widest step. Every row of that grid is
 placed by hand with no row gap, because a gap would open above a first-run
 block or an error that is not there. Create a room does not widen its form,
 which is read down a column: from 1200px the summary strip under it becomes a
