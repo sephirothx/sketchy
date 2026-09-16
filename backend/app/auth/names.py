@@ -46,3 +46,14 @@ def validate_name(value: object) -> str:
     if name.lower() in RESERVED_NAMES:
         raise NameError_("That name is reserved. Please choose another.")
     return name
+
+
+def fold_guest_name(name: str) -> str:
+    """The form two names are compared in when deciding they are the same.
+
+    Lowercase, the way usernames are compared (`ix_users_username_lower`), so
+    "Asd" and "asd" are one name for a guest as they are for an account. The
+    name rule admits ASCII letters, digits, `_` and `-` only, so lowercasing
+    is the whole of case folding here.
+    """
+    return name.lower()

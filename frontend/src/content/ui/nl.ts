@@ -155,6 +155,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   already_a_player: "Je bent al speler.",
   registered_name_fixed: "Geregistreerde spelers spelen onder hun gebruikersnaam.",
   name_taken_by_account: "Deze naam hoort bij een geregistreerde speler.",
+  name_in_use: "Iemand die online is, speelt al onder die naam. Kies een andere.",
   guests_cannot_choose_color: "Maak een account om een naamkleur te kiezen.",
   suggestion_inactive: "Deze suggestie is niet meer actief.",
   drawing_not_found: "Tekening niet gevonden.",
@@ -969,6 +970,8 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameInUse: (p: { name: string }) =>
+      `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
     couldNotSaveThatNamePlease: "Deze naam kon niet opgeslagen worden. Probeer het nog eens.",
     keepYourUsernameYourStatsEvery: "Houd je gebruikersnaam en je statistieken op elk apparaat.",
     createAccount: "Een account maken",

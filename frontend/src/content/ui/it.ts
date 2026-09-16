@@ -155,6 +155,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   already_a_player: "Sei già un giocatore.",
   registered_name_fixed: "I giocatori registrati giocano con il loro nome utente.",
   name_taken_by_account: "Questo nome appartiene a un giocatore registrato.",
+  name_in_use: "Qualcuno online sta già giocando con quel nome. Scegline un altro.",
   guests_cannot_choose_color: "Crea un account per scegliere un colore del nome.",
   suggestion_inactive: "Questo suggerimento non è più attivo.",
   drawing_not_found: "Disegno non trovato.",
@@ -969,6 +970,8 @@ export const IT: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameInUse: (p: { name: string }) =>
+      `Qualcuno online sta già giocando come «${p.name}». Scegli un altro nome per continuare a giocare.`,
     couldNotSaveThatNamePlease: "Non è stato possibile salvare questo nome. Riprova.",
     keepYourUsernameYourStatsEvery: "Tieni il tuo nome utente e le tue statistiche su ogni dispositivo.",
     createAccount: "Crea un account",

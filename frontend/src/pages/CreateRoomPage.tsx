@@ -338,6 +338,9 @@ export function CreateRoomPage() {
         navigate(`/room/${session.code}`);
         return;
       }
+      // A guest whose name somebody online took first (R-ACCT-09): the
+      // first-run block this page shows for a missing name asks for another.
+      if (response.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
       setError(refusalText(response, ui.createRoomPage.failedCreateRoom));
     } catch (createError) {
       setError(socketRequestErrorMessage(createError, ui.createRoomPage.createTheRoom));

@@ -30,6 +30,11 @@ export interface AuthUser {
   pendingRole: "moderator" | "admin" | null;
   createdAt: string | null;
   lastLoginAt: string | null;
+  /** A guest whose name somebody online took while they were away, and who
+      arrived first (R-ACCT-09). Only `GET /api/auth/me` says so, and a
+      refusal with `name_in_use` sets it; choosing a new name clears it,
+      because the account the server hands back carries no such flag. */
+  nameInUse?: boolean;
 }
 
 /** Thrown when an action needs a name and the draft cannot supply one. */
@@ -74,6 +79,9 @@ interface AuthStore {
    * whatever they are doing to learn something the socket already told them.
    */
   applyPendingRole: (pendingRole: AuthUser["pendingRole"]) => void;
+  /** Record that the server refused this guest's name because somebody who
+      arrived first is using it, so every place that asks for a name asks. */
+  markNameInUse: () => void;
   setDisplayName: (displayName: string) => Promise<AuthUser>;
   setNameColor: (nameColor: string) => Promise<AuthUser>;
   register: (username: string, password: string, email?: string) => Promise<AuthUser>;
@@ -191,7 +199,7 @@ let inFlightFetchMe: Promise<AuthUser | null> | null = null;
  * for the name; these controls wait for it.
  */
 export function needsIdentity(user: AuthUser | null): boolean {
-  return !user || (user.isAnonymous && !user.displayName);
+  return !user || (user.isAnonymous && (!user.displayName || Boolean(user.nameInUse)));
 }
 
 export function currentPlayerName(): string {
@@ -286,6 +294,9 @@ export const useAuthStore = create<AuthStore>((set, get) => {
 
   applyPendingRole: (pendingRole) =>
     set((state) => (state.user ? { user: { ...state.user, pendingRole } } : {})),
+
+  markNameInUse: () =>
+    set((state) => (state.user?.isAnonymous ? { user: { ...state.user, nameInUse: true } } : {})),
 
   setDisplayName: async (displayName) => {
     const had = get().user;

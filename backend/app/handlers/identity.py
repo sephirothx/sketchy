@@ -7,6 +7,8 @@ from uuid import UUID
 from app.auth.names import NameError_, validate_name
 from app.db.models import UserSettings
 from app.handlers.context import HandlerContext
+from app.refusals import ErrorCode
+from app.services.guest_names import online_guest_holding
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,13 @@ class PlayerIdentity:
 
 class IdentityError(ValueError):
     """A name the caller is not allowed to play under."""
+
+    def __init__(self, message: str, error_code: ErrorCode = ErrorCode.INVALID_NICKNAME):
+        super().__init__(message)
+        self.error_code = error_code
+
+
+NAME_IN_USE_MESSAGE = "Someone online is already playing under that name. Choose another."
 
 
 async def resolve_identity(
@@ -78,6 +87,17 @@ async def resolve_identity(
             # offers to create or join, so reaching here means something went
             # around the UI - never seat a nameless player.
             raise IdentityError("Choose a display name before joining a room.")
+        # Somebody who arrived first is online under this name, so this guest
+        # came back to find it taken (R-ACCT-09). They choose another before
+        # taking a seat, rather than sitting beside their namesake.
+        if await online_guest_holding(
+            user.display_name,
+            claimant_id=user.id,
+            registry=getattr(ctx, "presence", None),
+            user_repo=ctx.user_repo,
+            choosing=False,
+        ):
+            raise IdentityError(NAME_IN_USE_MESSAGE, ErrorCode.NAME_IN_USE)
         return PlayerIdentity(
             user_id=user.id,
             nickname=user.display_name,
@@ -96,6 +116,14 @@ async def resolve_identity(
         owner = await ctx.user_repo.get_by_username(nickname)
         if owner is not None and not owner.is_anonymous:
             raise IdentityError("That username belongs to a registered player.")
+        if await online_guest_holding(
+            nickname,
+            claimant_id=None,
+            registry=getattr(ctx, "presence", None),
+            user_repo=ctx.user_repo,
+            choosing=True,
+        ):
+            raise IdentityError(NAME_IN_USE_MESSAGE, ErrorCode.NAME_IN_USE)
 
     return PlayerIdentity(
         user_id=user_id,

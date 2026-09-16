@@ -43,6 +43,11 @@ export function useRoomEntry(code: string) {
           nameColor,
           colorblindSafeColors,
           asSpectator: mode === "spectator",
+        }).then((response) => {
+          // Somebody who arrived first holds this guest's name (R-ACCT-09):
+          // the refusal says so, and the name field it asks for appears.
+          if (response.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
+          return response;
         }),
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,

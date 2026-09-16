@@ -70,6 +70,7 @@ class ErrorCode(StrEnum):
     ALREADY_A_PLAYER = "already_a_player"
     REGISTERED_NAME_FIXED = "registered_name_fixed"
     NAME_TAKEN_BY_ACCOUNT = "name_taken_by_account"
+    NAME_IN_USE = "name_in_use"
     GUESTS_CANNOT_CHOOSE_COLOR = "guests_cannot_choose_color"
     SUGGESTION_INACTIVE = "suggestion_inactive"
     DRAWING_NOT_FOUND = "drawing_not_found"

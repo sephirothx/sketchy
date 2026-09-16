@@ -821,6 +821,23 @@ class SqlAlchemyUserRepository(UserRepository):
             user = result.scalar_one_or_none()
             return _to_user_data(user) if user else None
 
+    async def find_guest_named(self, name: str, among_user_ids: Sequence[str]) -> str | None:
+        clean = name.strip()
+        ids = [db_id for value in among_user_ids if (db_id := _optional_entity_id(value)) is not None]
+        if not clean or not ids:
+            return None
+        async with self._session_factory() as session:
+            found = await session.scalar(
+                select(User.id)
+                .where(
+                    User.id.in_(ids),
+                    User.state == AccountState.ANONYMOUS.value,
+                    func.lower(User.display_name) == clean.lower(),
+                )
+                .limit(1)
+            )
+            return _public_id(found) if found is not None else None
+
     async def get_credentials_by_username(self, username: str) -> UserCredentials | None:
         clean = username.strip()
         if not clean:

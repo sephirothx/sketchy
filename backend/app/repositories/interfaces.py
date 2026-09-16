@@ -815,6 +815,16 @@ class UserRepository(ABC):
         ...
 
     @abstractmethod
+    async def find_guest_named(self, name: str, among_user_ids: Sequence[str]) -> str | None:
+        """The id of a guest among these accounts whose name matches, ignoring case.
+
+        Bounded by the ids rather than a scan of every guest ever: the caller
+        passes the accounts online (R-ACCT-09), and a guest name is only unique
+        among them.
+        """
+        ...
+
+    @abstractmethod
     async def get_credentials_by_username(self, username: str) -> UserCredentials | None:
         """Fetch user authentication credentials by case-insensitive username for auth verification."""
         ...

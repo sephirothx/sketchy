@@ -41,6 +41,8 @@ from app.handlers.payloads import (
 )
 from app.services.presence import LOBBY_CHANNEL, PresenceIdentity
 from app.handlers.refusals import ErrorCode
+from app.handlers.identity import NAME_IN_USE_MESSAGE
+from app.services.guest_names import online_guest_holding
 
 NAME_REQUIRED = "Choose a name to chat."
 NOT_WATCHING = "Open the lobby to chat."
@@ -208,6 +210,17 @@ async def send_lobby_chat(ctx: HandlerContext, sid, data):
     identity = await _identity_of(ctx, user_id)
     if identity is None:
         return {"ok": False, "errorCode": ErrorCode.IDENTITY_UNAVAILABLE, "error": IDENTITY_UNAVAILABLE}
+    # A guest who came back to find their name held by somebody who arrived
+    # first is left out of the online list until they choose another
+    # (R-ACCT-09); a line signed with it would put the namesake back in view.
+    if identity.is_anonymous and await online_guest_holding(
+        identity.display_name,
+        claimant_id=user_id,
+        registry=ctx.presence,
+        user_repo=ctx.user_repo,
+        choosing=False,
+    ):
+        return {"ok": False, "errorCode": ErrorCode.NAME_IN_USE, "error": NAME_IN_USE_MESSAGE}
     # One instant for the wire and for the retained row, so the time a
     # watcher sees beside the line is the time a moderator sees on it.
     sent_at = datetime.now(timezone.utc)

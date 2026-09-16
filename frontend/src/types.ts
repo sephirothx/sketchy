@@ -537,6 +537,7 @@ export type ErrorCode =
   | "already_a_player"
   | "registered_name_fixed"
   | "name_taken_by_account"
+  | "name_in_use"
   | "guests_cannot_choose_color"
   | "suggestion_inactive"
   | "drawing_not_found"
