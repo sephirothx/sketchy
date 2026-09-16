@@ -1,19 +1,21 @@
-import { Fragment, useState } from "react";
+import { useState, type ReactNode } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { ChevronRightIcon, CopyIcon, LinkIcon, PlusIcon } from "./icons";
+import { BulbIcon, ClockIcon, CopyIcon, DeckIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon, RoundsIcon, TrophyIcon, UsersIcon } from "./icons";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { describeDrawingRules } from "../lib/drawingRules";
-import { hintLabelFor } from "../lib/roomSetup";
+import { DEFAULT_HINT_MODE, hintLabelFor } from "../lib/roomSetup";
+import { promptLanguageLabel } from "../lib/promptLanguages";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import type {
+  PromptLanguage,
   ColorMode,
   DrawingToolGroup,
   HintMode,
@@ -40,6 +42,7 @@ interface WaitingRoomPanelProps {
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
   promptListSlugs?: string[];
+  promptLanguage: PromptLanguage;
   players: PlayerInfo[];
   myPlayerId: string | null;
   isHost: boolean;
@@ -115,23 +118,58 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     await copyToClipboard(url, ui.waitingRoomPanel.inviteLink);
   }
 
-  const promptsValue = props.customPromptsOnly
-    ? ui.waitingRoomPanel.customPromptsOnlyCustomPromptCount({ customPromptCount: props.customPromptCount })
-    : props.customPromptCount > 0
-      ? ui.waitingRoomPanel.customPromptCountCustomPromptsCuratedLists({ customPromptCount: props.customPromptCount })
+  // The room's six facts (#580), in the order every place that describes a
+  // room uses. The three that are a choice rather than a number are tinted
+  // when the host moved them off a new room's default, so an unusual room
+  // reads as one before anybody starts it.
+  const promptsValue = [
+    promptLanguageLabel(props.promptLanguage),
+    props.customPromptCount > 0
+      ? props.customPromptsOnly
+        ? ui.waitingRoomPanel.customOnlyShort({ count: props.customPromptCount })
+        : ui.waitingRoomPanel.customShort({ count: props.customPromptCount })
       : props.promptListSlugs && props.promptListSlugs.length > 1
-        ? ui.waitingRoomPanel.promptListSlugsCountCuratedPromptLists({ promptListSlugsCount: props.promptListSlugs.length })
-        : null;
-  const settingsFacts = [
-    ui.waitingRoomPanel.roundCount({ count: props.rounds }),
-    `${props.drawingSeconds}s`,
-    hintLabelFor(props.hintMode, props.hideMaskedPrompt),
-    props.scoringMode === "none" ? ui.waitingRoomPanel.noScoring : null,
-    promptsValue,
+        ? ui.waitingRoomPanel.listsShort({ count: props.promptListSlugs.length })
+        : null,
+  ].filter(Boolean).join(" · ");
+  const facts: { key: string; icon: ReactNode; label: string; value: string; changed?: boolean }[] = [
+    {
+      key: "players",
+      icon: <UsersIcon size={18} />,
+      label: ui.roomPlayersPanel.players,
+      value: ui.waitingRoomPanel.rosterCount({ here: activePlayers.length, capacity: props.maxPlayers }),
+    },
+    { key: "rounds", icon: <RoundsIcon size={18} />, label: ui.roomSetupForm.rounds, value: String(props.rounds) },
+    { key: "drawing-time", icon: <ClockIcon size={18} />, label: ui.roomSetupForm.drawingTime, value: `${props.drawingSeconds}s` },
+    {
+      key: "scoring",
+      icon: <TrophyIcon size={18} />,
+      label: ui.roomSetupForm.scoring,
+      value: props.scoringMode === "none"
+        ? ui.roomSetup.noScoring
+        : props.scoringMode === "pressure" ? ui.roomSetup.pressure : ui.roomSetup.default,
+      changed: props.scoringMode !== "default",
+    },
+    {
+      key: "hints",
+      icon: <BulbIcon size={18} />,
+      label: ui.roomSetupForm.hints,
+      value: hintLabelFor(props.hintMode, props.hideMaskedPrompt),
+      changed: props.hideMaskedPrompt || props.hintMode !== DEFAULT_HINT_MODE,
+    },
+    {
+      key: "prompts",
+      icon: <DeckIcon size={18} />,
+      label: ui.roomSetupForm.prompts,
+      value: promptsValue,
+      changed: props.customPromptCount > 0 || Boolean(props.promptListSlugs && props.promptListSlugs.length > 1),
+    },
+  ];
+  // What else the host changed, said once and only when there is something.
+  const otherRules = [
     describeDrawingRules(props.allowedTools, props.colorMode),
     props.spectatorsSeePrompt ? ui.waitingRoomPanel.spectatorsSeeThePrompt : null,
-  ].filter((fact): fact is string => Boolean(fact));
-
+  ].filter((rule): rule is string => Boolean(rule));
 
   return (
     <main className="waiting-room" data-testid="waiting-room">
@@ -238,39 +276,6 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </ul>
       </section>}
 
-      {/* One line, and a way in. Eight chips restating what the host chose a
-          minute ago spent 250px saying it twice. */}
-      {isHost ? (
-        <button
-          type="button"
-          className="waiting-card waiting-settings-row"
-          onClick={() => setSettingsOpen(true)}
-        >
-          <span className="waiting-settings-summary">
-            {settingsFacts.map((fact, index) => (
-              <Fragment key={fact}>
-                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                <span>{fact}</span>
-              </Fragment>
-            ))}
-          </span>
-          <span className="waiting-settings-edit">
-            {ui.waitingRoomPanel.edit} <ChevronRightIcon size={16} />
-          </span>
-        </button>
-      ) : (
-        <p className="waiting-card waiting-settings-row is-static">
-          <span className="waiting-settings-summary">
-            {settingsFacts.map((fact, index) => (
-              <Fragment key={fact}>
-                {index > 0 && <span className="waiting-settings-sep" aria-hidden="true"> · </span>}
-                <span>{fact}</span>
-              </Fragment>
-            ))}
-          </span>
-        </p>
-      )}
-
       {/* Players get a read-only look at the prompts; the host has the editor
           itself, and spectators are kept away from spoilers. */}
       {props.customPromptCount > 0 && !me?.isSpectator && !isHost && (
@@ -292,43 +297,77 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         </div>
       )}
 
-      {/* The button and nothing else. What was around it — a heading saying
-          the host was ready, and a paragraph explaining why they were not —
-          is either obvious or belongs on the button itself. */}
-      <section className="waiting-card waiting-start-card" aria-live="polite">
-        {isHost ? (
-          <>
-            {props.startError && <p className="waiting-start-error">{props.startError}</p>}
-            <button
-              type="button"
-              className="btn btn-success btn-big waiting-start-button"
-              disabled={!canStart || props.startBusy}
-              onClick={props.onStart}
-              title={canStart ? undefined : startBlockedReason}
+      {/* The room's rules and the way to start, in one card (#580): the facts
+          are what the host checks before pressing Start, so they sit right
+          above it. Six cells rather than one line of text, because a line
+          said them in a different order and wording from every other place
+          a room is described. On a phone the footer docks to the bottom of
+          the screen, as Start did - it sat below the fold otherwise. */}
+      <section className="waiting-card waiting-rules-card" aria-labelledby="waiting-rules-title">
+        <h2 id="waiting-rules-title" className="visually-hidden">{ui.inviteEntryPage.roomRules}</h2>
+        <dl className="waiting-facts" data-testid="waiting-facts">
+          {facts.map((fact) => (
+            <div
+              key={fact.key}
+              className={`waiting-fact${fact.changed ? " is-changed" : ""}`}
+              data-fact={fact.key}
             >
-              {props.startBusy
-                ? ui.waitingRoomPanel.starting
-                : canStart
-                  ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
-                  : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
-            </button>
-          </>
-        ) : (
-          <p className="waiting-start-waiting">
-            {host
-              ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
-              host: (
-                <span
-                  className={playerNameClass(host.isAnonymous)}
-                  style={playerNameStyle(host.nameColor, host.isAnonymous)}
-                >
-                  {host.nickname}
-                </span>
-              ),
-            })}</>
-              : ui.waitingRoomPanel.waitingForAHost}
+              <span className="waiting-fact-icon" aria-hidden="true">{fact.icon}</span>
+              <dd className="waiting-fact-value">{fact.value}</dd>
+              <dt className="waiting-fact-label">{fact.label}</dt>
+            </div>
+          ))}
+        </dl>
+        {otherRules.length > 0 && (
+          <p className="waiting-rules-also">
+            <span>{ui.waitingRoomPanel.also}</span>
+            {otherRules.map((rule) => <span key={rule} className="chip chip-primary">{rule}</span>)}
           </p>
         )}
+        <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+          {isHost ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary waiting-rules-edit"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <PencilIcon size={15} />
+                {ui.waitingRoomPanel.editRoomRules}
+              </button>
+              {props.startError && <p className="waiting-start-error">{props.startError}</p>}
+              <button
+                type="button"
+                className="btn btn-warm btn-big waiting-start-button"
+                disabled={!canStart || props.startBusy}
+                onClick={props.onStart}
+                title={canStart ? undefined : startBlockedReason}
+              >
+                <PlayIcon size={17} />
+                {props.startBusy
+                  ? ui.waitingRoomPanel.starting
+                  : canStart
+                    ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
+                    : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
+              </button>
+            </>
+          ) : (
+            <p className="waiting-start-waiting">
+              {host
+                ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
+                host: (
+                  <span
+                    className={playerNameClass(host.isAnonymous)}
+                    style={playerNameStyle(host.nameColor, host.isAnonymous)}
+                  >
+                    {host.nickname}
+                  </span>
+                ),
+              })}</>
+                : ui.waitingRoomPanel.waitingForAHost}
+            </p>
+          )}
+        </div>
       </section>
 
       {settingsOpen && (

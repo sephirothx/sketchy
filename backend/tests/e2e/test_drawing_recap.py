@@ -61,7 +61,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             # start. This whole test is one round long.
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await save_room_settings(host)
-            await guest.get_by_text("Custom prompts only (2)").wait_for()
+            await guest.locator('[data-fact="prompts"]', has_text="2 custom only").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             pages = [host, guest]

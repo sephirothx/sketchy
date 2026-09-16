@@ -57,7 +57,7 @@ async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
             await host.get_by_label("Only use custom prompts").check()
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await save_room_settings(host)
-            await guest.get_by_text("Custom prompts only (2)").wait_for()
+            await guest.locator('[data-fact="prompts"]', has_text="2 custom only").wait_for()
             await host.get_by_role("button", name="Start game").click()
 
             # Both players guess every turn, so the game has something to say.

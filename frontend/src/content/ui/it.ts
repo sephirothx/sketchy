@@ -2315,6 +2315,14 @@ export const IT: Catalogue = {
   },
 
   waitingRoomPanel: {
+    customShort: (p: { count: number }) =>
+      `${number(p.count)} personalizzate`,
+    customOnlyShort: (p: { count: number }) =>
+      `solo ${number(p.count)} personalizzate`,
+    listsShort: (p: { count: number }) =>
+      counted(p.count, { one: "lista", other: "liste" }),
+    also: "Inoltre",
+    editRoomRules: "Modifica le regole della stanza",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "round" }),
     needMorePlayers: (p: { count: number }) =>
@@ -2334,20 +2342,12 @@ export const IT: Catalogue = {
     host: "Host",
     friend: "Amico",
     invite: "Invita",
-    edit: "Modifica",
     viewHighlights: "Guarda i momenti migliori",
     viewDrawings: "Guarda i disegni",
     spectatorsAfkAndDisconnectedPlayers: "Spettatori, assenti e giocatori disconnessi non contano per i due giocatori attivi che servono a una partita.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Entra nella mia stanza di Sketchy: ${p.code}`,
     inviteLink: "Link d’invito",
-    customPromptsOnlyCustomPromptCount: (p: { customPromptCount: number }) =>
-      `Solo parole personalizzate (${p.customPromptCount})`,
-    customPromptCountCustomPromptsCuratedLists: (p: { customPromptCount: number }) =>
-      `${p.customPromptCount} parole personalizzate + liste selezionate`,
-    promptListSlugsCountCuratedPromptLists: (p: { promptListSlugsCount: number }) =>
-      `${p.promptListSlugsCount} liste di parole selezionate`,
-    noScoring: "Senza punteggio",
     spectatorsSeeThePrompt: "Gli spettatori vedono la parola",
     publicRoom: "Stanza pubblica",
     privateRoom: "Stanza privata",
