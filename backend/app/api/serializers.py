@@ -189,6 +189,7 @@ def game_detail_payload(detail: GameDetail) -> dict:
                     {"seatId": reaction.seat_id, "emoji": reaction.emoji}
                     for reaction in r.reactions
                 ],
+                "reactionCounts": dict(r.reaction_counts),
             }
             for r in detail.turns
         ],

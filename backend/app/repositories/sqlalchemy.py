@@ -348,6 +348,24 @@ async def _identity_ids(session: AsyncSession, user_id: UUID) -> tuple[UUID, ...
     return (canonical, *aliases)
 
 
+def _reaction_state(
+    rows: Sequence[TurnDrawingReaction],
+) -> tuple[tuple[TurnDrawingReactionDetail, ...], dict[str, int]]:
+    """How a drawing's reactions are shown (R-REACT-05): the rows with a seat
+    as a list, in the order they were given, and every row as a count by
+    code - the ones given from outside the room count and are named nowhere."""
+    ordered = sorted(rows, key=lambda row: (row.created_at, row.id))
+    details = tuple(
+        TurnDrawingReactionDetail(
+            seat_id=_public_id(row.participant_id), emoji=row.emoji
+        )
+        for row in ordered
+        if row.participant_id is not None
+    )
+    counts = dict(Counter(row.emoji for row in rows))
+    return details, counts
+
+
 def _prompt_usage_hash(revision_ids: Sequence[UUID], usage: PromptUsage) -> str:
     """Canonical digest of one usage batch, to tell a retry from a conflict."""
     payload = {
@@ -1651,6 +1669,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         TurnDrawingReaction(
                             game_id=record_id,
                             turn_id=reaction_turn_id,
+                            user_id=_entity_id(reaction.user_id),
                             participant_id=reaction_seat_id,
                             emoji=reaction.emoji,
                             set_version=reaction.set_version,
@@ -1929,16 +1948,21 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
     async def set_drawing_reaction(
         self,
-        game_id: str,
+        game_id: str | None,
         turn_id: str,
         *,
         requesting_user_id: str,
         emoji: str | None,
+        from_gallery: bool = False,
     ) -> DrawingReactionResult | None:
-        db_game_id = _optional_entity_id(game_id)
+        db_game_id = _optional_entity_id(game_id) if game_id is not None else None
         db_turn_id = _optional_entity_id(turn_id)
         db_user_id = _optional_entity_id(requesting_user_id)
-        if db_game_id is None or db_turn_id is None or db_user_id is None:
+        if db_turn_id is None or db_user_id is None:
+            return None
+        if game_id is not None and db_game_id is None:
+            return None
+        if db_game_id is None and not from_gallery:
             return None
         if emoji is not None and emoji not in OFFERED_REACTION_EMOJI_CODES:
             return None
@@ -1955,23 +1979,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     or account.state != AccountState.REGISTERED.value
                 ):
                     return None
-                seat = await session.scalar(
-                    select(GameParticipant)
-                    .where(
-                        GameParticipant.game_id == db_game_id,
-                        GameParticipant.user_id.in_(identity_ids),
-                    )
-                    .order_by(GameParticipant.id)
-                    .limit(1)
-                )
-                if seat is None:
-                    return None
-                turn = await session.scalar(
+                turn_query = (
                     select(TurnRecord)
-                    .where(
-                        TurnRecord.id == db_turn_id,
-                        TurnRecord.game_id == db_game_id,
-                    )
+                    .where(TurnRecord.id == db_turn_id)
                     .options(
                         selectinload(TurnRecord.drawing).load_only(
                             TurnDrawing.status
@@ -1979,14 +1989,36 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         selectinload(TurnRecord.game),
                     )
                 )
+                if db_game_id is not None:
+                    turn_query = turn_query.where(TurnRecord.game_id == db_game_id)
+                turn = await session.scalar(turn_query)
                 if turn is None:
+                    return None
+                # The reactor's seat, when they had one: written beside the
+                # account so the room and history keep naming the reaction.
+                seat = await session.scalar(
+                    select(GameParticipant)
+                    .where(
+                        GameParticipant.game_id == turn.game_id,
+                        GameParticipant.user_id.in_(identity_ids),
+                    )
+                    .order_by(GameParticipant.id)
+                    .limit(1)
+                )
+                if from_gallery:
+                    # The gallery predicate (R-GAL-01): a public game with a
+                    # kept drawing. Not a seat - that is the point of the door.
+                    if turn.game.visibility != GameVisibility.PUBLIC.value:
+                        return None
+                    if not await self._drawing_is_shown(session, db_turn_id):
+                        return None
+                elif seat is None:
                     return None
                 # By seat and by account: a drawer who left and rejoined may
                 # hold a second seat, and a merged identity a second id.
                 if (
-                    turn.drawer_participant_id == seat.id
-                    or turn.drawer_user_id in identity_ids
-                ):
+                    seat is not None and turn.drawer_participant_id == seat.id
+                ) or turn.drawer_user_id in identity_ids:
                     return None
                 # An erased drawing takes its reactions with it and takes no
                 # new ones; there is nothing left to react to.
@@ -1999,7 +2031,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 existing = await session.scalar(
                     select(TurnDrawingReaction).where(
                         TurnDrawingReaction.turn_id == db_turn_id,
-                        TurnDrawingReaction.participant_id == seat.id,
+                        TurnDrawingReaction.user_id.in_(identity_ids),
                     )
                 )
                 delta = 0
@@ -2010,9 +2042,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 elif existing is None:
                     session.add(
                         TurnDrawingReaction(
-                            game_id=db_game_id,
+                            game_id=turn.game_id,
                             turn_id=db_turn_id,
-                            participant_id=seat.id,
+                            user_id=identity_ids[0],
+                            participant_id=seat.id if seat is not None else None,
                             emoji=emoji,
                             set_version=REACTION_SET_VERSION,
                         )
@@ -2031,26 +2064,35 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     )
                 rows = (
                     await session.scalars(
-                        select(TurnDrawingReaction)
-                        .where(TurnDrawingReaction.turn_id == db_turn_id)
-                        .order_by(
-                            TurnDrawingReaction.created_at,
-                            TurnDrawingReaction.id,
+                        select(TurnDrawingReaction).where(
+                            TurnDrawingReaction.turn_id == db_turn_id
                         )
                     )
                 ).all()
+                details, counts = _reaction_state(rows)
                 return DrawingReactionResult(
                     turn_id=_public_id(db_turn_id),
-                    seat_id=_public_id(seat.id),
+                    seat_id=_public_id(seat.id) if seat is not None else None,
                     emoji=emoji,
-                    reactions=tuple(
-                        TurnDrawingReactionDetail(
-                            seat_id=_public_id(row.participant_id),
-                            emoji=row.emoji,
-                        )
-                        for row in rows
-                    ),
+                    reactions=details,
+                    reaction_counts=counts,
                 )
+
+    async def _drawing_is_shown(self, session: AsyncSession, turn_id: UUID) -> bool:
+        """Whether the turn's drawing is kept and readable: the availability
+        half of the gallery predicate (R-GAL-01), checked on the metadata so
+        no blob is read to answer it."""
+        return bool(
+            await session.scalar(
+                select(func.count())
+                .select_from(TurnDrawing)
+                .where(
+                    TurnDrawing.turn_id == turn_id,
+                    TurnDrawing.status == TurnDrawingStatus.READY.value,
+                    TurnDrawing.payload.is_not(None),
+                )
+            )
+        )
 
     async def set_profile_pins(
         self,
@@ -2221,12 +2263,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             public,
         )
 
-    async def get_profile_pins(self, profile_user_id: str) -> tuple[ProfilePinEntry, ...]:
+    async def get_profile_pins(
+        self, profile_user_id: str, *, viewer_user_id: str | None = None
+    ) -> tuple[ProfilePinEntry, ...]:
         db_profile_user_id = _optional_entity_id(profile_user_id)
         if db_profile_user_id is None:
             return ()
+        db_viewer_id = (
+            _optional_entity_id(viewer_user_id) if viewer_user_id is not None else None
+        )
         async with self._session_factory() as session:
             canonical = await _canonical_user_id(session, db_profile_user_id)
+            viewer_ids: tuple[UUID, ...] = (
+                await _identity_ids(session, db_viewer_id) if db_viewer_id else ()
+            )
             rows = (
                 await session.execute(
                     select(ProfileDrawingPin, TurnRecord)
@@ -2249,29 +2299,34 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     .order_by(ProfileDrawingPin.position)
                 )
             ).all()
-        return tuple(
-            ProfilePinEntry(
-                turn_id=_public_id(pin.turn_id),
-                position=pin.position,
-                round_number=turn.round_number,
-                turn_number=turn.turn_number,
-                drawer_display_name=turn.drawer_display_name_snapshot,
-                drawer_name_color=turn.drawer_name_color_snapshot,
-                drawer_is_anonymous=turn.drawer_is_anonymous_snapshot,
-                prompt=turn.prompt,
-                stroke_count=turn.stroke_count,
-                reactions=tuple(
-                    TurnDrawingReactionDetail(
-                        seat_id=_public_id(reaction.participant_id),
-                        emoji=reaction.emoji,
-                    )
-                    for reaction in sorted(
-                        turn.reactions, key=lambda r: (r.created_at, r.id)
-                    )
-                ),
+        entries = []
+        for pin, turn in rows:
+            details, counts = _reaction_state(turn.reactions)
+            entries.append(
+                ProfilePinEntry(
+                    turn_id=_public_id(pin.turn_id),
+                    position=pin.position,
+                    round_number=turn.round_number,
+                    turn_number=turn.turn_number,
+                    drawer_display_name=turn.drawer_display_name_snapshot,
+                    drawer_name_color=turn.drawer_name_color_snapshot,
+                    drawer_is_anonymous=turn.drawer_is_anonymous_snapshot,
+                    prompt=turn.prompt,
+                    stroke_count=turn.stroke_count,
+                    reactions=details,
+                    reaction_counts=counts,
+                    my_reaction=next(
+                        (
+                            reaction.emoji
+                            for reaction in turn.reactions
+                            if reaction.user_id in viewer_ids
+                        ),
+                        None,
+                    ),
+                    drawn_by_me=turn.drawer_user_id in viewer_ids,
+                )
             )
-            for pin, turn in rows
-        )
+        return tuple(entries)
 
     async def get_pinned_drawing(
         self, profile_user_id: str, turn_id: str
@@ -2574,16 +2629,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         ),
                         prompt_source_kind=r.prompt_source_kind,
                         participant_outcomes=outcome_details,
-                        reactions=[
-                            TurnDrawingReactionDetail(
-                                seat_id=_public_id(reaction.participant_id),
-                                emoji=reaction.emoji,
-                            )
-                            for reaction in sorted(
-                                r.reactions,
-                                key=lambda value: (value.created_at, value.id),
-                            )
-                        ],
+                        reactions=list(_reaction_state(r.reactions)[0]),
+                        reaction_counts=_reaction_state(r.reactions)[1],
                         prompt_offers=[
                             PromptOfferDetail(
                                 position=offer.position,

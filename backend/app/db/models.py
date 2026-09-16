@@ -3243,13 +3243,20 @@ class TurnParticipantOutcome(Base):
 class TurnDrawingReaction(Base):
     """One registered player's reaction to the drawing made in one turn (#520).
 
-    A reaction is a fact about the drawing, so it hangs off the turn and the
-    reactor's participant seat rather than off an account: the seat already
-    carries the frozen presentation (R-PRIV-08) and becomes the **Deleted
-    player** tombstone with everything else, so a deleted reactor's reaction
-    keeps counting. The unique constraint is the one-per-account-per-drawing
-    rule - a game holds at most one seat per linked account, so no alias
-    resolution sits behind it. Guests cannot react, so a guest-to-account merge
+    A reaction is a fact about the drawing, so it hangs off the turn. It is
+    keyed by the reactor's **account** (#524): anyone signed in may react from
+    the Gallery or a pinned shelf, and most of them never sat in the game, so
+    the seat cannot be the key. The seat is kept beside the account when the
+    reactor had one - it carries the frozen presentation (R-PRIV-08) that names
+    the reaction in the room and in history - and is null for an outsider,
+    whose reaction only counts (R-REACT-05). A deleted account is a tombstoned
+    row, never a removed one, so the account key still holds and the reaction
+    keeps counting (R-REACT-10).
+
+    The unique constraint on `(turn, user)` is the one-per-account-per-drawing
+    rule; the caller resolves identity aliases before the write, so a person
+    merged from two identities holds one row. The seat constraint stays for
+    the rows that carry one. Guests cannot react, so a guest-to-account merge
     (R-ACCT-04) brings none with it.
 
     `emoji` is a stable code from `ReactionEmoji`, never the glyph, and
@@ -3260,6 +3267,11 @@ class TurnDrawingReaction(Base):
 
     __tablename__ = "turn_drawing_reactions"
     __table_args__ = (
+        UniqueConstraint(
+            "turn_id",
+            "user_id",
+            name="uq_turn_drawing_reactions_turn_user",
+        ),
         UniqueConstraint(
             "turn_id",
             "participant_id",
@@ -3297,8 +3309,16 @@ class TurnDrawingReaction(Base):
     turn_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
-    participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+    # The reactor's account, resolved to its canonical identity by the writer.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # The reactor's seat when they sat in the game; null from the Gallery.
+    participant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=True, index=True
     )
     emoji: Mapped[str] = mapped_column(String(16), nullable=False)
     set_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -3314,7 +3334,7 @@ class TurnDrawingReaction(Base):
         foreign_keys=[game_id, turn_id],
     )
     # Flush-ordering edge (see TurnRecord.drawer_seat).
-    participant: Mapped[GameParticipant] = relationship(
+    participant: Mapped[GameParticipant | None] = relationship(
         primaryjoin=(
             "GameParticipant.id == foreign(TurnDrawingReaction.participant_id)"
         ),

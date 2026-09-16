@@ -109,6 +109,31 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await expect(visitor.locator(".profile-shelf-item")).to_have_count(1)
             await expect(visitor.get_by_role("button", name="Unpin")).to_have_count(0)
 
+            # A stranger - registered, never in the game - reacts to the pinned
+            # drawing from the shelf through the gallery door (R-PIN-08,
+            # R-GAL-06): the tally counts it, and nobody is named.
+            stranger_context = await browser.new_context()
+            stranger = await stranger_context.new_page()
+            await stranger.goto(BASE_URL)
+            await use_guest_name(stranger, "PinStranger")
+            await register_account(stranger, "pinstranger")
+            await stranger.goto(f"{BASE_URL}/profile/{host_id}")
+            await stranger.locator('[data-testid="pinned-drawings"] .profile-shelf-open').first.click()
+            await stranger.locator(".drawing-recap").wait_for()
+            await stranger.locator('[data-testid="reaction-toggle"]').click()
+            await stranger.locator('[data-testid="reaction-option-wow"]').click()
+            await expect(
+                stranger.locator(
+                    '[data-testid="reaction-control"] .reaction-chip[data-emoji="wow"] .reaction-count'
+                )
+            ).to_have_text("1")
+            await stranger.keyboard.press("Escape")
+            await expect(stranger.locator(".drawing-recap")).to_have_count(0)
+            await expect(
+                stranger.locator('[data-testid="pinned-drawings"] .reaction-chip .reaction-count').first
+            ).to_have_text("1")
+            await stranger_context.close()
+
             # A visitor with no session sees no shelf at all (R-PIN-06).
             anonymous_context = await browser.new_context()
             anonymous = await anonymous_context.new_page()

@@ -111,11 +111,12 @@ class FakeGameHistoryRepository(GameHistoryRepository):
 
     async def set_drawing_reaction(
         self,
-        game_id: str,
+        game_id: str | None,
         turn_id: str,
         *,
         requesting_user_id: str,
         emoji: str | None,
+        from_gallery: bool = False,
     ) -> DrawingReactionResult | None:
         if self.fail:
             raise RuntimeError("database unavailable")
@@ -136,6 +137,7 @@ class FakeGameHistoryRepository(GameHistoryRepository):
                 if emoji
                 else ()
             ),
+            reaction_counts={emoji: 1} if emoji else {},
         )
 
     async def set_profile_pins(
@@ -172,7 +174,9 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     ) -> str | None:
         return None
 
-    async def get_profile_pins(self, profile_user_id: str) -> tuple[ProfilePinEntry, ...]:
+    async def get_profile_pins(
+        self, profile_user_id: str, *, viewer_user_id: str | None = None
+    ) -> tuple[ProfilePinEntry, ...]:
         return ()
 
     async def get_pinned_drawing(

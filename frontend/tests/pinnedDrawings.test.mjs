@@ -71,6 +71,9 @@ test("recap entries follow shelf order and carry no seat", () => {
       prompt: "jackpot",
       strokeCount: 12,
       reactions: [],
+      reactionCounts: {},
+      myReaction: null,
+      drawnByMe: false,
     },
   ]);
   assert.deepEqual(entries, [
