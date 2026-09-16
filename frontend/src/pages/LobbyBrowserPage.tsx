@@ -187,6 +187,9 @@ export function LobbyBrowserPage() {
   // not reading this list and should not be paying for it mid-game.
   useLobbyChannel();
   const isNarrow = useMediaQuery("(max-width: 720px)");
+  // A room to a row, with its facts in columns, once the rooms panel is wide
+  // enough to hold them (#581). The same breakpoint the lobby's columns use.
+  const isWide = useMediaQuery("(min-width: 1500px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
@@ -485,9 +488,19 @@ export function LobbyBrowserPage() {
             {ui.lobbyBrowserPage.noPublicRoomsMatchYourSearch}
           </p>
         ) : (
-          <div className="room-list">
+          <div className={`room-list${isWide ? " is-rows" : ""}`}>
+            {/* Headings for the row's columns. Hidden from assistive tech:
+                each row already says what its numbers are. */}
+            {isWide && (
+              <div className="room-list-columns" aria-hidden="true">
+                <span>{ui.publicRoomCard.columnRoom}</span>
+                <span>{ui.publicRoomCard.columnSeats}</span>
+                <span>{ui.publicRoomCard.columnLength}</span>
+                <span>{ui.publicRoomCard.columnHouseRules}</span>
+              </div>
+            )}
             {filteredRooms.map((room) => (
-              <PublicRoomCard key={room.id} room={room} busy={Boolean(pendingJoin)} pendingMode={pendingJoin?.key === room.id ? pendingJoin.mode : null} onJoin={(asSpectator) => void handleJoinRoom(room, asSpectator)} />
+              <PublicRoomCard key={room.id} room={room} busy={Boolean(pendingJoin)} pendingMode={pendingJoin?.key === room.id ? pendingJoin.mode : null} onJoin={(asSpectator) => void handleJoinRoom(room, asSpectator)} layout={isWide ? "row" : "card"} />
             ))}
           </div>
         )}

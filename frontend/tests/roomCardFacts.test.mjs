@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { gameLength, gameMinutes, houseRules } from "../src/lib/roomCardFacts.ts";
+
+const standard = {
+  id: "r1",
+  code: "ABC123",
+  name: "The Sketchy Art Class",
+  isPublic: true,
+  playerCount: 1,
+  spectatorCount: 0,
+  maxPlayers: 8,
+  isFull: false,
+  rounds: 3,
+  customPromptCount: 0,
+  customPromptsOnly: false,
+  drawingSeconds: 90,
+  hintMode: "checkpoints",
+  scoringMode: "default",
+  spectatorsSeePrompt: false,
+  hideMaskedPrompt: false,
+  allowedTools: ["brush", "fill", "shapes"],
+  colorMode: "all",
+  promptLanguage: "en",
+  state: "waiting",
+};
+
+test("a game's length matches the Create page's estimate for the same room", () => {
+  // 8 players x 3 rounds x (90s + 24s) = 2736s, about 46 minutes.
+  assert.equal(gameMinutes(standard, 8), 46);
+  assert.equal(gameMinutes({ rounds: 1, drawingSeconds: 15 }, 2), 1);
+});
+
+test("the range runs from the seats taken, never fewer than two, to a full room", () => {
+  assert.deepEqual(gameLength(standard), { low: 11, high: 46 });
+  assert.deepEqual(gameLength({ ...standard, playerCount: 5 }), { low: 29, high: 46 });
+  assert.deepEqual(gameLength({ ...standard, playerCount: 8 }), { low: 46, high: 46 });
+});
+
+test("a room on standard settings has no house rules to show", () => {
+  assert.deepEqual(houseRules(standard), []);
+});
+
+test("only the settings that differ from a new room's are named, in a fixed order", () => {
+  assert.deepEqual(
+    houseRules({
+      ...standard,
+      spectatorsSeePrompt: true,
+      customPromptCount: 40,
+      colorMode: "black_and_white",
+      allowedTools: ["brush"],
+      hintMode: "wheel",
+      scoringMode: "pressure",
+    }),
+    [
+      "Pressure scoring",
+      "Wheel of Fortune",
+      "Brush only, black and white",
+      "40 custom prompts plus defaults",
+      "Spectators can see the prompt",
+    ],
+  );
+  assert.deepEqual(houseRules({ ...standard, scoringMode: "none", hideMaskedPrompt: true }), [
+    "No scoring",
+    "Hidden prompt",
+  ]);
+  assert.deepEqual(houseRules({ ...standard, customPromptCount: 1, customPromptsOnly: true }), [
+    "1 custom prompt only",
+  ]);
+});

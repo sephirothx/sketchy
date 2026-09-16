@@ -2480,7 +2480,8 @@ A seated client checks with the server every five seconds that it still holds th
   1180 × 885, 3.5× the area it had on a 2560px monitor; the drawing itself stays 800 × 600,
   so past that size it would only get blurrier, and the extra width goes to the players and
   the chat instead. From 1500px the lobby puts the rooms beside who is online and the chat,
-  stacked in a column, with the rooms three cards across (four from 2100px); from 1200px Create a room keeps
+  stacked in a column, with one room to a row: its open seats, how long a game
+  will take, and any rules that differ from the defaults, lined up in columns; from 1200px Create a room keeps
   a card beside the form with what you are about to create, how long it runs, and the
   Create room button, in view however far down the form you are.
 - An action that expects an answer - creating a room, joining, starting, voting to restart -
