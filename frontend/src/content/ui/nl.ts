@@ -1275,6 +1275,7 @@ export const NL: Catalogue = {
     couldNotLoadTheGallery: "De galerij kon niet geladen worden.",
     couldNotLoadThisDrawing: "Deze tekening kon niet worden geladen.",
     showMore: "Meer tonen",
+    tryAgain: "Opnieuw proberen",
     openDrawing: (p: { prompt: string; drawer: string }) => `‘${p.prompt}’ van ${p.drawer} openen`,
     byDrawer: (p: { drawer: string }) => `van ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: { minute: "minuut", hour: "uur", day: "dag" }[p.unit], other: { minute: "minuten", hour: "uur", day: "dagen" }[p.unit] })} geleden`,

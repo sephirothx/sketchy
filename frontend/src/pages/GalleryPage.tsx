@@ -104,27 +104,42 @@ export function GalleryPage() {
     setSearchParams(paramsFromGalleryFilters(next), { replace: true });
   }, [setSearchParams]);
 
+  // One request at a time, held in a ref so the observer below never has to
+  // be rebuilt around it; and whether an automatic load failed, which stops
+  // the automatic loading until the reader asks again.
+  const inFlight = useRef(false);
+  const [stalled, setStalled] = useState(false);
+
   const showMore = useCallback(async () => {
-    if (!cursor || busy) return;
+    if (!cursor || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       const fetched = await fetchGallery(filters, cursor);
       setPage((held) => (held && held.key === filterKey && held.reader === reader
         ? { ...held, entries: [...held.entries, ...fetched.entries], cursor: fetched.nextCursor }
         : held));
+      setStalled(false);
+      setError(null);
     } catch (moreError) {
+      // A failed page is not retried on its own: the sentinel is still on
+      // screen, and an observer that asked again would ask forever. The
+      // reader gets a button instead.
+      setStalled(true);
       setError(refusalText(moreError, ui.galleryPage.couldNotLoadTheGallery));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
     // `filters` is derived from `filterKey`; the key is the dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, busy, filterKey, reader]);
+  }, [cursor, filterKey, reader]);
 
-  // Loads the next page as the end of the feed comes into view. Without an
-  // IntersectionObserver the Show more button below does the same by hand.
+  // Loads the next page as the end of the feed comes into view, until a load
+  // fails. Without an IntersectionObserver the Show more button below does
+  // the same by hand.
   useEffect(() => {
-    if (!cursor || typeof IntersectionObserver === "undefined") return;
+    if (!cursor || stalled || typeof IntersectionObserver === "undefined") return;
     const element = sentinel.current;
     if (!element) return;
     const observer = new IntersectionObserver((records) => {
@@ -132,7 +147,7 @@ export function GalleryPage() {
     }, { rootMargin: "400px" });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [cursor, showMore]);
+  }, [cursor, stalled, showMore]);
 
   // Back to top is offered once the reader is well past the top, and taken
   // away again there: at the top it would be a button that does nothing.
@@ -247,13 +262,14 @@ export function GalleryPage() {
             </ul>}
       {!loading && entries.length > 0 && (cursor
         ? <div ref={sentinel} className="gallery-more">
-            {typeof IntersectionObserver === "undefined"
+            {stalled || typeof IntersectionObserver === "undefined"
               ? <button
                   type="button"
                   className="btn btn-secondary btn-compact"
                   disabled={busy}
+                  data-testid="gallery-show-more"
                   onClick={() => void showMore()}
-                >{ui.galleryPage.showMore}</button>
+                >{stalled ? ui.galleryPage.tryAgain : ui.galleryPage.showMore}</button>
               : <span className="gallery-loading"><span className="gallery-spinner" aria-hidden="true" />{ui.galleryPage.loading}</span>}
           </div>
         : theEnd)}
