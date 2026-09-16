@@ -1375,7 +1375,6 @@ export const ES: Catalogue = {
   },
 
   notFoundPage: {
-    pageNotFound: "Página no encontrada",
     nobodyDrewThisPage: "Nadie ha dibujado esta página",
     thatLinkDoesnTLeadAnywhere: "Ese enlace no lleva a ninguna parte de Sketchy.",
     backLobby: "Volver al vestíbulo",

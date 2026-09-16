@@ -1375,7 +1375,6 @@ export const FR: Catalogue = {
   },
 
   notFoundPage: {
-    pageNotFound: "Page introuvable",
     nobodyDrewThisPage: "Personne n’a dessiné cette page",
     thatLinkDoesnTLeadAnywhere: "Ce lien ne mène nulle part sur Sketchy.",
     backLobby: "Retour au hall",
