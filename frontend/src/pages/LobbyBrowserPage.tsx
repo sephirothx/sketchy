@@ -318,14 +318,6 @@ export function LobbyBrowserPage() {
             >
               {ui.lobbyBrowserPage.joinByCode}
             </button>
-            <Button
-              variant="primary"
-              compact
-              iconLeft={<PlusIcon size={15} />}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              {ui.lobbyBrowserPage.createRoom}
-            </Button>
           </>
         }
       />
@@ -349,20 +341,20 @@ export function LobbyBrowserPage() {
           <span className="lobby-rooms-count">
             {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
           </span>
-          <button
-            type="button"
-            className="lobby-catalogue-link"
-            onClick={() => navigate("/community-lists")}
-          >
-            {ui.communityCataloguePage.communityCatalogue}
-          </button>
-          <button
-            type="button"
-            className="lobby-catalogue-link"
-            onClick={() => navigate("/gallery")}
-          >
-            {ui.galleryPage.gallery}
-          </button>
+          {/* Beside the list it adds to, rather than in the header: a room
+              made here is a card in this panel. The catalogue and the Gallery
+              are in the account menu. A phone has the dock instead. */}
+          {!isNarrow && (
+            <Button
+              variant="primary"
+              compact
+              className="lobby-rooms-create"
+              iconLeft={<PlusIcon size={15} />}
+              onClick={() => void handleOpenCreateRoom()}
+            >
+              {ui.lobbyBrowserPage.createRoom}
+            </Button>
+          )}
         </div>
 
         {roomsState.loaded && rooms.length > 0 && (

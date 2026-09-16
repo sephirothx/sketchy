@@ -1,17 +1,3 @@
-/* The way into the catalogue from the lobby: a link, not a third header
-   button - the header already packs tightly at 390px. */
-.lobby-catalogue-link {
-  background: none;
-  border: none;
-  color: var(--primary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  padding: 0;
-  text-decoration: underline;
-}
-
 /* ------------------------------------------------------------------- page
 
    The catalogue is a shelf: rows of lists to choose between, with the one
