@@ -29,6 +29,11 @@
     --canvas-cap: 1000px;
     --room-players-width: 290px;
     --room-chat-width: 340px;
+    /* The lobby's people column: wider than the room's chat, because on the
+       lobby it holds two lists and the rooms are one to a row. It grows with
+       the window rather than jumping, so the narrowest windows of the step
+       keep the width their room rows need. */
+    --lobby-people-width: clamp(420px, 28vw, 460px);
   }
 }
 
@@ -38,6 +43,7 @@
     --canvas-cap: 1180px;
     --room-players-width: 320px;
     --room-chat-width: 380px;
+    --lobby-people-width: clamp(520px, 26vw, 580px);
   }
 }
 .lobby-page {

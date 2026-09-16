@@ -854,6 +854,8 @@ export const EN = {
     leaveBlankForARandom: "Leave blank for a random name!",
     creating: "Creating…",
     createRoom2: "Create room",
+    yourRoom: "Your room",
+    aRandomName: "A random name",
     playerCount: (p: { count: number }) =>
       counted(p.count, { one: "player", other: "players" }),
     roundCount: (p: { count: number }) =>
@@ -1652,6 +1654,18 @@ export const EN = {
     joining: "Joining…",
     join: "Join",
     spectate: "Spectate",
+    waiting: "Waiting",
+    seatsOpen: (p: { count: number }) => `${number(p.count)} open`,
+    noSeatsOpen: "No seats open",
+    watching: (p: { count: number }) => `${number(p.count)} watching`,
+    gameLength: (p: { minutes: number }) => `~${number(p.minutes)} min`,
+    gameLengthRange: (p: { low: number; high: number }) => `~${number(p.low)}–${number(p.high)} min`,
+    standardRules: "Standard rules",
+    moreRules: (p: { count: number }) => `+${number(p.count)} more`,
+    columnRoom: "Room",
+    columnSeats: "Seats",
+    columnLength: "Length",
+    columnRoomRules: "Room rules",
   },
 
   recapDrawings: {
