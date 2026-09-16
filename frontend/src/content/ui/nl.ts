@@ -1056,11 +1056,10 @@ export const NL: Catalogue = {
   },
 
   inviteEntryPage: {
+    haveAnAccount: "Heb je al een account?",
     roomCode: (p: { code: string }) => `Kamer ${p.code}`,
     hereCount: (p: { here: number; capacity: number; full: boolean }) =>
       `${p.here}/${p.capacity} hier${p.full ? " · vol" : ""}`,
-    roomSummary: (p: { rounds: number; seconds: number; hintMode: string }) =>
-      `${counted(p.rounds, { one: "ronde", other: "rondes" })} · ${p.seconds}s · ${p.hintMode}`,
     checkingYourInvite: "Je uitnodiging controleren…",
     loadingRoomDetails: "Kamergegevens laden.",
     roomUnavailable: "Kamer niet beschikbaar",

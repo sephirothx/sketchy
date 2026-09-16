@@ -15,10 +15,11 @@ async def use_guest_name(page, name: str) -> None:
     # finish first. Setting the name while GET /api/auth/me is still in flight
     # races it: both calls create an account, and whichever cookie lands
     # second wins - usually discarding the name that was just set. The
-    # first-run block is what proves it has landed.
+    # first-run block, or the invite screen's name field, is what proves it
+    # has landed.
     named_before_any_page = page.url.startswith("about:")
     if not named_before_any_page:
-        await page.wait_for_selector(".first-run, .identity-chip")
+        await page.wait_for_selector(".first-run, #invite-name, .identity-chip")
 
     # Through the browser context's own cookie jar rather than from inside the
     # page. It is the same request the page would make and lands in the same

@@ -154,11 +154,16 @@ Sorted by how much it cost a player.
     four chips) and 315 px of account decision — on a screen reached by
     somebody who had already decided to play. The page was 990 px for what is
     fundamentally a yes.
-    → The settings fold behind one summary line on phones (open by default on
-    a wide screen, where there is room). Join moves to **y 604** and the page
-    fits in 844. Spectate becomes a link, and the name field's own button
-    steps back to secondary inside the invite card, since **Join already
-    commits a typed name** — the two-step was never required.
+    → First pass: the settings folded behind one summary line on phones, and
+    Join moved to y 604. That hid what the host chose from the person deciding
+    whether to play, and still left two buttons that saved the name (#592).
+    Now the answer is **docked to the bottom of the screen** on a phone — one
+    name field (only when there is no name yet), Join, and Spectate with its
+    eye icon — at **y 717–844** from the first paint, and the settings stay
+    open above it. The first-run block is gone from this screen: **Join
+    commits the typed name** and Enter does the same, and "Have an account?
+    Log in" is one quiet line at the end of the card. Wide screens show the
+    same answer at the end of the card instead of docked.
 13. **The first landing led with an account decision.** A visitor who has
     never seen the game met *"Play as yourself · Keep your username and your
     stats on every device"* first, with the fastest path — type a name, play —

@@ -27,7 +27,7 @@ import { ui } from "../content/ui/index.ts";
  * a new device lands here and reaches "Log in" without being asked to invent a
  * guest name.
  */
-export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}) {
+export function FirstRunIdentity() {
   const user = useAuthStore((s) => s.user);
   const hasResolved = useAuthStore((s) => s.hasResolved);
   const setDisplayName = useAuthStore((s) => s.setDisplayName);
@@ -153,7 +153,7 @@ export function FirstRunIdentity({ compact = false }: { compact?: boolean } = {}
 
   return (
     <section
-      className={compact ? "first-run is-compact" : "first-run"}
+      className="first-run"
       aria-labelledby={`${fieldId}-heading`}
     >
       {isNarrow ? [guest, account] : [account, divider, guest]}

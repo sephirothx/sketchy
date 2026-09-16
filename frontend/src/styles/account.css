@@ -1004,18 +1004,6 @@
     width: 100%;
   }
 
-  /* Inside the invite card it is not: Join game is the action there, and two
-     controls that both look like the answer is one too many. Saving the name
-     is a step on the way, so it steps back a level. */
-  .first-run.is-compact .first-run-guest-submit {
-    background: var(--card);
-    border: 1.5px solid var(--line-strong);
-    box-shadow: none;
-    color: var(--ink);
-    font-size: 15px;
-    font-weight: 800;
-    min-height: 46px;
-  }
 
   .first-run-primary {
     align-items: baseline;
