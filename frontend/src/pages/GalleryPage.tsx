@@ -312,8 +312,10 @@ export function GalleryPage() {
                 <p className="section-label">{ui.galleryPage.sortBy}</p>
                 {sortControl}
               </section>
-              {weekEntries && weekEntries.length > 0 && (
-                <section className="surface-card gallery-rail-card">
+              {/* Once the week has been read the card stays, empty week included
+                  (R-GAL-07): an absent shelf and an empty week must not look alike. */}
+              {weekEntries && (
+                <section className="surface-card gallery-rail-card" data-testid="gallery-rail-week">
                   <div className="gallery-rail-head">
                     <h2>{ui.galleryPage.thisWeek}</h2>
                     <button
@@ -322,7 +324,9 @@ export function GalleryPage() {
                       onClick={() => applyFilters({ sort: "top", window: "week" })}
                     >{ui.galleryPage.topOfTheWeek}</button>
                   </div>
-                  <ul className="gallery-rail-list">
+                  {weekEntries.length === 0
+                    ? <p className="gallery-empty" data-testid="gallery-rail-week-empty">{ui.galleryPage.nothingThisWeek}</p>
+                    : <ul className="gallery-rail-list">
                     {weekEntries.map((entry) => (
                       <li key={entry.turnId}>
                         <button
@@ -344,7 +348,7 @@ export function GalleryPage() {
                         </button>
                       </li>
                     ))}
-                  </ul>
+                  </ul>}
                 </section>
               )}
             </aside>

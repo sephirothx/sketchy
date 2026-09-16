@@ -1270,6 +1270,7 @@ export const NL: Catalogue = {
     allTime: "Altijd",
     thisMonth: "Deze maand",
     thisWeek: "Deze week",
+    nothingThisWeek: "Nog geen openbare tekeningen deze week. Speel een openbaar spel en kom terug.",
     nothingHereYet: "Hier is nog niets. Speel een openbaar spel en kom terug.",
     signInToSeeTheGallery: "De galerij is voor ingelogde spelers. Log in of ga verder als gast vanuit de lobby.",
     couldNotLoadTheGallery: "De galerij kon niet geladen worden.",

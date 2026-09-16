@@ -1281,6 +1281,7 @@ export const EN = {
     allTime: "All time",
     thisMonth: "This month",
     thisWeek: "This week",
+    nothingThisWeek: "No public drawings this week yet. Play a public game and come back.",
     nothingHereYet: "Nothing here yet. Play a public game and come back.",
     signInToSeeTheGallery: "The gallery is for signed-in players. Sign in or continue as a guest from the lobby.",
     couldNotLoadTheGallery: "Could not load the gallery.",
