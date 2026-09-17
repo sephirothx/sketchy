@@ -1102,14 +1102,16 @@ parts exact (below) and a fill's edges the same everywhere.
 > frame that was being sent anyway and a path with none is byte for byte what it was.
 > Measured over the recorded traces with a pressure curve laid on them
 > (`benchmarks/path_widths.py`, brush 12, at most six widths, deflated and framed):
-> **+5 – 10% and no message added**, against +13 – 18% for a byte per point, +37 – 62%
-> and twice the messages for a frame per change, and +52 – 88% for ending the path and
+> **+6 – 15% and no message added**, against +16 – 20% for a byte per point, +49 – 92%
+> and twice the messages for a frame per change, and +71 – 130% for ending the path and
 > opening another — which would also make Undo remove a sliver and turn 37 strokes into
-> 219 actions. The number of widths is what decides it: at one-pixel steps a 32 px brush
-> changes on half its points and in-band is no better than a byte per point, so the
+> 314 actions. The number of widths is what decides it: at one-pixel steps a 32 px brush
+> changes on two thirds of its points and in-band costs more than a byte per point, so the
 > client gives a brush at most six widths rather than stepping by a pixel
 > ([`lib/penPressure.ts`](../frontend/src/lib/penPressure.ts)), which holds every brush
-> size on every trace between +4% and +11%.
+> size on every trace between +6% and +15%. (Those were +4 – 11% while the floor was a
+> quarter of the brush; the range a pen can use was widened on purpose, R-DRAW-17, and
+> this is what the extra changes of width cost.)
 
 The price is one value of the delta range: `0x81` was an offset of −127 quarter-pixels
 and is now the marker, so that step escapes. The width is absolute, not a step from the
@@ -1594,8 +1596,8 @@ points recoded as deltas from the previous point, then deflated, behind a header
 declares the frame's inflated length. `SKCD` v2 is what a finished drawing is written as
 now (#828): v1 reads and restores a width marker exactly, since it treats every entry
 alike, but it chains the marker into the differences — two large deltas, one to reach
-it and one to leave — so a pen drawing stored **34% larger** than the same strokes at
-one width where v2 stores it **12% larger** (`benchmarks/path_widths.py`, the long hand
+it and one to leave — so a pen drawing stored **50% larger** than the same strokes at
+one width where v2 stores it **18% larger** (`benchmarks/path_widths.py`, the long hand
 trace at brush 12). v2 copies a marker through and differences the points either side
 against each other. For a recoded marker to be tellable from a recoded point, x is
 differenced modulo **65 535** rather than 2¹⁶ — a path's x has exactly that many values,

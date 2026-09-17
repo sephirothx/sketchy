@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  FULL_PRESSURE,
   MAX_WIDTH_LEVELS,
   MIN_PEN_WIDTH,
   createPressureQuantizer,
@@ -13,19 +14,59 @@ import { rasterizePath, floodFillPixels } from "../src/lib/canvasPixels.ts";
 
 const PRESETS = [2, 4, 6, 8, 12, 16, 24, 32];
 
-test("every brush tops out at itself, bottoms out at two pixels or a quarter, and has at most six widths", () => {
-  for (const brush of [...PRESETS, 1, 3, 64]) {
+test("every brush tops out at itself, bottoms out at two pixels, and has at most six widths", () => {
+  for (const brush of [...PRESETS, 3, 64]) {
     const { floor, widths } = widthLevels(brush);
     assert.equal(widths.at(-1), brush, `brush ${brush} at full pressure is the selected size`);
-    assert.equal(widths[0], floor);
-    assert.equal(floor, Math.min(brush, Math.max(MIN_PEN_WIDTH, Math.round(brush / 4))));
+    assert.equal(widths[0], MIN_PEN_WIDTH, `brush ${brush} reaches the floor whatever its size`);
+    assert.equal(floor, MIN_PEN_WIDTH);
     assert.ok(widths.length <= MAX_WIDTH_LEVELS, `brush ${brush}: ${widths}`);
     assert.deepEqual(widths, [...new Set(widths)].sort((a, b) => a - b));
     for (const width of widths) assert.ok(Number.isInteger(width) && width >= 1 && width <= 64);
   }
   assert.deepEqual(widthLevels(2).widths, [2], "the smallest brush has nowhere to go");
   assert.deepEqual(widthLevels(6).widths, [2, 3, 4, 5, 6]);
-  assert.deepEqual(widthLevels(32).widths, [8, 12, 17, 22, 27, 32]);
+});
+
+test("the widths are spaced by ratio, so the fine end is not one jump", () => {
+  // Six even steps from 2 to 32 would be 2, 8, 14, ...: four times the width
+  // at the first step, where a pen's control matters most.
+  assert.deepEqual(widthLevels(32).widths, [2, 3, 6, 11, 18, 32]);
+  assert.deepEqual(widthLevels(12).widths, [2, 3, 4, 6, 8, 12]);
+  for (const brush of [16, 24, 32, 64]) {
+    const { widths } = widthLevels(brush);
+    const ratios = widths.slice(1).map((width, index) => width / widths[index]);
+    assert.ok(Math.max(...ratios) <= 2, `brush ${brush}: no step more than doubles the line (${widths})`);
+  }
+});
+
+test("the whole brush arrives before the pen is pressed as hard as it goes", () => {
+  for (const brush of PRESETS) {
+    assert.equal(createPressureQuantizer(brush).width(FULL_PRESSURE), brush);
+    assert.equal(createPressureQuantizer(brush).width(1), brush);
+    assert.equal(createPressureQuantizer(brush).width(0), widthLevels(brush).widths[0]);
+  }
+  // And not from a touch: a light hand on the largest brush is still a fine line.
+  assert.ok(createPressureQuantizer(32).width(0.05) <= 6);
+  assert.ok(createPressureQuantizer(32).width(FULL_PRESSURE / 2) < 32);
+});
+
+test("each level owns a band of pressure a hand can stop in", () => {
+  // Mapped in pixels, a 32 px brush's three finest widths shared the lightest
+  // twentieth of the range. By ratio, every level is reachable on the way up
+  // in steps of 1% of the sensor's range, and none is narrower than 5%.
+  for (const brush of [12, 32]) {
+    const quantizer = createPressureQuantizer(brush);
+    const band = new Map();
+    for (let step = 0; step <= 100; step += 1) {
+      const width = quantizer.width(step / 100);
+      band.set(width, (band.get(width) ?? 0) + 1);
+    }
+    assert.deepEqual([...band.keys()], widthLevels(brush).widths);
+    for (const [width, samples] of band) {
+      if (width !== brush) assert.ok(samples >= 5, `brush ${brush}: ${width}px held for ${samples}%`);
+    }
+  }
 });
 
 test("two pixels is the floor because one does not hold a fill", () => {
