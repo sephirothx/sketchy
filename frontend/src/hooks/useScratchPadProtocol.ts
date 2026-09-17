@@ -51,5 +51,8 @@ export function useScratchPadProtocol(renderer: CanvasProtocolRenderer): CanvasP
     requestAuthoritativeSync() {
       renderer.replay(scratchSheet.actions);
     },
+    repaintFromHistory() {
+      renderer.replay(scratchSheet.actions);
+    },
   }), [renderer, redraw]);
 }

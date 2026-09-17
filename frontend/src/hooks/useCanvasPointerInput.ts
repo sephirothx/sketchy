@@ -247,6 +247,7 @@ export function useCanvasPointerInput(
   useEffect(() => {
     acceptRef.current = acceptPoints;
     flushPenStrokeRef.current = flushPenStroke;
+    abandonStrokeRef.current = abandonStroke;
     repaintPreviewRef.current = repaintPreview;
     sendPendingPointsRef.current = sendPendingPoints;
   });
@@ -255,15 +256,17 @@ export function useCanvasPointerInput(
   // they then become the last of - only if the frame went. A frame the
   // protocol dropped (over the point budget, no path open) left the server's
   // path where it was, and the next frame must be relative to that. With
-  // `ends`, the frame also closes the path (#603). Returns whether it went.
-  function sendPendingPoints(ends = false): boolean {
+  // `ends`, the frame also closes the path (#603). Says whether it went, was
+  // refused, or there was nothing to send - which are not the same thing: a
+  // refused frame's points are already ink on this canvas (below).
+  function sendPendingPoints(ends = false): "sent" | "refused" | "empty" {
     const points = pendingPointsRef.current;
-    if (points.length === 0) return false;
+    if (points.length === 0) return "empty";
     const penStroke = penStrokeRef.current;
     const widths = penStroke?.takeFrame() ?? [];
     pendingPointsRef.current = [];
     const previous = lastSentRef.current;
-    if (ends && !previous) return false;
+    if (ends && !previous) return "refused";
     const sent = protocol.sendPathFrame(
       encodePathPoints({
         points,
@@ -280,8 +283,35 @@ export function useCanvasPointerInput(
       // has to ramp from there rather than from one that never arrived.
       penStroke?.frameRefused();
     }
-    return sent;
+    return sent ? "sent" : "refused";
   }
+
+  // A frame was painted here and then not taken: the turn's drawing limit is
+  // all but spent and the batch is refused whole, points and width keyframes
+  // together - so a pen can be refused a single point that would have fitted,
+  // because its keyframe is a second entry, and with one entry left the limit
+  // still reads as open and would let it happen again, frame after frame.
+  // The room has the stroke up to the last frame that went, and so must this
+  // canvas, or a fill here floods a region nobody else has. So the stroke ends
+  // where the room's copy ends, and what it drew past that is painted out from
+  // the history this client holds - no round trip, since nothing the server
+  // has is in doubt.
+  function abandonStroke() {
+    thinnerRef.current = null;
+    penStrokeRef.current = null;
+    widthThinnerRef.current = null;
+    smootherRef.current = null;
+    pendingPointsRef.current = [];
+    protocol.sendPathFrame(encodePathEnd());
+    lastSentRef.current = null;
+    protocol.finishPathAction();
+    protocol.repaintFromHistory();
+    lastPointRef.current = null;
+    // The pointer is still down; what it does until it lifts draws nothing.
+    inputActiveRef.current = false;
+    clearPreview();
+  }
+  const abandonStrokeRef = useRef(abandonStroke);
   const sendPendingPointsRef = useRef(sendPendingPoints);
 
   // The points buffered when the pen lifted and the end go as one frame
@@ -293,12 +323,16 @@ export function useCanvasPointerInput(
     if (thinner) acceptPoints(thinner.end());
     thinnerRef.current = null;
     flushPenStroke(true);
-    if (!sendPendingPoints(true)) protocol.sendPathFrame(encodePathEnd());
+    const final = sendPendingPoints(true);
+    if (final !== "sent") protocol.sendPathFrame(encodePathEnd());
     penStrokeRef.current = null;
     widthThinnerRef.current = null;
     smootherRef.current = null;
     lastSentRef.current = null;
     protocol.finishPathAction();
+    // The last batch did not fit: the stroke ends where the room's copy does,
+    // and so does its ink here (see `abandonStroke`).
+    if (final === "refused") protocol.repaintFromHistory();
     repaintPreview(pointerPosRef.current);
   }
 
@@ -521,7 +555,7 @@ export function useCanvasPointerInput(
         flushPenStrokeRef.current();
         repaintPreviewRef.current(pointerPosRef.current);
       }
-      sendPendingPointsRef.current();
+      if (sendPendingPointsRef.current() === "refused") abandonStrokeRef.current();
     }, flushIntervalMs);
     return () => clearInterval(flushTimer);
   }, [isDrawer, protocol, flushIntervalMs]);
@@ -532,7 +566,7 @@ export function useCanvasPointerInput(
     if (thinner) acceptRef.current(thinner.end());
     thinnerRef.current = null;
     flushPenStrokeRef.current(true);
-    if (!sendPendingPointsRef.current(true)) protocol.sendPathFrame(encodePathEnd());
+    if (sendPendingPointsRef.current(true) !== "sent") protocol.sendPathFrame(encodePathEnd());
     penStrokeRef.current = null;
     widthThinnerRef.current = null;
     smootherRef.current = null;
