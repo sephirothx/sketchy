@@ -2492,8 +2492,9 @@ A seated client checks with the server every five seconds that it still holds th
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
   go away, save the drawing, start over, settings, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows. A short window gives way in a fixed
-  order: the room's name, then your chip's name, then the wordmark; the clock and the menu
-  never do. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
+  order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,
+  the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
+  borrows the wordmark's room until it ends. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
   cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait" swaps

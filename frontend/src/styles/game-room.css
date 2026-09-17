@@ -128,24 +128,13 @@
   margin-left: 8px;
 }
 
-/* A short desktop window gives way in a fixed order: the room's name, then
-   the identity chip's name (the avatar stays), then the wordmark. The clock,
-   the round, the notice chips and the Room menu never do. */
+/* A short window gives way in a fixed order: the room's name, then the
+   identity chip's name (the avatar stays, as the compact chip - see
+   ActiveGameRoom). The wordmark, the clock, the round, the notice chips, the
+   Room menu and the avatar stay at every width; only the phone's bar, below,
+   ever lets the wordmark go, and only while a notice needs its room. */
 @media (max-width: 1100px) {
   .game-header-room-name {
-    display: none;
-  }
-}
-
-@media (max-width: 1000px) {
-  .game-header-actions .identity-name,
-  .game-header-actions .identity-chevron {
-    display: none;
-  }
-}
-
-@media (max-width: 950px) {
-  .game-header-home {
     display: none;
   }
 }
@@ -163,9 +152,26 @@
   position: relative;
 }
 
+.game-header-mobile {
+  container: room-bar / inline-size;
+}
+
+.game-header-mobile .game-header-start {
+  flex: none;
+}
+
+/* The one time the phone's wordmark gives way: a notice or the Away chip
+   beside the round and the clock, on a bar too narrow for all of them. It is
+   back the moment the notice ends. */
+@container room-bar (max-width: 470px) {
+  .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-home {
+    display: none;
+  }
+}
+
 .game-header-mobile .game-header-center {
   flex: 1 1 auto;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .game-header-mobile .game-header-actions {
