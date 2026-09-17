@@ -22,10 +22,19 @@ import {
   encodePathStart,
   encodeShape,
 } from "../lib/liveDrawing";
-import { createPointThinner, type PointThinner } from "../lib/pointThinning";
+import {
+  createPressureQuantizer,
+  createPressureSource,
+  type PressureQuantizer,
+} from "../lib/penPressure";
+import { createPointThinner, type PointThinner, type ThinnedPoint } from "../lib/pointThinning";
 import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
-import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
+import type { DrawTool, StrokeFillPayload, StrokePoint, WidthChange } from "../types";
+
+// One per tab, not per canvas: whether this device's pen has a working sensor
+// is a fact about the device, and the scratch pad and the game share it.
+const pressureSource = createPressureSource();
 
 interface DrawingSettings {
   isDrawer: boolean;
@@ -73,6 +82,15 @@ export function useCanvasPointerInput(
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);
+  // A pen's pressure as widths (#828). The quantizer lives for one brush
+  // stroke; null for a mouse, a finger, the eraser, a pen with no sensor.
+  // `queuedWidthRef` is the width the path is at once everything queued is
+  // sent, `sentWidthRef` the width the server has it at, and the changes
+  // between the two ride the next frame beside the points they apply from.
+  const quantizerRef = useRef<PressureQuantizer | null>(null);
+  const pendingWidthsRef = useRef<WidthChange[]>([]);
+  const queuedWidthRef = useRef(brushWidth);
+  const sentWidthRef = useRef(brushWidth);
   // For a brush stroke, the last sample *kept* (#560), which is where the
   // next kept segment starts on this canvas and on every viewer's; for a
   // shape, the pointer's last position.
@@ -134,14 +152,22 @@ export function useCanvasPointerInput(
     };
   }
 
-  function drawLocalSegment(from: StrokePoint, to: StrokePoint) {
+  /** The sample, with the width the pen's pressure gives it when it has one. */
+  function sampledPoint(event: ReactPointerEvent<HTMLCanvasElement>): ThinnedPoint {
+    const point: ThinnedPoint = normalizedPoint(event);
+    const quantizer = quantizerRef.current;
+    if (quantizer) point.width = quantizer.width(event.pressure);
+    return point;
+  }
+
+  function drawLocalSegment(from: StrokePoint, to: StrokePoint, width: number) {
     const context = contextRef.current;
     if (!context) return;
     const activeColor = tool === "eraser" ? "#ffffff" : color;
     rasterizePath(
       context,
       [toPixels(from), toPixels(to)],
-      brushWidth / 2,
+      width / 2,
       hexToRgba(activeColor),
       false,
     );
@@ -162,7 +188,7 @@ export function useCanvasPointerInput(
     rasterizePath(
       previewContext,
       [toPixels(thinner.anchor()), toPixels(pending)],
-      brushWidth / 2,
+      (pending.width ?? brushWidth) / 2,
       hexToRgba(activeColor),
       false,
     );
@@ -171,11 +197,21 @@ export function useCanvasPointerInput(
   // Samples the thinner kept: painted here from the last kept sample, and
   // queued for the frame, so the drawer's canvas and every viewer's are
   // rasterized from the same polyline (#560).
-  function acceptPoints(points: StrokePoint[]) {
+  //
+  // A kept sample's width is the width of the segment ending at it - the
+  // thinner never folds two widths into one segment - so where it differs
+  // from what the path is at, the change is queued at this point's place in
+  // the frame, which is exactly where a viewer will start painting it.
+  function acceptPoints(points: ThinnedPoint[]) {
     for (const point of points) {
-      if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point);
+      const width = point.width ?? queuedWidthRef.current;
+      if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point, width);
+      if (width !== queuedWidthRef.current) {
+        pendingWidthsRef.current.push([pendingPointsRef.current.length, width]);
+        queuedWidthRef.current = width;
+      }
       lastPointRef.current = point;
-      pendingPointsRef.current.push(point);
+      pendingPointsRef.current.push({ x: point.x, y: point.y });
     }
   }
   // The flush timer below is armed once and must paint with the colour and
@@ -196,13 +232,27 @@ export function useCanvasPointerInput(
   function sendPendingPoints(ends = false): boolean {
     const points = pendingPointsRef.current;
     if (points.length === 0) return false;
+    const widths = pendingWidthsRef.current;
     pendingPointsRef.current = [];
+    pendingWidthsRef.current = [];
     const previous = lastSentRef.current;
     if (ends && !previous) return false;
     const sent = protocol.sendPathFrame(
-      encodePathPoints({ points, previous: previous ?? undefined, ...(ends ? { ends: true } : {}) }),
+      encodePathPoints({
+        points,
+        previous: previous ?? undefined,
+        ...(widths.length > 0 ? { widths } : {}),
+        ...(ends ? { ends: true } : {}),
+      }),
     );
-    if (sent) lastSentRef.current = points[points.length - 1];
+    if (sent) {
+      lastSentRef.current = points[points.length - 1];
+      sentWidthRef.current = queuedWidthRef.current;
+    } else {
+      // The server's path is still at the width it had: the next frame has
+      // to say so again rather than assume a change that never arrived.
+      queuedWidthRef.current = sentWidthRef.current;
+    }
     return sent;
   }
   const sendPendingPointsRef = useRef(sendPendingPoints);
@@ -215,6 +265,7 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     if (thinner) acceptPoints(thinner.end());
     thinnerRef.current = null;
+    quantizerRef.current = null;
     if (!sendPendingPoints(true)) protocol.sendPathFrame(encodePathEnd());
     lastSentRef.current = null;
     protocol.finishPathAction();
@@ -277,7 +328,12 @@ export function useCanvasPointerInput(
     }
     activePointerIdRef.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
-    const point = normalizedPoint(event);
+    // The brush only: an eraser that thinned under a light hand would leave
+    // what it was meant to remove. Asked of every pen event, whatever the
+    // tool, so a sensor is recognized the first time it says anything.
+    const pressed = pressureSource.trusts(event.pointerType, event.pressure) && tool === "brush";
+    quantizerRef.current = pressed ? createPressureQuantizer(brushWidth) : null;
+    const point = sampledPoint(event);
     pointerPosRef.current = point;
     repaintPreview(point);
     if ((tool === "brush" || tool === "eraser") && !strokeAvailable) {
@@ -288,14 +344,21 @@ export function useCanvasPointerInput(
     lastPointRef.current = point;
     if (tool === "brush" || tool === "eraser") {
       const activeColor = tool === "eraser" ? "#ffffff" : color;
+      // A pen lands lightly, so its path opens at the width it landed at: the
+      // dot every screen paints for a start is then no wider than the line
+      // that leaves it.
+      const startWidth = point.width ?? brushWidth;
+      queuedWidthRef.current = startWidth;
+      sentWidthRef.current = startWidth;
+      pendingWidthsRef.current = [];
       thinnerRef.current = createPointThinner(point);
       lastSentRef.current = point;
-      drawLocalSegment(point, point);
+      drawLocalSegment(point, point, startWidth);
       protocol.beginDrawAction(encodePathStart({
         x: point.x,
         y: point.y,
         color: activeColor,
-        width: brushWidth,
+        width: startWidth,
       }), true);
     } else if (tool === "fill") {
       const context = contextRef.current;
@@ -315,7 +378,8 @@ export function useCanvasPointerInput(
       || (activePointerIdRef.current !== null
         && event.pointerId !== activePointerIdRef.current)
     ) return;
-    const point = normalizedPoint(event);
+    pressureSource.trusts(event.pointerType, event.pressure);
+    const point = sampledPoint(event);
     pointerPosRef.current = point;
     if (!inputActiveRef.current || tool === "fill") {
       repaintPreview(point);
@@ -390,6 +454,7 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     if (thinner) acceptRef.current(thinner.end());
     thinnerRef.current = null;
+    quantizerRef.current = null;
     if (!sendPendingPointsRef.current(true)) protocol.sendPathFrame(encodePathEnd());
     lastSentRef.current = null;
     protocol.finishPathAction();
@@ -411,6 +476,8 @@ export function useCanvasPointerInput(
     activePointerIdRef.current = null;
     inputActiveRef.current = false;
     pendingPointsRef.current = [];
+    pendingWidthsRef.current = [];
+    quantizerRef.current = null;
     lastPointRef.current = null;
     thinnerRef.current = null;
     lastSentRef.current = null;

@@ -160,6 +160,7 @@ the section is what is drawn with a name wherever a player appears.
 | **Fill** | The tool that floods an enclosed area with the current color. | bucket, paint bucket, flood |
 | **Shape** | The rectangle, ellipse, and triangle tools, collectively. Name the individual ones **rectangle**, **ellipse**, **triangle**. | box, circle/oval, square |
 | **Stroke** | One continuous mark, from the moment the drawer presses down to the moment they lift. What the brush and eraser produce. | line, scribble, path |
+| **Pen pressure** | A pressure-sensitive stylus drawing a thinner **brush stroke** under a lighter hand. **Brush size** is the widest the stroke gets, at full pressure; it never gets wider. The brush only - the **Eraser** keeps its size - and only a stylus: a mouse or a finger draws at the brush size, as ever. "Pen" here is the hardware in the player's hand, never the tool, which stays the **Brush**. | pressure sensitivity (as a label), stylus mode, tablet mode, dynamic brush, tapering |
 | **Color** | The current drawing color, chosen from the palette or, where the room's **color mode** allows it, a custom picker. | colour, ink, shade |
 | **Undo** | Removes the drawer's most recent mark for everyone. | back, revert, erase |
 | **Clear** | Empties the canvas for everyone. | reset, wipe, erase all |

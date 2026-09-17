@@ -13,10 +13,11 @@ lifts, and a slow wobble between, seeded so the run repeats. That is a model,
 and says so; what it is a model *of* is the thing that decides the cost, which
 is how often the quantized width steps. `--wobble` and `--brush` move it.
 
-The width is quantized the way the client will: the selected size is the
-ceiling, a quarter of it (at least one pixel) the floor, and a new width is
-taken only when the target has moved a whole step past the current one, so a
-pen held steady does not chatter between two widths.
+The width is quantized the way the client does (`frontend/src/lib/penPressure.ts`,
+mirrored here constant for constant): the selected size is the ceiling, a
+quarter of it (at least two pixels) the floor, a brush has at most `--levels`
+widths, and a new one is taken only when the target is three quarters of the
+way to the next, so a pen held steady does not chatter between two.
 
 Four ways to carry the changes, each through the same warm permessage-deflate
 context as the drawer's uplink, with WebSocket frame headers counted:
@@ -66,6 +67,9 @@ from point_thinning import CANVAS_HEIGHT, CANVAS_WIDTH, TRACE_DIR, load_strokes,
 TOLERANCE = 0.25
 FLUSH_EVERY = 2  # the traces were recorded at 40 ms; the client flushes at 80
 FLOOR_SHARE = 0.25
+MIN_PEN_WIDTH = 2
+PRESSURE_GAMMA = 0.6
+HYSTERESIS = 0.75
 
 
 # ---------------------------------------------------------------- pressure
@@ -84,23 +88,37 @@ def pressure_curve(count: int, rng: random.Random, wobble: float) -> list[float]
     return out
 
 
-def quantized_widths(pressure: list[float], brush: int, levels: int) -> list[int]:
-    """The width of the segment ending at each sample, with hysteresis.
+def width_levels(brush: int, levels: int) -> tuple[int, list[int]]:
+    """`widthLevels` in `frontend/src/lib/penPressure.ts`: counted down from the
+    brush, so full pressure is the selected size. Zero levels = every pixel."""
+    floor = min(brush, max(MIN_PEN_WIDTH, round(brush * FLOOR_SHARE)))
+    step = max(1, math.ceil((brush - floor) / (levels - 1))) if levels > 1 else 1
+    widths = list(range(brush, floor, -step))[::-1]
+    return floor, [floor, *widths]
 
-    `levels` caps how many widths a brush has between its floor and itself,
-    so the step grows with the brush: one pixel is a sixth of a 6 px line and
-    a thirty-second of a 32 px one, and a change nobody can see still costs
-    its two bytes and the run boundary the thinner has to keep. Zero means a
-    step is always one pixel.
+
+def quantized_widths(pressure: list[float], brush: int, levels: int) -> list[int]:
+    """The width of the segment ending at each sample: the client's quantizer.
+
+    `levels` caps how many widths a brush has, so the step grows with the
+    brush: one pixel is a sixth of a 6 px line and a thirty-second of a 32 px
+    one, and a change nobody can see still costs its two bytes and the run
+    boundary the thinner has to keep. A new width is taken once the target is
+    three quarters of the way to the next level.
     """
-    floor = max(1, round(brush * FLOOR_SHARE))
-    step = max(1, math.ceil((brush - floor) / levels)) if levels else 1
+    floor, widths = width_levels(brush, levels)
+    nearest = lambda target: min(reversed(widths), key=lambda width: abs(width - target))
     current = None
     out = []
     for value in pressure:
-        target = floor + value * (brush - floor)
-        if current is None or abs(target - current) >= step:
-            current = max(floor, min(brush, brush - step * round((brush - target) / step)))
+        target = floor + value ** PRESSURE_GAMMA * (brush - floor)
+        if current is None:
+            current = nearest(target)
+        else:
+            index = widths.index(current) + (target > current) - (target < current)
+            if 0 <= index < len(widths) and widths[index] != current:
+                if abs(target - current) >= abs(widths[index] - current) * HYSTERESIS:
+                    current = nearest(target)
         out.append(current)
     return out
 
@@ -371,7 +389,7 @@ def main() -> None:
     parser.add_argument("--trace", type=Path, default=TRACE_DIR)
     parser.add_argument("--brush", type=int, nargs="+", default=[6, 12, 32])
     parser.add_argument("--wobble", type=float, default=0.15)
-    parser.add_argument("--levels", type=int, nargs="+", default=[6], help="widths per brush; 0 = every pixel")
+    parser.add_argument("--levels", type=int, nargs="+", default=[6], help="widths per brush (the client's is 6); 0 = every pixel")
     parser.add_argument("--seed", type=int, default=828)
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
