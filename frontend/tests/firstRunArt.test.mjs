@@ -25,14 +25,13 @@ test("a deal is the same in the same order, and every tilt, drop and size is sma
     for (const doodle of [...art.left, ...art.right]) {
       assert.ok(Math.abs(doodle.rotate) <= 9, `tilt ${doodle.rotate}`);
       assert.ok(Math.abs(doodle.shift) <= 14, `drop ${doodle.shift}`);
-      assert.ok(doodle.scale >= 0.8 && doodle.scale <= 1.2, `size ${doodle.scale}`);
+      assert.ok(doodle.scale >= 0.85 && doodle.scale <= 1.15, `size ${doodle.scale}`);
     }
-    assert.ok(art.corner === "left" || art.corner === "right");
   }
 });
 
 test("the deal follows the rolls it is given", () => {
-  const art = pickArt(["a", "b", "c", "d"], rolls([0.9, 0, 0.5, 0.5, 0.5, 0, 0.5, 0.5, 0.5, 0, 0.5, 0.5, 0.5, 0.2]));
+  const art = pickArt(["a", "b", "c", "d"], rolls([0.9, 0, 0.5, 0.5, 0.5, 0, 0.5, 0.5, 0.5, 0, 0.5, 0.5, 0.5]));
   // First roll 0.9: two doodles left, one right.
   assert.equal(art.left.length, 2);
   assert.equal(art.right.length, 1);
@@ -40,7 +39,6 @@ test("the deal follows the rolls it is given", () => {
   assert.equal(art.left[0].rotate, 0);
   assert.equal(art.left[0].shift, 0);
   assert.equal(art.left[0].scale, 1);
-  assert.equal(art.corner, "left");
 });
 
 test("a pool with fewer doodles than the card wants deals what there is", () => {

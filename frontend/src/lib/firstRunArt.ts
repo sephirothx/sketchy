@@ -10,7 +10,10 @@
  *
  * The numbers are deliberately small. This is a lobby, not a scrapbook: a
  * doodle may lean, sit a little high or low, and be a little bigger than its
- * neighbour, and that is the whole of it.
+ * neighbour, and that is the whole of it. Every one of them is spent on a
+ * transform - rotate, translate, scale - and never on the box, so the deal
+ * cannot change the height of the card it decorates: a panel that is a
+ * different size on every load is a page that jumps.
  */
 
 import { DOODLES } from "./avatarDoodles.ts";
@@ -19,18 +22,17 @@ export interface FirstRunDoodle {
   name: string;
   /** Degrees, -9 to 9. */
   rotate: number;
-  /** Pixels up or down off the middle, -14 to 14. */
+  /** Pixels up or down off the middle, -14 to 14. Drawn, not laid out. */
   shift: number;
-  /** 0.8 to 1.2 of the size the card gives it. */
+  /** 0.85 to 1.15 of the size the card gives it. Drawn, not laid out. */
   scale: number;
 }
 
 export interface FirstRunArt {
-  /** Left of the tag; the first of these is also the phone-width corner doodle. */
+  /** Left of the tag; the first doodle of the deal is the one a narrow card
+   keeps, in its bottom-right corner. */
   left: FirstRunDoodle[];
   right: FirstRunDoodle[];
-  /** Which corner the single doodle takes when the card is too narrow for a row. */
-  corner: "left" | "right";
 }
 
 /** How many doodles the card holds when it is wide enough for them. */
@@ -56,11 +58,11 @@ export function pickArt(pool: readonly string[], roll: () => number): FirstRunAr
       name,
       rotate: Math.round(range(roll(), -9, 9) * 2) / 2,
       shift: Math.round(range(roll(), -14, 14)),
-      scale: Math.round(range(roll(), 0.8, 1.2) * 100) / 100,
+      scale: Math.round(range(roll(), 0.85, 1.15) * 100) / 100,
     };
     (index < leftCount ? left : right).push(doodle);
   }
-  return { left, right, corner: roll() < 0.5 ? "left" : "right" };
+  return { left, right };
 }
 
 let dealt: FirstRunArt | null = null;

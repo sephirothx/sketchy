@@ -105,11 +105,11 @@ export function FirstRunIdentity() {
       <div className="first-run-inner">
       {/* The deployment's own doodles, one side and the other, so that on a
           wide card the tag and the words sit in the middle of the block rather
-          than against its left edge. Narrower, one is left, in a corner. Which
-          three, which side and how each leans is this visit's deal
-          (`lib/firstRunArt.ts`). Decorative either way: the tag and the words
-          say everything. */}
-      <div className="first-run-art is-left" data-corner={art.corner} aria-hidden="true">
+          than against its left edge. Narrower, one is left, in the bottom-right
+          corner. Which three, which side and how each leans is this visit's
+          deal (`lib/firstRunArt.ts`), and none of it changes the card's size.
+          Decorative either way: the tag and the words say everything. */}
+      <div className="first-run-art is-left" aria-hidden="true">
         {art.left.map(doodle)}
       </div>
       {takenName && (
