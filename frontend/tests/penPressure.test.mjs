@@ -3,70 +3,49 @@ import test from "node:test";
 
 import {
   FULL_PRESSURE,
-  MAX_WIDTH_LEVELS,
   MIN_PEN_WIDTH,
-  createPressureQuantizer,
   createPressureSource,
-  widthLevels,
+  targetWidth,
+  wholeWidth,
 } from "../src/lib/penPressure.ts";
-import { createPointThinner, maxThinningErrorPx, THINNING_TOLERANCE_PX } from "../src/lib/pointThinning.ts";
+import { createPointThinner } from "../src/lib/pointThinning.ts";
+import { EXACT_TOLERANCE_PX, WIDTH_TOLERANCE_PX, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
 import { rasterizePath, floodFillPixels } from "../src/lib/canvasPixels.ts";
 
 const PRESETS = [2, 4, 6, 8, 12, 16, 24, 32];
 
-test("every brush tops out at itself, bottoms out at two pixels, and has at most six widths", () => {
-  for (const brush of [...PRESETS, 3, 64]) {
-    const { floor, widths } = widthLevels(brush);
-    assert.equal(widths.at(-1), brush, `brush ${brush} at full pressure is the selected size`);
-    assert.equal(widths[0], MIN_PEN_WIDTH, `brush ${brush} reaches the floor whatever its size`);
-    assert.equal(floor, MIN_PEN_WIDTH);
-    assert.ok(widths.length <= MAX_WIDTH_LEVELS, `brush ${brush}: ${widths}`);
-    assert.deepEqual(widths, [...new Set(widths)].sort((a, b) => a - b));
-    for (const width of widths) assert.ok(Number.isInteger(width) && width >= 1 && width <= 64);
-  }
-  assert.deepEqual(widthLevels(2).widths, [2], "the smallest brush has nowhere to go");
-  assert.deepEqual(widthLevels(6).widths, [2, 3, 4, 5, 6]);
-});
-
-test("the widths are spaced by ratio, so the fine end is not one jump", () => {
-  // Six even steps from 2 to 32 would be 2, 8, 14, ...: four times the width
-  // at the first step, where a pen's control matters most.
-  assert.deepEqual(widthLevels(32).widths, [2, 3, 6, 11, 18, 32]);
-  assert.deepEqual(widthLevels(12).widths, [2, 3, 4, 6, 8, 12]);
-  for (const brush of [16, 24, 32, 64]) {
-    const { widths } = widthLevels(brush);
-    const ratios = widths.slice(1).map((width, index) => width / widths[index]);
-    assert.ok(Math.max(...ratios) <= 2, `brush ${brush}: no step more than doubles the line (${widths})`);
-  }
-});
-
-test("the whole brush arrives before the pen is pressed as hard as it goes", () => {
+test("every brush spans two pixels to itself, and the whole of it arrives before full pressure", () => {
   for (const brush of PRESETS) {
-    assert.equal(createPressureQuantizer(brush).width(FULL_PRESSURE), brush);
-    assert.equal(createPressureQuantizer(brush).width(1), brush);
-    assert.equal(createPressureQuantizer(brush).width(0), widthLevels(brush).widths[0]);
+    assert.equal(wholeWidth(targetWidth(0, brush), brush), MIN_PEN_WIDTH);
+    assert.equal(targetWidth(FULL_PRESSURE, brush), brush);
+    assert.equal(targetWidth(1, brush), brush);
+    assert.equal(targetWidth(7, brush), brush);
+    assert.equal(targetWidth(Number.NaN, brush), Math.min(brush, MIN_PEN_WIDTH));
+    let last = 0;
+    for (let step = 0; step <= 100; step += 1) {
+      const width = targetWidth(step / 100, brush);
+      assert.ok(width >= last && width >= MIN_PEN_WIDTH && width <= brush);
+      last = width;
+    }
   }
-  // And not from a touch: a light hand on the largest brush is still a fine line.
-  assert.ok(createPressureQuantizer(32).width(0.05) <= 6);
-  assert.ok(createPressureQuantizer(32).width(FULL_PRESSURE / 2) < 32);
+  assert.equal(targetWidth(0.3, 2), 2, "the smallest brush has nowhere to go");
+  assert.ok(targetWidth(FULL_PRESSURE * 0.75, 32) < 32, "but not from three quarters of the way there");
 });
 
-test("each level owns a band of pressure a hand can stop in", () => {
-  // Mapped in pixels, a 32 px brush's three finest widths shared the lightest
-  // twentieth of the range. By ratio, every level is reachable on the way up
-  // in steps of 1% of the sensor's range, and none is narrower than 5%.
-  for (const brush of [12, 32]) {
-    const quantizer = createPressureQuantizer(brush);
-    const band = new Map();
-    for (let step = 0; step <= 100; step += 1) {
-      const width = quantizer.width(step / 100);
-      band.set(width, (band.get(width) ?? 0) + 1);
-    }
-    assert.deepEqual([...band.keys()], widthLevels(brush).widths);
-    for (const [width, samples] of band) {
-      if (width !== brush) assert.ok(samples >= 5, `brush ${brush}: ${width}px held for ${samples}%`);
-    }
-  }
+test("pressure moves the width by ratio: equal shares multiply it by equal amounts", () => {
+  // Half the way up the (lifted) pressure scale is the geometric middle of
+  // the brush's range - 8 px of 2..32 - not the arithmetic one, 17.
+  const half = FULL_PRESSURE * 0.5 ** (1 / 0.8);
+  assert.ok(Math.abs(targetWidth(half, 32) - 8) < 1e-9);
+  // So the fine end is not a sliver: a fifth of the sensor's range is spent under 6 px.
+  assert.ok(targetWidth(0.2, 32) < 6);
+});
+
+test("a keyframe's width is whole pixels inside the brush's range", () => {
+  assert.equal(wholeWidth(1.2, 32), 2);
+  assert.equal(wholeWidth(17.5, 32), 18);
+  assert.equal(wholeWidth(40, 32), 32);
+  assert.equal(wholeWidth(3.4, 2), 2);
 });
 
 test("two pixels is the floor because one does not hold a fill", () => {
@@ -94,34 +73,6 @@ test("two pixels is the floor because one does not hold a fill", () => {
   assert.ok(leaks(1) > 30);
 });
 
-test("pressure rises through the levels and falls back, never outside them", () => {
-  const quantizer = createPressureQuantizer(12);
-  const { widths } = widthLevels(12);
-  const seen = [];
-  for (let step = 0; step <= 100; step++) seen.push(quantizer.width(step / 100));
-  for (let step = 100; step >= 0; step--) seen.push(quantizer.width(step / 100));
-  assert.equal(seen[0], widths[0]);
-  assert.equal(seen[100], 12);
-  assert.equal(seen.at(-1), widths[0]);
-  for (const width of seen) assert.ok(widths.includes(width));
-  for (let index = 1; index <= 100; index++) assert.ok(seen[index] >= seen[index - 1]);
-  assert.equal(createPressureQuantizer(12).width(Number.NaN), widths[0]);
-  assert.equal(createPressureQuantizer(12).width(7), 12);
-});
-
-test("a hand held on the border of two levels does not chatter between them", () => {
-  const quantizer = createPressureQuantizer(32);
-  let changes = 0;
-  let last = quantizer.width(0.3);
-  for (let sample = 0; sample < 500; sample++) {
-    // +/- 2% of the sensor's range around one pressure: noise, not intent.
-    const width = quantizer.width(0.3 + 0.02 * Math.sin(sample * 1.7));
-    if (width !== last) changes += 1;
-    last = width;
-  }
-  assert.ok(changes <= 1, `${changes} changes`);
-});
-
 test("only a pen that has shown a working sensor is believed", () => {
   const source = createPressureSource();
   assert.equal(source.trusts("mouse", 0.5), false);
@@ -134,30 +85,97 @@ test("only a pen that has shown a working sensor is believed", () => {
   assert.equal(source.trusts("mouse", 0.07), false);
 });
 
-test("the thinner keeps the point two widths share, and every kept width is its whole run's", () => {
-  // A ruler-straight line: without widths the thinner keeps only its ends.
-  const line = Array.from({ length: 61 }, (_, i) => ({ x: 0.1 + i / 200, y: 0.5 }));
-  const plain = createPointThinner(line[0]);
-  const keptPlain = [line[0], ...line.slice(1).flatMap((p) => plain.push(p)), ...plain.end()];
-  assert.equal(keptPlain.length, 2);
 
-  const widthAt = (i) => (i <= 20 ? 3 : i <= 40 ? 7 : 5);
-  const pen = line.map((p, i) => ({ ...p, width: widthAt(i) }));
-  const thinner = createPointThinner(pen[0]);
-  const kept = [pen[0], ...pen.slice(1).flatMap((p) => thinner.push(p)), ...thinner.end()];
-  // The ends, and sample 20 and 40: where one width's last segment ends.
-  assert.deepEqual(kept.map((p) => Math.round((p.x - 0.1) * 200)), [0, 20, 40, 60]);
-  assert.deepEqual(kept.slice(1).map((p) => p.width), [3, 7, 5]);
-  assert.ok(maxThinningErrorPx(pen, kept) <= THINNING_TOLERANCE_PX);
+// --- which widths are sent ----------------------------------------------------------
+
+const RANGE = { floor: 2, brush: 32 };
+
+/** Keyframes for a width curve sampled every `step` pixels of path. */
+function keyframes(curve, step = 3) {
+  const thinner = createWidthThinner({ at: 0, width: curve[0] }, RANGE);
+  const keys = [{ at: 0, width: curve[0] }];
+  let previous = null;
+  curve.slice(1).forEach((width, index) => {
+    const sample = { at: (index + 1) * step, width };
+    if (thinner.push(sample) && previous) keys.push(previous);
+    previous = sample;
+  });
+  keys.push(previous);
+  return keys;
+}
+
+function rampAt(keys, at) {
+  const next = keys.findIndex((key) => key.at >= at);
+  if (next <= 0) return keys[Math.max(0, next)].width;
+  const [a, b] = [keys[next - 1], keys[next]];
+  return a.width + (b.width - a.width) * ((at - a.at) / (b.at - a.at));
+}
+
+test("a swell and a taper are a few keyframes, and no sample is further from their ramps than the tolerance", () => {
+  // Lands, leans in over sixty samples, holds, eases off: the shape of a stroke.
+  const curve = [];
+  for (let i = 0; i <= 60; i += 1) curve.push(2 + 30 * (0.5 - 0.5 * Math.cos((i / 60) * Math.PI)));
+  for (let i = 0; i < 80; i += 1) curve.push(32);
+  for (let i = 0; i <= 60; i += 1) curve.push(32 - 30 * (0.5 - 0.5 * Math.cos((i / 60) * Math.PI)));
+  const keys = keyframes(curve);
+  assert.ok(keys.length <= 16, `${keys.length} keyframes for ${curve.length} samples`);
+  curve.forEach((width, index) => {
+    const error = Math.abs(width - rampAt(keys, index * 3));
+    assert.ok(error <= widthTolerance(width, RANGE) + 1e-9, `sample ${index}: ${width} drawn ${rampAt(keys, index * 3)}`);
+  });
 });
 
-test("a flush between two widths still leaves each segment one width", () => {
-  const thinner = createPointThinner({ x: 0.1, y: 0.5, width: 3 });
-  assert.deepEqual(thinner.push({ x: 0.11, y: 0.5, width: 3 }), []);
-  assert.deepEqual(thinner.flush().map((p) => p.width), [3]);
-  // Nothing pending: the first sample at the new width just becomes pending,
-  // and the anchor it will be joined to is the boundary.
-  assert.deepEqual(thinner.push({ x: 0.12, y: 0.5, width: 7 }), []);
-  assert.deepEqual(thinner.push({ x: 0.13, y: 0.5, width: 7 }), []);
-  assert.deepEqual(thinner.end().map((p) => [p.x, p.width]), [[0.13, 7]]);
+test("a steady hand sends nothing, however its sensor wobbles inside the tolerance", () => {
+  const curve = Array.from({ length: 300 }, (_, i) => 20 + 1.4 * Math.sin(i * 1.7));
+  assert.equal(keyframes(curve).length, 2, "the start and the end");
+  assert.equal(widthTolerance(20, RANGE), 3);
+  assert.equal(widthTolerance(4, RANGE), WIDTH_TOLERANCE_PX, "a pixel matters on a fine line");
+  // Exact at the ends of the range, and never tightening faster than the width moves.
+  assert.equal(widthTolerance(32, RANGE), EXACT_TOLERANCE_PX);
+  assert.equal(widthTolerance(2, RANGE), EXACT_TOLERANCE_PX);
+  for (let width = 2; width < 32; width += 0.25) {
+    assert.ok(Math.abs(widthTolerance(width + 0.25, RANGE) - widthTolerance(width, RANGE)) <= 0.25 + 1e-9);
+  }
+});
+
+test("a stroke held at full pressure is drawn at the selected size, wherever the keyframes fall", () => {
+  // Up to the brush, a long hold there, and off again: a chord across the
+  // hold is within the tolerance of every sample on it, and must not do.
+  for (const brush of [6, 32]) {
+    const range = { floor: 2, brush };
+    const curve = [];
+    for (let i = 0; i <= 30; i += 1) curve.push(2 + (brush - 2) * (i / 30));
+    for (let i = 0; i < 90; i += 1) curve.push(brush);
+    for (let i = 0; i <= 30; i += 1) curve.push(brush - (brush - 2) * (i / 30));
+    const thinner = createWidthThinner({ at: 0, width: 2 }, range);
+    const keys = [{ at: 0, width: 2 }];
+    let previous = null;
+    curve.slice(1).forEach((width, index) => {
+      const sample = { at: (index + 1) * 3, width };
+      if (thinner.push(sample) && previous) keys.push(previous);
+      previous = sample;
+    });
+    keys.push(previous);
+    for (let index = 31; index <= 119; index += 1) {
+      assert.equal(Math.round(rampAt(keys, index * 3)), brush, `brush ${brush}, sample ${index}`);
+    }
+  }
+});
+
+test("a keyframe lands on a kept point: the point thinner gives up its pending sample when asked", () => {
+  // A ruler-straight line keeps only its ends - unless a keyframe needs a point in between.
+  const line = Array.from({ length: 41 }, (_, i) => ({ x: 0.1 + i / 200, y: 0.5 }));
+  const thinner = createPointThinner(line[0]);
+  const kept = [line[0]];
+  line.slice(1).forEach((point, index) => {
+    if (index + 1 === 21) {
+      const forced = thinner.flush();
+      forced[0].key = 9;
+      kept.push(...forced);
+    }
+    kept.push(...thinner.push(point));
+  });
+  kept.push(...thinner.end());
+  assert.deepEqual(kept.map((point) => Math.round((point.x - 0.1) * 200)), [0, 20, 40]);
+  assert.deepEqual(kept.map((point) => point.key), [undefined, 9, undefined]);
 });

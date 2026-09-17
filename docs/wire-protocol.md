@@ -1080,49 +1080,83 @@ corner is the start mirrored through the apex's column, so swapping them gives a
 different triangle (#787). Every client derives that third corner from the two, so it
 is never sent; it can fall outside the canvas, where the rasterizer clips it.
 
-### A width change inside a path
+### A width keyframe inside a path
 
-A path's width can change part way along it (#828, R-DRAW-16): a pen's pressure, which
-the client quantizes to whole pixels. In a record stream — tags 6, 7 and 8 — the byte
-`0x81` where a record would start is not an offset but a change: **one more byte
-follows, the new width (1 – 64), and then the record of the point it applies from**.
-The segment ending at that point is the first painted at the new width, so every
-segment has one constant width and none tapers; that is what keeps a segment painted in
-parts exact (below) and a fill's edges the same everywhere.
+A path's width can change along it (#828, R-DRAW-16): a pen's pressure. In a record
+stream — tags 6, 7 and 8 — the byte `0x81` where a record would start is not an offset
+but a **width keyframe**: **one more byte follows, the width (1 – 64), and then the
+record of the point the path has that width at**.
 
 ```
-17 0018 81 05 100c 100c      relative: a point, then width 5 from the next point on
+17 0018 81 05 100c 100c      relative: a point, then "5 px wide at the next point"
 ```
 
+**Between two keyframes the width is a straight line from the one to the other along
+the length of the path**; the path's start is a keyframe at the width in its
+`draw_start`, and after the last keyframe the width holds. No painter paints anything
+else, and none is sent how: each derives the ramp from the points and keyframes it
+holds ([`lib/pathWidths.ts`](../frontend/src/lib/pathWidths.ts)) — the stretch cut into
+pieces a pixel of width apart, equal shares of its length, the cuts snapped to the
+quarter-pixel grid the coordinates sit on — so the drawer, a viewer and a replay still
+rasterize one picture and a fill sees the same edges everywhere. Every *piece* has one
+constant radius, which is what keeps a segment painted in parts exact (below): a ramp is
+only more capsules. A keyframe at the width the path already has is legal and means
+something: it is where a later ramp starts.
+
+> **Why keyframes, and not the width itself.** The first version sent the width as one
+> of six levels per brush, when the level changed, and painted it as sent: a line that
+> held 11 px and then held 18 px, with a shoulder between, however the levels were
+> chosen. A hand's pressure is a smooth curve, and a smooth curve is a few points with
+> straight lines between them: a sample becomes a keyframe only when a straight ramp
+> past it would miss some sample's width by more than 15% (a pixel at least), the same
+> whole-stroke bound the point thinner holds for position
+> ([`lib/widthKeyframes.ts`](../frontend/src/lib/widthKeyframes.ts)). A swell from 2 px
+> to 32 that was five visible steps is one ramp and usually two keyframes.
+>
 > **Why in-band.** A message is what live drawing costs, not a byte (§1). A frame of
-> its own per change would be a second Socket.IO event — an envelope, a WebSocket
+> its own per keyframe would be a second Socket.IO event — an envelope, a WebSocket
 > header and a unit of the drawing budget — to carry one byte, and it would split the
 > batch it fell inside; a width byte on every point would tax the strokes that never
-> change width, which is every stroke from a mouse. In-band, a change is two bytes in a
+> change width, which is every stroke from a mouse. In-band, a keyframe is two bytes in a
 > frame that was being sent anyway and a path with none is byte for byte what it was.
 > Measured over the recorded traces with a pressure curve laid on them
-> (`benchmarks/path_widths.py`, brush 12, at most six widths, deflated and framed):
-> **+6 – 15% and no message added**, against +16 – 20% for a byte per point, +49 – 92%
-> and twice the messages for a frame per change, and +71 – 130% for ending the path and
-> opening another — which would also make Undo remove a sliver and turn 37 strokes into
-> 314 actions. The number of widths is what decides it: at one-pixel steps a 32 px brush
-> changes on two thirds of its points and in-band costs more than a byte per point, so the
-> client gives a brush at most six widths rather than stepping by a pixel
-> ([`lib/penPressure.ts`](../frontend/src/lib/penPressure.ts)), which holds every brush
-> size on every trace between +6% and +15%. (Those were +4 – 11% while the floor was a
-> quarter of the brush; the range a pen can use was widened on purpose, R-DRAW-17, and
-> this is what the extra changes of width cost.)
+> (`benchmarks/path_widths.py`, deflated and framed, against the same strokes at one
+> width): **+1 – 4% on a 6 px brush, +9 – 11% on a 12, +14 – 22% on a 32, and no message
+> added**; a byte per point is +3 – 23%, a frame per keyframe +33 – 168% with two to four
+> times the messages, and the six stepped levels were +6 – 15%. The largest brush costs
+> the most because its range is the widest and a wobble of the sensor is more pixels
+> there; on one trace it is dearer than a byte per point (+22% against +18%), which is
+> the price of costing a mouse nothing. The tolerance is exact where the width is the
+> brush's own or its floor, tightening toward them gradually: full pressure is promised
+> to draw the selected size (R-DRAW-17), and a chord across a stroke held there is
+> otherwise within tolerance of every sample on it.
+
+**What a viewer may assume, and what the drawer's client therefore promises.** A viewer
+paints a frame when it arrives, before the next keyframe exists, so it paints whatever
+follows a frame's last keyframe at that keyframe's width. A later keyframe of another
+width would ramp back across ink already painted flat, so the client never sends one
+unless the keyframe it ramps from is **in the same frame or on the last point of the
+frame before** ([`lib/penStroke.ts`](../frontend/src/lib/penStroke.ts)): a frame that
+goes out part way through a change carries a keyframe on its last point saying how far
+the width got, and a change that begins after frames with nothing to say gets a **hold**
+— a keyframe at the old width — on the first point of its own frame. The server does
+not check this; a client that broke it would show its viewers a line that a resync
+redraws, and nothing else. It is what lets a live batch be ramped from the point it
+joins and come out as the whole path will
+(`frontend/tests/pathWidths.test.mjs` holds the drawer's ink, a viewer's frames and the
+whole path to one raster).
 
 The price is one value of the delta range: `0x81` was an offset of −127 quarter-pixels
 and is now the marker, so that step escapes. The width is absolute, not a step from the
-last, so a frame still validates on its own the way its points do. Decoded, the changes
-are `widths: [[index, width], …]` beside `points`, ascending by index into that batch.
+last, so a frame still validates on its own the way its points do. Decoded, the
+keyframes are `widths: [[index, width], …]` beside `points`, ascending by index into that
+batch.
 
-The encoder never sends a frame with a change as the absolute form, which has no
+The encoder never sends a frame with a keyframe as the absolute form, which has no
 records: it is relative when the open path's last point is known — escaping if the first
 step is too far, as a final batch does — and otherwise the delta form, whose first point
-is not a record, so a change there is refused. A change with no point after it in the
-same frame, two changes on one point, or a width outside 1 – 64 refuses the frame.
+is not a record, so a keyframe there is refused. A keyframe with no point after it in the
+same frame, two on one point, or a width outside 1 – 64 refuses the frame.
 
 ### Coordinates
 
@@ -1162,7 +1196,7 @@ Colors are `#rrggbb` strings on the payload side and three raw bytes on the wire
 | --- | --- | --- |
 | `draw_start` | `{x: 0.25, y: 0.75, color: "#aabbcc", width: 4}` | `10 aabbcc 04 2003 0807` |
 | `draw_move` | `{points: [{0.1,0.2}, {1.2,-0.1}]}` | `11 4001 e001 000f 10ff` |
-| `draw_move` | three points from (0.5, 0.5), `widths: [[1, 5]]` | `17 0018 81 05 100c 100c` |
+| `draw_move` | three points from (0.5, 0.5), a keyframe `widths: [[1, 5]]` | `17 0018 81 05 100c 100c` |
 | `draw_end` | — | `12` |
 | `draw_shape` | ellipse `#123456`, width 64, (0.1,0.2)→(0.8,0.9) | `13 01 123456 40 4001 e001 000a 7008` |
 | `draw_fill` | `{x: 0.25, y: 0.75, color: "#fedcba"}` | `14 fedcba c800 c201` |
@@ -1182,11 +1216,10 @@ are kept because they fail that test. The sample still pending when the flush ti
 is sent with that flush, so a viewer watches a straight stroke advance every flush rather
 than only when it bends or ends.
 
-A pen's sample carries the width its pressure gives it (#828, R-DRAW-17), and a change of
-width is a corner as far as the thinner is concerned: the sample before it is kept, as
-the point the two widths share, because the one segment that replaces a run of dropped
-samples has one width. That kept point is what the width change above is sent in front
-of. Samples from a mouse carry no width and thin exactly as before.
+A pen's width keyframe (#828, above) says how wide the path is *at a point*, so the point
+has to be one the path keeps: when a sample becomes a keyframe the thinner gives up its
+pending sample, which is that one, and the keyframe is sent in front of it. Samples from
+a mouse have no keyframes and thin exactly as before.
 
 The kept samples are the stroke, on both sides: the drawer's own canvas is painted from
 them, not from the raw pointer (the raw segment under the pen is shown on the preview
@@ -1241,7 +1274,7 @@ rejects, before anything is recorded or rebroadcast:
 - A version other than 1.
 - Any frame whose length does not exactly match its tag's layout.
 - A brush width outside 1 – 64, an unknown shape id, a fill point outside the canvas.
-- A width change that is misplaced (above), and any coordinate packed to −32768.
+- A width keyframe that is misplaced (above), and any coordinate packed to −32768.
 
 On top of the codec, [`drawing.py`](../backend/app/handlers/drawing.py) refuses:
 
@@ -1539,8 +1572,8 @@ Packed record layouts (tags are **history** tags, distinct from the live-drawing
 | `CLEAR` | 3 | `<B` | tag |
 
 **A width marker** is a path entry whose x is `−32768` (`WIDTH_MARKER_X`), which no
-coordinate packs to; its y is the new width, and it applies from the segment ending at
-the next point (#828). It is shaped like a point on purpose. The record stays a header
+coordinate packs to; its y is a width, and it is a keyframe (§6): the path is that wide
+at the next point (#828). It is shaped like a point on purpose. The record stays a header
 and a run of four-byte entries, so a path is still extended by appending, its last four
 bytes are still its last point — what a relative frame is resolved against — and the
 length check and the size bound below are unchanged. A marker is never a path's first
@@ -1596,8 +1629,8 @@ points recoded as deltas from the previous point, then deflated, behind a header
 declares the frame's inflated length. `SKCD` v2 is what a finished drawing is written as
 now (#828): v1 reads and restores a width marker exactly, since it treats every entry
 alike, but it chains the marker into the differences — two large deltas, one to reach
-it and one to leave — so a pen drawing stored **50% larger** than the same strokes at
-one width where v2 stores it **18% larger** (`benchmarks/path_widths.py`, the long hand
+it and one to leave — so a pen drawing stored **68% larger** than the same strokes at
+one width where v2 stores it **20% larger** (`benchmarks/path_widths.py`, the long hand
 trace at brush 12). v2 copies a marker through and differences the points either side
 against each other. For a recoded marker to be tellable from a recoded point, x is
 differenced modulo **65 535** rather than 2¹⁶ — a path's x has exactly that many values,

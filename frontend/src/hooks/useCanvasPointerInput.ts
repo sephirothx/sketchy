@@ -22,15 +22,13 @@ import {
   encodePathStart,
   encodeShape,
 } from "../lib/liveDrawing";
-import {
-  createPressureQuantizer,
-  createPressureSource,
-  type PressureQuantizer,
-} from "../lib/penPressure";
+import { createPressureSource, targetWidth, wholeWidth, widthRange } from "../lib/penPressure";
+import { PenStroke, type PaintRun } from "../lib/penStroke";
 import { createPointThinner, type PointThinner, type ThinnedPoint } from "../lib/pointThinning";
+import { createWidthThinner, widthTolerance, type WidthThinner } from "../lib/widthKeyframes";
 import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
-import type { DrawTool, StrokeFillPayload, StrokePoint, WidthChange } from "../types";
+import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
 
 // One per tab, not per canvas: whether this device's pen has a working sensor
 // is a fact about the device, and the scratch pad and the game share it.
@@ -85,15 +83,14 @@ export function useCanvasPointerInput(
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);
-  // A pen's pressure as widths (#828). The quantizer lives for one brush
-  // stroke; null for a mouse, a finger, the eraser, a pen with no sensor.
-  // `queuedWidthRef` is the width the path is at once everything queued is
-  // sent, `sentWidthRef` the width the server has it at, and the changes
-  // between the two ride the next frame beside the points they apply from.
-  const quantizerRef = useRef<PressureQuantizer | null>(null);
-  const pendingWidthsRef = useRef<WidthChange[]>([]);
-  const queuedWidthRef = useRef(brushWidth);
-  const sentWidthRef = useRef(brushWidth);
+  // A pen's pressure (#828). All of it lives for one brush stroke, and is null
+  // for a mouse, a finger, the eraser and a pen with no sensor. `penStroke`
+  // places the stroke's width keyframes in its frames and says what this
+  // canvas may paint; `widthThinner` picks which samples are keyframes, over
+  // the path's length (`arc`) and the width the pressure asks for (`target`).
+  const penStrokeRef = useRef<PenStroke | null>(null);
+  const widthThinnerRef = useRef<WidthThinner | null>(null);
+  const penRef = useRef({ arc: 0, previousArc: 0, target: 0, last: { x: 0, y: 0 } });
   // For a brush stroke, the last sample *kept* (#560), which is where the
   // next kept segment starts on this canvas and on every viewer's; for a
   // shape, the pointer's last position.
@@ -155,25 +152,14 @@ export function useCanvasPointerInput(
     };
   }
 
-  /** The sample, with the width the pen's pressure gives it when it has one. */
-  function sampledPoint(event: ReactPointerEvent<HTMLCanvasElement>): ThinnedPoint {
-    const point: ThinnedPoint = normalizedPoint(event);
-    const quantizer = quantizerRef.current;
-    if (quantizer) point.width = quantizer.width(event.pressure);
-    return point;
+  function paintRuns(context: CanvasRenderingContext2D | null, runs: PaintRun[]) {
+    if (!context || runs.length === 0) return;
+    const activeColor = hexToRgba(tool === "eraser" ? "#ffffff" : color);
+    for (const run of runs) rasterizePath(context, run.points, run.width / 2, activeColor, false);
   }
 
   function drawLocalSegment(from: StrokePoint, to: StrokePoint, width: number) {
-    const context = contextRef.current;
-    if (!context) return;
-    const activeColor = tool === "eraser" ? "#ffffff" : color;
-    rasterizePath(
-      context,
-      [toPixels(from), toPixels(to)],
-      width / 2,
-      hexToRgba(activeColor),
-      false,
-    );
+    paintRuns(contextRef.current, [{ points: [toPixels(from), toPixels(to)], width }]);
   }
 
   // The preview layer, repainted as one picture: the circle cursor if there
@@ -186,43 +172,72 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     const pending = thinner?.pending();
     const previewContext = previewContextRef.current;
-    if (!thinner || !pending || !previewContext) return;
-    const activeColor = tool === "eraser" ? "#ffffff" : color;
-    rasterizePath(
-      previewContext,
-      [toPixels(thinner.anchor()), toPixels(pending)],
-      (pending.width ?? brushWidth) / 2,
-      hexToRgba(activeColor),
-      false,
-    );
+    if (!thinner || !previewContext) return;
+    if (!pending) {
+      // A pen's kept points wait for the keyframe that decides their width.
+      const penOnly = penStrokeRef.current;
+      if (penOnly) paintRuns(previewContext, penOnly.provisional(null, wholeWidth(penRef.current.target, brushWidth)));
+      return;
+    }
+    const penStroke = penStrokeRef.current;
+    if (penStroke) {
+      // Everything since the last keyframe, heading for the width the pen is
+      // asking for now: what the next keyframe or flush will make ink of.
+      paintRuns(
+        previewContext,
+        penStroke.provisional(toPixels(pending), wholeWidth(penRef.current.target, brushWidth)),
+      );
+      return;
+    }
+    paintRuns(previewContext, [{ points: [toPixels(thinner.anchor()), toPixels(pending)], width: brushWidth }]);
   }
 
-  // Samples the thinner kept: painted here from the last kept sample, and
-  // queued for the frame, so the drawer's canvas and every viewer's are
-  // rasterized from the same polyline (#560).
-  //
-  // A kept sample's width is the width of the segment ending at it - the
-  // thinner never folds two widths into one segment - so where it differs
-  // from what the path is at, the change is queued at this point's place in
-  // the frame, which is exactly where a viewer will start painting it.
+  // Samples the thinner kept: queued for the frame and painted from the last
+  // kept sample, so the drawer's canvas and every viewer's are rasterized
+  // from the same polyline (#560). A pen's are painted through `penStroke`,
+  // by the rule every painter follows - the width ramps between keyframes -
+  // which means not before the keyframe that decides them exists.
   function acceptPoints(points: ThinnedPoint[]) {
+    const penStroke = penStrokeRef.current;
     for (const point of points) {
-      const width = point.width ?? queuedWidthRef.current;
-      if (lastPointRef.current) drawLocalSegment(lastPointRef.current, point, width);
-      if (width !== queuedWidthRef.current) {
-        pendingWidthsRef.current.push([pendingPointsRef.current.length, width]);
-        queuedWidthRef.current = width;
+      if (penStroke) {
+        const { runs, held } = penStroke.accept(toPixels(point), point.key);
+        paintRuns(contextRef.current, runs);
+        // The keyframe had to stand in as a hold: the width asked for was
+        // not placed, so the search for the next keyframe starts from here.
+        if (held) widthThinnerRef.current?.anchorAt({ at: penRef.current.previousArc, width: penStroke.width });
+      } else if (lastPointRef.current) {
+        drawLocalSegment(lastPointRef.current, point, brushWidth);
       }
       lastPointRef.current = point;
       pendingPointsRef.current.push({ x: point.x, y: point.y });
     }
   }
+
+  // A frame is about to go: if the pen's width is part way through a change,
+  // the frame's last point says how far it got, so a viewer can paint the
+  // frame without waiting for the keyframe the change ends on. A wobble inside
+  // the keyframe tolerance says nothing - or every frame of a steady hand
+  // would carry a keyframe for the sensor's noise. `final` is the pen lifting:
+  // whatever the width got to is where the stroke ends.
+  function flushPenStroke(final = false) {
+    const penStroke = penStrokeRef.current;
+    if (!penStroke) return;
+    const { arc, target } = penRef.current;
+    const moved = final || Math.abs(target - penStroke.width) > widthTolerance(target, widthRange(brushWidth));
+    const { runs, placed } = penStroke.flush(moved ? wholeWidth(target, brushWidth) : penStroke.width);
+    paintRuns(contextRef.current, runs);
+    if (placed) widthThinnerRef.current?.anchorAt({ at: arc, width: penStroke.width });
+  }
+
   // The flush timer below is armed once and must paint with the colour and
   // width the stroke has *now*, not the ones it closed over when armed.
   const acceptRef = useRef(acceptPoints);
+  const flushPenStrokeRef = useRef(flushPenStroke);
   const repaintPreviewRef = useRef(repaintPreview);
   useEffect(() => {
     acceptRef.current = acceptPoints;
+    flushPenStrokeRef.current = flushPenStroke;
     repaintPreviewRef.current = repaintPreview;
     sendPendingPointsRef.current = sendPendingPoints;
   });
@@ -235,9 +250,9 @@ export function useCanvasPointerInput(
   function sendPendingPoints(ends = false): boolean {
     const points = pendingPointsRef.current;
     if (points.length === 0) return false;
-    const widths = pendingWidthsRef.current;
+    const penStroke = penStrokeRef.current;
+    const widths = penStroke?.takeFrame() ?? [];
     pendingPointsRef.current = [];
-    pendingWidthsRef.current = [];
     const previous = lastSentRef.current;
     if (ends && !previous) return false;
     const sent = protocol.sendPathFrame(
@@ -250,11 +265,11 @@ export function useCanvasPointerInput(
     );
     if (sent) {
       lastSentRef.current = points[points.length - 1];
-      sentWidthRef.current = queuedWidthRef.current;
+      penStroke?.frameSent();
     } else {
-      // The server's path is still at the width it had: the next frame has
-      // to say so again rather than assume a change that never arrived.
-      queuedWidthRef.current = sentWidthRef.current;
+      // The server's path is still at the width it had: the next keyframe
+      // has to ramp from there rather than from one that never arrived.
+      penStroke?.frameRefused();
     }
     return sent;
   }
@@ -268,8 +283,10 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     if (thinner) acceptPoints(thinner.end());
     thinnerRef.current = null;
-    quantizerRef.current = null;
+    flushPenStroke(true);
     if (!sendPendingPoints(true)) protocol.sendPathFrame(encodePathEnd());
+    penStrokeRef.current = null;
+    widthThinnerRef.current = null;
     lastSentRef.current = null;
     protocol.finishPathAction();
     repaintPreview(pointerPosRef.current);
@@ -337,8 +354,7 @@ export function useCanvasPointerInput(
     const pressed = pressureSource.trusts(event.pointerType, event.pressure)
       && tool === "brush"
       && penPressure;
-    quantizerRef.current = pressed ? createPressureQuantizer(brushWidth) : null;
-    const point = sampledPoint(event);
+    const point = normalizedPoint(event);
     pointerPosRef.current = point;
     repaintPreview(point);
     if ((tool === "brush" || tool === "eraser") && !strokeAvailable) {
@@ -351,11 +367,11 @@ export function useCanvasPointerInput(
       const activeColor = tool === "eraser" ? "#ffffff" : color;
       // A pen lands lightly, so its path opens at the width it landed at: the
       // dot every screen paints for a start is then no wider than the line
-      // that leaves it.
-      const startWidth = point.width ?? brushWidth;
-      queuedWidthRef.current = startWidth;
-      sentWidthRef.current = startWidth;
-      pendingWidthsRef.current = [];
+      // that leaves it, and it is the keyframe the first change ramps from.
+      const startWidth = pressed ? wholeWidth(targetWidth(event.pressure, brushWidth), brushWidth) : brushWidth;
+      penStrokeRef.current = pressed ? new PenStroke(toPixels(point), startWidth) : null;
+      widthThinnerRef.current = pressed ? createWidthThinner({ at: 0, width: startWidth }, widthRange(brushWidth)) : null;
+      penRef.current = { arc: 0, previousArc: 0, target: startWidth, last: toPixels(point) };
       thinnerRef.current = createPointThinner(point);
       lastSentRef.current = point;
       drawLocalSegment(point, point, startWidth);
@@ -376,6 +392,47 @@ export function useCanvasPointerInput(
     }
   }
 
+  // One pen sample: how far along the path it is and the width it asks for,
+  // offered to the keyframe thinner. When that says the sample *before* this
+  // one has to be a keyframe, that sample is still pending in the point
+  // thinner - so it is forced out and kept, marked - or it was kept a moment
+  // ago for its own sake and the keyframe lands on it where it sits.
+  function trackPressure(
+    event: ReactPointerEvent<HTMLCanvasElement>,
+    point: StrokePoint,
+    thinner: PointThinner,
+  ) {
+    const penStroke = penStrokeRef.current;
+    const widthThinner = widthThinnerRef.current;
+    if (!penStroke || !widthThinner) return;
+    const pen = penRef.current;
+    const pixels = toPixels(point);
+    const moved = Math.hypot(pixels.x - pen.last.x, pixels.y - pen.last.y);
+    if (moved === 0 && pen.arc > 0) {
+      // Pressing harder on the spot moves nothing along the path; the width
+      // it asks for is taken up by the next sample that does.
+      pen.target = targetWidth(event.pressure, brushWidth);
+      return;
+    }
+    const before = widthThinner.pending();
+    pen.previousArc = pen.arc;
+    pen.arc += moved;
+    pen.last = pixels;
+    pen.target = targetWidth(event.pressure, brushWidth);
+    if (!widthThinner.push({ at: pen.arc, width: pen.target }) || !before) return;
+    const key = wholeWidth(before.width, brushWidth);
+    const forced = thinner.flush();
+    if (forced.length > 0) {
+      forced[0].key = key;
+      acceptPoints(forced);
+      return;
+    }
+    const keyed = penStroke.keyLast(key);
+    if (!keyed) return;
+    paintRuns(contextRef.current, keyed.runs);
+    if (keyed.held) widthThinner.anchorAt({ at: pen.previousArc, width: penStroke.width });
+  }
+
   function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (
       !isDrawer
@@ -384,7 +441,7 @@ export function useCanvasPointerInput(
         && event.pointerId !== activePointerIdRef.current)
     ) return;
     pressureSource.trusts(event.pointerType, event.pressure);
-    const point = sampledPoint(event);
+    const point = normalizedPoint(event);
     pointerPosRef.current = point;
     if (!inputActiveRef.current || tool === "fill") {
       repaintPreview(point);
@@ -398,7 +455,10 @@ export function useCanvasPointerInput(
         return;
       }
       const thinner = thinnerRef.current;
-      if (thinner) acceptPoints(thinner.push(point));
+      if (thinner) {
+        trackPressure(event, point, thinner);
+        acceptPoints(thinner.push(point));
+      }
       repaintPreview(point);
     } else {
       repaintPreview(point);
@@ -444,10 +504,9 @@ export function useCanvasPointerInput(
       const thinner = thinnerRef.current;
       if (thinner) {
         const forced = thinner.flush();
-        if (forced.length > 0) {
-          acceptRef.current(forced);
-          repaintPreviewRef.current(pointerPosRef.current);
-        }
+        if (forced.length > 0) acceptRef.current(forced);
+        flushPenStrokeRef.current();
+        repaintPreviewRef.current(pointerPosRef.current);
       }
       sendPendingPointsRef.current();
     }, flushIntervalMs);
@@ -459,8 +518,10 @@ export function useCanvasPointerInput(
     const thinner = thinnerRef.current;
     if (thinner) acceptRef.current(thinner.end());
     thinnerRef.current = null;
-    quantizerRef.current = null;
+    flushPenStrokeRef.current(true);
     if (!sendPendingPointsRef.current(true)) protocol.sendPathFrame(encodePathEnd());
+    penStrokeRef.current = null;
+    widthThinnerRef.current = null;
     lastSentRef.current = null;
     protocol.finishPathAction();
     inputActiveRef.current = false;
@@ -481,8 +542,8 @@ export function useCanvasPointerInput(
     activePointerIdRef.current = null;
     inputActiveRef.current = false;
     pendingPointsRef.current = [];
-    pendingWidthsRef.current = [];
-    quantizerRef.current = null;
+    penStrokeRef.current = null;
+    widthThinnerRef.current = null;
     lastPointRef.current = null;
     thinnerRef.current = null;
     lastSentRef.current = null;

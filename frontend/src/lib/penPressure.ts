@@ -17,37 +17,23 @@ not: a 1 px line is a row of holes, and a flood fill beside it leaked across
 in 710 of 720 angles and offsets tried, against none at 2 px. Two is also the
 smallest size the toolbar offers, so nothing thinner has ever been drawn.
 
-**A brush has at most `MAX_WIDTH_LEVELS` widths, spaced by ratio.** Every
-change of width costs two bytes on the wire and a point the thinner would
-otherwise have dropped (the run boundary has to be kept), so the widths are
-few: stepping by a pixel, a 32 px brush changed width on two thirds of its
-points and cost +50% on the drawer's uplink, worse than a width byte on every
-point, where six widths cost +10% and every brush on every recorded trace
-lands between +6% and +15% (`benchmarks/path_widths.py`, which mirrors the
-constants below). And they are
-spaced by ratio rather than by pixels - 2, 3, 6, 11, 18, 32 - because that is
-how a change of width is seen: from 2 px to 3 is as visible as from 18 to 32,
-and six even steps of 6 px would have jumped from 2 straight to 8 at the fine
-end, where a pen's control matters most, and spent three levels between 20
-and 32 that nobody could tell apart at a glance.
-
-**Pressure moves along that same scale.** The share of the way from the floor
-to the brush is taken in ratio too, so each level owns an equal band of
-pressure and none is a sliver the hand passes through without being able to
-stop in. Mapped in pixels instead, a 32 px brush's three finest widths would
-together have had the lightest twentieth of the range.
+**Pressure moves the width by ratio, not by pixels.** From 2 px to 3 is as
+visible as from 18 to 32, so equal shares of pressure multiply the width by
+equal amounts: half way is 8 px on the 32 px brush, not 17. Mapped in pixels,
+everything finer than 8 px on that brush would have lived in the lightest
+fifth of the range, where a hand cannot stop.
 
 **Full size comes before full pressure.** A sensor's 1.0 is as hard as the pen
 can be pressed, which nobody draws at: `FULL_PRESSURE` of it already gives the
 whole brush. Below that, pressure is raised to `PRESSURE_GAMMA`, a mild lift
 because an ordinary writing hand sits in the lower half of a sensor's range.
-Mild on purpose: at 0.6 the floor owned 2% of the range on a 32 px brush - a
-fine line in name only - and at 0.8 every level below the brush has at least
-5%, with the whole brush from about two thirds of the sensor's range up.
 
-**Hysteresis.** A new width is taken only once the target is three quarters of
-the way to the next level, not half: a hand held steady on the border of
-two levels would otherwise flip between them on every sample.
+**What this returns is continuous.** It used to be one of six levels per brush,
+because every change of width costs bytes; but however the levels were chosen
+and however their joins were drawn, a line that holds 11 px and then holds
+18 px has a shoulder. What is sent now is a few keyframes of this curve, with
+the width ramped between them (`widthKeyframes.ts`, `pathWidths.ts`), which
+costs about what the levels did and has no levels to see.
 
 **Which pens.** Only `pointerType === "pen"`. A mouse reports a constant 0.5
 while a button is down and a finger reports 0, 1 or a guess from its contact
@@ -57,78 +43,33 @@ would draw every stroke at a middling width for no reason, so a pen is only
 believed once it has reported some pressure that is not 0.5. A sensor's first
 contact is a small number, so a real one is believed from its first stroke. */
 
-/** How many widths a brush has between its floor and itself, inclusive. */
-export const MAX_WIDTH_LEVELS = 6;
 /** The thinnest a pen draws, in canvas pixels, whatever the brush. See above:
 1 px leaks fills. */
 export const MIN_PEN_WIDTH = 2;
 /** The share of a sensor's range that already draws the whole brush. */
 export const FULL_PRESSURE = 0.7;
-/** How far toward the next level, as a share of the gap, the target must be to move the width. */
-export const HYSTERESIS_STEPS = 0.75;
 /** Pressure, as a share of `FULL_PRESSURE`, is raised to this before it is mapped. */
 export const PRESSURE_GAMMA = 0.8;
 
 const UNSUPPORTED_PRESSURE = 0.5;
 
-export interface WidthLevels {
-  floor: number;
-  /** Ascending, from the floor to the brush itself. */
-  widths: number[];
-}
-
-export function widthLevels(brush: number): WidthLevels {
+/** The width a pressure (0-1) asks of a brush, in pixels and not yet whole:
+between the floor and the brush, by ratio. */
+export function targetWidth(pressure: number, brush: number): number {
   const floor = Math.min(brush, MIN_PEN_WIDTH);
-  const widths: number[] = [];
-  for (let level = 0; level < MAX_WIDTH_LEVELS; level += 1) {
-    // Equal ratios from the floor to the brush, to the nearest pixel. A small
-    // brush has fewer pixels than levels, so neighbours that round alike merge.
-    const width = Math.round(floor * (brush / floor) ** (level / (MAX_WIDTH_LEVELS - 1)));
-    if (width !== widths[widths.length - 1]) widths.push(width);
-  }
-  return { floor, widths };
+  if (brush <= floor) return brush;
+  const share = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure / FULL_PRESSURE)) : 0;
+  return floor * (brush / floor) ** (share ** PRESSURE_GAMMA);
 }
 
-/** Where a width sits between the floor (0) and the brush (1), by ratio. */
-function scalePosition(width: number, floor: number, brush: number): number {
-  return brush > floor ? Math.log(width / floor) / Math.log(brush / floor) : 0;
+/** The ends of a brush's range: what a resting pen and a full press draw. */
+export function widthRange(brush: number): { floor: number; brush: number } {
+  return { floor: Math.min(brush, MIN_PEN_WIDTH), brush };
 }
 
-export interface PressureQuantizer {
-  /** The width to draw at, given the latest pressure (0-1). */
-  width(pressure: number): number;
-}
-
-export function createPressureQuantizer(brush: number): PressureQuantizer {
-  const { floor, widths } = widthLevels(brush);
-  const positions = widths.map((width) => scalePosition(width, floor, brush));
-  let current: number | null = null;
-  const nearest = (target: number): number => {
-    let best = 0;
-    for (let index = 0; index < positions.length; index += 1) {
-      if (Math.abs(positions[index] - target) <= Math.abs(positions[best] - target)) best = index;
-    }
-    return best;
-  };
-  return {
-    width(pressure) {
-      const clamped = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure / FULL_PRESSURE)) : 0;
-      const target = clamped ** PRESSURE_GAMMA;
-      if (current === null) {
-        current = nearest(target);
-        return widths[current];
-      }
-      // Measured against the gap to the next level on the target's side:
-      // rounding to whole pixels leaves the gaps a little uneven, and the
-      // floor and the brush itself must both stay reachable.
-      const neighbour = current + Math.sign(target - positions[current]);
-      if (neighbour < 0 || neighbour >= positions.length || neighbour === current) return widths[current];
-      const gap = Math.abs(positions[neighbour] - positions[current]);
-      if (Math.abs(target - positions[current]) < gap * HYSTERESIS_STEPS) return widths[current];
-      current = nearest(target);
-      return widths[current];
-    },
-  };
+/** A keyframe's width: whole pixels, as the wire carries them, inside the brush's range. */
+export function wholeWidth(width: number, brush: number): number {
+  return Math.min(brush, Math.max(Math.min(brush, MIN_PEN_WIDTH), Math.round(width)));
 }
 
 export interface PressureSource {

@@ -452,8 +452,10 @@ export interface StrokeStartPayload {
   width: number;
 }
 
-/** A path's width changing part way along it (#828): `[index, width]`, the
-width from the segment that ends at `points[index]` on. Ascending by index. */
+/** A width keyframe (#828): `[index, width]`, the path is `width` wide at
+`points[index]`, and painters ramp between keyframes (`lib/pathWidths.ts`).
+Ascending by index. After ramping, the same shape carries the derived
+one-pixel steps, each applying from the segment that ends at its point. */
 export type WidthChange = [index: number, width: number];
 
 export interface StrokeMovePayload {

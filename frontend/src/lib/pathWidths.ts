@@ -1,13 +1,37 @@
-/** A path whose width changes along it (#828), as runs of one width each.
+/** A path whose width changes along it (#828): keyframes, and the ramps between them.
 
-A pen's pressure reaches the history as width changes between points, so a
-path is a sequence of runs rather than one polyline at one width. Every
-painter works a run at a time - the whole-path rasterizer, the replay's
-growing stroke, the viewer's live playback - because a run is exactly what
-they painted before: consecutive segments at one constant radius. That is
-also what keeps a segment painted in parts exact (`strokePlayback.ts`): no
-segment ever tapers. Runs meet at a shared point, where each one's round cap
-covers the join. */
+A pen's pressure reaches the history as a few **width keyframes** - "the path
+is this wide at this point" - and not as a width per point, which would cost a
+byte on every point of every stroke (`penPressure.ts`, `widthKeyframes.ts`).
+Between two keyframes the width is a straight line from the one to the other
+**along the length of the path**, and no painter paints anything else: the
+stretch is cut into pieces a pixel of width apart, each an equal share of its
+length, so a line swells and tapers half a pixel a side at a time and never
+steps. The path's start is a keyframe at the width it opened with; after the
+last keyframe the width holds.
+
+None of the pieces are on the wire or in the history. `expandWidthRamps`
+derives them from the points and keyframes every client already holds, and
+every painter goes through it - the drawer's own ink, a viewer's live
+playback, the whole-path replay, the timelapse - so they still rasterize one
+picture and a fill sees the same edges everywhere (R-DRAW-14). The cuts are
+snapped to the quarter-pixel grid the wire's own coordinates sit on, so two
+clients whose copies of a point differ by float dust cut in the same places.
+
+And every *piece* is still one constant radius, which is what keeps painting a
+segment in parts exact (`strokePlayback.ts`): a capsule split at a point on its
+own segment is the union of its halves, and a ramp is only more capsules.
+Pieces and runs meet at shared points, where each one's round cap covers the
+join.
+
+**What a live viewer may assume.** It paints a frame when it arrives, before
+the next keyframe exists, so it paints whatever follows a frame's last
+keyframe at that keyframe's width. That is only right if no later keyframe
+ramps back across ink already painted, and the drawer's client guarantees it
+(`useCanvasPointerInput.ts`): a keyframe of a new width is always preceded, in
+the same frame or on the last point of the one before, by a keyframe to ramp
+from. So a batch can be ramped from the point it joins, and come out as the
+whole path will. */
 
 import type { WidthChange } from "../types.ts";
 
@@ -69,4 +93,117 @@ export function segmentWidths(
     result.push(current);
   }
   return result;
+}
+
+const RAMP_GRID = 4; // quarter pixels, the wire's own coordinate scale
+
+interface PathPoint {
+  x: number;
+  y: number;
+}
+
+export interface RampedPath {
+  points: readonly PathPoint[];
+  width: number;
+  widths: WidthChange[] | undefined;
+}
+
+/** The same path with the width between every two keyframes ramped a pixel a
+piece along the path's length. The result is a path like any other - more
+points, and changes of a single pixel - so whatever paints a path paints this.
+A path with no keyframes comes back as it was. */
+export function expandWidthRamps(
+  points: readonly PathPoint[],
+  width: number,
+  widths: readonly WidthChange[] | undefined,
+): RampedPath {
+  if (!widths || widths.length === 0 || points.length < 2) {
+    return { points, width, widths: undefined };
+  }
+  const out: PathPoint[] = [points[0]];
+  const ramped: WidthChange[] = [];
+  let fromIndex = 0;
+  let fromWidth = width;
+  for (const [toIndex, toWidth] of widths) {
+    if (toIndex <= fromIndex || toIndex >= points.length) continue;
+    const steps = Math.abs(toWidth - fromWidth);
+    const lengths: number[] = [];
+    let total = 0;
+    for (let index = fromIndex; index < toIndex; index += 1) {
+      const length = Math.hypot(points[index + 1].x - points[index].x, points[index + 1].y - points[index].y);
+      lengths.push(length);
+      total += length;
+    }
+    if (steps === 0 || total === 0) {
+      // Nothing to ramp, or nowhere to: the width holds, or changes on the spot.
+      for (let index = fromIndex + 1; index <= toIndex; index += 1) out.push(points[index]);
+      if (steps !== 0) ramped.push([out.length - 1, toWidth]);
+    } else {
+      // One more piece than steps, so the stretch leaves at the width it came
+      // in at and arrives at the width it is going to.
+      const pieces = steps + 1;
+      const direction = Math.sign(toWidth - fromWidth);
+      let cut = 1;
+      let walked = 0;
+      for (let index = fromIndex; index < toIndex; index += 1) {
+        const length = lengths[index - fromIndex];
+        while (cut <= steps && (total * cut) / pieces <= walked + length) {
+          const t = length > 0 ? ((total * cut) / pieces - walked) / length : 1;
+          out.push({
+            x: Math.round((points[index].x + (points[index + 1].x - points[index].x) * t) * RAMP_GRID) / RAMP_GRID,
+            y: Math.round((points[index].y + (points[index + 1].y - points[index].y) * t) * RAMP_GRID) / RAMP_GRID,
+          });
+          // The piece that starts here ends at the next point pushed.
+          ramped.push([out.length, fromWidth + direction * cut]);
+          cut += 1;
+        }
+        walked += length;
+        out.push(points[index + 1]);
+      }
+    }
+    fromIndex = toIndex;
+    fromWidth = toWidth;
+  }
+  for (let index = fromIndex + 1; index < points.length; index += 1) out.push(points[index]);
+  return { points: out, width, widths: ramped.length > 0 ? ramped : undefined };
+}
+
+/** What to paint: the ramped path's runs, each a polyline at one width. */
+export function rampedRuns(
+  points: readonly PathPoint[],
+  width: number,
+  widths: readonly WidthChange[] | undefined,
+): { points: PathPoint[]; width: number }[] {
+  const path = expandWidthRamps(points, width, widths);
+  return widthRuns(path.points.length, path.width, path.widths).map((run) => ({
+    points: run.to === run.from
+      ? [path.points[run.from], path.points[run.from]]
+      : path.points.slice(run.from, run.to + 1),
+    width: run.width,
+  }));
+}
+
+/** A live batch, ramped, as the viewer's playback takes it: the points to
+queue after `from`, the width of the segment ending at each, and the width the
+path is left at. `widths` index into `points`, as they arrive on the wire;
+`from` is where the path ends and `width` its last keyframe's width, which -
+see the note above on what a viewer may assume - is what it is there. */
+export function rampedBatch(
+  from: PathPoint,
+  points: readonly PathPoint[],
+  width: number,
+  widths: readonly WidthChange[] | undefined,
+): { points: PathPoint[]; segmentWidths: number[]; finalWidth: number } {
+  const path = expandWidthRamps(
+    [from, ...points],
+    width,
+    widths?.map(([index, next]): WidthChange => [index + 1, next]),
+  );
+  const batch = path.points.slice(1);
+  const each = segmentWidths(
+    batch.length,
+    width,
+    path.widths?.map(([index, next]): WidthChange => [index - 1, next]),
+  );
+  return { points: batch, segmentWidths: each, finalWidth: finalWidth(width, widths) };
 }

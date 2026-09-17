@@ -19,7 +19,9 @@ import {
   encodePathPoints,
   encodePathStart,
 } from "../src/lib/liveDrawing.ts";
-import { finalWidth, segmentWidths, widthRuns } from "../src/lib/pathWidths.ts";
+import { expandWidthRamps, finalWidth, rampedBatch, segmentWidths, widthRuns } from "../src/lib/pathWidths.ts";
+import { PenStroke } from "../src/lib/penStroke.ts";
+import { createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
 import { replayPlan, replayStroke, stepReplay } from "../src/lib/replay.ts";
 import { createStrokePlayback } from "../src/lib/strokePlayback.ts";
 
@@ -240,14 +242,16 @@ test("a viewer painting a pen path live, in arbitrary parts, ends on the raster 
   let width = PEN_ACTION.width;
   let last = first;
   let offset = 1;
-  for (const size of [2, 1, 3]) {
+  // Frames as the drawer's client cuts them: a keyframe of a new width always
+  // has the one it ramps from in its own frame or ending the frame before.
+  for (const size of [1, 2, 1, 2]) {
     const batch = rest.slice(offset - 1, offset - 1 + size);
     const widths = PEN_ACTION.widths
       .filter(([index]) => index >= offset && index < offset + size)
       .map(([index, to]) => [index - offset, to]);
-    const each = segmentWidths(batch.length, width, widths);
-    play.enqueueSegments(last, batch, { radius: width / 2, color }, 0, each.map((value) => value / 2));
-    width = each.at(-1);
+    const ramped = rampedBatch(last, batch, width, widths);
+    play.enqueueSegments(last, ramped.points, { radius: width / 2, color }, 0, ramped.segmentWidths.map((value) => value / 2));
+    width = ramped.finalWidth;
     last = batch.at(-1);
     offset += size;
   }
@@ -272,16 +276,237 @@ test("a replay growing a pen path a fraction of a segment at a time ends on the 
     position = stepReplay(actions, plan, position, 0.37, painter).position;
   }
   assert.deepEqual(grown, whole);
-  assert.deepEqual(replayStroke(PEN_ACTION).widths, PEN_ACTION.widths);
+  // The stroke the replay grows is the ramped one, as every painter's is.
+  const ramped = expandWidthRamps(PEN_ACTION.points, PEN_ACTION.width, PEN_ACTION.widths);
+  assert.deepEqual(replayStroke(PEN_ACTION).widths, ramped.widths);
+  assert.deepEqual(replayStroke(PEN_ACTION).points, ramped.points);
 });
 
 test("the runs are really painted at different widths", () => {
   const pixels = blank();
   applyCanvasAction(pixels, PEN_ACTION);
   const inked = (x, y) => pixels[(y * CANVAS_WIDTH + x) * 4] === 0;
-  // Segment 0->1 is 3 wide: ink on the line, none 4 px off it. Segment 3->4
-  // is 20 wide: ink 8 px off it.
-  assert.equal(inked(65, 65), true);
-  assert.equal(inked(65, 70), false);
-  assert.equal(inked(230, 100), true);
+  // Between points 1 and 2 the path is 3 wide: ink on the line, none 4 px off
+  // it. Between points 4 and 5 it has reached 20: ink 8 px off it.
+  assert.equal(inked(115, 105), true);
+  assert.equal(inked(120, 102), false);
+  assert.equal(inked(288, 140), true);
+});
+
+// --- ramps ------------------------------------------------------------------------
+
+function thickness(pixels, x) {
+  let ink = 0;
+  for (let y = 0; y < CANVAS_HEIGHT; y += 1) if (pixels[(y * CANVAS_WIDTH + x) * 4] === 0) ink += 1;
+  return ink;
+}
+
+test("between two keyframes the width is a ramp along the path, never a shoulder", () => {
+  // The widest change there is, 2 px to 32, with the keyframes 140 px apart
+  // and two kept points between them.
+  const action = {
+    kind: "path",
+    color: "#000000",
+    width: 2,
+    points: [{ x: 100, y: 300 }, { x: 200, y: 300 }, { x: 240, y: 300 }, { x: 300, y: 300 }, { x: 340, y: 300 }, { x: 500, y: 300 }],
+    widths: [[1, 2], [4, 32]],
+  };
+  const pixels = blank();
+  applyCanvasAction(pixels, action);
+  assert.equal(thickness(pixels, 150), 2, "flat up to the keyframe the ramp starts from");
+  assert.equal(thickness(pixels, 420), 32, "and flat after the one it ends on");
+  let steepest = 0;
+  for (let x = 120; x < 480; x += 1) {
+    steepest = Math.max(steepest, Math.abs(thickness(pixels, x + 1) - thickness(pixels, x)));
+    if (x >= 200 && x < 340) assert.ok(thickness(pixels, x + 1) >= thickness(pixels, x), `a bulge at ${x}`);
+  }
+  // Recorded as it is, the line would gain thirty pixels between two columns.
+  assert.ok(steepest <= 2, `steepest column-to-column change: ${steepest}`);
+  // A straight line in width over length: half way along is half way between.
+  assert.ok(Math.abs(thickness(pixels, 270) - 17) <= 2, `${thickness(pixels, 270)} px at the middle`);
+});
+
+test("a ramp is derived, not recorded: a pixel a piece, equal shares of the path between the keyframes", () => {
+  const ramped = expandWidthRamps(
+    [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }, { x: 30, y: 0 }],
+    6,
+    [[1, 6], [3, 9]],
+  );
+  // 6, 7, 8, 9 over the twenty pixels from the hold to the keyframe, across
+  // the kept point between them.
+  assert.deepEqual(ramped.points.map((point) => point.x), [0, 10, 15, 20, 20, 25, 30]);
+  // (The second cut falls on the kept point itself: a piece of no length there.)
+  assert.deepEqual(ramped.widths, [[3, 7], [4, 8], [6, 9]]);
+  // Narrowing, from the path's start; a keyframe at the width it already has; none at all.
+  assert.deepEqual(expandWidthRamps([{ x: 0, y: 0 }, { x: 9, y: 0 }], 5, [[1, 3]]).widths, [[2, 4], [3, 3]]);
+  assert.equal(expandWidthRamps([{ x: 0, y: 0 }, { x: 8, y: 0 }], 5, [[1, 5]]).widths, undefined);
+  const plain = [{ x: 0, y: 0 }, { x: 8, y: 0 }];
+  assert.equal(expandWidthRamps(plain, 5, undefined).points, plain);
+});
+
+test("cut points land on the quarter-pixel grid, whatever float dust the ends carry", () => {
+  const clean = expandWidthRamps([{ x: 224, y: 156 }, { x: 232, y: 162 }], 2, [[1, 7]]);
+  const dusty = expandWidthRamps([{ x: 224.00000000000003, y: 156 }, { x: 231.99999999999997, y: 162 }], 2, [[1, 7]]);
+  assert.deepEqual(dusty.points.slice(1, -1), clean.points.slice(1, -1));
+  for (const point of clean.points) assert.equal(point.x * 4, Math.round(point.x * 4));
+});
+
+// --- the promise a live viewer relies on ------------------------------------------
+
+/** A pen stroke run through the client's own bookkeeping, a frame every
+`flushEvery` samples: what the drawer painted, and the frames it sent. */
+function drawWithPen(samples, flushEvery, brush) {
+  const range = { floor: 2, brush };
+  const start = samples[0];
+  const startWidth = Math.round(start.width);
+  const stroke = new PenStroke(start, startWidth);
+  const thinner = createWidthThinner({ at: 0, width: startWidth }, range);
+  const drawn = [];
+  const frames = [];
+  let frame = [];
+  let arc = 0;
+  let before = null;
+  const paint = (runs) => drawn.push(...runs);
+  const send = (final) => {
+    if (frame.length === 0) return;
+    const target = samples[Math.min(samples.length - 1, sent + frame.length)].width;
+    const moved = final || Math.abs(target - stroke.width) > widthTolerance(target, range);
+    const { runs, placed } = stroke.flush(moved ? Math.round(target) : stroke.width);
+    paint(runs);
+    if (placed) thinner.anchorAt({ at: arc, width: stroke.width });
+    frames.push({ points: frame, widths: stroke.takeFrame() });
+    stroke.frameSent();
+    sent += frame.length;
+    frame = [];
+  };
+  let sent = 0;
+  for (let index = 1; index < samples.length; index += 1) {
+    const sample = samples[index];
+    arc += Math.hypot(sample.x - samples[index - 1].x, sample.y - samples[index - 1].y);
+    const isKey = thinner.push({ at: arc, width: sample.width }) && before;
+    if (isKey) {
+      const keyed = stroke.keyLast(Math.round(before.width));
+      if (keyed) {
+        paint(keyed.runs);
+        if (keyed.held) thinner.anchorAt({ at: before.at, width: stroke.width });
+      }
+    }
+    before = { at: arc, width: sample.width };
+    paint(stroke.accept({ x: sample.x, y: sample.y }).runs);
+    frame.push({ x: sample.x, y: sample.y });
+    if (index % flushEvery === 0) send(false);
+  }
+  send(true);
+  return { startWidth, drawn, frames };
+}
+
+function penSamples(seed, count, brush) {
+  let state = seed;
+  const random = () => ((state = (state * 1664525 + 1013904223) % 4294967296) / 4294967296);
+  const samples = [];
+  let pressure = 0.02;
+  let goal = random();
+  for (let index = 0; index < count; index += 1) {
+    // A hand: heads for a pressure, holds a while, picks another.
+    if (index % 25 === 0) goal = random() < 0.3 ? pressure : random();
+    pressure += (goal - pressure) * 0.15 + (random() - 0.5) * 0.02;
+    const lifted = Math.min(1, (count - index) / 10);
+    const share = Math.min(1, Math.max(0, pressure * lifted));
+    samples.push({
+      x: Math.round((60 + index * 2.25) * 4) / 4,
+      y: Math.round((300 + 80 * Math.sin(index / 18)) * 4) / 4,
+      width: 2 * (brush / 2) ** share,
+    });
+  }
+  return samples;
+}
+
+test("the drawer, a viewer painting frame by frame, and a replay of the whole path are one raster", () => {
+  for (const [seed, flushEvery, brush] of [[1, 5, 32], [2, 9, 32], [3, 3, 12], [4, 7, 6], [5, 1, 32], [6, 40, 24]]) {
+    const samples = penSamples(seed, 280, brush);
+    const { startWidth, drawn, frames } = drawWithPen(samples, flushEvery, brush);
+    const color = [0, 0, 0, 255];
+    const dot = (pixels) => rasterizePath(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, [samples[0], samples[0]], startWidth / 2, color, false);
+
+    const drawer = blank();
+    dot(drawer);
+    for (const run of drawn) rasterizePath(drawer, CANVAS_WIDTH, CANVAS_HEIGHT, run.points, run.width / 2, color, false);
+
+    // As Canvas.tsx does: each frame ramped from where the path ends, at the
+    // last keyframe's width, with no knowledge of the frames to come.
+    const viewer = blank();
+    dot(viewer);
+    let last = samples[0];
+    let width = startWidth;
+    const points = [samples[0]];
+    const widths = [];
+    for (const frame of frames) {
+      const batch = rampedBatch(last, frame.points, width, frame.widths);
+      let from = last;
+      batch.points.forEach((point, index) => {
+        rasterizePath(viewer, CANVAS_WIDTH, CANVAS_HEIGHT, [from, point], batch.segmentWidths[index] / 2, color, false);
+        from = point;
+      });
+      for (const [index, to] of frame.widths) widths.push([points.length + index, to]);
+      points.push(...frame.points);
+      width = batch.finalWidth;
+      last = frame.points.at(-1);
+    }
+
+    const replay = blank();
+    applyCanvasAction(replay, { kind: "path", color: "#000000", width: startWidth, points, widths });
+
+    const label = `seed ${seed}, a frame every ${flushEvery}, brush ${brush}`;
+    assert.ok(widths.length > 0, `${label}: the stroke has keyframes`);
+    assert.deepEqual(viewer, replay, `${label}: a viewer's frames against the whole path`);
+    assert.deepEqual(drawer, replay, `${label}: the drawer's own ink against the whole path`);
+    // And the keyframes are sparse: that is the point of them.
+    assert.ok(widths.length < points.length / 2, `${label}: ${widths.length} keyframes for ${points.length} points`);
+  }
+});
+
+test("a change after a quiet stretch is given a hold to ramp from, in its own frame", () => {
+  const stroke = new PenStroke({ x: 0, y: 0 }, 6);
+  // Two frames with nothing to say...
+  for (const x of [10, 20]) stroke.accept({ x, y: 0 });
+  stroke.flush(6);
+  assert.deepEqual(stroke.takeFrame(), []);
+  for (const x of [30, 40]) stroke.accept({ x, y: 0 });
+  stroke.flush(6);
+  assert.deepEqual(stroke.takeFrame(), []);
+  // ...then a keyframe of another width, three points into the next one.
+  stroke.accept({ x: 50, y: 0 });
+  stroke.accept({ x: 60, y: 0 });
+  assert.equal(stroke.accept({ x: 70, y: 0 }, 12).held, false);
+  assert.deepEqual(stroke.takeFrame(), [[0, 6], [2, 12]], "a hold at the old width, then the keyframe");
+
+  // The keyframe ended the frame, so the next change may ramp from it as it is.
+  stroke.accept({ x: 80, y: 0 }, 20);
+  assert.deepEqual(stroke.takeFrame(), [[0, 20]]);
+
+  // On a frame's very first point there is nothing before it to hold: it
+  // becomes the hold, and the caller is told the width was not placed.
+  stroke.accept({ x: 90, y: 0 });
+  stroke.flush(20);
+  stroke.takeFrame();
+  assert.equal(stroke.accept({ x: 100, y: 0 }, 9).held, true);
+  assert.deepEqual(stroke.takeFrame(), [[0, 20]]);
+});
+
+test("a frame that goes out part way through a change says how far it got", () => {
+  const stroke = new PenStroke({ x: 0, y: 0 }, 4);
+  stroke.accept({ x: 10, y: 0 });
+  stroke.accept({ x: 20, y: 0 });
+  const { runs, placed } = stroke.flush(9);
+  assert.equal(placed, true);
+  assert.deepEqual(stroke.takeFrame(), [[1, 9]]);
+  stroke.frameSent();
+  // And what the drawer painted for it is the ramp, not a step.
+  assert.deepEqual(runs.map((run) => run.width), [4, 5, 6, 7, 8, 9]);
+  // A refused frame leaves the server where it was: the next change ramps from a hold.
+  stroke.accept({ x: 30, y: 0 });
+  stroke.accept({ x: 40, y: 0 }, 15);
+  stroke.takeFrame();
+  stroke.frameRefused();
+  assert.equal(stroke.width, 9);
 });

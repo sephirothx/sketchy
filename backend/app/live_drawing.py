@@ -89,10 +89,11 @@ _DELTA = struct.Struct("<bb")
 # -128 is not a delta but the escape marker, followed by an absolute pair. It
 # is what keeps an arbitrarily fast stroke representable rather than refused.
 _DELTA_ESCAPE = -128
-# -127 in the same position says the path's width changes (#828): one more
-# byte follows, the new width, and then the record of the point it applies
-# from - the segment ending at that point is the first drawn at it. A pen's
-# pressure, quantized to whole pixels by the client, arrives this way.
+# -127 in the same position is a width keyframe (#828): one more byte follows,
+# a width, and then the record of the point the path has that width at. A
+# pen's pressure arrives this way - a few keyframes of it, and every painter
+# ramps the width between them along the path (`frontend/src/lib/pathWidths.ts`).
+# The server paints nothing, so to it a keyframe is a record to keep in place.
 #
 # It lives inside the records because a message is what costs, not a byte. A
 # frame of its own would be a second Socket.IO event per change - an envelope,

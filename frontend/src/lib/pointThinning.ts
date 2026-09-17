@@ -33,14 +33,10 @@ so local and remote rasters are one raster, and a flood fill sees the same
 edges everywhere. The pending sample is shown to the drawer on the preview
 layer, so the line under the pen does not lag a sample behind.
 
-**A change of width is a corner.** A pen's sample carries the width of the
-segment that ends at it (#828), and a run of dropped samples is replaced by
-one segment, which has one width. So a sample whose width differs from the
-pending one's is never folded into the same run: the pending sample is kept,
-and becomes the point the two widths share. Every kept sample's width is then
-the width of everything dropped before it, and the segment that replaces them
-is drawn as all of them would have been. Samples with no width - a mouse, the
-eraser - never differ, and thin exactly as before.
+**A width keyframe rides a kept sample.** Which of a pen's widths are sent is
+decided elsewhere (`widthKeyframes.ts`); when one is, the caller forces the
+pending sample out with `flush()` and marks it, because a keyframe says how
+wide the path is *at a point* and the point has to be one the path keeps.
 
 Coordinates here are normalized (0-1 over the canvas); the tolerance is in
 canvas pixels, and the test converts. */
@@ -54,14 +50,14 @@ resolution the samples had, and measured on recorded hand strokes fill
 topology was unchanged while half the points went (#560). */
 export const THINNING_TOLERANCE_PX = 0.25;
 
-/** A sample, and the width of the segment ending at it where a pen set one. */
+/** A sample, and the width keyframe (#828) the caller placed on it, if any. */
 export interface ThinnedPoint extends StrokePoint {
-  width?: number;
+  key?: number;
 }
 
 export interface PointThinner {
   /** Offer a sample; returns the samples kept because of it, in order. The
-  objects returned are the ones offered, so a sample's width comes back on it. */
+  objects returned are the ones offered, so what the caller put on one comes back. */
   push(point: ThinnedPoint): ThinnedPoint[];
   /** Force the pending sample out, for a flush. Returns it if there was one. */
   flush(): ThinnedPoint[];
@@ -114,8 +110,6 @@ export function createPointThinner(
   }
 
   function fits(candidate: ThinnedPoint): boolean {
-    // Two widths cannot share the one segment that would replace them.
-    if (pending && pending.width !== candidate.width) return false;
     if (pending && distanceToSegmentPx(pending, anchor, candidate) > tolerancePx) return false;
     for (const q of dropped) {
       if (distanceToSegmentPx(q, anchor, candidate) > tolerancePx) return false;

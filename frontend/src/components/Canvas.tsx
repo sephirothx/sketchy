@@ -30,7 +30,7 @@ import {
 } from "../lib/canvasRenderer";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
 import { currentClientConfig } from "../lib/clientConfig";
-import { finalWidth, segmentWidths } from "../lib/pathWidths";
+import { finalWidth, rampedBatch } from "../lib/pathWidths";
 import { createStrokePlayback } from "../lib/strokePlayback";
 import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
@@ -135,11 +135,18 @@ function createProtocolRenderer(
       if (packet.payload.points.length === 0 || !queued.last) return;
       const style = { radius: queued.width / 2, color: hexToRgba(queued.color) };
       const points = packet.payload.points.map(toPixels);
-      // A pen may have changed the width inside the batch (#828); the next
-      // batch carries on at whatever this one ended at.
-      const widths = segmentWidths(points.length, queued.width, packet.payload.widths);
-      playback.enqueueSegments(queued.last, points, style, now, widths.map((width) => width / 2));
-      queued.width = widths[widths.length - 1];
+      // A pen may have changed the width inside the batch (#828): ramped, as
+      // every painter ramps it, and the next batch carries on at whatever
+      // this one ended at.
+      const batch = rampedBatch(queued.last, points, queued.width, packet.payload.widths);
+      playback.enqueueSegments(
+        queued.last,
+        batch.points,
+        style,
+        now,
+        batch.segmentWidths.map((width) => width / 2),
+      );
+      queued.width = batch.finalWidth;
       queued.last = packet.payload.ends ? null : points[points.length - 1];
     } else if (packet.event === "draw_end") {
       queued.last = null;
