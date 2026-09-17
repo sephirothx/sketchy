@@ -19,8 +19,26 @@ MAX_BRUSH_WIDTH = 64
 MAX_CANVAS_ACTIONS = 20_000
 MAX_CANVAS_POINTS = 25_000
 COORDINATE_SCALE = 4
-MIN_PACKED_COORDINATE = -(2**15)
+# One value short of int16's floor: that x is the width marker below, so no
+# point may pack to it. It was 8192 pixels left of an 800-pixel canvas.
+MIN_PACKED_COORDINATE = -(2**15) + 1
 MAX_PACKED_COORDINATE = 2**15 - 1
+
+# A path's width can change part way along it (#828): a pen's pressure,
+# quantized to whole pixels by the client. The change is an entry in the
+# path's own point list - this x, which no coordinate can pack to, and the new
+# width where y would be - and it applies from the segment that ends at the
+# next point. Keeping it the size and shape of a point is the whole design:
+# the record is still a header and a run of four-byte entries, so a path is
+# still extended by appending, its last four bytes are still its last point
+# (a marker is never last), the length check and the size bound are unchanged,
+# and the stored delta walk in `canvas_storage` - frozen, and unaware of this -
+# recodes a marker like any other entry and restores it exactly. A marker is
+# charged against MAX_CANVAS_POINTS as the point it is shaped like, so the
+# budget stays a count of entries and a jittery pen cannot grow a path for
+# free. Each segment still has one constant radius, which is what keeps a
+# capsule split during playback the union of its halves (R-DRAW-01).
+WIDTH_MARKER_X = -(2**15)
 
 PATH_TAG = 0
 SHAPE_TAG = 1
@@ -65,6 +83,9 @@ class PathAction:
     points: list[tuple[float, float]]
     color: int
     width: int
+    #: `(point index, width)`: the width from the segment ending at that point
+    #: on. `width` is what the path starts at.
+    widths: list[tuple[int, int]] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -142,24 +163,24 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
         tag = self.data[start]
         if tag == PATH_TAG:
             _, color, width = _PATH_HEADER.unpack_from(self.data, start)
-            points = [
-                (
-                    _unpack_coordinate(x, CANVAS_WIDTH),
-                    _unpack_coordinate(y, CANVAS_HEIGHT),
-                )
-                for x, y in (
-                    _PATH_POINT.unpack_from(self.data, offset)
-                    for offset in range(
-                        start + _PATH_HEADER.size,
-                        end,
-                        _PATH_POINT.size,
+            points: list[tuple[float, float]] = []
+            widths: list[tuple[int, int]] = []
+            for offset in range(start + _PATH_HEADER.size, end, _PATH_POINT.size):
+                x, y = _PATH_POINT.unpack_from(self.data, offset)
+                if x == WIDTH_MARKER_X:
+                    widths.append((len(points), y))
+                else:
+                    points.append(
+                        (
+                            _unpack_coordinate(x, CANVAS_WIDTH),
+                            _unpack_coordinate(y, CANVAS_HEIGHT),
+                        )
                     )
-                )
-            ]
             return PathAction(
                 points=points,
                 color=_unpacked_color(color),
                 width=width,
+                widths=widths,
             )
         if tag == SHAPE_TAG:
             _, shape_id, color, width, start_x, start_y, end_x, end_y = (
@@ -248,11 +269,22 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
         self,
         index: int,
         points: Sequence[tuple[float, float]],
+        widths: Sequence[tuple[int, int]] = (),
     ) -> None:
+        """Append points, and a width marker before each one `widths` names.
+
+        `widths` is `(index into points, width)`, ascending, as the live codec
+        validated it.
+        """
         if index != len(self) - 1 or self.data[self.offsets[index]] != PATH_TAG:
             raise ValueError("only the active final path can be extended")
+        changes = dict(widths)
         packed_points = bytearray()
-        for x, y in points:
+        for position, (x, y) in enumerate(points):
+            if position in changes:
+                packed_points.extend(
+                    _PATH_POINT.pack(WIDTH_MARKER_X, changes[position])
+                )
             packed_points.extend(
                 _PATH_POINT.pack(
                     _pack_coordinate(x, CANVAS_WIDTH),
@@ -328,6 +360,8 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
             raise IndexError("pop from empty canvas history")
         start = self.offsets[-1]
         tag = self.data[start]
+        # Entries, not points: a width marker was charged as one (see
+        # WIDTH_MARKER_X), so it is refunded as one.
         point_count = (
             (len(self.data) - start - _PATH_HEADER.size) // _PATH_POINT.size
             if tag == PATH_TAG
@@ -418,6 +452,31 @@ def decode_binary_canvas_history(payload) -> PackedCanvasHistory:
             _, _, width = _PATH_HEADER.unpack_from(data, start)
             if not 1 <= width <= MAX_BRUSH_WIDTH:
                 raise ValueError("packed path action has invalid width")
+            # A marker sits between two points: never first, never last, never
+            # beside another. Anything else is not something the recorder
+            # could have written. Most paths have none, so the entries are
+            # only walked when the x column holds one.
+            if _OFFSETS_ARE_WIRE_LAYOUT:
+                # Released before returning: a live view would pin the
+                # bytearray, and the history is appended to afterwards.
+                with memoryview(data) as whole, whole[
+                    start + _PATH_HEADER.size:end
+                ].cast("h") as columns:
+                    has_marker = WIDTH_MARKER_X in columns[::2].tolist()
+            else:
+                has_marker = True
+            if has_marker:
+                after_marker = True
+                for offset in range(start + _PATH_HEADER.size, end, _PATH_POINT.size):
+                    x, y = _PATH_POINT.unpack_from(data, offset)
+                    if x != WIDTH_MARKER_X:
+                        after_marker = False
+                    elif after_marker or not 1 <= y <= MAX_BRUSH_WIDTH:
+                        raise ValueError("packed path action has an invalid width marker")
+                    else:
+                        after_marker = True
+                if after_marker:
+                    raise ValueError("packed path action has an invalid width marker")
             point_count += (
                 record_length - _PATH_HEADER.size
             ) // _PATH_POINT.size

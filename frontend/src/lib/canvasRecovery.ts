@@ -27,7 +27,7 @@ Three parts, all pure so they can be tested without a socket:
   state: the drawing that exists is the one the room has. */
 
 import { decodeLiveDrawing, encodePathEnd, encodePathPoints, endsPath, type LiveDrawingPacket } from "./liveDrawing.ts";
-import type { StrokePoint } from "../types.ts";
+import type { StrokePoint, WidthChange } from "../types.ts";
 import type { DrawingFrame } from "./liveDrawing.ts";
 
 const MAX_POINTS_PER_FRAME = 256;
@@ -71,15 +71,33 @@ export function repackDrawFrames(frames: DrawingFrame[]): DrawingFrame[] {
   const last = packets.at(-1);
   if (!first || first.event !== "draw_start" || !last || !endsPath(last)) return frames;
   const points: { x: number; y: number }[] = [];
+  // Where a pen changed the width (#828), by index into `points`: part of
+  // the action, so part of what is replayed.
+  const widths: WidthChange[] = [];
   // A path that ended on a final batch (#603) has that batch's points too;
   // the repack ends on the one-byte end either way.
   for (const packet of packets.slice(1, last.event === "draw_end" ? -1 : undefined)) {
     if (!packet || packet.event !== "draw_move") return frames;
+    for (const [index, width] of packet.payload.widths ?? []) widths.push([points.length + index, width]);
     points.push(...packet.payload.points);
   }
   const repacked: DrawingFrame[] = [frames[0]];
+  let previous: StrokePoint = { x: first.payload.x, y: first.payload.y };
   for (let index = 0; index < points.length; index += MAX_POINTS_PER_FRAME) {
-    repacked.push(encodePathPoints({ points: points.slice(index, index + MAX_POINTS_PER_FRAME) }));
+    const chunk = points.slice(index, index + MAX_POINTS_PER_FRAME);
+    const changes = widths
+      .filter(([at]) => at >= index && at < index + chunk.length)
+      .map(([at, width]): WidthChange => [at - index, width]);
+    // Self-contained wherever it can be, as a replayed chunk always was. A
+    // change on the chunk's first point is the one case that cannot: it has
+    // to sit in front of a record, and only the relative form makes the
+    // first point one - so that chunk alone names where the path ended.
+    repacked.push(encodePathPoints(
+      changes[0]?.[0] === 0
+        ? { points: chunk, widths: changes, previous }
+        : { points: chunk, widths: changes },
+    ));
+    previous = chunk[chunk.length - 1];
   }
   repacked.push(encodePathEnd());
   return repacked;
@@ -88,7 +106,7 @@ export function repackDrawFrames(frames: DrawingFrame[]): DrawingFrame[] {
 export function pointCount(frames: DrawingFrame[]): number {
   let total = 0;
   for (const packet of decodeSavedFrames(frames)) {
-    if (packet?.event === "draw_move") total += packet.payload.points.length;
+    if (packet?.event === "draw_move") total += packet.payload.points.length + (packet.payload.widths?.length ?? 0);
   }
   return total;
 }

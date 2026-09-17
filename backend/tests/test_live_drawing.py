@@ -195,3 +195,136 @@ def test_an_ending_batch_is_the_relative_layout_under_its_own_tag():
         encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "ends": True})
     with pytest.raises(ValueError):
         decode_live_drawing(bytes((0x18,)))
+
+
+# --- width changes inside a path (#828) -----------------------------------------
+
+PREVIOUS = {"x": 0.5, "y": 0.5}
+THREE = [{"x": 0.5, "y": 0.51}, {"x": 0.505, "y": 0.515}, {"x": 0.51, "y": 0.52}]
+
+
+def test_a_width_change_costs_two_bytes_in_a_frame_already_being_sent():
+    from app.live_drawing import resolve_relative_points
+
+    plain = encode_live_drawing("draw_move", {"points": THREE, "previous": PREVIOUS})
+    changed = encode_live_drawing(
+        "draw_move", {"points": THREE, "previous": PREVIOUS, "widths": [[1, 5]]}
+    )
+
+    assert len(changed) == len(plain) + 2
+    assert changed[3:5] == bytes((0x81, 5)), "the marker, then the width, in front of the point's record"
+    packet = resolve_relative_points(decode_live_drawing(changed), (0.5, 0.5))
+    assert packet.payload["widths"] == [(1, 5)]
+    assert packet.payload["points"] == resolve_relative_points(
+        decode_live_drawing(plain), (0.5, 0.5)
+    ).payload["points"]
+
+
+def test_a_path_that_never_changes_width_is_byte_for_byte_what_it_was():
+    for payload in (
+        {"points": THREE},
+        {"points": THREE, "previous": PREVIOUS},
+        {"points": THREE, "previous": PREVIOUS, "ends": True},
+    ):
+        assert encode_live_drawing("draw_move", payload) == encode_live_drawing(
+            "draw_move", {**payload, "widths": []}
+        )
+        assert "widths" not in decode_live_drawing(encode_live_drawing("draw_move", payload)).payload
+
+
+def test_a_width_change_without_a_predecessor_rides_the_delta_form():
+    frame = encode_live_drawing("draw_move", {"points": THREE, "widths": [[2, 12]]})
+
+    assert frame[0] & 0x0F == 6
+    packet = decode_live_drawing(frame)
+    assert packet.payload["widths"] == [(2, 12)]
+    assert len(packet.payload["points"]) == 3
+    # The delta form's first point is not a record, so nothing can sit before it.
+    with pytest.raises(ValueError):
+        encode_live_drawing("draw_move", {"points": THREE, "widths": [[0, 12]]})
+
+
+def test_a_frame_with_a_width_change_is_never_absolute_even_when_every_step_is_far():
+    far = [{"x": 0.1, "y": 0.1}, {"x": 0.9, "y": 0.9}, {"x": 0.1, "y": 0.9}]
+    frame = encode_live_drawing("draw_move", {"points": far, "widths": [[1, 3]]})
+
+    assert frame[0] & 0x0F == 6
+    assert decode_live_drawing(frame).payload["widths"] == [(1, 3)]
+
+
+def test_a_step_of_minus_127_escapes_now_that_the_byte_is_the_marker():
+    step = 127 / (800 * 4)
+    frame = encode_live_drawing(
+        "draw_move",
+        {"points": [{"x": 0.5, "y": 0.5}, {"x": 0.5 - step, "y": 0.5}], "previous": {"x": 0.5, "y": 0.49}},
+    )
+
+    assert frame[3] == 0x80, "escaped to an absolute pair rather than written as 0x81"
+    assert "widths" not in decode_live_drawing(frame).payload
+
+
+@pytest.mark.parametrize(
+    "widths",
+    [
+        [[3, 5]],  # past the batch
+        [[-1, 5]],
+        [[1, 5], [1, 6]],  # twice on one point
+        [[2, 5], [1, 6]],  # out of order
+        [[1, 0]],
+        [[1, 65]],
+        [[1, 5.0]],
+        [[True, 5]],
+        [[1]],
+        "15",
+    ],
+)
+def test_the_encoder_refuses_width_changes_it_cannot_place(widths):
+    with pytest.raises(ValueError):
+        encode_live_drawing("draw_move", {"points": THREE, "previous": PREVIOUS, "widths": widths})
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        bytes((0x17, 0x81)),  # a marker with no width
+        bytes((0x17, 0x81, 5)),  # a change with no point after it
+        bytes((0x17, 1, 1, 0x81, 5)),  # trailing the frame
+        bytes((0x17, 0x81, 5, 0x81, 6, 1, 1)),  # two on one point
+        bytes((0x17, 0x81, 0, 1, 1)),  # width 0
+        bytes((0x17, 0x81, 65, 1, 1)),  # width past the brush's maximum
+        bytes((0x18, 0x81, 5)),  # the same, on a final batch
+        bytes((0x16, 0, 0, 0, 0, 0x81, 5)),  # and on a delta frame
+    ],
+)
+def test_malformed_width_changes_are_refused(payload):
+    with pytest.raises(ValueError):
+        decode_live_drawing(payload)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        bytes((0x10, 0, 0, 0, 1)) + (-32768).to_bytes(2, "little", signed=True) + bytes(2),
+        bytes((0x11,)) + (-32768).to_bytes(2, "little", signed=True) + bytes(2),
+        bytes((0x16,)) + (-32768).to_bytes(2, "little", signed=True) + bytes(2),
+        bytes((0x17, 0x80)) + (-32768).to_bytes(2, "little", signed=True) + bytes(2),
+        bytes((0x13, 0, 0, 0, 0, 1)) + (-32768).to_bytes(2, "little", signed=True) + bytes(6),
+    ],
+)
+def test_no_frame_may_carry_the_coordinate_the_history_reads_as_a_marker(payload):
+    """int16's floor as a path x is a width marker in the history, so a point
+    there would be recorded as one. It is refused at the door instead, on every
+    frame, so the recorder never has to."""
+    with pytest.raises(ValueError):
+        decode_live_drawing(payload)
+
+
+def test_the_largest_frame_is_the_relative_one_escaping_and_changing_throughout():
+    from app.live_drawing import MAX_FRAME_BYTES, MAX_POINTS_PER_FRAME
+
+    points = [{"x": (i % 2) * 0.999, "y": 0.5} for i in range(MAX_POINTS_PER_FRAME)]
+    widths = [[i, 1 + i % 2] for i in range(MAX_POINTS_PER_FRAME)]
+    frame = encode_live_drawing("draw_move", {"points": points, "widths": widths, "previous": PREVIOUS})
+
+    assert len(frame) == MAX_FRAME_BYTES == 1 + 256 * 7
+    assert len(decode_live_drawing(frame).payload["widths"]) == MAX_POINTS_PER_FRAME

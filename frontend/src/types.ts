@@ -452,8 +452,14 @@ export interface StrokeStartPayload {
   width: number;
 }
 
+/** A path's width changing part way along it (#828): `[index, width]`, the
+width from the segment that ends at `points[index]` on. Ascending by index. */
+export type WidthChange = [index: number, width: number];
+
 export interface StrokeMovePayload {
   points: StrokePoint[];
+  /** Where the width changes inside this batch, if it does. */
+  widths?: WidthChange[];
   /** The open path's last point, when the encoder is given it: unlocks the
   relative frame (#559). Never on the wire itself. */
   previous?: StrokePoint;
@@ -470,6 +476,7 @@ export type RelativePointRecord =
 
 export interface RelativeMovePayload {
   records: RelativePointRecord[];
+  widths?: WidthChange[];
   ends?: boolean;
 }
 

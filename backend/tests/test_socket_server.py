@@ -222,7 +222,12 @@ async def test_disconnect_clears_every_per_socket_record(monkeypatch):
 async def test_the_largest_legitimate_binary_draw_still_passes(monkeypatch):
     sio, store, sockets, received, clock = await server(monkeypatch)
     points = [{"x": (i % 2) * 0.999, "y": ((i // 2) % 2) * 0.999} for i in range(MAX_POINTS_PER_FRAME)]
-    frame = encode_live_drawing("draw_move", {"points": points})
+    # Every step too far for a byte and every point at a new width (#828):
+    # the relative frame escaping throughout is the largest the codec writes.
+    widths = [[i, 1 + i % 2] for i in range(MAX_POINTS_PER_FRAME)]
+    frame = encode_live_drawing(
+        "draw_move", {"points": points, "widths": widths, "previous": {"x": 0.5, "y": 0.5}}
+    )
     assert len(frame) == MAX_FRAME_BYTES
     await sio._handle_eio_message("eio0", HEADER)
     assert "eio0" in sio._assembly_started

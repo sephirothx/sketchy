@@ -1335,8 +1335,9 @@ Every drawing from a completed game is kept **for as long as that game, in the s
 transaction that records it**. The stored bytes are the canvas frame itself — the
 actions, not a picture of them — so a drawing can be replayed and redrawn at any size,
 and a PNG stays something the browser produces on demand rather than something the
-server keeps. Since #547 the frame is written delta-recoded and deflated (`SKCD` v1,
-about 4.5× smaller on a realistic drawing; a frame too small to earn deflate's overhead
+server keeps. Since #547 the frame is written delta-recoded and deflated (`SKCD`, v2 since
+#828 so that a pen's width changes do not break the run of small deltas — v1 rows keep
+their decoder; about 4.5× smaller on a realistic drawing; a frame too small to earn deflate's overhead
 stays a verbatim `SKCH` v1), and `byte_size` and `checksum_sha256` describe those
 stored bytes. On PostgreSQL the `payload` column (here and on
 `player_report_drawing_evidence`) is `STORAGE EXTERNAL`: out of line past the TOAST
@@ -1361,7 +1362,7 @@ object store. Measured on PostgreSQL 17 over 200 games seeded through the real w
 
 | | |
 | --- | --- |
-| One stored drawing | 7,635 B (`SKCD` v1; 34.6 KB on the wire) |
+| One stored drawing | 7,638 B (`SKCD` v2; 34.6 KB on the wire) |
 | `turn_drawings` per finished game | 67.2 KB — heap 1.6, TOAST 64.8, index 0.8 |
 | Every other history table per game | 13.2 KB |
 | WAL per game | 86.2 KB |

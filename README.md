@@ -1667,6 +1667,7 @@ frontend/
     lib/announcements.ts The room's own lines, rendered per reader from a code
     lib/interfaceLocale.ts Which language the interface is read in, and from where
     lib/drawingRules.ts The client's copy of the room's tool and color rules
+    lib/pathWidths.ts A path whose width changes along it, as runs of one width each (#828)
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
     lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule, where Pin is offered, and its list arithmetic
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
@@ -1904,6 +1905,10 @@ backend/.venv/bin/python benchmarks/live_drawing.py --room-size 8 --window-bits 
 # What thinning the pointer samples saves and changes, over the same traces (#560)
 backend/.venv/bin/python benchmarks/point_thinning.py
 
+# What a pen's changing width costs on the wire and in storage, against the ways it was not done (#828)
+backend/.venv/bin/python benchmarks/path_widths.py
+backend/.venv/bin/python benchmarks/path_widths.py --brush 6 12 32 --levels 0 6
+
 # The release load gate: 50 rooms x 8 seats sustained for 5 minutes against a throwaway server (#461)
 ./benchmarks/run_load.sh
 
@@ -2064,7 +2069,14 @@ at several tolerances and reports points, bytes, the measured error bound, the
 pixels that change and the blank regions a fill could be aimed at, then puts the same
 kept points on the wire three ways — 40 ms frames, 40 ms relative frames, and 80 ms
 relative frames — for the message count and the deflated bytes of each (#559). A trace
-recorded now would already be thinned, and would understate what thinning does. A repeated identical batch, which is what the benchmark
+recorded now would already be thinned, and would understate what thinning does.
+None of the traces carries pressure, so `path_widths.py` lays a seeded pressure curve
+over each stroke - a model, and it says so - quantizes it the way the client will, and
+puts the width changes on the wire four ways: inside the frame being sent anyway (what
+is implemented), a byte on every point, a frame per change, and a new path per width.
+It reports messages and deflated, framed bytes for each against the same strokes at one
+width, and the `SKCH` and stored sizes with what `SKCD` v1 would have stored beside
+them. `--levels` is the number that decides the result: how many widths a brush has. A repeated identical batch, which is what the benchmark
 modelled before, is deflate's best case and understated live drawing by about
 half; the trace is what fixed that.
 

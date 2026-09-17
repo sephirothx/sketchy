@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from app import live_drawing
-from app.canvas_history import BINARY_HISTORY_MAGIC, CANVAS_HISTORY_VERSION
+from app.canvas_history import BINARY_HISTORY_MAGIC, CANVAS_HISTORY_VERSION, WIDTH_MARKER_X
 from app.client_config import CLIENT_CONFIG_CONTRACT_VERSION
 from app.handlers import payloads
 from app.handlers.budgets import COMMAND_CLASSES, SILENT_COMMANDS, CommandBudgetPolicy
@@ -144,6 +144,7 @@ PINNED_FIXTURES = (
     "fixtures/canvas_protocol_v1.json",
     "fixtures/lobby_presence_v1.json",
     "fixtures/stored_drawings_v1.json",
+    "fixtures/stored_drawings_v2.json",
 )
 
 CAMEL_CASE = re.compile(r"[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*")
@@ -254,6 +255,12 @@ def build_contract() -> dict[str, Any]:
             "magic": BINARY_HISTORY_MAGIC.decode(),
             "maxBase64FrameBytes": live_drawing.MAX_BASE64_FRAME_BYTES,
             "maxPointsPerFrame": live_drawing.MAX_POINTS_PER_FRAME,
+            "maxFrameBytes": live_drawing.MAX_FRAME_BYTES,
+            # The two values taken out of a record's delta range, and the
+            # coordinate the history reads as a width change (#828).
+            "deltaEscape": live_drawing._DELTA_ESCAPE,
+            "widthMarker": live_drawing._WIDTH_MARKER,
+            "historyWidthMarkerX": WIDTH_MARKER_X,
             "tags": {
                 "path_start": live_drawing.PATH_START_TAG,
                 "path_points": live_drawing.PATH_POINTS_TAG,
