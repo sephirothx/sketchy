@@ -133,11 +133,10 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
             assert await page.evaluate("document.activeElement?.dataset.testid") == "close-waiting-pad"
             # Start stays one press away, and nothing of the pad is below the fold.
             assert await page.locator(".waiting-pad-strip .waiting-start-button").count() == 1
-            # The code copies from the strip in one press.
+            # The strip's code chip copies the invite link in one press.
             await page.click('[data-testid="copy-waiting-pad-code"]')
-            await page.wait_for_selector('.app-toast.success:has-text("Room code copied.")')
-            copied = await page.evaluate("navigator.clipboard.readText()")
-            assert copied == await page.locator('[data-testid="copy-waiting-pad-code"]').get_attribute("data-code")
+            await page.wait_for_selector('.app-toast.success:has-text("Invite link copied.")')
+            assert await page.evaluate("navigator.clipboard.readText()") == page.url
             bottom = await page.evaluate(
                 "document.querySelector('.waiting-room.is-drawing .scratch-pad').getBoundingClientRect().bottom"
             )
@@ -165,6 +164,69 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
             await page.click('[data-testid="close-waiting-pad"]')
             await page.wait_for_selector(".waiting-rules-card")
             assert await page.evaluate("document.activeElement?.dataset.testid") == "open-waiting-pad"
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_the_pad_fits_the_narrowest_phone():
+    """Six chips - Save among them - at 44px each are wider than a 320px phone
+    leaves the strip, and the page scrolled sideways with Save off the edge."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(
+            viewport={"width": 320, "height": 640}, is_mobile=True, has_touch=True
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "PadNarrow")
+            await page.wait_for_selector(".first-run, .identity-chip, .lobby-page")
+            await context.set_offline(True)
+            await page.click('[data-testid="open-scratch-pad"]')
+            pad = '.scratch-pad-dialog [data-testid="scratch-pad"]'
+            await page.wait_for_selector(pad)
+            # The dialog pops in from 92%; measured mid-way, everything is small.
+            await page.wait_for_function(
+                "() => document.querySelector('.scratch-pad-dialog').getAnimations().length === 0"
+            )
+            overflow = await page.evaluate(
+                """() => {
+                  const chips = [...document.querySelectorAll('.scratch-pad-dialog .toolbar-mobile-chip')];
+                  return {
+                    page: document.documentElement.scrollWidth,
+                    chips: chips.length,
+                    right: Math.max(...chips.map((chip) => chip.getBoundingClientRect().right)),
+                    narrowest: Math.min(...chips.map((chip) => chip.getBoundingClientRect().width)),
+                  };
+                }"""
+            )
+            assert overflow["chips"] == 6
+            assert overflow["page"] <= 320, overflow
+            assert overflow["right"] <= 320, overflow
+            assert overflow["narrowest"] >= 44, overflow
+            await page.click('.scratch-pad-dialog button:has-text("Close")')
+            await context.set_offline(False)
+            await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
+
+            # And in place of the waiting room's column, strip and all.
+            await page.click('button:has-text("Create a room")')
+            await page.wait_for_selector(".create-room-page")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await page.click('[data-testid="open-waiting-pad"]')
+            await page.wait_for_selector('.waiting-room.is-drawing [data-testid="scratch-pad"]')
+            room = await page.evaluate(
+                """() => {
+                  const controls = [...document.querySelectorAll('.waiting-room.is-drawing button')];
+                  return {
+                    page: document.documentElement.scrollWidth,
+                    right: Math.max(...controls.map((control) => control.getBoundingClientRect().right)),
+                  };
+                }"""
+            )
+            assert room["page"] <= 320, room
+            assert room["right"] <= 320, room
         finally:
             await context.close()
             await browser.close()

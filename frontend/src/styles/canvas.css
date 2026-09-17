@@ -32,6 +32,39 @@
   width: 100%;
 }
 
+/* The phone's chip strip, with Save as a sixth chip. The pad's column is a
+   container so the strip can give way to the width it actually has: first
+   the carets and the separator go and the chips close up; below that, Save
+   wraps under the others rather than off the edge. Every chip keeps its
+   44px target throughout. */
+.scratch-pad-toolbar .toolbar-mobile {
+  container: scratch-pad-toolbar / inline-size;
+}
+
+@container scratch-pad-toolbar (max-width: 360px) {
+  .scratch-pad-toolbar .toolbar-mobile-strip {
+    flex-wrap: wrap;
+    gap: 6px 4px;
+  }
+
+  .scratch-pad-toolbar .toolbar-mobile-chip-caret,
+  .scratch-pad-toolbar .toolbar-mobile-sep {
+    display: none;
+  }
+
+  .scratch-pad-toolbar .toolbar-mobile-tool-chip,
+  .scratch-pad-toolbar .toolbar-mobile-color-chip {
+    min-width: 44px;
+    padding-inline: 6px;
+  }
+}
+
+@media (max-width: 600px) {
+  .scratch-pad-toolbar .toolbar-container.toolbar-mobile {
+    padding: 8px;
+  }
+}
+
 /* Over a paused room the card takes the stage's size, and the drawing is held
    to what the stage's height leaves once the card's words and the toolbar are
    counted, so the whole card stays on screen. */

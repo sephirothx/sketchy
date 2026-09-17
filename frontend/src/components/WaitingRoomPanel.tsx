@@ -197,18 +197,18 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <BackIcon size={15} />
             {ui.scratchPad.backToTheRoom}
           </button>
-          {/* The code is what somebody asks for while you draw ("what was it
-              again?"), so it copies in one press, as the header's chip used to. */}
+          {/* Showing the code, copying the invite link, as the header's chip
+              used to: the code is what identifies the room at a glance, and
+              the link is what somebody pastes into a chat to bring a friend. */}
           {code && (
             <button
               type="button"
               className="room-copy-button waiting-pad-code"
               data-testid="copy-waiting-pad-code"
-              data-code={code}
-              title={ui.waitingRoomPanel.copyCode}
-              onClick={() => void copyToClipboard(code, ui.waitingRoomPanel.roomCode)}
+              title={ui.roomMenuSheet.copyInviteLink}
+              onClick={() => void copyToClipboard(window.location.href, ui.waitingRoomPanel.inviteLink)}
             >
-              <span className="visually-hidden">{ui.waitingRoomPanel.copyCode}: </span>
+              <span className="visually-hidden">{ui.roomMenuSheet.copyInviteLink}: </span>
               <span>{code}</span>
               <CopyIcon size={14} />
             </button>
