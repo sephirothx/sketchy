@@ -95,6 +95,9 @@ async def test_a_pen_stroke_is_one_raster_on_the_drawer_a_viewer_and_a_replay():
                 await drawing.evaluate(INK_IN_COLUMN, x) for x in (110, 400, 690)
             ]
             assert heavy == 6, f"full pressure is the selected size, got {heavy}"
+            # Three quarters of the way to it, too: the whole brush arrives at
+            # 70% of the sensor's range, not at the hardest a pen can be pressed.
+            assert await drawing.evaluate(INK_IN_COLUMN, 330) == 6
             assert light <= 3 and easing <= 3, f"a light hand is thinner: {light}, {easing}"
 
             drawer_png = await drawing.evaluate(CANVAS_PNG)

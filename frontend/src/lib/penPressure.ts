@@ -6,24 +6,44 @@ nothing a mouse could not - any of these widths is a brush size a mouse user
 can already select (R-DRAW-02) - and the toolbar's size still means what it
 says: the widest the stroke will be.
 
-**The floor is two pixels, never one.** The rasterizer paints a pixel when its
-centre lies within the radius of the segment, and at a radius of half a pixel
-most centres along a slanted line do not: a 1 px line is a row of holes, and a
-flood fill beside it leaked across in 710 of 720 angles and offsets tried,
-against none at 2 px. Two is also the smallest size the toolbar offers, so
-nothing thinner has ever been drawn. Above that the floor is a quarter of the
-brush.
+**The floor is two pixels, for every brush.** It was a quarter of the brush,
+which gave a 32 px brush 8 px at its lightest: a pen could shade with it but
+not draw a fine line without going to the slider. At 2 px the largest brush
+spans everything the toolbar offers, and the size a drawer picks is how far
+up the range a firm hand takes them. It is two and not one because the
+rasterizer paints a pixel when its centre lies within the radius of the
+segment, and at a radius of half a pixel most centres along a slanted line do
+not: a 1 px line is a row of holes, and a flood fill beside it leaked across
+in 710 of 720 angles and offsets tried, against none at 2 px. Two is also the
+smallest size the toolbar offers, so nothing thinner has ever been drawn.
 
-**A brush has at most `MAX_WIDTH_LEVELS` widths.** Every change of width costs
-two bytes on the wire and a point the thinner would otherwise have dropped
-(the run boundary has to be kept), and one pixel is a sixth of a 6 px line but
-a thirty-second of a 32 px one - a change nobody can see at the same price.
-Stepping by a pixel, a 32 px brush changed width on half its points and cost
-+36% on the drawer's uplink - no better than a width byte on every point;
-with six widths it is +8%, and every brush on every recorded trace lands
-between +4% and +11% (`benchmarks/path_widths.py`, which mirrors the
-constants below). The levels are counted down from the brush, so
-full pressure is exactly the selected size.
+**A brush has at most `MAX_WIDTH_LEVELS` widths, spaced by ratio.** Every
+change of width costs two bytes on the wire and a point the thinner would
+otherwise have dropped (the run boundary has to be kept), so the widths are
+few: stepping by a pixel, a 32 px brush changed width on two thirds of its
+points and cost +50% on the drawer's uplink, worse than a width byte on every
+point, where six widths cost +10% and every brush on every recorded trace
+lands between +6% and +15% (`benchmarks/path_widths.py`, which mirrors the
+constants below). And they are
+spaced by ratio rather than by pixels - 2, 3, 6, 11, 18, 32 - because that is
+how a change of width is seen: from 2 px to 3 is as visible as from 18 to 32,
+and six even steps of 6 px would have jumped from 2 straight to 8 at the fine
+end, where a pen's control matters most, and spent three levels between 20
+and 32 that nobody could tell apart at a glance.
+
+**Pressure moves along that same scale.** The share of the way from the floor
+to the brush is taken in ratio too, so each level owns an equal band of
+pressure and none is a sliver the hand passes through without being able to
+stop in. Mapped in pixels instead, a 32 px brush's three finest widths would
+together have had the lightest twentieth of the range.
+
+**Full size comes before full pressure.** A sensor's 1.0 is as hard as the pen
+can be pressed, which nobody draws at: `FULL_PRESSURE` of it already gives the
+whole brush. Below that, pressure is raised to `PRESSURE_GAMMA`, a mild lift
+because an ordinary writing hand sits in the lower half of a sensor's range.
+Mild on purpose: at 0.6 the floor owned 2% of the range on a 32 px brush - a
+fine line in name only - and at 0.8 every level below the brush has at least
+5%, with the whole brush from about two thirds of the sensor's range up.
 
 **Hysteresis.** A new width is taken only once the target is three quarters of
 the way to the next level, not half: a hand held steady on the border of
@@ -39,33 +59,39 @@ contact is a small number, so a real one is believed from its first stroke. */
 
 /** How many widths a brush has between its floor and itself, inclusive. */
 export const MAX_WIDTH_LEVELS = 6;
-/** The thinnest a pen draws, in canvas pixels. See above: 1 px leaks fills. */
+/** The thinnest a pen draws, in canvas pixels, whatever the brush. See above:
+1 px leaks fills. */
 export const MIN_PEN_WIDTH = 2;
-/** The floor as a share of the selected size. */
-export const FLOOR_SHARE = 0.25;
+/** The share of a sensor's range that already draws the whole brush. */
+export const FULL_PRESSURE = 0.7;
 /** How far toward the next level, as a share of the gap, the target must be to move the width. */
 export const HYSTERESIS_STEPS = 0.75;
-/** Pressure is raised to this before it is mapped: an ordinary writing hand
-sits around a quarter to a half of a sensor's range, and mapped linearly would
-spend the whole stroke near the floor. */
-export const PRESSURE_GAMMA = 0.6;
+/** Pressure, as a share of `FULL_PRESSURE`, is raised to this before it is mapped. */
+export const PRESSURE_GAMMA = 0.8;
 
 const UNSUPPORTED_PRESSURE = 0.5;
 
 export interface WidthLevels {
   floor: number;
-  step: number;
-  /** Ascending, ending on the brush itself. */
+  /** Ascending, from the floor to the brush itself. */
   widths: number[];
 }
 
 export function widthLevels(brush: number): WidthLevels {
-  const floor = Math.min(brush, Math.max(MIN_PEN_WIDTH, Math.round(brush * FLOOR_SHARE)));
-  const step = Math.max(1, Math.ceil((brush - floor) / (MAX_WIDTH_LEVELS - 1)));
+  const floor = Math.min(brush, MIN_PEN_WIDTH);
   const widths: number[] = [];
-  for (let width = brush; width > floor; width -= step) widths.unshift(width);
-  widths.unshift(floor);
-  return { floor, step, widths };
+  for (let level = 0; level < MAX_WIDTH_LEVELS; level += 1) {
+    // Equal ratios from the floor to the brush, to the nearest pixel. A small
+    // brush has fewer pixels than levels, so neighbours that round alike merge.
+    const width = Math.round(floor * (brush / floor) ** (level / (MAX_WIDTH_LEVELS - 1)));
+    if (width !== widths[widths.length - 1]) widths.push(width);
+  }
+  return { floor, widths };
+}
+
+/** Where a width sits between the floor (0) and the brush (1), by ratio. */
+function scalePosition(width: number, floor: number, brush: number): number {
+  return brush > floor ? Math.log(width / floor) / Math.log(brush / floor) : 0;
 }
 
 export interface PressureQuantizer {
@@ -75,32 +101,32 @@ export interface PressureQuantizer {
 
 export function createPressureQuantizer(brush: number): PressureQuantizer {
   const { floor, widths } = widthLevels(brush);
+  const positions = widths.map((width) => scalePosition(width, floor, brush));
   let current: number | null = null;
   const nearest = (target: number): number => {
-    let best = widths[0];
-    for (const width of widths) {
-      if (Math.abs(width - target) <= Math.abs(best - target)) best = width;
+    let best = 0;
+    for (let index = 0; index < positions.length; index += 1) {
+      if (Math.abs(positions[index] - target) <= Math.abs(positions[best] - target)) best = index;
     }
     return best;
   };
   return {
     width(pressure) {
-      const clamped = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure)) : 0;
-      const target = floor + clamped ** PRESSURE_GAMMA * (brush - floor);
+      const clamped = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure / FULL_PRESSURE)) : 0;
+      const target = clamped ** PRESSURE_GAMMA;
       if (current === null) {
         current = nearest(target);
-        return current;
+        return widths[current];
       }
-      // Measured against the gap to the next level on the target's side, not
-      // a fixed step: the levels are counted down from the brush, so the gap
-      // above the floor can be narrower than the rest, and the floor and the
-      // brush itself must both stay reachable.
-      const index = widths.indexOf(current);
-      const neighbour = widths[index + Math.sign(target - current)];
-      if (neighbour === undefined || neighbour === current) return current;
-      if (Math.abs(target - current) < Math.abs(neighbour - current) * HYSTERESIS_STEPS) return current;
+      // Measured against the gap to the next level on the target's side:
+      // rounding to whole pixels leaves the gaps a little uneven, and the
+      // floor and the brush itself must both stay reachable.
+      const neighbour = current + Math.sign(target - positions[current]);
+      if (neighbour < 0 || neighbour >= positions.length || neighbour === current) return widths[current];
+      const gap = Math.abs(positions[neighbour] - positions[current]);
+      if (Math.abs(target - positions[current]) < gap * HYSTERESIS_STEPS) return widths[current];
       current = nearest(target);
-      return current;
+      return widths[current];
     },
   };
 }

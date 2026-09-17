@@ -14,10 +14,10 @@ and says so; what it is a model *of* is the thing that decides the cost, which
 is how often the quantized width steps. `--wobble` and `--brush` move it.
 
 The width is quantized the way the client does (`frontend/src/lib/penPressure.ts`,
-mirrored here constant for constant): the selected size is the ceiling, a
-quarter of it (at least two pixels) the floor, a brush has at most `--levels`
-widths, and a new one is taken only when the target is three quarters of the
-way to the next, so a pen held steady does not chatter between two.
+mirrored here constant for constant): the selected size is the ceiling, two
+pixels the floor whatever the brush, a brush has at most `--levels` widths
+spaced by ratio, and a new one is taken only when the target is three quarters
+of the way to the next, so a pen held steady does not chatter between two.
 
 Four ways to carry the changes, each through the same warm permessage-deflate
 context as the drawer's uplink, with WebSocket frame headers counted:
@@ -66,9 +66,9 @@ from point_thinning import CANVAS_HEIGHT, CANVAS_WIDTH, TRACE_DIR, load_strokes,
 
 TOLERANCE = 0.25
 FLUSH_EVERY = 2  # the traces were recorded at 40 ms; the client flushes at 80
-FLOOR_SHARE = 0.25
 MIN_PEN_WIDTH = 2
-PRESSURE_GAMMA = 0.6
+FULL_PRESSURE = 0.7
+PRESSURE_GAMMA = 0.8
 HYSTERESIS = 0.75
 
 
@@ -89,37 +89,44 @@ def pressure_curve(count: int, rng: random.Random, wobble: float) -> list[float]
 
 
 def width_levels(brush: int, levels: int) -> tuple[int, list[int]]:
-    """`widthLevels` in `frontend/src/lib/penPressure.ts`: counted down from the
-    brush, so full pressure is the selected size. Zero levels = every pixel."""
-    floor = min(brush, max(MIN_PEN_WIDTH, round(brush * FLOOR_SHARE)))
-    step = max(1, math.ceil((brush - floor) / (levels - 1))) if levels > 1 else 1
-    widths = list(range(brush, floor, -step))[::-1]
-    return floor, [floor, *widths]
+    """`widthLevels` in `frontend/src/lib/penPressure.ts`: the floor is two
+    pixels whatever the brush, and the widths between are spaced by ratio.
+    Zero levels = every pixel."""
+    floor = min(brush, MIN_PEN_WIDTH)
+    if not levels:
+        return floor, list(range(floor, brush + 1))
+    widths: list[int] = []
+    for level in range(levels):
+        # floor(x + 0.5), as Math.round does; Python's round() is banker's.
+        width = math.floor(floor * (brush / floor) ** (level / (levels - 1)) + 0.5) if levels > 1 else brush
+        if not widths or width != widths[-1]:
+            widths.append(width)
+    return floor, widths
 
 
 def quantized_widths(pressure: list[float], brush: int, levels: int) -> list[int]:
     """The width of the segment ending at each sample: the client's quantizer.
 
-    `levels` caps how many widths a brush has, so the step grows with the
-    brush: one pixel is a sixth of a 6 px line and a thirty-second of a 32 px
-    one, and a change nobody can see still costs its two bytes and the run
-    boundary the thinner has to keep. A new width is taken once the target is
-    three quarters of the way to the next level.
+    Pressure moves along the same ratio scale the levels sit on, the whole
+    brush arrives at `FULL_PRESSURE` of the sensor's range, and a new width is
+    taken once the target is three quarters of the way to the next level.
     """
     floor, widths = width_levels(brush, levels)
-    nearest = lambda target: min(reversed(widths), key=lambda width: abs(width - target))
+    span = math.log(brush / floor) if brush > floor else 0.0
+    positions = [math.log(width / floor) / span if span else 0.0 for width in widths]
+    nearest = lambda target: max(range(len(positions)), key=lambda i: (-abs(positions[i] - target), i))
     current = None
     out = []
     for value in pressure:
-        target = floor + value ** PRESSURE_GAMMA * (brush - floor)
+        target = min(1.0, max(0.0, value / FULL_PRESSURE)) ** PRESSURE_GAMMA
         if current is None:
             current = nearest(target)
         else:
-            index = widths.index(current) + (target > current) - (target < current)
-            if 0 <= index < len(widths) and widths[index] != current:
-                if abs(target - current) >= abs(widths[index] - current) * HYSTERESIS:
+            neighbour = current + (target > positions[current]) - (target < positions[current])
+            if 0 <= neighbour < len(positions) and neighbour != current:
+                if abs(target - positions[current]) >= abs(positions[neighbour] - positions[current]) * HYSTERESIS:
                     current = nearest(target)
-        out.append(current)
+        out.append(widths[current])
     return out
 
 
