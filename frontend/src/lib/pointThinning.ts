@@ -33,6 +33,15 @@ so local and remote rasters are one raster, and a flood fill sees the same
 edges everywhere. The pending sample is shown to the drawer on the preview
 layer, so the line under the pen does not lag a sample behind.
 
+**A change of width is a corner.** A pen's sample carries the width of the
+segment that ends at it (#828), and a run of dropped samples is replaced by
+one segment, which has one width. So a sample whose width differs from the
+pending one's is never folded into the same run: the pending sample is kept,
+and becomes the point the two widths share. Every kept sample's width is then
+the width of everything dropped before it, and the segment that replaces them
+is drawn as all of them would have been. Samples with no width - a mouse, the
+eraser - never differ, and thin exactly as before.
+
 Coordinates here are normalized (0-1 over the canvas); the tolerance is in
 canvas pixels, and the test converts. */
 
@@ -45,17 +54,23 @@ resolution the samples had, and measured on recorded hand strokes fill
 topology was unchanged while half the points went (#560). */
 export const THINNING_TOLERANCE_PX = 0.25;
 
+/** A sample, and the width of the segment ending at it where a pen set one. */
+export interface ThinnedPoint extends StrokePoint {
+  width?: number;
+}
+
 export interface PointThinner {
-  /** Offer a sample; returns the samples kept because of it, in order. */
-  push(point: StrokePoint): StrokePoint[];
+  /** Offer a sample; returns the samples kept because of it, in order. The
+  objects returned are the ones offered, so a sample's width comes back on it. */
+  push(point: ThinnedPoint): ThinnedPoint[];
   /** Force the pending sample out, for a flush. Returns it if there was one. */
-  flush(): StrokePoint[];
+  flush(): ThinnedPoint[];
   /** The stroke ended: the last sample is kept. */
-  end(): StrokePoint[];
+  end(): ThinnedPoint[];
   /** The sample under the pen that has not been kept yet, for the preview. */
-  pending(): StrokePoint | null;
+  pending(): ThinnedPoint | null;
   /** The last kept sample, which the preview segment starts from. */
-  anchor(): StrokePoint;
+  anchor(): ThinnedPoint;
 }
 
 function distanceToSegmentPx(p: StrokePoint, a: StrokePoint, b: StrokePoint): number {
@@ -81,24 +96,26 @@ function same(a: StrokePoint, b: StrokePoint): boolean {
 
 /** A thinner for one stroke, anchored at its first sample. */
 export function createPointThinner(
-  start: StrokePoint,
+  start: ThinnedPoint,
   tolerancePx: number = THINNING_TOLERANCE_PX,
 ): PointThinner {
   let anchor = start;
-  let pending: StrokePoint | null = null;
+  let pending: ThinnedPoint | null = null;
   let lastSeen = start;
   // Every sample dropped since the anchor. Bounded in practice by how long
   // the pen moves straight between flushes; the check over it is what makes
   // the bound a whole-stroke one.
-  let dropped: StrokePoint[] = [];
+  let dropped: ThinnedPoint[] = [];
 
-  function keep(point: StrokePoint): StrokePoint {
+  function keep(point: ThinnedPoint): ThinnedPoint {
     anchor = point;
     dropped = [];
     return point;
   }
 
-  function fits(candidate: StrokePoint): boolean {
+  function fits(candidate: ThinnedPoint): boolean {
+    // Two widths cannot share the one segment that would replace them.
+    if (pending && pending.width !== candidate.width) return false;
     if (pending && distanceToSegmentPx(pending, anchor, candidate) > tolerancePx) return false;
     for (const q of dropped) {
       if (distanceToSegmentPx(q, anchor, candidate) > tolerancePx) return false;
