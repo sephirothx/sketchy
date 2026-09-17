@@ -80,6 +80,9 @@ export function FirstRunIdentity() {
 
   return (
     <section className="first-run" aria-labelledby={`${fieldId}-heading`}>
+      {/* The card is the size container; its contents are the grid, because a
+          card cannot answer a container query about itself. */}
+      <div className="first-run-inner">
       {takenName && (
         <p className="first-run-name-in-use" role="status">
           {ui.firstRunIdentity.nameInUse({ name: takenName })}
@@ -135,12 +138,19 @@ export function FirstRunIdentity() {
         </p>
       </div>
 
-      {/* One of the deployment's own doodles, wandering in from the corner.
-          Decorative: the tag and the words say everything. */}
-      <svg className="first-run-doodle is-corner" viewBox="0 0 24 24" aria-hidden="true">
-        <use href={`${DOODLE_SPRITE}#cat`} />
-      </svg>
+      {/* The deployment's own doodles. On a wide window they are a column of
+          the block, which is what keeps a 1600px card from being 900px of
+          nothing; narrower, only the first is left, wandering in from the
+          corner. Decorative either way: the tag and the words say everything. */}
+      <div className="first-run-art" aria-hidden="true">
+        {["cat", "rocket", "donut"].map((doodle) => (
+          <svg key={doodle} className="first-run-doodle" viewBox="0 0 24 24">
+            <use href={`${DOODLE_SPRITE}#${doodle}`} />
+          </svg>
+        ))}
+      </div>
 
+      </div>
       {mode && (
         <AuthDialog
           mode={mode}

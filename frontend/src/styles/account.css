@@ -595,18 +595,22 @@
    and the account as one quiet line. One layout at every width - the tag, then
    the words - so the DOM and the screen agree and there is one code path. */
 .first-run {
-  align-items: center;
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  display: grid;
-  gap: 8px 24px;
-  grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+  container: first-run / inline-size;
   margin-bottom: 16px;
   overflow: hidden;
   padding: 22px 24px 26px;
   position: relative;
+}
+
+.first-run-inner {
+  align-items: center;
+  display: grid;
+  gap: 8px 24px;
+  grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
 }
 
 /* A guest who came back to find their name taken by somebody online who
@@ -746,21 +750,67 @@
   text-underline-offset: 2px;
 }
 
-/* Decoration, in the ink the doodle avatars use. Behind everything, and gone
-   on a phone, where the card has no room to spare. */
-.first-run-doodle {
-  color: var(--line-strong);
-  height: 96px;
+/* Decoration, in the ink the doodle avatars use. One doodle in the card's
+   corner at ordinary widths; a column of three where there is width to spare
+   (below); nothing at all on a phone. */
+.first-run-art {
+  bottom: -14px;
   pointer-events: none;
   position: absolute;
-  width: 96px;
+  right: 10px;
+  rotate: 8deg;
   z-index: 0;
 }
 
-.first-run-doodle.is-corner {
-  bottom: -14px;
-  right: 10px;
-  rotate: 8deg;
+.first-run-art .first-run-doodle:not(:first-child) {
+  display: none;
+}
+
+.first-run-doodle {
+  color: var(--line-strong);
+  display: block;
+  height: 96px;
+  width: 96px;
+}
+
+/* A wide card - not a wide window, which is not the same thing once the lobby
+   has columns - is three tracks, and the third is the doodles at a size worth
+   seeing. The words keep a readable measure rather than running the width of a
+   2560px card, and the line grows with the room it has. */
+@container first-run (min-width: 1080px) {
+  .first-run {
+    padding: 26px 28px 30px;
+  }
+
+  .first-run-inner {
+    grid-template-columns: minmax(0, 320px) minmax(0, 46ch) minmax(0, 1fr);
+  }
+
+  .first-run-heading {
+    font-size: clamp(26px, 2.6cqi, 34px);
+  }
+
+  .first-run-art {
+    align-items: center;
+    display: flex;
+    gap: clamp(12px, 2.4cqi, 40px);
+    justify-content: center;
+    position: static;
+    rotate: none;
+  }
+
+  .first-run-art .first-run-doodle:not(:first-child) {
+    display: block;
+  }
+
+  .first-run-doodle {
+    height: clamp(96px, 10cqi, 150px);
+    width: clamp(96px, 10cqi, 150px);
+  }
+
+  .first-run-doodle:nth-child(1) { rotate: -7deg; }
+  .first-run-doodle:nth-child(2) { rotate: 6deg; }
+  .first-run-doodle:nth-child(3) { rotate: -3deg; }
 }
 
 .first-run-tag,
@@ -771,16 +821,19 @@
 
 @media (max-width: 900px) {
   .first-run {
+    padding: 18px;
+  }
+
+  .first-run-inner {
     gap: 14px;
     grid-template-columns: minmax(0, 1fr);
-    padding: 18px;
   }
 
   .first-run-heading {
     font-size: 22px;
   }
 
-  .first-run-doodle {
+  .first-run-art {
     display: none;
   }
 }
