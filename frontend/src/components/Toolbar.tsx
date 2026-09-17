@@ -34,8 +34,8 @@ import {
   UndoIcon,
 } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import { BRUSH_SIZES, DEFAULT_ERASER_SIZE, isBrushSize, stopPosition } from "../lib/brushSizes";
 
-const PRESET_WIDTHS = [2, 4, 6, 8, 12, 16, 24, 32];
 
 type MobilePanel = "tool" | "color" | "size" | null;
 
@@ -183,8 +183,12 @@ export function Toolbar({
   const mobileToolPanelId = `toolbar-mobile-tool-panel${idBase}`;
   const mobileColorPanelId = `toolbar-mobile-color-panel${idBase}`;
   const mobileSizePanelId = `toolbar-mobile-size-panel${idBase}`;
-  const currentIdx = PRESET_WIDTHS.indexOf(brushWidth);
-  const defaultIdx = tool === "eraser" ? 6 : 2;
+  // What the size goes back to: the player's own default for the brush
+  // (Settings -> Appearance), and the eraser's fixed one.
+  const defaultBrushSize = useSettingsStore((state) => state.defaultBrushSize);
+  const defaultSize = tool === "eraser" ? DEFAULT_ERASER_SIZE : defaultBrushSize;
+  const currentIdx = isBrushSize(brushWidth) ? BRUSH_SIZES.indexOf(brushWidth) : -1;
+  const defaultIdx = BRUSH_SIZES.indexOf(defaultSize);
   const sliderValue = currentIdx !== -1 ? currentIdx : defaultIdx;
   const activeTool = tools.find((t) => t.value === tool) ?? tools[0];
 
@@ -251,24 +255,24 @@ export function Toolbar({
       if (boundTool) {
         onToolChange(boundTool.value);
       } else if (kb.brushDecrease.includes(key)) {
-        const idx = PRESET_WIDTHS.indexOf(brushWidth);
+        const idx = currentIdx;
         if (idx > 0) {
-          handleWidthChange(PRESET_WIDTHS[idx - 1]);
+          handleWidthChange(BRUSH_SIZES[idx - 1]);
         } else if (idx === -1) {
-          handleWidthChange(PRESET_WIDTHS[0]);
+          handleWidthChange(BRUSH_SIZES[0]);
         }
       } else if (kb.brushIncrease.includes(key)) {
-        const idx = PRESET_WIDTHS.indexOf(brushWidth);
-        if (idx >= 0 && idx < PRESET_WIDTHS.length - 1) {
-          handleWidthChange(PRESET_WIDTHS[idx + 1]);
+        const idx = currentIdx;
+        if (idx >= 0 && idx < BRUSH_SIZES.length - 1) {
+          handleWidthChange(BRUSH_SIZES[idx + 1]);
         } else if (idx === -1) {
-          handleWidthChange(PRESET_WIDTHS[defaultIdx]);
+          handleWidthChange(BRUSH_SIZES[defaultIdx]);
         }
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [brushWidth, defaultIdx, handleWidthChange, onToolChange, tools]);
+  }, [currentIdx, defaultIdx, handleWidthChange, onToolChange, tools]);
 
   // The host can tighten the rules while the toolbar is on screen, and a
   // drawer arriving mid-turn brings whatever they last held. Either way the
@@ -310,14 +314,38 @@ export function Toolbar({
         <input
           type="range"
           min="0"
-          max={PRESET_WIDTHS.length - 1}
+          max={BRUSH_SIZES.length - 1}
           step="1"
           value={sliderValue}
-          onChange={(e) => handleWidthChange(PRESET_WIDTHS[Number(e.target.value)])}
+          onChange={(e) => handleWidthChange(BRUSH_SIZES[Number(e.target.value)])}
+          // The desktop habit for "put it back": the same as the button below.
+          onDoubleClick={() => handleWidthChange(defaultSize)}
           className="vertical-brush-slider"
           aria-label={ui.toolbar.sizeSnappingSlider({ tool: labelPrefix })}
         />
+        {/* Where the slider stops, with the default marked: a stop is a
+            place the thumb lands, and the default is the one to find again. */}
+        <div className="slider-stops" aria-hidden="true">
+          {BRUSH_SIZES.map((size) => (
+            <span
+              key={size}
+              className={`slider-stop${size === defaultSize ? " is-default" : ""}`}
+              style={{ ["--stop" as string]: stopPosition(size) }}
+            />
+          ))}
+        </div>
       </div>
+      <button
+        type="button"
+        className="slider-default-button"
+        onClick={() => handleWidthChange(defaultSize)}
+        aria-pressed={brushWidth === defaultSize}
+        aria-label={ui.toolbar.backToDefaultSize({ width: defaultSize })}
+        title={ui.toolbar.backToDefaultSize({ width: defaultSize })}
+      >
+        <span className="slider-default-mark" aria-hidden="true" />
+        {ui.toolbar.defaultSize}
+      </button>
     </div>
   );
 

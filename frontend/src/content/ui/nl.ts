@@ -2027,6 +2027,8 @@ export const NL: Catalogue = {
     crosshairPreciseAtPointOutlineShows: "Een draadkruis is precies op het punt; een omtrek laat zien hoe breed de streek wordt.",
     penPressure: "Pendruk",
     aLighterHandDrawsThinnerBrush: "Met een drukgevoelige pen tekent een lichtere hand een dunnere penseelstreek. Breder dan de penseelgrootte wordt die nooit.",
+    defaultBrushSize: "Standaard penseelgrootte",
+    theSizeTheBrushStartsEveryTurnAt: "De grootte waarmee het penseel elke beurt begint. Gemarkeerd op de schuifregelaar.",
     brushCursorStyle: "Stijl van de penseelcursor",
     soundEffects: "Geluidseffecten",
     chimesCorrectGuessStartRoundLast: "Tonen bij een goede gok, het begin van een ronde, de laatste tien seconden, en spelers die komen en gaan.",
@@ -2181,6 +2183,8 @@ export const NL: Catalogue = {
     sizeShortcutHint: (p: { tool: string; width: number }) =>
       `${p.tool}, grootte: ${p.width}px ([ / ])`,
     widthReadout: (p: { width: number }) => `${p.width}px`,
+    defaultSize: "Standaard",
+    backToDefaultSize: (p: { width: number }) => `Standaardgrootte, ${p.width}px`,
     colorSwatch: (p: { color: string }) => `Kleur ${p.color}`,
     drawingTools: "Tekengereedschap",
     chooseTool: "Gereedschap kiezen",

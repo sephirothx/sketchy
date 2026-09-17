@@ -2031,6 +2031,8 @@ export const EN = {
     crosshairPreciseAtPointOutlineShows: "A crosshair is precise at the point; an outline shows how wide the stroke will be.",
     penPressure: "Pen pressure",
     aLighterHandDrawsThinnerBrush: "With a pressure-sensitive pen, a lighter hand draws a thinner brush stroke. Brush size is the widest it gets.",
+    defaultBrushSize: "Default brush size",
+    theSizeTheBrushStartsEveryTurnAt: "The size the brush starts every turn at. Marked on the size slider.",
     brushCursorStyle: "Brush cursor style",
     soundEffects: "Sound effects",
     chimesCorrectGuessStartRoundLast: "Chimes for a correct guess, the start of a round, the last ten seconds, and players coming and going.",
@@ -2191,6 +2193,8 @@ export const EN = {
     sizeShortcutHint: (p: { tool: string; width: number }) =>
       `${p.tool} size: ${p.width}px ([ / ])`,
     widthReadout: (p: { width: number }) => `${p.width}px`,
+    defaultSize: "Default",
+    backToDefaultSize: (p: { width: number }) => `Default size, ${p.width}px`,
     colorSwatch: (p: { color: string }) => `Color ${p.color}`,
     drawingTools: "Drawing tools",
     chooseTool: "Choose tool",

@@ -566,6 +566,11 @@ DATA_EXPORT_ARTIFACT_ENCODINGS = tuple(
 )
 USER_THEMES = tuple(theme.value for theme in UserTheme)
 BRUSH_CURSOR_STYLES = tuple(style.value for style in BrushCursorStyle)
+# The sizes the toolbar's slider stops at, which is every size a default can
+# be: a default the slider could not show would be a size nobody can return
+# to. Mirrors `BRUSH_SIZES` in `frontend/src/lib/brushSizes.ts`.
+BRUSH_SIZES = (2, 4, 6, 8, 12, 16, 24, 32)
+DEFAULT_BRUSH_SIZE = 6
 TIME_FORMATS = tuple(value.value for value in TimeFormat)
 REPORT_REASONS = tuple(reason.value for reason in ReportReason)
 # A line copied into a report is either what the report is about or what was

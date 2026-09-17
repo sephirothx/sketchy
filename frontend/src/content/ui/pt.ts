@@ -2026,6 +2026,8 @@ export const PT: Catalogue = {
     crosshairPreciseAtPointOutlineShows: "Uma mira é precisa no ponto; um contorno mostra a largura do traço.",
     penPressure: "Pressão da caneta",
     aLighterHandDrawsThinnerBrush: "Com uma caneta sensível à pressão, uma mão mais leve desenha um traço mais fino. O tamanho do pincel é a largura máxima.",
+    defaultBrushSize: "Tamanho padrão do pincel",
+    theSizeTheBrushStartsEveryTurnAt: "O tamanho com que o pincel começa cada turno. Marcado no controlo de tamanho.",
     brushCursorStyle: "Estilo do cursor do pincel",
     soundEffects: "Efeitos sonoros",
     chimesCorrectGuessStartRoundLast: "Sons para um acerto, o início de uma ronda, os últimos dez segundos, e jogadores a entrar e a sair.",
@@ -2180,6 +2182,8 @@ export const PT: Catalogue = {
     sizeShortcutHint: (p: { tool: string; width: number }) =>
       `${p.tool}, tamanho: ${p.width}px ([ / ])`,
     widthReadout: (p: { width: number }) => `${p.width}px`,
+    defaultSize: "Padrão",
+    backToDefaultSize: (p: { width: number }) => `Tamanho padrão, ${p.width}px`,
     colorSwatch: (p: { color: string }) => `Cor ${p.color}`,
     drawingTools: "Ferramentas de desenho",
     chooseTool: "Escolher ferramenta",

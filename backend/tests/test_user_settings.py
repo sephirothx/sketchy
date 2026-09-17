@@ -64,6 +64,7 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         "brushCursor": "circle",
         # Off, against a default of on: a seed that was dropped would read back true.
         "penPressure": False,
+        "defaultBrushSize": 12,
         "keyBindings": {**DEFAULT_KEY_BINDINGS, "brush": ["b"]},
         "colorblindSafeColors": True,
         "timeFormat": "24h",
@@ -108,6 +109,27 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         assert row.theme == "light"
         assert row.sound_effects_volume == 0.9
         assert row.pen_pressure is True
+
+
+async def test_the_default_brush_size_is_one_of_the_sliders_stops(env):
+    """A default the slider could not show would be a size nobody can get back to."""
+    http, factory = env
+    registered = await http.post(
+        "/api/auth/register", json={"username": "SizeDefault", "password": PASSWORD}
+    )
+    assert registered.status_code == 200
+    assert (await http.get("/api/users/me/settings")).json()["defaultBrushSize"] == 6
+
+    patched = await http.patch("/api/users/me/settings", json={"defaultBrushSize": 24})
+    assert patched.status_code == 200
+    assert patched.json()["defaultBrushSize"] == 24
+    # 6.0 is not here: JSON has one number type, and it is stored as 6.
+    for refused in (5, 0, 64, "6", 6.5, True, [6]):
+        response = await http.patch("/api/users/me/settings", json={"defaultBrushSize": refused})
+        assert response.status_code == 422, refused
+    async with factory() as session:
+        row = await session.scalar(select(UserSettings))
+        assert row.default_brush_size == 24
 
 
 async def test_pen_pressure_is_on_until_a_player_turns_it_off(env):

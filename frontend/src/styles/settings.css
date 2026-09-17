@@ -1179,3 +1179,29 @@
   margin-top: 8px;
   width: 100%;
 }
+
+/* The default brush size: eight segments in a recipe sized for two to four.
+   The columns shrink to what a two-digit number needs, and on a phone the
+   control takes the row's width rather than running off it. */
+.settings-brush-sizes {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-brush-sizes .segmented-control {
+  grid-auto-columns: minmax(34px, 1fr);
+  max-width: 100%;
+}
+
+.settings-brush-sizes .segmented-control button {
+  padding: 8px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+  .settings-brush-sizes,
+  .settings-brush-sizes .segmented-control-field,
+  .settings-brush-sizes .segmented-control {
+    width: 100%;
+  }
+}

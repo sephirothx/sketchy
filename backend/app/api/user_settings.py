@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
 from app.db.models import User, UserSettings
-from app.domain_values import AccountState, DEFAULT_USER_KEY_BINDINGS
+from app.domain_values import AccountState, DEFAULT_BRUSH_SIZE, DEFAULT_USER_KEY_BINDINGS
 
 
 KEY_BINDING_ACTIONS = (
@@ -48,6 +48,11 @@ def _validated_key_bindings(value: dict[str, list[str]] | None):
     return value
 
 
+# One of the slider's stops (`BRUSH_SIZES`). A literal is not coerced to, so
+# `"6"` is refused rather than read as a size.
+BrushSize = Literal[2, 4, 6, 8, 12, 16, 24, 32]
+
+
 class UserSettingsSeed(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -59,6 +64,7 @@ class UserSettingsSeed(BaseModel):
         default="crosshair", alias="brushCursor"
     )
     pen_pressure: bool = Field(default=True, alias="penPressure")
+    default_brush_size: BrushSize = Field(default=DEFAULT_BRUSH_SIZE, alias="defaultBrushSize")
     key_bindings: dict[str, list[str]] = Field(
         default_factory=lambda: {key: list(value) for key, value in DEFAULT_KEY_BINDINGS.items()},
         alias="keyBindings",
@@ -100,6 +106,7 @@ class UserSettingsPatch(BaseModel):
         default=None, alias="brushCursor"
     )
     pen_pressure: bool | None = Field(default=None, alias="penPressure")
+    default_brush_size: BrushSize | None = Field(default=None, alias="defaultBrushSize")
     key_bindings: dict[str, list[str]] | None = Field(
         default=None, alias="keyBindings"
     )
@@ -134,6 +141,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "volume": settings.sound_effects_volume,
         "brushCursor": settings.brush_cursor,
         "penPressure": settings.pen_pressure,
+        "defaultBrushSize": settings.default_brush_size,
         "keyBindings": settings.key_bindings,
         "colorblindSafeColors": settings.colorblind_safe_colors,
         "timeFormat": settings.time_format,
