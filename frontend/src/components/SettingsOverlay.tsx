@@ -38,6 +38,7 @@ import { doodleNameOf } from "../lib/avatarDoodles";
 import { PictureCropDialog } from "./PictureCropDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
+import { BRUSH_SIZES, isBrushSize } from "../lib/brushSizes";
 import { SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
 import { LanguagePicker } from "./LanguagePicker";
 import type { PromptLanguage } from "../types";
@@ -150,6 +151,12 @@ const BRUSH_CURSOR_OPTIONS: { value: BrushCursorStyle; label: string }[] = [
   { value: "crosshair", get label() { return ui.settingsOverlay.crosshair; } },
   { value: "circle", get label() { return ui.settingsOverlay.outline; } },
 ];
+
+const BRUSH_SIZE_OPTIONS = BRUSH_SIZES.map((size) => ({
+  value: String(size),
+  label: String(size),
+  get name() { return ui.toolbar.widthReadout({ width: size }); },
+}));
 
 function formatKey(key: string): string {
   if (key === " ") return ui.settingsOverlay.space;
@@ -948,6 +955,8 @@ function AppearancePane() {
   const brushCursor = useSettingsStore((state) => state.brushCursor);
   const setBrushCursor = useSettingsStore((state) => state.setBrushCursor);
   const penPressure = useSettingsStore((state) => state.penPressure);
+  const defaultBrushSize = useSettingsStore((state) => state.defaultBrushSize);
+  const setDefaultBrushSize = useSettingsStore((state) => state.setDefaultBrushSize);
   const setPenPressure = useSettingsStore((state) => state.setPenPressure);
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
@@ -1075,6 +1084,25 @@ function AppearancePane() {
             options={BRUSH_CURSOR_OPTIONS}
             onChange={chooseCursor}
           />
+        </Row>
+        <Row
+          label={ui.settingsOverlay.defaultBrushSize}
+          hint={ui.settingsOverlay.theSizeTheBrushStartsEveryTurnAt}
+        >
+          {/* Eight segments, where the recipe is sized for two to four. */}
+          <div className="settings-brush-sizes">
+          <SegmentedControl
+            label={ui.settingsOverlay.defaultBrushSize}
+            value={String(defaultBrushSize)}
+            options={BRUSH_SIZE_OPTIONS}
+            onChange={(next) => {
+              const size = Number(next);
+              if (!isBrushSize(size)) return;
+              setDefaultBrushSize(size);
+              queueSettingsSync({ defaultBrushSize: size });
+            }}
+          />
+          </div>
         </Row>
         <ToggleRow
           label={ui.settingsOverlay.penPressure}

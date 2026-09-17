@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 10,
+  "schemaVersion": 11,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -245,6 +245,7 @@
     "settings.colorblindSafeColors",
     "settings.confettiEffects",
     "settings.createdAt",
+    "settings.defaultBrushSize",
     "settings.keyBindings",
     "settings.keyBindings.brush",
     "settings.keyBindings.brushDecrease",

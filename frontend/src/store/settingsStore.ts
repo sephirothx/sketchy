@@ -4,6 +4,7 @@ import {
   preferredPromptLanguage,
 } from "../lib/promptLanguages.ts";
 import type { PromptLanguage } from "../types";
+import { DEFAULT_BRUSH_SIZE, isBrushSize, type BrushSize } from "../lib/brushSizes.ts";
 
 import {
   DEFAULT_TIME_FORMAT,
@@ -196,6 +197,15 @@ function loadStoredFlag(key: string, defaultValue = true): boolean {
   }
 }
 
+function loadStoredDefaultBrushSize(): BrushSize {
+  try {
+    const stored = Number(localStorage.getItem("sketchy_defaultbrushsize"));
+    return isBrushSize(stored) ? stored : DEFAULT_BRUSH_SIZE;
+  } catch {
+    return DEFAULT_BRUSH_SIZE;
+  }
+}
+
 function loadStoredVolume(): number {
   try {
     const raw = localStorage.getItem("sketchy_volume");
@@ -234,6 +244,8 @@ interface SettingsStore {
   /** Whether a pressure-sensitive pen thins the brush under a lighter hand
       (R-DRAW-17). Inert for a mouse, a finger and a pen with no sensor. */
   penPressure: boolean;
+  /** The brush size a turn, and the scratch pad, starts at. */
+  defaultBrushSize: BrushSize;
   theme: AppTheme;
   confettiEffects: boolean;
   soundEffects: boolean;
@@ -252,6 +264,7 @@ interface SettingsStore {
     keyBindings: KeyBindings;
     brushCursor: BrushCursorStyle;
     penPressure?: boolean;
+    defaultBrushSize?: BrushSize;
     theme?: AppTheme;
     confettiEffects?: boolean;
     soundEffects?: boolean;
@@ -265,6 +278,7 @@ interface SettingsStore {
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setBrushCursor: (brushCursor: BrushCursorStyle) => void;
   setPenPressure: (enabled: boolean) => void;
+  setDefaultBrushSize: (size: BrushSize) => void;
   setNameColor: (nameColor: string) => void;
   setTheme: (theme: AppTheme) => void;
   setConfettiEffects: (enabled: boolean) => void;
@@ -304,6 +318,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   keyBindings: loadStoredKeyBindings(),
   brushCursor: loadStoredBrushCursor(),
   penPressure: loadStoredFlag("sketchy_penpressure"),
+  defaultBrushSize: loadStoredDefaultBrushSize(),
   theme: initialTheme,
   confettiEffects: loadStoredFlag("sketchy_confettieffects"),
   soundEffects: loadStoredFlag("sketchy_soundeffects"),
@@ -317,6 +332,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     keyBindings,
     brushCursor,
     penPressure = true,
+    defaultBrushSize = DEFAULT_BRUSH_SIZE,
     theme = DEFAULT_THEME,
     confettiEffects = true,
     soundEffects = true,
@@ -332,6 +348,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem(BRUSH_CURSOR_KEY, brushCursor);
       localStorage.removeItem(LEGACY_BRUSH_CURSOR_KEY);
       localStorage.setItem("sketchy_penpressure", String(penPressure));
+      localStorage.setItem("sketchy_defaultbrushsize", String(defaultBrushSize));
       localStorage.setItem("sketchy_theme", theme);
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
@@ -352,6 +369,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         keyBindings,
         brushCursor,
         penPressure,
+        defaultBrushSize,
         theme,
         confettiEffects,
         soundEffects,
@@ -381,6 +399,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set(() => {
       localStorage.setItem("sketchy_penpressure", String(enabled));
       return { penPressure: enabled };
+    }),
+  setDefaultBrushSize: (size) =>
+    set(() => {
+      localStorage.setItem("sketchy_defaultbrushsize", String(size));
+      return { defaultBrushSize: size };
     }),
   setNameColor: (nameColor) =>
     set(() => {

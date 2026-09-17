@@ -184,6 +184,9 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
             pen_pressure = dialog.get_by_role("switch", name="Pen pressure")
             assert await pen_pressure.is_checked()
             await pen_pressure.uncheck()
+            await dialog.get_by_role("group", name="Default brush size").get_by_role(
+                "button", name="16px"
+            ).click()
             cursor = dialog.get_by_role("group", name="Brush cursor style")
             # Immediately-applied rows are merged into one write, so waiting for
             # the request the last change triggers is waiting for all four.
@@ -216,6 +219,7 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                         colors: localStorage.getItem('sketchy_colorblindsafecolors'),
                         clock: localStorage.getItem('sketchy_timeformat'),
                         pen: localStorage.getItem('sketchy_penpressure'),
+                        size: localStorage.getItem('sketchy_defaultbrushsize'),
                     })"""
                 )
                 assert stored == {
@@ -224,6 +228,7 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                     "colors": "true",
                     "clock": "24h",
                     "pen": "false",
+                    "size": "16",
                 }
                 # Retired settings leave no key behind to be resurrected.
                 retired = await fresh_page.evaluate(
@@ -244,6 +249,9 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                 assert not await fresh_dialog.get_by_role(
                     "switch", name="Pen pressure"
                 ).is_checked()
+                assert await fresh_dialog.get_by_role(
+                    "group", name="Default brush size"
+                ).get_by_role("button", name="16px").get_attribute("aria-pressed") == "true"
                 cursor_synced = fresh_dialog.get_by_role(
                     "group", name="Brush cursor style"
                 )

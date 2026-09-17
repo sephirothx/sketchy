@@ -186,21 +186,95 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The slider and the rail of stops beside it share one box, so a stop's
+   place along the rail is the thumb's place along the track. `--thumb` is the
+   native thumb's size: its centre travels from half of it to the track's
+   length less half of it, and the stops are laid out over the same span. */
 .slider-track-wrapper {
+  --thumb: 16px;
+  --track-length: 100px;
+  position: relative;
   height: 110px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 4px 0;
+}
+
+@supports (-moz-appearance: none) {
+  .slider-track-wrapper {
+    --thumb: 20px;
+  }
 }
 
 .vertical-brush-slider {
   writing-mode: vertical-lr;
   direction: rtl;
   width: 20px;
-  height: 100px;
+  height: var(--track-length);
   cursor: pointer;
   accent-color: var(--primary);
+}
+
+.slider-stops {
+  position: relative;
+  width: 10px;
+  height: var(--track-length);
+  flex: 0 0 auto;
+}
+
+.slider-stop {
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--thumb) / 2 + var(--stop) * (100% - var(--thumb)));
+  width: 5px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--line-strong);
+  transform: translateY(50%);
+}
+
+/* The default: the marker orange the rest of the app spends on "this one". */
+.slider-stop.is-default {
+  width: 10px;
+  height: 3px;
+  background: var(--warm);
+}
+
+.slider-default-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.slider-default-button:hover {
+  border-color: var(--warm-edge);
+  color: var(--warm-ink);
+}
+
+.slider-default-button[aria-pressed="true"] {
+  border-color: var(--warm-edge);
+  background: var(--warm-soft);
+  color: var(--warm-ink);
+}
+
+.slider-default-mark {
+  width: 8px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--warm);
 }
 
 
@@ -536,6 +610,62 @@
   border: none;
   padding: 0;
   animation: none;
+  /* This popover is as wide as the screen, so the slider lies along it: a
+     100px vertical track in a 360px-wide panel used a quarter of the travel
+     the thumb could have had, and left the rest of the panel empty. */
+  flex-direction: row;
+  width: 100%;
+  gap: 12px;
+}
+
+.toolbar-mobile-size-popover .slider-top-preview {
+  flex: 0 0 44px;
+  height: auto;
+}
+
+.toolbar-mobile-size-popover .slider-track-wrapper {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0;
+}
+
+.toolbar-mobile-size-popover .vertical-brush-slider {
+  writing-mode: horizontal-tb;
+  direction: ltr;
+  width: 100%;
+  /* A thumb is dragged with a thumb here. */
+  height: 32px;
+  margin: 0;
+}
+
+.toolbar-mobile-size-popover .slider-stops {
+  width: 100%;
+  height: 10px;
+}
+
+.toolbar-mobile-size-popover .slider-stop {
+  left: calc(var(--thumb) / 2 + var(--stop) * (100% - var(--thumb)));
+  bottom: auto;
+  top: 0;
+  width: 1.5px;
+  height: 5px;
+  transform: translateX(-50%);
+}
+
+.toolbar-mobile-size-popover .slider-stop.is-default {
+  width: 3px;
+  height: 10px;
+}
+
+.toolbar-mobile-size-popover .slider-default-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 2px 12px;
+  font-size: 12.5px;
 }
 
 /* Width floor for the same reason as the shell's landscape block: a portrait

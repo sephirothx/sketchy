@@ -2027,6 +2027,8 @@ export const DE: Catalogue = {
     crosshairPreciseAtPointOutlineShows: "Ein Fadenkreuz ist punktgenau; ein Umriss zeigt, wie breit der Strich wird.",
     penPressure: "Stiftdruck",
     aLighterHandDrawsThinnerBrush: "Mit einem drucksensitiven Stift zeichnet eine leichtere Hand einen dünneren Pinselstrich. Breiter als die Pinselgröße wird er nie.",
+    defaultBrushSize: "Standard-Pinselgröße",
+    theSizeTheBrushStartsEveryTurnAt: "Mit dieser Größe beginnt der Pinsel jede Runde. Auf dem Größenregler markiert.",
     brushCursorStyle: "Art des Pinselzeigers",
     soundEffects: "Soundeffekte",
     chimesCorrectGuessStartRoundLast: "Töne für eine richtige Antwort, den Rundenbeginn, die letzten zehn Sekunden und für kommende und gehende Spieler.",
@@ -2181,6 +2183,8 @@ export const DE: Catalogue = {
     sizeShortcutHint: (p: { tool: string; width: number }) =>
       `${p.tool}, Größe: ${p.width}px ([ / ])`,
     widthReadout: (p: { width: number }) => `${p.width}px`,
+    defaultSize: "Standard",
+    backToDefaultSize: (p: { width: number }) => `Standardgröße, ${p.width}px`,
     colorSwatch: (p: { color: string }) => `Farbe ${p.color}`,
     drawingTools: "Zeichenwerkzeuge",
     chooseTool: "Werkzeug wählen",

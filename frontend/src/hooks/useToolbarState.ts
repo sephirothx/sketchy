@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
+import { useSettingsStore } from "../store/settingsStore";
+import { DEFAULT_ERASER_SIZE } from "../lib/brushSizes";
 import type { DrawTool } from "../types";
 import { ui } from "../content/ui/index.ts";
 
 export function useToolbarState(isDrawer: boolean) {
   const [color, setColor] = useState("#000000");
-  const [brushWidth, setBrushWidth] = useState(6);
-  const [eraserWidth, setEraserWidth] = useState(24);
+  // The player's own default (Settings -> Appearance): every turn resets the
+  // toolbar, so whoever always draws at another size would otherwise reach
+  // for the slider at the start of every turn, with the clock running.
+  const defaultBrushSize = useSettingsStore((state) => state.defaultBrushSize);
+  const [brushWidth, setBrushWidth] = useState<number>(defaultBrushSize);
+  const [eraserWidth, setEraserWidth] = useState<number>(DEFAULT_ERASER_SIZE);
   const [tool, setTool] = useState<DrawTool>("brush");
   const [wasDrawer, setWasDrawer] = useState(false);
 
@@ -18,8 +24,8 @@ export function useToolbarState(isDrawer: boolean) {
     if (isDrawer) {
       setColor("#000000");
       setTool("brush");
-      setBrushWidth(6);
-      setEraserWidth(24);
+      setBrushWidth(defaultBrushSize);
+      setEraserWidth(DEFAULT_ERASER_SIZE);
     }
   }
 

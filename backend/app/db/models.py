@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    SmallInteger,
     JSON,
     LargeBinary,
     String,
@@ -48,6 +49,8 @@ from app.domain_values import (
     EMAIL_TEMPLATES,
     ACCOUNT_STATES,
     BRUSH_CURSOR_STYLES,
+    BRUSH_SIZES,
+    DEFAULT_BRUSH_SIZE,
     TIME_FORMATS,
     BUG_REPORT_AREAS,
     BUG_REPORT_SCREENSHOT_STATUSES,
@@ -484,6 +487,10 @@ class UserSettings(Base):
         _values_check(
             "brush_cursor", BRUSH_CURSOR_STYLES, "ck_user_settings_brush_cursor"
         ),
+        CheckConstraint(
+            f"default_brush_size IN ({', '.join(map(str, BRUSH_SIZES))})",
+            name="ck_user_settings_default_brush_size",
+        ),
         _values_check("time_format", TIME_FORMATS, "ck_user_settings_time_format"),
         _values_check(
             "prompt_language", PROMPT_LANGUAGES, "ck_user_settings_prompt_language"
@@ -526,6 +533,14 @@ class UserSettings(Base):
     # with one gets it without looking for it and nobody else can tell.
     pen_pressure: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
+    )
+    # The brush size a turn starts at: every turn resets the toolbar, so a
+    # player who always reaches for another size was doing it every turn.
+    default_brush_size: Mapped[int] = mapped_column(
+        SmallInteger,
+        default=DEFAULT_BRUSH_SIZE,
+        server_default=text(str(DEFAULT_BRUSH_SIZE)),
+        nullable=False,
     )
     key_bindings: Mapped[dict] = mapped_column(
         PortableJSON,

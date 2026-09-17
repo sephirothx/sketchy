@@ -6,6 +6,7 @@ import {
   type KeyBindings,
   type TimeFormat,
 } from "../store/settingsStore";
+import type { BrushSize } from "./brushSizes.ts";
 import type { PromptLanguage } from "../types";
 import type { Locale } from "./interfaceLocale.ts";
 
@@ -17,6 +18,7 @@ export interface AccountSettings {
   volume: number;
   brushCursor: BrushCursorStyle;
   penPressure: boolean;
+  defaultBrushSize: BrushSize;
   keyBindings: KeyBindings;
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
@@ -37,6 +39,7 @@ export function currentSettingsPayload(): AccountSettings {
     volume: settings.volume,
     brushCursor: settings.brushCursor,
     penPressure: settings.penPressure,
+    defaultBrushSize: settings.defaultBrushSize,
     keyBindings: settings.keyBindings,
     colorblindSafeColors: settings.colorblindSafeColors,
     timeFormat: settings.timeFormat,

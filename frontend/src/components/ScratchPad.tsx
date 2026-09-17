@@ -5,6 +5,8 @@ import { ScratchPadCanvas, type CanvasRef } from "./Canvas";
 import { Toolbar } from "./Toolbar";
 import { ModalShell } from "./ui/ModalShell";
 import type { DrawTool } from "../types";
+import { DEFAULT_ERASER_SIZE } from "../lib/brushSizes";
+import { useSettingsStore } from "../store/settingsStore";
 import { ui } from "../content/ui/index.ts";
 
 /**
@@ -19,8 +21,9 @@ export function ScratchPad() {
   const canvasRef = useRef<CanvasRef | null>(null);
   const [color, setColor] = useState("#000000");
   const [tool, setTool] = useState<DrawTool>("brush");
-  const [brushWidth, setBrushWidth] = useState(6);
-  const [eraserWidth, setEraserWidth] = useState(24);
+  const defaultBrushSize = useSettingsStore((state) => state.defaultBrushSize);
+  const [brushWidth, setBrushWidth] = useState<number>(defaultBrushSize);
+  const [eraserWidth, setEraserWidth] = useState<number>(DEFAULT_ERASER_SIZE);
   const width = tool === "eraser" ? eraserWidth : brushWidth;
 
   return (
