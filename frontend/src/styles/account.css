@@ -644,6 +644,9 @@
 
 .first-run-tag-top {
   background: var(--tag-edge, #c8102e);
+  /* The card's radius less its border, so the banner ends where the card
+     curves instead of poking two square corners past it. */
+  border-radius: 10px 10px 0 0;
   color: #fff;
   font-size: 11.5px;
   font-weight: 800;
