@@ -787,7 +787,9 @@ what puts you in a game is Quick play, beside the room list. Next to the tag, on
 line drawn from a pool on each visit ("Cubism, but by accident.") over the sentence
 that never changes: one player draws, everybody else tries to guess, and no account,
 install or talent is required. The pool is written per language rather than
-translated, because the lines are jokes. Creating an account and logging in are one
+translated, because the lines are jokes. The doodles around the block are dealt the
+same way: three of the deployment's own, on one side or the other, each leaning its
+own way. Creating an account and logging in are one
 quiet line at the end of the block, offered again at the end of the first game where
 there is finally something worth keeping.
 

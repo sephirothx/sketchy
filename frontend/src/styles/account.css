@@ -758,8 +758,18 @@
   pointer-events: none;
   position: absolute;
   right: 10px;
-  rotate: 8deg;
   z-index: 0;
+}
+
+/* Which corner is this visit's too. */
+.first-run-art.is-left[data-corner="left"] {
+  left: 10px;
+  right: auto;
+}
+
+/* Only one fits a corner, whichever side the deal put the pair on. */
+.first-run-art .first-run-doodle:not(:first-child) {
+  display: none;
 }
 
 .first-run-art.is-right {
@@ -769,8 +779,10 @@
 .first-run-doodle {
   color: var(--line-strong);
   display: block;
-  height: 96px;
-  width: 96px;
+  height: calc(96px * var(--doodle-scale, 1));
+  rotate: var(--doodle-rotate, 0deg);
+  translate: 0 var(--doodle-shift, 0px);
+  width: calc(96px * var(--doodle-scale, 1));
 }
 
 /* A wide card - not a wide window, which is not the same thing once the lobby
@@ -802,14 +814,14 @@
     rotate: none;
   }
 
-  .first-run-doodle {
-    height: clamp(96px, 10cqi, 150px);
-    width: clamp(96px, 10cqi, 150px);
+  .first-run-art .first-run-doodle:not(:first-child) {
+    display: block;
   }
 
-  .is-left .first-run-doodle { rotate: -7deg; }
-  .is-right .first-run-doodle:nth-child(1) { rotate: 6deg; }
-  .is-right .first-run-doodle:nth-child(2) { rotate: -3deg; }
+  .first-run-doodle {
+    height: calc(clamp(96px, 10cqi, 150px) * var(--doodle-scale, 1));
+    width: calc(clamp(96px, 10cqi, 150px) * var(--doodle-scale, 1));
+  }
 }
 
 .first-run-tag,

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type CSSProperties } from "react";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
@@ -6,6 +6,7 @@ import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { refusalText } from "../lib/refusals.ts";
 import { firstRunLine } from "../lib/firstRunLines";
 import { DOODLE_SPRITE } from "../lib/avatarDoodles";
+import { firstRunArt, type FirstRunDoodle } from "../lib/firstRunArt";
 import { ui } from "../content/ui/index.ts";
 
 /**
@@ -28,6 +29,24 @@ import { ui } from "../content/ui/index.ts";
  * are never gated, and a returning player on a new device reaches "Log in"
  * without being asked to invent a guest name.
  */
+/** One doodle, leaning the way this visit dealt it. */
+function doodle({ name, rotate, shift, scale }: FirstRunDoodle) {
+  return (
+    <svg
+      key={name}
+      className="first-run-doodle"
+      viewBox="0 0 24 24"
+      style={{
+        "--doodle-rotate": `${rotate}deg`,
+        "--doodle-shift": `${shift}px`,
+        "--doodle-scale": scale,
+      } as CSSProperties}
+    >
+      <use href={`${DOODLE_SPRITE}#${name}`} />
+    </svg>
+  );
+}
+
 export function FirstRunIdentity() {
   const user = useAuthStore((s) => s.user);
   const hasResolved = useAuthStore((s) => s.hasResolved);
@@ -36,6 +55,7 @@ export function FirstRunIdentity() {
   const register = useAuthStore((s) => s.register);
 
   const fieldId = useId();
+  const art = firstRunArt();
   const [mode, setMode] = useState<AuthMode | null>(null);
   // Shared, so that typing a name here and pressing Create or Join instead of
   // this form's own button means the same thing.
@@ -85,13 +105,12 @@ export function FirstRunIdentity() {
       <div className="first-run-inner">
       {/* The deployment's own doodles, one side and the other, so that on a
           wide card the tag and the words sit in the middle of the block rather
-          than against its left edge. Narrower, the right-hand pair goes and the
-          left one wanders into the corner. Decorative either way: the tag and
-          the words say everything. */}
-      <div className="first-run-art is-left" aria-hidden="true">
-        <svg className="first-run-doodle" viewBox="0 0 24 24">
-          <use href={`${DOODLE_SPRITE}#cat`} />
-        </svg>
+          than against its left edge. Narrower, one is left, in a corner. Which
+          three, which side and how each leans is this visit's deal
+          (`lib/firstRunArt.ts`). Decorative either way: the tag and the words
+          say everything. */}
+      <div className="first-run-art is-left" data-corner={art.corner} aria-hidden="true">
+        {art.left.map(doodle)}
       </div>
       {takenName && (
         <p className="first-run-name-in-use" role="status">
@@ -150,11 +169,7 @@ export function FirstRunIdentity() {
 
 
       <div className="first-run-art is-right" aria-hidden="true">
-        {["rocket", "donut"].map((doodle) => (
-          <svg key={doodle} className="first-run-doodle" viewBox="0 0 24 24">
-            <use href={`${DOODLE_SPRITE}#${doodle}`} />
-          </svg>
-        ))}
+        {art.right.map(doodle)}
       </div>
       </div>
       {mode && (
