@@ -80,6 +80,44 @@ async def test_a_turn_starts_at_the_players_default_size_and_the_slider_goes_bac
             await drawing.get_by_role("button", name="Brush size 2px").wait_for()
             assert await drawing.evaluate(MARK_TO_THUMB) <= 1.5
 
+            # The example is a circle at every size: it used to be squeezed
+            # into an ellipse from 16 px up, by a row too short for it.
+            for _ in range(7):
+                await drawing.keyboard.press("]")
+            await drawing.get_by_role("button", name="Brush size 32px").wait_for()
+            # (The dot eases to its new size, so wait for it to get there.)
+            await drawing.wait_for_function(
+                "() => document.querySelector('.brush-slider-popover .preview-dot').getBoundingClientRect().width > 25"
+            )
+            dot = await drawing.locator(".brush-slider-popover .preview-dot").bounding_box()
+            assert dot and abs(dot["width"] - dot["height"]) < 0.5, dot
+            await back.click()
+
+            # Pressing anywhere else closes it - starting to draw most of all -
+            # and a finger has to count: on a canvas with `touch-action: none`
+            # it never becomes the mouse event this used to wait for.
+            canvas_box = await (await drawing.query_selector("canvas.drawing-canvas")).bounding_box()
+            popover = drawing.locator(".brush-slider-popover")
+            await drawing.mouse.move(canvas_box["x"] + 120, canvas_box["y"] + 120)
+            await drawing.mouse.down()
+            await popover.wait_for(state="detached")
+            await drawing.mouse.up()
+            cdp = await drawing.context.new_cdp_session(drawing)
+            await drawing.get_by_role("button", name="Brush size 2px").click()
+            await popover.wait_for()
+            await cdp.send("Input.dispatchTouchEvent", {
+                "type": "touchStart", "touchPoints": [{"x": canvas_box["x"] + 200, "y": canvas_box["y"] + 200}],
+            })
+            await popover.wait_for(state="detached")
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+            # But not a press inside it: the slider and Default are for using.
+            await drawing.get_by_role("button", name="Brush size 2px").click()
+            await popover.wait_for()
+            # (Its preview rather than its slider, which would take the focus
+            # and with it the tool shortcuts the next step uses.)
+            await drawing.locator(".brush-slider-popover .slider-top-preview").click()
+            assert await popover.count() == 1
+
             # The eraser's default is its own, and not the setting.
             await drawing.keyboard.press("e")
             await drawing.get_by_role("button", name="Default size, 24px").wait_for()

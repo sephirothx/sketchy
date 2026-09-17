@@ -211,8 +211,15 @@ export function Toolbar({
     setMobilePanel(null);
   });
 
+  // Anything pressed outside a popover closes it - starting a stroke most of
+  // all, since the size popover sits over the canvas's edge. `pointerdown`,
+  // not `mousedown`: a finger drawing on a canvas with `touch-action: none`
+  // never produces a mouse event, and neither do some pen drivers, so the
+  // popover stayed open over the drawing for exactly the people most likely
+  // to have it in the way. In the capture phase, so that nothing that stops
+  // the event on its way up can keep a popover open.
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handlePressOutside(e: PointerEvent) {
       const target = e.target as Node;
       if (sizePickerRef.current && !sizePickerRef.current.contains(target)) {
         setSizePickerOpen(false);
@@ -221,9 +228,9 @@ export function Toolbar({
         setMobilePanel(null);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handlePressOutside, true);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("pointerdown", handlePressOutside, true);
     };
   }, []);
 
