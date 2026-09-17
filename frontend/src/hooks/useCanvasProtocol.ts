@@ -83,6 +83,10 @@ export interface CanvasProtocol {
   requestUndo(): void;
   requestClear(): void;
   requestAuthoritativeSync(discardPending?: boolean): void;
+  /** Repaint the canvas from the history this client holds: what is on it
+  that the history does not have goes. For the ink of a frame that was painted
+  and then not taken - no round trip, since nothing the server has is in doubt. */
+  repaintFromHistory(): void;
 }
 
 export function useCanvasProtocol(
@@ -701,6 +705,10 @@ export function useCanvasProtocol(
     };
   }, [decodeAgainstHistory, ensureSyncRequester, publishBudgets, renderer, requestAuthoritativeSync, sendDraw]);
 
+  const repaintFromHistory = useCallback((): void => {
+    renderer.replay(historyRef.current.actions);
+  }, [renderer]);
+
   return useMemo(() => ({
     beginDrawAction,
     sendPathFrame,
@@ -708,9 +716,11 @@ export function useCanvasProtocol(
     requestUndo,
     requestClear,
     requestAuthoritativeSync,
+    repaintFromHistory,
   }), [
     beginDrawAction,
     finishPathAction,
+    repaintFromHistory,
     requestAuthoritativeSync,
     requestClear,
     requestUndo,
