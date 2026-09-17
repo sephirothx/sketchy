@@ -606,11 +606,32 @@
   position: relative;
 }
 
+/* One column until the card can hold two, whatever the window is doing: the
+   tag beside the words needs about 700px, and a tag stretched the width of a
+   tablet is a sticker nobody would print. */
 .first-run-inner {
   align-items: center;
   display: grid;
-  gap: 8px 24px;
-  grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container first-run (min-width: 620px) {
+  .first-run-inner {
+    gap: 8px 24px;
+    grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+  }
+}
+
+/* The corner doodle needs a card wide enough to have a corner to spare. */
+.first-run-art.is-left {
+  display: none;
+}
+
+@container first-run (min-width: 620px) {
+  .first-run-art.is-left {
+    display: block;
+  }
 }
 
 /* A guest who came back to find their name taken by somebody online who
@@ -637,6 +658,10 @@
    that sticks it on. Tilted a degree and a half, because a sticker is. */
 .first-run-tag {
   background: #fff;
+  /* A name tag is a name tag: it never runs the width of the card. */
+  justify-self: center;
+  max-width: 360px;
+  width: 100%;
   border: 2px solid var(--tag-edge, #c8102e);
   border-radius: 12px;
   box-shadow: 0 3px 0 rgba(20, 16, 10, 0.14);
@@ -839,17 +864,8 @@
     padding: 18px;
   }
 
-  .first-run-inner {
-    gap: 14px;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .first-run-heading {
     font-size: 22px;
-  }
-
-  .first-run-art {
-    display: none;
   }
 }
 

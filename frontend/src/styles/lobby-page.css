@@ -1239,13 +1239,15 @@ a.online-player-name:focus-visible {
    which is less usable than the ordinary page, so the ordinary page is what
    it falls back to. */
 @media (min-width: 900px) and (min-height: 640px) {
-  /* A visitor who has not chosen a name yet gets the ordinary scrolling page.
-     The first-run block is a 260px card, and pinning the viewport around it
-     leaves the rooms panel a heading and nothing else - the one screen where
-     the lists matter least is not worth breaking them for. It disappears the
-     moment they have a name, and the fixed shell takes over. */
+  /* A visitor who has not chosen a name yet gets a page that can grow: the
+     first-run block, the rooms and the social column together can outgrow a
+     short window, and pinning the viewport around them left the rooms panel a
+     heading and nothing else. It still *fills* the window, though - the panels
+     take the height the block leaves rather than shrinking to their contents
+     and stranding the bottom third of the screen. */
   .lobby-page:has(> .first-run) {
     height: auto;
+    min-height: calc(100dvh - var(--banner-height));
     overflow: visible;
   }
 
