@@ -96,6 +96,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [colorSuggestionBusy, setColorSuggestionBusy] = useState(false);
   const [restartClock, setRestartClock] = useState(() => Date.now());
   const isMobile = useMediaQuery("(max-width: 900px)");
+  // The identity chip gives up its name before anything else in the bar does
+  // (after the room's), and is the avatar alone from here down - the compact
+  // chip, drawn round, not the full one with its label hidden inside it.
+  const identityCompact = useMediaQuery("(max-width: 1000px)");
   // Which seats belong to friends, asked once for the whole room. Here rather
   // than in the sidebar roster that first used it: that panel is not mounted
   // on a narrow layout, where the waiting roster and the guess pips draw the
@@ -364,22 +368,21 @@ export function ActiveGameRoom({ code }: { code: string }) {
         data-testid="room-header"
         data-room-code={code}
       >
-        {!isMobile && (
-          <div className="game-header-start">
-            {/* The way back to the lobby, which from a room is leaving it -
-                so it asks first during a game, as Leave does. */}
-            <button
-              type="button"
-              className="game-header-home"
-              onClick={handleLeave}
-              title={ui.activeGameRoom.leaveRoom}
-              aria-label={ui.activeGameRoom.leaveRoom}
-            >
-              <Wordmark size={24} decorative />
-            </button>
-            {roomName && <span className="game-header-room-name">{roomName}</span>}
-          </div>
-        )}
+        <div className="game-header-start">
+          {/* The way back to the lobby, which from a room is leaving it -
+              so it asks first during a game, as Leave does. On every width:
+              it is what says which game this is. */}
+          <button
+            type="button"
+            className="game-header-home"
+            onClick={handleLeave}
+            title={ui.activeGameRoom.leaveRoom}
+            aria-label={ui.activeGameRoom.leaveRoom}
+          >
+            <Wordmark size={isMobile ? 22 : 24} decorative />
+          </button>
+          {!isMobile && roomName && <span className="game-header-room-name">{roomName}</span>}
+        </div>
         <div className="game-header-center">
           <GameHeaderStatus />
           <RoomNoticeChips compact={isMobile} />
@@ -412,11 +415,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
               <DotsIcon size={18} />
             </button>
           ) : (
-            <>
-              <RoomMenuDropdown actions={roomMenuActions} />
-              <AccountMenu inRoom />
-            </>
+            <RoomMenuDropdown actions={roomMenuActions} />
           )}
+          <AccountMenu inRoom compact={identityCompact} />
         </div>
       </header>
 
