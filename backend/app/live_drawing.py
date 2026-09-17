@@ -89,9 +89,27 @@ _DELTA = struct.Struct("<bb")
 # -128 is not a delta but the escape marker, followed by an absolute pair. It
 # is what keeps an arbitrarily fast stroke representable rather than refused.
 _DELTA_ESCAPE = -128
-_MIN_DELTA = -127
+# -127 in the same position says the path's width changes (#828): one more
+# byte follows, the new width, and then the record of the point it applies
+# from - the segment ending at that point is the first drawn at it. A pen's
+# pressure, quantized to whole pixels by the client, arrives this way.
+#
+# It lives inside the records because a message is what costs, not a byte. A
+# frame of its own would be a second Socket.IO event per change - an envelope,
+# a WebSocket header and a unit of the drawing budget, to carry one byte - and
+# a width byte on every point would tax the strokes that never change width,
+# which is all of them from a mouse. In-band, a change is two bytes in a frame
+# that was being sent anyway, and a path with no change is byte for byte what
+# it was. The price is one value of the delta range: a step of exactly -127
+# quarter-pixels now escapes.
+#
+# The width is absolute rather than a step from the last one so that a frame
+# still validates on its own, the way its points do.
+_WIDTH_MARKER = -127
+_MIN_DELTA = -126
 _MAX_DELTA = 127
 _ESCAPE_RECORD_SIZE = 1 + _POINT.size
+_WIDTH_RECORD_SIZE = 2
 
 # Above this many payload bytes, a frame travels as a binary attachment;
 # at or below it, as base64 inside an ordinary text event.
@@ -108,18 +126,18 @@ _ESCAPE_RECORD_SIZE = 1 + _POINT.size
 # untouched and stays binary: histories run to kilobytes, far past the
 # crossover.
 MAX_BASE64_FRAME_BYTES = 85
-#: The largest frame the codec can produce: a full path-points frame with every
-#: point absolute (the delta form is never larger, and an escape record is the
-#: absolute size plus one only where a delta would have been smaller still).
+#: The largest frame the codec can produce: a full relative frame in which
+#: every point escapes and every point changes the width. Without width
+#: changes the bound is the absolute frame, 1 + 4n, since the encoder then
+#: sends whichever form is smaller; a frame with them is always relative, and
+#: escapes where a step is too far rather than falling back.
 #: Checked by `tests/test_live_drawing.py`; `socket_server.py` refuses a binary
 #: attachment past it before keeping a byte.
-MAX_FRAME_BYTES = 1 + MAX_POINTS_PER_FRAME * _POINT.size
+MAX_FRAME_BYTES = 1 + MAX_POINTS_PER_FRAME * (_ESCAPE_RECORD_SIZE + _WIDTH_RECORD_SIZE)
 
-# The largest frame that can legitimately arrive, base64-expanded: a full
-# 256-point frame with every point escaping.
-_MAX_BASE64_CHARS = (
-    ((1 + _POINT.size + MAX_POINTS_PER_FRAME * _ESCAPE_RECORD_SIZE) + 2) // 3
-) * 4
+# The largest frame that can legitimately arrive, base64-expanded: a delta
+# frame's absolute first point, then the same worst case.
+_MAX_BASE64_CHARS = ((MAX_FRAME_BYTES + _POINT.size + 2) // 3) * 4
 _PATH_START = struct.Struct("<B3sBhh")
 _SHAPE = struct.Struct("<BB3sBhhhh")
 _FILL = struct.Struct("<B3sHH")
@@ -170,11 +188,24 @@ def _is_delta(delta_x: int, delta_y: int) -> bool:
     )
 
 
-def _encode_records(tag: int, packed: list[tuple[int, int]], previous: tuple[int, int]) -> bytes:
-    """Offset records from `previous`, escaping to absolute where one is too far."""
+def _encode_records(
+    tag: int,
+    packed: list[tuple[int, int]],
+    previous: tuple[int, int],
+    widths: dict[int, int] | None = None,
+    first_index: int = 0,
+) -> bytes:
+    """Offset records from `previous`, escaping to absolute where one is too far.
+
+    `widths` maps a point's index in the frame to the width that starts
+    there; `first_index` is the index `packed[0]` has in the frame.
+    """
     frame = bytearray((_header(tag),))
     previous_x, previous_y = previous
-    for x, y in packed:
+    for index, (x, y) in enumerate(packed, first_index):
+        if widths and index in widths:
+            frame.append(_WIDTH_MARKER & 0xFF)
+            frame.append(widths[index])
         delta_x = x - previous_x
         delta_y = y - previous_y
         if _is_delta(delta_x, delta_y):
@@ -187,7 +218,9 @@ def _encode_records(tag: int, packed: list[tuple[int, int]], previous: tuple[int
 
 
 def _encode_points(
-    packed: list[tuple[int, int]], previous: tuple[int, int] | None = None
+    packed: list[tuple[int, int]],
+    previous: tuple[int, int] | None = None,
+    widths: dict[int, int] | None = None,
 ) -> bytes:
     """Pack path points whichever way is smaller for this particular frame.
 
@@ -196,7 +229,22 @@ def _encode_points(
     three by construction (no absolute first point). A first point too far
     from the predecessor makes it the largest, so the frame falls back to
     the self-contained forms.
+
+    A width change needs a record to sit in front of, so a frame carrying
+    one is never absolute: relative when there is a predecessor, escaping if
+    it must, and otherwise the delta form - whose first point is not a
+    record, so the change cannot be on it.
     """
+    if widths:
+        if previous is not None:
+            return _encode_records(PATH_POINTS_RELATIVE_TAG, packed, previous, widths)
+        if 0 in widths:
+            raise ValueError("a width change on the first point needs the open path's last point")
+        frame = bytearray(
+            _encode_records(PATH_POINTS_DELTA_TAG, packed[1:], packed[0], widths, 1)
+        )
+        frame[1:1] = _POINT.pack(*packed[0])
+        return bytes(frame)
     if previous is not None and _is_delta(packed[0][0] - previous[0], packed[0][1] - previous[1]):
         return _encode_records(PATH_POINTS_RELATIVE_TAG, packed, previous)
     absolute_size = 1 + len(packed) * _POINT.size
@@ -215,6 +263,108 @@ def _encode_points(
     frame = bytearray(_encode_records(PATH_POINTS_DELTA_TAG, packed[1:], packed[0]))
     frame[1:1] = _POINT.pack(*packed[0])
     return bytes(frame)
+
+
+def _width_changes(widths, point_count: int) -> dict[int, int]:
+    """Validate a `widths` list: `(point index, width)` pairs, ascending."""
+    if not isinstance(widths, (list, tuple)):
+        raise ValueError("invalid width changes")
+    changes: dict[int, int] = {}
+    last_index = -1
+    for change in widths:
+        if not isinstance(change, (list, tuple)) or len(change) != 2:
+            raise ValueError("invalid width change")
+        index, width = change
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or not last_index < index < point_count
+            or not isinstance(width, int)
+            or isinstance(width, bool)
+            or not 1 <= width <= MAX_BRUSH_WIDTH
+        ):
+            raise ValueError("invalid width change")
+        changes[index] = width
+        last_index = index
+    return changes
+
+
+def _decode_records(
+    frame: bytes, offset: int, first_index: int = 0
+) -> tuple[list[tuple[int, int] | tuple[None, int, int]], list[tuple[int, int]]]:
+    """Walk offset records to the end of the frame.
+
+    Variable-length, so the frame is walked rather than divided. Every step is
+    bounded by the frame it is reading and the point count is checked as it
+    grows, so a malformed frame is refused rather than read past. A width
+    change must be followed by the record of the point it applies from, in
+    this frame: one that trails the frame, or sits beside another, is refused.
+    """
+    records: list[tuple[int, int] | tuple[None, int, int]] = []
+    widths: list[tuple[int, int]] = []
+    width_pending = False
+    while offset < len(frame):
+        lead = frame[offset]
+        if lead == (_WIDTH_MARKER & 0xFF):
+            if width_pending or offset + _WIDTH_RECORD_SIZE > len(frame):
+                raise ValueError("invalid width change")
+            width = frame[offset + 1]
+            if not 1 <= width <= MAX_BRUSH_WIDTH:
+                raise ValueError("invalid brush width")
+            widths.append((first_index + len(records), width))
+            width_pending = True
+            offset += _WIDTH_RECORD_SIZE
+            continue
+        if lead == (_DELTA_ESCAPE & 0xFF):
+            offset += 1
+            if offset + _POINT.size > len(frame):
+                raise ValueError("invalid path-points frame size")
+            x, y = _POINT.unpack_from(frame, offset)
+            if min(x, y) < MIN_PACKED_COORDINATE:
+                raise ValueError("path point is outside packed range")
+            offset += _POINT.size
+            records.append((None, x, y))
+        else:
+            if offset + _DELTA.size > len(frame):
+                raise ValueError("invalid path-points frame size")
+            records.append(_DELTA.unpack_from(frame, offset))
+            offset += _DELTA.size
+        width_pending = False
+        if first_index + len(records) > MAX_POINTS_PER_FRAME:
+            raise ValueError("invalid path point count")
+    if width_pending:
+        raise ValueError("invalid width change")
+    return records, widths
+
+
+def _walk_records(
+    records, x: int, y: int
+) -> list[tuple[int, int]]:
+    """The packed points offset records stand for, from `(x, y)`."""
+    packed = []
+    for record in records:
+        if record[0] is None:
+            x, y = record[1], record[2]
+        else:
+            x += record[0]
+            y += record[1]
+            if not (
+                MIN_PACKED_COORDINATE <= x <= MAX_PACKED_COORDINATE
+                and MIN_PACKED_COORDINATE <= y <= MAX_PACKED_COORDINATE
+            ):
+                raise ValueError("path point is outside packed range")
+        packed.append((x, y))
+    return packed
+
+
+def _unpacked_points(packed) -> list[dict]:
+    return [
+        {
+            "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
+            "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
+        }
+        for point_x, point_y in packed
+    ]
 
 
 def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
@@ -256,14 +406,15 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
                 _pack_coordinate(previous.get("x"), CANVAS_WIDTH),
                 _pack_coordinate(previous.get("y"), CANVAS_HEIGHT),
             )
+        widths = _width_changes(payload.get("widths") or (), len(packed))
         if payload.get("ends"):
             # The final batch closes the path (#603): always relative, since
             # an ending has an open path to be relative to, escaping where a
             # step is too far rather than falling back.
             if packed_previous is None:
                 raise ValueError("an ending batch needs the open path's last point")
-            return _encode_records(PATH_POINTS_END_TAG, packed, packed_previous)
-        return _encode_points(packed, packed_previous)
+            return _encode_records(PATH_POINTS_END_TAG, packed, packed_previous, widths)
+        return _encode_points(packed, packed_previous, widths)
     if event == "draw_end":
         return _header(PATH_END_TAG)
     if event == "draw_shape":
@@ -358,6 +509,8 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
         _, color, width, x, y = _PATH_START.unpack(frame)
         if not 1 <= width <= MAX_BRUSH_WIDTH:
             raise ValueError("invalid brush width")
+        if x < MIN_PACKED_COORDINATE or y < MIN_PACKED_COORDINATE:
+            raise ValueError("path point is outside packed range")
         return LiveDrawingPacket(
             "draw_start",
             {
@@ -377,83 +530,37 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
             or (len(frame) - 1) // _POINT.size > MAX_POINTS_PER_FRAME
         ):
             raise ValueError("invalid path-points frame size")
-        points = [
-            {
-                "x": _unpack_coordinate(x, CANVAS_WIDTH),
-                "y": _unpack_coordinate(y, CANVAS_HEIGHT),
-            }
-            for x, y in (
-                _POINT.unpack_from(frame, offset)
-                for offset in range(1, len(frame), _POINT.size)
-            )
+        packed = [
+            _POINT.unpack_from(frame, offset)
+            for offset in range(1, len(frame), _POINT.size)
         ]
-        return LiveDrawingPacket("draw_move", {"points": points})
+        # int16's floor is the history's width marker, not a coordinate.
+        if any(min(point) < MIN_PACKED_COORDINATE for point in packed):
+            raise ValueError("path point is outside packed range")
+        return LiveDrawingPacket("draw_move", {"points": _unpacked_points(packed)})
     if tag == PATH_POINTS_DELTA_TAG:
-        # Variable-length records, so the frame is walked rather than divided.
-        # Every step is bounded by the frame it is reading, and the point count
-        # is checked as it grows, so a malformed frame is refused rather than
-        # read past.
         if len(frame) < 1 + _POINT.size:
             raise ValueError("invalid path-points frame size")
         x, y = _POINT.unpack_from(frame, 1)
-        offset = 1 + _POINT.size
-        packed = [(x, y)]
-        while offset < len(frame):
-            if frame[offset] == (_DELTA_ESCAPE & 0xFF):
-                offset += 1
-                if offset + _POINT.size > len(frame):
-                    raise ValueError("invalid path-points frame size")
-                x, y = _POINT.unpack_from(frame, offset)
-                offset += _POINT.size
-            else:
-                if offset + _DELTA.size > len(frame):
-                    raise ValueError("invalid path-points frame size")
-                delta_x, delta_y = _DELTA.unpack_from(frame, offset)
-                offset += _DELTA.size
-                x += delta_x
-                y += delta_y
-                if not (
-                    MIN_PACKED_COORDINATE <= x <= MAX_PACKED_COORDINATE
-                    and MIN_PACKED_COORDINATE <= y <= MAX_PACKED_COORDINATE
-                ):
-                    raise ValueError("path point is outside packed range")
-            packed.append((x, y))
-            if len(packed) > MAX_POINTS_PER_FRAME:
-                raise ValueError("invalid path point count")
-        points = [
-            {
-                "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
-                "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
-            }
-            for point_x, point_y in packed
-        ]
-        return LiveDrawingPacket("draw_move", {"points": points})
+        if min(x, y) < MIN_PACKED_COORDINATE:
+            raise ValueError("path point is outside packed range")
+        records, widths = _decode_records(frame, 1 + _POINT.size, first_index=1)
+        payload = {"points": _unpacked_points([(x, y), *_walk_records(records, x, y)])}
+        if widths:
+            payload["widths"] = widths
+        return LiveDrawingPacket("draw_move", payload)
     if tag in {PATH_POINTS_RELATIVE_TAG, PATH_POINTS_END_TAG}:
-        # Walked like the delta frame, but nothing here is a point yet: the
-        # records are offsets from a predecessor this frame does not carry.
-        # `resolve_relative_points` turns them into points once the caller
-        # has looked the predecessor up. The end tag is the same records,
-        # and the path is closed once they are recorded (#603).
-        if len(frame) < 1 + _DELTA.size:
+        # Nothing here is a point yet: the records are offsets from a
+        # predecessor this frame does not carry. `resolve_relative_points`
+        # turns them into points once the caller has looked the predecessor
+        # up. The end tag is the same records, and the path is closed once
+        # they are recorded (#603).
+        records, widths = _decode_records(frame, 1)
+        if not records:
             raise ValueError("invalid path-points frame size")
-        offset = 1
-        records: list[tuple[int, int] | tuple[None, int, int]] = []
-        while offset < len(frame):
-            if frame[offset] == (_DELTA_ESCAPE & 0xFF):
-                offset += 1
-                if offset + _POINT.size > len(frame):
-                    raise ValueError("invalid path-points frame size")
-                x, y = _POINT.unpack_from(frame, offset)
-                offset += _POINT.size
-                records.append((None, x, y))
-            else:
-                if offset + _DELTA.size > len(frame):
-                    raise ValueError("invalid path-points frame size")
-                records.append(_DELTA.unpack_from(frame, offset))
-                offset += _DELTA.size
-            if len(records) > MAX_POINTS_PER_FRAME:
-                raise ValueError("invalid path point count")
-        payload: dict = {"relative": records}
+        payload = {"relative": records}
+        if widths:
+            payload["widths"] = widths
         if tag == PATH_POINTS_END_TAG:
             payload["ends"] = True
         return LiveDrawingPacket("draw_move", payload)
@@ -465,7 +572,12 @@ def decode_live_drawing(data) -> LiveDrawingPacket:
         if len(frame) != _SHAPE.size:
             raise ValueError("invalid shape frame size")
         _, shape_id, color, width, start_x, start_y, end_x, end_y = _SHAPE.unpack(frame)
-        if shape_id >= len(SHAPE_NAMES) or not 1 <= width <= MAX_BRUSH_WIDTH:
+        if (
+            shape_id >= len(SHAPE_NAMES)
+            or not 1 <= width <= MAX_BRUSH_WIDTH
+            # One packed range for every coordinate the recorder re-packs.
+            or min(start_x, start_y, end_x, end_y) < MIN_PACKED_COORDINATE
+        ):
             raise ValueError("invalid shape frame")
         return LiveDrawingPacket(
             "draw_shape",
@@ -531,30 +643,14 @@ def resolve_relative_points(
     resolved point is range-checked the way the delta decoder checks its
     running point, so a frame cannot walk a path off the packed range.
     """
-    x = _pack_coordinate(previous[0], CANVAS_WIDTH)
-    y = _pack_coordinate(previous[1], CANVAS_HEIGHT)
-    packed = []
-    for record in packet.payload["relative"]:
-        if record[0] is None:
-            x, y = record[1], record[2]
-        else:
-            x += record[0]
-            y += record[1]
-            if not (
-                MIN_PACKED_COORDINATE <= x <= MAX_PACKED_COORDINATE
-                and MIN_PACKED_COORDINATE <= y <= MAX_PACKED_COORDINATE
-            ):
-                raise ValueError("path point is outside packed range")
-        packed.append((x, y))
-    resolved: dict = {
-        "points": [
-            {
-                "x": _unpack_coordinate(point_x, CANVAS_WIDTH),
-                "y": _unpack_coordinate(point_y, CANVAS_HEIGHT),
-            }
-            for point_x, point_y in packed
-        ]
-    }
+    packed = _walk_records(
+        packet.payload["relative"],
+        _pack_coordinate(previous[0], CANVAS_WIDTH),
+        _pack_coordinate(previous[1], CANVAS_HEIGHT),
+    )
+    resolved: dict = {"points": _unpacked_points(packed)}
+    if packet.payload.get("widths"):
+        resolved["widths"] = packet.payload["widths"]
     if packet.payload.get("ends"):
         resolved["ends"] = True
     return LiveDrawingPacket("draw_move", resolved)

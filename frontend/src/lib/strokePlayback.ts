@@ -43,6 +43,9 @@ interface Segments {
   /** The polyline, starting at the point the previous batch ended on. */
   points: Point[];
   style: SegmentStyle;
+  /** The radius of each segment, where a pen varied it inside the batch
+  (#828); otherwise every segment is `style.radius`. */
+  radii: number[] | null;
   dueStart: number;
   dueEnd: number;
   /** How much of the polyline is painted, in segments (fractional). */
@@ -57,8 +60,10 @@ interface Barrier {
 type Item = Segments | Barrier;
 
 export interface StrokePlayback {
-  /** Queue a batch of path points; `from` is where the path currently ends. */
-  enqueueSegments(from: Point, points: Point[], style: SegmentStyle, now: number): void;
+  /** Queue a batch of path points; `from` is where the path currently ends.
+  `radii`, one per point, is the radius of the segment ending there, for a
+  batch that does not keep to `style.radius` throughout. */
+  enqueueSegments(from: Point, points: Point[], style: SegmentStyle, now: number, radii?: number[]): void;
   /** Queue something that must run once everything before it is painted. */
   enqueueBarrier(run: () => void, now: number): void;
   /** Paint what has come due by `now`. Returns whether anything is left. */
@@ -108,7 +113,25 @@ export function createStrokePlayback(options: {
     if (target > endIndex && endIndex < segmentCount) {
       points.push(interpolate(item.points[endIndex], item.points[endIndex + 1], target - endIndex));
     }
-    if (points.length > 1) options.paint(points, item.style);
+    if (points.length > 1) {
+      if (!item.radii) {
+        options.paint(points, item.style);
+      } else {
+        // `points[k]` to `points[k + 1]` lies on segment `startIndex + k`.
+        // Consecutive segments at one radius are painted as one polyline, so
+        // a batch that never changes width is painted exactly as before, and
+        // no segment is ever painted at two radii - which is what keeps
+        // painting it in parts exact.
+        let runStart = 0;
+        for (let k = 1; k <= points.length - 1; k += 1) {
+          const radius = item.radii[startIndex + k - 1];
+          if (k === points.length - 1 || item.radii[startIndex + k] !== radius) {
+            options.paint(points.slice(runStart, k + 1), { ...item.style, radius });
+            runStart = k;
+          }
+        }
+      }
+    }
     item.painted = target;
   }
 
@@ -126,13 +149,14 @@ export function createStrokePlayback(options: {
   }
 
   return {
-    enqueueSegments(from, points, style, now) {
+    enqueueSegments(from, points, style, now, radii) {
       if (points.length === 0) return;
       const start = lastDueEnd(now);
       queue.push({
         kind: "segments",
         points: [from, ...points],
         style,
+        radii: radii && radii.some((radius) => radius !== style.radius) ? radii : null,
         dueStart: start,
         dueEnd: start + options.intervalMs(),
         painted: 0,

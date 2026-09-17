@@ -1,6 +1,15 @@
 import type { DecodedCanvasAction } from "./canvasHistory";
 import { shapeOutlinePoints } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
+import type { WidthChange } from "../types.ts";
+
+/** A stroke as the replay grows it; `widths` where a pen varied it (#828). */
+export interface ReplayStroke {
+  points: Point[];
+  width: number;
+  color: string;
+  widths?: WidthChange[];
+}
 
 /** How long a replay takes, whatever the drawing: a doodle is not over in a
  * blink and a dense one does not drag. */
@@ -34,9 +43,9 @@ export interface ReplayPlan {
  */
 export function replayStroke(
   action: DecodedCanvasAction,
-): { points: Point[]; width: number; color: string } | null {
+): ReplayStroke | null {
   if (action.kind === "path" && action.points.length > 1) {
-    return { points: action.points, width: action.width, color: action.color };
+    return { points: action.points, width: action.width, color: action.color, widths: action.widths };
   }
   if (action.kind === "shape") {
     const outline = shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape);
@@ -93,7 +102,7 @@ export function replayPlan(actions: readonly DecodedCanvasAction[]): ReplayPlan 
 
 export interface ReplayPainter {
   /** Draw the stretch `from..to` (in segments) of a stroke. */
-  span(stroke: { points: Point[]; width: number; color: string }, from: number, to: number): void;
+  span(stroke: ReplayStroke, from: number, to: number): void;
   /** Apply a whole action: a dot, a fill, a clear. */
   whole(action: DecodedCanvasAction): void;
 }

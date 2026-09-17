@@ -1224,13 +1224,17 @@
   }
  },
  "fixtures": {
-  "fixtures/canvas_protocol_v1.json": "025e2c0e4dc21e709cc4559c0cd86a410b0bec601b5fb63ea36f2c15f358c108",
+  "fixtures/canvas_protocol_v1.json": "e85d2b42c360153d4c027f1807b2b711f65badb57a2f31515891de1d74fc67bd",
   "fixtures/lobby_presence_v1.json": "b1c5e31170b8a7903bb22f0330d44d121f9d9f878e563bfa2ae0ba48684d9fa3",
-  "fixtures/stored_drawings_v1.json": "ca56f37d8705134e3ed3800909cd6578e9628ba61754e4028e0b7e5985e70937"
+  "fixtures/stored_drawings_v1.json": "ca56f37d8705134e3ed3800909cd6578e9628ba61754e4028e0b7e5985e70937",
+  "fixtures/stored_drawings_v2.json": "aefe6904642d9777e3515a850373676c0d7bde2ff6d4f35cb4b5ff70c08be46a"
  },
  "liveDrawing": {
+  "deltaEscape": -128,
+  "historyWidthMarkerX": -32768,
   "magic": "SKCH",
   "maxBase64FrameBytes": 85,
+  "maxFrameBytes": 1793,
   "maxPointsPerFrame": 256,
   "tags": {
    "clear": 5,
@@ -1242,7 +1246,8 @@
    "path_points_relative": 7,
    "path_start": 0,
    "shape": 3
-  }
+  },
+  "widthMarker": -127
  },
  "payloadBuilders": {
   "api.admin_controls:_state": [
@@ -2613,7 +2618,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 23,
+ "protocolVersion": 24,
  "refusal": {
   "codes": [
    "invalid_payload",

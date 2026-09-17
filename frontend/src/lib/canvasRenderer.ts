@@ -3,6 +3,8 @@ import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
 import { replayStroke } from "./replay.ts";
+import type { ReplayStroke } from "./replay.ts";
+import { widthRuns } from "./pathWidths.ts";
 import {
   fillWhitePixels,
   floodFillPixels,
@@ -165,17 +167,22 @@ export function applyCanvasAction(
   action: DecodedCanvasAction,
 ): void {
   if (action.kind === "path" && action.points.length > 0) {
-    rasterizePixelPath(
-      pixels,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT,
-      action.points.length === 1
-        ? [action.points[0], action.points[0]]
-        : action.points,
-      action.width / 2,
-      hexToRgba(action.color),
-      false,
-    );
+    const color = hexToRgba(action.color);
+    // One run for a path at one width, which is every path not drawn with a
+    // pressure-sensitive pen (#828).
+    for (const run of widthRuns(action.points.length, action.width, action.widths)) {
+      rasterizePixelPath(
+        pixels,
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT,
+        run.to === run.from
+          ? [action.points[run.from], action.points[run.from]]
+          : action.points.slice(run.from, run.to + 1),
+        run.width / 2,
+        color,
+        false,
+      );
+    }
   } else if (action.kind === "shape") {
     rasterizePixelPath(
       pixels,
@@ -216,10 +223,26 @@ export function applyCanvasAction(
  */
 export function applyCanvasStrokeSpan(
   pixels: Uint8ClampedArray,
-  stroke: { points: Point[]; width: number; color: string },
+  stroke: ReplayStroke,
   from: number,
   to: number,
 ): void {
+  if (stroke.widths?.length) {
+    // The stretch, cut where the width changes (#828): each piece is a
+    // stretch of a stroke at one width, which is what the rest of this paints.
+    for (const run of widthRuns(stroke.points.length, stroke.width, stroke.widths)) {
+      const start = Math.max(from, run.from);
+      const end = Math.min(to, run.to);
+      if (run.to === run.from && from <= 0) {
+        // The dot the path opened with, at a width its first segment left.
+        const dot = stroke.points[run.from];
+        rasterizePixelPath(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, [dot, dot], run.width / 2, hexToRgba(stroke.color), false);
+      } else if (end > start) {
+        applyCanvasStrokeSpan(pixels, { ...stroke, width: run.width, widths: undefined }, start, end);
+      }
+    }
+    return;
+  }
   const points = stroke.points;
   const last = points.length - 1;
   if (last < 1 || to <= from) return;

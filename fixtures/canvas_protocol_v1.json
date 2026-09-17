@@ -161,6 +161,113 @@
       "wire": "1880400b7008"
     },
     {
+      "event": "draw_move",
+      "payload": {
+        "points": [
+          {
+            "x": 0.5,
+            "y": 0.51
+          },
+          {
+            "x": 0.505,
+            "y": 0.515
+          },
+          {
+            "x": 0.51,
+            "y": 0.52
+          }
+        ],
+        "widths": [
+          [
+            1,
+            5
+          ]
+        ],
+        "previous": {
+          "x": 0.5,
+          "y": 0.5
+        }
+      },
+      "note": "a width change inside a batch (#828): marker 0x81, the width, then the record of the point it applies from - two bytes in a frame that was being sent anyway",
+      "wire": "1700188105100c100c"
+    },
+    {
+      "event": "draw_move",
+      "payload": {
+        "points": [
+          {
+            "x": 0.9,
+            "y": 0.9
+          },
+          {
+            "x": 0.905,
+            "y": 0.9
+          }
+        ],
+        "widths": [
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            2
+          ]
+        ],
+        "previous": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "ends": true
+      },
+      "note": "final batch changing width on its first point, which escapes, and again on the next",
+      "wire": "18810380400b700881021000"
+    },
+    {
+      "event": "draw_move",
+      "payload": {
+        "points": [
+          {
+            "x": 0.1,
+            "y": 0.2
+          },
+          {
+            "x": 0.105,
+            "y": 0.205
+          },
+          {
+            "x": 0.11,
+            "y": 0.21
+          }
+        ],
+        "widths": [
+          [
+            2,
+            12
+          ]
+        ]
+      },
+      "note": "no predecessor given: the delta form carries the change, never the absolute one, which has no record to put it in front of",
+      "wire": "164001e001100c810c100c"
+    },
+    {
+      "event": "draw_move",
+      "payload": {
+        "points": [
+          {
+            "x": 0.5,
+            "y": 0.5
+          }
+        ],
+        "previous": {
+          "x": 0.5396875,
+          "y": 0.5
+        }
+      },
+      "note": "a first step of exactly -127 quarter-pixels no longer fits a byte - that value is the width marker (#828) - so the frame falls back to absolute, as any first step too far does",
+      "wire": "114006b004"
+    },
+    {
       "event": "draw_end",
       "payload": {},
       "wire": "12"
@@ -207,6 +314,12 @@
       "name": "representative",
       "binary": "534b4348010400000000000d0000001b000000230000002400000000aabbcc044001e001c003c0030101102030088002d002000a700802ffffff1f03570203",
       "hash": 209809303
+    },
+    {
+      "name": "width-runs",
+      "binary": "534b4348010200000000002500000032000000001020300620035802008004004003580260037002008005008003700200800600a003880200000000024006b0048007b004",
+      "hash": 804885328,
+      "note": "a path whose width changes three times (#828) - the first on its very first segment - beside one that never does"
     }
   ],
   "malformedVersions": {

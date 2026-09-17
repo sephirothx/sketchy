@@ -13,8 +13,11 @@ import pytest
 from app.canvas_history import (
     BINARY_HISTORY_MAGIC,
     CANVAS_HISTORY_VERSION,
+    CANVAS_WIDTH,
+    COORDINATE_SCALE,
     MAX_BINARY_CANVAS_HISTORY_BYTES,
     MAX_CANVAS_ACTIONS,
+    MIN_PACKED_COORDINATE,
     PackedCanvasHistory,
     decode_binary_canvas_history,
 )
@@ -81,7 +84,9 @@ def _extreme_history() -> PackedCanvasHistory:
     two of them does not fit a signed 16-bit value and the modular recoding
     is what keeps it lossless."""
     history = PackedCanvasHistory()
-    corners = [(-10.24, -10.24), (10.2, 13.6), (-10.24, 13.6), (10.2, -10.24), (0.0, 0.0)]
+    # The packed floor, one above int16's: that x is the width marker (#828).
+    left = MIN_PACKED_COORDINATE / (CANVAS_WIDTH * COORDINATE_SCALE)
+    corners = [(left, -10.24), (10.2, 13.6), (left, 13.6), (10.2, -10.24), (0.0, 0.0)]
     history.append_path(corners * 40, color=0xFF00FF, width=3)
     return history
 
@@ -102,7 +107,7 @@ def test_a_blob_written_on_the_day_the_format_was_cut_still_decodes(entry):
     may move between zlib versions, the frame it inflates to may not."""
     blob = bytes.fromhex(entry["stored"])
 
-    assert stored_drawing_format(blob) == (STORED_DELTA_MAGIC, STORED_DELTA_VERSION)
+    assert stored_drawing_format(blob) == (STORED_DELTA_MAGIC, 1)
     assert stored_drawing_checksum(blob) == entry["checksum"]
     assert stored_drawing_wire_payload(blob, checksum=entry["checksum"]) == bytes.fromhex(entry["wire"])
 
@@ -150,7 +155,7 @@ def test_the_first_format_is_still_read_as_it_was_written():
 def test_the_blob_declares_its_own_format():
     assert stored_drawing_format(GOLDEN[0]) == (b"SKCH", 1)
     stored, *_ = prepare_stored_drawing(_stroke_history(1).binary_payload())
-    assert stored_drawing_format(stored) == (b"SKCD", 1)
+    assert stored_drawing_format(stored) == (b"SKCD", 2)
 
 
 def test_a_truncated_blob_cannot_be_identified():
@@ -294,3 +299,83 @@ def test_a_second_stored_format_is_additive(monkeypatch):
     assert stored_drawing_wire_payload(future) == GOLDEN[1]
     assert stored_drawing_wire_payload(GOLDEN[0]) == GOLDEN[0]
     assert stored_drawing_wire_payload(stored) == _stroke_history(7).binary_payload()
+
+
+# --- SKCD v2: width markers stepped over (#828) ---------------------------------
+
+STORED_V2 = json.loads((FIXTURES_DIR / "stored_drawings_v2.json").read_text())
+
+
+def _pen_history(seed: int, *, strokes: int = 40, points: int = 60) -> PackedCanvasHistory:
+    """`_stroke_history`, drawn with a pen: the width steps along each stroke."""
+    rng = random.Random(seed)
+    history = PackedCanvasHistory()
+    for _ in range(strokes):
+        x, y = rng.uniform(0, 1), rng.uniform(0, 1)
+        index = history.append_path([(x, y)], color=rng.randrange(1 << 24), width=rng.randint(1, 64))
+        trail, widths = [], []
+        for step in range(points):
+            x, y = x + rng.uniform(-0.01, 0.01), y + rng.uniform(-0.01, 0.01)
+            trail.append((x, y))
+            if step % 4 == 0:
+                widths.append((step, rng.randint(1, 64)))
+        history.extend_path(index, trail, widths)
+    return history
+
+
+@pytest.mark.parametrize("entry", STORED_V2["drawings"], ids=lambda entry: entry["name"])
+def test_a_v2_blob_written_on_the_day_the_format_was_cut_still_decodes(entry):
+    blob = bytes.fromhex(entry["stored"])
+
+    assert stored_drawing_format(blob) == (STORED_DELTA_MAGIC, 2)
+    assert stored_drawing_checksum(blob) == entry["checksum"]
+    assert stored_drawing_wire_payload(blob, checksum=entry["checksum"]) == bytes.fromhex(entry["wire"])
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_a_pen_drawing_comes_back_exact_and_stores_smaller_than_v1_would(seed):
+    from app.canvas_storage import _recode_path_v1
+
+    frame = _pen_history(seed).binary_payload()
+    stored, magic, version, checksum = prepare_stored_drawing(frame)
+
+    assert (magic, version) == (STORED_DELTA_MAGIC, 2)
+    assert stored_drawing_wire_payload(stored, checksum=checksum) == frame
+    as_v1 = zlib.compress(_walk_frame(frame, undo=False, recode=_recode_path_v1), 6)
+    assert len(stored) - _DELTA_HEADER.size < len(as_v1) * 0.85
+
+
+def test_a_v1_blob_holding_markers_is_still_read_by_the_v1_walk():
+    """v1 never knew about markers and restores them anyway; its decoder is
+    the one a v1 blob gets, whatever is written now."""
+    from app.canvas_storage import _recode_path_v1
+
+    frame = _pen_history(3).binary_payload()
+    recoded = _walk_frame(frame, undo=False, recode=_recode_path_v1)
+    blob = _DELTA_HEADER.pack(STORED_DELTA_MAGIC, 1, len(frame)) + zlib.compress(recoded, 6)
+
+    assert stored_drawing_wire_payload(blob) == frame
+    assert recoded != _walk_frame(frame, undo=False)
+
+
+def test_a_difference_that_would_read_as_a_marker_modulo_65536_does_not_in_v2():
+    """x stepping by exactly 32768 is 0x8000 modulo 2**16 - the marker's own
+    value - which is why v2 differences x modulo 65,535 and keeps 0xFFFF for
+    markers. Every such pair, and the extremes, beside a real marker."""
+    scale = CANVAS_WIDTH * COORDINATE_SCALE
+    history = PackedCanvasHistory()
+    for low in (-32767, -32766, -1, 0):
+        high = low + 32768 if low + 32768 <= 32767 else 32767
+        index = history.append_path([(low / scale, 0.0)], color=0, width=5)
+        history.extend_path(
+            index,
+            [(high / scale, 0.1), (low / scale, 0.2), (32767 / scale, 0.3), (-32767 / scale, 0.4)],
+            [(1, 9), (3, 64)],
+        )
+    frame = history.binary_payload()
+    recoded = _walk_frame(frame, undo=False)
+
+    assert _walk_frame(recoded, undo=True) == frame
+    assert recoded.count(b"\xff\xff") >= 8, "one recoded marker per change"
+    stored, *_ = prepare_stored_drawing(frame)
+    assert decode_binary_canvas_history(stored_drawing_wire_payload(stored)) == history

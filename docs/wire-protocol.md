@@ -458,7 +458,7 @@ kept:
 | Binary events | `draw` only, `BINARY_EVENT` only | The one command that carries bytes; the server never asks a client for an acknowledgement, so a `BINARY_ACK` cannot be ours |
 | Attachments per event | exactly 1 (`MAX_ATTACHMENTS`) | A frame is one attachment; the codec cannot spread it over two |
 | Placeholder | `{"_placeholder": true, "num": 0}` in argument 1, then at most the action identity, never a second placeholder | The exact shape the client emits |
-| Attachment size | `MAX_FRAME_BYTES` = 1 + 256 × 4 = 1,025 B | The largest frame the codec produces (a full absolute path-points frame) |
+| Attachment size | `MAX_FRAME_BYTES` = 1 + 256 × (5 + 2) = 1,793 B | The largest frame the codec produces: a full relative frame in which every point escapes and every point changes the width (§6). Without width changes the largest is the absolute frame, 1,025 B |
 | Assembly age | `ASSEMBLY_DEADLINE_SECONDS` = 5 s | The two messages leave the client back to back; seconds apart means the second is not coming |
 | Text mid-assembly | dropped with the assembly, then judged on its own | A protocol violation, but the text may itself be a well-formed command |
 | Packets per socket | `MAX_PACKETS_PER_WINDOW` = the drawing budget's tunable maximum + 100 (500 today) per second, counted before decoding; a frame's attachment does not count | An administrator may raise drawing to `DRAWING.maximum` frames per window and a client bunches frames after a stall, so the whole allowance can land in one second; the margin is the seat's other traffic. This stops a flood, the budgets are the limits |
@@ -1062,7 +1062,7 @@ All multi-byte integers are **little-endian** except colors, which are big-endia
 | --- | --- | --- |
 | `draw_start` | `<B3sBhh` | header, color (3 B, RGB), width (1 B), x, y (int16) |
 | `draw_move` | `B` + `<hh` × n | header, then n points; 1 ≤ n ≤ 256 (`MAX_POINTS_PER_FRAME`) |
-| `draw_move` (delta, tag 6) | `B` + `<hh` + records | header, the first point absolute, then one record per further point: `<bb` (a signed-byte offset from the previous point) or the escape byte `0x80` followed by `<hh` absolute |
+| `draw_move` (delta, tag 6) | `B` + `<hh` + records | header, the first point absolute, then one record per further point: `<bb` (a signed-byte offset from the previous point, each −126 … 127) or the escape byte `0x80` followed by `<hh` absolute. Any record may be preceded by a **width change**, `0x81` + width (see below) |
 | `draw_move` (relative, tag 7) | `B` + records | header, then one record per point in the same two shapes — the first relative to the **open path's last point**, which the frame does not carry (#559). Decodes to offsets; the receiver resolves them against the path it holds: the server against `canvas_session`, a viewer against its own history. A relative frame with no open path is dropped, as an absolute `draw_move` with no open path is. The encoder takes it whenever the first step fits a byte, since it is then the smallest of the three: a one-point frame is 3 bytes instead of 5 |
 | `draw_move` (final batch, tag 8) | `B` + records | The relative layout, and the frame **also closes the path** (#603): the points the drawer had buffered when the pen lifted and its `draw_end` used to be two events sent in the same call, only the second carrying the commit. One frame extends the path and ends it atomically — refused whole if the points do not fit the budget, so a refused ending never leaves a committed prefix — and carries the commit the way `draw_end` does. Always relative (an ending has an open path), escaping where a step is too far. The one-byte `draw_end` stays for a path with nothing buffered, and for a final batch that was refused: the stroke then ends where the budget ran out. Both forms produce byte-identical history and hash |
 | `draw_end` | `B` | header only |
@@ -1071,7 +1071,7 @@ All multi-byte integers are **little-endian** except colors, which are big-endia
 | `clear_canvas` | `B` | header only |
 
 Shape IDs: `rectangle = 0`, `ellipse = 1`, `triangle = 2` (`SHAPE_IDS`,
-[`backend/app/canvas_history.py:30`](../backend/app/canvas_history.py)).
+[`backend/app/canvas_history.py:48`](../backend/app/canvas_history.py)).
 
 x₀, y₀ is where the drag started and x₁, y₁ where it ended, and the order is kept
 end to end. A rectangle or ellipse fills the box between them either way; a triangle
@@ -1079,6 +1079,46 @@ does not — the two points are one of its base corners and its apex, and its th
 corner is the start mirrored through the apex's column, so swapping them gives a
 different triangle (#787). Every client derives that third corner from the two, so it
 is never sent; it can fall outside the canvas, where the rasterizer clips it.
+
+### A width change inside a path
+
+A path's width can change part way along it (#828, R-DRAW-16): a pen's pressure, which
+the client quantizes to whole pixels. In a record stream — tags 6, 7 and 8 — the byte
+`0x81` where a record would start is not an offset but a change: **one more byte
+follows, the new width (1 – 64), and then the record of the point it applies from**.
+The segment ending at that point is the first painted at the new width, so every
+segment has one constant width and none tapers; that is what keeps a segment painted in
+parts exact (below) and a fill's edges the same everywhere.
+
+```
+17 0018 81 05 100c 100c      relative: a point, then width 5 from the next point on
+```
+
+> **Why in-band.** A message is what live drawing costs, not a byte (§1). A frame of
+> its own per change would be a second Socket.IO event — an envelope, a WebSocket
+> header and a unit of the drawing budget — to carry one byte, and it would split the
+> batch it fell inside; a width byte on every point would tax the strokes that never
+> change width, which is every stroke from a mouse. In-band, a change is two bytes in a
+> frame that was being sent anyway and a path with none is byte for byte what it was.
+> Measured over the recorded traces with a pressure curve laid on them
+> (`benchmarks/path_widths.py`, brush 12, at most six widths, deflated and framed):
+> **+5 – 10% and no message added**, against +14 – 18% for a byte per point, +42 – 66%
+> and twice the messages for a frame per change, and +59 – 94% for ending the path and
+> opening another — which would also make Undo remove a sliver and turn 37 strokes into
+> 224 actions. The number of widths is what decides it: at one-pixel steps a 32 px brush
+> changes on half its points and in-band is no better than a byte per point, so the
+> client caps the widths a brush has rather than stepping by a pixel.
+
+The price is one value of the delta range: `0x81` was an offset of −127 quarter-pixels
+and is now the marker, so that step escapes. The width is absolute, not a step from the
+last, so a frame still validates on its own the way its points do. Decoded, the changes
+are `widths: [[index, width], …]` beside `points`, ascending by index into that batch.
+
+The encoder never sends a frame with a change as the absolute form, which has no
+records: it is relative when the open path's last point is known — escaping if the first
+step is too far, as a final batch does — and otherwise the delta form, whose first point
+is not a record, so a change there is refused. A change with no point after it in the
+same frame, two changes on one point, or a width outside 1 – 64 refuses the frame.
 
 ### Coordinates
 
@@ -1090,8 +1130,10 @@ packed = round(normalized × canvasSize × COORDINATE_SCALE)
 ```
 
 with `CANVAS_WIDTH = 800`, `CANVAS_HEIGHT = 600`, `COORDINATE_SCALE = 4`, and the
-packed value bounded to `[-32768, 32767]`. That gives quarter-pixel precision and
-about ±10 canvases of overshoot headroom before a coordinate is refused.
+packed value bounded to `[-32767, 32767]`. That gives quarter-pixel precision and
+about ±10 canvases of overshoot headroom before a coordinate is refused. int16's floor,
+−32768, is not a coordinate: as a path entry's x it is the history's width marker (§8),
+so every decoder refuses it in any frame rather than let a point be recorded as one.
 
 Fill coordinates are different on purpose: they are sent as **absolute pixel indices**
 (`uint16`), because a fill's seed point must land on an exact pixel. The encoder
@@ -1116,6 +1158,7 @@ Colors are `#rrggbb` strings on the payload side and three raw bytes on the wire
 | --- | --- | --- |
 | `draw_start` | `{x: 0.25, y: 0.75, color: "#aabbcc", width: 4}` | `10 aabbcc 04 2003 0807` |
 | `draw_move` | `{points: [{0.1,0.2}, {1.2,-0.1}]}` | `11 4001 e001 000f 10ff` |
+| `draw_move` | three points from (0.5, 0.5), `widths: [[1, 5]]` | `17 0018 81 05 100c 100c` |
 | `draw_end` | — | `12` |
 | `draw_shape` | ellipse `#123456`, width 64, (0.1,0.2)→(0.8,0.9) | `13 01 123456 40 4001 e001 000a 7008` |
 | `draw_fill` | `{x: 0.25, y: 0.75, color: "#fedcba"}` | `14 fedcba c800 c201` |
@@ -1179,7 +1222,7 @@ ruler-straight line would then appear on viewers' screens all at once.
 
 ### Server-side refusals
 
-`decode_live_drawing` ([`backend/app/live_drawing.py:150`](../backend/app/live_drawing.py))
+`decode_live_drawing` ([`backend/app/live_drawing.py:469`](../backend/app/live_drawing.py))
 rejects, before anything is recorded or rebroadcast:
 
 - A non-integer, non-bytes payload, or an empty frame.
@@ -1188,6 +1231,7 @@ rejects, before anything is recorded or rebroadcast:
 - A version other than 1.
 - Any frame whose length does not exactly match its tag's layout.
 - A brush width outside 1 – 64, an unknown shape id, a fill point outside the canvas.
+- A width change that is misplaced (above), and any coordinate packed to −32768.
 
 On top of the codec, [`drawing.py`](../backend/app/handlers/drawing.py) refuses:
 
@@ -1447,7 +1491,7 @@ is a way to grief a room rather than merely a way to waste a server.
 | Constant | Value | Meaning |
 | --- | --- | --- |
 | `MAX_CANVAS_ACTIONS` | 20 000 | Actions per turn |
-| `MAX_CANVAS_POINTS` | 25 000 | Path points per turn |
+| `MAX_CANVAS_POINTS` | 25 000 | Path points per turn. A width change inside a path is charged, and refunded, as one (R-DRAW-07): it is stored as an entry the size of a point |
 | `MAX_TURN_REPLAY_WORK` | 20 000 | Weighted replay cost per turn |
 | `REPLAY_WORK_BY_TAG` | path 1, shape 1, **fill 200**, clear 0 | Measured in Chromium: a worst-case fill repaints all 480 000 pixels (~6.1 ms) against ~0.02 ms for a path |
 
@@ -1479,14 +1523,25 @@ Packed record layouts (tags are **history** tags, distinct from the live-drawing
 
 | Tag | Value | `struct` | Fields |
 | --- | --- | --- | --- |
-| `PATH` | 0 | `<B3sB` + `<hh` × n | tag, color, width, then points |
+| `PATH` | 0 | `<B3sB` + `<hh` × n | tag, color, the width the path starts at, then entries: points, and width markers between them (below) |
 | `SHAPE` | 1 | `<BB3sBhhhh` | tag, shape id, color, width, x₀, y₀, x₁, y₁ |
 | `FILL` | 2 | `<B3sHH` | tag, color, x, y (absolute pixels) |
 | `CLEAR` | 3 | `<B` | tag |
 
+**A width marker** is a path entry whose x is `−32768` (`WIDTH_MARKER_X`), which no
+coordinate packs to; its y is the new width, and it applies from the segment ending at
+the next point (#828). It is shaped like a point on purpose. The record stays a header
+and a run of four-byte entries, so a path is still extended by appending, its last four
+bytes are still its last point — what a relative frame is resolved against — and the
+length check and the size bound below are unchanged. A marker is never a path's first
+entry, its last, or beside another, and a decoder refuses a record where one is. Most
+paths hold none, and the server only walks a record's entries when its x column holds
+the value.
+
 `MAX_BINARY_CANVAS_HISTORY_BYTES` is derived from the layout as an invariant, not a
 target: all 20 000 action slots, all 25 000 points in one path, and the remaining slots
-filled with the larger fixed-size shape record.
+filled with the larger fixed-size shape record. Markers do not move it, because they are
+charged against the same 25 000.
 
 ### The retired JSON form
 
@@ -1524,11 +1579,21 @@ Two rules, and only two:
    learn that a stored format exists, and the wire format stays free to change without
    migrating a single row.
 
-Two formats exist. `SKCH` v1 is the wire frame stored byte for byte, the only format
+Three formats exist. `SKCH` v1 is the wire frame stored byte for byte, the only format
 written before #547 and still what a frame too small to be worth encoding is stored as;
-its decoder is the identity function. `SKCD` v1 is what a finished drawing is written as
-now: the same frame with every path's points recoded as deltas from the previous point,
-then deflated, behind a header that declares the frame's inflated length. A stroke is a
+its decoder is the identity function. `SKCD` v1 is the same frame with every path's
+points recoded as deltas from the previous point, then deflated, behind a header that
+declares the frame's inflated length. `SKCD` v2 is what a finished drawing is written as
+now (#828): v1 reads and restores a width marker exactly, since it treats every entry
+alike, but it chains the marker into the differences — two large deltas, one to reach
+it and one to leave — so a pen drawing stored **35% larger** than the same strokes at
+one width where v2 stores it **13% larger** (`benchmarks/path_widths.py`, the long hand
+trace at brush 12). v2 copies a marker through and differences the points either side
+against each other. For a recoded marker to be tellable from a recoded point, x is
+differenced modulo **65 535** rather than 2¹⁶ — a path's x has exactly that many values,
+the floor being the marker — which leaves `0xFFFF` free to mean "marker"; modulo 2¹⁶
+every value is some pair of points' difference, and a step of exactly 32 768 would read
+as one. Small steps are the same small numbers either way. A stroke is a
 run of small movements, so the deltas are the small repeated numbers deflate is good at;
 the realistic benchmark frame stores 4.5× smaller (34.6 KB → 7.6 KB), where deflate
 over the raw frame reaches 1.4×. The `(magic, version)` pair at offset 0 is the
@@ -1542,8 +1607,9 @@ caps while the deltas are undone. A blob that lies about any of it is reported c
 The row's checksum and `byte_size` describe the **stored** bytes, so a read verifies what
 the database holds before decoding; the drawing route's `ETag` is that checksum, which is
 a valid validator because a stored blob decodes to one frame. The decode-only golden
-blobs live in [`fixtures/stored_drawings_v1.json`](../fixtures/stored_drawings_v1.json):
-entries may be added, never removed or changed. On PostgreSQL the payload columns are
+blobs live in [`fixtures/stored_drawings_v1.json`](../fixtures/stored_drawings_v1.json)
+and [`fixtures/stored_drawings_v2.json`](../fixtures/stored_drawings_v2.json), one file a
+format: entries may be added, never removed or changed. On PostgreSQL the payload columns are
 `STORAGE EXTERNAL`, so TOAST never tries to compress what is already deflated. Because a
 database column has no integrity check of its own, an operator command decodes stored
 drawings in bounded batches:
@@ -1916,7 +1982,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (23) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (24) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

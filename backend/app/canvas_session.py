@@ -89,13 +89,18 @@ class CanvasSession:
         if event == "draw_move":
             if self.active_path_index is None:
                 return False
-            if self.point_count + len(payload["points"]) > MAX_CANVAS_POINTS:
+            # A width change (#828) is charged as the point it is stored as,
+            # so a pen cannot grow a path with changes the budget never sees.
+            widths = payload.get("widths") or ()
+            cost = len(payload["points"]) + len(widths)
+            if self.point_count + cost > MAX_CANVAS_POINTS:
                 return False
             self.history.extend_path(
                 self.active_path_index,
                 [(point["x"], point["y"]) for point in payload["points"]],
+                widths,
             )
-            self.point_count += len(payload["points"])
+            self.point_count += cost
             return True
         if event == "draw_end":
             if self.active_path_index is None:

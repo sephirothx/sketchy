@@ -227,7 +227,8 @@ export function useCanvasProtocol(
       packet.event === "draw_move"
       && !pointsFitWithinBudget(
         historyRef.current.actions,
-        packet.payload.points.length,
+        // A width change costs what a point does (#828), as it does the server.
+        packet.payload.points.length + (packet.payload.widths?.length ?? 0),
       )
     ) {
       // The server refuses a batch whole, so taking part of it here would put

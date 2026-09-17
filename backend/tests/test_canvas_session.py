@@ -292,3 +292,94 @@ def test_the_client_cost_model_still_agrees_with_this_one():
         declared = re.search(rf"{name}\s*=\s*([\d_]+)", source)
         assert declared, f"the client no longer declares {name}"
         assert int(declared.group(1).replace("_", "")) == expected, name
+
+
+# --- width changes inside a path (#828) -----------------------------------------
+
+
+def _pen_path(canvas: CanvasSession) -> None:
+    assert canvas.record_stroke("draw_start", {"x": 0.25, "y": 0.25, "color": "#102030", "width": 6})
+    assert canvas.record_stroke(
+        "draw_move",
+        {"points": [{"x": 0.26, "y": 0.25}, {"x": 0.27, "y": 0.26}, {"x": 0.28, "y": 0.26}], "widths": [(0, 4), (2, 5)]},
+    )
+    assert canvas.record_stroke("draw_move", {"points": [{"x": 0.29, "y": 0.27}], "widths": [(0, 6)]})
+
+
+def test_width_changes_are_recorded_against_the_whole_path_not_the_batch():
+    canvas = CanvasSession(generation=1)
+    _pen_path(canvas)
+    assert canvas.record_stroke("draw_end", {})
+
+    (path,) = canvas.history
+    assert path.width == 6
+    assert path.widths == [(1, 4), (3, 5), (4, 6)]
+    assert len(path.points) == 5
+    # A marker is never the path's last entry, so the last four bytes are
+    # still its last point: what a relative frame is resolved against.
+    assert canvas.history.last_path_point(0) == pytest.approx((0.29, 0.27))
+
+
+def test_a_width_change_is_charged_and_refunded_as_a_point():
+    canvas = CanvasSession(generation=1)
+    _pen_path(canvas)
+    assert canvas.point_count == 5 + 3
+
+    assert canvas.undo_last_stroke()
+    assert canvas.point_count == 0
+
+
+def test_a_batch_whose_width_changes_do_not_fit_is_refused_whole():
+    canvas = CanvasSession(generation=1)
+    assert canvas.record_stroke("draw_start", {"x": 0.5, "y": 0.5, "color": "#000000", "width": 6})
+    canvas.point_count = MAX_CANVAS_POINTS - 2
+    before = bytes(canvas.history.data)
+
+    assert not canvas.record_stroke(
+        "draw_move", {"points": [{"x": 0.5, "y": 0.51}, {"x": 0.5, "y": 0.52}], "widths": [(1, 3)]}
+    )
+    assert bytes(canvas.history.data) == before
+    assert canvas.record_stroke("draw_move", {"points": [{"x": 0.5, "y": 0.51}, {"x": 0.5, "y": 0.52}]})
+
+
+def test_a_path_with_width_changes_survives_the_wire_and_the_stored_format():
+    """The stored delta walk is frozen and knows nothing of markers: it recodes
+    one like any other four-byte entry, and restores it exactly."""
+    from app.canvas_storage import STORED_DELTA_MAGIC, prepare_stored_drawing, stored_drawing_wire_payload
+
+    canvas = CanvasSession(generation=1)
+    for stroke in range(40):
+        assert canvas.record_stroke("draw_start", {"x": 0.1, "y": stroke / 50, "color": "#000000", "width": 12})
+        points = [{"x": 0.1 + step / 400, "y": stroke / 50} for step in range(1, 40)]
+        widths = [(step, 3 + (step // 3) % 9) for step in range(0, 39, 3)]
+        assert canvas.record_stroke("draw_move", {"points": points, "widths": widths})
+        assert canvas.record_stroke("draw_end", {})
+    frame = canvas.sync_payload()
+
+    decoded = decode_binary_canvas_history(frame)
+    assert decoded == canvas.history
+    assert canvas_history_hash(decoded) == canvas.hash
+    blob, magic, _, checksum = prepare_stored_drawing(frame)
+    assert magic == STORED_DELTA_MAGIC and len(blob) < len(frame)
+    assert stored_drawing_wire_payload(blob, checksum=checksum) == frame
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        [(-32768, 5), (0, 0)],  # first: nothing to change from
+        [(0, 0), (-32768, 5)],  # last: nothing to apply to
+        [(0, 0), (-32768, 5), (-32768, 6), (4, 4)],  # beside another
+        [(0, 0), (-32768, 0), (4, 4)],
+        [(0, 0), (-32768, 65), (4, 4)],
+        [(0, 0), (-32768, -1), (4, 4)],
+    ],
+)
+def test_a_history_with_a_misplaced_or_invalid_width_marker_is_refused(entries):
+    import struct
+
+    record = struct.pack("<B3sB", 0, b"\x00\x00\x00", 6) + b"".join(struct.pack("<hh", *entry) for entry in entries)
+    frame = struct.pack("<4sBH", b"SKCH", 1, 1) + struct.pack("<II", 0, len(record)) + record
+
+    with pytest.raises(ValueError):
+        decode_binary_canvas_history(frame)

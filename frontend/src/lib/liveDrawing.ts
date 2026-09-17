@@ -14,6 +14,7 @@ import type {
   StrokePoint,
   StrokeShapePayload,
   StrokeStartPayload,
+  WidthChange,
 } from "../types.ts";
 
 const LIVE_DRAWING_VERSION = 1;
@@ -33,9 +34,18 @@ const SHAPES = ["rectangle", "ellipse", "triangle"] as const;
 // make a delta frame larger than an absolute one, on exactly the slow devices
 // that most need the saving.
 const DELTA_ESCAPE = -128;
-const MIN_DELTA = -127;
+// -127 in the same position is a width change (#828): the new width follows
+// in one byte, then the record of the point it applies from. In-band because
+// a message is what costs, not a byte - see the matching block in
+// `backend/app/live_drawing.py`. It takes -127 out of the delta range.
+const WIDTH_MARKER = -127;
+const MIN_DELTA = -126;
 const MAX_DELTA = 127;
 const ESCAPE_RECORD_SIZE = 5;
+const WIDTH_RECORD_SIZE = 2;
+// One above int16's floor: that x is the history's width marker.
+const MIN_PACKED_COORDINATE = -0x7fff;
+const MAX_PACKED_COORDINATE = 0x7fff;
 
 const PATH_START_TAG = 0;
 const PATH_POINTS_TAG = 1;
@@ -69,7 +79,7 @@ function writeColor(view: DataView, offset: number, color: string): void {
 
 function packedCoordinate(value: number, canvasSize: number): number {
   const packed = Math.round(value * canvasSize * CANVAS_COORDINATE_SCALE);
-  if (!Number.isFinite(value) || packed < -0x8000 || packed > 0x7fff) {
+  if (!Number.isFinite(value) || packed < MIN_PACKED_COORDINATE || packed > MAX_PACKED_COORDINATE) {
     throw new Error("Drawing coordinate is outside packed range");
   }
   return packed;
@@ -108,9 +118,17 @@ function writeRecords(
   offset: number,
   packed: number[][],
   previous: number[],
+  widths: Map<number, number> | null = null,
+  firstIndex = 0,
 ): number {
   let [previousX, previousY] = previous;
-  for (const [x, y] of packed) {
+  for (const [position, [x, y]] of packed.entries()) {
+    const width = widths?.get(firstIndex + position);
+    if (width !== undefined) {
+      view.setInt8(offset, WIDTH_MARKER);
+      view.setUint8(offset + 1, width);
+      offset += WIDTH_RECORD_SIZE;
+    }
     const deltaX = x - previousX;
     const deltaY = y - previousY;
     if (stepFits(deltaX, deltaY)) {
@@ -140,6 +158,21 @@ function recordsSize(packed: number[][], previous: number[]): number {
   return size;
 }
 
+/** `widths` as a lookup, validated: indices ascending and inside the batch. */
+function widthChanges(widths: WidthChange[] | undefined, pointCount: number): Map<number, number> | null {
+  if (!widths || widths.length === 0) return null;
+  const changes = new Map<number, number>();
+  let lastIndex = -1;
+  for (const [index, width] of widths) {
+    if (!Number.isInteger(index) || index <= lastIndex || index >= pointCount || !validWidth(width)) {
+      throw new Error("Invalid width change");
+    }
+    changes.set(index, width);
+    lastIndex = index;
+  }
+  return changes;
+}
+
 export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
   if (payload.points.length < 1 || payload.points.length > MAX_POINTS_PER_FRAME) {
     throw new Error("Invalid path point count");
@@ -148,6 +181,8 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
     packedCoordinate(point.x, CANVAS_WIDTH),
     packedCoordinate(point.y, CANVAS_HEIGHT),
   ]);
+  const widths = widthChanges(payload.widths, packed.length);
+  const widthBytes = (widths?.size ?? 0) * WIDTH_RECORD_SIZE;
 
   // With the open path's last point in hand, the relative form is the
   // smallest of the three whenever its first step fits a byte: every point
@@ -161,15 +196,20 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
     ];
     // An ending batch (#603) is always relative - it has an open path to
     // be relative to - escaping where a step is too far.
-    if (payload.ends || stepFits(packed[0][0] - previous[0], packed[0][1] - previous[1])) {
-      const frame = new Uint8Array(1 + recordsSize(packed, previous));
+    // So is a batch with a width change: the change sits in front of a
+    // record, and the absolute frame has none.
+    if (payload.ends || widths || stepFits(packed[0][0] - previous[0], packed[0][1] - previous[1])) {
+      const frame = new Uint8Array(1 + recordsSize(packed, previous) + widthBytes);
       const view = new DataView(frame.buffer);
       view.setUint8(0, header(payload.ends ? PATH_POINTS_END_TAG : PATH_POINTS_RELATIVE_TAG));
-      writeRecords(view, 1, packed, previous);
+      writeRecords(view, 1, packed, previous, widths);
       return frame;
     }
   }
   if (payload.ends) throw new Error("An ending batch needs the open path's last point");
+  // Without a predecessor the delta form carries the changes - but its first
+  // point is not a record, so none can be on it.
+  if (widths?.has(0)) throw new Error("A width change on the first point needs the open path's last point");
 
   const fits = (index: number): boolean =>
     stepFits(packed[index][0] - packed[index - 1][0], packed[index][1] - packed[index - 1][1]);
@@ -180,7 +220,7 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
     deltaSize += fits(index) ? 2 : ESCAPE_RECORD_SIZE;
   }
 
-  if (deltaSize >= absoluteSize) {
+  if (!widths && deltaSize >= absoluteSize) {
     const frame = new Uint8Array(absoluteSize);
     const absolute = new DataView(frame.buffer);
     absolute.setUint8(0, header(PATH_POINTS_TAG));
@@ -191,13 +231,59 @@ export function encodePathPoints(payload: StrokeMovePayload): Uint8Array {
     return frame;
   }
 
-  const frame = new Uint8Array(deltaSize);
+  const frame = new Uint8Array(deltaSize + widthBytes);
   const view = new DataView(frame.buffer);
   view.setUint8(0, header(PATH_POINTS_DELTA_TAG));
   view.setInt16(1, packed[0][0], true);
   view.setInt16(3, packed[0][1], true);
-  writeRecords(view, 5, packed.slice(1), packed[0]);
+  writeRecords(view, 5, packed.slice(1), packed[0], widths, 1);
   return frame;
+}
+
+function inPackedRange(x: number, y: number): boolean {
+  return x >= MIN_PACKED_COORDINATE && x <= MAX_PACKED_COORDINATE
+    && y >= MIN_PACKED_COORDINATE && y <= MAX_PACKED_COORDINATE;
+}
+
+/** Walk offset records to the end of the frame. Variable-length, so every
+step is bounded by the frame it reads. A width change must be followed, in
+this frame, by the record of the point it applies from: one that trails the
+frame or sits beside another is refused. Null for a malformed frame. */
+function readRecords(
+  view: DataView,
+  offset: number,
+  firstIndex: number,
+): { records: RelativePointRecord[]; widths: WidthChange[] } | null {
+  const records: RelativePointRecord[] = [];
+  const widths: WidthChange[] = [];
+  let widthPending = false;
+  while (offset < view.byteLength) {
+    const lead = view.getInt8(offset);
+    if (lead === WIDTH_MARKER) {
+      if (widthPending || offset + WIDTH_RECORD_SIZE > view.byteLength) return null;
+      const width = view.getUint8(offset + 1);
+      if (!validWidth(width)) return null;
+      widths.push([firstIndex + records.length, width]);
+      widthPending = true;
+      offset += WIDTH_RECORD_SIZE;
+      continue;
+    }
+    if (lead === DELTA_ESCAPE) {
+      if (offset + ESCAPE_RECORD_SIZE > view.byteLength) return null;
+      const x = view.getInt16(offset + 1, true);
+      const y = view.getInt16(offset + 3, true);
+      if (!inPackedRange(x, y)) return null;
+      records.push({ x, y });
+      offset += ESCAPE_RECORD_SIZE;
+    } else {
+      if (offset + 2 > view.byteLength) return null;
+      records.push({ dx: lead, dy: view.getInt8(offset + 1) });
+      offset += 2;
+    }
+    widthPending = false;
+    if (firstIndex + records.length > MAX_POINTS_PER_FRAME) return null;
+  }
+  return widthPending ? null : { records, widths };
 }
 
 /** The points a relative frame stands for, given the open path's last point.
@@ -213,7 +299,7 @@ export function resolveRelativePoints(
     if ("dx" in record) {
       x += record.dx;
       y += record.dy;
-      if (x < -0x8000 || x > 0x7fff || y < -0x8000 || y > 0x7fff) return null;
+      if (!inPackedRange(x, y)) return null;
     } else {
       x = record.x;
       y = record.y;
@@ -223,7 +309,10 @@ export function resolveRelativePoints(
       y: unpackedCoordinate(y, CANVAS_HEIGHT),
     });
   }
-  return { event: "draw_move", payload: packet.payload.ends ? { points, ends: true } : { points } };
+  const payload: StrokeMovePayload = { points };
+  if (packet.payload.widths) payload.widths = packet.payload.widths;
+  if (packet.payload.ends) payload.ends = true;
+  return { event: "draw_move", payload };
 }
 
 /** Whether this frame closes the open path: `draw_end`, or a final batch (#603). */
@@ -352,6 +441,7 @@ export function decodeLiveDrawing(
   if (tag === PATH_START_TAG) {
     const width = view.byteLength === 9 ? view.getUint8(4) : 0;
     if (!validWidth(width)) return null;
+    if (!inPackedRange(view.getInt16(5, true), view.getInt16(7, true))) return null;
     return {
       event: "draw_start",
       payload: {
@@ -373,6 +463,8 @@ export function decodeLiveDrawing(
     }
     const points = [];
     for (let offset = 1; offset < view.byteLength; offset += 4) {
+      // int16's floor is the history's width marker, not a coordinate.
+      if (!inPackedRange(view.getInt16(offset, true), view.getInt16(offset + 2, true))) return null;
       points.push({
         x: unpackedCoordinate(view.getInt16(offset, true), CANVAS_WIDTH),
         y: unpackedCoordinate(view.getInt16(offset + 2, true), CANVAS_HEIGHT),
@@ -381,56 +473,31 @@ export function decodeLiveDrawing(
     return { event: "draw_move", payload: { points } };
   }
   if (tag === PATH_POINTS_DELTA_TAG) {
-    // Variable-length records, so the frame is walked rather than divided.
     if (view.byteLength < 5) return null;
-    let x = view.getInt16(1, true);
-    let y = view.getInt16(3, true);
-    let offset = 5;
-    const points = [{
-      x: unpackedCoordinate(x, CANVAS_WIDTH),
-      y: unpackedCoordinate(y, CANVAS_HEIGHT),
-    }];
-    while (offset < view.byteLength) {
-      if (view.getInt8(offset) === DELTA_ESCAPE) {
-        if (offset + 5 > view.byteLength) return null;
-        x = view.getInt16(offset + 1, true);
-        y = view.getInt16(offset + 3, true);
-        offset += 5;
-      } else {
-        if (offset + 2 > view.byteLength) return null;
-        x += view.getInt8(offset);
-        y += view.getInt8(offset + 1);
-        offset += 2;
-        if (x < -0x8000 || x > 0x7fff || y < -0x8000 || y > 0x7fff) return null;
-      }
-      points.push({
-        x: unpackedCoordinate(x, CANVAS_WIDTH),
-        y: unpackedCoordinate(y, CANVAS_HEIGHT),
-      });
-      if (points.length > MAX_POINTS_PER_FRAME) return null;
-    }
-    return { event: "draw_move", payload: { points } };
+    const first = { x: view.getInt16(1, true), y: view.getInt16(3, true) };
+    if (!inPackedRange(first.x, first.y)) return null;
+    const read = readRecords(view, 5, 1);
+    if (!read) return null;
+    // The rest are offsets from the first point, which is what a relative
+    // frame's are from its predecessor: one walk serves both.
+    const rest = resolveRelativePoints(
+      { event: "draw_move_relative", payload: { records: read.records } },
+      { x: unpackedCoordinate(first.x, CANVAS_WIDTH), y: unpackedCoordinate(first.y, CANVAS_HEIGHT) },
+    );
+    if (!rest) return null;
+    const points = [
+      { x: unpackedCoordinate(first.x, CANVAS_WIDTH), y: unpackedCoordinate(first.y, CANVAS_HEIGHT) },
+      ...rest.payload.points,
+    ];
+    return { event: "draw_move", payload: read.widths.length > 0 ? { points, widths: read.widths } : { points } };
   }
   if (tag === PATH_POINTS_RELATIVE_TAG || tag === PATH_POINTS_END_TAG) {
-    if (view.byteLength < 3) return null;
-    const records: RelativePointRecord[] = [];
-    let offset = 1;
-    while (offset < view.byteLength) {
-      if (view.getInt8(offset) === DELTA_ESCAPE) {
-        if (offset + 5 > view.byteLength) return null;
-        records.push({ x: view.getInt16(offset + 1, true), y: view.getInt16(offset + 3, true) });
-        offset += 5;
-      } else {
-        if (offset + 2 > view.byteLength) return null;
-        records.push({ dx: view.getInt8(offset), dy: view.getInt8(offset + 1) });
-        offset += 2;
-      }
-      if (records.length > MAX_POINTS_PER_FRAME) return null;
-    }
-    const relative = {
-      event: "draw_move_relative" as const,
-      payload: tag === PATH_POINTS_END_TAG ? { records, ends: true } : { records },
-    };
+    const read = readRecords(view, 1, 0);
+    if (!read || read.records.length === 0) return null;
+    const payload: RelativeMovePayload = { records: read.records };
+    if (read.widths.length > 0) payload.widths = read.widths;
+    if (tag === PATH_POINTS_END_TAG) payload.ends = true;
+    const relative = { event: "draw_move_relative" as const, payload };
     return previous ? resolveRelativePoints(relative, previous) : relative;
   }
   if (tag === PATH_END_TAG) {
@@ -441,6 +508,10 @@ export function decodeLiveDrawing(
     const shape = SHAPES[view.getUint8(1)];
     const width = view.getUint8(5);
     if (!shape || !validWidth(width)) return null;
+    if (
+      !inPackedRange(view.getInt16(6, true), view.getInt16(8, true))
+      || !inPackedRange(view.getInt16(10, true), view.getInt16(12, true))
+    ) return null;
     return {
       event: "draw_shape",
       payload: {

@@ -1,4 +1,4 @@
-import type { ShapeType, StrokePoint, StrokeShapePayload } from "../types";
+import type { ShapeType, StrokePoint, StrokeShapePayload, WidthChange } from "../types";
 import type { LiveDrawingPacket } from "./liveDrawing";
 
 export const CANVAS_WIDTH = 800;
@@ -33,6 +33,11 @@ const BINARY_HEADER_SIZE = 7;
 const BINARY_OFFSET_SIZE = 4;
 const PATH_HEADER_SIZE = 5;
 const PATH_POINT_SIZE = 4;
+// A path entry with this x is not a point but a width change (#828): the new
+// width sits where y would be, and it applies from the segment ending at the
+// next point. No coordinate packs to it. See WIDTH_MARKER_X in
+// `backend/app/canvas_history.py` for why it is shaped like a point.
+const WIDTH_MARKER_X = -0x8000;
 const SHAPE_ACTION_SIZE = 14;
 const FILL_ACTION_SIZE = 8;
 const CLEAR_ACTION_SIZE = 1;
@@ -43,7 +48,15 @@ interface CanvasPoint {
 }
 
 export type DecodedCanvasAction =
-  | { kind: "path"; color: string; width: number; points: CanvasPoint[] }
+  | {
+    kind: "path";
+    color: string;
+    /** What the path starts at. */
+    width: number;
+    points: CanvasPoint[];
+    /** Where the width changes, by index into `points`; absent when it never does. */
+    widths?: WidthChange[];
+  }
   | { kind: "shape"; payload: StrokeShapePayload }
   | { kind: "fill"; color: string; x: number; y: number }
   | { kind: "clear" };
@@ -72,15 +85,26 @@ export function colorBytes(color: string): [number, number, number] {
 
 function canonicalActionBytes(action: DecodedCanvasAction): Uint8Array {
   if (action.kind === "path") {
-    const bytes = new Uint8Array(PATH_HEADER_SIZE + action.points.length * PATH_POINT_SIZE);
+    const widths = action.widths ?? [];
+    const bytes = new Uint8Array(
+      PATH_HEADER_SIZE + (action.points.length + widths.length) * PATH_POINT_SIZE,
+    );
     const view = new DataView(bytes.buffer);
     bytes[0] = 0;
     bytes.set(colorBytes(action.color), 1);
     bytes[4] = action.width;
+    let offset = PATH_HEADER_SIZE;
+    let nextWidth = 0;
     action.points.forEach((point, index) => {
-      const offset = PATH_HEADER_SIZE + index * PATH_POINT_SIZE;
+      if (nextWidth < widths.length && widths[nextWidth][0] === index) {
+        view.setInt16(offset, WIDTH_MARKER_X, true);
+        view.setInt16(offset + 2, widths[nextWidth][1], true);
+        offset += PATH_POINT_SIZE;
+        nextWidth += 1;
+      }
       view.setInt16(offset, Math.round(point.x * CANVAS_COORDINATE_SCALE), true);
       view.setInt16(offset + 2, Math.round(point.y * CANVAS_COORDINATE_SCALE), true);
+      offset += PATH_POINT_SIZE;
     });
     return bytes;
   }
@@ -166,7 +190,8 @@ export function canFillWithinBudget(actions: DecodedCanvasAction[]): boolean {
 export function canvasPointCount(actions: DecodedCanvasAction[]): number {
   let points = 0;
   for (const action of actions) {
-    if (action.kind === "path") points += action.points.length;
+    // A width change is charged as the point it is stored as (#828).
+    if (action.kind === "path") points += action.points.length + (action.widths?.length ?? 0);
   }
   return points;
 }
@@ -283,6 +308,12 @@ export class ClientCanvasHistory {
         >;
       }
       if (!this.activePath) return false;
+      if (packet.payload.widths?.length) {
+        const base = this.activePath.points.length;
+        (this.activePath.widths ??= []).push(
+          ...packet.payload.widths.map(([index, width]): WidthChange => [base + index, width]),
+        );
+      }
       this.activePath.points.push(
         ...packet.payload.points.map((point) => ({
           x: point.x * CANVAS_WIDTH,
@@ -556,24 +587,37 @@ function decodeBinaryCanvasHistory(view: DataView): DecodedCanvasAction[] | null
       const width = view.getUint8(start + 4);
       if (!isIntegerBetween(width, 1, MAX_BRUSH_WIDTH)) return null;
       const points: CanvasPoint[] = [];
+      const widths: WidthChange[] = [];
+      // A marker sits between two points: never first, never last, never
+      // beside another.
+      let afterMarker = true;
       for (
         let offset = start + PATH_HEADER_SIZE;
         offset < end;
         offset += PATH_POINT_SIZE
       ) {
-        points.push({
-          x: view.getInt16(offset, true) / CANVAS_COORDINATE_SCALE,
-          y: view.getInt16(offset + 2, true) / CANVAS_COORDINATE_SCALE,
-        });
+        const x = view.getInt16(offset, true);
+        const y = view.getInt16(offset + 2, true);
+        if (x === WIDTH_MARKER_X) {
+          if (afterMarker || !isIntegerBetween(y, 1, MAX_BRUSH_WIDTH)) return null;
+          widths.push([points.length, y]);
+          afterMarker = true;
+        } else {
+          points.push({ x: x / CANVAS_COORDINATE_SCALE, y: y / CANVAS_COORDINATE_SCALE });
+          afterMarker = false;
+        }
       }
-      totalPoints += points.length;
+      if (afterMarker) return null;
+      totalPoints += points.length + widths.length;
       if (totalPoints > MAX_CANVAS_POINTS) return null;
-      decoded.push({
+      const path: Extract<DecodedCanvasAction, { kind: "path" }> = {
         kind: "path",
         color: binaryColor(view, start + 1),
         width,
         points,
-      });
+      };
+      if (widths.length > 0) path.widths = widths;
+      decoded.push(path);
     } else if (tag === 1) {
       if (recordLength !== SHAPE_ACTION_SIZE) return null;
       const shapeId = view.getUint8(start + 1);
