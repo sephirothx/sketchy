@@ -2024,6 +2024,8 @@ export const PT: Catalogue = {
     nudgesHostsTowardRoomColorsThat: "Encaminha os anfitriões para cores de sala que continuam distinguíveis com deuteranopia e protanopia, sem lhes dizer quem pediu. Nada muda sozinho.",
     brushCursor: "Cursor do pincel",
     crosshairPreciseAtPointOutlineShows: "Uma mira é precisa no ponto; um contorno mostra a largura do traço.",
+    penPressure: "Pressão da caneta",
+    aLighterHandDrawsThinnerBrush: "Com uma caneta sensível à pressão, uma mão mais leve desenha um traço mais fino. O tamanho do pincel é a largura máxima.",
     brushCursorStyle: "Estilo do cursor do pincel",
     soundEffects: "Efeitos sonoros",
     chimesCorrectGuessStartRoundLast: "Sons para um acerto, o início de uma ronda, os últimos dez segundos, e jogadores a entrar e a sair.",

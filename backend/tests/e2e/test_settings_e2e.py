@@ -179,6 +179,11 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
             await dialog.get_by_role("group", name="Time format").get_by_role(
                 "button", name="24-hour"
             ).click()
+            # On until a player turns it off (R-DRAW-17), so off is the state
+            # that proves it travelled.
+            pen_pressure = dialog.get_by_role("switch", name="Pen pressure")
+            assert await pen_pressure.is_checked()
+            await pen_pressure.uncheck()
             cursor = dialog.get_by_role("group", name="Brush cursor style")
             # Immediately-applied rows are merged into one write, so waiting for
             # the request the last change triggers is waiting for all four.
@@ -210,6 +215,7 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                         cursor: localStorage.getItem('sketchy_brushcursor'),
                         colors: localStorage.getItem('sketchy_colorblindsafecolors'),
                         clock: localStorage.getItem('sketchy_timeformat'),
+                        pen: localStorage.getItem('sketchy_penpressure'),
                     })"""
                 )
                 assert stored == {
@@ -217,6 +223,7 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                     "cursor": "circle",
                     "colors": "true",
                     "clock": "24h",
+                    "pen": "false",
                 }
                 # Retired settings leave no key behind to be resurrected.
                 retired = await fresh_page.evaluate(
@@ -233,6 +240,9 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
                 await fresh_dialog.get_by_role("tab", name="Appearance").click()
                 assert await fresh_dialog.get_by_role(
                     "switch", name="I have trouble telling colors apart"
+                ).is_checked()
+                assert not await fresh_dialog.get_by_role(
+                    "switch", name="Pen pressure"
                 ).is_checked()
                 cursor_synced = fresh_dialog.get_by_role(
                     "group", name="Brush cursor style"

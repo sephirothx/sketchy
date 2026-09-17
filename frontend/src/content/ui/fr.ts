@@ -2027,6 +2027,8 @@ export const FR: Catalogue = {
     nudgesHostsTowardRoomColorsThat: "Oriente les hôtes vers des couleurs de salon qui restent distinguables avec une deutéranopie ou une protanopie, sans leur dire qui l’a demandé. Rien ne change tout seul.",
     brushCursor: "Curseur du pinceau",
     crosshairPreciseAtPointOutlineShows: "Une croix est précise au point ; un contour montre la largeur du trait.",
+    penPressure: "Pression du stylet",
+    aLighterHandDrawsThinnerBrush: "Avec un stylet sensible à la pression, une main plus légère trace un trait plus fin. La taille du pinceau est sa largeur maximale.",
     brushCursorStyle: "Style du curseur du pinceau",
     soundEffects: "Effets sonores",
     chimesCorrectGuessStartRoundLast: "Des sons pour une bonne réponse, le début d’une manche, les dix dernières secondes, et les joueurs qui arrivent et partent.",

@@ -42,6 +42,8 @@ interface DrawingSettings {
   brushWidth: number;
   tool: DrawTool;
   brushCursor: string;
+  /** The player's setting (R-DRAW-17): off, and a pen draws like a mouse. */
+  penPressure: boolean;
   /** No turn's point budget applies: the scratch pad, which no server replays. */
   unbudgeted?: boolean;
 }
@@ -69,6 +71,7 @@ export function useCanvasPointerInput(
     brushWidth,
     tool,
     brushCursor,
+    penPressure,
     unbudgeted = false,
   } = settings;
   // Painting locally past the point budget would put pixels on screen that
@@ -331,7 +334,9 @@ export function useCanvasPointerInput(
     // The brush only: an eraser that thinned under a light hand would leave
     // what it was meant to remove. Asked of every pen event, whatever the
     // tool, so a sensor is recognized the first time it says anything.
-    const pressed = pressureSource.trusts(event.pointerType, event.pressure) && tool === "brush";
+    const pressed = pressureSource.trusts(event.pointerType, event.pressure)
+      && tool === "brush"
+      && penPressure;
     quantizerRef.current = pressed ? createPressureQuantizer(brushWidth) : null;
     const point = sampledPoint(event);
     pointerPosRef.current = point;

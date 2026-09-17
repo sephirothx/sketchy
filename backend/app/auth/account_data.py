@@ -96,7 +96,7 @@ from app.domain_values import (
 # should be able to tell which shape it has. To 5 when the account gained
 # `lastSeenAt` (#469). To 9 when a prompt list stopped having a share code
 # and `shareCode` left each list (R-LIST-03).
-EXPORT_SCHEMA_VERSION = 9
+EXPORT_SCHEMA_VERSION = 10
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -922,6 +922,7 @@ async def _write_export_artifact(
             "confettiEffects": settings.confetti_effects,
             "volume": settings.sound_effects_volume,
             "brushCursor": settings.brush_cursor,
+            "penPressure": settings.pen_pressure,
             "keyBindings": settings.key_bindings,
             "colorblindSafeColors": settings.colorblind_safe_colors,
             "timeFormat": settings.time_format,

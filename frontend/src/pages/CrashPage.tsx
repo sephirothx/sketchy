@@ -88,6 +88,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
       soundEffects: state.soundEffects,
       confettiEffects: state.confettiEffects,
       brushCursor: state.brushCursor,
+      penPressure: state.penPressure,
     };
   }, null);
   const canvasBudget = safely(() => {

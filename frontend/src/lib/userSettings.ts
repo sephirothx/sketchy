@@ -16,6 +16,7 @@ export interface AccountSettings {
   confettiEffects: boolean;
   volume: number;
   brushCursor: BrushCursorStyle;
+  penPressure: boolean;
   keyBindings: KeyBindings;
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
@@ -35,6 +36,7 @@ export function currentSettingsPayload(): AccountSettings {
     confettiEffects: settings.confettiEffects,
     volume: settings.volume,
     brushCursor: settings.brushCursor,
+    penPressure: settings.penPressure,
     keyBindings: settings.keyBindings,
     colorblindSafeColors: settings.colorblindSafeColors,
     timeFormat: settings.timeFormat,

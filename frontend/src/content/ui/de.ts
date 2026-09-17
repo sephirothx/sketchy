@@ -2025,6 +2025,8 @@ export const DE: Catalogue = {
     nudgesHostsTowardRoomColorsThat: "Legt Gastgebern Raumfarben nahe, die bei Deuteranopie und Protanopie unterscheidbar bleiben, ohne zu verraten, wer gefragt hat. Von allein ändert sich nichts.",
     brushCursor: "Pinselzeiger",
     crosshairPreciseAtPointOutlineShows: "Ein Fadenkreuz ist punktgenau; ein Umriss zeigt, wie breit der Strich wird.",
+    penPressure: "Stiftdruck",
+    aLighterHandDrawsThinnerBrush: "Mit einem drucksensitiven Stift zeichnet eine leichtere Hand einen dünneren Pinselstrich. Breiter als die Pinselgröße wird er nie.",
     brushCursorStyle: "Art des Pinselzeigers",
     soundEffects: "Soundeffekte",
     chimesCorrectGuessStartRoundLast: "Töne für eine richtige Antwort, den Rundenbeginn, die letzten zehn Sekunden und für kommende und gehende Spieler.",

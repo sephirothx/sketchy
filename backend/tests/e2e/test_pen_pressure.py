@@ -41,32 +41,39 @@ async def _pen(cdp, kind: str, x: float, y: float, force: float) -> None:
     })
 
 
+async def _start_turn(host_page, player_page):
+    """Two seats, a private room, the first prompt: (drawing page, viewing page)."""
+    await host_page.goto(BASE_URL)
+    await use_guest_name(host_page, f"PenHost{uuid4().hex[:6]}")
+    await host_page.click('button:has-text("Create room")')
+    await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
+    await host_page.click('button:has-text("Create room")')
+    await host_page.wait_for_selector('[data-testid="waiting-room"]')
+    code = await room_code(host_page)
+
+    await player_page.goto(BASE_URL)
+    await use_guest_name(player_page, f"PenView{uuid4().hex[:6]}")
+    await join_by_code(player_page, code)
+    await player_page.wait_for_selector('[data-testid="waiting-room"]')
+
+    await host_page.click('.waiting-start-button')
+    await host_page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
+    drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
+    viewing = player_page if drawing is host_page else host_page
+    await drawing.click('.prompt-choices button:first-child')
+    await drawing.wait_for_selector('canvas.drawing-canvas')
+    await viewing.wait_for_selector('canvas.drawing-canvas')
+
+    return drawing, viewing
+
+
 async def test_a_pen_stroke_is_one_raster_on_the_drawer_a_viewer_and_a_replay():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_page = await (await browser.new_context()).new_page()
         player_page = await (await browser.new_context()).new_page()
         try:
-            await host_page.goto(BASE_URL)
-            await use_guest_name(host_page, f"PenHost{uuid4().hex[:6]}")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
-            code = await room_code(host_page)
-
-            await player_page.goto(BASE_URL)
-            await use_guest_name(player_page, f"PenView{uuid4().hex[:6]}")
-            await join_by_code(player_page, code)
-            await player_page.wait_for_selector('[data-testid="waiting-room"]')
-
-            await host_page.click('.waiting-start-button')
-            await host_page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
-            drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
-            viewing = player_page if drawing is host_page else host_page
-            await drawing.click('.prompt-choices button:first-child')
-            await drawing.wait_for_selector('canvas.drawing-canvas')
-            await viewing.wait_for_selector('canvas.drawing-canvas')
+            drawing, viewing = await _start_turn(host_page, player_page)
 
             canvas = await drawing.query_selector('canvas.drawing-canvas')
             box = await canvas.bounding_box()
@@ -125,6 +132,40 @@ async def test_a_pen_stroke_is_one_raster_on_the_drawer_a_viewer_and_a_replay():
             await late_page.wait_for_function(
                 "expected => document.querySelector('canvas.drawing-canvas').toDataURL() === expected",
                 arg=erased_png,
+            )
+        finally:
+            await browser.close()
+
+
+async def test_with_the_setting_off_a_pen_draws_like_a_mouse():
+    """Settings -> Appearance -> Pen pressure (R-DRAW-17). Stored per browser
+    for a guest, so it is set where the client reads it on load."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(), await browser.new_context()]
+        for context in contexts:
+            await context.add_init_script("localStorage.setItem('sketchy_penpressure', 'false')")
+        host_page, player_page = [await context.new_page() for context in contexts]
+        try:
+            drawing, viewing = await _start_turn(host_page, player_page)
+            canvas = await drawing.query_selector('canvas.drawing-canvas')
+            box = await canvas.bounding_box()
+            assert box is not None
+            scale = box["width"] / 800
+            cdp = await drawing.context.new_cdp_session(drawing)
+
+            y = box["y"] + 300 * scale
+            await _pen(cdp, "mousePressed", box["x"] + 100 * scale, y, 0.02)
+            for step in range(1, 61):
+                await _pen(cdp, "mouseMoved", box["x"] + (100 + step * 10) * scale, y, 0.05)
+            await _pen(cdp, "mouseReleased", box["x"] + 700 * scale, y, 0)
+
+            for x in (110, 400, 690):
+                assert await drawing.evaluate(INK_IN_COLUMN, x) == 6, "the selected size, however light the hand"
+            drawer_png = await drawing.evaluate(CANVAS_PNG)
+            await viewing.wait_for_function(
+                "expected => document.querySelector('canvas.drawing-canvas').toDataURL() === expected",
+                arg=drawer_png,
             )
         finally:
             await browser.close()

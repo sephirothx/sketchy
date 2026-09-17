@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -256,6 +256,7 @@
     "settings.keyBindings.triangle",
     "settings.keyBindings.undo",
     "settings.locale",
+    "settings.penPressure",
     "settings.promptLanguage",
     "settings.soundEffects",
     "settings.theme",

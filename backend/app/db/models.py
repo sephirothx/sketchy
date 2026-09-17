@@ -521,6 +521,12 @@ class UserSettings(Base):
         server_default=BrushCursorStyle.CROSSHAIR.value,
         nullable=False,
     )
+    # Whether a pressure-sensitive pen thins the brush under a lighter hand
+    # (#828). On by default: it only ever acts for such a pen, so a player
+    # with one gets it without looking for it and nobody else can tell.
+    pen_pressure: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     key_bindings: Mapped[dict] = mapped_column(
         PortableJSON,
         default=lambda: {
