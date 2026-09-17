@@ -62,6 +62,11 @@ export function targetWidth(pressure: number, brush: number): number {
   return floor * (brush / floor) ** (share ** PRESSURE_GAMMA);
 }
 
+/** The ends of a brush's range: what a resting pen and a full press draw. */
+export function widthRange(brush: number): { floor: number; brush: number } {
+  return { floor: Math.min(brush, MIN_PEN_WIDTH), brush };
+}
+
 /** A keyframe's width: whole pixels, as the wire carries them, inside the brush's range. */
 export function wholeWidth(width: number, brush: number): number {
   return Math.min(brush, Math.max(Math.min(brush, MIN_PEN_WIDTH), Math.round(width)));

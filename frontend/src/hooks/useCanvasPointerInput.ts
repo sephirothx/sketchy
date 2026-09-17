@@ -22,7 +22,7 @@ import {
   encodePathStart,
   encodeShape,
 } from "../lib/liveDrawing";
-import { createPressureSource, targetWidth, wholeWidth } from "../lib/penPressure";
+import { createPressureSource, targetWidth, wholeWidth, widthRange } from "../lib/penPressure";
 import { PenStroke, type PaintRun } from "../lib/penStroke";
 import { createPointThinner, type PointThinner, type ThinnedPoint } from "../lib/pointThinning";
 import { createWidthThinner, widthTolerance, type WidthThinner } from "../lib/widthKeyframes";
@@ -224,7 +224,7 @@ export function useCanvasPointerInput(
     const penStroke = penStrokeRef.current;
     if (!penStroke) return;
     const { arc, target } = penRef.current;
-    const moved = final || Math.abs(target - penStroke.width) > widthTolerance(target);
+    const moved = final || Math.abs(target - penStroke.width) > widthTolerance(target, widthRange(brushWidth));
     const { runs, placed } = penStroke.flush(moved ? wholeWidth(target, brushWidth) : penStroke.width);
     paintRuns(contextRef.current, runs);
     if (placed) widthThinnerRef.current?.anchorAt({ at: arc, width: penStroke.width });
@@ -370,7 +370,7 @@ export function useCanvasPointerInput(
       // that leaves it, and it is the keyframe the first change ramps from.
       const startWidth = pressed ? wholeWidth(targetWidth(event.pressure, brushWidth), brushWidth) : brushWidth;
       penStrokeRef.current = pressed ? new PenStroke(toPixels(point), startWidth) : null;
-      widthThinnerRef.current = pressed ? createWidthThinner({ at: 0, width: startWidth }) : null;
+      widthThinnerRef.current = pressed ? createWidthThinner({ at: 0, width: startWidth }, widthRange(brushWidth)) : null;
       penRef.current = { arc: 0, previousArc: 0, target: startWidth, last: toPixels(point) };
       thinnerRef.current = createPointThinner(point);
       lastSentRef.current = point;

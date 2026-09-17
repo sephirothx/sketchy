@@ -21,7 +21,17 @@ many were passed over - the error cannot accumulate.
 The tolerance is a share of the width, with a floor of a pixel, because that
 is how a width is seen: a pixel matters on a 4 px line and is nothing on a
 30 px one, and it is the wide strokes whose sensor noise would otherwise be
-chased keyframe by keyframe. */
+chased keyframe by keyframe.
+
+**Except at the ends of the brush's range, where it is exact.** Full pressure
+draws the selected size and a resting pen draws the floor: those are promises
+(`penPressure.ts`), and a chord across a stroke held at full pressure is
+within the tolerance of every sample on it - so the hold was drawn a pixel
+short of the brush, or not, depending on where the keyframes happened to
+fall. A sample that rounds to the brush or to the floor is held to under half
+a pixel, which is to say to the pixel, and the tolerance tightens toward that
+gradually - never looser than half a pixel plus the width left to the end -
+because a sudden drop is a shoulder of its own. */
 
 /** How far a sample's width may be from the ramp drawn in its place. */
 export const WIDTH_TOLERANCE_PX = 1;
@@ -44,11 +54,15 @@ export interface WidthThinner {
   anchorAt(sample: WidthSample): void;
 }
 
-export function widthTolerance(width: number): number {
-  return Math.max(WIDTH_TOLERANCE_PX, width * WIDTH_TOLERANCE_SHARE);
+/** Under half a pixel: the ramp and the sample round to the same width. */
+export const EXACT_TOLERANCE_PX = 0.49;
+
+export function widthTolerance(width: number, range: { floor: number; brush: number }): number {
+  const toEnd = Math.max(0, Math.min(range.brush - width, width - range.floor));
+  return Math.min(Math.max(WIDTH_TOLERANCE_PX, width * WIDTH_TOLERANCE_SHARE), EXACT_TOLERANCE_PX + toEnd);
 }
 
-export function createWidthThinner(start: WidthSample): WidthThinner {
+export function createWidthThinner(start: WidthSample, range: { floor: number; brush: number }): WidthThinner {
   let anchor = start;
   let pending: WidthSample | null = null;
   let passed: WidthSample[] = [];
@@ -57,9 +71,9 @@ export function createWidthThinner(start: WidthSample): WidthThinner {
     const span = candidate.at - anchor.at;
     const onRamp = (sample: WidthSample) =>
       anchor.width + (candidate.width - anchor.width) * (span > 0 ? (sample.at - anchor.at) / span : 1);
-    if (pending && Math.abs(pending.width - onRamp(pending)) > widthTolerance(pending.width)) return false;
+    if (pending && Math.abs(pending.width - onRamp(pending)) > widthTolerance(pending.width, range)) return false;
     for (const sample of passed) {
-      if (Math.abs(sample.width - onRamp(sample)) > widthTolerance(sample.width)) return false;
+      if (Math.abs(sample.width - onRamp(sample)) > widthTolerance(sample.width, range)) return false;
     }
     return true;
   }

@@ -1121,12 +1121,15 @@ something: it is where a later ramp starts.
 > frame that was being sent anyway and a path with none is byte for byte what it was.
 > Measured over the recorded traces with a pressure curve laid on them
 > (`benchmarks/path_widths.py`, deflated and framed, against the same strokes at one
-> width): **+1 – 3% on a 6 px brush, +5 – 9% on a 12, +13 – 18% on a 32, and no message
-> added**; a byte per point is +3 – 22%, a frame per keyframe +36 – 145% with two to four
+> width): **+1 – 4% on a 6 px brush, +9 – 11% on a 12, +14 – 22% on a 32, and no message
+> added**; a byte per point is +3 – 23%, a frame per keyframe +33 – 168% with two to four
 > times the messages, and the six stepped levels were +6 – 15%. The largest brush costs
 > the most because its range is the widest and a wobble of the sensor is more pixels
-> there; on one trace it is a little dearer than a byte per point (+15% against +14%),
-> which is the price of costing a mouse nothing.
+> there; on one trace it is dearer than a byte per point (+22% against +18%), which is
+> the price of costing a mouse nothing. The tolerance is exact where the width is the
+> brush's own or its floor, tightening toward them gradually: full pressure is promised
+> to draw the selected size (R-DRAW-17), and a chord across a stroke held there is
+> otherwise within tolerance of every sample on it.
 
 **What a viewer may assume, and what the drawer's client therefore promises.** A viewer
 paints a frame when it arrives, before the next keyframe exists, so it paints whatever
@@ -1626,8 +1629,8 @@ points recoded as deltas from the previous point, then deflated, behind a header
 declares the frame's inflated length. `SKCD` v2 is what a finished drawing is written as
 now (#828): v1 reads and restores a width marker exactly, since it treats every entry
 alike, but it chains the marker into the differences — two large deltas, one to reach
-it and one to leave — so a pen drawing stored **60% larger** than the same strokes at
-one width where v2 stores it **17% larger** (`benchmarks/path_widths.py`, the long hand
+it and one to leave — so a pen drawing stored **68% larger** than the same strokes at
+one width where v2 stores it **20% larger** (`benchmarks/path_widths.py`, the long hand
 trace at brush 12). v2 copies a marker through and differences the points either side
 against each other. For a recoded marker to be tellable from a recoded point, x is
 differenced modulo **65 535** rather than 2¹⁶ — a path's x has exactly that many values,

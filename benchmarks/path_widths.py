@@ -76,6 +76,7 @@ MIN_PEN_WIDTH = 2
 FULL_PRESSURE = 0.7
 PRESSURE_GAMMA = 0.8
 WIDTH_TOLERANCE_PX = 1.0
+EXACT_TOLERANCE_PX = 0.49
 HYSTERESIS = 0.75
 STEPPED_LEVELS = 6
 
@@ -156,7 +157,11 @@ def keyframed_stroke(stroke: dict, brush: int, pressure: list[float], share: flo
     keyframe thinner, and `PenStroke`'s two rules about frames."""
     points, frame_of = stroke["points"], stroke["frame_of"]
     targets = [target_width(value, brush) for value in pressure]
-    tolerance = lambda width: max(WIDTH_TOLERANCE_PX, share * width)
+    floor = min(brush, MIN_PEN_WIDTH)
+    # Exact at the ends of the brush's range, tightening toward them gradually.
+    tolerance = lambda width: min(
+        max(WIDTH_TOLERANCE_PX, share * width), EXACT_TOLERANCE_PX + max(0.0, min(brush - width, width - floor))
+    )
     start_width = whole_width(targets[0], brush)
     kept, kept_frames, keys = [points[0]], [frame_of[0]], {}
     key_width, reach, frame_first = start_width, "previous-frame-end", 1

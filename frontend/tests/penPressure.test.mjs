@@ -9,7 +9,7 @@ import {
   wholeWidth,
 } from "../src/lib/penPressure.ts";
 import { createPointThinner } from "../src/lib/pointThinning.ts";
-import { WIDTH_TOLERANCE_PX, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
+import { EXACT_TOLERANCE_PX, WIDTH_TOLERANCE_PX, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
 import { rasterizePath, floodFillPixels } from "../src/lib/canvasPixels.ts";
 
 const PRESETS = [2, 4, 6, 8, 12, 16, 24, 32];
@@ -88,9 +88,11 @@ test("only a pen that has shown a working sensor is believed", () => {
 
 // --- which widths are sent ----------------------------------------------------------
 
+const RANGE = { floor: 2, brush: 32 };
+
 /** Keyframes for a width curve sampled every `step` pixels of path. */
 function keyframes(curve, step = 3) {
-  const thinner = createWidthThinner({ at: 0, width: curve[0] });
+  const thinner = createWidthThinner({ at: 0, width: curve[0] }, RANGE);
   const keys = [{ at: 0, width: curve[0] }];
   let previous = null;
   curve.slice(1).forEach((width, index) => {
@@ -119,15 +121,45 @@ test("a swell and a taper are a few keyframes, and no sample is further from the
   assert.ok(keys.length <= 16, `${keys.length} keyframes for ${curve.length} samples`);
   curve.forEach((width, index) => {
     const error = Math.abs(width - rampAt(keys, index * 3));
-    assert.ok(error <= widthTolerance(width) + 1e-9, `sample ${index}: ${width} drawn ${rampAt(keys, index * 3)}`);
+    assert.ok(error <= widthTolerance(width, RANGE) + 1e-9, `sample ${index}: ${width} drawn ${rampAt(keys, index * 3)}`);
   });
 });
 
 test("a steady hand sends nothing, however its sensor wobbles inside the tolerance", () => {
   const curve = Array.from({ length: 300 }, (_, i) => 20 + 1.4 * Math.sin(i * 1.7));
   assert.equal(keyframes(curve).length, 2, "the start and the end");
-  assert.equal(widthTolerance(20), 3);
-  assert.equal(widthTolerance(3), WIDTH_TOLERANCE_PX, "a pixel matters on a fine line");
+  assert.equal(widthTolerance(20, RANGE), 3);
+  assert.equal(widthTolerance(4, RANGE), WIDTH_TOLERANCE_PX, "a pixel matters on a fine line");
+  // Exact at the ends of the range, and never tightening faster than the width moves.
+  assert.equal(widthTolerance(32, RANGE), EXACT_TOLERANCE_PX);
+  assert.equal(widthTolerance(2, RANGE), EXACT_TOLERANCE_PX);
+  for (let width = 2; width < 32; width += 0.25) {
+    assert.ok(Math.abs(widthTolerance(width + 0.25, RANGE) - widthTolerance(width, RANGE)) <= 0.25 + 1e-9);
+  }
+});
+
+test("a stroke held at full pressure is drawn at the selected size, wherever the keyframes fall", () => {
+  // Up to the brush, a long hold there, and off again: a chord across the
+  // hold is within the tolerance of every sample on it, and must not do.
+  for (const brush of [6, 32]) {
+    const range = { floor: 2, brush };
+    const curve = [];
+    for (let i = 0; i <= 30; i += 1) curve.push(2 + (brush - 2) * (i / 30));
+    for (let i = 0; i < 90; i += 1) curve.push(brush);
+    for (let i = 0; i <= 30; i += 1) curve.push(brush - (brush - 2) * (i / 30));
+    const thinner = createWidthThinner({ at: 0, width: 2 }, range);
+    const keys = [{ at: 0, width: 2 }];
+    let previous = null;
+    curve.slice(1).forEach((width, index) => {
+      const sample = { at: (index + 1) * 3, width };
+      if (thinner.push(sample) && previous) keys.push(previous);
+      previous = sample;
+    });
+    keys.push(previous);
+    for (let index = 31; index <= 119; index += 1) {
+      assert.equal(Math.round(rampAt(keys, index * 3)), brush, `brush ${brush}, sample ${index}`);
+    }
+  }
 });
 
 test("a keyframe lands on a kept point: the point thinner gives up its pending sample when asked", () => {
