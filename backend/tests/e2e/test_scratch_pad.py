@@ -104,3 +104,45 @@ async def test_a_paused_room_carries_the_pad_and_the_tab_keeps_the_drawing():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_the_pad_fits_the_narrowest_phone():
+    """Six chips - Save among them - at 44px each are wider than a 320px phone
+    leaves the strip, and the page scrolled sideways with Save off the edge."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(
+            viewport={"width": 320, "height": 640}, is_mobile=True, has_touch=True
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "PadNarrow")
+            await page.wait_for_selector(".first-run, .identity-chip, .lobby-page")
+            await context.set_offline(True)
+            await page.click('[data-testid="open-scratch-pad"]')
+            pad = '.scratch-pad-dialog [data-testid="scratch-pad"]'
+            await page.wait_for_selector(pad)
+            # The dialog pops in from 92%; measured mid-way, everything is small.
+            await page.wait_for_function(
+                "() => document.querySelector('.scratch-pad-dialog').getAnimations().length === 0"
+            )
+            overflow = await page.evaluate(
+                """() => {
+                  const chips = [...document.querySelectorAll('.scratch-pad-dialog .toolbar-mobile-chip')];
+                  return {
+                    page: document.documentElement.scrollWidth,
+                    chips: chips.length,
+                    right: Math.max(...chips.map((chip) => chip.getBoundingClientRect().right)),
+                    narrowest: Math.min(...chips.map((chip) => chip.getBoundingClientRect().width)),
+                  };
+                }"""
+            )
+            assert overflow["chips"] == 6
+            assert overflow["page"] <= 320, overflow
+            assert overflow["right"] <= 320, overflow
+            assert overflow["narrowest"] >= 44, overflow
+            await context.set_offline(False)
+        finally:
+            await context.close()
+            await browser.close()
