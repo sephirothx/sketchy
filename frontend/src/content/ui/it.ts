@@ -983,16 +983,16 @@ export const IT: Catalogue = {
     beenHereBefore: "Sei già stato qui?",
     helloMyNameIs: "Ciao, mi chiamo",
     stickItOn: "Attaccalo",
-    oneLineExplainer: "Uno disegna, tutti gli altri provano a indovinare. Senza account, senza installare nulla, senza talento.",
+    oneLineExplainer: "Un giocatore disegna, tutti gli altri cercano di indovinare. Nessun account, installazione o talento richiesti.",
     /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
        the English pool: the misread-drawing joke needs a pair of words that
        are far apart in this language. */
     lines: [
-      "Quello è un sottomarino? Io avevo capito spazzolino.",
-      "È ora di dare torto al tuo prof di disegno.",
-      "Cubismo, ma per sbaglio.",
-      "Sei tu, Michelangelo?",
-      "Wow, sembra un Pollock!",
+      "È uno spazzolino? Credevo fosse una scopa.",
+      "Sfoggia le doti artistiche che non sapevi di avere.",
+      "Cubismo, per sbaglio.",
+      "Sei proprio tu, Michelangelo?",
+      "Bello, sembra un Pollock!",
     ],
   },
 
