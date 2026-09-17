@@ -976,17 +976,24 @@ export const NL: Catalogue = {
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
     couldNotSaveThatNamePlease: "Deze naam kon niet opgeslagen worden. Probeer het nog eens.",
-    keepYourUsernameYourStatsEvery: "Houd je gebruikersnaam en je statistieken op elk apparaat.",
     createAccount: "Een account maken",
     logIn: "Inloggen",
-    or: "of",
     displayName: "Weergavenaam",
-    beenHereBefore: "Al eens hier geweest?",
-    playAsYourself: "Speel als jezelf",
     whatShouldWeCallYou: "Hoe mogen we je noemen?",
-    justPlayingOncePickA: "Speel je maar één keer? Kies een weergavenaam",
-    play: "Spelen",
-    playAsGuest: "Spelen als gast",
+    beenHereBefore: "Al eerder hier geweest?",
+    helloMyNameIs: "Hallo, ik heet",
+    stickItOn: "Plakken",
+    oneLineExplainer: "Eén speler tekent, alle anderen raden. Geen account, geen installatie, geen talent nodig.",
+    /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
+       the English pool: the misread-drawing joke needs a pair of words that
+       are far apart in this language. */
+    lines: [
+      "Is dat een duikboot? Ik dacht dat het een tandenborstel was.",
+      "Tijd om je tekenleraar ongelijk te geven.",
+      "Kubisme, maar per ongeluk.",
+      "Ben jij dat, Michelangelo?",
+      "Wauw, het lijkt wel een Pollock!",
+    ],
   },
 
   friendButton: {

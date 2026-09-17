@@ -62,8 +62,9 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
 
             # The first-run name field carries the app's input contract, except
-            # that autoCapitalize is off: names are case-sensitive and cannot
-            # contain spaces.
+            # that autoCapitalize is off (names are case-sensitive and cannot
+            # contain spaces) and the enter key says "done" rather than "go":
+            # since #588 the tag's button names you and goes nowhere.
             nickname_input = page.locator(".first-run-guest-row input")
             await nickname_input.wait_for(state="visible")
             await assert_input_contract(nickname_input, {
@@ -74,7 +75,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
                 "autoCapitalize": "off",
                 "spellCheck": False,
                 "autoCorrect": "off",
-                "enterKeyHint": "go",
+                "enterKeyHint": "done",
             })
             await nickname_input.fill("SetupHost")
             await page.click(".first-run-guest-submit")
