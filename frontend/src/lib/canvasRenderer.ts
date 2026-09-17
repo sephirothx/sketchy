@@ -4,7 +4,7 @@ import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.t
 import type { Point } from "./canvasGeometry.ts";
 import { replayStroke } from "./replay.ts";
 import type { ReplayStroke } from "./replay.ts";
-import { widthRuns } from "./pathWidths.ts";
+import { rampedRuns, widthRuns } from "./pathWidths.ts";
 import {
   fillWhitePixels,
   floodFillPixels,
@@ -169,19 +169,9 @@ export function applyCanvasAction(
   if (action.kind === "path" && action.points.length > 0) {
     const color = hexToRgba(action.color);
     // One run for a path at one width, which is every path not drawn with a
-    // pressure-sensitive pen (#828).
-    for (const run of widthRuns(action.points.length, action.width, action.widths)) {
-      rasterizePixelPath(
-        pixels,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT,
-        run.to === run.from
-          ? [action.points[run.from], action.points[run.from]]
-          : action.points.slice(run.from, run.to + 1),
-        run.width / 2,
-        color,
-        false,
-      );
+    // pressure-sensitive pen (#828); for one that was, its changes ramped.
+    for (const run of rampedRuns(action.points, action.width, action.widths)) {
+      rasterizePixelPath(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, run.points, run.width / 2, color, false);
     }
   } else if (action.kind === "shape") {
     rasterizePixelPath(

@@ -2,10 +2,11 @@ import type { DecodedCanvasAction } from "./canvasHistory";
 import { shapeOutlinePoints } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
 import type { WidthChange } from "../types.ts";
+import { expandWidthRamps } from "./pathWidths.ts";
 
 /** A stroke as the replay grows it; `widths` where a pen varied it (#828). */
 export interface ReplayStroke {
-  points: Point[];
+  points: readonly Point[];
   width: number;
   color: string;
   widths?: WidthChange[];
@@ -45,7 +46,10 @@ export function replayStroke(
   action: DecodedCanvasAction,
 ): ReplayStroke | null {
   if (action.kind === "path" && action.points.length > 1) {
-    return { points: action.points, width: action.width, color: action.color, widths: action.widths };
+    // Ramped (`pathWidths.ts`), so the stroke the replay grows is the one
+    // every other painter paints; a path at one width comes back unchanged.
+    const ramped = expandWidthRamps(action.points, action.width, action.widths);
+    return { points: ramped.points, width: ramped.width, color: action.color, widths: ramped.widths };
   }
   if (action.kind === "shape") {
     const outline = shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape);

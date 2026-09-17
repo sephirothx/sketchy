@@ -34,8 +34,8 @@ const SHAPES = ["rectangle", "ellipse", "triangle"] as const;
 // make a delta frame larger than an absolute one, on exactly the slow devices
 // that most need the saving.
 const DELTA_ESCAPE = -128;
-// -127 in the same position is a width change (#828): the new width follows
-// in one byte, then the record of the point it applies from. In-band because
+// -127 in the same position is a width keyframe (#828): a width follows in one
+// byte, then the record of the point the path has that width at. In-band because
 // a message is what costs, not a byte - see the matching block in
 // `backend/app/live_drawing.py`. It takes -127 out of the delta range.
 const WIDTH_MARKER = -127;

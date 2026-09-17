@@ -172,3 +172,90 @@ async def test_with_the_setting_off_a_pen_draws_like_a_mouse():
             )
         finally:
             await browser.close()
+
+
+# The steepest change in the line's thickness between two neighbouring columns.
+STEEPEST_CHANGE = """
+([from, to]) => {
+  const canvas = document.querySelector('canvas.drawing-canvas');
+  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  const thickness = (x) => {
+    let ink = 0;
+    for (let y = 0; y < canvas.height; y += 1) if (data[(y * canvas.width + x) * 4] !== 255) ink += 1;
+    return ink;
+  };
+  let steepest = 0;
+  let widest = 0;
+  let narrowest = Infinity;
+  for (let x = from; x < to; x += 1) {
+    steepest = Math.max(steepest, Math.abs(thickness(x + 1) - thickness(x)));
+    widest = Math.max(widest, thickness(x));
+    narrowest = Math.min(narrowest, thickness(x));
+  }
+  return { steepest, widest, narrowest };
+}
+"""
+
+
+async def test_the_largest_brush_swells_and_tapers_without_a_shoulder():
+    """A few width keyframes travel, and every painter ramps the width between
+    them a pixel at a time along the path, from the same history: so the line
+    has no shoulder anywhere, and it is still one raster everywhere - which it
+    only is because the drawer's client never sends a keyframe that would ramp
+    back across ink a viewer has already painted."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(), await browser.new_context()]
+        for context in contexts:
+            await context.add_init_script("localStorage.setItem('sketchy_defaultbrushsize', '32')")
+        host_page, player_page = [await context.new_page() for context in contexts]
+        try:
+            drawing, viewing = await _start_turn(host_page, player_page)
+            canvas = await drawing.query_selector('canvas.drawing-canvas')
+            box = await canvas.bounding_box()
+            assert box is not None
+            scale = box["width"] / 800
+            cdp = await drawing.context.new_cdp_session(drawing)
+
+            y = box["y"] + 300 * scale
+            await _pen(cdp, "mousePressed", box["x"] + 100 * scale, y, 0.01)
+            # Leans in, holds steady for long enough that frames go out with
+            # nothing to say about the width, eases to another pressure, holds
+            # again, and lifts: every way a keyframe can fall in a frame.
+            def lean(step: int) -> float:
+                if step <= 50:
+                    return 0.8 * step / 50
+                if step <= 110:
+                    return 0.8
+                if step <= 140:
+                    return 0.8 - 0.5 * (step - 110) / 30
+                if step <= 200:
+                    return 0.3
+                return 0.3 * (240 - step) / 40
+
+            for step in range(1, 241):
+                await _pen(cdp, "mouseMoved", box["x"] + (100 + step * 2.5) * scale, y, max(0.01, lean(step)))
+            await _pen(cdp, "mouseReleased", box["x"] + 700 * scale, y, 0)
+
+            shape = await drawing.evaluate(STEEPEST_CHANGE, [120, 680])
+            assert shape["widest"] == 32 and shape["narrowest"] <= 6, shape
+            # A round cap alone swells by a few pixels a column; painted as six
+            # levels this line had shoulders of eleven and fourteen.
+            assert shape["steepest"] <= 4, shape
+
+            drawer_png = await drawing.evaluate(CANVAS_PNG)
+            await viewing.wait_for_function(
+                "expected => document.querySelector('canvas.drawing-canvas').toDataURL() === expected",
+                arg=drawer_png,
+            )
+            late_page = await (await browser.new_context()).new_page()
+            await late_page.goto(BASE_URL)
+            await use_guest_name(late_page, f"PenLate{uuid4().hex[:6]}")
+            await join_by_code(late_page, viewing.url.rstrip("/").split("/")[-1])
+            await late_page.wait_for_selector('canvas.drawing-canvas')
+            await late_page.wait_for_function(
+                "expected => document.querySelector('canvas.drawing-canvas').toDataURL() === expected",
+                arg=drawer_png,
+            )
+        finally:
+            await browser.close()

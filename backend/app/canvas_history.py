@@ -24,11 +24,10 @@ COORDINATE_SCALE = 4
 MIN_PACKED_COORDINATE = -(2**15) + 1
 MAX_PACKED_COORDINATE = 2**15 - 1
 
-# A path's width can change part way along it (#828): a pen's pressure,
-# quantized to whole pixels by the client. The change is an entry in the
-# path's own point list - this x, which no coordinate can pack to, and the new
-# width where y would be - and it applies from the segment that ends at the
-# next point. Keeping it the size and shape of a point is the whole design:
+# A path's width can change along it (#828): a pen's pressure, as a few
+# keyframes the painters ramp between. A keyframe is an entry in the path's
+# own point list - this x, which no coordinate can pack to, and a width where
+# y would be - and it says how wide the path is at the next point. Keeping it the size and shape of a point is the whole design:
 # the record is still a header and a run of four-byte entries, so a path is
 # still extended by appending, its last four bytes are still its last point
 # (a marker is never last), the length check and the size bound are unchanged,
@@ -36,7 +35,8 @@ MAX_PACKED_COORDINATE = 2**15 - 1
 # recodes a marker like any other entry and restores it exactly. A marker is
 # charged against MAX_CANVAS_POINTS as the point it is shaped like, so the
 # budget stays a count of entries and a jittery pen cannot grow a path for
-# free. Each segment still has one constant radius, which is what keeps a
+# free. The ramps are derived by whoever paints, a pixel of width a piece, so
+# every piece painted still has one constant radius, which is what keeps a
 # capsule split during playback the union of its halves (R-DRAW-01).
 WIDTH_MARKER_X = -(2**15)
 
@@ -83,8 +83,8 @@ class PathAction:
     points: list[tuple[float, float]]
     color: int
     width: int
-    #: `(point index, width)`: the width from the segment ending at that point
-    #: on. `width` is what the path starts at.
+    #: `(point index, width)` keyframes: how wide the path is at that point.
+    #: `width` is what the path starts at.
     widths: list[tuple[int, int]] = field(default_factory=list)
 
 

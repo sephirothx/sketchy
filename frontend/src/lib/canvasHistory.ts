@@ -33,9 +33,9 @@ const BINARY_HEADER_SIZE = 7;
 const BINARY_OFFSET_SIZE = 4;
 const PATH_HEADER_SIZE = 5;
 const PATH_POINT_SIZE = 4;
-// A path entry with this x is not a point but a width change (#828): the new
-// width sits where y would be, and it applies from the segment ending at the
-// next point. No coordinate packs to it. See WIDTH_MARKER_X in
+// A path entry with this x is not a point but a width keyframe (#828): a
+// width sits where y would be, and the path is that wide at the next point
+// (`pathWidths.ts` ramps between keyframes). No coordinate packs to it. See WIDTH_MARKER_X in
 // `backend/app/canvas_history.py` for why it is shaped like a point.
 const WIDTH_MARKER_X = -0x8000;
 const SHAPE_ACTION_SIZE = 14;
