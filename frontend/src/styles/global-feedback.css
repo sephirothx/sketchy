@@ -12,13 +12,35 @@
 }
 
 .connection-status-banner {
+  align-items: center;
   background: var(--warning-soft);
   border-bottom: 1px solid var(--warning-edge);
   color: var(--warning);
+  display: flex;
+  flex-wrap: wrap;
   font-size: 14px;
   font-weight: 800;
+  gap: 4px 12px;
+  justify-content: center;
   padding: 9px 16px;
   text-align: center;
+}
+
+/* The scratch pad's way in (#829): a quiet outline, since the sentence beside
+   it is the news. */
+.connection-status-pad-button {
+  background: transparent;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 12px;
+}
+
+.connection-status-pad-button:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
 
 .connection-status-banner.offline {

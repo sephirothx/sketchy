@@ -1923,6 +1923,14 @@ export const IT: Catalogue = {
       counted(p.count, { one: "personalizzata", other: "personalizzate" }),
   },
 
+  scratchPad: {
+    title: "Blocco appunti",
+    drawWhileYouWait: "Disegna mentre aspetti",
+    canvasLabel: "Blocco appunti. Solo tu vedi quello che disegni qui.",
+    save: "Salva",
+    close: "Chiudi",
+  },
+
   roomStageNotice: {
     connectionLost: "Connessione persa",
     serverUpdating: "Aggiornamento del server",

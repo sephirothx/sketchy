@@ -1922,6 +1922,14 @@ export const NL: Catalogue = {
       `${number(p.count)} eigen`,
   },
 
+  scratchPad: {
+    title: "Kladblok",
+    drawWhileYouWait: "Teken terwijl je wacht",
+    canvasLabel: "Kladblok. Alleen jij ziet wat je hier tekent.",
+    save: "Opslaan",
+    close: "Sluiten",
+  },
+
   roomStageNotice: {
     connectionLost: "Verbinding verbroken",
     serverUpdating: "Server wordt bijgewerkt",

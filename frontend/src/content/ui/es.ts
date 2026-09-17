@@ -1921,6 +1921,14 @@ export const ES: Catalogue = {
       counted(p.count, { one: "propia", other: "propias" }),
   },
 
+  scratchPad: {
+    title: "Bloc de notas",
+    drawWhileYouWait: "Dibuja mientras esperas",
+    canvasLabel: "Bloc de notas. Solo tú ves lo que dibujas aquí.",
+    save: "Guardar",
+    close: "Cerrar",
+  },
+
   roomStageNotice: {
     connectionLost: "Conexión perdida",
     serverUpdating: "Actualizando el servidor",

@@ -3,18 +3,30 @@ interface CanvasCommandHandlers {
   undo: () => void;
 }
 
-let handlers: CanvasCommandHandlers | null = null;
+/**
+ * The canvases that can take Undo and Clear, newest last.
+ *
+ * A stack rather than one slot because two can be mounted at once: the scratch
+ * pad on the card over a paused game (#829) sits on top of the drawer's canvas.
+ * The toolbar that is usable is the one on top, so the command goes there; and
+ * when that pad goes, the canvas under it gets its commands back rather than
+ * being left with none, which is what a single slot cleared on unmount did.
+ */
+const stack: CanvasCommandHandlers[] = [];
 
-export function registerCanvasCommandHandlers(
-  nextHandlers: CanvasCommandHandlers | null,
-): void {
-  handlers = nextHandlers;
+/** Returns the way to take these handlers off again. */
+export function registerCanvasCommandHandlers(handlers: CanvasCommandHandlers): () => void {
+  stack.push(handlers);
+  return () => {
+    const index = stack.lastIndexOf(handlers);
+    if (index !== -1) stack.splice(index, 1);
+  };
 }
 
 export function requestCanvasClear(): void {
-  handlers?.clear();
+  stack.at(-1)?.clear();
 }
 
 export function requestCanvasUndo(): void {
-  handlers?.undo();
+  stack.at(-1)?.undo();
 }

@@ -11,7 +11,8 @@ import { useCanvasPointerInput } from "../hooks/useCanvasPointerInput";
 import {
   useCanvasProtocol,
 } from "../hooks/useCanvasProtocol";
-import type { CanvasProtocolRenderer } from "../hooks/useCanvasProtocol";
+import type { CanvasProtocol, CanvasProtocolRenderer } from "../hooks/useCanvasProtocol";
+import { useScratchPadProtocol } from "../hooks/useScratchPadProtocol";
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
@@ -33,7 +34,7 @@ import { createStrokePlayback } from "../lib/strokePlayback";
 import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
-import { recordRender } from "../lib/renderDiagnostics";
+import { recordRender, type RenderRegion } from "../lib/renderDiagnostics";
 
 interface CanvasProps {
   isDrawer: boolean;
@@ -201,86 +202,104 @@ function createProtocolRenderer(
   return { apply, clear, replay };
 }
 
-const CanvasComponent = forwardRef<CanvasRef, CanvasProps>(function Canvas(
-  {
-    isDrawer,
-    color,
-    brushWidth,
-    tool,
-    downloadPrompt = null,
-    overlay = null,
-    label,
-  },
-  ref,
+/**
+ * One drawing surface, bound to where its frames go.
+ *
+ * The game's canvas sends them to the room; the scratch pad's keeps them in the
+ * tab (#829). Everything else - the pointer, the preview layer, the brush
+ * cursor, undo and clear, the renderer - is the same code, so the pad draws
+ * exactly as a turn does. A factory rather than a prop, because which protocol
+ * hook runs cannot change over a component's life.
+ */
+function createCanvas(
+  useProtocol: (renderer: CanvasProtocolRenderer) => CanvasProtocol,
+  region: RenderRegion,
+  unbudgeted: boolean,
 ) {
-  recordRender("canvas");
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const contextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const brushCursor = useSettingsStore((state) => state.brushCursor);
+  return forwardRef<CanvasRef, CanvasProps>(function Canvas(
+    {
+      isDrawer,
+      color,
+      brushWidth,
+      tool,
+      downloadPrompt = null,
+      overlay = null,
+      label,
+    },
+    ref,
+  ) {
+    recordRender(region);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const contextRef = useRef<CanvasRenderingContext2D | null>(null);
+    const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
+    const brushCursor = useSettingsStore((state) => state.brushCursor);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const previewCanvas = previewCanvasRef.current;
-    if (!canvas || !previewCanvas) return;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    const previewContext = previewCanvas.getContext("2d");
-    if (!context || !previewContext) return;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    previewContext.lineCap = "round";
-    previewContext.lineJoin = "round";
-    fillWhite(context, canvas.width, canvas.height);
-    contextRef.current = context;
-    previewContextRef.current = previewContext;
-  }, []);
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      const previewCanvas = previewCanvasRef.current;
+      if (!canvas || !previewCanvas) return;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const previewContext = previewCanvas.getContext("2d");
+      if (!context || !previewContext) return;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      previewContext.lineCap = "round";
+      previewContext.lineJoin = "round";
+      fillWhite(context, canvas.width, canvas.height);
+      contextRef.current = context;
+      previewContextRef.current = previewContext;
+    }, []);
 
-  const renderer = useMemo(
-    () => createProtocolRenderer(canvasRef, contextRef),
-    [],
-  );
-  const protocol = useCanvasProtocol(renderer);
-  const pointer = useCanvasPointerInput(
-    protocol,
-    canvasRef,
-    contextRef,
-    previewCanvasRef,
-    previewContextRef,
-    { isDrawer, color, brushWidth, tool, brushCursor },
-  );
+    const renderer = useMemo(
+      () => createProtocolRenderer(canvasRef, contextRef),
+      [],
+    );
+    const protocol = useProtocol(renderer);
+    const pointer = useCanvasPointerInput(
+      protocol,
+      canvasRef,
+      contextRef,
+      previewCanvasRef,
+      previewContextRef,
+      { isDrawer, color, brushWidth, tool, brushCursor, unbudgeted },
+    );
 
-  useImperativeHandle(ref, () => ({
-    saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),
-  }), [downloadPrompt]);
+    useImperativeHandle(ref, () => ({
+      saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),
+    }), [downloadPrompt]);
 
-  return (
-    <div className="canvas-wrapper">
-      <div className="canvas-stack">
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          className={`drawing-canvas${isDrawer ? " drawable" : ""}${pointer.showCircleCursor ? " eraser-tool" : ""}`}
-          role="img"
-          aria-label={label}
-          onPointerDown={pointer.onPointerDown}
-          onPointerMove={pointer.onPointerMove}
-          onPointerUp={pointer.onPointerUp}
-          onPointerLeave={pointer.onPointerLeave}
-          onPointerCancel={pointer.onPointerCancel}
-        />
-        <canvas
-          ref={previewCanvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          className="preview-canvas"
-          aria-hidden="true"
-        />
-        {overlay}
+    return (
+      <div className="canvas-wrapper">
+        <div className="canvas-stack">
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            className={`drawing-canvas${isDrawer ? " drawable" : ""}${pointer.showCircleCursor ? " eraser-tool" : ""}`}
+            role="img"
+            aria-label={label}
+            onPointerDown={pointer.onPointerDown}
+            onPointerMove={pointer.onPointerMove}
+            onPointerUp={pointer.onPointerUp}
+            onPointerLeave={pointer.onPointerLeave}
+            onPointerCancel={pointer.onPointerCancel}
+          />
+          <canvas
+            ref={previewCanvasRef}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            className="preview-canvas"
+            aria-hidden="true"
+          />
+          {overlay}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  });
+}
 
-export const Canvas = memo(CanvasComponent);
+export const Canvas = memo(createCanvas(useCanvasProtocol, "canvas", false));
+
+/** The scratch pad's canvas: nothing it draws leaves the tab. */
+export const ScratchPadCanvas = memo(createCanvas(useScratchPadProtocol, "scratchPad", true));
