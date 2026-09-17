@@ -753,7 +753,7 @@
 /* Decoration, in the ink the doodle avatars use. One doodle in the card's
    corner at ordinary widths; a column of three where there is width to spare
    (below); nothing at all on a phone. */
-.first-run-art {
+.first-run-art.is-left {
   bottom: -14px;
   pointer-events: none;
   position: absolute;
@@ -762,7 +762,7 @@
   z-index: 0;
 }
 
-.first-run-art .first-run-doodle:not(:first-child) {
+.first-run-art.is-right {
   display: none;
 }
 
@@ -782,15 +782,18 @@
     padding: 26px 28px 30px;
   }
 
+  /* A doodle, the tag, the words, two doodles: the two outer tracks are equal,
+     so the tag and the words land in the middle of the card. */
   .first-run-inner {
-    grid-template-columns: minmax(0, 320px) minmax(0, 46ch) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 320px) minmax(0, 46ch) minmax(0, 1fr);
   }
 
   .first-run-heading {
     font-size: clamp(26px, 2.6cqi, 34px);
   }
 
-  .first-run-art {
+  .first-run-art.is-left,
+  .first-run-art.is-right {
     align-items: center;
     display: flex;
     gap: clamp(12px, 2.4cqi, 40px);
@@ -799,18 +802,14 @@
     rotate: none;
   }
 
-  .first-run-art .first-run-doodle:not(:first-child) {
-    display: block;
-  }
-
   .first-run-doodle {
     height: clamp(96px, 10cqi, 150px);
     width: clamp(96px, 10cqi, 150px);
   }
 
-  .first-run-doodle:nth-child(1) { rotate: -7deg; }
-  .first-run-doodle:nth-child(2) { rotate: 6deg; }
-  .first-run-doodle:nth-child(3) { rotate: -3deg; }
+  .is-left .first-run-doodle { rotate: -7deg; }
+  .is-right .first-run-doodle:nth-child(1) { rotate: 6deg; }
+  .is-right .first-run-doodle:nth-child(2) { rotate: -3deg; }
 }
 
 .first-run-tag,
