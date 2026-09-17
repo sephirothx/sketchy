@@ -28,6 +28,15 @@ can be pressed, which nobody draws at: `FULL_PRESSURE` of it already gives the
 whole brush. Below that, pressure is raised to `PRESSURE_GAMMA`, a mild lift
 because an ordinary writing hand sits in the lower half of a sensor's range.
 
+**The pressure is smoothed before any of that.** A sensor's reading jitters
+from sample to sample by a few percent of its range, which a hand does not;
+on a 32 px brush a few percent is a pixel or two, and the keyframes that
+describe the width (`widthKeyframes.ts`) were being spent on describing the
+jitter - half of them, measured. So each reading is eased toward with a time
+constant of `PRESSURE_SMOOTHING_MS`: about one sample of lag at a pen's usual
+120 Hz, the same smoothing whatever rate the device reports at, and a line
+that is steadier under the hand as well as cheaper.
+
 **What this returns is continuous.** It used to be one of six levels per brush,
 because every change of width costs bytes; but however the levels were chosen
 and however their joins were drawn, a line that holds 11 px and then holds
@@ -51,7 +60,38 @@ export const FULL_PRESSURE = 0.7;
 /** Pressure, as a share of `FULL_PRESSURE`, is raised to this before it is mapped. */
 export const PRESSURE_GAMMA = 0.8;
 
+/** The time constant pressure readings are eased with. At 120 Hz this weighs
+a new reading at 0.4, the value the benchmark models. */
+export const PRESSURE_SMOOTHING_MS = 16;
+
 const UNSUPPORTED_PRESSURE = 0.5;
+
+export interface PressureSmoother {
+  /** The smoothed pressure, given a reading and when it was taken (ms). */
+  next(pressure: number, at: number): number;
+}
+
+/** One per stroke. The first reading is taken as it is: a stroke starts at
+the pressure the pen landed with, not at an average with nothing. */
+export function createPressureSmoother(): PressureSmoother {
+  let value: number | null = null;
+  let last = 0;
+  return {
+    next(pressure, at) {
+      const reading = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure)) : 0;
+      if (value === null) {
+        value = reading;
+      } else {
+        // Exponential in the time elapsed, so 60 Hz and 240 Hz pens are
+        // smoothed alike; a reading with no time passed moves nothing.
+        const elapsed = Math.max(0, at - last);
+        value += (reading - value) * (1 - Math.exp(-elapsed / PRESSURE_SMOOTHING_MS));
+      }
+      last = at;
+      return value;
+    },
+  };
+}
 
 /** The width a pressure (0-1) asks of a brush, in pixels and not yet whole:
 between the floor and the brush, by ratio. */
@@ -60,6 +100,11 @@ export function targetWidth(pressure: number, brush: number): number {
   if (brush <= floor) return brush;
   const share = Number.isFinite(pressure) ? Math.min(1, Math.max(0, pressure / FULL_PRESSURE)) : 0;
   return floor * (brush / floor) ** (share ** PRESSURE_GAMMA);
+}
+
+/** The ends of a brush's range: what a resting pen and a full press draw. */
+export function widthRange(brush: number): { floor: number; brush: number } {
+  return { floor: Math.min(brush, MIN_PEN_WIDTH), brush };
 }
 
 /** A keyframe's width: whole pixels, as the wire carries them, inside the brush's range. */

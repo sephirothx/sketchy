@@ -21,7 +21,7 @@ import {
 } from "../src/lib/liveDrawing.ts";
 import { expandWidthRamps, finalWidth, rampedBatch, segmentWidths, widthRuns } from "../src/lib/pathWidths.ts";
 import { PenStroke } from "../src/lib/penStroke.ts";
-import { createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
+import { QUIET_FRAME_SHARE, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
 import { replayPlan, replayStroke, stepReplay } from "../src/lib/replay.ts";
 import { createStrokePlayback } from "../src/lib/strokePlayback.ts";
 
@@ -355,11 +355,12 @@ test("cut points land on the quarter-pixel grid, whatever float dust the ends ca
 
 /** A pen stroke run through the client's own bookkeeping, a frame every
 `flushEvery` samples: what the drawer painted, and the frames it sent. */
-function drawWithPen(samples, flushEvery) {
+function drawWithPen(samples, flushEvery, brush) {
+  const range = { floor: 2, brush };
   const start = samples[0];
   const startWidth = Math.round(start.width);
   const stroke = new PenStroke(start, startWidth);
-  const thinner = createWidthThinner({ at: 0, width: startWidth });
+  const thinner = createWidthThinner({ at: 0, width: startWidth }, range);
   const drawn = [];
   const frames = [];
   let frame = [];
@@ -369,7 +370,7 @@ function drawWithPen(samples, flushEvery) {
   const send = (final) => {
     if (frame.length === 0) return;
     const target = samples[Math.min(samples.length - 1, sent + frame.length)].width;
-    const moved = final || Math.abs(target - stroke.width) > widthTolerance(target);
+    const moved = final || Math.abs(target - stroke.width) > widthTolerance(target, range) * QUIET_FRAME_SHARE;
     const { runs, placed } = stroke.flush(moved ? Math.round(target) : stroke.width);
     paint(runs);
     if (placed) thinner.anchorAt({ at: arc, width: stroke.width });
@@ -423,7 +424,7 @@ function penSamples(seed, count, brush) {
 test("the drawer, a viewer painting frame by frame, and a replay of the whole path are one raster", () => {
   for (const [seed, flushEvery, brush] of [[1, 5, 32], [2, 9, 32], [3, 3, 12], [4, 7, 6], [5, 1, 32], [6, 40, 24]]) {
     const samples = penSamples(seed, 280, brush);
-    const { startWidth, drawn, frames } = drawWithPen(samples, flushEvery);
+    const { startWidth, drawn, frames } = drawWithPen(samples, flushEvery, brush);
     const color = [0, 0, 0, 255];
     const dot = (pixels) => rasterizePath(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, [samples[0], samples[0]], startWidth / 2, color, false);
 

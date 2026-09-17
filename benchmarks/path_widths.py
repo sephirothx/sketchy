@@ -20,9 +20,10 @@ The client's own rules are mirrored here constant for constant
 (`frontend/src/lib/penPressure.ts`, `widthKeyframes.ts`, `penStroke.ts`): the
 selected size is the ceiling and two pixels the floor, pressure moves the width
 by ratio with the whole brush at 70% of the sensor's range, a sample becomes a
+the pressure is smoothed before it is mapped (`--smoothing`), a sample becomes a
 keyframe when a straight ramp to the next one would miss a sample passed over
-by more than the tolerance (`--tolerance`, a share of the width, a pixel at
-least), a frame that goes out part way through a change says how far it got,
+by more than the tolerance (a pixel at least, and 15% of the width widening to
+25% on a fat line; `--tolerance` tries a flat share instead), a frame that goes out part way through a change says how far it got,
 and a change after a quiet stretch gets a hold to ramp from.
 
 Ways to carry it, each through the same warm permessage-deflate context as the
@@ -43,7 +44,7 @@ saving `SKCD` v2 was cut for.
 
 Usage:
   backend/.venv/bin/python benchmarks/path_widths.py
-  backend/.venv/bin/python benchmarks/path_widths.py --brush 6 12 32 --tolerance 0.1 0.15 --wobble 0.15
+  backend/.venv/bin/python benchmarks/path_widths.py --brush 6 12 32 --tolerance 0.15 --smoothing 0   # as it was before both
   backend/.venv/bin/python benchmarks/path_widths.py --json-output out.json
 """
 from __future__ import annotations
@@ -76,6 +77,12 @@ MIN_PEN_WIDTH = 2
 FULL_PRESSURE = 0.7
 PRESSURE_GAMMA = 0.8
 WIDTH_TOLERANCE_PX = 1.0
+EXACT_TOLERANCE_PX = 0.49
+QUIET_FRAME_SHARE = 0.5
+FINE_TOLERANCE_SHARE = 0.15
+WIDE_TOLERANCE_SHARE = 0.25
+TOLERANCE_WIDENS_BETWEEN = (8, 16)
+SMOOTHING_WEIGHT = 0.4
 HYSTERESIS = 0.75
 STEPPED_LEVELS = 6
 
@@ -147,16 +154,39 @@ def target_width(pressure: float, brush: int) -> float:
     return floor * (brush / floor) ** share
 
 
+def width_tolerance(width: float, brush: int) -> float:
+    """`widthTolerance` in `widthKeyframes.ts`: a pixel at least, a share of the
+    width that loosens from 15% at 8 px to 25% at 16, and exact at the ends of
+    the brush's range - full pressure draws the selected size."""
+    to_end = max(0.0, min(brush - width, width - min(brush, MIN_PEN_WIDTH)))
+    fine, wide = TOLERANCE_WIDENS_BETWEEN
+    along = min(1.0, max(0.0, (width - fine) / (wide - fine)))
+    loose = max(WIDTH_TOLERANCE_PX, width * (FINE_TOLERANCE_SHARE + (WIDE_TOLERANCE_SHARE - FINE_TOLERANCE_SHARE) * along))
+    return min(loose, EXACT_TOLERANCE_PX + to_end)
+
+
+def smoothed(pressure: list[float], weight: float) -> list[float]:
+    """`createPressureSmoother` in `penPressure.ts`, at the 120 Hz the traces'
+    pens are modelled at: a 16 ms time constant weighs a new reading at 0.4."""
+    if not weight:
+        return pressure
+    out, value = [], pressure[0]
+    for reading in pressure:
+        value += (reading - value) * weight
+        out.append(value)
+    return out
+
+
 def whole_width(width: float, brush: int) -> int:
     return min(brush, max(min(brush, MIN_PEN_WIDTH), math.floor(width + 0.5)))
 
 
-def keyframed_stroke(stroke: dict, brush: int, pressure: list[float], share: float) -> dict:
+def keyframed_stroke(stroke: dict, brush: int, pressure: list[float], share: float | None = None) -> dict:
     """One stroke through the client's bookkeeping: the point thinner, the
     keyframe thinner, and `PenStroke`'s two rules about frames."""
     points, frame_of = stroke["points"], stroke["frame_of"]
     targets = [target_width(value, brush) for value in pressure]
-    tolerance = lambda width: max(WIDTH_TOLERANCE_PX, share * width)
+    tolerance = (lambda width: width_tolerance(width, brush)) if share is None else (lambda width: max(WIDTH_TOLERANCE_PX, share * width))
     start_width = whole_width(targets[0], brush)
     kept, kept_frames, keys = [points[0]], [frame_of[0]], {}
     key_width, reach, frame_first = start_width, "previous-frame-end", 1
@@ -215,7 +245,7 @@ def keyframed_stroke(stroke: dict, brush: int, pressure: list[float], share: flo
             if pending is not None:
                 keep(index)
             if len(kept) > frame_first:
-                if abs(targets[index] - key_width) > tolerance(targets[index]) and key_last(whole_width(targets[index], brush)):
+                if abs(targets[index] - key_width) > tolerance(targets[index]) * QUIET_FRAME_SHARE and key_last(whole_width(targets[index], brush)):
                     width_anchor, width_passed, width_pending = (arc, float(key_width)), [], None
                 reach = "previous-frame-end" if (len(kept) - 1) in keys else "earlier"
                 frame_first = len(kept)
@@ -391,12 +421,12 @@ def cost(messages: list[bytes]) -> dict:
     }
 
 
-def measure(path: Path, brush: int, wobble: float, seed: int, share: float) -> dict:
+def measure(path: Path, brush: int, wobble: float, seed: int, share: float | None, weight: float) -> dict:
     rng = random.Random(seed)
     raw = [stroke for stroke in load_strokes(path) if len(stroke["points"]) > 1]
     hands = [pressure_curve(len(stroke["points"]), rng, wobble) for stroke in raw]
     plain = [plain_stroke(stroke, brush) for stroke in raw]
-    keyed = [keyframed_stroke(stroke, brush, hand, share) for stroke, hand in zip(raw, hands)]
+    keyed = [keyframed_stroke(stroke, brush, smoothed(hand, weight), share) for stroke, hand in zip(raw, hands)]
     stepped = [stepped_stroke(stroke, brush, hand) for stroke, hand in zip(raw, hands)]
     variants = {
         "baseline (no pressure)": [m for n, stroke in enumerate(plain, 1) for m in variant_in_band(stroke, n)],
@@ -407,7 +437,7 @@ def measure(path: Path, brush: int, wobble: float, seed: int, share: float) -> d
     }
     plain_history, keyed_history = history_of(plain), history_of(keyed)
     return {
-        "trace": path.stem, "brush": brush, "tolerance": share, "strokes": len(raw),
+        "trace": path.stem, "brush": brush, "tolerance": share, "smoothing": weight, "strokes": len(raw),
         "points": sum(len(stroke["points"]) for stroke in plain),
         "points_keyed": sum(len(stroke["points"]) for stroke in keyed),
         "keyframes": sum(len(stroke["keys"]) for stroke in keyed),
@@ -423,7 +453,9 @@ def measure(path: Path, brush: int, wobble: float, seed: int, share: float) -> d
 
 
 def print_report(result: dict) -> None:
-    print(f"\n{result['trace']}  brush {result['brush']}px, tolerance {result['tolerance']:.0%}  {result['strokes']} strokes")
+    tolerance = "the client's tolerance" if result["tolerance"] is None else f"a flat {result['tolerance']:.0%} tolerance"
+    smoothing = "smoothed" if result["smoothing"] else "unsmoothed"
+    print(f"\n{result['trace']}  brush {result['brush']}px, {tolerance}, {smoothing}  {result['strokes']} strokes")
     print(f"  points {result['points']} -> {result['points_keyed']} with keyframes' points kept; "
           f"{result['keyframes']} keyframes ({result['keyframes'] / max(1, result['points_keyed']):.0%} of points), "
           f"against {result['level_changes']} changes of level")
@@ -443,14 +475,16 @@ def main() -> None:
     parser.add_argument("--trace", type=Path, default=TRACE_DIR)
     parser.add_argument("--brush", type=int, nargs="+", default=[6, 12, 32])
     parser.add_argument("--wobble", type=float, default=0.15)
-    parser.add_argument("--tolerance", type=float, nargs="+", default=[0.15],
-                        help="a keyframe's tolerance as a share of the width (the client's is 0.15)")
+    parser.add_argument("--tolerance", type=float, nargs="+", default=[None],
+                        help="a flat tolerance, as a share of the width, in place of the client's (15%% widening to 25%%)")
+    parser.add_argument("--smoothing", type=float, default=SMOOTHING_WEIGHT,
+                        help="the weight of a new pressure reading (the client's is 0.4 at 120 Hz); 0 turns smoothing off")
     parser.add_argument("--seed", type=int, default=828)
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
     paths = sorted(args.trace.glob("*.json")) if args.trace.is_dir() else [args.trace]
     results = [
-        measure(path, brush, args.wobble, args.seed, share)
+        measure(path, brush, args.wobble, args.seed, share, args.smoothing)
         for path in paths for brush in args.brush for share in args.tolerance
     ]
     for result in results:

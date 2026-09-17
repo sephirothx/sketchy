@@ -4,12 +4,14 @@ import test from "node:test";
 import {
   FULL_PRESSURE,
   MIN_PEN_WIDTH,
+  PRESSURE_SMOOTHING_MS,
+  createPressureSmoother,
   createPressureSource,
   targetWidth,
   wholeWidth,
 } from "../src/lib/penPressure.ts";
 import { createPointThinner } from "../src/lib/pointThinning.ts";
-import { WIDTH_TOLERANCE_PX, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
+import { EXACT_TOLERANCE_PX, WIDTH_TOLERANCE_PX, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
 import { rasterizePath, floodFillPixels } from "../src/lib/canvasPixels.ts";
 
 const PRESETS = [2, 4, 6, 8, 12, 16, 24, 32];
@@ -88,9 +90,11 @@ test("only a pen that has shown a working sensor is believed", () => {
 
 // --- which widths are sent ----------------------------------------------------------
 
+const RANGE = { floor: 2, brush: 32 };
+
 /** Keyframes for a width curve sampled every `step` pixels of path. */
 function keyframes(curve, step = 3) {
-  const thinner = createWidthThinner({ at: 0, width: curve[0] });
+  const thinner = createWidthThinner({ at: 0, width: curve[0] }, RANGE);
   const keys = [{ at: 0, width: curve[0] }];
   let previous = null;
   curve.slice(1).forEach((width, index) => {
@@ -119,15 +123,95 @@ test("a swell and a taper are a few keyframes, and no sample is further from the
   assert.ok(keys.length <= 16, `${keys.length} keyframes for ${curve.length} samples`);
   curve.forEach((width, index) => {
     const error = Math.abs(width - rampAt(keys, index * 3));
-    assert.ok(error <= widthTolerance(width) + 1e-9, `sample ${index}: ${width} drawn ${rampAt(keys, index * 3)}`);
+    assert.ok(error <= widthTolerance(width, RANGE) + 1e-9, `sample ${index}: ${width} drawn ${rampAt(keys, index * 3)}`);
   });
 });
 
 test("a steady hand sends nothing, however its sensor wobbles inside the tolerance", () => {
   const curve = Array.from({ length: 300 }, (_, i) => 20 + 1.4 * Math.sin(i * 1.7));
   assert.equal(keyframes(curve).length, 2, "the start and the end");
-  assert.equal(widthTolerance(20), 3);
-  assert.equal(widthTolerance(3), WIDTH_TOLERANCE_PX, "a pixel matters on a fine line");
+});
+
+test("the tolerance is a pixel on a fine line, loosens as the line gets fat, and is exact at the ends", () => {
+  const wide = { floor: 2, brush: 64 };
+  assert.equal(widthTolerance(5, wide), WIDTH_TOLERANCE_PX, "a pixel matters on a fine line");
+  assert.ok(Math.abs(widthTolerance(8, wide) - 1.2) < 1e-9, "15% up to 8 px");
+  assert.ok(Math.abs(widthTolerance(12, wide) - 2.4) < 1e-9, "half way between, 20%");
+  assert.ok(Math.abs(widthTolerance(16, wide) - 4) < 1e-9, "25% from 16 px");
+  // Full pressure draws the selected size and a resting pen the floor: to the pixel.
+  assert.equal(widthTolerance(32, RANGE), EXACT_TOLERANCE_PX);
+  assert.equal(widthTolerance(2, RANGE), EXACT_TOLERANCE_PX);
+  // And it tightens toward them gradually - a drop from 8 px to half of one
+  // between two samples is a shoulder - so never by more than the width moved.
+  for (let width = 2; width < 32; width += 0.25) {
+    const step = Math.abs(widthTolerance(width + 0.25, RANGE) - widthTolerance(width, RANGE));
+    assert.ok(step <= 0.25 + 1e-9, `at ${width}: ${step}`);
+  }
+  assert.equal(widthTolerance(20, RANGE), 5, "loose in the middle of the range");
+});
+
+test("a stroke held at full pressure is drawn at the selected size, whatever the tolerance around it", () => {
+  // Up to the brush, a long hold there, and off again: a chord across the
+  // hold is within a quarter of 32 px of every sample on it, and must not do.
+  for (const brush of [6, 32]) {
+    const range = { floor: 2, brush };
+    const curve = [];
+    for (let i = 0; i <= 30; i += 1) curve.push(2 + (brush - 2) * (i / 30));
+    for (let i = 0; i < 90; i += 1) curve.push(brush);
+    for (let i = 0; i <= 30; i += 1) curve.push(brush - (brush - 2) * (i / 30));
+    const thinner = createWidthThinner({ at: 0, width: 2 }, range);
+    const keys = [{ at: 0, width: 2 }];
+    let previous = null;
+    curve.slice(1).forEach((width, index) => {
+      const sample = { at: (index + 1) * 3, width };
+      if (thinner.push(sample) && previous) keys.push(previous);
+      previous = sample;
+    });
+    keys.push(previous);
+    for (let index = 31; index <= 119; index += 1) {
+      assert.equal(Math.round(rampAt(keys, index * 3)), brush, `brush ${brush}, sample ${index}`);
+    }
+  }
+});
+
+test("a sensor's jitter is smoothed away and a hand's intent is not", () => {
+  // 120 Hz readings around a steady 0.5, jittering by 3% of the range.
+  const steady = createPressureSmoother();
+  let lowest = 1;
+  let highest = 0;
+  for (let sample = 0; sample < 240; sample += 1) {
+    const value = steady.next(0.5 + (sample % 2 ? 0.03 : -0.03), sample * (1000 / 120));
+    if (sample > 20) {
+      lowest = Math.min(lowest, value);
+      highest = Math.max(highest, value);
+    }
+  }
+  assert.ok(highest - lowest < 0.02, `jitter of 0.06 came out as ${highest - lowest}`);
+
+  // A stroke starts at the pressure the pen landed with...
+  const landing = createPressureSmoother();
+  assert.equal(landing.next(0.2, 1000), 0.2);
+  // ...and a real change arrives within a few samples: two thirds of it in one time constant.
+  const after = landing.next(0.8, 1000 + PRESSURE_SMOOTHING_MS);
+  assert.ok(Math.abs(after - (0.2 + 0.6 * (1 - Math.exp(-1)))) < 1e-9);
+  for (let ms = 2; ms <= 5; ms += 1) landing.next(0.8, 1000 + ms * PRESSURE_SMOOTHING_MS);
+  assert.ok(landing.next(0.8, 1000 + 6 * PRESSURE_SMOOTHING_MS) > 0.795);
+});
+
+test("smoothing is by time, so a 60 Hz pen and a 240 Hz pen are smoothed alike", () => {
+  const at = (hz) => {
+    const smoother = createPressureSmoother();
+    smoother.next(0, 0);
+    let value = 0;
+    for (let ms = 1000 / hz; ms <= 50 + 1e-9; ms += 1000 / hz) value = smoother.next(1, ms);
+    return value;
+  };
+  assert.ok(Math.abs(at(60) - at(240)) < 0.02, `${at(60)} against ${at(240)}`);
+  // Two events with one timestamp, which a browser does produce, move nothing.
+  const same = createPressureSmoother();
+  same.next(0.3, 5);
+  assert.equal(same.next(0.9, 5), 0.3);
+  assert.equal(createPressureSmoother().next(Number.NaN, 0), 0);
 });
 
 test("a keyframe lands on a kept point: the point thinner gives up its pending sample when asked", () => {
