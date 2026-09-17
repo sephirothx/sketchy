@@ -112,14 +112,19 @@ async def test_a_pen_stroke_is_one_raster_on_the_drawer_a_viewer_and_a_replay():
                 "expected => document.querySelector('canvas.drawing-canvas').toDataURL() === expected",
                 arg=erased_png,
             )
-            # And from the history alone: a reload replays both paths whole. Last,
-            # because a two-seat room pauses while one of them is away.
-            await viewing.reload()
-            await viewing.wait_for_selector('canvas.drawing-canvas')
-            await viewing.wait_for_function(
+            # And from the history alone: somebody who joins now was sent none of
+            # the frames, and replays both paths whole. A third seat rather
+            # than a reload of the second: a two-seat room that sees a seat
+            # leave resets the turn and wipes the canvas on every screen, so
+            # whether a reload found the drawing depended on how fast it was.
+            late_page = await (await browser.new_context()).new_page()
+            await late_page.goto(BASE_URL)
+            await use_guest_name(late_page, f"PenLate{uuid4().hex[:6]}")
+            await join_by_code(late_page, viewing.url.rstrip("/").split("/")[-1])
+            await late_page.wait_for_selector('canvas.drawing-canvas')
+            await late_page.wait_for_function(
                 "expected => document.querySelector('canvas.drawing-canvas').toDataURL() === expected",
                 arg=erased_png,
             )
-
         finally:
             await browser.close()
