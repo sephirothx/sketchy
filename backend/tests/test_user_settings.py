@@ -62,6 +62,8 @@ async def test_registration_seeds_and_patch_persists_settings(env):
         "confettiEffects": False,
         "volume": 0.35,
         "brushCursor": "circle",
+        # Off, against a default of on: a seed that was dropped would read back true.
+        "penPressure": False,
         "keyBindings": {**DEFAULT_KEY_BINDINGS, "brush": ["b"]},
         "colorblindSafeColors": True,
         "timeFormat": "24h",
@@ -93,12 +95,30 @@ async def test_registration_seeds_and_patch_persists_settings(env):
     assert patched.json()["theme"] == "light"
     assert patched.json()["volume"] == 0.9
     assert patched.json()["brushCursor"] == "circle"
+    assert patched.json()["penPressure"] is False
+
+    turned_on = await http.patch("/api/users/me/settings", json={"penPressure": True})
+    assert turned_on.status_code == 200
+    assert turned_on.json()["penPressure"] is True
+    assert (await http.patch("/api/users/me/settings", json={"penPressure": "yes please"})).status_code == 422
 
     async with factory() as session:
         row = await session.scalar(select(UserSettings))
         assert row is not None
         assert row.theme == "light"
         assert row.sound_effects_volume == 0.9
+        assert row.pen_pressure is True
+
+
+async def test_pen_pressure_is_on_until_a_player_turns_it_off(env):
+    """It only ever acts for a pressure-sensitive pen, so a player with one
+    gets it without looking for it (#828)."""
+    http, _ = env
+    registered = await http.post(
+        "/api/auth/register", json={"username": "PenDefault", "password": PASSWORD}
+    )
+    assert registered.status_code == 200
+    assert (await http.get("/api/users/me/settings")).json()["penPressure"] is True
 
 
 async def test_registration_seed_never_overwrites_existing_settings(env):

@@ -239,6 +239,7 @@ function createCanvas(
     const contextRef = useRef<CanvasRenderingContext2D | null>(null);
     const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
     const brushCursor = useSettingsStore((state) => state.brushCursor);
+    const penPressure = useSettingsStore((state) => state.penPressure);
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -267,7 +268,7 @@ function createCanvas(
       contextRef,
       previewCanvasRef,
       previewContextRef,
-      { isDrawer, color, brushWidth, tool, brushCursor, unbudgeted },
+      { isDrawer, color, brushWidth, tool, brushCursor, penPressure, unbudgeted },
     );
 
     useImperativeHandle(ref, () => ({

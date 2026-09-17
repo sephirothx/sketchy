@@ -534,7 +534,7 @@ plus all of its aliases; the guest's sessions are revoked during the merge.
 ### `user_settings`
 Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE) ·
 `theme` · `sound_effects` · `confetti_effects` · `sound_effects_volume` (0.0–1.0) ·
-`brush_cursor` (`crosshair \| circle`) · `time_format` (`system \| 12h \| 24h`) ·
+`brush_cursor` (`crosshair \| circle`) · `pen_pressure` (on by default; the client acts on it only for a pressure-sensitive pen, R-DRAW-17) · `time_format` (`system \| 12h \| 24h`) ·
 `key_bindings` (JSON) ·
 `colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
 `locale` (the interface locales, `en` by default) ·
@@ -691,7 +691,7 @@ guesses, prompt-list revision history, the lists it starred, unexpired authored 
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v9_fields.json`](../fixtures/account_data_export_v9_fields.json).
+pinned by [`fixtures/account_data_export_v10_fields.json`](../fixtures/account_data_export_v10_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·

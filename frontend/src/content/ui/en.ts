@@ -2029,6 +2029,8 @@ export const EN = {
     nudgesHostsTowardRoomColorsThat: "Nudges hosts toward room colors that stay distinguishable with deuteranopia and protanopia, without telling them who asked. Nothing changes on its own.",
     brushCursor: "Brush cursor",
     crosshairPreciseAtPointOutlineShows: "A crosshair is precise at the point; an outline shows how wide the stroke will be.",
+    penPressure: "Pen pressure",
+    aLighterHandDrawsThinnerBrush: "With a pressure-sensitive pen, a lighter hand draws a thinner brush stroke. Brush size is the widest it gets.",
     brushCursorStyle: "Brush cursor style",
     soundEffects: "Sound effects",
     chimesCorrectGuessStartRoundLast: "Chimes for a correct guess, the start of a round, the last ten seconds, and players coming and going.",

@@ -231,6 +231,9 @@ function loadStoredNameColor(): string {
 interface SettingsStore {
   keyBindings: KeyBindings;
   brushCursor: BrushCursorStyle;
+  /** Whether a pressure-sensitive pen thins the brush under a lighter hand
+      (R-DRAW-17). Inert for a mouse, a finger and a pen with no sensor. */
+  penPressure: boolean;
   theme: AppTheme;
   confettiEffects: boolean;
   soundEffects: boolean;
@@ -248,6 +251,7 @@ interface SettingsStore {
   setAllSettings: (payload: {
     keyBindings: KeyBindings;
     brushCursor: BrushCursorStyle;
+    penPressure?: boolean;
     theme?: AppTheme;
     confettiEffects?: boolean;
     soundEffects?: boolean;
@@ -260,6 +264,7 @@ interface SettingsStore {
   }) => void;
   setKeyBinding: (action: keyof KeyBindings, keys: string[]) => void;
   setBrushCursor: (brushCursor: BrushCursorStyle) => void;
+  setPenPressure: (enabled: boolean) => void;
   setNameColor: (nameColor: string) => void;
   setTheme: (theme: AppTheme) => void;
   setConfettiEffects: (enabled: boolean) => void;
@@ -298,6 +303,7 @@ setClockLocale(initialLocale);
 export const useSettingsStore = create<SettingsStore>((set) => ({
   keyBindings: loadStoredKeyBindings(),
   brushCursor: loadStoredBrushCursor(),
+  penPressure: loadStoredFlag("sketchy_penpressure"),
   theme: initialTheme,
   confettiEffects: loadStoredFlag("sketchy_confettieffects"),
   soundEffects: loadStoredFlag("sketchy_soundeffects"),
@@ -310,6 +316,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setAllSettings: ({
     keyBindings,
     brushCursor,
+    penPressure = true,
     theme = DEFAULT_THEME,
     confettiEffects = true,
     soundEffects = true,
@@ -324,6 +331,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
       localStorage.setItem(BRUSH_CURSOR_KEY, brushCursor);
       localStorage.removeItem(LEGACY_BRUSH_CURSOR_KEY);
+      localStorage.setItem("sketchy_penpressure", String(penPressure));
       localStorage.setItem("sketchy_theme", theme);
       localStorage.setItem("sketchy_confettieffects", String(confettiEffects));
       localStorage.setItem("sketchy_soundeffects", String(soundEffects));
@@ -343,6 +351,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       return {
         keyBindings,
         brushCursor,
+        penPressure,
         theme,
         confettiEffects,
         soundEffects,
@@ -367,6 +376,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       // so it cannot resurface if the new one is ever cleared.
       localStorage.removeItem(LEGACY_BRUSH_CURSOR_KEY);
       return { brushCursor };
+    }),
+  setPenPressure: (enabled) =>
+    set(() => {
+      localStorage.setItem("sketchy_penpressure", String(enabled));
+      return { penPressure: enabled };
     }),
   setNameColor: (nameColor) =>
     set(() => {

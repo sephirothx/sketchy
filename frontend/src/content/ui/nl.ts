@@ -2025,6 +2025,8 @@ export const NL: Catalogue = {
     nudgesHostsTowardRoomColorsThat: "Duwt gastheren richting kamerkleuren die met deuteranopie en protanopie te onderscheiden blijven, zonder te zeggen wie het vroeg. Er verandert niets vanzelf.",
     brushCursor: "Penseelcursor",
     crosshairPreciseAtPointOutlineShows: "Een draadkruis is precies op het punt; een omtrek laat zien hoe breed de streek wordt.",
+    penPressure: "Pendruk",
+    aLighterHandDrawsThinnerBrush: "Met een drukgevoelige pen tekent een lichtere hand een dunnere penseelstreek. Breder dan de penseelgrootte wordt die nooit.",
     brushCursorStyle: "Stijl van de penseelcursor",
     soundEffects: "Geluidseffecten",
     chimesCorrectGuessStartRoundLast: "Tonen bij een goede gok, het begin van een ronde, de laatste tien seconden, en spelers die komen en gaan.",

@@ -58,6 +58,7 @@ class UserSettingsSeed(BaseModel):
     brush_cursor: Literal["crosshair", "circle"] = Field(
         default="crosshair", alias="brushCursor"
     )
+    pen_pressure: bool = Field(default=True, alias="penPressure")
     key_bindings: dict[str, list[str]] = Field(
         default_factory=lambda: {key: list(value) for key, value in DEFAULT_KEY_BINDINGS.items()},
         alias="keyBindings",
@@ -98,6 +99,7 @@ class UserSettingsPatch(BaseModel):
     brush_cursor: Literal["crosshair", "circle"] | None = Field(
         default=None, alias="brushCursor"
     )
+    pen_pressure: bool | None = Field(default=None, alias="penPressure")
     key_bindings: dict[str, list[str]] | None = Field(
         default=None, alias="keyBindings"
     )
@@ -131,6 +133,7 @@ def user_settings_payload(settings: UserSettings) -> dict:
         "confettiEffects": settings.confetti_effects,
         "volume": settings.sound_effects_volume,
         "brushCursor": settings.brush_cursor,
+        "penPressure": settings.pen_pressure,
         "keyBindings": settings.key_bindings,
         "colorblindSafeColors": settings.colorblind_safe_colors,
         "timeFormat": settings.time_format,

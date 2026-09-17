@@ -947,6 +947,8 @@ function AppearancePane() {
   const setColorblindSafeColors = useSettingsStore((state) => state.setColorblindSafeColors);
   const brushCursor = useSettingsStore((state) => state.brushCursor);
   const setBrushCursor = useSettingsStore((state) => state.setBrushCursor);
+  const penPressure = useSettingsStore((state) => state.penPressure);
+  const setPenPressure = useSettingsStore((state) => state.setPenPressure);
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
   const promptLanguage = useSettingsStore((state) => state.promptLanguage);
@@ -1074,6 +1076,15 @@ function AppearancePane() {
             onChange={chooseCursor}
           />
         </Row>
+        <ToggleRow
+          label={ui.settingsOverlay.penPressure}
+          hint={ui.settingsOverlay.aLighterHandDrawsThinnerBrush}
+          checked={penPressure}
+          onChange={(next) => {
+            setPenPressure(next);
+            queueSettingsSync({ penPressure: next });
+          }}
+        />
       </Group>
     </>
   );

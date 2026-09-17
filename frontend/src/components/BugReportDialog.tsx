@@ -65,6 +65,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
   const soundEffects = useSettingsStore((state) => state.soundEffects);
   const confettiEffects = useSettingsStore((state) => state.confettiEffects);
   const brushCursor = useSettingsStore((state) => state.brushCursor);
+  const penPressure = useSettingsStore((state) => state.penPressure);
   const fillAvailable = useCanvasBudgetStore((state) => state.fillAvailable);
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
 
@@ -120,7 +121,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
     totalRounds,
     playerCount: players.length,
     isDrawer: Boolean(playerId && drawerId === playerId),
-    settings: { theme, soundEffects, confettiEffects, brushCursor },
+    settings: { theme, soundEffects, confettiEffects, brushCursor, penPressure },
     canvasBudget: { fill: fillAvailable, stroke: strokeAvailable },
     screenshot: shot ? { width: shot.width, height: shot.height, byteSize: shot.byteSize } : null,
   });
