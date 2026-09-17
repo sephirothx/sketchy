@@ -1930,6 +1930,7 @@ export const FR: Catalogue = {
     canvasLabel: "Bloc-notes. Toi seul vois ce que tu dessines ici.",
     save: "Enregistrer",
     close: "Fermer",
+    backToTheRoom: "Retour au salon",
   },
 
   roomStageNotice: {

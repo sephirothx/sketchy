@@ -1927,6 +1927,7 @@ export const ES: Catalogue = {
     canvasLabel: "Bloc de notas. Solo tú ves lo que dibujas aquí.",
     save: "Guardar",
     close: "Cerrar",
+    backToTheRoom: "Volver a la sala",
   },
 
   roomStageNotice: {

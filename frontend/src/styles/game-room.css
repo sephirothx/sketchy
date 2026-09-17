@@ -704,6 +704,96 @@
   flex: 1 1 auto;
 }
 
+/* The scratch pad in place of the column (#591): one strip - back, the code,
+   Start - over a pad at a turn's size. */
+.waiting-room.is-drawing {
+  align-content: start;
+  gap: 0;
+}
+
+.waiting-pad-strip {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 0 auto;
+  max-width: var(--scratch-pad-width, 800px);
+  width: 100%;
+}
+
+/* The code as a copy chip, in the header chip's old recipe (#580 took it out
+   of the bar; the strip is where it is wanted now). */
+.room-copy-button {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 800;
+  gap: 8px;
+  letter-spacing: 0.08em;
+  min-height: 38px;
+  padding: 6px 14px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.room-copy-button svg {
+  color: var(--faint);
+}
+
+.room-copy-button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.room-copy-button:hover svg {
+  color: currentColor;
+}
+
+.waiting-pad-strip .waiting-start-button {
+  margin-left: auto;
+  width: auto;
+}
+
+/* A phone's strip is the way back and the code, one line, one at each end:
+   Start is in the dock. */
+@media (max-width: 900px) {
+  .waiting-pad-strip {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+}
+
+.waiting-pad-strip .waiting-start-waiting {
+  flex: 1 1 auto;
+  text-align: right;
+}
+
+.waiting-room.is-drawing > .waiting-start-error {
+  margin: 8px auto 0;
+  max-width: var(--scratch-pad-width, 800px);
+  width: 100%;
+}
+
+/* On a pinned desktop room the drawing is held to what the column's height
+   leaves once the strip and the toolbar are counted, so none of it
+   is below the fold. The column is a size container only while it holds the
+   pad: size containment on a column sized by its content would collapse it. */
+@media (min-width: 901px) and (min-height: 640px) {
+  .room-shell-main:has(> .room-shell-main-transition > .waiting-room.is-drawing) {
+    container-type: size;
+  }
+
+  .waiting-room.is-drawing {
+    --scratch-pad-width: max(320px, min(800px, 100cqw, calc((100cqh - 204px) * 4 / 3)));
+  }
+}
+
 .waiting-rules-footer .waiting-start-error {
   flex-basis: 100%;
   margin: 0;

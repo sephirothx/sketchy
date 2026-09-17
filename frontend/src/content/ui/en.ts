@@ -1932,6 +1932,7 @@ export const EN = {
     canvasLabel: "Scratch pad. Only you can see what you draw here.",
     save: "Save",
     close: "Close",
+    backToTheRoom: "Back to the room",
   },
 
   roomStageNotice: {

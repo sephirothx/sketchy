@@ -1927,6 +1927,7 @@ export const PT: Catalogue = {
     canvasLabel: "Bloco de rascunho. Só tu vês o que desenhas aqui.",
     save: "Guardar",
     close: "Fechar",
+    backToTheRoom: "Voltar à sala",
   },
 
   roomStageNotice: {

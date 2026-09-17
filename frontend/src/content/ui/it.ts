@@ -1929,6 +1929,7 @@ export const IT: Catalogue = {
     canvasLabel: "Blocco appunti. Solo tu vedi quello che disegni qui.",
     save: "Salva",
     close: "Chiudi",
+    backToTheRoom: "Torna alla stanza",
   },
 
   roomStageNotice: {

@@ -1928,6 +1928,7 @@ export const NL: Catalogue = {
     canvasLabel: "Kladblok. Alleen jij ziet wat je hier tekent.",
     save: "Opslaan",
     close: "Sluiten",
+    backToTheRoom: "Terug naar de kamer",
   },
 
   roomStageNotice: {

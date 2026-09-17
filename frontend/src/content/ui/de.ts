@@ -1928,6 +1928,7 @@ export const DE: Catalogue = {
     canvasLabel: "Notizblock. Was du hier zeichnest, siehst nur du.",
     save: "Speichern",
     close: "Schließen",
+    backToTheRoom: "Zurück zum Raum",
   },
 
   roomStageNotice: {

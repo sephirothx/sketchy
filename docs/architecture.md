@@ -1786,14 +1786,15 @@ recorded once per room code and stops the rebind loop, because the reason is rea
 flags (a drain seen before the loss) that the first answer spends. A pause while the connection
 is what is being waited for carries the scratch pad
 ([`ScratchPad.tsx`](../frontend/src/components/ScratchPad.tsx), #829), as does the
-connection banner outside a room: the game's `Canvas` and `Toolbar`, built with a
-different protocol hook
+connection banner outside a room and the waiting room (#591): the game's `Canvas` and
+`Toolbar`, built with a different protocol hook
 ([`useScratchPadProtocol`](../frontend/src/hooks/useScratchPadProtocol.ts)) that keeps the
 frames in one module-level `ClientCanvasHistory`
 ([`lib/scratchPad.ts`](../frontend/src/lib/scratchPad.ts)) instead of sending them. Every
-mounted pad redraws from that sheet when another changes it; and Undo and Clear go to the
-newest mounted canvas ([`lib/canvasCommands.ts`](../frontend/src/lib/canvasCommands.ts) is a
-stack), so a pad over a drawer's canvas takes them and hands them back.
+mounted pad redraws from that sheet when another changes it, because the waiting room's pad
+sits under the paused card's; and Undo and Clear go to the newest mounted canvas
+([`lib/canvasCommands.ts`](../frontend/src/lib/canvasCommands.ts) is a stack), so a pad over a
+drawer's canvas takes them and hands them back.
 
 The canvas is 4:3 because 800 × 600 is baked into the wire protocol, so on a
 portrait phone it can never exceed about a third of the height. It is sized from

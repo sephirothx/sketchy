@@ -1,4 +1,4 @@
-"""The scratch pad (#829): something to draw on while the connection is down."""
+"""The scratch pad (#829, #591): something to draw on while the connection is down, and while a room waits for players."""
 
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import use_guest_name
@@ -106,6 +106,69 @@ async def test_a_paused_room_carries_the_pad_and_the_tab_keeps_the_drawing():
             await browser.close()
 
 
+async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_over():
+    """#591: the waiting room offered a disabled Start and nothing else. The pad
+    takes the column from one button in view, fits it without scrolling, and
+    gives it back. And two pads can be on screen at once - the room's, and the
+    paused card's over it - so what is drawn on one is what the other shows."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            permissions=["clipboard-read", "clipboard-write"],
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "PadHost")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector(".create-room-page")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            await page.click('[data-testid="open-waiting-pad"]')
+            room_pad = '.waiting-room.is-drawing [data-testid="scratch-pad"]'
+            await page.wait_for_selector(room_pad)
+            assert await page.locator(".waiting-rules-card").count() == 0
+            assert await page.evaluate("document.activeElement?.dataset.testid") == "close-waiting-pad"
+            # Start stays one press away, and nothing of the pad is below the fold.
+            assert await page.locator(".waiting-pad-strip .waiting-start-button").count() == 1
+            # The strip's code chip copies the invite link in one press.
+            await page.click('[data-testid="copy-waiting-pad-code"]')
+            await page.wait_for_selector('.app-toast.success:has-text("Invite link copied.")')
+            assert await page.evaluate("navigator.clipboard.readText()") == page.url
+            bottom = await page.evaluate(
+                "document.querySelector('.waiting-room.is-drawing .scratch-pad').getBoundingClientRect().bottom"
+            )
+            assert bottom <= 800, f"the pad runs to {bottom}px on an 800px window"
+            canvas_box = await page.locator(f"{room_pad} .drawing-canvas").bounding_box()
+            assert canvas_box is not None and canvas_box["width"] >= 600
+
+            await scribble(page, room_pad)
+            first = await inked(page, room_pad)
+            assert first > 100
+
+            await context.set_offline(True)
+            paused_pad = '[data-testid="room-stage-paused"] [data-testid="scratch-pad"]'
+            await page.wait_for_selector(paused_pad, timeout=5000)
+            assert await inked(page, paused_pad) == first
+            await page.locator(paused_pad).locator(CLEAR).click()
+            assert await inked(page, paused_pad) == 0
+
+            await context.set_offline(False)
+            await page.wait_for_selector('[data-testid="room-stage-paused"]', state="detached", timeout=10000)
+            # Cleared on the card, so cleared in the room: the room's pad must not
+            # keep the older sheet it was showing underneath.
+            assert await inked(page, room_pad) == 0
+
+            await page.click('[data-testid="close-waiting-pad"]')
+            await page.wait_for_selector(".waiting-rules-card")
+            assert await page.evaluate("document.activeElement?.dataset.testid") == "open-waiting-pad"
+        finally:
+            await context.close()
+            await browser.close()
+
+
 async def test_the_pad_fits_the_narrowest_phone():
     """Six chips - Save among them - at 44px each are wider than a 320px phone
     leaves the strip, and the page scrolled sideways with Save off the edge."""
@@ -142,7 +205,35 @@ async def test_the_pad_fits_the_narrowest_phone():
             assert overflow["page"] <= 320, overflow
             assert overflow["right"] <= 320, overflow
             assert overflow["narrowest"] >= 44, overflow
+            await page.click('.scratch-pad-dialog button:has-text("Close")')
             await context.set_offline(False)
+            await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
+
+            # And in place of the waiting room's column, strip and all.
+            await page.click('button:has-text("Create a room")')
+            await page.wait_for_selector(".create-room-page")
+            await page.click('button:has-text("Create room")')
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await page.click('[data-testid="open-waiting-pad"]')
+            await page.wait_for_selector('.waiting-room.is-drawing [data-testid="scratch-pad"]')
+            room = await page.evaluate(
+                """() => {
+                  const controls = [...document.querySelectorAll('.waiting-room.is-drawing button')];
+                  return {
+                    page: document.documentElement.scrollWidth,
+                    right: Math.max(...controls.map((control) => control.getBoundingClientRect().right)),
+                  };
+                }"""
+            )
+            assert room["page"] <= 320, room
+            assert room["right"] <= 320, room
+            # One line for the way back and the code; Start in the phone's dock.
+            back = await page.locator('[data-testid="close-waiting-pad"]').bounding_box()
+            chip = await page.locator('[data-testid="copy-waiting-pad-code"]').bounding_box()
+            assert back and chip and abs(back["y"] - chip["y"]) < 4, (back, chip)
+            assert await page.locator(".waiting-pad-strip .waiting-start-button").count() == 0
+            start = await page.locator(".waiting-start-card .waiting-start-button").bounding_box()
+            assert start and start["y"] + start["height"] <= 640, start
         finally:
             await context.close()
             await browser.close()
