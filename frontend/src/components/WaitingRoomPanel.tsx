@@ -213,10 +213,17 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               <CopyIcon size={14} />
             </button>
           )}
-          {isHost ? startButton(false) : waitingForHost}
+          {!isNarrow && (isHost ? startButton(false) : waitingForHost)}
         </div>
         {props.startError && <p className="waiting-start-error">{props.startError}</p>}
         <ScratchPad />
+        {/* A phone docks Start at the bottom of the screen, as the room view
+            does, rather than wrapping it onto a line of its own in the strip. */}
+        {isNarrow && (
+          <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+            {isHost ? startButton(true) : waitingForHost}
+          </div>
+        )}
       </main>
     );
   }

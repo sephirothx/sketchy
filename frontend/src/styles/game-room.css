@@ -753,6 +753,16 @@
   width: auto;
 }
 
+/* A phone's strip is the way back and the code, one line, one at each end:
+   Start is in the dock. */
+@media (max-width: 900px) {
+  .waiting-pad-strip {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+}
+
 .waiting-pad-strip .waiting-start-waiting {
   flex: 1 1 auto;
   text-align: right;
