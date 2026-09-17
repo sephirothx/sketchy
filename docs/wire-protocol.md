@@ -1108,7 +1108,9 @@ something: it is where a later ramp starts.
 > held 11 px and then held 18 px, with a shoulder between, however the levels were
 > chosen. A hand's pressure is a smooth curve, and a smooth curve is a few points with
 > straight lines between them: a sample becomes a keyframe only when a straight ramp
-> past it would miss some sample's width by more than 15% (a pixel at least), the same
+> past it would miss some sample's width by more than 15% of it (a pixel at least, and
+> widening to 25% on a line 16 px and fatter, where a wobble is more pixels and the error
+> hardest to see, and exact where the width is the brush's own or its floor), the same
 > whole-stroke bound the point thinner holds for position
 > ([`lib/widthKeyframes.ts`](../frontend/src/lib/widthKeyframes.ts)). A swell from 2 px
 > to 32 that was five visible steps is one ramp and usually two keyframes.
@@ -1121,15 +1123,22 @@ something: it is where a later ramp starts.
 > frame that was being sent anyway and a path with none is byte for byte what it was.
 > Measured over the recorded traces with a pressure curve laid on them
 > (`benchmarks/path_widths.py`, deflated and framed, against the same strokes at one
-> width): **+1 – 4% on a 6 px brush, +9 – 11% on a 12, +14 – 22% on a 32, and no message
-> added**; a byte per point is +3 – 23%, a frame per keyframe +33 – 168% with two to four
-> times the messages, and the six stepped levels were +6 – 15%. The largest brush costs
-> the most because its range is the widest and a wobble of the sensor is more pixels
-> there; on one trace it is dearer than a byte per point (+22% against +18%), which is
-> the price of costing a mouse nothing. The tolerance is exact where the width is the
-> brush's own or its floor, tightening toward them gradually: full pressure is promised
-> to draw the selected size (R-DRAW-17), and a chord across a stroke held there is
-> otherwise within tolerance of every sample on it.
+> width): **+1 – 4% on a 6 px brush, +5 – 7% on a 12, +8 – 10% on a 32, and no message
+> added**; a byte per point is +2 – 20% (on the short hand trace the two are level, and
+> a mouse still pays nothing), a frame per keyframe +35 – 96% with about twice the
+> messages, and the six stepped levels were +6 – 15%. Two things got the largest
+> brush there from +13 – 19%, where its keyframes were being spent on a sensor's jitter:
+> the pressure is smoothed before it is mapped
+> ([`lib/penPressure.ts`](../frontend/src/lib/penPressure.ts)), and the tolerance widens
+> with the line — everywhere but at the ends of the brush's range, where it is exact,
+> because full pressure is promised to draw the selected size (R-DRAW-17) and a quarter
+> of 32 px would have let a stroke held there be drawn at 26; it tightens toward the ends
+> gradually, since a drop from 8 px to half of one between two samples is itself a
+> shoulder. A frame that goes out while the width has drifted less than *half* the
+> tolerance from the last keyframe says nothing about it; a whole tolerance of drift,
+> painted flat and then made up, showed as a kink at the frame boundary. Together they
+> took a pen from half again as fast through the turn's drawing limit (R-DRAW-07 charges
+> a keyframe as a point) to a quarter.
 
 **What a viewer may assume, and what the drawer's client therefore promises.** A viewer
 paints a frame when it arrives, before the next keyframe exists, so it paints whatever
@@ -1629,8 +1638,8 @@ points recoded as deltas from the previous point, then deflated, behind a header
 declares the frame's inflated length. `SKCD` v2 is what a finished drawing is written as
 now (#828): v1 reads and restores a width marker exactly, since it treats every entry
 alike, but it chains the marker into the differences — two large deltas, one to reach
-it and one to leave — so a pen drawing stored **68% larger** than the same strokes at
-one width where v2 stores it **20% larger** (`benchmarks/path_widths.py`, the long hand
+it and one to leave — so a pen drawing stored **48% larger** than the same strokes at
+one width where v2 stores it **12% larger** (`benchmarks/path_widths.py`, the long hand
 trace at brush 12). v2 copies a marker through and differences the points either side
 against each other. For a recoded marker to be tellable from a recoded point, x is
 differenced modulo **65 535** rather than 2¹⁶ — a path's x has exactly that many values,

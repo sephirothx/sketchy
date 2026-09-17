@@ -22,10 +22,17 @@ import {
   encodePathStart,
   encodeShape,
 } from "../lib/liveDrawing";
-import { createPressureSource, targetWidth, wholeWidth, widthRange } from "../lib/penPressure";
+import {
+  createPressureSmoother,
+  createPressureSource,
+  targetWidth,
+  wholeWidth,
+  widthRange,
+  type PressureSmoother,
+} from "../lib/penPressure";
 import { PenStroke, type PaintRun } from "../lib/penStroke";
 import { createPointThinner, type PointThinner, type ThinnedPoint } from "../lib/pointThinning";
-import { createWidthThinner, widthTolerance, type WidthThinner } from "../lib/widthKeyframes";
+import { QUIET_FRAME_SHARE, createWidthThinner, widthTolerance, type WidthThinner } from "../lib/widthKeyframes";
 import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
 import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
@@ -90,6 +97,7 @@ export function useCanvasPointerInput(
   // the path's length (`arc`) and the width the pressure asks for (`target`).
   const penStrokeRef = useRef<PenStroke | null>(null);
   const widthThinnerRef = useRef<WidthThinner | null>(null);
+  const smootherRef = useRef<PressureSmoother | null>(null);
   const penRef = useRef({ arc: 0, previousArc: 0, target: 0, last: { x: 0, y: 0 } });
   // For a brush stroke, the last sample *kept* (#560), which is where the
   // next kept segment starts on this canvas and on every viewer's; for a
@@ -217,14 +225,15 @@ export function useCanvasPointerInput(
   // A frame is about to go: if the pen's width is part way through a change,
   // the frame's last point says how far it got, so a viewer can paint the
   // frame without waiting for the keyframe the change ends on. A wobble inside
-  // the keyframe tolerance says nothing - or every frame of a steady hand
+  // half the keyframe tolerance says nothing - or every frame of a steady hand
   // would carry a keyframe for the sensor's noise. `final` is the pen lifting:
   // whatever the width got to is where the stroke ends.
   function flushPenStroke(final = false) {
     const penStroke = penStrokeRef.current;
     if (!penStroke) return;
     const { arc, target } = penRef.current;
-    const moved = final || Math.abs(target - penStroke.width) > widthTolerance(target, widthRange(brushWidth));
+    const moved = final
+      || Math.abs(target - penStroke.width) > widthTolerance(target, widthRange(brushWidth)) * QUIET_FRAME_SHARE;
     const { runs, placed } = penStroke.flush(moved ? wholeWidth(target, brushWidth) : penStroke.width);
     paintRuns(contextRef.current, runs);
     if (placed) widthThinnerRef.current?.anchorAt({ at: arc, width: penStroke.width });
@@ -287,6 +296,7 @@ export function useCanvasPointerInput(
     if (!sendPendingPoints(true)) protocol.sendPathFrame(encodePathEnd());
     penStrokeRef.current = null;
     widthThinnerRef.current = null;
+    smootherRef.current = null;
     lastSentRef.current = null;
     protocol.finishPathAction();
     repaintPreview(pointerPosRef.current);
@@ -368,7 +378,9 @@ export function useCanvasPointerInput(
       // A pen lands lightly, so its path opens at the width it landed at: the
       // dot every screen paints for a start is then no wider than the line
       // that leaves it, and it is the keyframe the first change ramps from.
-      const startWidth = pressed ? wholeWidth(targetWidth(event.pressure, brushWidth), brushWidth) : brushWidth;
+      smootherRef.current = pressed ? createPressureSmoother() : null;
+      const landed = smootherRef.current?.next(event.pressure, event.timeStamp) ?? 0;
+      const startWidth = pressed ? wholeWidth(targetWidth(landed, brushWidth), brushWidth) : brushWidth;
       penStrokeRef.current = pressed ? new PenStroke(toPixels(point), startWidth) : null;
       widthThinnerRef.current = pressed ? createWidthThinner({ at: 0, width: startWidth }, widthRange(brushWidth)) : null;
       penRef.current = { arc: 0, previousArc: 0, target: startWidth, last: toPixels(point) };
@@ -408,17 +420,18 @@ export function useCanvasPointerInput(
     const pen = penRef.current;
     const pixels = toPixels(point);
     const moved = Math.hypot(pixels.x - pen.last.x, pixels.y - pen.last.y);
+    const pressure = smootherRef.current?.next(event.pressure, event.timeStamp) ?? event.pressure;
     if (moved === 0 && pen.arc > 0) {
       // Pressing harder on the spot moves nothing along the path; the width
       // it asks for is taken up by the next sample that does.
-      pen.target = targetWidth(event.pressure, brushWidth);
+      pen.target = targetWidth(pressure, brushWidth);
       return;
     }
     const before = widthThinner.pending();
     pen.previousArc = pen.arc;
     pen.arc += moved;
     pen.last = pixels;
-    pen.target = targetWidth(event.pressure, brushWidth);
+    pen.target = targetWidth(pressure, brushWidth);
     if (!widthThinner.push({ at: pen.arc, width: pen.target }) || !before) return;
     const key = wholeWidth(before.width, brushWidth);
     const forced = thinner.flush();
@@ -522,6 +535,7 @@ export function useCanvasPointerInput(
     if (!sendPendingPointsRef.current(true)) protocol.sendPathFrame(encodePathEnd());
     penStrokeRef.current = null;
     widthThinnerRef.current = null;
+    smootherRef.current = null;
     lastSentRef.current = null;
     protocol.finishPathAction();
     inputActiveRef.current = false;
@@ -544,6 +558,7 @@ export function useCanvasPointerInput(
     pendingPointsRef.current = [];
     penStrokeRef.current = null;
     widthThinnerRef.current = null;
+    smootherRef.current = null;
     lastPointRef.current = null;
     thinnerRef.current = null;
     lastSentRef.current = null;

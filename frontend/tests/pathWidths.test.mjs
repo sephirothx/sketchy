@@ -21,7 +21,7 @@ import {
 } from "../src/lib/liveDrawing.ts";
 import { expandWidthRamps, finalWidth, rampedBatch, segmentWidths, widthRuns } from "../src/lib/pathWidths.ts";
 import { PenStroke } from "../src/lib/penStroke.ts";
-import { createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
+import { QUIET_FRAME_SHARE, createWidthThinner, widthTolerance } from "../src/lib/widthKeyframes.ts";
 import { replayPlan, replayStroke, stepReplay } from "../src/lib/replay.ts";
 import { createStrokePlayback } from "../src/lib/strokePlayback.ts";
 
@@ -370,7 +370,7 @@ function drawWithPen(samples, flushEvery, brush) {
   const send = (final) => {
     if (frame.length === 0) return;
     const target = samples[Math.min(samples.length - 1, sent + frame.length)].width;
-    const moved = final || Math.abs(target - stroke.width) > widthTolerance(target, range);
+    const moved = final || Math.abs(target - stroke.width) > widthTolerance(target, range) * QUIET_FRAME_SHARE;
     const { runs, placed } = stroke.flush(moved ? Math.round(target) : stroke.width);
     paint(runs);
     if (placed) thinner.anchorAt({ at: arc, width: stroke.width });

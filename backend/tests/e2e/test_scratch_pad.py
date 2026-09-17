@@ -230,7 +230,14 @@ async def test_the_pad_fits_the_narrowest_phone():
             # One line for the way back and the code; Start in the phone's dock.
             back = await page.locator('[data-testid="close-waiting-pad"]').bounding_box()
             chip = await page.locator('[data-testid="copy-waiting-pad-code"]').bounding_box()
-            assert back and chip and abs(back["y"] - chip["y"]) < 4, (back, chip)
+            # By their middles, not their tops: the strip centres its items, and
+            # at 320 px the way back wraps onto a second line whenever the text
+            # is a few pixels wider - the fallback face, before the web font has
+            # loaded - which moves its top by 7 px and leaves it on the same row.
+            assert back and chip, (back, chip)
+            middles = [box["y"] + box["height"] / 2 for box in (back, chip)]
+            assert abs(middles[0] - middles[1]) < 4, (back, chip)
+            assert back["x"] + back["width"] <= chip["x"], (back, chip)
             assert await page.locator(".waiting-pad-strip .waiting-start-button").count() == 0
             start = await page.locator(".waiting-start-card .waiting-start-button").bounding_box()
             assert start and start["y"] + start["height"] <= 640, start
