@@ -1912,6 +1912,10 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/history_row_footprint.py --games 200
 
+# WAL and heap-only share of a session touch, and a chat insert's per-index bytes (#890)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/index_write_cost.py --sessions 20000 --messages 100000
+
 # The score-event ledger's bytes, write time and read cost per game (#552)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
@@ -2066,6 +2070,15 @@ rows, room evidence, the export queue, player search) were left alone, as was
 `pg_trgm` for the player search: at this population a `display_name ILIKE`
 over registered players is a third of a millisecond, and the extension needs
 installation rights the deployment may not have.
+
+The index-write benchmark measures what the schema it runs against costs the two
+hottest write paths, so running it on either side of a revision shows what the
+revision changed. On PostgreSQL 17 on 2026-09-18, #890's revision took a session
+touch from 910 B of WAL (up to 1.2 KB after a checkpoint) and no heap-only
+updates to 315 B and 7,499 of 7,500 heap-only, with the table no longer growing
+under touches; and a 100,000-line chat insert from 205 to 102 index bytes per row
+and 918 to 773 B of WAL per row. Its wall time barely moves (3.85 s → 3.75 s),
+because the insert is dominated by building the rows in Python.
 
 The user-stat benchmark seeds deterministic finished-game facts, rebuilds the
 daily projection (reporting the rebuild's wall time and peak allocation), and

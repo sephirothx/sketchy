@@ -1944,7 +1944,23 @@ async def test_every_fixture_engine_is_configured_like_the_application():
 # Foreign keys deliberately left without a leading index, each with the
 # reason. A row here is a decision, not an oversight; delete it when the
 # reason stops being true.
-FK_INDEX_EXEMPTIONS: dict[tuple[str, tuple[str, ...]], str] = {}
+FK_INDEX_EXEMPTIONS: dict[tuple[str, tuple[str, ...]], str] = {
+    # #890: these parents are never deleted except with their whole game -
+    # game history is kept indefinitely (R-PRIV-05), and a seat or a turn has
+    # no delete path of its own. An operator deleting one game by hand pays a
+    # scan of that game's rows, which the game_id-leading key already bounds.
+    ("turn_records", ("game_id", "drawer_participant_id")): (
+        "the seat is deleted only with its game; served by uq_turn_records_game_round_turn's game_id prefix"
+    ),
+    ("score_events", ("game_id", "turn_id")): (
+        "the turn is deleted only with its game; served by the primary key's game_id prefix"
+    ),
+}
+
+# #890: a non-unique index whose leading column is neither a foreign key nor
+# named by any statement in backend/app. Each entry names the reader the
+# static search cannot see (raw SQL, a column reached through a relationship).
+UNREAD_INDEX_ALLOWED: dict[str, str] = {}
 
 
 def _uniquely_identifies(column) -> bool:
@@ -2052,3 +2068,43 @@ def test_the_mappers_configure_without_a_warning():
         text=True,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_every_index_is_read_by_something():
+    """An index nothing reads is a write on every insert and update for no
+    return, and on a hot table it can stop updates from being heap-only (#890:
+    the session touch wrote into six indexes for one nobody used). A
+    non-unique index must lead with a foreign key's column - a delete walks
+    it - or with a column some statement in backend/app names, as
+    ``Model.column`` or through an ``aliased(Model)``."""
+    import re
+    from pathlib import Path
+
+    from sqlalchemy import Column
+
+    app = Path(__file__).resolve().parents[1] / "app"
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in app.rglob("*.py")
+        if path != app / "db" / "models.py"
+    )
+    aliases: dict[str, set[str]] = {}
+    for alias, model in re.findall(r"(\w+)\s*=\s*aliased\((\w+)\)", source):
+        aliases.setdefault(model, set()).add(alias)
+    models = {mapper.local_table.name: mapper.class_.__name__ for mapper in Base.registry.mappers}
+
+    unread: list[str] = []
+    for table in Base.metadata.sorted_tables:
+        foreign = {column.name for fk in table.foreign_key_constraints for column in fk.columns}
+        for index in table.indexes:
+            if index.unique or index.name in UNREAD_INDEX_ALLOWED:
+                continue
+            leading = next(iter(index.expressions))
+            if not isinstance(leading, Column) or leading.name in foreign:
+                continue
+            model = models[table.name]
+            names = {model} | aliases.get(model, set())
+            if not any(re.search(rf"\b{name}\.{leading.name}\b", source) for name in names):
+                unread.append(f"{index.name} ({table.name}.{leading.name})")
+    assert unread == [], f"indexes no statement reads: {unread}"
+    assert set(UNREAD_INDEX_ALLOWED) <= {index.name for table in Base.metadata.sorted_tables for index in table.indexes}
