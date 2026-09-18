@@ -740,7 +740,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
 | `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend}` | **per socket** |
-| `sync_game` | same shape as `turn_payload`, plus `turnId` and the turn's `reactions[]` | one socket |
+| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's `you_guessed_correctly` payload, or `null` (R-CONN-13) | one socket |
 | `turn_ended` | `TurnEndedPayload` | room |
 | `game_ended` | `{scores, highlights, drawings}` — each drawing carrying `turnId` and its `reactions[]` | room |
 | `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing | room, the drawer included |
@@ -2055,7 +2055,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (25) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (26) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

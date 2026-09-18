@@ -69,8 +69,9 @@ interface GameStore {
   /** The phase's full length. phaseSeconds is rebased to the remaining time
       by sync_game, so ring/bar fractions divide by this instead. */
   phaseDurationSeconds: number;
-  /** Per-player elapsed seconds for correct guesses this turn, derived
-      client-side from correct_guess events (lost on mid-turn reconnect). */
+  /** Per-player elapsed seconds for correct guesses this turn: estimated
+      client-side from correct_guess events, replaced by the server's figures
+      on every sync_game. */
   turnCorrectGuesses: Record<string, number>;
   nextHintCost: number | null;
   letterPrices: Record<string, number> | null;
@@ -131,6 +132,10 @@ interface GameStore {
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
     maxHintSpend?: number;
+    /** On a sync: who has already guessed, with the server's seconds into the
+        drawing, and this seat's own receipt if it is one of them (#870). */
+    correctGuessers?: [string, number][];
+    guessed?: (GuessBreakdown & { prompt: string }) | null;
   }) => void;
   setMyPrompt: (prompt: string | null) => void;
   setGuessedPrompt: (prompt: string | null, breakdown?: GuessBreakdown | null) => void;
@@ -309,7 +314,7 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: seconds,
     }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions }) =>
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed }) =>
     set((s) => ({
       phase: "drawing",
       currentTurnId: turnId ?? s.currentTurnId,
@@ -337,8 +342,18 @@ export const useGameStore = create<GameStore>((set) => ({
       // restores the real spend instead of zeroing it.
       hintSpend: hintSpend ?? 0,
       maxHintSpend: maxHintSpend ?? s.maxHintSpend,
-      lastGuessBreakdown: null,
-      turnCorrectGuesses: {},
+      // A sync restores what the one-shot correct_guess and
+      // you_guessed_correctly events said, which a resyncing socket may have
+      // missed; a new turn starts with nobody having guessed.
+      ...(isSync
+        ? {
+            turnCorrectGuesses: Object.fromEntries(correctGuessers ?? []),
+            guessedPrompt: guessed?.prompt ?? null,
+            lastGuessBreakdown: guessed
+              ? { points: guessed.points, basePoints: guessed.basePoints, hintSpend: guessed.hintSpend }
+              : null,
+          }
+        : { lastGuessBreakdown: null, turnCorrectGuesses: {} }),
     })),
   setMyPrompt: (prompt) => set({ myPrompt: prompt }),
   setGuessedPrompt: (prompt, breakdown) =>

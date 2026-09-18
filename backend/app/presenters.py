@@ -102,6 +102,37 @@ def turn_payload(
         # ceiling on it. Private: only ever sent on a per-socket emit.
         "hintSpend": game.hint_spend.get(player_id, 0) if player_id else 0,
         "maxHintSpend": MAX_HINT_SPEND,
+        # Who has already guessed, in the order they did, with the seconds
+        # into the drawing each took - what `correct_guess` told the room one
+        # event at a time. A socket that resyncs mid-turn missed some of those
+        # events, and every tab that comes back into view resyncs (#870).
+        "correctGuessers": [
+            [token, round(game.guess_times.get(token, 0.0))]
+            for token in game.guess_points
+        ],
+        # This seat's own `you_guessed_correctly`, restored the same way, so
+        # its guess input stays closed and the breakdown adds up. Private:
+        # sync_game is only ever a per-socket emit.
+        "guessed": guessed_receipt(game, player_id),
+    }
+
+
+def guessed_receipt(game: Game, player_id: str | None) -> dict | None:
+    """What `you_guessed_correctly` tells a seat, or None if it has not.
+
+    `points` is already net of the hints this player bought, and the deduction
+    clamps at zero, so the gross figure can't be recovered client-side; it is
+    sent so the round-end breakdown adds up. Hints cannot be bought after a
+    correct guess, so the spend here is the one the guess was charged."""
+    if player_id is None or player_id not in game.guess_points:
+        return None
+    points = game.guess_points[player_id]
+    hint_spend = game.hint_spend.get(player_id, 0)
+    return {
+        "prompt": game.prompt,
+        "points": points,
+        "basePoints": points + hint_spend,
+        "hintSpend": hint_spend,
     }
 
 
