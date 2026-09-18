@@ -6,6 +6,7 @@ import logging
 import time
 from functools import partial
 
+import socketio
 from socketio.exceptions import ConnectionRefusedError
 
 from app.auth.sessions import (
@@ -223,7 +224,7 @@ async def disconnect(ctx: HandlerContext, sid, reason: str | None = None):
     # clock, which is right, because reconnecting is something a person did.
     ctx.activity.forget(sid)
     ctx.afk_watch.forget(sid)
-    ctx.release_stale(sid)
+    ctx.release_stale(sid, closed_by_server=reason == socketio.AsyncServer.reason.SERVER_DISCONNECT)
     if ctx.is_closing(sid):
         # We are closing this socket ourselves, from inside a seat transition
         # that has already moved its seat on - the tab a reconnect superseded.

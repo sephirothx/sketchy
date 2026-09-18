@@ -26,9 +26,10 @@ from app.services.telemetry import Telemetry
 
 def observations(store: Telemetry, histogram_name: str) -> int:
     line = next(
-        line for line in store.prometheus_lines() if line.startswith(f"{histogram_name}_count")
+        (line for line in store.prometheus_lines() if line.startswith(f"{histogram_name}_count")),
+        None,
     )
-    return int(float(line.split()[-1]))
+    return 0 if line is None else int(float(line.split()[-1]))
 
 
 def fresh_store(monkeypatch) -> Telemetry:
@@ -158,6 +159,38 @@ async def test_a_stale_client_is_counted_by_its_version_and_how_it_went(monkeypa
     assert store.stale_clients.get(("absent", "closed")) == 1
     assert store.stale_clients.total() == 2
     assert stale_client_bucket(PROTOCOL_VERSION + 3) == "newer"
+    await context.timers.close()
+
+
+async def test_a_stale_socket_another_server_path_closes_did_not_reload(monkeypatch):
+    """A suspension or a superseded seat closes the socket from the server;
+    that is not the reload the notice asked for."""
+    store = fresh_store(monkeypatch)
+    sio, context = server()
+    context.quarantine("suspended", PROTOCOL_VERSION - 1, close_after=60)
+    await disconnect(context, "suspended", sio.reason.SERVER_DISCONNECT)
+    context.quarantine("tab-reloaded", PROTOCOL_VERSION - 1, close_after=60)
+    await disconnect(context, "tab-reloaded", sio.reason.TRANSPORT_CLOSE)
+    assert store.stale_clients.get(("older", "closed")) == 1
+    assert store.stale_clients.get(("older", "reloaded")) == 1
+    await context.timers.close()
+
+
+async def test_a_reconnect_refused_for_an_ending_account_is_not_a_rebind(monkeypatch):
+    store = fresh_store(monkeypatch)
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    player = room_manager.add_player(room, "Ending", user_id="ending-user")
+    room_manager.add_player(room, "Other", user_id="other-user")
+    player.sid = "old-sid"
+    sio, context = server(room_manager)
+    sio.get_session = AsyncMock(return_value={"user_id": "ending-user"})
+    await disconnect(context, "old-sid", sio.reason.TRANSPORT_CLOSE)
+    monkeypatch.setattr(context, "is_ending", lambda sid: sid == "new-sid")
+
+    await sio.handlers["/"]["join_room"]("new-sid", {"code": room.code, "nickname": player.nickname})
+    assert player.connected is False
+    assert observations(store, "sketchy_seat_rebind_seconds") == 0
     await context.timers.close()
 
 

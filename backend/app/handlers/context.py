@@ -279,13 +279,20 @@ class HandlerContext:
         """Whether this socket was told to upgrade and has not gone yet."""
         return sid in self._stale_sockets
 
-    def release_stale(self, sid: str) -> None:
-        """Forget a stale socket, cancelling its close: it has gone."""
+    def release_stale(self, sid: str, *, closed_by_server: bool = False) -> None:
+        """Forget a stale socket, cancelling its close: it has gone.
+
+        `reloaded` means it left by itself before the close came due - the
+        reload the notice asked for, or the tab going. A socket another server
+        path closed first (a suspension, a superseded seat) did not reload,
+        and counts as `closed` like one the quarantine timer closed.
+        """
         stale = self._stale_sockets.pop(sid, None)
         if stale is None:
             return
-        # Gone before the close came due: the reload the notice asked for.
-        telemetry.note_stale_client(stale_client_bucket(stale[0]), "reloaded")
+        telemetry.note_stale_client(
+            stale_client_bucket(stale[0]), "closed" if closed_by_server else "reloaded"
+        )
         if stale[1] is not None:
             stale[1].cancel()
 

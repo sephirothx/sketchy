@@ -664,11 +664,15 @@ async def _seat_in_room(
             }
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
-        if not player.connected and player.disconnected_at is not None:
-            # A seat inside its reconnect grace, taken back: how long that
-            # took is what the 30 s grace has to cover (#881). A second tab
-            # taking over a live seat is not a rebind.
-            telemetry.note_seat_rebind(time.monotonic() - player.disconnected_at)
+        # A seat inside its reconnect grace: how long it stood empty is what
+        # the 30 s grace has to cover (#881). Measured now, recorded only once
+        # the seat is really taken back below. A second tab taking over a live
+        # seat is not a rebind.
+        empty_for = (
+            time.monotonic() - player.disconnected_at
+            if not player.connected and player.disconnected_at is not None
+            else None
+        )
         metrics.record(
             RuntimeEventType.PLAYER_RECONNECTED,
             room_id=room.id,
@@ -679,6 +683,8 @@ async def _seat_in_room(
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, player)
+        if empty_for is not None:
+            telemetry.note_seat_rebind(empty_for)
         seated.append(player)
         return session_payload(room, player)
 
