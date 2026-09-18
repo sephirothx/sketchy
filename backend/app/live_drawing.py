@@ -467,6 +467,49 @@ def encode_live_drawing(event: str, payload: dict | None = None) -> bytes | int:
     raise ValueError("unknown drawing event")
 
 
+_FRAME_KINDS = {
+    PATH_START_TAG: "start",
+    PATH_POINTS_TAG: "points",
+    PATH_END_TAG: "end",
+    SHAPE_TAG: "shape",
+    FILL_TAG: "fill",
+    CLEAR_TAG: "clear",
+    PATH_POINTS_DELTA_TAG: "points_delta",
+    PATH_POINTS_RELATIVE_TAG: "points_relative",
+    PATH_POINTS_END_TAG: "points_end",
+}
+
+
+def frame_kind(data) -> tuple[str, str]:
+    """A frame's kind and the wire shape it arrived in, as bounded labels (#882).
+
+    Reads the header byte only - a base64 frame decodes its first four
+    characters, not the frame - so it is cheap enough for every frame and
+    never raises: anything it cannot read is `unknown`, which is what a
+    refused frame's label should be rather than a crash in the counter.
+    """
+    if isinstance(data, bool):
+        return "unknown", "unknown"
+    if isinstance(data, int):
+        header, shape = data, "int"
+    elif isinstance(data, str):
+        shape = "base64"
+        try:
+            header = base64.b64decode(data[:4], validate=True)[0]
+        except (ValueError, binascii.Error, IndexError):
+            return "unknown", shape
+    elif isinstance(data, (bytes, bytearray, memoryview)):
+        shape = "binary"
+        if not len(data):
+            return "unknown", shape
+        header = bytes(data[:1])[0]
+    else:
+        return "unknown", "unknown"
+    if not 0 <= header <= 0xFF or header >> _HEADER_VERSION_SHIFT != LIVE_DRAWING_VERSION:
+        return "unknown", shape
+    return _FRAME_KINDS.get(header & _HEADER_TAG_MASK, "unknown"), shape
+
+
 def decode_live_drawing(data) -> LiveDrawingPacket:
     """Validate and decode one action, however it arrived on the wire.
 

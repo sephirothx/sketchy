@@ -505,3 +505,23 @@ async def test_an_aged_backlog_is_closed_by_the_sweep_without_a_new_packet(monke
     # is not judged twice.
     sio.sweep_backlogs_once()
     assert store.socket_backlog_closures.total() == 1
+
+
+async def test_the_sweep_samples_every_open_backlog_so_the_distribution_is_visible(monkeypatch):
+    """#882: the high-water marks say one socket once got bad; a sample per
+    socket per sweep says where most of them sit."""
+    sio, store, sockets, received, clock = await server(monkeypatch, seats=0)
+    stalled = StalledEngineSocket()
+    stalled_sid = await _seat(sio, "eio-stalled", stalled)
+    healthy = DrainingEngineSocket()
+    healthy_sid = await _seat(sio, "eio-healthy", healthy)
+    await sio.emit("chat_message", {"text": "queued"}, to=stalled_sid)
+    await sio.emit("chat_message", {"text": "taken"}, to=healthy_sid)
+    clock.now += 2.0
+    sio.sweep_backlogs_once()
+
+    lines = store.prometheus_lines()
+    assert "sketchy_socket_backlog_bytes_count 2" in lines
+    assert 'sketchy_socket_backlog_bytes_bucket{le="0.0"} 1' in lines  # the one keeping up
+    assert 'sketchy_socket_backlog_age_seconds_bucket{le="1.0"} 1' in lines
+    assert 'sketchy_socket_backlog_age_seconds_bucket{le="2.5"} 2' in lines

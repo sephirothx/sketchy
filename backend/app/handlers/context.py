@@ -19,6 +19,7 @@ from app.repositories.interfaces import (
 )
 from app.domain_values import RuntimeEventType
 from app.handlers.refusals import ErrorCode, refuse
+from app.live_drawing import frame_kind
 from app.protocol import PROTOCOL_VERSION, stale_client_bucket
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
@@ -45,6 +46,17 @@ if TYPE_CHECKING:
     from app.services.room_quotas import RoomCapacityService, RoomQuotaService
     from app.services.shutdown import ShutdownCoordinator
 
+
+_ERROR_CODES = frozenset(code.value for code in ErrorCode)
+
+
+def _note_door_refusal(command: str, code: ErrorCode, frame_result: str, args: tuple) -> None:
+    """A command refused before its handler ran (#882): counted by its code
+    like any other refusal, and a `draw` frame counted in the frame mix too,
+    so the mix does not lose exactly the frames a saturated drawer sends."""
+    telemetry.note_refusal(command, code.value)
+    if command == "draw":
+        telemetry.note_draw_frame(*frame_kind(args[0] if args else None), frame_result)
 
 logger = logging.getLogger("sketchy.handlers.context")
 
@@ -168,6 +180,7 @@ class HandlerContext:
             correlation.request_id.set(correlation.new_request_id())
             if len(args) > max_args:
                 telemetry.socket_event(command, "refused", None)
+                _note_door_refusal(command, ErrorCode.INVALID_PAYLOAD, "invalid", args)
                 if command in SILENT_COMMANDS:
                     return None
                 return refuse(ErrorCode.INVALID_PAYLOAD, "Invalid request payload")
@@ -178,6 +191,7 @@ class HandlerContext:
             stale = self._stale_sockets.get(sid)
             if stale is not None:
                 telemetry.socket_event(command, "refused", None)
+                _note_door_refusal(command, ErrorCode.PROTOCOL_MISMATCH, "refused", args)
                 if command in SILENT_COMMANDS:
                     return None
                 return refuse(
@@ -220,8 +234,18 @@ class HandlerContext:
                 telemetry.socket_event(
                     command, "refused" if refused else "ok", perf_counter() - started
                 )
+                if refused:
+                    # Which refusal (#882): `errorCode` is a closed enum, but
+                    # it is read off a dict, so anything outside it is `other`
+                    # rather than a new series.
+                    code = result.get("errorCode")
+                    telemetry.note_refusal(
+                        command,
+                        str(code) if isinstance(code, str) and code in _ERROR_CODES else "other",
+                    )
                 return result
             telemetry.socket_event(command, "throttled", None)
+            _note_door_refusal(command, ErrorCode.TOO_FAST, "throttled", args)
             if self._command_windows.should_report(key, budget):
                 logger.warning("throttled %s from %s", command, sid)
                 metrics.record(

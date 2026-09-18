@@ -35,6 +35,7 @@ import time
 from app.auth.avatars import avatar_url
 from app.auth.names import fold_guest_name
 from app.repositories.interfaces import UserRepository
+from app.services.telemetry import telemetry
 from app.services.lobby_rooms import (
     EMPTY_ROOMS,
     RoomsDelta,
@@ -738,6 +739,9 @@ class LobbyBroadcaster:
             self._room_manager, revision=self._rooms_revision + 1
         )
         delta = diff_rooms(self._last_rooms, candidate)
+        # Whether the tick earns its keep (#882): a feed that is mostly
+        # skipped ticks is a loop that could run slower or be driven by events.
+        telemetry.note_lobby_tick("rooms", not delta.is_empty)
         if delta.is_empty:
             return None
         # Emitted before the revision is consumed. `run` swallows a failed
@@ -794,7 +798,9 @@ class LobbyBroadcaster:
         # changes nothing in the list but does change the "showing 100 of
         # 412" the panel renders, and a client told nothing would keep
         # rendering the old number for as long as the list stayed still.
-        if delta.is_empty and candidate.online_count == self._last.online_count:
+        quiet = delta.is_empty and candidate.online_count == self._last.online_count
+        telemetry.note_lobby_tick("presence", not quiet)
+        if quiet:
             return None
         # Emitted before the revision is consumed, for the reason
         # `_flush_rooms` gives at length: a swallowed failure must not leave a
