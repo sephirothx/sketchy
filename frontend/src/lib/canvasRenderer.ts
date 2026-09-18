@@ -270,27 +270,23 @@ export function applyCanvasStrokeSpan(
   const points = stroke.points;
   const last = points.length - 1;
   if (last < 1 || to <= from) return;
-  const at = (position: number) => {
-    const index = Math.min(last - 1, Math.max(0, Math.floor(position)));
-    const t = Math.min(1, Math.max(0, position - index));
-    const a = points[index];
-    const b = points[index + 1];
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-  };
-  const stretch = [at(from)];
-  for (let index = Math.floor(from) + 1; index <= Math.min(last, Math.floor(to)); index++) {
-    if (index > from && index < to) stretch.push(points[index]);
+  // As live playback paints (#940): the stretch as spans of the stroke's own
+  // segments, each pixel decided against its whole segment, so stretches that
+  // meet paint the whole stroke's pixels - a replay played to the end, or
+  // scrubbed there in any steps, is the whole history's raster, and a fill
+  // after it sees the same boundary. Stretches cut at interpolated points and
+  // painted as segments of their own were a float's width off a diagonal.
+  const start = Math.max(0, from);
+  const end = Math.min(last, to);
+  const spans: SegmentSpan[] = [];
+  for (let index = Math.floor(start); index < end && index < last; index += 1) {
+    const t0 = Math.max(0, start - index);
+    const t1 = Math.min(1, end - index);
+    if (t1 > t0) {
+      spans.push({ a: points[index], b: points[index + 1], t0, t1 });
+    }
   }
-  stretch.push(at(to));
-  rasterizePixelPath(
-    pixels,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
-    stretch.length === 1 ? [stretch[0], stretch[0]] : stretch,
-    stroke.width / 2,
-    hexToRgba(stroke.color),
-    false,
-  );
+  rasterizeSpans(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, spans, stroke.width / 2, hexToRgba(stroke.color));
 }
 
 /** Replay a whole history onto a blank canvas.
