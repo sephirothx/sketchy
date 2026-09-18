@@ -1988,6 +1988,7 @@ backend/.venv/bin/python benchmarks/room_state_deltas.py
 # A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
+./benchmarks/run_load.sh --no-deflate   # clients that offer no permessage-deflate, as the gate did before #875
 ./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target
 
 # Re-record that trace through the production client (scripted pen, or --manual to draw by hand)

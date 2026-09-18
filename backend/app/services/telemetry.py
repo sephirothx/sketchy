@@ -777,6 +777,16 @@ class Telemetry:
             "sketchy_socket_bytes_out_total",
             "Socket.IO packet bytes sent, per recipient, before compression.",
         )
+        # What permessage-deflate produced, framed, on WebSocket connections
+        # only (#875); set against the packet counters above, the real ratio.
+        self.ws_wire_bytes_out = LabelledCounter(
+            "sketchy_ws_wire_bytes_out_total",
+            "WebSocket frame bytes written after compression, headers included.",
+        )
+        self.ws_wire_bytes_in = LabelledCounter(
+            "sketchy_ws_wire_bytes_in_total",
+            "WebSocket frame bytes received before decompression, headers included.",
+        )
         self.socket_command_bytes = Histogram(
             "sketchy_socket_command_bytes",
             "Payload size of a client command as the handler received it.",
@@ -998,6 +1008,12 @@ class Telemetry:
         self.socket_bytes_out.inc(by=size)
         self.socket_bytes_out_by_event.inc((event,), by=size)
         self.socket_minutes.bump(self._clock(), field=5, by=size)
+
+    def note_ws_wire_bytes_out(self, size: int) -> None:
+        self.ws_wire_bytes_out.inc(by=size)
+
+    def note_ws_wire_bytes_in(self, size: int) -> None:
+        self.ws_wire_bytes_in.inc(by=size)
 
     def socket_command_payload(self, event: str, size: int) -> None:
         self.socket_command_bytes.observe(float(size), (event,), now=self._clock())
@@ -1287,6 +1303,8 @@ class Telemetry:
         lines += self.socket_handshake_transports.lines()
         lines += self.socket_bytes_in.lines()
         lines += self.socket_bytes_out.lines()
+        lines += self.ws_wire_bytes_out.lines()
+        lines += self.ws_wire_bytes_in.lines()
         lines += self.socket_bytes_out_by_event.lines()
         lines += self.socket_command_bytes.lines()
         lines += self.socket_emit_bytes.lines()

@@ -131,6 +131,10 @@ class Samples:
         return [ms for values in self.ack_ms.values() for ms in values]
 
 
+def _by_label(counts: dict[str, float]) -> str:
+    return ", ".join(f"{label} × {count:.0f}" for label, count in counts.items()) or "none recorded"
+
+
 def percentile(values: list[float], fraction: float) -> float:
     if not values:
         return 0.0
@@ -180,7 +184,9 @@ class Seat:
         self.cookie = cookie
 
     async def connect(self) -> None:
-        sio = socketio.AsyncClient(reconnection=False)
+        sio = socketio.AsyncClient(
+            reconnection=False, websocket_extra_options=self.harness.websocket_options
+        )
         self.sio = sio
         samples = self.harness.samples
 
@@ -448,7 +454,9 @@ class SlowViewer:
     async def connect(self) -> None:
         self.session = aiohttp.ClientSession()
         url = self.harness.base_url.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket"
-        self.ws = await self.session.ws_connect(url, headers={"Cookie": self.cookie})
+        self.ws = await self.session.ws_connect(
+            url, headers={"Cookie": self.cookie}, **self.harness.websocket_options
+        )
         opened = await self.ws.receive_str()
         assert opened.startswith("0"), opened
         await self.ws.send_str("40" + json.dumps({"protocol": PROTOCOL_VERSION}))
@@ -547,6 +555,11 @@ class Harness:
     def __init__(self, args) -> None:
         self.base_url = args.base_url.rstrip("/")
         self.args = args
+        # What a browser offers (#875). aiohttp's `ws_connect` offers no
+        # permessage-deflate unless asked, so until #875 every gate socket ran
+        # uncompressed - which the wire counter showed at 90% of packet bytes
+        # - and the server's deflate CPU and memory were never in the gate.
+        self.websocket_options = {} if args.no_deflate else {"compress": 15}
         self.samples = Samples()
         self.stopping = False
         self.tasks: set[asyncio.Task] = set()
@@ -714,6 +727,17 @@ class Harness:
             "lagP99SeriesMs": [round(m.get("lag_p99_ms", 0.0), 1) for m in during if m],
             "bytesOutMB": ((after.get("bytes_out", 0.0) - before.get("bytes_out", 0.0)) / 1e6) if after else 0.0,
             "bytesInMB": ((after.get("bytes_in", 0.0) - before.get("bytes_in", 0.0)) / 1e6) if after else 0.0,
+            # The same traffic as WebSocket frames after permessage-deflate
+            # (#875). Every gate socket is a WebSocket, so the ratio is the
+            # compression the server's settings achieve on this traffic.
+            "wireBytesOutMB": ((after.get("wire_out", 0.0) - before.get("wire_out", 0.0)) / 1e6) if after else 0.0,
+            "wireBytesInMB": ((after.get("wire_in", 0.0) - before.get("wire_in", 0.0)) / 1e6) if after else 0.0,
+            # Every WebSocket accepted since the server started, by what it
+            # negotiated: the proof the ratio above is the one intended.
+            "transports": {
+                key[len("transport:"):]: after.get(key, 0.0)
+                for key in sorted(after) if key.startswith("transport:") and after.get(key, 0.0)
+            } if after else {},
             "unexpectedDisconnects": s.unexpected_disconnects,
             "reconnects": s.reconnects,
             "failedReconnects": s.failed_reconnects,
@@ -748,6 +772,7 @@ class Harness:
                 "rooms": self.args.rooms, "seatsPerRoom": self.args.seats,
                 "seats": self.args.rooms * self.args.seats, "lobbyWatchers": self.args.lobby_watchers,
                 "durationSeconds": self.args.duration, "reconnectShare": self.args.reconnect_share,
+                "deflate": not self.args.no_deflate,
                 "slowViewers": len(self.slow_viewers),
                 "metricsScrapes": 2 + len(during),
             },
@@ -804,6 +829,13 @@ def parse_metrics(text: str) -> dict[str, float]:
             values["bytes_out"] = number
         elif name == "sketchy_socket_bytes_in_total":
             values["bytes_in"] = number
+        elif name.startswith("sketchy_socket_transport_total{"):
+            compression = name.split('compression="')[1].split('"')[0]
+            values[f"transport:{compression}"] = number
+        elif name == "sketchy_ws_wire_bytes_out_total":
+            values["wire_out"] = number
+        elif name == "sketchy_ws_wire_bytes_in_total":
+            values["wire_in"] = number
         elif name.startswith("sketchy_socket_packets_rejected_total"):
             values["rejected"] = values.get("rejected", 0.0) + number
         elif name.startswith("sketchy_socket_bytes_out_by_event_total{"):
@@ -878,6 +910,10 @@ def print_report(report: dict) -> None:
     print(f"  outbound backlog high-water: {m['backlogBytesMax']:.0f} B, oldest {m['backlogAgeMaxMs']:.0f} ms; "
           f"closures {m['backlogClosures'] or 'none'} with {m['slowViewers']} slow viewers")
     print(f"  RSS every 15 s: {m['rssSeriesMB']}")
+    print(f"  on the wire: out {m['wireBytesOutMB']:.2f} MB of {m['bytesOutMB']:.2f} MB of packets "
+          f"({100 * m['wireBytesOutMB'] / max(m['bytesOutMB'], 1e-9):.1f}%), in {m['wireBytesInMB']:.2f} MB of "
+          f"{m['bytesInMB']:.2f} MB ({100 * m['wireBytesInMB'] / max(m['bytesInMB'], 1e-9):.1f}%); "
+          f"sockets by compression {_by_label(m['transports'])}")
     by_event = sorted(m["bytesOutByEvent"].items(), key=lambda item: -item[1]["bytes"])
     total_out = sum(item["bytes"] for _, item in by_event) or 1.0
     print("  bytes out by event (before compression, summed over every recipient):")
@@ -918,6 +954,7 @@ def record_result(report: dict, path: Path) -> None:
         ("Outbound backlog high-water (bytes / oldest) and closures", f"{m['backlogBytesMax']:.0f} B / {m['backlogAgeMaxMs']:.0f} ms; closures {', '.join(f'{k} {v:.0f}' for k, v in m['backlogClosures'].items()) or 'none'} with {m['slowViewers']} slow viewers", "closures = slow viewers; budget 10 s / 4 MiB"),
         ("Packets rejected / fault notices (all notices by reason)", f"{m['packetsRejected']:.0f} / {m['faultNotices']:.0f} ({', '.join(f'{k} {v:.0f}' for k, v in m['recoveryNotices'].items()) or 'none'})", "0 / 0"),
         ("Traffic", f"{m['bytesOutMB']:.1f} MB out, {m['bytesInMB']:.1f} MB in; {m['framesSent']} frames sent, {m['framesReceived']} received; {m['guesses']} guesses, {m['chats']} chats", "—"),
+        ("On the wire (after permessage-deflate)", f"{m['wireBytesOutMB']:.1f} MB out ({100 * m['wireBytesOutMB'] / max(m['bytesOutMB'], 1e-9):.1f}% of packet bytes), {m['wireBytesInMB']:.1f} MB in; sockets by compression {_by_label(m['transports'])}", "—"),
     ]
     lines = [
         f"**Last result** — {'PASSED' if report['passed'] else 'FAILED (' + ', '.join(report['breaches']) + ')'}: "
@@ -944,6 +981,7 @@ def main() -> int:
     parser.add_argument("--duration", type=float, default=300.0, help="seconds of sustained play")
     parser.add_argument("--reconnect-share", type=float, default=0.25, help="share of non-host seats that drop and reconnect on a schedule")
     parser.add_argument("--slow-viewers", type=int, default=4, help="spectators that join a room and stop reading, for the outbound budget (#602); each is expected to be closed by the server")
+    parser.add_argument("--no-deflate", action="store_true", help="connect without offering permessage-deflate, as the gate did before #875")
     parser.add_argument("--metrics-token", default=os.environ.get("METRICS_TOKEN"))
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--capture-seat", type=Path, help="write one seat's raw inbound stream, in order with times, as JSON lines (#493)")
