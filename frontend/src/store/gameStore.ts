@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
-import { applyReactionEvent } from "../lib/reactions";
+import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules.ts";
+import { applyReactionEvent } from "../lib/reactions.ts";
 import type {
   ChatMessage,
   ColorblindSafeSuggestion,
@@ -22,7 +22,7 @@ import type {
   GuessBreakdown,
   TurnEndedPayload,
   ScoringMode,
-} from "../types";
+} from "../types.ts";
 
 interface GameStore {
   playerId: string | null;
@@ -244,7 +244,7 @@ export const useGameStore = create<GameStore>((set) => ({
   },
   setExitingRoom: (isExitingRoom) => set({ isExitingRoom }),
   setRoomState: (payload) =>
-    set(() => ({
+    set((state) => ({
       roomId: payload.id,
       code: payload.code,
       name: payload.name,
@@ -264,9 +264,17 @@ export const useGameStore = create<GameStore>((set) => ({
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
       // The recap is not in the room state (#871); it arrives with
-      // `game_ended` or `last_game` and stays until a game starts.
-      ...(payload.state === "playing"
-        ? { finalScores: null, drawingRecap: [], gameHighlights: [] }
+      // `game_ended` or `last_game` and stays until a game starts - or until
+      // this is a different room: a friend's invite moves the socket straight
+      // from one room to another, and the new one sends `last_game` only if
+      // it has a finished game of its own.
+      ...(payload.state === "playing" || payload.id !== state.roomId
+        ? {
+            finalScores: null,
+            drawingRecap: [],
+            gameHighlights: [],
+            ...(payload.id !== state.roomId ? { drawingReactions: {} } : {}),
+          }
         : {}),
       moderation: payload.moderation,
       restartVote: payload.restartVote ?? null,
@@ -397,6 +405,11 @@ export const useGameStore = create<GameStore>((set) => ({
       }),
     })),
   applyLastGame: (payload) => set((s) => ({
+    // Only a waiting room sends it, so it is also the word that the game is
+    // over: a tab that missed `game_ended` - still showing play - is put in
+    // the waiting room with the recap, without replaying the game's end.
+    roomState: "waiting",
+    phase: s.phase === "game_end" ? s.phase : "idle",
     finalScores: payload.scores,
     drawingRecap: payload.drawings ?? [],
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
