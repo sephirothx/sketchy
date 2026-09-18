@@ -613,10 +613,16 @@ shared by its factual identities. Ratios and averages are derived on read, never
 
 **Synchronization.** Every writer of an account's rows locks that account's `users`
 row first, in ascending id order: the finished-game write holds every seat's account
-`FOR UPDATE` (it also writes `last_active_at`), a merge holds source and target, and a
-rebuild holds every identity of the accounts it replaces. So a game that commits while a
-rebuild runs either committed before the rebuild read its facts, or waits and increments
-the rows the rebuild wrote — never the lost increment a read-then-replace allowed (#609).
+`FOR UPDATE` (it also writes `last_active_at`), a merge holds source and target, a
+rebuild holds every identity of the accounts it replaces, and a reaction holds the
+drawer's identity (the guest and the account it merged into) shared, before the drawing
+row. So a game or a reaction that commits while a rebuild runs either committed before
+the rebuild read its facts, or waits and increments the rows the rebuild wrote — never
+the lost increment a read-then-replace allowed (#609; the reaction writer took no
+account lock until a +1 landing between the rebuild's read and its replacement was
+reproduced on PostgreSQL). Shared, so reactions to one drawer's drawings do not wait on
+each other; before the drawing row, because erasure and the pin write take the account
+first too, and one order is what keeps them out of a cycle.
 The incremental upsert lists its rows in ascending account id for the same reason: two
 games sharing accounts in opposite seat order take the projection rows in one order.
 
@@ -1335,7 +1341,8 @@ rows `turn_drawing_reactions` holds for the turn, and reddit's
 orders by a column rather than counting on read, and Hot orders by a score that never
 changes for one row except when its count does — the decay is the newer rows' larger
 second term. Every reaction write sets both from the rows **under the row's lock**
-(`SELECT … FOR UPDATE`), so two reactions landing together cannot each count only their
+(`SELECT … FOR UPDATE`, taken after the drawer's account lock — *Synchronization* under
+`user_stats_daily`), so two reactions landing together cannot each count only their
 own — from one grouped count by code, hydrating only the seated rows the room names,
 never a row per reaction: every other reaction to a popular drawing waits on that lock,
 and loading 5,000 rows under it held it for 22 ms median, 44 ms p95, against 2.6 and

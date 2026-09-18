@@ -336,6 +336,78 @@ async def test_a_game_saved_during_a_rebuild_waits_for_it_and_is_then_counted(
         await engine.dispose()
 
 
+async def _reactions_received(factory, user_id: str) -> int:
+    async with factory() as session:
+        return sum(
+            (
+                await session.scalars(
+                    select(UserStatsDaily.reactions_received).where(
+                        UserStatsDaily.user_id == UUID(user_id)
+                    )
+                )
+            ).all()
+        )
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
+async def test_a_reaction_given_during_a_rebuild_waits_for_it_and_is_then_counted(
+    monkeypatch,
+):
+    """A reaction adjusts its drawer's row by one, so it must not commit
+    between the rebuild's read of the reaction facts and its replacement of
+    the rows - the replacement would carry the older total and the +1 would
+    be lost. The reaction writer takes the drawer's account lock the rebuild
+    holds, so it waits, then increments the row the rebuild wrote."""
+    import app.services.user_stats_projection as projection
+    from tests.test_drawing_reactions import record_game, registered
+
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    history = SqlAlchemyGameHistoryRepository(factory)
+    try:
+        drawer = await registered(users, "Drawer")
+        reactor = await registered(users, "Reactor")
+        fan = await registered(users, "Fan")
+        recorded = await record_game(
+            history, drawer=drawer.id, reactor=reactor.id, reactions="default", visibility="public"
+        )
+        assert await _reactions_received(factory, drawer.id) == 1
+
+        real_stream = projection._stream
+        facts_read = asyncio.Event()
+        let_the_rebuild_replace = asyncio.Event()
+
+        async def paused_stream(session, statement):
+            async for row in real_stream(session, statement):
+                yield row
+            if "turn_drawing_reactions" in str(statement) and not facts_read.is_set():
+                # The reaction facts are read; the replacement comes next.
+                facts_read.set()
+                await let_the_rebuild_replace.wait()
+
+        monkeypatch.setattr(projection, "_stream", paused_stream)
+        rebuild = asyncio.create_task(
+            projection.rebuild_user_stats_projection(factory, user_id=UUID(drawer.id))
+        )
+        await facts_read.wait()
+        reaction = asyncio.create_task(
+            history.set_drawing_reaction(
+                None, recorded.turn_id, requesting_user_id=fan.id, emoji="wow", from_gallery=True
+            )
+        )
+        await asyncio.sleep(0.3)
+        assert not reaction.done(), "the reaction must wait for the rebuild's account lock"
+        let_the_rebuild_replace.set()
+        await asyncio.gather(rebuild, reaction)
+        monkeypatch.setattr(projection, "_stream", real_stream)
+
+        assert await _reactions_received(factory, drawer.id) == 2
+        await rebuild_user_stats_projection(factory)
+        assert await _reactions_received(factory, drawer.id) == 2
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
 async def test_two_saves_in_opposite_seat_order_do_not_deadlock():
     """Users are locked and projection rows upserted in ascending id order,
