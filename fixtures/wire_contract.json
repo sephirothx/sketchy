@@ -2194,9 +2194,6 @@
   "handlers.chat:_chat_line": [
    "playerId"
   ],
-  "handlers.chat:_emit_player_chat": [
-   "retainedMessageId"
-  ],
   "handlers.chat:buy_hint": [
    "errorCode",
    "hintCost",
@@ -2633,7 +2630,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 24,
+ "protocolVersion": 25,
  "refusal": {
   "codes": [
    "invalid_payload",

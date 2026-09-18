@@ -103,36 +103,45 @@ worth making yet, and #461's load run is where to revisit it. Both are constants
 than settings because a value nobody has measured is not one an operator can choose
 well.
 
-**Measured, combined (#568).** With every change of the wire-protocol epic in, one guest's
-whole inbound stream was captured under the release load gate's full population (50
-rooms, 400 seats, `benchmarks/run_load.sh --capture-seat`, kept as
-[`fixtures/viewer_streams/gate-viewer-180s.jsonl`](../fixtures/viewer_streams/gate-viewer-180s.jsonl))
-and replayed through one context at the server's settings
-([`benchmarks/room_state_deltas.py`](../benchmarks/room_state_deltas.py)):
+**Measured, combined (#568, #869).** One guest's whole inbound stream is captured under
+the release load gate's full population (50 rooms, 400 seats,
+`benchmarks/run_load.sh --capture-seat`) and replayed through one context at the server's
+settings ([`benchmarks/room_state_deltas.py`](../benchmarks/room_state_deltas.py)). The
+current capture is
+[`fixtures/viewer_streams/gate-viewer-180s-869.jsonl`](../fixtures/viewer_streams/gate-viewer-180s-869.jsonl),
+taken after room chat lines stopped carrying `retainedMessageId`; the one #568 closed on
+is kept beside it as
+[`gate-viewer-180s.jsonl`](../fixtures/viewer_streams/gate-viewer-180s.jsonl):
 
-| A guest's stream, 184 s | uncompressed | on the wire |
-| --- | ---: | ---: |
-| whole stream (431 messages) | 108.0 KB | 11.7 KB — **64 B/s per seat** |
-| `chat_message` (171) | 31.3 KB | 5.8 KB (50%) |
-| `draw` (127) | 3.7 KB | 2.2 KB (19%) |
-| `room_state` (28) | 66.3 KB | 1.8 KB (15%) |
-| everything else | 6.7 KB | 1.9 KB |
+| A guest's stream, 184 s | #568 uncompressed | #568 on the wire | #869 uncompressed | #869 on the wire |
+| --- | ---: | ---: | ---: | ---: |
+| whole stream | 108.0 KB (431) | 11.7 KB — 64 B/s per seat | 100.9 KB (424) | 7.2 KB — **39 B/s per seat** |
+| `chat_message` | 31.3 KB (171) | 5.8 KB (50%) | 21.5 KB (174) | 1.3 KB (18%) |
+| `draw` | 3.7 KB (127) | 2.2 KB (19%) | 3.7 KB (127) | 2.2 KB (31%) |
+| `room_state` | 66.3 KB (28) | 1.8 KB (15%) | 68.9 KB (29) | 1.8 KB (25%) |
+| everything else | 6.7 KB | 1.9 KB | 6.8 KB | 1.8 KB |
+
+A capture of the tree just before #869, under the same run, measured 12.1 KB (chat
+6.3 KB, 34 B a line), so the change is −41% of a viewer's stream and chat 34 → 7.5 B a
+line. The UUIDv7 each line carried was the cost: its random half is entropy deflate
+cannot remove, and nothing in a room read it.
 
 The gate itself measured 64.6 MB of packet bytes out before compression over five
 minutes for 420 sockets (~0.5 KB/s per seat), 43% fewer draw messages and about half the
 draw bytes against the state before the epic (#560, #559, #603), and ack p95 under
-15 ms throughout. Two things the table says that the estimates did not: chat, not
-drawing, is the largest share of a viewer's wire bytes once drawing is thinned and folded,
-because every line is its own message with its own boundary; and a **room-state delta
-protocol is not worth building (#493)** — replacing every `room_state` after the first
-with the patch the issue describes (changed top-level keys and a version) saves 1.5% of
-the stream on the wire, 1.0 B/s per seat, 0.4 KB/s at 400 seats, against 15% of the
-uncompressed stream (the long-polling bound), while building a snapshot costs 4 µs for a
-16-seat room, 0.01% of a core at the gate's rate. The compressor already does the
-delta: through this real mixed stream a `room_state` costs 64 B on the wire, the same as
-through a context that saw nothing else (63 B). A smaller window changes that (4 KB:
-15.7 KB → 13.8 KB with deltas), which is one more reason the window is 32 KB (§above).
-Requirements N-14 records the decision.
+15 ms throughout. Two things the table says that the estimates did not. At #568, chat,
+not drawing, was the largest share of a viewer's wire bytes once drawing was thinned and
+folded — and #869 found the reason was the per-line id, not the per-line message; drawing
+is the largest share now. And a **room-state delta protocol is not worth building
+(#493)** — replacing every `room_state` after the first with the patch the issue
+describes (changed top-level keys and a version) saves 1.5% of the stream on the wire at
+#568 and 2.6% at #869, 1.0 B/s per seat either way, 0.4 KB/s at 400 seats, against
+15–17% of the uncompressed stream (the long-polling bound), while building a snapshot
+costs 4 µs for a 16-seat room, 0.01% of a core at the gate's rate. The compressor already
+does the delta: through this real mixed stream a `room_state` costs 63 B on the wire, the
+same as through a context that saw nothing else (62 B). A smaller window changes that
+(4 KB: 12.2 KB → 9.2 KB with deltas), which is one more reason the window is 32 KB
+(§above). Requirements N-14 records the decision.
 
 The server's own counters (`sketchy_socket_bytes_{in,out}_total`, §9) sit **before** all
 of this: they count Engine.IO packet bytes as the server handed them to the transport,
@@ -722,7 +731,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 
 | Event | Payload | Scope |
 | --- | --- | --- |
-| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5% on the wire (§1, *Measured, combined*; N-14) | room |
+| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5–2.6% on the wire (§1, *Measured, combined*; N-14) | room |
 | `player_joined` / `player_reconnected` | `{playerId, nickname}` | room |
 | `player_left` | `{playerId}` | room |
 | `player_disconnected` | `{playerId, nickname}` | room |
@@ -863,8 +872,9 @@ it watched go by. It carries an account id for the reason `LobbyPlayer` does
 — there is no seat to resolve, and a report needs a stable target — and never
 a room. `sentAt` is the server's instant, the same one written to the
 retained row, and the client renders it as an age rather than sorting by it.
-`retainedMessageId` follows room chat's rule exactly (R-MOD-08a): absent means
-the line cannot be cited.
+`retainedMessageId` follows R-MOD-08a: issued before the row is written, absent
+when retention withheld it, and absent means the line cannot be cited. Room chat
+lines are retained under the same rule but never carry the id (#869).
 
 
 **`room_state`** ([`backend/app/rooms.py:511`](../backend/app/rooms.py) →
@@ -903,9 +913,12 @@ whose loss would leave a drawer looking at a masked prompt, and mid-turn
 (`hint_revealed`, `sync_game`) the divergence is real anyway.
 
 **`chat_message`** (`ChatMessage`) has `id`, `nickname`, `correct`, and the optional
-`text`, `retainedMessageId`, `playerId`, `nameColor`, `isAnonymous`, `system`, `close`
+`text`, `playerId`, `nameColor`, `isAnonymous`, `system`, `close`
 (a near-miss hint), `restricted` (delivered only to the drawer, spectators, and correct
-guessers), and `isSpectator`.
+guessers), and `isSpectator`. It carries **no retained-message id**, though the line is
+retained: nothing in a room cites a line (`report_player` selects its own evidence), and
+the UUIDv7's random half, which deflate cannot remove, was 39% of a viewer's whole
+stream on the wire (#869). A lobby line keeps its id because a lobby report cites it.
 
 **A room-authored announcement carries no text.** It is `{system: true, code, params?}`
 - built by `system_chat_message()`
@@ -2042,7 +2055,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (24) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (25) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
