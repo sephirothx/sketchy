@@ -69,7 +69,9 @@ async def test_the_reading_counts_toast_not_just_the_heap():
             await session.execute(text("DELETE FROM turn_drawings"))
             await session.commit()
         empty = await DrawingStoreFootprint(factory, cache_seconds=0.0).read()
-        assert empty is not None and empty.rows == 0
+        # The row figure is the planner's estimate (#892): whatever the last
+        # analyze saw, not a count, so only its presence is asserted here.
+        assert empty is not None and empty.rows >= 0
 
         async with factory() as session:
             heap = await session.scalar(text("SELECT pg_relation_size('turn_drawings')"))
