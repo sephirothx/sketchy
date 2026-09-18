@@ -104,6 +104,14 @@ def compression_label(extensions) -> str:
     return "none"
 
 
+# When a connection sends and receives frames, in wsproto's own terms
+# (`WSConnection.send` / `receive_data`): the wire counters use the same states,
+# so a rejected handshake's HTTP response is never counted and neither half of
+# a closing handshake is missed.
+FRAME_SEND_STATES = (ConnectionState.OPEN, ConnectionState.REMOTE_CLOSING)
+FRAME_RECEIVE_STATES = (ConnectionState.OPEN, ConnectionState.LOCAL_CLOSING)
+
+
 class NegotiatingConnection(wsproto.WSConnection):
     """A server connection that swaps in the sized extension at accept time.
 
@@ -125,17 +133,18 @@ class NegotiatingConnection(wsproto.WSConnection):
             output = super().send(event)
             self._record(compression_label(extensions))
             return output
+        sends_a_frame = self.state in FRAME_SEND_STATES
         output = super().send(event)
         if isinstance(event, AcceptConnection):
             self._record("none")
-        elif output:
+        elif output and sends_a_frame:
             telemetry.note_ws_wire_bytes_out(len(output))
         return output
 
     def receive_data(self, data: bytes | None) -> None:
         # The upgrade request arrives before the connection is open; only
         # frames count, so the ratio compares like with like.
-        if data and self.state is ConnectionState.OPEN:
+        if data and self.state in FRAME_RECEIVE_STATES:
             telemetry.note_ws_wire_bytes_in(len(data))
         super().receive_data(data)
 

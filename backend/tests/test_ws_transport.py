@@ -16,7 +16,14 @@ from pathlib import Path
 import uvicorn
 import wsproto
 from wsproto.connection import ConnectionType
-from wsproto.events import AcceptConnection, Request, TextMessage
+from wsproto.events import (
+    AcceptConnection,
+    CloseConnection,
+    RejectConnection,
+    RejectData,
+    Request,
+    TextMessage,
+)
 from wsproto.extensions import PerMessageDeflate
 
 from app import ws_transport
@@ -141,6 +148,53 @@ def test_wire_bytes_are_the_frames_after_compression_and_not_the_handshake(monke
     lines = store.prometheus_lines()
     assert f"sketchy_ws_wire_bytes_out_total {len(first) + len(second)}" in lines
     assert f"sketchy_ws_wire_bytes_in_total {len(guess)}" in lines
+
+
+def open_pair(monkeypatch, store: Telemetry):
+    monkeypatch.setattr(ws_transport, "telemetry", store)
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    server = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+    server.receive_data(client.send(Request(host="h", target="/socket.io/", extensions=[BrowserOffer()])))
+    list(server.events())
+    client.receive_data(server.send(AcceptConnection(extensions=[PerMessageDeflate()])))
+    list(client.events())
+    return client, server
+
+
+def test_a_rejected_handshake_is_http_and_not_counted_as_wire(monkeypatch):
+    """A plain-ws or cross-origin handshake is refused with an HTTP response,
+    which has no packet bytes behind it; counting it would skew the ratio."""
+    store = Telemetry()
+    monkeypatch.setattr(ws_transport, "telemetry", store)
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    server = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+    server.receive_data(client.send(Request(host="h", target="/socket.io/")))
+    list(server.events())
+    rejected = server.send(RejectConnection(status_code=403, has_body=True))
+    rejected += server.send(RejectData(data=b"Forbidden"))
+    assert rejected
+    assert store.ws_wire_bytes_out.total() == 0 and store.ws_wire_bytes_in.total() == 0
+
+
+def test_both_halves_of_a_closing_handshake_are_counted(monkeypatch):
+    """wsproto still takes frames while the side that closed first waits for
+    the reply, and still sends the reply to a close it received."""
+    store = Telemetry()
+    client, server = open_pair(monkeypatch, store)
+    closing = server.send(CloseConnection(code=1000))
+    client.receive_data(closing)
+    reply = client.send(next(e for e in client.events() if isinstance(e, CloseConnection)).response())
+    server.receive_data(reply)
+    assert store.ws_wire_bytes_out.total() == len(closing)
+    assert store.ws_wire_bytes_in.total() == len(reply)
+
+    store = Telemetry()
+    client, server = open_pair(monkeypatch, store)
+    closing = client.send(CloseConnection(code=1001))
+    server.receive_data(closing)
+    reply = server.send(next(e for e in server.events() if isinstance(e, CloseConnection)).response())
+    assert store.ws_wire_bytes_in.total() == len(closing)
+    assert store.ws_wire_bytes_out.total() == len(reply)
 
 
 def test_server_names_the_protocol_and_requirements_pin_the_library():
