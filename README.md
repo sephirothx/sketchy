@@ -781,6 +781,18 @@ production database.
 
 ### Accounts
 
+The lobby's first landing asks for one thing: a name, on a name tag — *Hello, my
+name is …*, and a button that sticks it on. It saves the name and nothing else;
+what puts you in a game is Quick play, beside the room list. Next to the tag, one
+line drawn from a pool on each visit ("Cubism, but by accident.") over the sentence
+that never changes: one player draws, everybody else tries to guess, and no account,
+install or talent is required. The pool is written per language rather than
+translated, because the lines are jokes. The doodles around the block are dealt the
+same way: three of the deployment's own, on one side or the other, each leaning its
+own way. Creating an account and logging in are one
+quiet line at the end of the block, offered again at the end of the first game where
+there is finally something worth keeping.
+
 Every visitor is given an account automatically on their first page load, and
 it is remembered by an HttpOnly `sketchy_session` cookie. Guests play under a
 name of their choosing; setting a username and password later claims that same

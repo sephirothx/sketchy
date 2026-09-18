@@ -976,17 +976,24 @@ export const DE: Catalogue = {
     nameInUse: (p: { name: string }) =>
       `Jemand, der gerade online ist, spielt schon als „${p.name}“. Wähle einen anderen Namen, um weiterzuspielen.`,
     couldNotSaveThatNamePlease: "Dieser Name konnte nicht gespeichert werden. Bitte versuch es noch einmal.",
-    keepYourUsernameYourStatsEvery: "Behalte deinen Benutzernamen und deine Statistik auf jedem Gerät.",
     createAccount: "Konto anlegen",
     logIn: "Anmelden",
-    or: "oder",
     displayName: "Anzeigename",
-    beenHereBefore: "Schon mal hier gewesen?",
-    playAsYourself: "Als du selbst spielen",
     whatShouldWeCallYou: "Wie sollen wir dich nennen?",
-    justPlayingOncePickA: "Nur mal kurz spielen? Wähle einen Anzeigenamen",
-    play: "Spielen",
-    playAsGuest: "Als Gast spielen",
+    beenHereBefore: "Schon mal hier gewesen?",
+    helloMyNameIs: "Hallo, ich heiße",
+    stickItOn: "Aufkleben",
+    oneLineExplainer: "Einer zeichnet, alle anderen raten. Kein Konto, keine Installation, kein Talent nötig.",
+    /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
+       the English pool: the misread-drawing joke needs a pair of words that
+       are far apart in this language. */
+    lines: [
+      "Das soll ein U-Boot sein? Ich dachte, es ist eine Zahnbürste.",
+      "Zeit, deiner Kunstlehrerin das Gegenteil zu beweisen.",
+      "Kubismus, aber aus Versehen.",
+      "Bist du das, Michelangelo?",
+      "Wow, das sieht aus wie ein Pollock!",
+    ],
   },
 
   friendButton: {

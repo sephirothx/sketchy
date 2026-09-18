@@ -987,17 +987,24 @@ export const EN = {
     nameInUse: (p: { name: string }) =>
       `Someone online is already playing as “${p.name}”. Choose another name to keep playing.`,
     couldNotSaveThatNamePlease: "Could not save that name. Please try again.",
-    keepYourUsernameYourStatsEvery: "Keep your username and your stats on every device.",
     createAccount: "Create an account",
     logIn: "Log in",
-    or: "or",
     displayName: "Display name",
-    beenHereBefore: "Been here before?",
-    playAsYourself: "Play as yourself",
     whatShouldWeCallYou: "What should we call you?",
-    justPlayingOncePickA: "Just playing once? Pick a display name",
-    play: "Play",
-    playAsGuest: "Play as guest",
+    beenHereBefore: "Been here before?",
+    helloMyNameIs: "Hello, my name is",
+    stickItOn: "Stick it on",
+    oneLineExplainer: "One player draws, everybody else tries to guess. No account, no install, no talent required.",
+    /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
+       the English pool: the misread-drawing joke needs a pair of words that
+       are far apart in this language. */
+    lines: [
+      "That is a submarine? I thought it was a toothbrush.",
+      "Time to prove your art teacher wrong.",
+      "Cubism, but by accident.",
+      "Is that you, Michelangelo?",
+      "Wow, it looks like a Pollock!",
+    ],
   },
 
   friendButton: {

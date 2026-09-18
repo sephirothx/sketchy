@@ -591,14 +591,47 @@
 .account-data-actions { margin-top: 18px; }
 .account-danger-zone button:disabled, .account-data-heading-row button:disabled { cursor: wait; opacity: .6; }
 
-/* First-run block: account primary, guest secondary. */
+/* First-run block (#588, #590): a name tag, the line of the visit beside it,
+   and the account as one quiet line. One layout at every width - the tag, then
+   the words - so the DOM and the screen agree and there is one code path. */
 .first-run {
+  background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
-  padding: 20px;
-  margin-bottom: 16px;
-  background: var(--card);
   box-shadow: var(--shadow);
+  container: first-run / inline-size;
+  margin-bottom: 16px;
+  overflow: hidden;
+  padding: 22px 24px 26px;
+  position: relative;
+}
+
+/* One column until the card can hold two, whatever the window is doing: the
+   tag beside the words needs about 700px, and a tag stretched the width of a
+   tablet is a sticker nobody would print. */
+.first-run-inner {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container first-run (min-width: 620px) {
+  .first-run-inner {
+    gap: 8px 24px;
+    grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+  }
+}
+
+/* The corner doodle needs a card wide enough to have a corner to spare. */
+.first-run-art.is-left {
+  display: none;
+}
+
+@container first-run (min-width: 620px) {
+  .first-run-art.is-left {
+    display: block;
+  }
 }
 
 /* A guest who came back to find their name taken by somebody online who
@@ -610,118 +643,230 @@
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
+  grid-column: 1 / -1;
   line-height: 1.45;
-  margin: 0 0 14px;
+  margin: 0 0 4px;
   padding: 10px 12px;
 }
 
 .invite-name-in-use {
+  grid-column: auto;
   margin-bottom: 10px;
 }
 
-.first-run-heading {
-  margin: 0 0 4px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 18px;
-  color: var(--ink);
-}
-
-.first-run-copy {
-  margin: 0 0 14px;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.first-run-actions {
-  display: flex;
+/* The tag itself: a red banner, a dashed rule to write on, and the button
+   that sticks it on. Tilted a degree and a half, because a sticker is. */
+.first-run-tag {
+  background: #fff;
+  /* A name tag is a name tag: it never runs the width of the card. */
+  justify-self: center;
+  max-width: 360px;
+  width: 100%;
+  border: 2px solid var(--tag-edge, #c8102e);
+  border-radius: 12px;
+  box-shadow: 0 3px 0 rgba(20, 16, 10, 0.14);
+  display: grid;
   gap: 10px;
-  flex-wrap: wrap;
+  padding-bottom: 12px;
+  rotate: -1.4deg;
 }
 
-.first-run-signup {
-  border: none;
-  background: var(--primary);
-  color: var(--card);
-  border-radius: var(--radius-sm);
-  padding: 11px 20px;
-  font-size: 15px;
+.first-run-tag-top {
+  background: var(--tag-edge, #c8102e);
+  /* The card's radius less its border, so the banner ends where the card
+     curves instead of poking two square corners past it. */
+  border-radius: 10px 10px 0 0;
+  color: #fff;
+  font-size: 11.5px;
   font-weight: 800;
-  cursor: pointer;
-  min-height: 44px;
-  box-shadow: 0 2px 0 var(--primary-edge);
-}
-
-.first-run-signup:hover {
-  filter: brightness(1.08);
-}
-
-.first-run-login {
-  border: 1.5px solid var(--line-strong);
-  background: var(--card);
-  color: var(--ink);
-  border-radius: var(--radius-sm);
-  padding: 11px 20px;
-  font-size: 15px;
-  font-weight: 800;
-  cursor: pointer;
-  min-height: 44px;
-  box-shadow: var(--shadow);
-}
-
-.first-run-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 18px 0 14px;
-  font-size: 13px;
-  color: var(--faint);
-}
-
-.first-run-divider::before,
-.first-run-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-
-.first-run-guest-label {
-  display: block;
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 6px;
+  letter-spacing: 0.12em;
+  padding: 6px 10px;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .first-run-guest-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  margin: 2px 14px 0;
 }
 
 .first-run-guest-row input {
-  flex: 1 1 12rem;
-  min-width: 0;
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
-  /* 16px keeps iOS from zooming the viewport on focus. */
-  font-size: 16px;
-  background: var(--field);
-  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px dashed #b9b0a0;
+  border-radius: 0;
+  color: #292520;
+  font-family: var(--font-display);
+  /* 16px or more keeps iOS from zooming the viewport on focus. */
+  font-size: 22px;
+  font-weight: 600;
+  padding: 2px 4px 4px;
+  width: 100%;
 }
 
-/* Deliberately plain: easy to use, clearly not the headline action. */
+.first-run-guest-row input::placeholder {
+  color: #a29883;
+  font-weight: 500;
+}
+
+.first-run-guest-row input:focus-visible {
+  border-bottom-color: var(--tag-edge, #c8102e);
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 3px;
+}
+
+/* Plainly a name, not a game: what plays is Quick play, beside the room list. */
 .first-run-guest-submit {
+  background: var(--card);
   border: 1.5px solid var(--line-strong);
-  background: transparent;
-  color: var(--ink);
   border-radius: var(--radius-sm);
-  padding: 9px 16px;
-  font-size: 14px;
-  font-weight: 700;
+  box-shadow: var(--shadow);
+  color: var(--ink);
   cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  justify-self: center;
   min-height: 40px;
+  padding: 0 18px;
+}
+
+.first-run-tag .auth-error {
+  margin: 0 14px;
+}
+
+.first-run-say {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.first-run-heading {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.12;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.first-run-copy {
+  color: var(--muted);
+  font-size: 14.5px;
+  margin: 0;
+  max-width: 52ch;
+}
+
+.first-run-account {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+
+.first-run-account button {
+  background: none;
+  border: 0;
+  color: var(--primary-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Decoration, in the ink the doodle avatars use. One doodle in the card's
+   corner at ordinary widths; a column of three where there is width to spare
+   (below); nothing at all on a phone. */
+.first-run-art.is-left {
+  bottom: -14px;
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
+  z-index: 0;
+}
+
+/* Only one fits a corner, whichever side the deal put the pair on. */
+.first-run-art .first-run-doodle:not(:first-child) {
+  display: none;
+}
+
+.first-run-art.is-right {
+  display: none;
+}
+
+/* The box is the same whatever the deal: the tilt, the drop and the size are
+   transforms, so a doodle can lean out of its square without the card growing
+   a pixel. `--doodle-box` is the one thing a width changes. */
+.first-run-doodle {
+  color: var(--line-strong);
+  display: block;
+  height: var(--doodle-box, 96px);
+  rotate: var(--doodle-rotate, 0deg);
+  scale: var(--doodle-scale, 1);
+  translate: 0 var(--doodle-shift, 0px);
+  width: var(--doodle-box, 96px);
+}
+
+/* A wide card - not a wide window, which is not the same thing once the lobby
+   has columns - is three tracks, and the third is the doodles at a size worth
+   seeing. The words keep a readable measure rather than running the width of a
+   2560px card, and the line grows with the room it has. */
+@container first-run (min-width: 1080px) {
+  .first-run {
+    padding: 26px 28px 30px;
+  }
+
+  /* A doodle, the tag, the words, two doodles: the two outer tracks are equal,
+     so the tag and the words land in the middle of the card. */
+  .first-run-inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 320px) minmax(0, 46ch) minmax(0, 1fr);
+  }
+
+  .first-run-heading {
+    font-size: clamp(26px, 2.6cqi, 34px);
+  }
+
+  .first-run-art.is-left,
+  .first-run-art.is-right {
+    align-items: center;
+    display: flex;
+    gap: clamp(12px, 2.4cqi, 40px);
+    justify-content: center;
+    position: static;
+    rotate: none;
+  }
+
+  .first-run-art .first-run-doodle:not(:first-child) {
+    display: block;
+  }
+
+  /* The row is the height of one box, so a taller deal cannot make the card
+     taller either. */
+  .first-run-art.is-left,
+  .first-run-art.is-right {
+    height: var(--doodle-box);
+  }
+
+  .first-run-inner {
+    --doodle-box: clamp(96px, 10cqi, 150px);
+  }
+}
+
+.first-run-tag,
+.first-run-say {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 900px) {
+  .first-run {
+    padding: 18px;
+  }
+
+  .first-run-heading {
+    font-size: 22px;
+  }
 }
 
 .settings-account-row {
@@ -976,90 +1121,6 @@
   padding-top: 6px;
 }
 
-
-/* ── First landing ─────────────────────────────────────────────────────
-   Wide screens keep the shipped order: the account is the headline, the
-   guest name the quieter path below a divider. A phone reverses it — one
-   field and one loud Play first, the account offer as a single quiet line
-   under it. That offer is made again at the end of the first game, where
-   there is finally something worth keeping. */
-
-@media (max-width: 900px) {
-  .first-run {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 16px;
-  }
-
-  .first-run-guest-label {
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--faint);
-  }
-
-  .first-run-guest-row {
-    flex-direction: column;
-  }
-
-  .first-run-guest-row input {
-    flex: 0 0 auto;
-    min-height: 50px;
-    width: 100%;
-  }
-
-  /* The loud one here: it is the action that leads somewhere. */
-  .first-run-guest-submit {
-    background: var(--primary);
-    border: 0;
-    box-shadow: 0 3px 0 var(--primary-edge);
-    color: #fff;
-    font-size: 16px;
-    font-weight: 900;
-    min-height: 50px;
-    width: 100%;
-  }
-
-
-  .first-run-primary {
-    align-items: baseline;
-    border-top: 1.5px solid var(--line);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 8px;
-    padding-top: 12px;
-  }
-
-  .first-run-heading {
-    font-family: var(--font-body);
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--muted);
-    margin: 0;
-  }
-
-  .first-run-actions {
-    display: flex;
-    gap: 14px;
-    margin: 0;
-  }
-
-  .first-run-signup,
-  .first-run-login {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    color: var(--primary-ink);
-    font-size: 13px;
-    font-weight: 800;
-    min-height: 44px;
-    padding: 0;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-}
 
 /* Deleting the account has a dialog of its own (Settings > Account). */
 .account-delete-dialog .account-delete-confirm {

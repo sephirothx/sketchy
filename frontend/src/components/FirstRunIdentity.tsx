@@ -1,32 +1,52 @@
-import { useId, useState } from "react";
-import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useId, useState, type CSSProperties } from "react";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
 import { refusalText } from "../lib/refusals.ts";
+import { firstRunLine } from "../lib/firstRunLines";
+import { DOODLE_SPRITE } from "../lib/avatarDoodles";
+import { firstRunArt, type FirstRunDoodle } from "../lib/firstRunArt";
 import { ui } from "../content/ui/index.ts";
 
 /**
  * Shown only until the visitor has an account or a name of their own.
  *
- * On a wide screen an account is the primary action and says why; playing as a
- * guest is one field and one click below a divider - easy, but plainly the
- * lesser path.
+ * A name tag, because the one decision on the page should look like a party
+ * rather than a sign-up (#588): "Hello, my name is ___", and a button that
+ * sticks it on. It is the only thing the block asks for, and - this is the
+ * point of #589 - it promises nothing more than a name. What plays is Quick
+ * play, beside the room list.
  *
- * On a phone that order is reversed. The visitor has not seen the game yet, so
- * an account decision is being asked for before there is anything to keep;
- * naming yourself and playing is both the faster path and the one that produces
- * something worth an account. The offer moves to the end of the first game,
- * where the game-over screen already makes it ("Keep this name and your
- * points?"). Nothing is removed - Create an account and Log in stay on screen,
- * as one quiet line under the field.
+ * Beside the tag, what the game is: a line from the pool (#590, see
+ * `lib/firstRunLines.ts`) over the one sentence that always explains it. The
+ * account offer is one quiet line at the end, on every width. It used to lead
+ * the desktop with Create an account in the primary colour, asking a visitor
+ * to commit before the page had shown them a single drawing.
  *
- * Inline rather than modal, so browsing and logging in are never gated, and
- * nothing interrupts a click the player has already made. A returning player on
- * a new device lands here and reaches "Log in" without being asked to invent a
- * guest name.
+ * One layout for every width: the tag, then the words, in that order both in
+ * the DOM and on screen. Inline rather than modal, so browsing and logging in
+ * are never gated, and a returning player on a new device reaches "Log in"
+ * without being asked to invent a guest name.
  */
+/** One doodle, leaning the way this visit dealt it. */
+function doodle({ name, rotate, shift, scale }: FirstRunDoodle) {
+  return (
+    <svg
+      key={name}
+      className="first-run-doodle"
+      viewBox="0 0 24 24"
+      style={{
+        "--doodle-rotate": `${rotate}deg`,
+        "--doodle-shift": `${shift}px`,
+        "--doodle-scale": scale,
+      } as CSSProperties}
+    >
+      <use href={`${DOODLE_SPRITE}#${name}`} />
+    </svg>
+  );
+}
+
 export function FirstRunIdentity() {
   const user = useAuthStore((s) => s.user);
   const hasResolved = useAuthStore((s) => s.hasResolved);
@@ -35,10 +55,7 @@ export function FirstRunIdentity() {
   const register = useAuthStore((s) => s.register);
 
   const fieldId = useId();
-  // The two orders are rendered rather than reordered with CSS `order`: that
-  // leaves the DOM - and so the tab order and what a screen reader reads -
-  // saying the opposite of what the screen shows.
-  const isNarrow = useMediaQuery("(max-width: 900px)");
+  const art = firstRunArt();
   const [mode, setMode] = useState<AuthMode | null>(null);
   // Shared, so that typing a name here and pressing Create or Join instead of
   // this form's own button means the same thing.
@@ -60,7 +77,7 @@ export function FirstRunIdentity() {
   if (!needsIdentity(user)) return null;
   const takenName = user?.nameInUse ? user.displayName : null;
 
-  async function playAsGuest(event: React.FormEvent) {
+  async function nameMe(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
     const chosen = name.trim();
@@ -81,95 +98,86 @@ export function FirstRunIdentity() {
     }
   }
 
-  const account = (
-    <div className="first-run-primary" key="account">
-      <h2 id={`${fieldId}-heading`} className="first-run-heading">
-        {isNarrow ? ui.firstRunIdentity.beenHereBefore : ui.firstRunIdentity.playAsYourself}
-      </h2>
-      {!isNarrow && (
-        <p className="first-run-copy">
-          {ui.firstRunIdentity.keepYourUsernameYourStatsEvery}
-        </p>
-      )}
-      <div className="first-run-actions">
-        <button
-          type="button"
-          className="first-run-signup"
-          onClick={() => setMode("claim")}
-        >
-          {ui.firstRunIdentity.createAccount}
-        </button>
-        <button
-          type="button"
-          className="first-run-login"
-          onClick={() => setMode("login")}
-        >
-          {ui.firstRunIdentity.logIn}
-        </button>
-      </div>
-    </div>
-  );
-
-  const divider = !isNarrow && (
-    <div className="first-run-divider" role="presentation" key="divider">
-      <span>{ui.firstRunIdentity.or}</span>
-    </div>
-  );
-
-  const guest = (
-    <form className="first-run-guest" onSubmit={playAsGuest} key="guest">
-      <label htmlFor={`${fieldId}-name`} className="first-run-guest-label">
-        {isNarrow ? ui.firstRunIdentity.whatShouldWeCallYou : ui.firstRunIdentity.justPlayingOncePickA}
-      </label>
-      <div className="first-run-guest-row">
-        {/* Search type suppresses Android Chrome's unrelated autofill toolbar,
-            matching every other name field in the app. */}
-        <input
-          id={`${fieldId}-name`}
-          type="search"
-          inputMode="text"
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            setError(null);
-          }}
-          maxLength={MAX_NICKNAME_LENGTH}
-          placeholder={ui.firstRunIdentity.displayName}
-          autoComplete="nickname"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          enterKeyHint="go"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${fieldId}-error` : undefined}
-        />
-        <button type="submit" className="first-run-guest-submit" disabled={busy}>
-          {busy ? "\u2026" : isNarrow ? ui.firstRunIdentity.play : ui.firstRunIdentity.playAsGuest}
-        </button>
-      </div>
-      {error && (
-        <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>
-      )}
-    </form>
-  );
-
   return (
-    <section
-      className="first-run"
-      aria-labelledby={`${fieldId}-heading`}
-    >
+    <section className="first-run" aria-labelledby={`${fieldId}-heading`}>
+      {/* The card is the size container; its contents are the grid, because a
+          card cannot answer a container query about itself. */}
+      <div className="first-run-inner">
+      {/* The deployment's own doodles, one side and the other, so that on a
+          wide card the tag and the words sit in the middle of the block rather
+          than against its left edge. Narrower, one is left, in the bottom-right
+          corner. Which three, which side and how each leans is this visit's
+          deal (`lib/firstRunArt.ts`), and none of it changes the card's size.
+          Decorative either way: the tag and the words say everything. */}
+      <div className="first-run-art is-left" aria-hidden="true">
+        {art.left.map(doodle)}
+      </div>
       {takenName && (
         <p className="first-run-name-in-use" role="status">
           {ui.firstRunIdentity.nameInUse({ name: takenName })}
         </p>
       )}
-      {isNarrow ? [guest, account] : [account, divider, guest]}
+      <form className="first-run-tag" onSubmit={nameMe}>
+        <label className="first-run-tag-top" htmlFor={`${fieldId}-name`}>
+          {ui.firstRunIdentity.helloMyNameIs}
+        </label>
+        <div className="first-run-guest-row">
+          {/* Search type suppresses Android Chrome's unrelated autofill toolbar,
+              matching every other name field in the app. */}
+          <input
+            id={`${fieldId}-name`}
+            type="search"
+            inputMode="text"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              setError(null);
+            }}
+            maxLength={MAX_NICKNAME_LENGTH}
+            placeholder={ui.firstRunIdentity.displayName}
+            autoComplete="nickname"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="done"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? `${fieldId}-error` : undefined}
+          />
+        </div>
+        <button type="submit" className="first-run-guest-submit" disabled={busy}>
+          {busy ? "\u2026" : ui.firstRunIdentity.stickItOn}
+        </button>
+        {error && (
+          <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>
+        )}
+      </form>
+
+      <div className="first-run-say">
+        <h2 id={`${fieldId}-heading`} className="first-run-heading">{firstRunLine()}</h2>
+        <p className="first-run-copy">{ui.firstRunIdentity.oneLineExplainer}</p>
+        <p className="first-run-account">
+          {ui.firstRunIdentity.beenHereBefore}{" "}
+          <button type="button" className="first-run-login" onClick={() => setMode("login")}>
+            {ui.firstRunIdentity.logIn}
+          </button>
+          {" · "}
+          <button type="button" className="first-run-signup" onClick={() => setMode("claim")}>
+            {ui.firstRunIdentity.createAccount}
+          </button>
+        </p>
+      </div>
+
+
+      <div className="first-run-art is-right" aria-hidden="true">
+        {art.right.map(doodle)}
+      </div>
+      </div>
       {mode && (
         <AuthDialog
           mode={mode}
           onClose={() => setMode(null)}
           onSwitchMode={setMode}
-onSubmit={authSubmitter(mode, login, register)}
+          onSubmit={authSubmitter(mode, login, register)}
         />
       )}
     </section>
