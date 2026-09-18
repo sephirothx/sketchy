@@ -87,3 +87,42 @@ async def test_quick_play_opens_a_public_room_when_none_is_waiting():
             await context.close()
             await watcher_context.close()
             await browser.close()
+
+
+async def test_one_press_names_a_first_time_visitor_and_plays():
+    """The first press used to stop after saving the name: naming reconnects the
+    socket, the reconnect marks the room list stale, and Quick play gave up on
+    the stale list instead of waiting for the new one. And while it was in
+    flight, Join by code and Create room stayed live beside it."""
+    tag = random.randint(1000, 9999)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        # Italian: nobody else's, so the room this opens is this test's alone.
+        context = await browser.new_context(viewport={"width": 1280, "height": 900}, locale="it-IT")
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".first-run")
+            await page.wait_for_selector('[data-testid="quick-play"]:not([disabled])')
+            # A name typed on the tag, never stuck on: Quick play is the press.
+            await page.fill(".first-run-guest-row input", f"QpFirst{tag}")
+            # Pressed and read in one go, a frame apart: naming and the
+            # reconnect after it keep the press in flight for far longer, and
+            # while it is, no other way into a room may start (a second entry
+            # would release this one's seat and race it for the route).
+            in_flight = await page.evaluate(
+                """async () => {
+                  document.querySelector('[data-testid="quick-play"]').click();
+                  await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+                  return [...document.querySelectorAll('.lobby-rooms-actions button')]
+                    .map((button) => button.disabled);
+                }"""
+            )
+            assert len(in_flight) == 3 and all(in_flight), in_flight
+
+            await page.wait_for_selector('[data-testid="waiting-room"]', timeout=15000)
+            await page.wait_for_selector(f'[data-testid="room-players-region"]:has-text("QpFirst{tag}")')
+        finally:
+            await context.close()
+            await browser.close()
+

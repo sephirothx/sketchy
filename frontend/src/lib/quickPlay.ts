@@ -47,6 +47,37 @@ export function quickPlayReady(state: RoomsState): boolean {
 }
 
 /**
+ * Resolve once `ready` holds for the store's state, or with false after
+ * `timeoutMs`. Naming a first-time visitor reconnects the socket, and the
+ * reconnect marks the room list stale until the new connection's snapshot
+ * lands; Quick play waits for that rather than giving up on the press that
+ * named them - one press is the whole promise (R-UX-14).
+ */
+export function waitForState<State>(
+  get: () => State,
+  subscribe: (listener: (state: State) => void) => () => void,
+  ready: (state: State) => boolean,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (ready(get())) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const stop = subscribe((state) => {
+      if (!ready(state)) return;
+      clearTimeout(timer);
+      stop();
+      resolve(true);
+    });
+    const timer = setTimeout(() => {
+      stop();
+      resolve(false);
+    }, timeoutMs);
+  });
+}
+
+/** How long Quick play waits for a list after naming, before saying so. */
+export const QUICK_PLAY_LIST_WAIT_MS = 10_000;
+
+/**
  * The refusals that are about one room only: it filled, it went, or it is no
  * longer public and waiting. Anything else - joining too fast, the database
  * busy, a name somebody took, the server draining - the next room would say

@@ -132,3 +132,38 @@ test("nothing to try is a room of your own", async () => {
   const answer = await runQuickPlay([], async () => assert.fail("joined nothing"), async () => ({ ok: true, code: "NEW222" }));
   assert.equal(answer.code, "NEW222");
 });
+
+import { waitForState } from "../src/lib/quickPlay.ts";
+
+/** A store in miniature: state, listeners, and a way to push a new state. */
+function store(initial) {
+  let state = initial;
+  const listeners = new Set();
+  return {
+    get: () => state,
+    subscribe: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+    set(next) { state = next; for (const listener of [...listeners]) listener(state); },
+    listeners,
+  };
+}
+
+test("a list that is ready already needs no wait", async () => {
+  const rooms = store({ ready: true });
+  assert.equal(await waitForState(rooms.get, rooms.subscribe, (s) => s.ready, 50), true);
+  assert.equal(rooms.listeners.size, 0);
+});
+
+test("naming made the list stale: the press waits for the next snapshot and carries on", async () => {
+  const rooms = store({ ready: false });
+  const waiting = waitForState(rooms.get, rooms.subscribe, (s) => s.ready, 1000);
+  rooms.set({ ready: false });
+  rooms.set({ ready: true });
+  assert.equal(await waiting, true);
+  assert.equal(rooms.listeners.size, 0, "stopped listening once it had its answer");
+});
+
+test("a snapshot that never comes is a false, not a hang", async () => {
+  const rooms = store({ ready: false });
+  assert.equal(await waitForState(rooms.get, rooms.subscribe, (s) => s.ready, 20), false);
+  assert.equal(rooms.listeners.size, 0);
+});

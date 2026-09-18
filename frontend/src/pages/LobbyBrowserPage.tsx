@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { emitTransient, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
@@ -28,7 +28,14 @@ import {
   LanguagePicker,
   type LanguageChoice,
 } from "../components/LanguagePicker";
-import { quickPlayCandidates, quickPlayReady, quickPlayRoom, runQuickPlay } from "../lib/quickPlay";
+import {
+  QUICK_PLAY_LIST_WAIT_MS,
+  quickPlayCandidates,
+  quickPlayReady,
+  quickPlayRoom,
+  runQuickPlay,
+  waitForState,
+} from "../lib/quickPlay";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -193,8 +200,22 @@ export function LobbyBrowserPage() {
   const isWide = useMediaQuery("(min-width: 1500px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
+  // One entry at a time, whichever control started it: a room card, a code,
+  // Quick play. Two in flight would release each other's seats and race for
+  // the session and the route, so every entry control is disabled while one
+  // is pending.
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
-  const [quickPlayBusy, setQuickPlayBusy] = useState(false);
+  const quickPlayBusy = pendingJoin?.key === "quick-play";
+  // An entry whose answer arrives after the lobby has gone (the player took
+  // the header's way somewhere else meanwhile) must not drag them back into a
+  // room - and a seat it did take is let go rather than left behind.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   // The validator from the last successful fetch. A ref rather than state:
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -245,6 +266,8 @@ export function LobbyBrowserPage() {
 
   // No gate: every visitor already has a name, generated on their first load.
   async function handleOpenCreateRoom() {
+    // An entry already in flight owns the socket and the route.
+    if (pendingJoin) return;
     // A visitor who typed a name and pressed this plainly means to play under
     // it, so provision from the draft rather than sending them back to a form
     // they have already filled in.
@@ -268,16 +291,28 @@ export function LobbyBrowserPage() {
    * to that is the next room, then a room of your own - not an error.
    */
   async function handleQuickPlay() {
-    if (quickPlayBusy || pendingJoin || !quickPlayReady(roomsState)) return;
-    setQuickPlayBusy(true);
+    if (pendingJoin || !quickPlayReady(roomsState)) return;
+    setPendingJoin({ key: "quick-play", mode: "join" });
     setError(null);
     try {
       let playerName = currentPlayerName();
       if (awaitingName) playerName = (await ensureIdentity()).displayName;
-      // Read now, not from the render the press came from: naming can take
-      // long enough for the list to change under it.
+      // Naming reconnects the socket, which leaves the list stale until the
+      // new connection's snapshot arrives. Wait for it and carry on: the press
+      // that named the player is the press that plays.
+      const listed = await waitForState(
+        () => useRoomsStore.getState().rooms,
+        (listener) => useRoomsStore.subscribe((state) => listener(state.rooms)),
+        quickPlayReady,
+        QUICK_PLAY_LIST_WAIT_MS,
+      );
+      if (!mountedRef.current) return;
+      if (!listed) {
+        setError(ui.lobbyBrowserPage.couldNotFindOrOpenARoom);
+        return;
+      }
+      // Read now, not from the render the press came from.
       const current = useRoomsStore.getState().rooms;
-      if (!quickPlayReady(current)) return;
       const answer = await runQuickPlay(
         quickPlayCandidates(current.rooms, playerLanguage),
         (room) => emitWithAck<AckResponse>("join_room", {
@@ -296,6 +331,10 @@ export function LobbyBrowserPage() {
         }),
       );
       const session = sessionFrom(answer);
+      if (!mountedRef.current) {
+        if (session) emitTransient("leave_room");
+        return;
+      }
       if (session) {
         setSession(session);
         navigate(`/room/${session.code}`);
@@ -304,10 +343,11 @@ export function LobbyBrowserPage() {
       if (answer.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
       setError(refusalText(answer, ui.lobbyBrowserPage.couldNotFindOrOpenARoom));
     } catch (quickPlayError) {
+      if (!mountedRef.current) return;
       if (quickPlayError instanceof IdentityRequiredError) setError(identityMessage(quickPlayError));
       else setError(socketRequestErrorMessage(quickPlayError, ui.lobbyBrowserPage.quickPlay));
     } finally {
-      setQuickPlayBusy(false);
+      if (mountedRef.current) setPendingJoin(null);
     }
   }
 
@@ -349,6 +389,10 @@ export function LobbyBrowserPage() {
         ...target,
       });
       const session = sessionFrom(res);
+      if (!mountedRef.current) {
+        if (session) emitTransient("leave_room");
+        return;
+      }
       if (session) {
         setSession(session);
         navigate(`/room/${session.code}`);
@@ -356,9 +400,10 @@ export function LobbyBrowserPage() {
         setError(refusalText(res, ui.lobbyBrowserPage.failedJoinRoom));
       }
     } catch (joinError) {
+      if (!mountedRef.current) return;
       setError(socketRequestErrorMessage(joinError, asSpectator ? ui.lobbyBrowserPage.joinAsASpectator : ui.lobbyBrowserPage.joinTheRoom));
     } finally {
-      setPendingJoin(null);
+      if (mountedRef.current) setPendingJoin(null);
     }
   }
 
@@ -398,7 +443,7 @@ export function LobbyBrowserPage() {
                 type="button"
                 className="btn btn-warm btn-compact lobby-quick-play"
                 data-testid="quick-play"
-                disabled={quickPlayBusy || !quickPlayReady(roomsState)}
+                disabled={Boolean(pendingJoin) || !quickPlayReady(roomsState)}
                 onClick={() => void handleQuickPlay()}
               >
                 <BoltIcon size={15} />
@@ -407,6 +452,7 @@ export function LobbyBrowserPage() {
               <button
                 type="button"
                 className="btn btn-secondary btn-compact"
+                disabled={Boolean(pendingJoin)}
                 onClick={() => setCodeSheetOpen(true)}
               >
                 {ui.lobbyBrowserPage.joinByCode}
@@ -415,6 +461,7 @@ export function LobbyBrowserPage() {
                 variant="primary"
                 compact
                 iconLeft={<PlusIcon size={15} />}
+                disabled={Boolean(pendingJoin)}
                 onClick={() => void handleOpenCreateRoom()}
               >
                 {ui.lobbyBrowserPage.createRoom}
@@ -595,7 +642,7 @@ export function LobbyBrowserPage() {
             type="button"
             className="btn btn-warm btn-big lobby-quick-play"
             data-testid="quick-play"
-            disabled={quickPlayBusy || !quickPlayReady(roomsState)}
+            disabled={Boolean(pendingJoin) || !quickPlayReady(roomsState)}
             onClick={() => void handleQuickPlay()}
           >
             <BoltIcon size={16} />
@@ -605,6 +652,7 @@ export function LobbyBrowserPage() {
             <Button
               variant="primary"
               iconLeft={<PlusIcon size={15} />}
+              disabled={Boolean(pendingJoin)}
               onClick={() => void handleOpenCreateRoom()}
             >
               {ui.lobbyBrowserPage.createRoom2}
@@ -612,6 +660,7 @@ export function LobbyBrowserPage() {
             <button
               type="button"
               className="btn btn-secondary lobby-dock-code"
+              disabled={Boolean(pendingJoin)}
               onClick={() => setCodeSheetOpen(true)}
             >
               {ui.lobbyBrowserPage.joinWithCode}
