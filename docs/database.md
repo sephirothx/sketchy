@@ -505,6 +505,15 @@ collides on the primary key instead of creating a second row, so the handler
 sees a request from the other party and accepts it. `x < x` being false
 forbids a self-friendship for free.
 
+**The ceilings are counted under both accounts' row locks** (#898). The friends,
+pending-sent and pending-received limits are each a count followed by a write, and
+nothing about the rows counted stops a second request from counting the same rows a
+moment later. So a request and an accept first take `FOR UPDATE` on both `users` rows
+in one ascending statement (`lock_pair_for_ceilings`) — the order the erasure barrier
+uses, so no cycle is possible with a game write, a merge or a deletion — and only
+then read the pair and count. `tests/test_account_ceilings.py` holds a writer after
+its count and proves the second one waits.
+
 Canonicalisation lives in exactly one place,
 [`services/friends.py`](../backend/app/services/friends.py)`.friendship_key`;
 a site that inlines it and gets it backwards writes a row the CHECK rejects,
@@ -1686,7 +1695,9 @@ nullable) · timestamps.
 
 **Deleting a list retires it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py)):
 `deleted_at` is set, the visibility falls back to private and the current-display `prompts` rows go, in the same transaction. From then on
-nothing lists, opens, resolves, forks or counts it against the 25-list allowance. The
+nothing lists, opens, resolves, forks or counts it against the 25-list allowance (which
+create, copy and duplicate count under the owner's row lock, taken `FOR UPDATE` by the
+erasure barrier, so two requests at 24 cannot both land — #898). The
 revisions stay exactly as long as a finished game pins one (`game_prompt_sources`,
 `turn_prompt_offer_sources`, `prompt_usage_facts`): the `RESTRICT`s there are what
 keep another player's provenance from vanishing because its author tidied up
