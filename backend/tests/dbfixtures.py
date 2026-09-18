@@ -204,9 +204,21 @@ async def create_test_db(
         engine = create_test_engine(external_url, role=role)
         # The external database is migrated before this suite starts. Keep the
         # schema intact so tests exercise Alembic's output, while isolating
-        # tests by removing application rows in dependency order.
-        async with engine.begin() as conn:
-            await _run_driver_script(conn, _postgresql_wipe_script())
+        # tests by removing application rows in dependency order - as the
+        # owner when the suite runs as the application role (#896), which
+        # may not delete from the two append-only ledgers.
+        owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+        if owner_url:
+            assert_disposable(owner_url)
+            owner = create_test_engine(owner_url, role=role)
+            try:
+                async with owner.begin() as conn:
+                    await _run_driver_script(conn, _postgresql_wipe_script())
+            finally:
+                await owner.dispose()
+        else:
+            async with engine.begin() as conn:
+                await _run_driver_script(conn, _postgresql_wipe_script())
     else:
         engine = create_test_engine(SQLITE_MEMORY_URL)
         async with engine.begin() as conn:

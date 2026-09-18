@@ -1755,6 +1755,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | What the server records about its own behaviour. |
 | [`app/services/telemetry.py`](../backend/app/services/telemetry.py) | Process signals — request, command, query and loop-lag RED/USE — kept in memory for `/metrics` and the operations page. |
 | [`app/services/queue_depths.py`](../backend/app/services/queue_depths.py) | Depth and oldest age of the mail outbox and pending exports, cached. |
+| [`app/db/roles.py`](../backend/app/db/roles.py) | Which PostgreSQL role may do what, and the check that the web process is not the owner (#896). |
 | [`app/services/integrity_audit.py`](../backend/app/services/integrity_audit.py) | The integrity checks, run on a schedule and reported rather than remembered (#894). |
 | [`app/services/storage_report.py`](../backend/app/services/storage_report.py) | What each table occupies in the live database, safe to paste into an issue (#895). |
 | [`app/services/sweeps.py`](../backend/app/services/sweeps.py) | Bounded, batched deletion for every retention sweep. |

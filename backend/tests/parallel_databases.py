@@ -40,6 +40,16 @@ class WorkerDatabases:
             await connection.close()
         return self.template.set(database=name).render_as_string(hide_password=False)
 
+    @staticmethod
+    def as_role(clone_url: str, role_url: str) -> str:
+        """The same clone, reached with another role's credentials (#896)."""
+        role = make_url(role_url)
+        return (
+            make_url(clone_url)
+            .set(username=role.username, password=role.password)
+            .render_as_string(hide_password=False)
+        )
+
     async def close(self) -> None:
         if not self.names:
             return

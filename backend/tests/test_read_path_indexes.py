@@ -14,7 +14,7 @@ import pytest
 
 from app.db.models import Base
 
-from tests.dbfixtures import create_test_db
+from tests.dbfixtures import create_test_db, create_test_engine
 
 
 ON_POSTGRESQL = os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql")
@@ -123,10 +123,23 @@ async def _seed(factory, now: datetime) -> None:
                     for i in range(4_000)
                 ],
             )
-        await session.execute(text("ANALYZE room_messages"))
-        await session.execute(text("ANALYZE email_outbox"))
-        await session.execute(text("ANALYZE user_bans"))
-        await session.commit()
+    # Statistics are the owner's to refresh (#896): as the application role
+    # ANALYZE skips each table with a warning, and the plans stay generic.
+    owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+    if owner_url:
+        owner = create_test_engine(owner_url)
+        try:
+            async with owner.connect() as connection:
+                for table in ("room_messages", "email_outbox", "user_bans"):
+                    await connection.execute(text(f"ANALYZE {table}"))
+                await connection.commit()
+        finally:
+            await owner.dispose()
+    else:
+        async with factory() as session:
+            for table in ("room_messages", "email_outbox", "user_bans"):
+                await session.execute(text(f"ANALYZE {table}"))
+            await session.commit()
 
 
 @pytest.mark.skipif(not ON_POSTGRESQL, reason="plans are PostgreSQL's")
