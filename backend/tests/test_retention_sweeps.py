@@ -361,9 +361,72 @@ def test_every_scheduled_sweep_is_registered_once():
         "data_exports",
         "shutdown_abandonments",
         "auth_rate_limit_buckets",
+        "auth_login_lockouts",
         "room_code_reservations",
         "runtime_events",
         "bug_report_screenshots",
         "retired_prompt_lists",
         "anonymous_accounts",
     }
+
+
+async def test_login_lockouts_untouched_for_a_day_are_swept_by_the_loop():
+    """Documented as dropped after a day, and never swept before #891. A
+    failure is counted for names that do not exist, so without the sweep every
+    name anybody tried stays for ever."""
+    from app.auth.login_guard import LOCKOUT_FORGET_AFTER, purge_forgotten_lockouts
+    from app.db.models import AuthLoginLockout
+
+    factory, engine = await create_test_db()
+    try:
+        now = datetime.now(timezone.utc)
+        ages = {"ancient": timedelta(days=3), "stale": LOCKOUT_FORGET_AFTER + timedelta(hours=1)}
+        ages["fresh"] = timedelta(hours=1)
+        async with factory() as session, session.begin():
+            for key, age in ages.items():
+                session.add(
+                    AuthLoginLockout(key_hash=key, consecutive_failures=2, locked_until=None, updated_at=now - age)
+                )
+
+        # One row per pass: the budget holds, and the report says what is left.
+        first = await purge_forgotten_lockouts(factory, now=now, budget=SweepBudget(rows=1, batch=1))
+        assert int(first) == 1 and first.exhausted
+        assert first.backlog == 1
+        assert first.oldest_overdue_seconds == pytest.approx(3600, abs=5)
+
+        reports = await run_retention_sweeps(factory, budget=SweepBudget(rows=50, batch=10))
+        assert reports["auth_login_lockouts"]["oldest_overdue_seconds"] == 0.0
+        async with factory() as session:
+            left = set((await session.scalars(select(AuthLoginLockout.key_hash))).all())
+        assert left == {"fresh"}
+    finally:
+        await engine.dispose()
+
+
+def test_the_retention_summary_names_every_registered_sweep_and_its_sla():
+    """A documented retention with nothing enforcing it is how the lockouts
+    went unswept (#891): docs/database.md §10 says a day, and no sweep ran.
+    Every row there with a deletion SLA names its sweep, every registered
+    sweep is named there, and the SLA each row states is the one it is held to."""
+    from pathlib import Path
+    import re
+
+    document = (Path(__file__).resolve().parents[2] / "docs" / "database.md").read_text(encoding="utf-8")
+    section = document[document.index("## 10. Retention summary") :]
+    section = section[: section.index("\n## ")]
+    documented: dict[str, set[str]] = {}
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 6 or cells[0] in {"Data", "---"}:
+            continue
+        sla, sweep = cells[2], cells[5]
+        if sla == "—":
+            assert sweep == "—", line
+            continue
+        match = re.fullmatch(r"`([a-z_]+)`", sweep)
+        assert match, f"a deletion SLA with no sweep named: {line}"
+        documented.setdefault(match.group(1), set()).add(sla)
+    registered = {sweep.name: sweep for sweep in retention.retention_sweeps()}
+    assert set(documented) == set(registered)
+    hours = {name: f"{int(sweep.sla_seconds // 3600)} h" for name, sweep in registered.items()}
+    assert {name: slas for name, slas in documented.items() if slas != {hours[name]}} == {}

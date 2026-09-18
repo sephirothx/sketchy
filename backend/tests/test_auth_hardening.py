@@ -26,6 +26,7 @@ from app.auth.login_guard import (
     LOCKOUT_AFTER_FAILURES,
     LoginGuard,
     count_open_lockouts,
+    purge_forgotten_lockouts,
 )
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.password import MIN_PASSWORD_LENGTH, PasswordPolicyError, validate_password
@@ -838,8 +839,8 @@ async def test_finished_lockouts_are_forgotten(env):
     _, factory, _ = env
     guard = LoginGuard(factory)
     await guard.note_failure(username="Ancient", address="10.0.0.1")
-    forgotten = await guard.forget_expired_lockouts(
-        before=datetime.now(timezone.utc) + timedelta(days=2)
+    forgotten = await purge_forgotten_lockouts(
+        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
     )
     assert forgotten == 1
     assert (await guard.check(username="Ancient", address="10.0.0.1")).allowed

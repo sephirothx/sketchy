@@ -382,6 +382,7 @@ def retention_sweeps() -> tuple[Sweep, ...]:
     last because their cascades are the heaviest; messages first because
     they are the fastest-growing table.
     """
+    from app.auth.login_guard import purge_forgotten_lockouts
     from app.auth.mail import purge_expired_outbox_entries
     from app.auth.rate_limit import cleanup_expired_rate_limit_buckets
     from app.auth.tokens import purge_expired_tokens
@@ -411,6 +412,7 @@ def retention_sweeps() -> tuple[Sweep, ...]:
         Sweep("data_exports", purge_expired_data_exports),
         Sweep("shutdown_abandonments", purge_expired_shutdown_abandonments),
         Sweep("auth_rate_limit_buckets", cleanup_expired_rate_limit_buckets),
+        Sweep("auth_login_lockouts", purge_forgotten_lockouts),
         Sweep(
             "room_code_reservations",
             purge_retired_room_codes,

@@ -165,7 +165,7 @@ groups:
 
       # Per-table, because the loop's own counters cannot say which table:
       # every sweep is fault-isolated, so one failing every hour leaves the
-      # other eleven succeeding and the loop looking merely intermittent.
+      # other twelve succeeding and the loop looking merely intermittent.
       - alert: SketchyRetentionSweepFailing
         expr: sketchy_retention_sweep_failed == 1
         for: 2h
