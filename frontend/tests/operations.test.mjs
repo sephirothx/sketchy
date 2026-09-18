@@ -63,7 +63,9 @@ function healthy(overrides = {}) {
     },
     database: {
       pool: { size: 5, checkedOut: 1, checkedIn: 4, overflow: 0, capacity: 10 },
-      queriesPerMinute: 50, queryP95Ms: 2, queryErrors: 0,
+      queriesPerMinute: 50, queryP95Ms: 2, queryErrors: 0, errorsByCause: {},
+      poolWaitP95Ms: 0.1, poolTimeouts: 0, poolTimeoutsInWindow: 0, topOperations: [], retries: {},
+      historyWriteP95Ms: 40, historyPersistLagP95Seconds: 0.2,
       historyWritesAbandoned: { total: 0, lastHour: 0, byReason: { timeout: 0, error: 0 } },
       readiness: { ok: true, reason: null, checkedAgoSeconds: 2 },
     },
@@ -119,10 +121,13 @@ test("each threshold is a threshold, not a suggestion", () => {
   assert.deepEqual(at({ queues: { mailOutbox: { pending: 1, oldestSeconds: 60 } } }), []);
   assert.deepEqual(at({ queues: { mailOutbox: { pending: 1, oldestSeconds: 61 } } }), ["mail-backlog"]);
   assert.deepEqual(at({ database: { pool: { checkedOut: 10 } } }), ["pool-saturated"]);
+  // Waiting is its own reason (#892): a pool can be full and fast, or not full and slow to hand out.
+  assert.deepEqual(at({ database: { poolWaitP95Ms: 250 } }), ["pool-waiting"]);
+  assert.deepEqual(at({ database: { poolTimeoutsInWindow: 1 } }), ["pool-waiting"]);
   // The drawing store is a review size, not a fault: at the line, nothing.
-  assert.deepEqual(at({ drawingStore: { totalBytes: ATTENTION.drawingStoreBytes, readyRows: 1 } }), []);
+  assert.deepEqual(at({ drawingStore: { totalBytes: ATTENTION.drawingStoreBytes, rows: 1 } }), []);
   assert.deepEqual(
-    at({ drawingStore: { totalBytes: ATTENTION.drawingStoreBytes + 1, readyRows: 1 } }),
+    at({ drawingStore: { totalBytes: ATTENTION.drawingStoreBytes + 1, rows: 1 } }),
     ["drawing-store-large"],
   );
   // Off PostgreSQL there is no reading, and an absent one must not read as an

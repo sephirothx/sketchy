@@ -44,6 +44,24 @@ warnings, because each one is a cause the objectives above would show the effect
 `SketchyPoolSaturated`, `SketchySlowQueries`, `SketchyDiskLow` (page: a full disk is
 data loss), `SketchyMemoryHigh`.
 
+The database's application-side signals name a cause as well as an effect (#892).
+`sketchy_db_query_duration_seconds` is labelled by `operation` (session resolve, save
+game, prompt usage, message batch, event flush, gallery page, community catalogue,
+history page, export build, retention sweep, profile pins, stats rebuild, other) and
+reaches 30 s, the web role's statement timeout, so a slow p95 has a name.
+`sketchy_db_pool_wait_seconds` is the wait for a connection, which that histogram
+starts after: `SketchyPoolWaiting` (warn, p95 over 100 ms for 5 m) is the queue the
+fill ratio only implies, and `SketchyPoolTimeouts` (page) is a request that gave up
+waiting — a failure the statement counters never saw, because no cursor existed.
+`sketchy_db_query_errors_total{cause}` splits failures by SQLSTATE class, and
+`SketchyDatabaseDeadlocks` (warn) fires on any deadlock or serialization failure in an
+hour: the ascending lock order and the 5 s lock budget exist so that it never does.
+`sketchy_db_transaction_seconds{operation}` is how long each kind of transaction holds
+its connection, which is what a pool sized 5 + 5 has to be judged against;
+`sketchy_db_retries_total{operation,outcome}` counts the retried writes; and
+`sketchy_history_write_seconds` and `sketchy_history_persist_lag_seconds` say how long
+a finished game takes to write and how long after the game it lands.
+
 On PostgreSQL the disk is the database host's: the application does not emit
 `sketchy_data_disk_*` there (its working directory is not where the data is), and
 `sketchy:disk_free_ratio` reads node_exporter on the database host instead, so

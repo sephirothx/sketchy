@@ -240,8 +240,8 @@ def _drawing_store_lines(size: DrawingStoreSize | None) -> list[str]:
         ),
         *gauge_lines(
             "sketchy_drawing_store_rows",
-            "Stored drawings held.",
-            size.ready_rows,
+            "Drawing rows, from the planner's estimate (pg_class.reltuples).",
+            size.rows,
         ),
     ]
 

@@ -30,6 +30,10 @@ groups:
         expr: >
           histogram_quantile(0.95,
             sum by (le) (rate(sketchy_db_query_duration_seconds_bucket[5m])))
+      - record: sketchy:db_pool_wait_p95_seconds:5m
+        expr: >
+          histogram_quantile(0.95,
+            sum by (le) (rate(sketchy_db_pool_wait_seconds_bucket[5m])))
       - record: sketchy:db_pool_fill_ratio
         expr: >
           sketchy_db_pool_checked_out / clamp_min(sketchy_db_pool_capacity, 1)

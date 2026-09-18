@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
+from app.services.telemetry import database_operation_of, telemetry
 from app.db.models import (
     GalleryShelfReview,
     AuditEvent,
@@ -1333,6 +1334,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
 
+    @database_operation_of("save_game")
     async def save_game(
         self,
         game_record: GameRecordInput,
@@ -2298,6 +2300,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     reaction_counts=summary.counts,
                 )
 
+    @database_operation_of("gallery_page")
     async def list_gallery(
         self,
         *,
@@ -2559,7 +2562,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 rows = await self._replace_profile_pins(db_user_id, db_turn_ids)
             except LockSetChangedError:
                 if attempt == PIN_WRITE_LOCK_RETRIES - 1:
+                    telemetry.db_retry("profile_pins", "exhausted")
                     raise
+                telemetry.db_retry("profile_pins", "retried")
                 continue
             break
         if rows is None:
@@ -2878,6 +2883,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 for row in rows
             ]
 
+    @database_operation_of("history_page")
     async def get_user_games(
         self,
         user_id: str,
@@ -3438,6 +3444,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListMutationError(str(error)) from error
         return name, description, language
 
+    @database_operation_of("community_catalogue")
     async def list_community(
         self,
         *,
@@ -5513,6 +5520,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         )
         return resolved
 
+    @database_operation_of("prompt_usage")
     async def record_prompt_usage(
         self,
         prompt_list_revision_ids: Sequence[str],

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from app.domain_values import AccountState, GameOutcome
+from app.services.telemetry import telemetry
 from app.db.models import (
     GameParticipant,
     GameRecord,
@@ -621,7 +622,10 @@ async def rebuild_user_stats_projection(
                     break
                 except DBAPIError as error:
                     if not _is_transient(error) or attempt == REBUILD_RETRIES - 1:
+                        if _is_transient(error):
+                            telemetry.db_retry("stats_rebuild", "exhausted")
                         raise
+                    telemetry.db_retry("stats_rebuild", "retried")
     return rows
 
 

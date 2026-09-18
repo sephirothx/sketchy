@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.db import create_db_engine, upgrade_database
+from app.db import create_db_engine, summarise_on_dispose, upgrade_database
 
 
 async def _run() -> None:
@@ -11,6 +11,8 @@ async def _run() -> None:
     # included) and a statement budget of its own, rather than the web
     # engine's request-sized ones.
     engine = create_db_engine(role="migration")
+    # How long the migration ran and what it did, as one log line (#892).
+    summarise_on_dispose(engine, role="migration", command="app.db.migrate")
     try:
         await upgrade_database(engine)
     finally:

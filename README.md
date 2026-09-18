@@ -2501,7 +2501,12 @@ p95), then a queue that is merely slow. Quote the `X-Request-ID` of any failing
 request: the access line, the audit entry and every log line inside that request
 carry it, and every command's lines carry its socket id and command name. Event-loop
 lag with no matching database latency is a starved loop, not a slow database; the
-reverse is the pool or the disk. Its per-player view answers "which account keeps
+reverse is the pool or the disk. The database's own series say which: statement
+latency is labelled by operation, the wait for a connection is its own histogram
+(`SketchyPoolWaiting`, and `SketchyPoolTimeouts` when a request gave up), and failures
+are counted by cause, so a deadlock (`SketchyDatabaseDeadlocks`) is not read as a
+timeout. Operator commands log one line each on exit — command, seconds, statements,
+rows, failures. Its per-player view answers "which account keeps
 disconnecting", and because that is a surveillance surface on the game's own
 players, every use writes an audit event naming both who looked and who was
 looked at.

@@ -813,6 +813,7 @@ async def replay_claim(
     try:
         if history_state == HandoffPartState.PENDING.value:
             history = envelope.history
+            write_started = time.perf_counter()
             try:
                 await asyncio.wait_for(
                     game_history_repo.save_game(
@@ -829,6 +830,18 @@ async def replay_claim(
                 return await _fail(HandoffFailureCode.CONFLICT, str(error))
             except (asyncio.TimeoutError, Exception) as error:
                 raise _Transient(f"history: {error!r}") from error
+            # How long the write took and how late the game landed (#892):
+            # `persisted_at` is the database's clock at this commit, and the
+            # wall clock here is within milliseconds of it.
+            finished_at = history.record.finished_at
+            telemetry.history_write(
+                time.perf_counter() - write_started,
+                persist_lag_seconds=(
+                    (datetime.now(timezone.utc) - finished_at).total_seconds()
+                    if finished_at is not None
+                    else None
+                ),
+            )
             if not await store.mark_part(claim, "history", HandoffPartState.DONE.value):
                 return _lost()
             history_state = HandoffPartState.DONE.value
@@ -856,7 +869,9 @@ async def replay_claim(
                 return _lost()
     except _Transient as error:
         if claim.attempts >= MAX_ATTEMPTS:
+            telemetry.db_retry("save_game", "exhausted")
             return await _fail(HandoffFailureCode.EXHAUSTED, str(error))
+        telemetry.db_retry("save_game", "retried")
         wait = RETRY_BACKOFF_SECONDS[min(claim.attempts, len(RETRY_BACKOFF_SECONDS)) - 1]
         logger.warning(
             "finished game %s not recorded on attempt %d of %d (%s); next in %.0fs",
