@@ -530,6 +530,9 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
             }
         return {"ok": False, "errorCode": ErrorCode.ROOM_NOT_FOUND, "error": "Room not found"}
 
+    if payload.quick_play and not _open_for_quick_play(room):
+        return QUICK_PLAY_REFUSAL
+
     return await _seat_in_room(
         ctx,
         sid,
@@ -538,7 +541,26 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         seated,
         soft=payload.soft,
         reconnect_only=payload.reconnect_only,
+        quick_play=payload.quick_play,
     )
+
+
+QUICK_PLAY_REFUSAL = {
+    "ok": False,
+    "errorCode": ErrorCode.ROOM_NOT_OPEN,
+    "error": "That room is no longer open to Quick play",
+}
+
+
+def _open_for_quick_play(room) -> bool:
+    """Public and waiting, with no game running (R-UX-14).
+
+    Asked twice: when the room is resolved, which saves the work for a room
+    that plainly is not, and again immediately before the seat is added, with
+    no await in between, because the host can start the game or make the room
+    private while the identity is being resolved.
+    """
+    return bool(room.is_public) and room.state == "waiting" and not room.game
 
 
 async def _seat_in_room(
@@ -550,6 +572,7 @@ async def _seat_in_room(
     *,
     soft: bool = False,
     reconnect_only: bool = False,
+    quick_play: bool = False,
 ):
     """Take a seat in a room that has already been resolved.
 
@@ -686,6 +709,11 @@ async def _seat_in_room(
 
     if ctx.is_ending(sid):
         return ENDED_ACCOUNT_ACKNOWLEDGEMENT
+    # The last word on Quick play, with nothing awaited between it and the
+    # seat: the room may have started or gone private since it was resolved.
+    if quick_play and not _open_for_quick_play(room):
+        ctx.room_capacity.refund_join(sid)
+        return QUICK_PLAY_REFUSAL
     try:
         player = ctx.room_manager.add_player(
             room,

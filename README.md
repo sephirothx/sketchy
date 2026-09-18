@@ -2221,8 +2221,11 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 
 ## Game flow
 
-1. **Lobby**: pick a nickname, then create a room (public or private, with a max player count
-   and number of rounds), pick a scoring mode, or join one by code.
+1. **Lobby**: pick a nickname, then press **Quick play** — into the fullest public room
+   waiting for players in your prompt language, or a new public one on the standard rules
+   when none is — or create a room (public or private, with a max player count and number
+   of rounds), pick a scoring mode, or join one by code. Quick play never joins a game
+   already under way or a room in another language.
 2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. Wherever
    players are listed, the host's avatar wears a gold crown on its corner and your own
    avatar wears a ring, so neither needs a word beside the name.

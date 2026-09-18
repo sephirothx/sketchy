@@ -147,6 +147,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   not_in_room: "Je zit niet in deze kamer.",
   room_not_found: "Kamer niet gevonden.",
   room_ended: "Deze kamer is afgelopen.",
+  room_not_open: "Die kamer is niet meer open.",
   could_not_create_room: "De kamer kon niet aangemaakt worden.",
   no_session_to_resume: "Er is geen sessie van jou om in deze kamer te hervatten.",
   host_only: "Dat kan alleen de gastheer.",
@@ -1109,6 +1110,9 @@ export const NL: Catalogue = {
   },
 
   lobbyBrowserPage: {
+    quickPlay: "Snel spelen",
+    quickPlayBusy: "Kamer zoeken…",
+    couldNotFindOrOpenARoom: "Er kon geen kamer worden gevonden of geopend.",
     filterByLanguage: "Filteren op taal",
     filtersWithCount: (p: { count: number }) =>
       p.count > 0 ? `Filters · ${p.count}` : "Filters",

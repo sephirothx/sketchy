@@ -8,6 +8,7 @@ import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
 import { useFriendArrivalNotices } from "../hooks/useFriendArrivalNotices";
 import { useGameStore } from "../store/gameStore";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { useToast } from "../lib/toast";
 import { XIcon } from "./icons";
 import type { AckResponse } from "../types";
@@ -77,11 +78,18 @@ export function FriendInviteNotice() {
   // Signing out mid-invitation leaves a notice addressed to nobody. Derived
   // rather than cleared in an effect: the token is the server's to expire, and
   // there is nothing to tidy up here beyond not drawing it.
+  const entryPending = useRoomEntryStore((state) => state.pending !== null);
+
   if (!invite || !myUserId) return null;
 
   async function join() {
     const current = invite;
     if (!current) return;
+    // Mounted above every page, so it is the one way in that the lobby's own
+    // controls cannot see: it takes the same lock they do, and while another
+    // entry holds it the notice waits rather than racing it for the seat.
+    const token = useRoomEntryStore.getState().begin("friend-invite");
+    if (token === null) return;
     setInvite(null);
     try {
       const answer = await emitWithAck<AckResponse>("join_friend_room", {
@@ -97,6 +105,8 @@ export function FriendInviteNotice() {
       navigate(`/room/${session.code}`);
     } catch {
       notify(ui.friendInviteNotice.thatGameCouldNotBeJoined);
+    } finally {
+      useRoomEntryStore.getState().end(token);
     }
   }
 
@@ -105,7 +115,12 @@ export function FriendInviteNotice() {
       <span className="friend-invite-text">
         <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
       </span>
-      <button type="button" className="btn btn-primary btn-compact" onClick={() => void join()}>
+      <button
+        type="button"
+        className="btn btn-primary btn-compact"
+        disabled={entryPending}
+        onClick={() => void join()}
+      >
         {ui.friendInviteNotice.join}
       </button>
       <button

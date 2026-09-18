@@ -159,6 +159,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   not_in_room: "You are not in this room.",
   room_not_found: "Room not found.",
   room_ended: "This room has ended.",
+  room_not_open: "That room is no longer open.",
   could_not_create_room: "Could not create the room.",
   no_session_to_resume: "There is no session of yours to resume in this room.",
   host_only: "Only the host can do that.",
@@ -1120,6 +1121,9 @@ export const EN = {
   },
 
   lobbyBrowserPage: {
+    quickPlay: "Quick play",
+    quickPlayBusy: "Finding a room…",
+    couldNotFindOrOpenARoom: "Could not find or open a room.",
     filterByLanguage: "Filter by language",
     filtersWithCount: (p: { count: number }) =>
       p.count > 0 ? `Filters · ${p.count}` : "Filters",

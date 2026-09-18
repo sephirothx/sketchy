@@ -157,6 +157,9 @@ export function ZapIcon(p: IconProps) { return <IconBase {...p}><path d="M13 2 4
     the tip inside 24 with the ~1 unit of margin the rest of the set leaves. */
 export function BrushIcon(p: IconProps) { return <IconBase {...p}><path d="M9.06 11.9 18.8 4.2a2 2 0 0 1 3 3l-7.7 9.74" /><path d="M9.5 12.5c-2.5 0-4.5 2-4.5 4.5 0 1.5-1 2.5-2.5 3 1 .8 2.3 1.5 4 1.5 3 0 5.5-2.5 5.5-5.5" /></IconBase>; }
 export function SearchIcon(p: IconProps) { return <IconBase {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4-4" /></IconBase>; }
+/** Quick play: the fast way into a room (#589). */
+export function BoltIcon(p: IconProps) { return <IconBase {...p}><path d="M13 2 4 14h7l-1 8 9-12h-7Z" /></IconBase>; }
+
 export function PlusIcon(p: IconProps) { return <IconBase {...p}><path d="M12 5v14" /><path d="M5 12h14" /></IconBase>; }
 export function XIcon(p: IconProps) { return <IconBase {...p}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></IconBase>; }
 export function SendIcon(p: IconProps) { return <IconBase {...p}><path d="m22 2-11 11" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" /></IconBase>; }

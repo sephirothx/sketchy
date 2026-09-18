@@ -283,7 +283,7 @@ moderation - are the rest of the same enum, and are listed at
 | Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `max_players_below_seated`, `empty_message` |
 | Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
 | Server and account state | `server_draining`, `server_paused`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
-| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
+| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `room_not_open`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
 | Games and turns | `not_in_game`, `game_in_progress`, `game_starting`, `need_two_players`, `room_not_startable`, `prompt_not_ready`, `prompt_unavailable`, `hints_disabled`, `hint_spend_limit`, `hint_unavailable` |
 | Canvas | `drawer_only`, `canvas_stale_generation`, `canvas_sequence_committed`, `canvas_out_of_sequence`, `canvas_out_of_sync`, `nothing_to_undo` |
 | Votes and restarts | `spectators_cannot_vote`, `spectators_cannot_be_targets`, `invalid_vote_target`, `not_eligible`, `restart_vote_active`, `restart_vote_cooldown`, `no_restart_vote`, `restart_vote_closed` |
@@ -639,9 +639,17 @@ and no connection or AFK state: none of that helps somebody decide whether to
 join, and each one would say more about a stranger than the question needs.
 
 `join_room` takes `roomId` **or** `code` (at least one required; `code` is upper-cased),
-plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`, and
-`reconnectOnly` — the last used by the invite screen to ask *"do I already hold a seat
-here?"* without seating a visitor who is still deciding whether to play or spectate.
+plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`,
+`reconnectOnly` — used by the invite screen to ask *"do I already hold a seat
+here?"* without seating a visitor who is still deciding whether to play or spectate — and
+`quickPlay`. **Quick play** (R-UX-14) picks its room from the lobby's list, which is a
+moment old, so `quickPlay: true` asks the server to seat the player only if the room is
+still **public and waiting with no game running**, and refuses with `room_not_open`
+otherwise. It is checked when the room is resolved and again immediately before the seat
+is added, with nothing awaited in between, because the host can start the game or make
+the room private while the joiner's identity is being resolved; a refused seat refunds the
+join allowance. `quickPlay` requires `roomId` and a player seat (`invalid_payload` with a
+`code` or `asSpectator`). An ordinary join still admits a game in progress.
 
 Both `create_room` and `join_room` **release any seat the socket already holds**: the
 room it came from sees an ordinary `player_left` for it and, if that was its last

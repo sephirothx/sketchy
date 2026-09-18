@@ -147,6 +147,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   not_in_room: "Tu n’es pas dans ce salon.",
   room_not_found: "Salon introuvable.",
   room_ended: "Ce salon est terminé.",
+  room_not_open: "Ce salon n’est plus ouvert.",
   could_not_create_room: "Le salon n’a pas pu être créé.",
   no_session_to_resume: "Il n’y a aucune session à toi à reprendre dans ce salon.",
   host_only: "Seul l’hôte peut faire cela.",
@@ -1109,6 +1110,9 @@ export const FR: Catalogue = {
   },
 
   lobbyBrowserPage: {
+    quickPlay: "Partie rapide",
+    quickPlayBusy: "Recherche d’un salon…",
+    couldNotFindOrOpenARoom: "Impossible de trouver ou d’ouvrir un salon.",
     filterByLanguage: "Filtrer par langue",
     filtersWithCount: (p: { count: number }) =>
       p.count > 0 ? `Filtres · ${p.count}` : "Filtres",

@@ -735,7 +735,32 @@
   /* ── The dock ──────────────────────────────────────────────────────────
      The two entry cards took 440px above the room list; as a fixed bar they
      take 120px below it, and both controls sit under the thumb. */
-  .lobby-dock {
+  /* Quick play (#589), beside the two ways in that were already there and at
+   the head of the phone's dock: the fast one of the three, and the only one
+   that is a game rather than a form. Warm, like Start in a room, so that the
+   indigo Create room stays the deliberate choice. */
+.lobby-quick-play {
+  gap: 7px;
+}
+
+.lobby-quick-play:disabled {
+  cursor: progress;
+  filter: saturate(0.6);
+}
+
+/* The dock's second row: the two that were there, side by side under it. */
+.lobby-dock-row {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-dock-row > * {
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+}
+
+.lobby-dock {
     background: var(--card);
     border-top: 1.5px solid var(--line);
     bottom: 0;

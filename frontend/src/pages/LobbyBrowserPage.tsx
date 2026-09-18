@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { emitTransient, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
@@ -13,12 +13,13 @@ import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useRoomsStore } from "../store/roomsStore";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, PlusIcon, SearchIcon } from "../components/icons";
+import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon } from "../components/icons";
 import {
   SUPPORTED_PROMPT_LANGUAGES,
   sortRoomsByLanguage,
@@ -28,13 +29,20 @@ import {
   LanguagePicker,
   type LanguageChoice,
 } from "../components/LanguagePicker";
+import {
+  QUICK_PLAY_LIST_WAIT_MS,
+  quickPlayCandidates,
+  quickPlayReady,
+  quickPlayRoom,
+  runQuickPlay,
+  waitForState,
+} from "../lib/quickPlay";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
 const ROOM_CODE_LENGTH = 6;
 
-type PendingJoin = { key: string; mode: "join" | "spectate" };
 
 function normalizeRoomCodeInput(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, ROOM_CODE_LENGTH);
@@ -192,7 +200,25 @@ export function LobbyBrowserPage() {
   const isWide = useMediaQuery("(min-width: 1500px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
-  const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
+  // One entry at a time, whichever control started it - a room card, a code,
+  // Quick play, or a friend's invitation from outside this page. Two in flight
+  // would release each other's seats and race for the session and the route,
+  // so every entry control is disabled while one is pending. The lock is the
+  // app's, not this page's (store/roomEntryStore.ts).
+  const pendingJoin = useRoomEntryStore((state) => state.pending);
+  const beginEntry = useRoomEntryStore((state) => state.begin);
+  const endEntry = useRoomEntryStore((state) => state.end);
+  const quickPlayBusy = pendingJoin?.key === "quick-play";
+  // An entry whose answer arrives after the lobby has gone (the player took
+  // the header's way somewhere else meanwhile) must not drag them back into a
+  // room - and a seat it did take is let go rather than left behind.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   // The validator from the last successful fetch. A ref rather than state:
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -243,6 +269,8 @@ export function LobbyBrowserPage() {
 
   // No gate: every visitor already has a name, generated on their first load.
   async function handleOpenCreateRoom() {
+    // An entry already in flight owns the socket and the route.
+    if (useRoomEntryStore.getState().pending) return;
     // A visitor who typed a name and pressed this plainly means to play under
     // it, so provision from the draft rather than sending them back to a form
     // they have already filled in.
@@ -255,6 +283,76 @@ export function LobbyBrowserPage() {
       }
     }
     navigate("/create");
+  }
+
+  /**
+   * The one control that plays (#589): into a room that is waiting with a seat
+   * free, or into a new one on the standard rules when there is none.
+   *
+   * The candidates are walked in order because the list is a moment old: a
+   * room can fill between the push that sent it and this press, and the answer
+   * to that is the next room, then a room of your own - not an error.
+   */
+  async function handleQuickPlay() {
+    if (!quickPlayReady(roomsState)) return;
+    const token = beginEntry("quick-play");
+    if (token === null) return;
+    setError(null);
+    try {
+      let playerName = currentPlayerName();
+      if (awaitingName) playerName = (await ensureIdentity()).displayName;
+      // Naming reconnects the socket, which leaves the list stale until the
+      // new connection's snapshot arrives. Wait for it and carry on: the press
+      // that named the player is the press that plays.
+      const listed = await waitForState(
+        () => useRoomsStore.getState().rooms,
+        (listener) => useRoomsStore.subscribe((state) => listener(state.rooms)),
+        quickPlayReady,
+        QUICK_PLAY_LIST_WAIT_MS,
+      );
+      if (!mountedRef.current) return;
+      if (!listed) {
+        setError(ui.lobbyBrowserPage.couldNotFindOrOpenARoom);
+        return;
+      }
+      // Read now, not from the render the press came from.
+      const current = useRoomsStore.getState().rooms;
+      const answer = await runQuickPlay(
+        quickPlayCandidates(current.rooms, playerLanguage),
+        (room) => emitWithAck<AckResponse>("join_room", {
+          nickname: playerName,
+          nameColor,
+          colorblindSafeColors,
+          asSpectator: false,
+          roomId: room.id,
+          quickPlay: true,
+        }),
+        () => emitWithAck<AckResponse>("create_room", {
+          nickname: playerName,
+          nameColor,
+          colorblindSafeColors,
+          ...quickPlayRoom(playerLanguage, colorblindSafeColors),
+        }),
+      );
+      const session = sessionFrom(answer);
+      if (!mountedRef.current) {
+        if (session) letGoOfAStraySeat();
+        return;
+      }
+      if (session) {
+        setSession(session);
+        navigate(`/room/${session.code}`);
+        return;
+      }
+      if (answer.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
+      setError(refusalText(answer, ui.lobbyBrowserPage.couldNotFindOrOpenARoom));
+    } catch (quickPlayError) {
+      if (!mountedRef.current) return;
+      if (quickPlayError instanceof IdentityRequiredError) setError(identityMessage(quickPlayError));
+      else setError(socketRequestErrorMessage(quickPlayError, ui.lobbyBrowserPage.quickPlay));
+    } finally {
+      endEntry(token);
+    }
   }
 
   async function handleJoinByCode(asSpectator = false) {
@@ -270,23 +368,22 @@ export function LobbyBrowserPage() {
   }
 
   async function joinRoom(target: { roomId?: string; code?: string }, asSpectator: boolean, key: string) {
-    if (pendingJoin) return;
-    setPendingJoin({ key, mode: asSpectator ? "spectate" : "join" });
+    const token = beginEntry(key, asSpectator ? "spectate" : "join");
+    if (token === null) return;
     setError(null);
-    // Every join arrives here - a public room card, a code, a spectate - so
-    // this is where a visitor who typed a name and pressed one of those
-    // instead of the block's own button becomes somebody.
-    let playerName = currentPlayerName();
-    if (awaitingName) {
-      try {
-        playerName = (await ensureIdentity()).displayName;
-      } catch (identityError) {
-        setError(identityMessage(identityError));
-        setPendingJoin(null);
-        return;
-      }
-    }
     try {
+      // Every join arrives here - a public room card, a code, a spectate - so
+      // this is where a visitor who typed a name and pressed one of those
+      // instead of the block's own button becomes somebody.
+      let playerName = currentPlayerName();
+      if (awaitingName) {
+        try {
+          playerName = (await ensureIdentity()).displayName;
+        } catch (identityError) {
+          if (mountedRef.current) setError(identityMessage(identityError));
+          return;
+        }
+      }
       const res = await emitWithAck<AckResponse>("join_room", {
         nickname: playerName,
         nameColor,
@@ -295,6 +392,10 @@ export function LobbyBrowserPage() {
         ...target,
       });
       const session = sessionFrom(res);
+      if (!mountedRef.current) {
+        if (session) letGoOfAStraySeat();
+        return;
+      }
       if (session) {
         setSession(session);
         navigate(`/room/${session.code}`);
@@ -302,10 +403,21 @@ export function LobbyBrowserPage() {
         setError(refusalText(res, ui.lobbyBrowserPage.failedJoinRoom));
       }
     } catch (joinError) {
+      if (!mountedRef.current) return;
       setError(socketRequestErrorMessage(joinError, asSpectator ? ui.lobbyBrowserPage.joinAsASpectator : ui.lobbyBrowserPage.joinTheRoom));
     } finally {
-      setPendingJoin(null);
+      endEntry(token);
     }
+  }
+
+  /**
+   * A seat taken by an answer that arrived after the lobby had gone. Safe to
+   * release because the entry lock was held throughout: no other way in can
+   * have seated this socket since - and, belt and braces, only while no room
+   * is on screen, so it can never free a seat the player is looking at.
+   */
+  function letGoOfAStraySeat() {
+    if (useGameStore.getState().roomId === null) emitTransient("leave_room");
   }
 
   return (
@@ -338,9 +450,22 @@ export function LobbyBrowserPage() {
               account menu. */}
           {!isNarrow && (
             <div className="lobby-rooms-actions">
+              {/* The fast one of the three, and the only one that is a game
+                  rather than a form (#589). */}
+              <button
+                type="button"
+                className="btn btn-warm btn-compact lobby-quick-play"
+                data-testid="quick-play"
+                disabled={Boolean(pendingJoin) || !quickPlayReady(roomsState)}
+                onClick={() => void handleQuickPlay()}
+              >
+                <BoltIcon size={15} />
+                {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary btn-compact"
+                disabled={Boolean(pendingJoin)}
                 onClick={() => setCodeSheetOpen(true)}
               >
                 {ui.lobbyBrowserPage.joinByCode}
@@ -349,6 +474,7 @@ export function LobbyBrowserPage() {
                 variant="primary"
                 compact
                 iconLeft={<PlusIcon size={15} />}
+                disabled={Boolean(pendingJoin)}
                 onClick={() => void handleOpenCreateRoom()}
               >
                 {ui.lobbyBrowserPage.createRoom}
@@ -525,21 +651,34 @@ export function LobbyBrowserPage() {
           {error && !codeSheetOpen && (
             <p className="lobby-action-error" role="alert">{error}</p>
           )}
-          <Button
-            variant="primary"
-            big
-            iconLeft={<PlusIcon size={16} />}
-            onClick={() => void handleOpenCreateRoom()}
-          >
-            {ui.lobbyBrowserPage.createRoom2}
-          </Button>
           <button
             type="button"
-            className="btn btn-secondary lobby-dock-code"
-            onClick={() => setCodeSheetOpen(true)}
+            className="btn btn-warm btn-big lobby-quick-play"
+            data-testid="quick-play"
+            disabled={Boolean(pendingJoin) || !quickPlayReady(roomsState)}
+            onClick={() => void handleQuickPlay()}
           >
-            {ui.lobbyBrowserPage.joinWithCode}
+            <BoltIcon size={16} />
+            {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
           </button>
+          <div className="lobby-dock-row">
+            <Button
+              variant="primary"
+              iconLeft={<PlusIcon size={15} />}
+              disabled={Boolean(pendingJoin)}
+              onClick={() => void handleOpenCreateRoom()}
+            >
+              {ui.lobbyBrowserPage.createRoom2}
+            </Button>
+            <button
+              type="button"
+              className="btn btn-secondary lobby-dock-code"
+              disabled={Boolean(pendingJoin)}
+              onClick={() => setCodeSheetOpen(true)}
+            >
+              {ui.lobbyBrowserPage.joinWithCode}
+            </button>
+          </div>
         </div>
       )}
 
