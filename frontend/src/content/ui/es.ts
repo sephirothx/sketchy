@@ -1109,6 +1109,9 @@ export const ES: Catalogue = {
   },
 
   lobbyBrowserPage: {
+    quickPlay: "Juego rápido",
+    quickPlayBusy: "Buscando una sala…",
+    couldNotFindOrOpenARoom: "No se pudo encontrar ni abrir una sala.",
     filterByLanguage: "Filtrar por idioma",
     filtersWithCount: (p: { count: number }) =>
       p.count > 0 ? `Filtros · ${p.count}` : "Filtros",

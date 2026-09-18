@@ -18,7 +18,7 @@ import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { AlertCircleIcon, PlusIcon, SearchIcon } from "../components/icons";
+import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon } from "../components/icons";
 import {
   SUPPORTED_PROMPT_LANGUAGES,
   sortRoomsByLanguage,
@@ -28,6 +28,7 @@ import {
   LanguagePicker,
   type LanguageChoice,
 } from "../components/LanguagePicker";
+import { quickPlayCandidates, quickPlayRoom } from "../lib/quickPlay";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -193,6 +194,7 @@ export function LobbyBrowserPage() {
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
+  const [quickPlayBusy, setQuickPlayBusy] = useState(false);
   // The validator from the last successful fetch. A ref rather than state:
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -255,6 +257,65 @@ export function LobbyBrowserPage() {
       }
     }
     navigate("/create");
+  }
+
+  /**
+   * The one control that plays (#589): into a room that is waiting with a seat
+   * free, or into a new one on the standard rules when there is none.
+   *
+   * The candidates are walked in order because the list is a moment old: a
+   * room can fill between the push that sent it and this press, and the answer
+   * to that is the next room, then a room of your own - not an error.
+   */
+  async function handleQuickPlay() {
+    if (quickPlayBusy || pendingJoin) return;
+    setQuickPlayBusy(true);
+    setError(null);
+    try {
+      let playerName = currentPlayerName();
+      if (awaitingName) playerName = (await ensureIdentity()).displayName;
+      for (const room of quickPlayCandidates(rooms, playerLanguage)) {
+        const joined = await emitWithAck<AckResponse>("join_room", {
+          nickname: playerName,
+          nameColor,
+          colorblindSafeColors,
+          asSpectator: false,
+          roomId: room.id,
+        });
+        const session = sessionFrom(joined);
+        if (session) {
+          setSession(session);
+          navigate(`/room/${session.code}`);
+          return;
+        }
+        // A name somebody online took while this page was open is not a full
+        // room, and trying the next one would meet the same refusal.
+        if (joined.errorCode === "name_in_use") {
+          useAuthStore.getState().markNameInUse();
+          setError(refusalText(joined, ui.lobbyBrowserPage.failedJoinRoom));
+          return;
+        }
+      }
+      const opened = await emitWithAck<AckResponse>("create_room", {
+        nickname: playerName,
+        nameColor,
+        colorblindSafeColors,
+        ...quickPlayRoom(playerLanguage, colorblindSafeColors),
+      });
+      const session = sessionFrom(opened);
+      if (session) {
+        setSession(session);
+        navigate(`/room/${session.code}`);
+        return;
+      }
+      if (opened.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
+      setError(refusalText(opened, ui.lobbyBrowserPage.couldNotFindOrOpenARoom));
+    } catch (quickPlayError) {
+      if (quickPlayError instanceof IdentityRequiredError) setError(identityMessage(quickPlayError));
+      else setError(socketRequestErrorMessage(quickPlayError, ui.lobbyBrowserPage.quickPlay));
+    } finally {
+      setQuickPlayBusy(false);
+    }
   }
 
   async function handleJoinByCode(asSpectator = false) {
@@ -338,6 +399,18 @@ export function LobbyBrowserPage() {
               account menu. */}
           {!isNarrow && (
             <div className="lobby-rooms-actions">
+              {/* The fast one of the three, and the only one that is a game
+                  rather than a form (#589). */}
+              <button
+                type="button"
+                className="btn btn-warm btn-compact lobby-quick-play"
+                data-testid="quick-play"
+                disabled={quickPlayBusy}
+                onClick={() => void handleQuickPlay()}
+              >
+                <BoltIcon size={15} />
+                {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary btn-compact"
@@ -525,21 +598,32 @@ export function LobbyBrowserPage() {
           {error && !codeSheetOpen && (
             <p className="lobby-action-error" role="alert">{error}</p>
           )}
-          <Button
-            variant="primary"
-            big
-            iconLeft={<PlusIcon size={16} />}
-            onClick={() => void handleOpenCreateRoom()}
-          >
-            {ui.lobbyBrowserPage.createRoom2}
-          </Button>
           <button
             type="button"
-            className="btn btn-secondary lobby-dock-code"
-            onClick={() => setCodeSheetOpen(true)}
+            className="btn btn-warm btn-big lobby-quick-play"
+            data-testid="quick-play"
+            disabled={quickPlayBusy}
+            onClick={() => void handleQuickPlay()}
           >
-            {ui.lobbyBrowserPage.joinWithCode}
+            <BoltIcon size={16} />
+            {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
           </button>
+          <div className="lobby-dock-row">
+            <Button
+              variant="primary"
+              iconLeft={<PlusIcon size={15} />}
+              onClick={() => void handleOpenCreateRoom()}
+            >
+              {ui.lobbyBrowserPage.createRoom2}
+            </Button>
+            <button
+              type="button"
+              className="btn btn-secondary lobby-dock-code"
+              onClick={() => setCodeSheetOpen(true)}
+            >
+              {ui.lobbyBrowserPage.joinWithCode}
+            </button>
+          </div>
         </div>
       )}
 

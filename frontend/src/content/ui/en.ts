@@ -1120,6 +1120,9 @@ export const EN = {
   },
 
   lobbyBrowserPage: {
+    quickPlay: "Quick play",
+    quickPlayBusy: "Finding a room…",
+    couldNotFindOrOpenARoom: "Could not find or open a room.",
     filterByLanguage: "Filter by language",
     filtersWithCount: (p: { count: number }) =>
       p.count > 0 ? `Filters · ${p.count}` : "Filters",
