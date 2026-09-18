@@ -38,12 +38,19 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import os
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.rate_limit import PersistentRateLimiter, keyed_client_hash
 from app.db.models import AuthLoginLockout
+from app.services.sweeps import (
+    SweepBudget,
+    SweepReport,
+    delete_in_batches,
+    overdue_probe,
+    sweep_budget_from_env,
+)
 
 
 # Consecutive failures on one account before it starts backing off, and what
@@ -57,7 +64,10 @@ LOCKOUT_BACKOFF = (
     timedelta(hours=1),
 )
 # A lockout row that has not been touched in a day is a finished attack, and
-# the count behind it should not follow somebody for a week.
+# the count behind it should not follow somebody for a week. Enforced by the
+# hourly retention sweep (`purge_forgotten_lockouts`), because a failure is
+# counted for usernames that do not exist - deliberately, so the answer does
+# not say which do - and every distinct name anybody tries leaves a row (#891).
 LOCKOUT_FORGET_AFTER = timedelta(days=1)
 
 GLOBAL_LOGIN_KEY = "all"
@@ -237,25 +247,48 @@ class LoginGuard:
                     record.locked_until = _locked_until(failures, now)
                     return
 
-    async def forget_expired_lockouts(self, *, before: datetime | None = None) -> int:
-        """Drop rows no longer holding anybody back, so the table stays small."""
-        cutoff = (before or self._clock()) - LOCKOUT_FORGET_AFTER
-        async with self._session_factory() as database:
-            async with database.begin():
-                removed = await database.execute(
-                    delete(AuthLoginLockout).where(
-                        AuthLoginLockout.updated_at <= cutoff
-                    )
-                )
-                return int(removed.rowcount or 0)
-
-
 def _locked_until(failures: int, now: datetime) -> datetime | None:
     """How long this many consecutive failures buys, or nothing yet."""
     if failures < LOCKOUT_AFTER_FAILURES:
         return None
     step = min(failures - LOCKOUT_AFTER_FAILURES, len(LOCKOUT_BACKOFF) - 1)
     return now + LOCKOUT_BACKOFF[step]
+
+
+async def purge_forgotten_lockouts(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    now: datetime | None = None,
+    budget: SweepBudget | None = None,
+) -> SweepReport:
+    """Drop lockouts untouched for `LOCKOUT_FORGET_AFTER`, from the hourly sweep.
+
+    The one table an unauthenticated client can add rows to at will: without
+    this, growth is set by whoever is guessing, bounded only by the login
+    rate limit, and kept for ever (#891). A stale row is already ignored by
+    `note_failure`, so removing it changes no decision - it only stops a
+    finished attack, and a list of names somebody tried, from being kept.
+    """
+    cutoff = (now or datetime.now(timezone.utc)) - LOCKOUT_FORGET_AFTER
+    return await delete_in_batches(
+        session_factory,
+        name="auth_login_lockouts",
+        candidates=select(AuthLoginLockout.key_hash)
+        .where(AuthLoginLockout.updated_at <= cutoff)
+        .order_by(AuthLoginLockout.updated_at, AuthLoginLockout.key_hash),
+        # The age is asked again: a failure landing between the select and
+        # the delete has just made the row current, and it stays.
+        delete_for=lambda keys: delete(AuthLoginLockout).where(
+            AuthLoginLockout.key_hash.in_(keys),
+            AuthLoginLockout.updated_at <= cutoff,
+        ),
+        budget=budget or sweep_budget_from_env(),
+        probe=overdue_probe(
+            AuthLoginLockout.updated_at,
+            AuthLoginLockout.updated_at <= cutoff,
+        ),
+        now=cutoff,
+    )
 
 
 async def count_open_lockouts(
@@ -266,9 +299,9 @@ async def count_open_lockouts(
     """How many accounts are being held back right now, for the operator view."""
     checked_at = now or datetime.now(timezone.utc)
     async with session_factory() as database:
-        rows = await database.execute(
-            select(AuthLoginLockout.key_hash).where(
-                AuthLoginLockout.locked_until > checked_at
+        return int(
+            await database.scalar(
+                select(func.count()).where(AuthLoginLockout.locked_until > checked_at)
             )
+            or 0
         )
-        return len(rows.all())

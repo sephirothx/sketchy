@@ -746,7 +746,7 @@ process. These deployment settings can be tuned without code changes:
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
-| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, room codes, runtime events, bug-report screenshots, retired lists, guests |
+| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, login lockouts, room codes, runtime events, bug-report screenshots, retired lists, guests |
 | `RETENTION_SWEEP_ROW_BUDGET` | `5000` | Rows one sweep may delete per run; a run that spends it comes back after 5 s rather than an hour |
 | `RETENTION_SWEEP_BATCH_ROWS` | `500` | Rows per committed delete batch inside a sweep |
 | `RETENTION_SWEEP_SECONDS_BUDGET` | `30` | Seconds one sweep may spend per run |
