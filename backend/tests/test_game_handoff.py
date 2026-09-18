@@ -248,6 +248,10 @@ async def test_an_envelope_past_the_ceiling_is_refused_before_it_is_written(env)
 
 
 async def test_a_staged_game_is_written_into_history_and_the_row_goes(env):
+    from app.services.telemetry import telemetry
+
+    writes_before = telemetry.history_write_seconds.count()
+    lags_before = telemetry.history_persist_lag.count()
     session_factory, users, history, store = env
     ann, bob = await two_players(users)
     game_id = str(generate_uuid())
@@ -260,6 +264,9 @@ async def test_a_staged_game_is_written_into_history_and_the_row_goes(env):
     assert (report.recorded, report.retried, report.failed) == (1, 0, 0)
     assert await rows(session_factory) == []
     assert outcomes == [(game_id, "recorded")]
+    # Timed, and its lateness measured against the game's end (#892).
+    assert telemetry.history_write_seconds.count() == writes_before + 1
+    assert telemetry.history_persist_lag.count() == lags_before + 1
     games = await history.get_user_games(ann, requesting_user_id=ann)
     assert [g.id for g in games] == [game_id]
     async with session_factory() as session:
@@ -332,6 +339,10 @@ async def test_a_commit_whose_outcome_was_never_learned_is_simply_tried_again(en
 
 
 async def test_transient_failures_back_off_on_the_schedule_and_then_give_up(env):
+    from app.services.telemetry import telemetry
+
+    retried_before = telemetry.db_retries.get(("save_game", "retried"))
+    exhausted_before = telemetry.db_retries.get(("save_game", "exhausted"))
     session_factory, users, history, store = env
     ann, bob = await two_players(users)
     game_id = str(generate_uuid())
@@ -354,6 +365,9 @@ async def test_transient_failures_back_off_on_the_schedule_and_then_give_up(env)
 
     outcome, code, history_recorded = await worker.replay_one()
     assert (outcome, code, history_recorded) == (ReplayOutcome.FAILED, "exhausted", False)
+    # Every retry and the final give-up are counted as such (#892).
+    assert telemetry.db_retries.get(("save_game", "retried")) - retried_before == len(RETRY_BACKOFF_SECONDS)
+    assert telemetry.db_retries.get(("save_game", "exhausted")) - exhausted_before == 1
     [row] = await rows(session_factory)
     assert (row.state, row.attempts, row.failure_code) == ("failed", MAX_ATTEMPTS, "exhausted")
     assert row.payload is None and row.failed_at == clock.now

@@ -149,7 +149,8 @@ export type RetentionTable = {
 /** What the stored drawings occupy (#471). Null off PostgreSQL, which has no
  *  relation-size catalogue - absent rather than a zero that would read as an
  *  empty store. */
-export type DrawingStore = { totalBytes: number; readyRows: number };
+/** `rows` is the planner's estimate, every drawing row kept or erased (#892). */
+export type DrawingStore = { totalBytes: number; rows: number };
 
 /** The size distribution of one command's or event's payload, in bytes. */
 export type PayloadSizeRow = {
@@ -229,6 +230,18 @@ export type ServerSignals = {
     queriesPerMinute: number;
     queryP95Ms: number | null;
     queryErrors: number;
+    /** Failed statements by SQLSTATE class (#892): timeout, lock_timeout, deadlock, serialization, integrity, connection, other. */
+    errorsByCause: Record<string, number>;
+    /** Waiting for a pooled connection, which the statement p95 does not include. */
+    poolWaitP95Ms: number | null;
+    poolTimeouts: number;
+    poolTimeoutsInWindow: number;
+    /** The labelled operations that spent the most statement time since start. */
+    topOperations: { operation: string; count: number; p95Ms: number | null }[];
+    /** Retried transactions, keyed `operation:outcome`. */
+    retries: Record<string, number>;
+    historyWriteP95Ms: number | null;
+    historyPersistLagP95Seconds: number | null;
     historyWritesAbandoned: {
       total: number;
       lastHour: number;
@@ -339,6 +352,9 @@ export const ATTENTION = {
   /** A staged game older than the retry schedule's second step is not a blip. */
   handoffOldestSeconds: 300,
   poolFillRatio: 1,
+  /** The same number `SketchyPoolWaiting` alerts on (#892): a request queueing
+   *  this long for a connection is slow before its first statement. */
+  poolWaitP95Ms: 100,
   abandonmentPercent: 25,
   /** The size #471 named for reopening inline drawing storage; the same number
    *  `SketchyDrawingStoreLarge` alerts on, so the page and the alert agree. */
@@ -458,6 +474,18 @@ export function attentionReasons(live: LiveSnapshot): AttentionReason[] {
   const fill = poolFill(live.database?.pool ?? null);
   if (fill !== null && fill >= ATTENTION.poolFillRatio) {
     add("pool-saturated", "database", "Connection pool saturated", "Every database connection is in use; new queries are waiting.");
+  }
+  const poolWait = live.database?.poolWaitP95Ms;
+  const poolTimeouts = live.database?.poolTimeoutsInWindow ?? 0;
+  if (poolTimeouts > 0 || (poolWait !== null && poolWait !== undefined && poolWait > ATTENTION.poolWaitP95Ms)) {
+    add(
+      "pool-waiting",
+      "database",
+      "Waiting for database connections",
+      poolTimeouts > 0
+        ? `${poolTimeouts} ${poolTimeouts === 1 ? "request" : "requests"} gave up waiting for a connection in the last ${live.windowMinutes} minutes.`
+        : `Getting a connection takes ${formatMs(poolWait ?? null)} at p95, before any statement runs.`,
+    );
   }
   const drawings = live.drawingStore;
   if (drawings && drawings.totalBytes > ATTENTION.drawingStoreBytes) {

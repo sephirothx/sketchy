@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.telemetry import database_operation_of
 from app.db import init_db, maintenance_engine
 from app.db.models import (
     AuditEvent,
@@ -557,6 +558,7 @@ def _breached(described: dict[str, object], sla_seconds: float) -> bool:
     return isinstance(overdue, (int, float)) and overdue > sla_seconds
 
 
+@database_operation_of("retention_sweep")
 async def run_retention_sweeps(
     session_factory: async_sessionmaker[AsyncSession],
     *,

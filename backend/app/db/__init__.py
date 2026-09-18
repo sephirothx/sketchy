@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import logging
 import os
+import sys
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 import warnings
+import weakref
 
 from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
@@ -16,8 +19,10 @@ from alembic.script import ScriptDirectory
 from alembic.script.revision import ResolutionError
 from alembic.util.exc import CommandError
 from sqlalchemy import event, text
+from sqlalchemy import exc as sa_exc
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SAWarning
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -25,7 +30,12 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.services.telemetry import PoolGauges, Telemetry, telemetry
+from app.services.telemetry import (
+    PoolGauges,
+    Telemetry,
+    current_database_operation,
+    telemetry,
+)
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./sketchy.db"
 SQLITE_BUSY_TIMEOUT_MS = 5_000
@@ -154,11 +164,41 @@ def _integer_setting(name: str, default: int, *, minimum: int) -> int:
     return value
 
 
+class TimedQueuePool(AsyncAdaptedQueuePool):
+    """The PostgreSQL pool, timing how long each checkout waited (#892).
+
+    The statement timer starts once a cursor exists, after the checkout, so a
+    request that spent three seconds queueing for one of ten connections and
+    three milliseconds in the database looked fast; and a checkout that gave
+    up raised before any cursor existed, so it was counted nowhere. The wait
+    includes opening an overflow connection, which is part of what the
+    caller waited for. The store is the process-wide one unless a test sets
+    `store` on the class.
+    """
+
+    store: Telemetry | None = None
+
+    def _do_get(self):
+        target = self.store if self.store is not None else telemetry
+        started = perf_counter()
+        try:
+            connection = super()._do_get()
+        except sa_exc.TimeoutError:
+            target.db_pool_checkout(perf_counter() - started, timed_out=True)
+            raise
+        except BaseException:
+            target.db_pool_checkout(perf_counter() - started)
+            raise
+        target.db_pool_checkout(perf_counter() - started)
+        return connection
+
+
 def get_engine_pool_options(url: str) -> dict[str, Any]:
     """Return deliberate production pool limits for PostgreSQL engines."""
     if not url.startswith("postgresql"):
         return {}
     return {
+        "poolclass": TimedQueuePool,
         "pool_pre_ping": True,
         "pool_size": _integer_setting(
             "DB_POOL_SIZE", POSTGRES_POOL_SIZE, minimum=1
@@ -210,13 +250,59 @@ class EngineListeners:
     failed: Callable[..., None]
 
 
+# SQLSTATE → the cause label on `sketchy_db_query_errors_total` (#892). Exact
+# codes first, then two-character classes. These are the failures the
+# schema's concurrency design is built to make rare - the lock budget and
+# ascending lock order against deadlocks, the erasure barrier's retries
+# against serialization - so each gets its own count rather than one number.
+_SQLSTATE_CAUSES = {
+    "57014": "timeout",  # query_canceled: statement_timeout
+    "25P03": "timeout",  # idle_in_transaction_session_timeout
+    "55P03": "lock_timeout",  # lock_not_available: lock_timeout, NOWAIT
+    "40P01": "deadlock",
+    "40001": "serialization",
+    "53300": "connection",  # too_many_connections
+    "57P01": "connection",  # admin_shutdown
+    "57P02": "connection",
+    "57P03": "connection",
+}
+_SQLSTATE_CLASS_CAUSES = {"23": "integrity", "08": "connection"}
+
+
+def classify_database_error(error: BaseException | None, *, is_disconnect: bool = False) -> str:
+    """The cause label for a failed statement, from its SQLSTATE where it has one."""
+    if is_disconnect:
+        return "connection"
+    seen: set[int] = set()
+    current = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        code = getattr(current, "pgcode", None) or getattr(current, "sqlstate", None)
+        if isinstance(code, str) and len(code) == 5:
+            return _SQLSTATE_CAUSES.get(code) or _SQLSTATE_CLASS_CAUSES.get(code[:2], "other")
+        name = type(current).__name__
+        if name == "IntegrityError":
+            return "integrity"
+        if name == "OperationalError" and "locked" in str(current).lower():
+            # SQLite's busy timeout ran out: its lock budget.
+            return "lock_timeout"
+        if isinstance(current, (ConnectionError, TimeoutError)) or name in (
+            "InterfaceError",
+            "ConnectionDoesNotExistError",
+        ):
+            return "connection"
+        current = getattr(current, "orig", None) or current.__cause__
+    return "other"
+
+
 def instrument_engine(engine: AsyncEngine, store: Telemetry | None = None) -> EngineListeners:
     """Time every statement the engine runs, on the store given or the default.
 
     The listeners run inside SQLAlchemy's greenlet on the event-loop thread,
     so they do the least possible: two clock reads and one counter bump.
     For aiosqlite the span includes the hand-off to its worker thread, which
-    is exactly the latency the caller feels.
+    is exactly the latency the caller feels. Each statement and transaction
+    carries the operation named by `database_operation` around it (#892).
     """
     target = store if store is not None else telemetry
 
@@ -235,11 +321,34 @@ def instrument_engine(engine: AsyncEngine, store: Telemetry | None = None) -> En
             # Cleared so a retried statement on the same context is not
             # counted twice, and the error is not also counted as a success.
             context._sketchy_started = None
-            target.db_query(perf_counter() - started, failed=True)
+            target.db_query(
+                perf_counter() - started,
+                failed=True,
+                cause=classify_database_error(
+                    getattr(exception_context, "original_exception", None),
+                    is_disconnect=bool(getattr(exception_context, "is_disconnect", False)),
+                ),
+            )
+
+    # Keyed by the Connection itself rather than kept in `conn.info`: reading
+    # `info` on a connection the server has just terminated tries to
+    # reconnect, and a rollback listener must never be what raises.
+    open_transactions: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+    def began(conn):
+        open_transactions[conn] = (perf_counter(), current_database_operation())
+
+    def ended(conn):
+        started = open_transactions.pop(conn, None)
+        if started is not None:
+            target.db_transaction(perf_counter() - started[0], operation=started[1])
 
     event.listen(engine.sync_engine, "before_cursor_execute", before)
     event.listen(engine.sync_engine, "after_cursor_execute", after)
     event.listen(engine.sync_engine, "handle_error", failed)
+    event.listen(engine.sync_engine, "begin", began)
+    event.listen(engine.sync_engine, "commit", ended)
+    event.listen(engine.sync_engine, "rollback", ended)
     return EngineListeners(before=before, after=after, failed=failed)
 
 
@@ -292,15 +401,73 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 )
 
 
+command_logger = logging.getLogger("app.db.command")
+
+
+def summarise_on_dispose(engine: AsyncEngine, *, role: str, command: str | None = None) -> None:
+    """Log one structured line when an operator engine is disposed (#892).
+
+    An operator command's engine is instrumented like the web one, but
+    nothing scrapes a process that lives for a minute, so how long a
+    migration or a rebuild took, and how much it did, was recorded nowhere.
+    The line carries the command, the role, the seconds from engine creation
+    to disposal, the statements sent, the rows they reported and the ones
+    that failed - counts only, never a statement's text or a parameter.
+    """
+    started = perf_counter()
+    counts = {"statements": 0, "rows": 0, "errors": 0}
+
+    def after(conn, cursor, statement, parameters, context, executemany):
+        counts["statements"] += 1
+        rowcount = getattr(cursor, "rowcount", -1)
+        if isinstance(rowcount, int) and rowcount > 0:
+            counts["rows"] += rowcount
+
+    def failed(exception_context):
+        counts["errors"] += 1
+
+    def disposed(_engine):
+        if not command_logger.hasHandlers():
+            # A command that never configured logging would drop an INFO
+            # line on the floor; this is the one line it exists to leave.
+            from app.logging_config import configure_logging
+
+            configure_logging()
+        name = command or _command_name()
+        seconds = round(perf_counter() - started, 3)
+        command_logger.info(
+            "%s finished in %.3fs: %d statements, %d rows, %d failed",
+            name,
+            seconds,
+            counts["statements"],
+            counts["rows"],
+            counts["errors"],
+            extra={"fields": {"command": name, "role": role, "seconds": seconds, **counts}},
+        )
+
+    event.listen(engine.sync_engine, "after_cursor_execute", after)
+    event.listen(engine.sync_engine, "handle_error", failed)
+    event.listen(engine.sync_engine, "engine_disposed", disposed)
+
+
+def _command_name() -> str:
+    """The module run with `python -m`, which is how every operator command starts."""
+    main = sys.modules.get("__main__")
+    spec = getattr(main, "__spec__", None)
+    return getattr(spec, "name", None) or os.path.basename(sys.argv[0] or "python")
+
+
 def maintenance_engine() -> tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """An engine and session factory for an operator command.
 
     Separate from the process-wide web engine on purpose: a rebuild, a
     verification pass or an export batch may run statements far longer than
     a request may, and gets the maintenance budgets rather than the web
-    ones by accident of sharing the import.
+    ones by accident of sharing the import. Its disposal logs the command's
+    one-line summary.
     """
     engine = create_db_engine(role="maintenance")
+    summarise_on_dispose(engine, role="maintenance")
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     return engine, factory
 

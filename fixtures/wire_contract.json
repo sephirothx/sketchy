@@ -2467,7 +2467,6 @@
    "turnId"
   ],
   "services.drawing_storage:as_json": [
-   "readyRows",
    "totalBytes"
   ],
   "services.game_flow:_begin_drawing": [
@@ -2597,7 +2596,10 @@
    "diskTotalBytes",
    "emitSizes",
    "errorRate",
+   "errorsByCause",
    "historyHandoff",
+   "historyPersistLagP95Seconds",
+   "historyWriteP95Ms",
    "historyWritesAbandoned",
    "httpP95Ms",
    "httpPerMinute",
@@ -2611,6 +2613,9 @@
    "p99Ms",
    "packetsRejected",
    "perMinute",
+   "poolTimeouts",
+   "poolTimeoutsInWindow",
+   "poolWaitP95Ms",
    "queriesPerMinute",
    "queryErrors",
    "queryP95Ms",
@@ -2623,6 +2628,7 @@
    "socketPerMinute",
    "startedAt",
    "throttledPerMinute",
+   "topOperations",
    "uptimeSeconds",
    "windowMinutes"
   ]

@@ -137,7 +137,37 @@ groups:
         for: 5m
         labels: {severity: warn}
         annotations:
-          summary: "Every database connection is in use; queries are waiting for one"
+          summary: "Every database connection is in use"
+          description: "Full is not yet slow: SketchyPoolWaiting says whether requests are queueing for a connection."
+          runbook: "README.md#on-call"
+
+      # The wait the statement histogram cannot see (#892): its timer starts
+      # once a connection is held. Tenth of a second at p95 is a request slow
+      # before it has sent anything.
+      - alert: SketchyPoolWaiting
+        expr: sketchy:db_pool_wait_p95_seconds:5m > 0.1
+        for: 5m
+        labels: {severity: warn}
+        annotations:
+          summary: "Requests wait {{ $value | humanizeDuration }} at p95 for a database connection"
+          description: "Look at sketchy_db_transaction_seconds by operation for what is holding connections, before raising DB_POOL_SIZE."
+          runbook: "README.md#on-call"
+
+      - alert: SketchyPoolTimeouts
+        expr: increase(sketchy_db_pool_timeouts_total[10m]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "Requests are failing because no database connection came free within DB_POOL_TIMEOUT_SECONDS"
+          runbook: "README.md#on-call"
+
+      # The lock order and the 5 s lock budget exist so that these stay at
+      # zero; one is a finding, not noise.
+      - alert: SketchyDatabaseDeadlocks
+        expr: increase(sketchy_db_query_errors_total{cause=~"deadlock|serialization"}[1h]) > 0
+        labels: {severity: warn}
+        annotations:
+          summary: "A transaction died of {{ $labels.cause }} in the last hour"
+          description: "The PostgreSQL log (log_lock_waits) names both sides; sketchy_db_retries_total says whether a retry saved it."
           runbook: "README.md#on-call"
 
       - alert: SketchySlowQueries

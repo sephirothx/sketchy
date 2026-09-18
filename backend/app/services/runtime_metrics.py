@@ -38,6 +38,7 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.telemetry import database_operation_of
 from app.logging_config import configure_logging
 from app.db.models import RuntimeEvent, RuntimeStatsDaily
 from app.domain_values import RuntimeEventType
@@ -261,6 +262,7 @@ async def _normalize_account_references(
     ]
 
 
+@database_operation_of("event_flush")
 async def flush_events(
     session_factory: async_sessionmaker[AsyncSession],
     *,

@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.telemetry import database_operation_of
 from app.auth.erasure import erased_identity_ids
 from app.services.sweeps import (
     SweepBudget,
@@ -252,6 +253,7 @@ class MessageRetentionService:
                 for _ in batch:
                     self._queue.task_done()
 
+    @database_operation_of("message_batch")
     async def _write(self, batch: list[RoomMessage]) -> None:
         """Insert one batch. Only insert: the expiry purge is the retention
         sweep's, on its own schedule and budget, so a purge backlog can never
