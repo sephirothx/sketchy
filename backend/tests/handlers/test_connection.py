@@ -283,6 +283,58 @@ async def test_sync_game_carries_the_running_hint_spend():
     assert sync["hintSpend"] == spend
     assert sync["maxHintSpend"] == MAX_HINT_SPEND
 
+async def test_sync_game_restores_who_has_guessed_and_this_seats_receipt():
+    """correct_guess and you_guessed_correctly are one-shot, and every tab
+    that comes back into view resyncs; without these a correct guesser's
+    input re-opens and every seat's pips clear (#870)."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode="purchase")
+    drawer = room_manager.add_player(room, "Drawer")
+    first = room_manager.add_player(room, "First")
+    second = room_manager.add_player(room, "Second")
+    waiting = room_manager.add_player(room, "Waiting")
+    for player in (first, second, waiting):
+        player.sid = f"{player.nickname}-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players), hint_mode="purchase")
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+    assert room.game.current_drawer == drawer.id
+    assert room.game.buy_hint_letter(second.id, 0) is True
+    spend = room.game.hint_spend[second.id]
+    room.game.set_phase_deadline(DRAWING_SECONDS - 7)
+    assert room.game.submit_guess(first.id, room.game.prompt)[0] is True
+    room.game.set_phase_deadline(DRAWING_SECONDS - 19)
+    correct, points = room.game.submit_guess(second.id, room.game.prompt)
+    assert correct is True
+
+    async def sync_for(player):
+        sio = socketio.AsyncServer(async_mode="asgi")
+        register_handlers(sio, room_manager)
+        sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": player.id})
+        sio.emit = AsyncMock()
+        await sio.handlers["/"]["join_room"](
+            player.sid, {"code": room.code, "nickname": player.nickname}
+        )
+        return next(
+            call.args[1] for call in sio.emit.await_args_list if call.args[0] == "sync_game"
+        )
+
+    guessed = await sync_for(second)
+    assert guessed["correctGuessers"] == [[first.id, 7], [second.id, 19]]
+    assert guessed["guessed"] == {
+        "prompt": room.game.prompt,
+        "points": points,
+        "basePoints": points + spend,
+        "hintSpend": spend,
+    }
+
+    still_guessing = await sync_for(waiting)
+    assert still_guessing["correctGuessers"] == [[first.id, 7], [second.id, 19]]
+    assert still_guessing["guessed"] is None
+
+
 async def test_already_joined_socket_resyncs_turn_results_overlay():
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room", is_public=True)

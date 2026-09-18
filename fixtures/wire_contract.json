@@ -2207,8 +2207,6 @@
    "maskedPrompt"
   ],
   "handlers.chat:guess": [
-   "basePoints",
-   "hintSpend",
    "playerId"
   ],
   "handlers.chat:send_chat": [
@@ -2345,6 +2343,10 @@
    "scoringMode",
    "spectatorsSeePrompt"
   ],
+  "presenters:guessed_receipt": [
+   "basePoints",
+   "hintSpend"
+  ],
   "presenters:session_payload": [
    "isAnonymous",
    "playerId",
@@ -2365,6 +2367,7 @@
    "turnId"
   ],
   "presenters:turn_payload": [
+   "correctGuessers",
    "drawerId",
    "hintCost",
    "hintSpend",
@@ -2630,7 +2633,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 25,
+ "protocolVersion": 26,
  "refusal": {
   "codes": [
    "invalid_payload",
