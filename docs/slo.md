@@ -85,6 +85,13 @@ or a full disk, caught while it is still a trend. All warn:
 | `SketchyDatabaseGrowthDoubled` | the database grew over twice last week's growth (and over 1 GB) | a new writer or a stopped sweep |
 | `SketchyDatabaseVolumeFillsSoon` | the last week's trend fills the database volume within 30 days | growth, ahead of `SketchyDiskLow` |
 
+The integrity audit (#894, [`database.md`](database.md) §13) is the detection bound
+for silent damage: `SketchyDrawingCorrupt` (page) is a stored drawing that no longer
+reads back, found within one audit cycle; `SketchyIntegrityDrift` (warn) is a projection
+or writer invariant that disagrees with its facts; `SketchyIntegrityCycleOverdue` (warn)
+is a check that has not finished a pass over its table in twice its target, which
+would leave the bound unkept.
+
 `SketchyDrawingStoreLarge` is neither, and is the only alert here that asks for a
 decision rather than a fix. `sketchy_drawing_store_bytes` is what the stored drawings
 occupy; #471 measured them, chose to keep the bytes in the primary database, and named

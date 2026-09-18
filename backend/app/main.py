@@ -75,6 +75,10 @@ from app.auth.retention import (
     start_retention_loop,
     stop_retention_loop,
 )
+from app.services.integrity_audit import (
+    start_integrity_loop,
+    stop_integrity_loop,
+)
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.data_export_worker import DataExportWorker, stop_export_worker
 from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
@@ -533,6 +537,7 @@ async def lifespan(_app: FastAPI):
     export_build = None
     metrics_flush = None
     retention_sweep = None
+    integrity_audit = None
     presence_broadcast = None
     afk_sweep = None
     lag_sampler = None
@@ -542,6 +547,7 @@ async def lifespan(_app: FastAPI):
     handoff_health = LoopHealth("history_handoff")
     metrics_health = LoopHealth("runtime_metrics")
     retention_health = LoopHealth("retention_sweep")
+    integrity_health = LoopHealth("integrity_audit")
     presence_health = LoopHealth("presence_broadcast")
     afk_health = LoopHealth("afk_sweep")
     lag_health = LoopHealth("loop_lag")
@@ -579,6 +585,12 @@ async def lifespan(_app: FastAPI):
         retention_sweep = start_retention_loop(
             async_session_factory, health=retention_health
         )
+        # The integrity checks (#894): a bounded slice of each per pass, so
+        # a corrupted drawing or a drifted projection is found within a
+        # cycle rather than when somebody opens it.
+        integrity_audit = start_integrity_loop(
+            async_session_factory, health=integrity_health
+        )
         # Same shape as the outbox: the table is the queue, this is the one
         # place a document is built, and the request only wakes it.
         export_build = export_worker.start(health=exports_health)
@@ -602,6 +614,7 @@ async def lifespan(_app: FastAPI):
         readiness_probe.supervise("mail_delivery", mail_delivery, mail_health)
         readiness_probe.supervise("runtime_metrics", metrics_flush, metrics_health)
         readiness_probe.supervise("retention_sweep", retention_sweep, retention_health)
+        readiness_probe.supervise("integrity_audit", integrity_audit, integrity_health)
         readiness_probe.supervise("data_exports", export_build, exports_health)
         readiness_probe.supervise("history_handoff", history_replay, handoff_health)
         readiness_probe.supervise(
@@ -628,6 +641,7 @@ async def lifespan(_app: FastAPI):
         # Flushed on the way out, so the observations describing a planned
         # restart are not the ones lost to it.
         await stop_retention_loop(retention_sweep)
+        await stop_integrity_loop(integrity_audit)
         # A build in flight hands its job back rather than finishing it: the
         # drain is for games, not for a document nobody is waiting on yet.
         await stop_export_worker(export_build)

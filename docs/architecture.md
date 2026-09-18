@@ -395,7 +395,7 @@ Any of steps 2–10 can refuse to start the process, and the cleanup in the life
 `/api/health` is liveness and stays process-only: a restart cannot fix a database
 outage the replacement comes back into, so a dependency failure must not be reported
 as "restart me". It does carry each background loop's run state, failure streak, and
-time since its last success — every supervised loop (mail delivery, the export worker, metrics flush, retention, presence broadcast, the loop-lag sampler) swallows every exception but cancellation
+time since its last success — every supervised loop (mail delivery, the export worker, metrics flush, retention, the integrity audit, presence broadcast, the loop-lag sampler) swallows every exception but cancellation
 and carry on for ever, which keeps one bad row from stopping every later sweep and also
 makes a loop failing on every iteration indistinguishable from a working one. These
 counters are that distinction.
@@ -1755,6 +1755,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | What the server records about its own behaviour. |
 | [`app/services/telemetry.py`](../backend/app/services/telemetry.py) | Process signals — request, command, query and loop-lag RED/USE — kept in memory for `/metrics` and the operations page. |
 | [`app/services/queue_depths.py`](../backend/app/services/queue_depths.py) | Depth and oldest age of the mail outbox and pending exports, cached. |
+| [`app/services/integrity_audit.py`](../backend/app/services/integrity_audit.py) | The integrity checks, run on a schedule and reported rather than remembered (#894). |
 | [`app/services/storage_report.py`](../backend/app/services/storage_report.py) | What each table occupies in the live database, safe to paste into an issue (#895). |
 | [`app/services/sweeps.py`](../backend/app/services/sweeps.py) | Bounded, batched deletion for every retention sweep. |
 | [`app/services/bug_report_retention.py`](../backend/app/services/bug_report_retention.py) | A ceiling on how long an undecided bug report keeps its screenshot. |
