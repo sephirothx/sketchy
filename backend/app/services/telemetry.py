@@ -860,7 +860,7 @@ class Telemetry:
         )
         self.draw_frames = LabelledCounter(
             "sketchy_draw_frames_total",
-            "Draw frames received, by frame kind, wire shape (binary, base64, int) and result.",
+            "Draw frames received, by frame kind, wire shape (binary, base64, int) and result, throttled ones included.",
             ("kind", "shape", "result"),
         )
         self.draw_frame_points = Histogram(

@@ -174,3 +174,27 @@ def test_the_new_families_stay_bounded():
     for index in range(MAX_SERIES + 50):
         store.note_refusal(f"command{index}", "invalid_payload")
     assert len(store.socket_refusals.items()) <= MAX_SERIES + 1
+
+
+async def test_refusals_at_the_door_are_counted_and_a_refused_draw_stays_in_the_frame_mix(monkeypatch):
+    """Arity, a stale protocol and the budget refuse before any handler runs;
+    each is still a refusal by code, and a `draw` among them still a frame."""
+    store = fresh_store(monkeypatch)
+    sio, context, room = drawing_room()
+    frame = encode_live_drawing("draw_end")
+
+    await sio.handlers["/"]["send_chat"]("sid", {"text": "hi"}, "one too many")
+    context.quarantine("stale-sid", 0, close_after=60)
+    await sio.handlers["/"]["draw"]("stale-sid", frame)
+    context.release_stale("stale-sid")
+    monkeypatch.setattr(context._command_windows, "check", lambda key, budget: False)
+    await sio.handlers["/"]["draw"]("drawer-sid", frame)
+
+    refusals = dict(store.socket_refusals.items())
+    assert refusals[("send_chat", "invalid_payload")] == 1
+    assert refusals[("draw", "protocol_mismatch")] == 1
+    assert refusals[("draw", "too_fast")] == 1
+    frames = dict(store.draw_frames.items())
+    assert frames[("end", "int", "refused")] == 1
+    assert frames[("end", "int", "throttled")] == 1
+    await context.timers.close()
