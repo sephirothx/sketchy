@@ -42,8 +42,9 @@ def field(value: str) -> str:
     return value.replace("\\", "\\\\").replace(":", "\\:")
 
 
+# libpq's order: hostname:port:database:username:password.
 with open(os.environ["PASSFILE"], "w", encoding="utf-8") as handle:
-    handle.write(":".join(field(value) for value in (host, port, user, database, url.password or "")) + "\n")
+    handle.write(":".join(field(value) for value in (host, port, database, user, url.password or "")) + "\n")
 print("\t".join((host, port, user, database, str(url.query.get("sslmode", "prefer")))))
 PY
 )
