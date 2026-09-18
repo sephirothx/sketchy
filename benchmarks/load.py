@@ -354,7 +354,13 @@ class Seat:
             if self.room.drawer_is(self):
                 continue
             if self.turn_deadline is None:
-                await self.call("send_chat", {"text": f"hello from {self.name}"})
+                # Between turns, as the browser does: in a running game the
+                # chat box sends `guess`, which the server turns into a chat
+                # line when no turn is being drawn. `send_chat` is waiting-room
+                # only, so until #882 counted them every "chat" here was a
+                # `waiting_room_only` refusal and no chat line was ever sent.
+                # The receipt is bare (wire §4), so it is counted like a guess.
+                await self.call("guess", {"text": f"hello from {self.name}", "code": self.room.code})
                 self.harness.samples.chats += 1
                 continue
             elapsed = self.turn_deadline - time.monotonic()
