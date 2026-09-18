@@ -49,7 +49,7 @@ from app.origin_policy import OriginPolicyMiddleware, configured_origins, socket
 from app.request_limits import RequestSizeLimitMiddleware
 from app.request_timing import RequestTimingMiddleware
 from app.auth.routes import create_auth_router
-from app.db import async_engine, async_session_factory, init_db
+from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
     is_production,
@@ -566,6 +566,10 @@ async def lifespan(_app: FastAPI):
         # sends its links to a relay, never to the log (#466).
         validate_mail_configuration()
         await init_db()
+        if is_production():
+            # Beside the revision check: the process answering anonymous
+            # traffic must not be able to alter what it serves (#896).
+            await verify_least_privilege()
         if handler_context.room_codes is not None:
             await handler_context.room_codes.retire_orphaned_ephemeral()
         # The restore reads only unexpired lines; every purge is the retention

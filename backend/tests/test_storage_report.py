@@ -18,7 +18,7 @@ from app.services.storage_report import (
     run_report,
 )
 
-from tests.dbfixtures import create_test_db
+from tests.dbfixtures import create_test_db, create_test_engine
 from tests.test_drawing_reactions import record_game, registered
 
 ON_POSTGRESQL = os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql")
@@ -33,9 +33,15 @@ async def test_the_report_covers_every_table_per_game_and_names_nobody():
         drawer = await registered(users, "Secretdrawer")
         guesser = await registered(users, "Secretguesser")
         await record_game(history, drawer=drawer.id, reactor=guesser.id, reactions="default")
-        async with factory() as session:
-            await session.execute(text("ANALYZE"))
-            await session.commit()
+        # ANALYZE is the owner's (#896); as the application role it skips
+        # every table with a warning and the estimates stay empty.
+        owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+        analyzer = create_test_engine(owner_url) if owner_url else engine
+        async with analyzer.connect() as connection:
+            await connection.execute(text("ANALYZE"))
+            await connection.commit()
+        if analyzer is not engine:
+            await analyzer.dispose()
 
         report = await run_report(factory)
 

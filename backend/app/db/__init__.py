@@ -555,6 +555,11 @@ async def upgrade_database(engine: AsyncEngine | None = None) -> None:
         # "table already exists" halfway through the baseline.
         await conn.run_sync(_database_revisions_sync, alembic_cfg)
         await conn.run_sync(_run_alembic_upgrade_sync, alembic_cfg)
+        # In the same transaction as the tables they cover, so no deploy can
+        # leave a table the application role cannot read (#896).
+        from app.db.roles import apply_grants
+
+        await apply_grants(conn)
 
 
 async def verify_database_head(engine: AsyncEngine | None = None) -> None:
@@ -569,6 +574,51 @@ async def verify_database_head(engine: AsyncEngine | None = None) -> None:
             f"(current: {sorted(current) or ['base']}; expected: {sorted(expected)}). "
             "Run `python -m app.db.migrate` before starting Sketchy."
         )
+
+
+class DatabaseRoleError(RuntimeError):
+    """The web process connected with a role that can alter the schema."""
+
+
+async def verify_least_privilege(engine: AsyncEngine | None = None) -> None:
+    """Refuse to serve from a connection that owns the schema (#896, R-PLAT-22).
+
+    Production only - the caller decides - because development and CI run as
+    one role on purpose. One query beside the revision check.
+    """
+    from app.db.roles import web_role_privilege_problem
+
+    target_engine = engine or async_engine
+    async with target_engine.connect() as conn:
+        problem = await web_role_privilege_problem(conn)
+    if problem is not None:
+        raise DatabaseRoleError(
+            f"Refusing to start: {problem}. Connect the web process as the application "
+            "role (sketchy_app) and migrate with MIGRATION_DATABASE_URL as the owner; "
+            "see ops/postgres/init.sql."
+        )
+
+
+def get_migration_database_url(environ: dict[str, str] | None = None) -> str:
+    """The URL `python -m app.db.migrate` connects with: the schema owner's (#896).
+
+    `MIGRATION_DATABASE_URL`, falling back to `DATABASE_URL` outside
+    production, where one role is the norm. Production refuses the fallback:
+    the web role cannot run DDL, so a migration attempted with it would fail
+    halfway rather than at the start.
+    """
+    from app.deployment import is_production
+
+    values = os.environ if environ is None else environ
+    raw = (values.get("MIGRATION_DATABASE_URL") or "").strip()
+    if raw:
+        return get_database_url(raw)
+    if is_production(values):
+        raise RuntimeError(
+            "MIGRATION_DATABASE_URL is required in production: migrations run as the "
+            "schema owner, and DATABASE_URL is the application role's."
+        )
+    return get_database_url(values.get("DATABASE_URL"))
 
 
 async def init_db(engine: AsyncEngine | None = None) -> None:

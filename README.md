@@ -714,12 +714,22 @@ for the NAS, and a one-time script creating the extension and the
 reason; `ops/postgres/check-config.sh` proves them against a throwaway cluster.
 See [Server configuration](docs/database.md#server-configuration).
 
+The same script creates three roles (#896). `sketchy_owner` owns the schema and
+is used only by `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`);
+`sketchy_app` is `DATABASE_URL` - the web process and every operator command -
+and may read and write rows and nothing more, and only add to `audit_events`
+and `score_events`; `sketchy_monitor` is postgres_exporter's. The migration
+command grants the application role its privileges after every upgrade, and a
+production start refuses a web connection that owns the tables, may create in
+the schema, or is a superuser.
+
 PostgreSQL connections are checked before checkout, recycled after 30 minutes,
 and bounded to five persistent plus five overflow connections per server
 process. These deployment settings can be tuned without code changes:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `MIGRATION_DATABASE_URL` | `DATABASE_URL` outside production | The schema owner's URL, used only by `python -m app.db.migrate`, which also grants the application role its privileges. Production requires it: there `DATABASE_URL` is the application role, which cannot run DDL (#896) |
 | `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL`, and a missing `SMTP_HOST` |
 | `DB_POOL_SIZE` | `5` | Persistent connections per process |
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
@@ -1861,6 +1871,12 @@ before the unchanged statement and branch floors are checked (R-ENG-15).
 CI prints the slowest 50 test phases and saves JUnit reports for seven days in the
 `backend-test-results` and `postgresql-test-results` artifacts; the former also
 contains `coverage.json`. Local JUnit output belongs in `backend/test-results/`.
+
+With `TEST_OWNER_DATABASE_URL` set as well, the suite runs as the application
+role that `TEST_DATABASE_URL` names against a schema the owner migrated - what CI
+does (#896): the owner clones the template for each worker and empties the
+append-only ledgers between tests, and everything else connects as the
+application, so a missing grant fails the suite. Without it one role does both.
 
 With `TEST_DATABASE_URL` set, parallel pytest requires a migrated, disposable
 PostgreSQL database whose name contains `test`, plus its owner role with `CREATEDB` and

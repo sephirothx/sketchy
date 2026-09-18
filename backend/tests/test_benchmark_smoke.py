@@ -59,7 +59,14 @@ def test_the_benchmark_runs_at_smoke_size(name):
     completed = subprocess.run(
         [sys.executable, str(BENCHMARKS / f"{name}.py"), *SMOKE_ARGS[name]],
         cwd=BENCHMARKS.parent / "backend",
-        env={**os.environ, "TEST_DATABASE_URL": os.environ["TEST_DATABASE_URL"]},
+        # As the owner where there is one (#896): the benchmarks empty tables
+        # with TRUNCATE and refresh statistics with ANALYZE, which are the
+        # owner's to do, not the application's.
+        env={
+            **os.environ,
+            "TEST_DATABASE_URL": os.environ.get("TEST_OWNER_DATABASE_URL")
+            or os.environ["TEST_DATABASE_URL"],
+        },
         capture_output=True,
         text=True,
         timeout=180,

@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+import os
 import uuid
 import warnings
 
@@ -982,11 +983,24 @@ async def test_score_events_constrain_order_reason_direction_and_corrections():
         # Deleting the whole game takes the corrected entry and its
         # correction together: the self-referencing RESTRICT is about a
         # correction outliving its target, not about the game's lifecycle.
-        async with factory() as session:
-            async with session.begin():
-                game = await session.get(GameRecord, game_id)
-                assert game is not None
-                await session.delete(game)
+        # No application path deletes a game (R-PRIV-05); an operator does,
+        # as the owner - the application role may not delete ledger rows,
+        # and the ORM deletes them itself, in an order the RESTRICT allows
+        # (#896).
+        owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+        owner = create_test_engine(owner_url) if owner_url else None
+        deleting = (
+            async_sessionmaker(owner, expire_on_commit=False) if owner is not None else factory
+        )
+        try:
+            async with deleting() as session:
+                async with session.begin():
+                    game = await session.get(GameRecord, game_id)
+                    assert game is not None
+                    await session.delete(game)
+        finally:
+            if owner is not None:
+                await owner.dispose()
         async with factory() as session:
             assert (
                 await session.scalar(

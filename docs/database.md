@@ -37,6 +37,7 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
 | Pool (PostgreSQL) | 5 persistent + 5 overflow, pre-ping, 10 s timeout, 30 min recycle; all four tunable | [`db/__init__.py:25`](../backend/app/db/__init__.py) |
+| Roles (PostgreSQL) | The web process connects as `sketchy_app`, which may read and write rows and only append to `audit_events` and `score_events`; the schema belongs to `sketchy_owner`, used only by the migration command, which grants the application its privileges. Production refuses an owner connection (#896, R-PLAT-22; §13 *Roles*) | [`db/roles.py`](../backend/app/db/roles.py) |
 | Session budgets (PostgreSQL) | Every connection carries its role's `application_name` and server-enforced `statement_timeout` / `lock_timeout` / `idle_in_transaction_session_timeout`, sent by asyncpg at connect so a recycled or re-established connection carries them too: **web** 30 s / 5 s / 60 s, **migration** 600 s / 5 s / 60 s (the lock budget covers the deploy advisory lock), **maintenance** 600 s / 5 s / 120 s for every operator command. Validated from the environment at startup beside the pool settings; SQLite is untouched. They bound one statement, one lock wait and one idle transaction — not a whole sweep, which has budgets of its own (§10) (#555) | [`db/__init__.py`](../backend/app/db/__init__.py) (`POSTGRES_ROLE_BUDGETS`) |
 
 ### Identifiers
@@ -2590,10 +2591,41 @@ cd backend && .venv/bin/python -m app.services.integrity_audit --passes 10
 ```bash
 cd backend
 export SKETCHY_ENV=production                # without it every production guard is off
-export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
+export DATABASE_URL=postgresql+asyncpg://sketchy_app:password@localhost:5432/sketchy
+export MIGRATION_DATABASE_URL=postgresql+asyncpg://sketchy_owner:password@localhost:5432/sketchy
 .venv/bin/python -m app.db.migrate          # BEFORE starting or replacing any replica
 HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
 ```
+
+### Roles
+
+Three roles, created once by a superuser with [`ops/postgres/init.sql`](../ops/postgres/init.sql)
+(#896, R-PLAT-22), because one `DATABASE_URL` made the process that answers anonymous
+traffic the owner of every table — able to drop and truncate them, disable
+`trg_score_events_immutable_update`, and rewrite `audit_events`, whose append-only
+property was only a convention of the code:
+
+| Role | Used by | May |
+| --- | --- | --- |
+| `sketchy_owner` | `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`) | own the schema and every table; DDL |
+| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events` and `score_events`, only `SELECT` on `alembic_version`; no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
+| `sketchy_monitor` | postgres_exporter | `pg_monitor`; no table |
+
+The grants live in [`db/roles.py`](../backend/app/db/roles.py) and are applied by the
+migration command after every upgrade, in the same transaction, when `sketchy_app`
+exists — a table a revision creates is readable by the application the moment it
+exists, and a grant changed by hand is put back by the next deploy. Default privileges
+cover a table created by a hand-run migration too. Referential actions run with the
+owner's rights, so deleting an account still clears its references in the ledgers.
+Deleting a game remains an operator's act as the owner: the ORM removes its ledger rows
+itself, in an order the self-referencing `RESTRICT` on corrections allows.
+
+Production refuses to start when the web connection is a superuser, owns the schema's
+tables or may create in the schema (one query beside the revision check), and the
+migration command refuses to fall back to `DATABASE_URL`. CI runs the suite as
+`sketchy_app` against a schema `sketchy_owner` migrated (`TEST_OWNER_DATABASE_URL`), and
+`tests/test_database_roles.py` proves the application role cannot `TRUNCATE`, `ALTER`,
+create a table, rewrite either ledger or disable the trigger.
 
 ### Adding a table or column
 

@@ -291,17 +291,20 @@ async def test_a_lock_timeout_and_a_deadlock_each_count_under_their_own_cause():
     store = Telemetry()
     instrument_engine(engine, store)
     try:
+        # Two rows of a table the application may write, rather than a table
+        # of the test's own: the suite may run as a role with no DDL (#896).
         async with engine.begin() as setup:
-            await setup.execute(text("DROP TABLE IF EXISTS sketchy_lock_probe"))
-            await setup.execute(text("CREATE TABLE sketchy_lock_probe (id int PRIMARY KEY)"))
-            await setup.execute(text("INSERT INTO sketchy_lock_probe VALUES (1), (2)"))
+            await setup.execute(text("DELETE FROM app_config WHERE key LIKE 'lock_probe.%'"))
+            await setup.execute(
+                text("INSERT INTO app_config (key, value) VALUES ('lock_probe.1', '1'), ('lock_probe.2', '2')")
+            )
 
         # Lock timeout: one side holds the row, the other gives up after 100 ms.
         async with engine.connect() as holder, engine.connect() as waiter:
-            await holder.execute(text("SELECT * FROM sketchy_lock_probe WHERE id = 1 FOR UPDATE"))
+            await holder.execute(text("SELECT * FROM app_config WHERE key = 'lock_probe.1' FOR UPDATE"))
             await waiter.execute(text("SET lock_timeout = '100ms'"))
             with pytest.raises(DBAPIError):
-                await waiter.execute(text("UPDATE sketchy_lock_probe SET id = id WHERE id = 1"))
+                await waiter.execute(text("UPDATE app_config SET value = value WHERE key = 'lock_probe.1'"))
             await waiter.rollback()
             await holder.rollback()
         assert store.db_query_errors.get(("lock_timeout",)) == 1
@@ -310,13 +313,13 @@ async def test_a_lock_timeout_and_a_deadlock_each_count_under_their_own_cause():
         async with engine.connect() as left, engine.connect() as right:
             # deadlock_timeout (1 s by default) is superuser-only to change,
             # so detection takes that second.
-            await left.execute(text("UPDATE sketchy_lock_probe SET id = id WHERE id = 1"))
-            await right.execute(text("UPDATE sketchy_lock_probe SET id = id WHERE id = 2"))
+            await left.execute(text("UPDATE app_config SET value = value WHERE key = 'lock_probe.1'"))
+            await right.execute(text("UPDATE app_config SET value = value WHERE key = 'lock_probe.2'"))
 
             async def cross(connection, row):
                 try:
                     await connection.execute(
-                        text(f"UPDATE sketchy_lock_probe SET id = id WHERE id = {row}")
+                        text(f"UPDATE app_config SET value = value WHERE key = 'lock_probe.{row}'")
                     )
                     return None
                 except DBAPIError as error:
@@ -329,7 +332,7 @@ async def test_a_lock_timeout_and_a_deadlock_each_count_under_their_own_cause():
         assert store.db_query_errors.get(("deadlock",)) == 1
     finally:
         async with engine.begin() as cleanup:
-            await cleanup.execute(text("DROP TABLE IF EXISTS sketchy_lock_probe"))
+            await cleanup.execute(text("DELETE FROM app_config WHERE key LIKE 'lock_probe.%'"))
         await engine.dispose()
 
 
