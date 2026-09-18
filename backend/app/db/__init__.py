@@ -260,10 +260,19 @@ def create_db_engine(url: str | None = None, *, role: str = "web") -> AsyncEngin
     return engine
 
 
-def data_directory(url: str | None = None) -> str:
-    """Where the data lives, for the disk gauge: the SQLite file's folder, else here."""
+def data_directory(url: str | None = None) -> str | None:
+    """Where the data lives, for the disk gauge: the SQLite file's folder, else here.
+
+    ``None`` on PostgreSQL. The data is on the database host there, and the
+    application's working directory says nothing about that volume - a gauge
+    reading it would keep ``SketchyDiskLow`` quiet while the database filled.
+    The database volume is measured by node_exporter on its own host instead
+    (``ops/prometheus/scrape-example.yml``, #889).
+    """
     resolved_url = url or get_database_url()
-    if resolved_url.startswith("sqlite") and ":memory:" not in resolved_url:
+    if not resolved_url.startswith("sqlite"):
+        return None
+    if ":memory:" not in resolved_url:
         path = resolved_url.split("///", 1)[-1].split("?", 1)[0]
         if path:
             return str(Path(path).expanduser().resolve().parent)

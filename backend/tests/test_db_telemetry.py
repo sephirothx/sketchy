@@ -63,7 +63,8 @@ def test_the_data_directory_is_the_sqlite_file_folder_or_here(tmp_path, monkeypa
     monkeypatch.chdir(tmp_path)
     assert data_directory("sqlite+aiosqlite:///./sketchy.db") == str(tmp_path.resolve())
     assert data_directory("sqlite+aiosqlite:///:memory:") == str(tmp_path)
-    assert data_directory("postgresql+asyncpg://u:p@h/db") == str(tmp_path)
+    # The database's volume is on another host; the working directory's is not it.
+    assert data_directory("postgresql+asyncpg://u:p@h/db") is None
 
 
 async def test_the_queue_depths_are_answered_from_cache_inside_the_ttl():

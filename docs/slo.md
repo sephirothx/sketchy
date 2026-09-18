@@ -2,11 +2,13 @@
 
 What "healthy" means for one Sketchy worker, stated in the series `/metrics` exposes so
 that an alert, a dashboard and a person at the console all read the same number. The
-thresholds here are the ones in [`ops/prometheus/rules/sketchy-alerts.yml`](../ops/prometheus/rules/sketchy-alerts.yml);
+thresholds here are the ones in [`ops/prometheus/rules/sketchy-alerts.yml`](../ops/prometheus/rules/sketchy-alerts.yml)
+and [`sketchy-postgres.yml`](../ops/prometheus/rules/sketchy-postgres.yml);
 change one and change the other in the same commit. The recording rules in
 [`sketchy-recording.yml`](../ops/prometheus/rules/sketchy-recording.yml) compute the ratios
 and percentiles once, and [`backend/tests/test_alert_rules.py`](../backend/tests/test_alert_rules.py)
-refuses a rule that names a series the server does not expose.
+refuses a rule that names a series the server does not expose, or a postgres_exporter
+series whose collector the scrape example leaves off.
 
 The single-worker topology is a published decision (`docs/requirements.md` §13, N-01),
 so these objectives are per process and there is no fleet to average over. A restart
@@ -41,6 +43,29 @@ Saturation signals - pool fill, statement p95, disk, memory - are not objectives
 warnings, because each one is a cause the objectives above would show the effect of:
 `SketchyPoolSaturated`, `SketchySlowQueries`, `SketchyDiskLow` (page: a full disk is
 data loss), `SketchyMemoryHigh`.
+
+On PostgreSQL the disk is the database host's: the application does not emit
+`sketchy_data_disk_*` there (its working directory is not where the data is), and
+`sketchy:disk_free_ratio` reads node_exporter on the database host instead, so
+`SketchyDiskLow` watches the right volume on either engine.
+
+The database's own view of itself comes from postgres_exporter
+([`sketchy-postgres.yml`](../ops/prometheus/rules/sketchy-postgres.yml), #889). None of
+these is an objective either; each is a cause that shows up later as a slow statement
+or a full disk, caught while it is still a trend. All warn:
+
+| Alert | Fires when | What it usually is |
+| --- | --- | --- |
+| `SketchyPostgresExporterDown` | the exporter is not scraped, or cannot reach the database, for 5 m | every rule below is silent with it |
+| `SketchyPostgresDeadTuples` | a churn table is over 20 % dead tuples (and over 10,000) for 2 h | autovacuum not keeping up with a sweep, or a long transaction holding the horizon |
+| `SketchyPostgresAutovacuumStale` | a churn table with over 10,000 dead tuples has not been autovacuumed for 3 days | the same, seen from the vacuum side |
+| `SketchyPostgresCacheMisses` | under 95 % of block reads hit shared buffers for 6 h | the working set outgrew `shared_buffers`, or a statement scans a large table |
+| `SketchyPostgresLongTransaction` | a transaction has been open 15 minutes | an operator session: no application budget allows one |
+| `SketchyPostgresConnectionsHigh` | over 80 % of `max_connections` in use for 10 m | operator sessions on top of the web pool |
+| `SketchyPostgresWraparound` | `age(datfrozenxid)` over 500 million for 1 h | anti-wraparound vacuums not finishing |
+| `SketchyPostgresCheckpointsRequested` | more checkpoints forced by WAL volume than by time in a day | `max_wal_size` too small for the write rate |
+| `SketchyDatabaseGrowthDoubled` | the database grew over twice last week's growth (and over 1 GB) | a new writer or a stopped sweep |
+| `SketchyDatabaseVolumeFillsSoon` | the last week's trend fills the database volume within 30 days | growth, ahead of `SketchyDiskLow` |
 
 `SketchyDrawingStoreLarge` is neither, and is the only alert here that asks for a
 decision rather than a fix. `sketchy_drawing_store_bytes` is what the stored drawings

@@ -704,6 +704,16 @@ crash cannot run this planned-shutdown hook; failed finished-history writes and
 crash-safe retry are handled by the #323 durable spool rather than by live-state
 serialization.
 
+The PostgreSQL server itself is configured from tracked files in `ops/postgres/`:
+the `initdb` flags (data checksums, which cannot be switched on later without
+downtime), a `postgresql.conf` include with `pg_stat_statements`, I/O timing, a
+250 ms slow-statement log that names the connecting process, lock-wait,
+autovacuum and checkpoint logging, lz4 WAL and TOAST compression and memory sized
+for the NAS, and a one-time script creating the extension and the
+`sketchy_monitor` role postgres_exporter connects as. Each setting states its
+reason; `ops/postgres/check-config.sh` proves them against a throwaway cluster.
+See [Server configuration](docs/database.md#server-configuration).
+
 PostgreSQL connections are checked before checkout, recycled after 30 minutes,
 and bounded to five persistent plus five overflow connections per server
 process. These deployment settings can be tuned without code changes:
@@ -1689,6 +1699,9 @@ frontend/
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
+ops/
+  prometheus/       Scrape example, recording and alert rules (application and PostgreSQL)
+  postgres/         initdb flags, postgresql.conf include, one-time init script, and its check
 docs/
   architecture.md   Processes, layering, state ownership, lifecycle, and a module index
   wire-protocol.md  Every Socket.IO event, the binary drawing formats, and the REST surface
@@ -2424,7 +2437,10 @@ The objectives, their thresholds and their error budgets are in
 them are in [`ops/prometheus/rules/`](ops/prometheus/rules/), with a scrape job in
 [`ops/prometheus/scrape-example.yml`](ops/prometheus/scrape-example.yml). A test refuses
 a rule that names a series the server does not expose, so a metric rename fails CI
-rather than silencing an alert.
+rather than silencing an alert. The database's own statistics come from
+postgres_exporter (the `postgres` job) and its host's disk from node_exporter (the
+`postgres-host` job); what those alerts mean and the queries behind them are in
+[Reading the database from the inside](docs/database.md#reading-the-database-from-the-inside).
 
 The synthetic game is the probe that tells "the process is up" from "a game can be
 played": two guests, a room, a join, a start, one stroke seen by the other seat, and a

@@ -390,3 +390,14 @@ def test_the_size_table_is_bounded():
     rows = telemetry.snapshot()["socket"]["commandSizes"]
     assert len(rows) == TOP_SIZES
     assert rows[0]["event"] == f"cmd{TOP_SIZES + 4}"
+
+
+def test_no_disk_gauge_when_the_data_is_on_another_host():
+    """On PostgreSQL the working directory is not the database's volume (#889)."""
+    telemetry, _clock = store()
+    telemetry.process.data_path = None
+    telemetry.sample_process()
+    process = telemetry.snapshot()["process"]
+    assert process["diskFreeBytes"] is None and process["diskPath"] is None
+    lines = telemetry.prometheus_lines()
+    assert not any(line.startswith("sketchy_data_disk_") for line in lines)

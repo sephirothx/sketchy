@@ -1,0 +1,14 @@
+# Flags for the one initdb that creates the beta cluster (#889). Compose passes
+# them as POSTGRES_INITDB_ARGS; a bare-metal install passes them to initdb.
+# They cannot be changed afterwards without a dump and restore - checksums in
+# particular: pg_checksums can add them only with the cluster stopped, which on
+# a grown database is downtime proportional to its size.
+#
+# --data-checksums: every page carries a checksum verified on read, so a bad
+#   disk, controller or filesystem is reported as an error on the page it
+#   damaged instead of being served, backed up and restored as data. Cost is
+#   one checksum per page read or written (a few percent of CPU on I/O-bound
+#   work) and hint-bit changes being WAL-logged.
+# --encoding=UTF8: player names, chat and prompts are Unicode; the database
+#   must not be able to refuse one.
+--data-checksums --encoding=UTF8

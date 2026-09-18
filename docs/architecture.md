@@ -1354,7 +1354,10 @@ the repository rather than in a monitoring console: [`docs/slo.md`](slo.md) stat
 SLO in the series that measures it, [`ops/prometheus/rules/`](../ops/prometheus/rules/)
 computes the ratios and percentiles once and alerts on them, and
 [`backend/tests/test_alert_rules.py`](../backend/tests/test_alert_rules.py) refuses a rule
-naming a series the server does not expose. The one thing none of that can see - whether
+naming a series the server does not expose. The database is watched from its own side
+as well, through postgres_exporter and the server configuration tracked in
+[`ops/postgres/`](../ops/postgres/) (#889): the application can time its statements but
+cannot see dead tuples, vacuum, cache hits or transaction age. The one thing none of that can see - whether
 a stranger can open a room, be joined, and draw a line the other seat receives - is what
 [`backend/app/probe.py`](../backend/app/probe.py) plays out from outside on a schedule,
 and reports as its own series so it survives the server being down.

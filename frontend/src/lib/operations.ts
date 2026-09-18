@@ -221,7 +221,8 @@ export type ServerSignals = {
     startedAt: string;
     diskFreeBytes: number | null;
     diskTotalBytes: number | null;
-    diskPath: string;
+    /** Null on PostgreSQL: the data is on the database host, measured there. */
+    diskPath: string | null;
   };
   database: {
     pool: PoolGauges | null;

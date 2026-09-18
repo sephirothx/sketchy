@@ -239,8 +239,12 @@ export function ProcessCard({ live, reasons }: { live: LiveSnapshot; reasons: At
         <Cell label="Uptime" value={formatDuration(process.uptimeSeconds)} note={`since ${dateTime(new Date(process.startedAt))}`} />
         <Cell
           label="Disk free"
-          value={formatBytes(process.diskFreeBytes)}
-          note={`of ${formatBytes(process.diskTotalBytes)} at ${process.diskPath}`}
+          value={process.diskPath === null ? "—" : formatBytes(process.diskFreeBytes)}
+          note={
+            process.diskPath === null
+              ? "the database volume is on its own host; see its node_exporter"
+              : `of ${formatBytes(process.diskTotalBytes)} at ${process.diskPath}`
+          }
           full
         />
       </div>
