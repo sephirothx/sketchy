@@ -373,14 +373,21 @@ exposing or re-identifying old keys.
 
 ### `auth_login_lockouts`
 `key_hash` **PK** · `consecutive_failures` · `locked_until` · `updated_at`, with
-`ck_auth_login_lockouts_failures` and `ix_auth_login_lockouts_locked_until`.
+`ck_auth_login_lockouts_failures`, `ix_auth_login_lockouts_locked_until` (the operator
+view's count of accounts held back now) and `ix_auth_login_lockouts_updated_at`
+(`updated_at, key_hash`: the sweep's walk, oldest first).
 
 Separate from `auth_rate_limit_buckets` because it is a different shape (R-RATE-12,
 #468). A bucket is a count inside a fixed window that forgets everything when the window
 rolls, which is what a rate limit should do; a lockout has to remember **across**
 windows, since the point of backing off is that the tenth failure costs more than the
 second, and it is cleared by a success rather than by time. Rows untouched for a day are
-dropped, so a finished attack does not follow an account for a week.
+dropped by the hourly retention sweep (§10), so a finished attack does not follow an
+account for a week. That sweep matters more than the sentence suggests: a failure is
+counted for usernames that do not exist - deliberately, so the answer does not reveal
+which do (R-AUTH-09) - so every distinct name anybody tries leaves a row, and until #891
+nothing removed them. The table is now bounded by one day of attempts, which the login
+throttle bounds in turn.
 
 `key_hash` is an HMAC of the **lowercased username**, never the username: this table
 would otherwise be a list of which accounts exist and which are under attack, readable
@@ -2074,27 +2081,28 @@ removed it six hours later is a fault somebody should hear about. What is measur
 against the SLA is the age of the oldest row a sweep should already have removed,
 counted only over rows the policy does not exempt (R-PRIV-17).
 
-| Data | Retention | Deletion SLA | Exempt | Mechanism |
-| --- | --- | --- | --- | --- |
-| Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block |
-| Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup |
-| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) |
-| Expired one-shot tokens | Until expiry; consumed on presentation | 6 h | — | Hourly retention sweep (nothing scheduled it before #550) |
-| Pinned report evidence | Protected report policy (outlives the message) | — | Permanently kept: it is the evidence | Copied on report submission |
-| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | 6 h | — | Rolled up first, then swept hourly by the retention loop (the metrics loop's own purge before #478) |
-| Daily runtime roll-ups | Permanent | — | Permanently kept | — |
-| Shutdown abandonments | 90 days | 6 h | — | Hourly retention sweep (startup-only before #550) |
-| Bug report rows | Indefinite | — | Permanently kept: a defect outlives its triage | — |
-| Bug report screenshots | Until the report is decided, **and 90 days either way** | 6 h | The report row and every piece of screenshot metadata | Erased in the deciding transaction; expired unreviewed by the hourly sweep; `ck_bug_reports_screenshot_erased` and `ck_bug_reports_screenshot_expired` |
-| Data exports | 7 days (format v1) | 6 h | — | `expires_at`; hourly retention sweep |
-| Expired sessions | 30 days past `expires_at` | 6 h | Sessions of a suspended account, their only route to export and deletion (R-BAN-04) | Hourly retention sweep |
-| Expired rate-limit buckets | Their window | 6 h | — | One batch every 100 checks, and the hourly retention sweep |
-| Ephemeral room codes | 30 days retirement, then reusable | 6 h | Codes of the removed persistent-room feature, which never re-enter the pool | `retired_until`; freed by the hourly retention sweep (collision-triggered only before #550) |
-| Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool |
-| Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly |
-| Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly |
-| Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) |
-| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set |
+| Data | Retention | Deletion SLA | Exempt | Mechanism | Sweep |
+| --- | --- | --- | --- | --- | --- |
+| Friendships, including refusals | Indefinite | — | — | Deleted with either account (CASCADE), and on a block | — |
+| Retained messages, room and lobby alike | 30 days | 6 h | Lines copied as report evidence, which are their own rows | `expires_at`; hourly retention sweep. The lobby's live backlog (50 lines) is memory, re-seeded from the unexpired rows at startup | `room_messages` |
+| Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |
+| Expired one-shot tokens | Until expiry; consumed on presentation | 6 h | — | Hourly retention sweep (nothing scheduled it before #550) | `auth_tokens` |
+| Pinned report evidence | Protected report policy (outlives the message) | — | Permanently kept: it is the evidence | Copied on report submission | — |
+| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | 6 h | — | Rolled up first, then swept hourly by the retention loop (the metrics loop's own purge before #478) | `runtime_events` |
+| Daily runtime roll-ups | Permanent | — | Permanently kept | — | — |
+| Shutdown abandonments | 90 days | 6 h | — | Hourly retention sweep (startup-only before #550) | `shutdown_abandonments` |
+| Bug report rows | Indefinite | — | Permanently kept: a defect outlives its triage | — | — |
+| Bug report screenshots | Until the report is decided, **and 90 days either way** | 6 h | The report row and every piece of screenshot metadata | Erased in the deciding transaction; expired unreviewed by the hourly sweep; `ck_bug_reports_screenshot_erased` and `ck_bug_reports_screenshot_expired` | `bug_report_screenshots` |
+| Data exports | 7 days (format v1) | 6 h | — | `expires_at`; hourly retention sweep | `data_exports` |
+| Expired sessions | 30 days past `expires_at` | 6 h | Sessions of a suspended account, their only route to export and deletion (R-BAN-04) | Hourly retention sweep | `auth_sessions` |
+| Expired rate-limit buckets | Their window | 6 h | — | One batch every 100 checks, and the hourly retention sweep | `auth_rate_limit_buckets` |
+| Login lockouts | A day after the last failure (`LOCKOUT_FORGET_AFTER`); cleared at once by a correct password | 6 h | — | Hourly retention sweep, oldest first on `ix_auth_login_lockouts_updated_at`. Never ran before #891, though this row said a day: a failure is counted for usernames that do not exist, so every name anybody tried stayed for ever (R-RATE-12) | `auth_login_lockouts` |
+| Ephemeral room codes | 30 days retirement, then reusable | 6 h | Codes of the removed persistent-room feature, which never re-enter the pool | `retired_until`; freed by the hourly retention sweep (collision-triggered only before #550) | `room_code_reservations` |
+| Codes from the removed persistent-room feature | Permanent | — | Permanently kept | Never enter the reuse pool | — |
+| Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
+| Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
+| Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
+| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep
@@ -2104,6 +2112,13 @@ behind: reaching it means the loop missed its window six times over. A day is fo
 two sweeps whose per-run ceiling is deliberately small — guests cascade across a dozen
 tables, retired lists walk revisions, versions and concepts — so a backlog is worked off
 over several passes by design.
+
+The **Sweep** column names the registered sweep (`retention_sweeps()` in
+[`auth/retention.py`](../backend/app/auth/retention.py)) and
+`test_the_retention_summary_names_every_registered_sweep_and_its_sla` holds the two
+together in both directions: a documented deletion SLA with no sweep behind it fails, as
+does a sweep this table does not list or an SLA that differs. The login lockouts were
+that gap until #891 — documented as dropped after a day, and never swept.
 
 **Retention that runs is not retention that complies.** A sweep removing five thousand
 rows an hour from a table growing by six thousand is healthy by every signal that

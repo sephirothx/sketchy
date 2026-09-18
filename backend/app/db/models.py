@@ -2327,7 +2327,10 @@ class AuthLoginLockout(Base):
             "consecutive_failures >= 0",
             name="ck_auth_login_lockouts_failures",
         ),
+        # The operator view's count of accounts held back right now.
         Index("ix_auth_login_lockouts_locked_until", "locked_until"),
+        # The retention sweep's walk, oldest first (#891).
+        Index("ix_auth_login_lockouts_updated_at", "updated_at", "key_hash"),
         UPDATED_IN_PLACE,
     )
 
