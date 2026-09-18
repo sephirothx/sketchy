@@ -1,7 +1,7 @@
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
-import type { Point } from "./canvasGeometry.ts";
+import type { Point, SegmentSpan } from "./canvasGeometry.ts";
 import { replayStroke } from "./replay.ts";
 import type { ReplayStroke } from "./replay.ts";
 import { rampedRuns, widthRuns } from "./pathWidths.ts";
@@ -9,6 +9,7 @@ import {
   fillWhitePixels,
   floodFillPixels,
   hexToRgba,
+  rasterizeSpans,
   rasterizePath as rasterizePixelPath,
 } from "./canvasPixels.ts";
 import type {
@@ -97,6 +98,39 @@ export function rasterizePath(
     color,
     closed,
   );
+  context.putImageData(imageData, x, y);
+}
+
+/** Paint stretches of segments onto the canvas, as live playback hands them
+over (`rasterizeSpans`): the pixels the whole segments would have, a frame at
+a time. */
+export function rasterizeSegmentSpans(
+  context: CanvasRenderingContext2D,
+  spans: readonly SegmentSpan[],
+  radius: number,
+  color: [number, number, number, number],
+): void {
+  if (spans.length === 0) return;
+  const ends = spans.flatMap(({ a, b, t0, t1 }) => [
+    { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 },
+    { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 },
+  ]);
+  const bounds = boundsFromPath(ends, radius + 1);
+  const x = Math.max(0, Math.floor(bounds.minX));
+  const y = Math.max(0, Math.floor(bounds.minY));
+  const right = Math.min(CANVAS_WIDTH, Math.ceil(bounds.maxX));
+  const bottom = Math.min(CANVAS_HEIGHT, Math.ceil(bounds.maxY));
+  if (right - x <= 0 || bottom - y <= 0) return;
+  const imageData = context.getImageData(x, y, right - x, bottom - y);
+  // Moved by whole pixels, which is exact for quarter-pixel coordinates, so
+  // each decision is the one the whole canvas would make.
+  const local = spans.map(({ a, b, t0, t1 }) => ({
+    a: { x: a.x - x, y: a.y - y },
+    b: { x: b.x - x, y: b.y - y },
+    t0,
+    t1,
+  }));
+  rasterizeSpans(imageData.data, right - x, bottom - y, local, radius, color);
   context.putImageData(imageData, x, y);
 }
 

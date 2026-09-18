@@ -26,8 +26,9 @@ is on it, and an ulp never reaches the next position), and everything after
 is the same arithmetic on the same numbers everywhere.
 
 And every *piece* is still one constant radius, which is what keeps painting a
-segment in parts exact (`strokePlayback.ts`): a capsule split at a point on its
-own segment is the union of its halves, and a ramp is only more capsules.
+segment in parts exact (`strokePlayback.ts`): playback paints spans of a
+constant-radius segment, which tile it pixel for pixel, and a ramp is only
+more capsules.
 Pieces and runs meet at shared points, where each one's round cap covers the
 join.
 

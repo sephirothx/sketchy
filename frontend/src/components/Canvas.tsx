@@ -26,6 +26,7 @@ import {
   drawShapeOutlinePixels,
   fillWhite,
   rasterizePolyline,
+  rasterizeSegmentSpans,
   renderCanvasActions,
 } from "../lib/canvasRenderer";
 import type { LiveDrawingPacket } from "../lib/liveDrawing";
@@ -80,9 +81,12 @@ function createProtocolRenderer(
   // queue, so nothing is painted out of order.
   const playback = createStrokePlayback({
     intervalMs: () => currentClientConfig().flushIntervalMs,
-    paint: (points, style) => {
+    // Spans of the received segments rather than the interpolated polyline,
+    // so a stroke played out a frame at a time ends as the pixels the drawer
+    // and every replay have (#940).
+    paint: (_points, style, spans) => {
       const context = contextRef.current;
-      if (context) rasterizePolyline(context, points, style.radius, style.color);
+      if (context) rasterizeSegmentSpans(context, spans, style.radius, style.color);
     },
   });
   let frame: number | null = null;
