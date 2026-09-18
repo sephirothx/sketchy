@@ -14,9 +14,16 @@ None of the pieces are on the wire or in the history. `expandWidthRamps`
 derives them from the points and keyframes every client already holds, and
 every painter goes through it - the drawer's own ink, a viewer's live
 playback, the whole-path replay, the timelapse - so they still rasterize one
-picture and a fill sees the same edges everywhere (R-DRAW-14). The cuts are
-snapped to the quarter-pixel grid the wire's own coordinates sit on, so two
-clients whose copies of a point differ by float dust cut in the same places.
+picture and a fill sees the same edges everywhere (R-DRAW-14). Two clients'
+copies of a point differ by float dust: a live painter reaches a wire
+coordinate as `packed / 3200 * 800`, one ulp off the replay's `packed / 4` for
+about one coordinate in eight. Snapping only the *cuts* to the quarter-pixel
+grid did not absorb that: a cut that lands exactly half-way between two grid
+positions rounds either way on the dust, and a late joiner's ramp came out a
+quarter pixel from the room's - one pixel of ink apart. So the path's own
+points are snapped to that grid first, which is exact (every wire coordinate
+is on it, and an ulp never reaches the next position), and everything after
+is the same arithmetic on the same numbers everywhere.
 
 And every *piece* is still one constant radius, which is what keeps painting a
 segment in parts exact (`strokePlayback.ts`): a capsule split at a point on its
@@ -102,6 +109,14 @@ interface PathPoint {
   y: number;
 }
 
+/** A point on the quarter-pixel grid its wire coordinates came from. */
+function onGrid(point: PathPoint): PathPoint {
+  return {
+    x: Math.round(point.x * RAMP_GRID) / RAMP_GRID,
+    y: Math.round(point.y * RAMP_GRID) / RAMP_GRID,
+  };
+}
+
 export interface RampedPath {
   points: readonly PathPoint[];
   width: number;
@@ -120,6 +135,7 @@ export function expandWidthRamps(
   if (!widths || widths.length === 0 || points.length < 2) {
     return { points, width, widths: undefined };
   }
+  points = points.map(onGrid);
   const out: PathPoint[] = [points[0]];
   const ramped: WidthChange[] = [];
   let fromIndex = 0;

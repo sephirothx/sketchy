@@ -51,6 +51,23 @@ export function fillWhitePixels(data: Uint8ClampedArray): void {
   data.fill(255);
 }
 
+/** How much a pixel may be past a stroke's edge and still be ink: a tie.
+
+Every painter - the drawer's own canvas, a viewer's live playback, a late
+joiner's replay, the timelapse - rasterizes through here, and they have to
+agree to the pixel (R-DRAW-14). They reach the same point by different float
+routes: the live ones as `packed / 3200 * 800`, which is one ulp off
+`packed / 4` for about one coordinate in eight, the replay as `packed / 4`.
+With quarter-pixel coordinates, half-pixel centres and radii in halves, a
+centre exactly on the edge is common, and a strict `<=` let the ulp decide it:
+a late joiner's canvas came out a pixel apart from the room's.
+
+So an exact tie is ink everywhere. The margin sits between the two scales
+that matter: float dust in a squared distance is ~1e-11, while two distinct
+exact values of one on this grid differ by at least (1/256) / length², about
+4e-9 for the longest segment the canvas holds. */
+const EDGE_TIE = 1e-9;
+
 export function rasterizePath(
   data: Uint8ClampedArray,
   width: number,
@@ -61,7 +78,7 @@ export function rasterizePath(
   closed: boolean,
 ): void {
   if (points.length === 0) return;
-  const radiusSquared = radius * radius;
+  const radiusSquared = radius * radius + EDGE_TIE;
   const segmentCount = closed ? points.length : points.length - 1;
 
   for (let segment = 0; segment < segmentCount; segment++) {

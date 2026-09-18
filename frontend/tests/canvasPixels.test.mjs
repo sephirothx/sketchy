@@ -262,3 +262,25 @@ test("a stroke painted segment by segment is the stroke painted as one polyline 
   rasterizePath(asPolyline, width, height, points, 2.5, BLACK, false);
   assert.deepEqual(Array.from(bySegment), Array.from(asPolyline));
 });
+
+test("a pixel exactly on a stroke's edge is inked however its coordinates were rounded", () => {
+  // The live painters reach a wire coordinate as packed / 3200 * 800, which
+  // is one ulp off packed / 4 for about one coordinate in eight; the replay
+  // decodes packed / 4 exactly. Row 302's centre is exactly 2.5 below a line
+  // at y = 300, a radius-2.5 tie: whether it was inked depended on which way
+  // the ulp went, and a late joiner's replay differed from the live canvas
+  // by that one pixel (the pen-pressure E2E flake).
+  const exact = 300;
+  const below = 299.99999999999994;
+  const above = 300.00000000000006;
+  const rasters = [exact, below, above].map((y) => {
+    const data = solidPixels(40, 40 + 300);
+    rasterizePath(data, 40, 340, [{ x: 10, y }, { x: 30, y }], 2.5, BLACK, false);
+    return data;
+  });
+  assert.deepEqual(rasters[1], rasters[0]);
+  assert.deepEqual(rasters[2], rasters[0]);
+  // And the tie is ink: the replay's exact answer is the one kept.
+  const row302 = (302 * 40 + 20) * 4;
+  assert.deepEqual([...rasters[0].slice(row302, row302 + 4)], BLACK);
+});
