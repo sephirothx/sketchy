@@ -112,7 +112,7 @@ async def run(games: int) -> dict:
         players.append(u.id)
     revisions, versions = [], []
     for n in range(2):
-        created = await lists.create_owned(players[0], name=f"Source {n}", description="", language="en", visibility="private",
+        created = await lists.create_owned(players[0], name=f"Source {n}", description="", language="en",
                                            prompts=tuple(PromptListEntryInput(answer=f"answer {n}-{k}") for k in range(80)))
         pinned = await lists.authorize_selection([created.slug], requesting_user_id=players[0])
         revisions.extend(pinned.revision_ids)

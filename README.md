@@ -1662,6 +1662,7 @@ backend/
       timers.py    Application-owned asynchronous timer lifecycle
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
       bug_report_retention.py A ceiling on how long an undecided bug report keeps its screenshot
+      storage_report.py What each table of the live database occupies, from the catalogue
     presenters.py Pure construction of room, turn, round, and session payloads
     refusals.py   The one refusal vocabulary (`ErrorCode`), shared by REST and the socket
     auth/mail_copy.py The five outgoing messages, in each of the seven languages
@@ -1907,6 +1908,9 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/index_plans.py --scale 1
 
+# What each table of the live database occupies, from the catalogue (#895; read-only)
+backend/.venv/bin/python -m app.services.storage_report
+
 # Schema-trim measurements behind #545, #548 and #549 (disposable database only; nothing changes)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/recipient_array_sizes.py
@@ -2080,6 +2084,13 @@ rows, room evidence, the export queue, player search) were left alone, as was
 `pg_trgm` for the player search: at this population a `display_name ILIKE`
 over registered players is a third of a millisecond, and the extension needs
 installation rights the deployment may not have.
+
+Every benchmark that touches the database also runs in CI at its smallest size, on the
+PostgreSQL job (`tests/test_benchmark_smoke.py`): two had stopped running unnoticed
+(`history_row_footprint.py` after #815 removed a keyword it passed, `index_plans.py`
+after a lifecycle CHECK its seed did not meet), and a measurement that no longer runs is
+found the day somebody needs the number. A new database benchmark gets a line there;
+the test fails until it does. `index_plans.py --scale` takes a fraction for that run.
 
 The index-write benchmark measures what the schema it runs against costs the two
 hottest write paths, so running it on either side of a revision shows what the

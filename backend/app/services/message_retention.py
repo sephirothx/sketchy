@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.telemetry import database_operation_of
+from app.services.telemetry import database_operation_of, telemetry
 from app.auth.erasure import erased_identity_ids
 from app.services.sweeps import (
     SweepBudget,
@@ -276,6 +276,13 @@ class MessageRetentionService:
                         len(batch) - len(kept),
                     )
                 session.add_all(kept)
+        # Counted once committed (#895): how much is kept, of which kind, and
+        # for how many recipients - the number #545 turned on, now measured
+        # rather than scanned for.
+        for row in kept:
+            telemetry.message_retained(
+                row.message_kind, row.audience, len(row.audience_user_ids or ())
+            )
 
     async def drain(self) -> None:
         """Wait for everything taken so far to have been dealt with."""

@@ -2054,7 +2054,8 @@ itself) · `event_type` · `occurred_at` · `room_id` · `user_id` (`SET NULL`) 
 Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
 `player.disconnected`, `player.reconnected`, `player.evicted`, `command.throttled`, `game.started`,
 `game.finished`, `game.abandoned`, `turn.ended`, `timer.overran`,
-`canvas.payload_observed`, `drawing.stored`, `recap.budget_dropped`,
+`canvas.payload_observed`, `drawing.stored` (the wire frame's bytes), `drawing.encoded`
+(the same drawing's stored bytes, #895), `recap.budget_dropped`,
 `history.write_abandoned` (a finished game's history or prompt-usage write the server gave
 up on; `details.kind` is `game` or `prompt_usage`, `details.reason` is `timeout` or `error`,
 `value` is the milliseconds spent before giving up — #482).
@@ -2088,6 +2089,38 @@ Raw events are kept `RUNTIME_EVENT_RETENTION_DAYS` (default 30) and **rolled int
 permanent daily totals first**. What retention costs is the ability to ask about one
 particular minute last month; the shape of the month survives. Unbounded event rows on
 embedded SQLite is a disk that fills up quietly.
+
+A count, a sum and a maximum keep a month's shape but not a distribution, and the drawing
+sizes are the distribution every storage decision turns on. So `drawing.stored` and
+`drawing.encoded` also roll into fixed size buckets (#895) — one extra metric row per
+bucket per day: `drawing.stored.le_1k`, `…le_4k`, `…le_16k`, `…le_64k`, `…le_256k`,
+`…le_1m` and `…gt_1m`, the same for `drawing.encoded` — so the distribution outlives the
+raw events without a schema change.
+
+### Sizing facts on `/metrics`
+
+What the storage reviews of #471, #545, #549 and #558 had to guess from seeded shapes is
+recorded as it is written (#895), each after its write has committed and none carrying a
+user identifier: `sketchy_drawing_raw_bytes`, `sketchy_drawing_stored_bytes`,
+`sketchy_drawing_actions` and `sketchy_drawing_encode_seconds`, labelled by the format
+stored (`SKCD` encoded, `SKCH` verbatim); `sketchy_history_rows_per_game{table}` for
+every table a finished game writes; `sketchy_handoff_envelope_bytes`;
+`sketchy_messages_retained_total{kind,audience}` with `sketchy_message_recipients{audience}`
+— the recipient count #545 closed on a seeded distribution; and
+`sketchy_export_artifact_bytes`. After two to four weeks of beta these answer whether the
+drawing store reaches 50 GB in months or years, whether a second encoding (#899) is
+worth a permanent decoder, and what a finished game really costs.
+
+The live database's own footprint is one read-only command, safe to paste into an issue
+(table and index names and numbers only):
+
+```bash
+cd backend && .venv/bin/python -m app.services.storage_report          # or --json
+```
+
+It prints heap, TOAST and index bytes, the planner's row estimate and bytes per row for
+every table, bytes per finished game across all of them, and the ten largest indexes,
+from the catalogue — no table is scanned but `game_records`, for the count of games.
 
 Live counts of rooms, players, and running games are deliberately **not** in the
 database: one worker owns all of it, so an in-process count is the true count, and it is

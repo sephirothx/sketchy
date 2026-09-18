@@ -392,6 +392,14 @@ def color_to_int(color: str) -> int:
 def color_to_hex(color: int) -> str:
     return f"#{color:06x}"
 
+def binary_action_count(payload: bytes) -> int:
+    """How many actions a packed frame declares, read from its header alone
+    (#895). For measuring a frame already validated, never for trusting one."""
+    if len(payload) < _BINARY_HEADER.size:
+        return 0
+    return int(_BINARY_HEADER.unpack_from(payload)[2])
+
+
 def decode_binary_canvas_history(payload) -> PackedCanvasHistory:
     """Validate and decode a packed synchronization frame."""
     if not isinstance(payload, (bytes, bytearray, memoryview)):

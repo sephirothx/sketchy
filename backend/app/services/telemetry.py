@@ -71,6 +71,13 @@ POOL_WAIT_BUCKETS = (0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0, 
 # handoff writes at once, up to the replay backoff's two hours when it does not.
 HISTORY_BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 30.0, 60.0, 300.0, 1800.0, 7200.0)
 
+# Sizing facts (#895): a drawing is hundreds of bytes to a few megabytes,
+# stored or as it travels; a game writes a handful to a few hundred rows of
+# each kind; a chat line reaches up to a room's worth of recipients.
+BYTE_BUCKETS = (256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0, 4194304.0)
+COUNT_BUCKETS = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 4096.0)
+ENCODE_BUCKETS = (0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25)
+
 # The statements worth telling apart (#892), named at their call sites with
 # `database_operation`. Everything else is `other`: a fixed set keeps the
 # statement histogram at a few hundred series whatever the code grows into.
@@ -834,6 +841,59 @@ class Telemetry:
             "Replay attempts of staged finished games, by outcome.",
             ("outcome",),
         )
+        # Sizing facts (#895). None carries a user identifier: a format, a
+        # table, a message kind and audience - fixed, small sets.
+        self.drawing_raw_bytes = Histogram(
+            "sketchy_drawing_raw_bytes",
+            "A stored drawing's wire frame, by the format it was stored in.",
+            BYTE_BUCKETS,
+            ("format",),
+        )
+        self.drawing_stored_bytes = Histogram(
+            "sketchy_drawing_stored_bytes",
+            "A stored drawing's bytes as written, by format (SKCD encoded, SKCH verbatim).",
+            BYTE_BUCKETS,
+            ("format",),
+        )
+        self.drawing_actions = Histogram(
+            "sketchy_drawing_actions",
+            "Actions in a stored drawing, by format.",
+            COUNT_BUCKETS,
+            ("format",),
+        )
+        self.drawing_encode_seconds = Histogram(
+            "sketchy_drawing_encode_seconds",
+            "Validating and encoding one drawing for storage, by format.",
+            ENCODE_BUCKETS,
+            ("format",),
+        )
+        self.game_rows = Histogram(
+            "sketchy_history_rows_per_game",
+            "Rows one finished game wrote, by table.",
+            COUNT_BUCKETS,
+            ("table",),
+        )
+        self.envelope_bytes = Histogram(
+            "sketchy_handoff_envelope_bytes",
+            "A staged finished-game envelope's byte_size.",
+            BYTE_BUCKETS,
+        )
+        self.messages_retained = LabelledCounter(
+            "sketchy_messages_retained_total",
+            "Chat and guess lines kept for the retention window, by kind and audience.",
+            ("kind", "audience"),
+        )
+        self.message_recipients = Histogram(
+            "sketchy_message_recipients",
+            "Recipients recorded on one retained line, by audience.",
+            COUNT_BUCKETS,
+            ("audience",),
+        )
+        self.export_bytes = Histogram(
+            "sketchy_export_artifact_bytes",
+            "One account export's artifact, as written.",
+            BYTE_BUCKETS,
+        )
         self.history_write_seconds = Histogram(
             "sketchy_history_write_seconds",
             "Wall time of one finished game's history write, handoff to commit.",
@@ -962,6 +1022,32 @@ class Telemetry:
         if outcome not in DB_RETRY_OUTCOMES:
             raise ValueError(f"unknown retry outcome {outcome!r}")
         self.db_retries.inc((operation if operation in DB_OPERATIONS else "other", outcome))
+
+    def drawing_stored(
+        self, magic: str, *, raw_bytes: int, stored_bytes: int, actions: int, seconds: float
+    ) -> None:
+        """One drawing written into history, as it traveled and as it is kept."""
+        now = self._clock()
+        labels = (magic,)
+        self.drawing_raw_bytes.observe(raw_bytes, labels, now=now)
+        self.drawing_stored_bytes.observe(stored_bytes, labels, now=now)
+        self.drawing_actions.observe(actions, labels, now=now)
+        self.drawing_encode_seconds.observe(seconds, labels, now=now)
+
+    def game_rows_written(self, rows_by_table: dict[str, int]) -> None:
+        now = self._clock()
+        for table, rows in rows_by_table.items():
+            self.game_rows.observe(rows, (table,), now=now)
+
+    def envelope_staged(self, byte_size: int) -> None:
+        self.envelope_bytes.observe(byte_size, now=self._clock())
+
+    def message_retained(self, kind: str, audience: str, recipients: int) -> None:
+        self.messages_retained.inc((kind, audience))
+        self.message_recipients.observe(recipients, (audience,), now=self._clock())
+
+    def export_written(self, byte_size: int) -> None:
+        self.export_bytes.observe(byte_size, now=self._clock())
 
     def history_write(self, seconds: float, *, persist_lag_seconds: float | None) -> None:
         """One finished game written: how long the write took, and how long
@@ -1211,6 +1297,18 @@ class Telemetry:
         lines += self.history_replays.lines()
         lines += self.history_write_seconds.lines()
         lines += self.history_persist_lag.lines()
+        for family in (
+            self.drawing_raw_bytes,
+            self.drawing_stored_bytes,
+            self.drawing_actions,
+            self.drawing_encode_seconds,
+            self.game_rows,
+            self.envelope_bytes,
+            self.messages_retained,
+            self.message_recipients,
+            self.export_bytes,
+        ):
+            lines += family.lines()
         cpu = _cpu_seconds()
         if cpu is not None:
             lines += [

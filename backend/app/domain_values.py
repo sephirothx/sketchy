@@ -385,6 +385,10 @@ class RuntimeEventType(StrEnum):
     TIMER_OVERRAN = "timer.overran"
     CANVAS_PAYLOAD_OBSERVED = "canvas.payload_observed"
     DRAWING_STORED = "drawing.stored"
+    # The same drawing as written to the database (#895): its value is the
+    # stored bytes where `drawing.stored` carries the wire frame's, so the
+    # daily roll-up keeps the encoding's ratio after the raw events go.
+    DRAWING_ENCODED = "drawing.encoded"
     RECAP_BUDGET_DROPPED = "recap.budget_dropped"
     COMMAND_THROTTLED = "command.throttled"
     # A finished game's history, or its prompt-usage facts, that the server

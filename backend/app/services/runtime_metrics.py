@@ -342,6 +342,36 @@ async def flush_events(
     return len(pending)
 
 
+# Fixed size buckets kept beside the drawing events' daily totals (#895).
+# `runtime_stats_daily` is permanent but keeps only a count, a sum and a
+# maximum per metric, and the raw events go after thirty days, so without
+# these the distribution of drawing sizes - the number every storage decision
+# turns on - would be lost. One extra metric row per bucket per day, e.g.
+# `drawing.stored.le_16k`; `gt_1m` catches the rest. No schema change.
+SIZE_BUCKET_EVENTS = frozenset({"drawing.stored", "drawing.encoded"})
+SIZE_BUCKETS = (
+    (1024, "le_1k"),
+    (4096, "le_4k"),
+    (16384, "le_16k"),
+    (65536, "le_64k"),
+    (262144, "le_256k"),
+    (1048576, "le_1m"),
+)
+
+
+def size_bucket_label(value: int) -> str:
+    for bound, label in SIZE_BUCKETS:
+        if value <= bound:
+            return label
+    return "gt_1m"
+
+
+def _size_bucket_metrics(event: PendingEvent) -> tuple[str, ...]:
+    if event.event_type not in SIZE_BUCKET_EVENTS or event.value is None:
+        return ()
+    return (f"{event.event_type}.{size_bucket_label(event.value)}",)
+
+
 async def _roll_up(session: AsyncSession, events: list[PendingEvent]) -> None:
     """Add a batch to `runtime_stats_daily`, which is kept for ever.
 
@@ -354,11 +384,13 @@ async def _roll_up(session: AsyncSession, events: list[PendingEvent]) -> None:
     sums: Counter[tuple[date, str]] = Counter()
     maxima: dict[tuple[date, str], int] = {}
     for event in events:
-        key = (_utc_date(event.occurred_at), event.event_type)
-        occurrences[key] += 1
-        if event.value is not None:
-            sums[key] += event.value
-            maxima[key] = max(maxima.get(key, event.value), event.value)
+        day = _utc_date(event.occurred_at)
+        for metric in (event.event_type, *_size_bucket_metrics(event)):
+            key = (day, metric)
+            occurrences[key] += 1
+            if event.value is not None:
+                sums[key] += event.value
+                maxima[key] = max(maxima.get(key, event.value), event.value)
     rows = [
         {
             "stat_date": stat_date,
