@@ -149,7 +149,7 @@ groups:
           runbook: "docs/database.md#reading-the-database-from-the-inside"
 
       - alert: SketchyDatabaseVolumeFillsSoon
-        expr: predict_linear(node_filesystem_avail_bytes{job="postgres-host"}[7d], 30 * 86400) < 0
+        expr: predict_linear(node_filesystem_avail_bytes{job="postgres-host", volume="database"}[7d], 30 * 86400) < 0
         for: 6h
         labels: {severity: warn}
         annotations:

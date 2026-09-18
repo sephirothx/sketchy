@@ -65,7 +65,10 @@ a finished game takes to write and how long after the game it lands.
 On PostgreSQL the disk is the database host's: the application does not emit
 `sketchy_data_disk_*` there (its working directory is not where the data is), and
 `sketchy:disk_free_ratio` reads node_exporter on the database host instead, so
-`SketchyDiskLow` watches the right volume on either engine.
+`SketchyDiskLow` watches the right volume on either engine. node_exporter reports every
+mount on that host; the scrape labels the data directory's mount `volume="database"`
+([`scrape-example.yml`](../ops/prometheus/scrape-example.yml)) and the disk rules read
+only that series, so a full root or backup disk does not page as a full database.
 
 The database's own view of itself comes from postgres_exporter
 ([`sketchy-postgres.yml`](../ops/prometheus/rules/sketchy-postgres.yml), #889). None of
