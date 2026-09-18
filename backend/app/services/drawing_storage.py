@@ -90,6 +90,8 @@ class DrawingVerification:
     skipped: int = 0
     #: Failures beyond the named ones, per kind, so a report stays bounded.
     unlisted: dict[str, int] = field(default_factory=dict)
+    #: Payload bytes read, so a caller can hold a walk to a byte budget (#894).
+    bytes_checked: int = 0
     #: The walk covered every eligible row below the watermark.
     complete: bool = False
     cursor: DrawingCursor | None = None
@@ -257,6 +259,7 @@ async def verify_stored_drawings(
                         result.skipped += 1
                         continue
                     result.checked += 1
+                    result.bytes_checked += len(blob)
                     kind = _check(
                         bytes(blob),
                         byte_size=row.byte_size,

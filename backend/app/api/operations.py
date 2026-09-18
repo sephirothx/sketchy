@@ -187,6 +187,75 @@ def _retention_lines(sweeps: dict[str, dict[str, object]]) -> list[str]:
     ]
 
 
+def integrity_checks_from(loops: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    """Each integrity check's standing, from the audit loop's health (#894)."""
+    entry = loops.get("integrity_audit") or {}
+    detail = entry.get("detail")
+    checks = detail.get("checks") if isinstance(detail, dict) else None
+    return {name: row for name, row in (checks or {}).items() if isinstance(row, dict)}
+
+
+def _integrity_lines(checks: dict[str, dict[str, object]]) -> list[str]:
+    """What the integrity audit has verified and found, per check.
+
+    `cycle_age_seconds` and `cycle_target_seconds` carry identical labels so
+    one rule holds every check to its own bound; a check between cycles
+    reports an age of zero rather than nothing (#478's rule for SLAs).
+    """
+    names = sorted(checks)
+
+    def rows(key: str, *, cast=lambda value: value):
+        for name in names:
+            value = checks[name].get(key)
+            if value is not None:
+                yield (name,), cast(value)
+
+    return [
+        *labelled_counter_lines(
+            "sketchy_integrity_rows_verified_total",
+            "Rows this integrity check has verified since the process started.",
+            ("check",),
+            rows("rows_verified_total"),
+        ),
+        *labelled_counter_lines(
+            "sketchy_integrity_mismatches_total",
+            "Rows this integrity check found wrong since the process started.",
+            ("check",),
+            rows("mismatches_total"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_integrity_cycle_age_seconds",
+            "How long this check's current pass over its table has been running.",
+            ("check",),
+            rows("cycle_age_seconds"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_integrity_cycle_target_seconds",
+            "How long a full pass over this check's table is expected to take.",
+            ("check",),
+            rows("cycle_target_seconds"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_integrity_last_cycle_seconds",
+            "How long this check's last completed pass took.",
+            ("check",),
+            rows("last_cycle_seconds"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_integrity_last_completed_timestamp_seconds",
+            "When this check last completed a pass over its whole table.",
+            ("check",),
+            rows("last_completed_at"),
+        ),
+        *labelled_gauge_lines(
+            "sketchy_integrity_check_failed",
+            "Whether this check raised on the last pass.",
+            ("check",),
+            rows("failed", cast=int),
+        ),
+    ]
+
+
 # The scrape is what an operator reads *during* a database outage, so the one
 # query in it must neither fail the scrape nor hold it open.
 QUEUE_SCRAPE_TIMEOUT_SECONDS = 2.0
@@ -515,6 +584,7 @@ def create_operations_router(
             *store.prometheus_lines(),
             *_loop_lines(loop_snapshot()),
             *_retention_lines(retention_sweeps_from(loop_snapshot())),
+            *_integrity_lines(integrity_checks_from(loop_snapshot())),
             *_queue_lines(await _queue_depths_for_scrape(queues)),
             *_drawing_store_lines(await _drawing_store_for_scrape(drawings)),
         ]

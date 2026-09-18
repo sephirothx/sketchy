@@ -17,6 +17,7 @@ import yaml
 
 from app.api.operations import (
     _drawing_store_lines,
+    _integrity_lines,
     _loop_lines,
     _prometheus_lines,
     _queue_lines,
@@ -103,6 +104,20 @@ def exposed_names() -> set[str]:
                     "sla_seconds": 21600.0,
                     "removed_total": 3,
                     "failures_total": 0,
+                }
+            }
+        ),
+        # One check's standing, every field present.
+        *_integrity_lines(
+            {
+                "drawings": {
+                    "rows_verified_total": 10,
+                    "mismatches_total": 0,
+                    "failed": False,
+                    "cycle_age_seconds": 5.0,
+                    "cycle_target_seconds": 86400.0,
+                    "last_completed_at": 1.0,
+                    "last_cycle_seconds": 2.0,
                 }
             }
         ),
