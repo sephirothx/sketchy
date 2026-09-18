@@ -8,8 +8,26 @@ not by whichever English room another test left waiting.
 
 import random
 
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.test_friends import SETTLE_MS, make_friends, sign_up, unique
+
+# Holds every outgoing room entry - `join_room`, `create_room`,
+# `join_friend_room` - for a second and a half before it reaches the socket,
+# so a test can look at the page while an entry is still in flight. Nothing
+# else is touched: presence, the room list and invitations flow as ever.
+HOLD_ROOM_ENTRIES = """
+(() => {
+  const send = WebSocket.prototype.send;
+  WebSocket.prototype.send = function (data) {
+    if (typeof data === "string" && /\\["(join_room|create_room|join_friend_room)"/.test(data)) {
+      setTimeout(() => send.call(this, data), 1500);
+      return;
+    }
+    return send.call(this, data);
+  };
+})();
+"""
 
 
 BASE_URL = "http://localhost:8000"
@@ -126,3 +144,43 @@ async def test_one_press_names_a_first_time_visitor_and_plays():
             await context.close()
             await browser.close()
 
+
+
+async def test_a_friend_s_invitation_waits_while_quick_play_is_in_flight():
+    """The notice is mounted above every page, so the lobby's own lock could
+    not see it: accepting an invitation while Quick play was still walking its
+    rooms raced it for the one seat a socket holds, and either could release
+    the other's."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context()
+        host, guest = await host_context.new_page(), await guest_context.new_page()
+        host_name, guest_name = unique("QpHost"), unique("QpPal")
+        try:
+            await sign_up(host, host_name)
+            await sign_up(guest, guest_name)
+            await make_friends(host, guest, host_name, guest_name)
+
+            await host.click(".lobby-rooms-actions .btn-primary")
+            await host.click(".create-room-submit")
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            invite = host.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+            notice = guest.locator('[data-testid="friend-invite"]')
+            await expect(notice).to_be_visible(timeout=SETTLE_MS)
+
+            # From here the guest's room entries are held on the wire.
+            await guest.evaluate(HOLD_ROOM_ENTRIES)
+            await guest.click('[data-testid="quick-play"]')
+            await expect(notice.get_by_role("button", name="Join")).to_be_disabled()
+            await expect(guest.locator(".lobby-rooms-actions .btn-primary")).to_be_disabled()
+
+            await guest.wait_for_selector('[data-testid="waiting-room"]', timeout=SETTLE_MS)
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await browser.close()

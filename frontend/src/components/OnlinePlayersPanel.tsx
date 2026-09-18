@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { sessionFrom } from "../lib/roomEntryState";
 import { emitWithAck } from "../lib/socket";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { isFriend, lobbyRowMayOfferFriendship, withFriendsFirst } from "../lib/friends";
 import { presenceSummary } from "../lib/lobbyPresence";
 import type { OnlinePlayer } from "../lib/lobbyPresence";
@@ -53,6 +54,7 @@ export function OnlinePlayersPanel() {
     displayName: string;
     avatarUrl: string | null;
   } | null>(null);
+  const entryPending = useRoomEntryStore((state) => state.pending !== null);
   // The viewer, in the shape the friendship rules take it.
   const me = myUserId ? { userId: myUserId, isAnonymous: iAmAGuest } : null;
 
@@ -63,6 +65,9 @@ export function OnlinePlayersPanel() {
   );
 
   async function joinFriend(player: OnlinePlayer) {
+    // The lobby's one-entry-at-a-time lock (store/roomEntryStore.ts).
+    const token = useRoomEntryStore.getState().begin(`friend-${player.userId}`);
+    if (token === null) return;
     try {
       const answer = await emitWithAck<AckResponse>("join_friend_room", {
         friendUserId: player.userId,
@@ -78,6 +83,8 @@ export function OnlinePlayersPanel() {
       navigate(`/room/${session.code}`);
     } catch {
       notify(ui.onlinePlayersPanel.couldNotJoinThatGame);
+    } finally {
+      useRoomEntryStore.getState().end(token);
     }
   }
 
@@ -173,6 +180,7 @@ export function OnlinePlayersPanel() {
                     <Button
                       variant="secondary"
                       compact
+                      disabled={entryPending}
                       onClick={() => void joinFriend(player)}
                     >
                       {ui.onlinePlayersPanel.join}

@@ -11,6 +11,7 @@ import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { readCommunityPromptList } from "../lib/promptLists";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -88,6 +89,7 @@ export function CreateRoomPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const entryPending = useRoomEntryStore((state) => state.pending !== null);
   // The picker owns the prompt-list fetch; a copy lands here so the collapsed
   // Prompts section can summarize the selection in its header.
   const [loadedLists, setLoadedLists] = useState<PromptListSummary[]>([]);
@@ -324,6 +326,10 @@ export function CreateRoomPage() {
       setError(ui.createRoomPage.fixCustomPromptEntriesMarkedAbove);
       return;
     }
+    // One way in at a time, app-wide (store/roomEntryStore.ts): a friend's
+    // invitation accepted from the notice above must not race this for the seat.
+    const token = useRoomEntryStore.getState().begin("create-room");
+    if (token === null) return;
     setBusy(true);
     setError(null);
     try {
@@ -347,6 +353,7 @@ export function CreateRoomPage() {
       setError(socketRequestErrorMessage(createError, ui.createRoomPage.createTheRoom));
     } finally {
       setBusy(false);
+      useRoomEntryStore.getState().end(token);
     }
   }
 
@@ -400,7 +407,7 @@ export function CreateRoomPage() {
   );
 
   const submitButton = (
-    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
+    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
   );
 
   return <main className="create-room-page">

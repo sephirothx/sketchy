@@ -13,6 +13,7 @@ import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useRoomsStore } from "../store/roomsStore";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
 import { Button } from "../components/ui/Button";
@@ -42,7 +43,6 @@ import { ui } from "../content/ui/index.ts";
 
 const ROOM_CODE_LENGTH = 6;
 
-type PendingJoin = { key: string; mode: "join" | "spectate" };
 
 function normalizeRoomCodeInput(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, ROOM_CODE_LENGTH);
@@ -200,11 +200,14 @@ export function LobbyBrowserPage() {
   const isWide = useMediaQuery("(min-width: 1500px)");
   const [error, setError] = useState<string | null>(null);
   const [criticalError, setCriticalError] = useState<string | null>(location.state?.criticalError ?? null);
-  // One entry at a time, whichever control started it: a room card, a code,
-  // Quick play. Two in flight would release each other's seats and race for
-  // the session and the route, so every entry control is disabled while one
-  // is pending.
-  const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
+  // One entry at a time, whichever control started it - a room card, a code,
+  // Quick play, or a friend's invitation from outside this page. Two in flight
+  // would release each other's seats and race for the session and the route,
+  // so every entry control is disabled while one is pending. The lock is the
+  // app's, not this page's (store/roomEntryStore.ts).
+  const pendingJoin = useRoomEntryStore((state) => state.pending);
+  const beginEntry = useRoomEntryStore((state) => state.begin);
+  const endEntry = useRoomEntryStore((state) => state.end);
   const quickPlayBusy = pendingJoin?.key === "quick-play";
   // An entry whose answer arrives after the lobby has gone (the player took
   // the header's way somewhere else meanwhile) must not drag them back into a
@@ -267,7 +270,7 @@ export function LobbyBrowserPage() {
   // No gate: every visitor already has a name, generated on their first load.
   async function handleOpenCreateRoom() {
     // An entry already in flight owns the socket and the route.
-    if (pendingJoin) return;
+    if (useRoomEntryStore.getState().pending) return;
     // A visitor who typed a name and pressed this plainly means to play under
     // it, so provision from the draft rather than sending them back to a form
     // they have already filled in.
@@ -291,8 +294,9 @@ export function LobbyBrowserPage() {
    * to that is the next room, then a room of your own - not an error.
    */
   async function handleQuickPlay() {
-    if (pendingJoin || !quickPlayReady(roomsState)) return;
-    setPendingJoin({ key: "quick-play", mode: "join" });
+    if (!quickPlayReady(roomsState)) return;
+    const token = beginEntry("quick-play");
+    if (token === null) return;
     setError(null);
     try {
       let playerName = currentPlayerName();
@@ -332,7 +336,7 @@ export function LobbyBrowserPage() {
       );
       const session = sessionFrom(answer);
       if (!mountedRef.current) {
-        if (session) emitTransient("leave_room");
+        if (session) letGoOfAStraySeat();
         return;
       }
       if (session) {
@@ -347,7 +351,7 @@ export function LobbyBrowserPage() {
       if (quickPlayError instanceof IdentityRequiredError) setError(identityMessage(quickPlayError));
       else setError(socketRequestErrorMessage(quickPlayError, ui.lobbyBrowserPage.quickPlay));
     } finally {
-      if (mountedRef.current) setPendingJoin(null);
+      endEntry(token);
     }
   }
 
@@ -364,23 +368,22 @@ export function LobbyBrowserPage() {
   }
 
   async function joinRoom(target: { roomId?: string; code?: string }, asSpectator: boolean, key: string) {
-    if (pendingJoin) return;
-    setPendingJoin({ key, mode: asSpectator ? "spectate" : "join" });
+    const token = beginEntry(key, asSpectator ? "spectate" : "join");
+    if (token === null) return;
     setError(null);
-    // Every join arrives here - a public room card, a code, a spectate - so
-    // this is where a visitor who typed a name and pressed one of those
-    // instead of the block's own button becomes somebody.
-    let playerName = currentPlayerName();
-    if (awaitingName) {
-      try {
-        playerName = (await ensureIdentity()).displayName;
-      } catch (identityError) {
-        setError(identityMessage(identityError));
-        setPendingJoin(null);
-        return;
-      }
-    }
     try {
+      // Every join arrives here - a public room card, a code, a spectate - so
+      // this is where a visitor who typed a name and pressed one of those
+      // instead of the block's own button becomes somebody.
+      let playerName = currentPlayerName();
+      if (awaitingName) {
+        try {
+          playerName = (await ensureIdentity()).displayName;
+        } catch (identityError) {
+          if (mountedRef.current) setError(identityMessage(identityError));
+          return;
+        }
+      }
       const res = await emitWithAck<AckResponse>("join_room", {
         nickname: playerName,
         nameColor,
@@ -390,7 +393,7 @@ export function LobbyBrowserPage() {
       });
       const session = sessionFrom(res);
       if (!mountedRef.current) {
-        if (session) emitTransient("leave_room");
+        if (session) letGoOfAStraySeat();
         return;
       }
       if (session) {
@@ -403,8 +406,18 @@ export function LobbyBrowserPage() {
       if (!mountedRef.current) return;
       setError(socketRequestErrorMessage(joinError, asSpectator ? ui.lobbyBrowserPage.joinAsASpectator : ui.lobbyBrowserPage.joinTheRoom));
     } finally {
-      if (mountedRef.current) setPendingJoin(null);
+      endEntry(token);
     }
+  }
+
+  /**
+   * A seat taken by an answer that arrived after the lobby had gone. Safe to
+   * release because the entry lock was held throughout: no other way in can
+   * have seated this socket since - and, belt and braces, only while no room
+   * is on screen, so it can never free a seat the player is looking at.
+   */
+  function letGoOfAStraySeat() {
+    if (useGameStore.getState().roomId === null) emitTransient("leave_room");
   }
 
   return (

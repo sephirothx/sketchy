@@ -4,6 +4,7 @@ import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import type { AckResponse, RoomPreviewResponse } from "../types";
 
 export function useRoomEntry(code: string) {
@@ -36,19 +37,29 @@ export function useRoomEntry(code: string) {
         }),
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),
-      join: ({ code: roomCode, nickname: playerNickname, mode }) =>
-        emitWithAck<AckResponse>("join_room", {
-          code: roomCode,
-          nickname: playerNickname,
-          nameColor,
-          colorblindSafeColors,
-          asSpectator: mode === "spectator",
-        }).then((response) => {
+      join: async ({ code: roomCode, nickname: playerNickname, mode }) => {
+        // The app's one-entry-at-a-time lock (store/roomEntryStore.ts). Held
+        // by something else - a Quick play still answering, a friend's
+        // invitation - this join is refused rather than raced against it.
+        const entry = useRoomEntryStore.getState();
+        const token = entry.begin("invite-link", mode === "spectator" ? "spectate" : "join");
+        if (token === null) return { ok: false };
+        try {
+          const response = await emitWithAck<AckResponse>("join_room", {
+            code: roomCode,
+            nickname: playerNickname,
+            nameColor,
+            colorblindSafeColors,
+            asSpectator: mode === "spectator",
+          });
           // Somebody who arrived first holds this guest's name (R-ACCT-09):
           // the refusal says so, and the name field it asks for appears.
           if (response.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
           return response;
-        }),
+        } finally {
+          useRoomEntryStore.getState().end(token);
+        }
+      },
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,
     });
