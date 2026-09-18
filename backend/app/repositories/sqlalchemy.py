@@ -222,6 +222,20 @@ def _decode_catalogue_cursor(cursor: str | None) -> int:
 MAX_PAGINATION_LIMIT = 100
 DEFAULT_PAGINATION_LIMIT = 20
 MAX_OWNED_PROMPT_LISTS = 25
+
+
+async def _owned_list_count(session: AsyncSession, owner_id: UUID) -> int:
+    """The lists counting toward an account's allowance. Callers hold the
+    owner's row `FOR UPDATE` (`require_live_account(..., exclusive=True)`), so
+    the number is still true when they insert (#898)."""
+    count = await session.scalar(
+        select(func.count(PromptList.id)).where(
+            PromptList.owner_user_id == owner_id,
+            PromptList.is_bundled.is_(False),
+            PromptList.deleted_at.is_(None),
+        )
+    )
+    return int(count or 0)
 MAX_PROMPTS_PER_OWNED_LIST = 500
 
 
@@ -3767,15 +3781,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
         async with self._session_factory() as session:
             async with session.begin():
-                await require_live_account(session, owner_id)
-                count = await session.scalar(
-                    select(func.count(PromptList.id)).where(
-                        PromptList.owner_user_id == owner_id,
-                        PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
-                    )
-                )
-                if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
+                # Exclusive: the allowance is count-then-insert, and the
+                # account row is what serialises two creates at the cap (#898).
+                await require_live_account(session, owner_id, exclusive=True)
+                if await _owned_list_count(session, owner_id) >= MAX_OWNED_PROMPT_LISTS:
                     raise PromptListMutationError(
                         f"An account can own at most {MAX_OWNED_PROMPT_LISTS} prompt lists.",
                         code=ErrorCode.PROMPT_LIST_ALLOWANCE_REACHED,
@@ -3912,15 +3921,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         as one (R-LIST-17, R-LIST-21); a duplicate records neither.
         """
         # Checked before anything is written, so a refusal at the cap
-        # leaves nothing behind (R-LIST-08's spirit: fail visibly).
-        count = await session.scalar(
-            select(func.count(PromptList.id)).where(
-                PromptList.owner_user_id == owner_id,
-                PromptList.is_bundled.is_(False),
-                PromptList.deleted_at.is_(None),
-            )
-        )
-        if int(count or 0) >= MAX_OWNED_PROMPT_LISTS:
+        # leaves nothing behind (R-LIST-08's spirit: fail visibly). Both
+        # callers hold the owner's row exclusively, which is what makes this
+        # count still true at the insert (#898).
+        if await _owned_list_count(session, owner_id) >= MAX_OWNED_PROMPT_LISTS:
             raise PromptListMutationError(
                 f"An account can own at most {MAX_OWNED_PROMPT_LISTS} "
                 "prompt lists. Delete one first.",
@@ -4025,7 +4029,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListNotFoundError("Prompt list not found.")
         async with self._session_factory() as session:
             async with session.begin():
-                await require_live_account(session, forker_id)
+                await require_live_account(session, forker_id, exclusive=True)
                 source = await session.scalar(
                     select(PromptList).where(
                         PromptList.id == source_id,
@@ -4075,7 +4079,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListNotFoundError("Prompt list not found.")
         async with self._session_factory() as session:
             async with session.begin():
-                await require_live_account(session, owner_id)
+                await require_live_account(session, owner_id, exclusive=True)
                 source = await session.scalar(
                     select(PromptList).where(
                         PromptList.id == list_id,

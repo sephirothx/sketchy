@@ -122,6 +122,23 @@ async def resolve_account(session: AsyncSession, user_id: UUID) -> User | None:
     return user
 
 
+async def lock_pair_for_ceilings(session: AsyncSession, a: UUID, b: UUID) -> None:
+    """Hold both accounts' rows `FOR UPDATE` until the transaction ends (#898).
+
+    Every friendship ceiling is count-then-write, and two requests landing
+    together at one below a cap would otherwise both count, both pass and
+    both write. Locking the accounts the counts are about makes the count and
+    the write one step. Both rows, in one statement, in ascending id order -
+    the order the erasure barrier takes them in - so no lock cycle is
+    possible with a game write, a merge or a deletion. Taken before the
+    friendship row is read, so a writer that waited here sees what the one
+    ahead of it committed. SQLite has one writer and ignores the clause.
+    """
+    await session.execute(
+        select(User.id).where(User.id.in_(sorted({a, b}))).order_by(User.id).with_for_update()
+    )
+
+
 async def pair_is_blocked(session: AsyncSession, a: UUID, b: UUID) -> bool:
     """Whether either of these two has blocked the other.
 
@@ -421,6 +438,7 @@ class FriendService:
                 if target.id != target_id:
                     # The id named an alias; re-key onto the account it became.
                     low, high = friendship_key(requester_id, target.id)
+                await lock_pair_for_ceilings(session, requester_id, target.id)
                 if await pair_is_blocked(session, requester_id, target.id):
                     return FriendshipOutcome.IGNORED
 
@@ -500,6 +518,7 @@ class FriendService:
     async def _accept_in(
         self, session: AsyncSession, user_id: UUID, other_id: UUID, low, high
     ) -> FriendshipOutcome:
+        await lock_pair_for_ceilings(session, user_id, other_id)
         row = await session.get(Friendship, (low, high))
         if row is None or row.status != FriendshipState.PENDING.value:
             return FriendshipOutcome.UNCHANGED

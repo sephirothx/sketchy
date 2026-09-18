@@ -152,7 +152,14 @@ async def erased_identity_ids(
     return erased
 
 
-async def require_live_account(session: AsyncSession, user_id: UUID | str) -> None:
-    """Refuse, inside the caller's transaction, to write for an erased account."""
-    if await erased_identity_ids(session, (UUID(str(user_id)),)):
+async def require_live_account(
+    session: AsyncSession, user_id: UUID | str, *, exclusive: bool = False
+) -> None:
+    """Refuse, inside the caller's transaction, to write for an erased account.
+
+    `exclusive` for a writer that counts the account's rows against a ceiling
+    and then inserts: the row lock is what makes the count and the insert one
+    step, so two requests at the cap cannot both read "one below" (#898).
+    """
+    if await erased_identity_ids(session, (UUID(str(user_id)),), exclusive=exclusive):
         raise AccountErasedError("account not found")
