@@ -13,16 +13,21 @@
  * with the scratch pad (#591), and the room's own card is still there for
  * anybody who wants to watch.
  *
- * The choice is made from the lobby's live list rather than by the server, so
- * two visitors can pick the same last seat; the caller walks the candidates in
- * order and opens a room if every one of them is taken by the time it asks.
- * That costs a refused join, which the list would have to handle anyway - a
- * room fills between two pushes whatever picks it.
+ * The choice is made from the lobby's live list, which is a moment old: a room
+ * can fill, start or go private between the push and the press. So the join
+ * says it is a Quick play one and the server re-checks, at the instant it
+ * adds the seat, that the room is still public and waiting (`room_not_open`
+ * when it is not). The caller walks the candidates in order and opens a room
+ * only when every one of them turned out to be gone - and stops at the first
+ * refusal that is about the player rather than the room, which the next room
+ * would give too.
  */
 
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "./drawingRules.ts";
+import type { RoomsState } from "./lobbyRooms.ts";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE } from "./roomSetup.ts";
 import type {
+  AckResponse,
   ColorMode,
   DrawingToolGroup,
   HintMode,
@@ -30,6 +35,48 @@ import type {
   RoomSummary,
   ScoringMode,
 } from "../types.ts";
+
+/**
+ * Whether the list is one Quick play can decide from. Before the first
+ * snapshot the list is empty because nothing has arrived, not because nothing
+ * is open - and deciding from that opens a room beside the ones waiting. A
+ * stale or resyncing list is the same kind of not-yet.
+ */
+export function quickPlayReady(state: RoomsState): boolean {
+  return state.loaded && !state.stale && !state.needsResync;
+}
+
+/**
+ * The refusals that are about one room only: it filled, it went, or it is no
+ * longer public and waiting. Anything else - joining too fast, the database
+ * busy, a name somebody took, the server draining - the next room would say
+ * too, so it is shown rather than walked past into opening a room.
+ */
+export const QUICK_PLAY_SKIPS: ReadonlySet<string> = new Set([
+  "room_full",
+  "room_not_found",
+  "room_ended",
+  "room_not_open",
+]);
+
+/**
+ * Walk the candidates and settle on one answer: the first seat, the first
+ * refusal that is about the player rather than a room (the next room would
+ * say it too), or - when every candidate turned out to be gone - the room
+ * `open` makes. `join` and `open` are the two socket requests; they are
+ * parameters so the walk can be tested without a server.
+ */
+export async function runQuickPlay<Room>(
+  candidates: readonly Room[],
+  join: (room: Room) => Promise<AckResponse>,
+  open: () => Promise<AckResponse>,
+): Promise<AckResponse> {
+  for (const room of candidates) {
+    const answer = await join(room);
+    if (answer.ok || !QUICK_PLAY_SKIPS.has(answer.errorCode ?? "")) return answer;
+  }
+  return open();
+}
 
 /**
  * The rooms Quick play would try, best first: only rooms whose words are in

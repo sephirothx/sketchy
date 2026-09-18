@@ -70,3 +70,65 @@ test("the room it opens is public, in your language, on the standard rules", () 
   assert.equal(quickPlayRoom("en", true).colorMode, "colorblind_safe");
   assert.equal(quickPlayRoom("en", false).colorMode, "all");
 });
+
+import { QUICK_PLAY_SKIPS, quickPlayReady, runQuickPlay } from "../src/lib/quickPlay.ts";
+import { NO_ROOMS } from "../src/lib/lobbyRooms.ts";
+
+test("a list that has not arrived, or has gone stale, is not one to decide from", () => {
+  assert.equal(quickPlayReady(NO_ROOMS), false, "empty because nothing arrived is not empty");
+  const live = { ...NO_ROOMS, loaded: true, revision: 3 };
+  assert.equal(quickPlayReady(live), true);
+  assert.equal(quickPlayReady({ ...live, stale: true }), false);
+  assert.equal(quickPlayReady({ ...live, needsResync: true }), false);
+});
+
+test("only a refusal about that one room moves on to the next", () => {
+  for (const code of ["room_full", "room_not_found", "room_ended", "room_not_open"]) {
+    assert.ok(QUICK_PLAY_SKIPS.has(code), code);
+  }
+  for (const code of ["joining_too_fast", "seat_changing_too_fast", "database_busy", "name_in_use", "server_draining", "account_ended"]) {
+    assert.ok(!QUICK_PLAY_SKIPS.has(code), `${code} would be the same for every room`);
+  }
+});
+
+function refusal(errorCode) {
+  return { ok: false, errorCode, error: errorCode };
+}
+
+test("the walk takes the first seat, and never opens a room once seated", async () => {
+  const asked = [];
+  const answer = await runQuickPlay(
+    ["a", "b", "c"],
+    async (room) => (asked.push(room), room === "b" ? { ok: true, code: "BBB222" } : refusal("room_full")),
+    async () => assert.fail("opened a room with a seat to be had"),
+  );
+  assert.deepEqual(asked, ["a", "b"]);
+  assert.equal(answer.code, "BBB222");
+});
+
+test("rooms that are gone are walked past, and a room is opened when all of them were", async () => {
+  let opened = 0;
+  const answer = await runQuickPlay(
+    ["a", "b"],
+    async (room) => refusal(room === "a" ? "room_not_open" : "room_full"),
+    async () => (opened += 1, { ok: true, code: "NEW111" }),
+  );
+  assert.equal(opened, 1);
+  assert.equal(answer.code, "NEW111");
+});
+
+test("a refusal about the player stops the walk: no second room, no room opened", async () => {
+  const asked = [];
+  const answer = await runQuickPlay(
+    ["a", "b", "c"],
+    async (room) => (asked.push(room), refusal("joining_too_fast")),
+    async () => assert.fail("opened a room while the join allowance was spent"),
+  );
+  assert.deepEqual(asked, ["a"]);
+  assert.equal(answer.errorCode, "joining_too_fast");
+});
+
+test("nothing to try is a room of your own", async () => {
+  const answer = await runQuickPlay([], async () => assert.fail("joined nothing"), async () => ({ ok: true, code: "NEW222" }));
+  assert.equal(answer.code, "NEW222");
+});

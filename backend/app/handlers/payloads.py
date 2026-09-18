@@ -303,6 +303,10 @@ class JoinRoomPayload(RequestModel):
     # "Do I already hold a seat here?" - used by the invite screen, which must
     # not seat a visitor who is still deciding whether to play or spectate.
     reconnect_only: bool = Field(default=False, alias="reconnectOnly")
+    # Quick play (#589): seat me only if the room is still public and waiting
+    # when the seat is taken. The client chose it from a list that is a moment
+    # old, and ordinary joins deliberately admit a game in progress.
+    quick_play: bool = Field(default=False, alias="quickPlay")
 
     @field_validator("nickname")
     @classmethod
@@ -323,6 +327,10 @@ class JoinRoomPayload(RequestModel):
     def requires_room_reference(self) -> "JoinRoomPayload":
         if not self.room_id and not self.code:
             raise ValueError("roomId or code is required")
+        # Quick play picks a room from the public list and takes a seat to
+        # play in; a code or a spectator seat is not what it is for.
+        if self.quick_play and (not self.room_id or self.as_spectator):
+            raise ValueError("quickPlay needs roomId and a player seat")
         return self
 
 

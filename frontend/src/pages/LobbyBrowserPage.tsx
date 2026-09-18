@@ -28,7 +28,7 @@ import {
   LanguagePicker,
   type LanguageChoice,
 } from "../components/LanguagePicker";
-import { quickPlayCandidates, quickPlayRoom } from "../lib/quickPlay";
+import { quickPlayCandidates, quickPlayReady, quickPlayRoom, runQuickPlay } from "../lib/quickPlay";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -268,48 +268,41 @@ export function LobbyBrowserPage() {
    * to that is the next room, then a room of your own - not an error.
    */
   async function handleQuickPlay() {
-    if (quickPlayBusy || pendingJoin) return;
+    if (quickPlayBusy || pendingJoin || !quickPlayReady(roomsState)) return;
     setQuickPlayBusy(true);
     setError(null);
     try {
       let playerName = currentPlayerName();
       if (awaitingName) playerName = (await ensureIdentity()).displayName;
-      for (const room of quickPlayCandidates(rooms, playerLanguage)) {
-        const joined = await emitWithAck<AckResponse>("join_room", {
+      // Read now, not from the render the press came from: naming can take
+      // long enough for the list to change under it.
+      const current = useRoomsStore.getState().rooms;
+      if (!quickPlayReady(current)) return;
+      const answer = await runQuickPlay(
+        quickPlayCandidates(current.rooms, playerLanguage),
+        (room) => emitWithAck<AckResponse>("join_room", {
           nickname: playerName,
           nameColor,
           colorblindSafeColors,
           asSpectator: false,
           roomId: room.id,
-        });
-        const session = sessionFrom(joined);
-        if (session) {
-          setSession(session);
-          navigate(`/room/${session.code}`);
-          return;
-        }
-        // A name somebody online took while this page was open is not a full
-        // room, and trying the next one would meet the same refusal.
-        if (joined.errorCode === "name_in_use") {
-          useAuthStore.getState().markNameInUse();
-          setError(refusalText(joined, ui.lobbyBrowserPage.failedJoinRoom));
-          return;
-        }
-      }
-      const opened = await emitWithAck<AckResponse>("create_room", {
-        nickname: playerName,
-        nameColor,
-        colorblindSafeColors,
-        ...quickPlayRoom(playerLanguage, colorblindSafeColors),
-      });
-      const session = sessionFrom(opened);
+          quickPlay: true,
+        }),
+        () => emitWithAck<AckResponse>("create_room", {
+          nickname: playerName,
+          nameColor,
+          colorblindSafeColors,
+          ...quickPlayRoom(playerLanguage, colorblindSafeColors),
+        }),
+      );
+      const session = sessionFrom(answer);
       if (session) {
         setSession(session);
         navigate(`/room/${session.code}`);
         return;
       }
-      if (opened.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
-      setError(refusalText(opened, ui.lobbyBrowserPage.couldNotFindOrOpenARoom));
+      if (answer.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
+      setError(refusalText(answer, ui.lobbyBrowserPage.couldNotFindOrOpenARoom));
     } catch (quickPlayError) {
       if (quickPlayError instanceof IdentityRequiredError) setError(identityMessage(quickPlayError));
       else setError(socketRequestErrorMessage(quickPlayError, ui.lobbyBrowserPage.quickPlay));
@@ -405,7 +398,7 @@ export function LobbyBrowserPage() {
                 type="button"
                 className="btn btn-warm btn-compact lobby-quick-play"
                 data-testid="quick-play"
-                disabled={quickPlayBusy}
+                disabled={quickPlayBusy || !quickPlayReady(roomsState)}
                 onClick={() => void handleQuickPlay()}
               >
                 <BoltIcon size={15} />
@@ -602,7 +595,7 @@ export function LobbyBrowserPage() {
             type="button"
             className="btn btn-warm btn-big lobby-quick-play"
             data-testid="quick-play"
-            disabled={quickPlayBusy}
+            disabled={quickPlayBusy || !quickPlayReady(roomsState)}
             onClick={() => void handleQuickPlay()}
           >
             <BoltIcon size={16} />
