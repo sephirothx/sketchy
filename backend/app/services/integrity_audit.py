@@ -535,9 +535,15 @@ async def run_integrity_loop(
     health: LoopHealth | None = None,
     audit: IntegrityAudit | None = None,
 ) -> None:
-    """Audit for ever, a pass per interval, surviving everything but cancellation."""
+    """Audit for ever, a pass per interval, surviving everything but cancellation.
+
+    The first pass waits an interval, unlike the retention loop's: nothing is
+    owed at startup - the cursor carries on from where the last process left
+    it - and a boot is when the database is busiest.
+    """
     audit = audit or IntegrityAudit(session_factory)
     while True:
+        await asyncio.sleep(audit.budget.interval_seconds)
         try:
             await audit.run_pass(health=health)
         except asyncio.CancelledError:
@@ -546,7 +552,6 @@ async def run_integrity_loop(
             if health is not None:
                 health.record_failure()
             logger.exception("integrity audit pass failed")
-        await asyncio.sleep(audit.budget.interval_seconds)
 
 
 def start_integrity_loop(
