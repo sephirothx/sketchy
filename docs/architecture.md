@@ -1373,6 +1373,15 @@ a stranger can open a room, be joined, and draw a line the other seat receives -
 [`backend/app/probe.py`](../backend/app/probe.py) plays out from outside on a schedule,
 and reports as its own series so it survives the server being down.
 
+On the application side, a statement and its transaction carry the **operation**
+that ran them - `database_operation` sets a context variable at a dozen call sites
+(session resolve, save game, message batch, gallery page, a sweep, ...), which follows
+the task into SQLAlchemy's greenlet - so a slow p95 has a name (#892). The pool is a
+`TimedQueuePool` that times each checkout, because the statement timer starts only
+once a connection is held; a failed statement is counted by SQLSTATE class; and each
+operator command's engine logs one summary line when disposed, since nothing scrapes a
+process that lives for a minute.
+
 `/api/admin/metrics` carries all of it beside the live counts; the overview polls it
 every ten seconds while it is the tab on screen and the document is visible, and never
 otherwise. One ordered list of *attention reasons* — data already lost first (a dropped

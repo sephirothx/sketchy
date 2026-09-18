@@ -32,6 +32,8 @@ from __future__ import annotations
 import asyncio
 import bisect
 import contextlib
+import contextvars
+import functools
 import json
 import logging
 import os
@@ -57,7 +59,79 @@ logger = logging.getLogger(__name__)
 # query in single-digit milliseconds, and loop lag ideally under one.
 HTTP_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
 FAST_BUCKETS = (0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5)
-DB_BUCKETS = (0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0)
+# Up to the web role's 30 s statement_timeout (#892): a statement the server
+# cancels at 29 s used to land in the same `+Inf` as one that took 1.1 s.
+DB_BUCKETS = (
+    0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0,
+)
+# Waiting for a pooled connection: nothing at all when the pool has one free,
+# up to `DB_POOL_TIMEOUT_SECONDS` (10) when it does not.
+POOL_WAIT_BUCKETS = (0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0, 10.0)
+# A finished game's write and how late it lands: milliseconds when the
+# handoff writes at once, up to the replay backoff's two hours when it does not.
+HISTORY_BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 30.0, 60.0, 300.0, 1800.0, 7200.0)
+
+# The statements worth telling apart (#892), named at their call sites with
+# `database_operation`. Everything else is `other`: a fixed set keeps the
+# statement histogram at a few hundred series whatever the code grows into.
+DB_OPERATIONS = (
+    "session_resolve",
+    "save_game",
+    "prompt_usage",
+    "message_batch",
+    "event_flush",
+    "gallery_page",
+    "community_catalogue",
+    "history_page",
+    "export_build",
+    "retention_sweep",
+    "profile_pins",
+    "stats_rebuild",
+    "other",
+)
+# Why a statement failed, by SQLSTATE class: the causes the schema's
+# concurrency design rests on being rare (#555, #606-#609) are told apart.
+DB_ERROR_CAUSES = (
+    "timeout", "lock_timeout", "deadlock", "serialization", "integrity", "connection", "other",
+)
+DB_RETRY_OUTCOMES = ("retried", "exhausted")
+
+_db_operation: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "sketchy_db_operation", default="other"
+)
+
+
+@contextlib.contextmanager
+def database_operation(name: str):
+    """Label every statement and transaction inside with `name` (#892).
+
+    A context variable, so it follows the task into SQLAlchemy's greenlet and
+    through any helper the operation calls, and is gone when the block ends.
+    An unknown name is recorded as `other` rather than growing a label.
+    """
+    token = _db_operation.set(name if name in DB_OPERATIONS else "other")
+    try:
+        yield
+    finally:
+        _db_operation.reset(token)
+
+
+def database_operation_of(name: str):
+    """`database_operation` around a whole coroutine function, as a decorator."""
+
+    def decorate(function):
+        @functools.wraps(function)
+        async def labelled(*args, **kwargs):
+            with database_operation(name):
+                return await function(*args, **kwargs)
+
+        return labelled
+
+    return decorate
+
+
+def current_database_operation() -> str:
+    return _db_operation.get()
 # Payload sizes in bytes: a guess is tens of bytes, a draw frame hundreds, a
 # canvas snapshot or a recap tens of kilobytes.
 SIZE_BUCKETS = (64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0)
@@ -706,15 +780,39 @@ class Telemetry:
             "sketchy_db_queries_total", "Statements executed against the database."
         )
         self.db_query_errors = LabelledCounter(
-            "sketchy_db_query_errors_total", "Statements the database refused or that failed."
+            "sketchy_db_query_errors_total",
+            "Statements the database refused or that failed, by SQLSTATE class.",
+            ("cause",),
         )
         self.db_duration = Histogram(
             "sketchy_db_query_duration_seconds",
-            "Wall time of one statement, including any wait for a connection.",
+            "Wall time of one statement from send to result, by operation; the wait "
+            "for a pooled connection is measured separately.",
             DB_BUCKETS,
+            ("operation",),
         )
-        # queries, errors
-        self.db_minutes = CountRing(2)
+        self.db_transactions = Histogram(
+            "sketchy_db_transaction_seconds",
+            "A transaction from its first statement to its commit or rollback, by operation.",
+            DB_BUCKETS,
+            ("operation",),
+        )
+        self.db_pool_wait = Histogram(
+            "sketchy_db_pool_wait_seconds",
+            "Time spent waiting for a pooled connection, including opening an overflow one.",
+            POOL_WAIT_BUCKETS,
+        )
+        self.db_pool_timeouts = LabelledCounter(
+            "sketchy_db_pool_timeouts_total",
+            "Checkouts that gave up waiting for a connection (DB_POOL_TIMEOUT_SECONDS).",
+        )
+        self.db_retries = LabelledCounter(
+            "sketchy_db_retries_total",
+            "Transactions retried after a lock or conflict, by operation and outcome.",
+            ("operation", "outcome"),
+        )
+        # queries, errors, pool timeouts
+        self.db_minutes = CountRing(3)
 
         self.history_writes_abandoned = LabelledCounter(
             "sketchy_history_writes_abandoned_total",
@@ -735,6 +833,18 @@ class Telemetry:
             "sketchy_history_replays_total",
             "Replay attempts of staged finished games, by outcome.",
             ("outcome",),
+        )
+        self.history_write_seconds = Histogram(
+            "sketchy_history_write_seconds",
+            "Wall time of one finished game's history write, handoff to commit.",
+            HISTORY_BUCKETS,
+        )
+        # `game_records.persisted_at` exists so that save lag is measurable
+        # (#892); this is where it is measured, as each game lands.
+        self.history_persist_lag = Histogram(
+            "sketchy_history_persist_lag_seconds",
+            "How long after a game finished its history was committed.",
+            HISTORY_BUCKETS,
         )
 
     # --- recording ---------------------------------------------------------
@@ -818,14 +928,48 @@ class Telemetry:
         self.loop_lag.observe(seconds, now=now)
         self.lag_samples.add(now, seconds)
 
-    def db_query(self, seconds: float, *, failed: bool = False) -> None:
+    def db_query(
+        self,
+        seconds: float,
+        *,
+        failed: bool = False,
+        cause: str = "other",
+        operation: str | None = None,
+    ) -> None:
         now = self._clock()
         self.db_queries.inc()
         self.db_minutes.bump(now)
         if failed:
-            self.db_query_errors.inc()
+            self.db_query_errors.inc((cause if cause in DB_ERROR_CAUSES else "other",))
             self.db_minutes.bump(now, field=1)
-        self.db_duration.observe(seconds, now=now)
+        self.db_duration.observe(
+            seconds, (operation or current_database_operation(),), now=now
+        )
+
+    def db_transaction(self, seconds: float, *, operation: str | None = None) -> None:
+        self.db_transactions.observe(
+            seconds, (operation or current_database_operation(),), now=self._clock()
+        )
+
+    def db_pool_checkout(self, seconds: float, *, timed_out: bool = False) -> None:
+        now = self._clock()
+        self.db_pool_wait.observe(seconds, now=now)
+        if timed_out:
+            self.db_pool_timeouts.inc()
+            self.db_minutes.bump(now, field=2)
+
+    def db_retry(self, operation: str, outcome: str) -> None:
+        if outcome not in DB_RETRY_OUTCOMES:
+            raise ValueError(f"unknown retry outcome {outcome!r}")
+        self.db_retries.inc((operation if operation in DB_OPERATIONS else "other", outcome))
+
+    def history_write(self, seconds: float, *, persist_lag_seconds: float | None) -> None:
+        """One finished game written: how long the write took, and how long
+        after the game ended it landed (`persisted_at - finished_at`)."""
+        now = self._clock()
+        self.history_write_seconds.observe(seconds, now=now)
+        if persist_lag_seconds is not None:
+            self.history_persist_lag.observe(max(0.0, persist_lag_seconds), now=now)
 
     def history_write_abandoned(self, kind: str, reason: str) -> None:
         self.history_writes_abandoned.inc((kind, reason))
@@ -938,6 +1082,28 @@ class Telemetry:
                 "queriesPerMinute": round(db_count / minutes, 1),
                 "queryP95Ms": _ms(db_latency["p95"]),
                 "queryErrors": self.db_query_errors.total(),
+                "errorsByCause": {
+                    cause: count for (cause,), count in self.db_query_errors.items()
+                },
+                "poolWaitP95Ms": _ms(self.db_pool_wait.windowed(now)["p95"]),
+                "poolTimeouts": self.db_pool_timeouts.total(),
+                "poolTimeoutsInWindow": self.db_minutes.window_total(now, field=2),
+                "topOperations": [
+                    {
+                        "operation": row["labels"][0],  # type: ignore[index]
+                        "count": row["count"],
+                        "p95Ms": _ms(row["p95"]),  # type: ignore[arg-type]
+                    }
+                    for row in self.db_duration.per_label(top=5)
+                ],
+                "retries": {
+                    f"{operation}:{outcome}": count
+                    for (operation, outcome), count in self.db_retries.items()
+                },
+                "historyWriteP95Ms": _ms(self.history_write_seconds.windowed(now)["p95"]),
+                "historyPersistLagP95Seconds": _round(
+                    self.history_persist_lag.windowed(now)["p95"], 1
+                ),
                 "historyWritesAbandoned": {
                     "total": self.history_writes_abandoned.total(),
                     "lastHour": self.history_minutes.window_total(now, minutes=RING_MINUTES),
@@ -1020,6 +1186,8 @@ class Telemetry:
         lines += self.db_queries.lines()
         lines += self.db_query_errors.lines()
         lines += self.db_duration.lines()
+        lines += self.db_transactions.lines()
+        lines += self.db_retries.lines()
         if pool is not None:
             lines += gauge_lines("sketchy_db_pool_size", "Connections the pool keeps open.", pool.size)
             lines += gauge_lines(
@@ -1034,9 +1202,15 @@ class Telemetry:
             lines += gauge_lines(
                 "sketchy_db_pool_capacity", "Most connections the pool will ever open.", pool.capacity
             )
+            # Only beside a pool that keeps counts: SQLite's pools do not
+            # queue, so a wait family there would be a row of zeros.
+            lines += self.db_pool_wait.lines()
+            lines += self.db_pool_timeouts.lines()
         lines += self.history_writes_abandoned.lines()
         lines += self.history_handoffs.lines()
         lines += self.history_replays.lines()
+        lines += self.history_write_seconds.lines()
+        lines += self.history_persist_lag.lines()
         cpu = _cpu_seconds()
         if cpu is not None:
             lines += [

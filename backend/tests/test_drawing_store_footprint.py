@@ -69,7 +69,7 @@ async def test_the_reading_counts_toast_not_just_the_heap():
             await session.execute(text("DELETE FROM turn_drawings"))
             await session.commit()
         empty = await DrawingStoreFootprint(factory, cache_seconds=0.0).read()
-        assert empty is not None and empty.ready_rows == 0
+        assert empty is not None and empty.rows == 0
 
         async with factory() as session:
             heap = await session.scalar(text("SELECT pg_relation_size('turn_drawings')"))
@@ -112,6 +112,8 @@ async def test_concurrent_reads_share_one_lookup():
     try:
         results = await asyncio.gather(*(footprint.read() for _ in range(5)))
         assert all(result is results[0] for result in results)
-        assert store.db_queries.total() == 2  # the size, and the row count
+        # One statement: the size and the planner's row estimate together,
+        # with no count of the table behind it (#892).
+        assert store.db_queries.total() == 1
     finally:
         await engine.dispose()

@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.canvas_history import decode_binary_canvas_history
@@ -356,10 +356,14 @@ class DrawingStoreSize:
     """
 
     total_bytes: int
-    ready_rows: int
+    # The planner's row estimate for the relation (`pg_class.reltuples`), not
+    # a count: every drawing row, kept or erased, to within the last analyze.
+    # Counting the ready ones meant a filtered scan of the largest table every
+    # five minutes (#892); the size above is the number that decides anything.
+    rows: int
 
     def as_json(self) -> dict[str, object]:
-        return {"totalBytes": self.total_bytes, "readyRows": self.ready_rows}
+        return {"totalBytes": self.total_bytes, "rows": self.rows}
 
 
 class DrawingStoreFootprint:
@@ -415,12 +419,14 @@ class DrawingStoreFootprint:
         async with self._session_factory() as session:
             if session.get_bind().dialect.name != "postgresql":
                 return None
-            total = await session.scalar(
-                text("SELECT pg_total_relation_size('turn_drawings')")
-            )
-            ready = await session.scalar(
-                select(func.count()).select_from(TurnDrawing).where(
-                    TurnDrawing.status == TurnDrawingStatus.READY.value
+            total, rows = (
+                await session.execute(
+                    text(
+                        "SELECT pg_total_relation_size('turn_drawings'), "
+                        # -1 until the table is first analyzed (PostgreSQL 14+).
+                        "GREATEST(reltuples, 0)::bigint FROM pg_class "
+                        "WHERE oid = 'turn_drawings'::regclass"
+                    )
                 )
-            )
-        return DrawingStoreSize(int(total or 0), int(ready or 0))
+            ).one()
+        return DrawingStoreSize(int(total or 0), int(rows or 0))

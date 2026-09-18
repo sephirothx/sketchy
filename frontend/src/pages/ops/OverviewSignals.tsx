@@ -270,8 +270,46 @@ export function DatabaseCard({ live, reasons }: { live: LiveSnapshot; reasons: A
           }
           warning={flagged(reasons, "pool-saturated")}
         />
-        <Cell label="Queries / min" value={formatRate(database.queriesPerMinute)} note={`${database.queryErrors} errors since start`} />
-        <Cell label="Query p95" value={formatMs(database.queryP95Ms)} note="per statement" />
+        <Cell
+          label="Pool wait p95"
+          value={formatMs(database.poolWaitP95Ms)}
+          note={`${database.poolTimeoutsInWindow} timed out in the window · ${database.poolTimeouts} since start`}
+          warning={flagged(reasons, "pool-waiting")}
+        />
+        <Cell
+          label="Queries / min"
+          value={formatRate(database.queriesPerMinute)}
+          note={`${database.queryErrors} errors since start${
+            database.queryErrors
+              ? ` (${Object.entries(database.errorsByCause)
+                  .map(([cause, count]) => `${count} ${cause.replaceAll("_", " ")}`)
+                  .join(", ")})`
+              : ""
+          }`}
+        />
+        <Cell
+          label="Query p95"
+          value={formatMs(database.queryP95Ms)}
+          note={
+            database.topOperations.length
+              ? `most time: ${database.topOperations
+                  .slice(0, 3)
+                  .map((row) => `${row.operation.replaceAll("_", " ")} ${formatMs(row.p95Ms)}`)
+                  .join(" · ")}`
+              : "per statement"
+          }
+        />
+        <Cell
+          label="History write p95"
+          value={formatMs(database.historyWriteP95Ms)}
+          note={`lands ${
+            database.historyPersistLagP95Seconds === null ? "—" : formatDuration(database.historyPersistLagP95Seconds)
+          } after the game (p95) · ${
+            Object.entries(database.retries)
+              .map(([key, count]) => `${count} ${key.replace(":", " ")}`)
+              .join(", ") || "no retries"
+          }`}
+        />
         <Cell
           label="History writes lost"
           value={String(lost.lastHour)}
@@ -283,7 +321,7 @@ export function DatabaseCard({ live, reasons }: { live: LiveSnapshot; reasons: A
           value={live.drawingStore ? formatBytes(live.drawingStore.totalBytes) : "—"}
           note={
             live.drawingStore
-              ? `${live.drawingStore.readyRows.toLocaleString()} drawings · reopens object storage past 50 GB`
+              ? `~${live.drawingStore.rows.toLocaleString()} drawings · reopens object storage past 50 GB`
               : "no relation sizes on this engine"
           }
           warning={flagged(reasons, "drawing-store-large")}

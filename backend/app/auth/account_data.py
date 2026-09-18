@@ -31,6 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
 
+from app.services.telemetry import database_operation_of
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
 from app.db import init_db, maintenance_engine
 from app.db.models import (
@@ -1200,6 +1201,7 @@ async def _write_export_artifact(
     writer.end_object()
 
 
+@database_operation_of("export_build")
 async def process_data_export(
     session_factory: async_sessionmaker[AsyncSession],
     *,

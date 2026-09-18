@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.telemetry import database_operation_of
 from app.db.models import AuditEvent, AuthSession, User, UserBan, generate_uuid
 from app.deployment import is_production
 from app.domain_values import AuditTargetType, UserRole
@@ -294,6 +295,7 @@ async def resolve_session(
     ).session
 
 
+@database_operation_of("session_resolve")
 async def resolve_session_status(
     session_factory: async_sessionmaker[AsyncSession],
     token: str | None,
