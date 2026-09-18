@@ -17,7 +17,11 @@ import socketio
 from engineio import packet as eio_packet
 
 from app.handlers import register_all_handlers as register_handlers
-from app.handlers.socket_wire import engineio_packet_size, instrument_socket_server
+from app.handlers.socket_wire import (
+    engineio_packet_size,
+    instrument_socket_server,
+    socketio_packet_label,
+)
 from app.rooms import RoomManager
 from app.services.telemetry import Telemetry
 
@@ -96,6 +100,60 @@ async def test_a_room_broadcast_is_counted_once_per_recipient():
     assert sum(len(s.packets) for s in sockets.values()) == 3
     assert store.socket_bytes_out.total() == written_bytes(*sockets.values())
     assert store.socket_bytes_out.total() == 3 * len('42["room_state",{"players":[]}]')
+
+
+def bytes_by_event(store: Telemetry) -> dict[str, int]:
+    return {labels[0]: count for labels, count in store.socket_bytes_out_by_event.items()}
+
+
+async def test_a_broadcast_adds_its_size_per_recipient_to_its_event():
+    """The emit histogram is once per emit, so it understates a broadcast by
+    the room's size; the by-event counter is what the room cost (#874)."""
+    sio, store, sockets, sids = await seated_server(5)
+    await sio.emit("room_state", {"players": []}, room="r1")
+    await sio.emit("chat_message", {"text": "hi"}, room="r1", skip_sid=sids[0])
+    await drain()
+    assert bytes_by_event(store) == {
+        "room_state": 5 * len('42["room_state",{"players":[]}]'),
+        "chat_message": 4 * len('42["chat_message",{"text":"hi"}]'),
+    }
+    assert sum(bytes_by_event(store).values()) == store.socket_bytes_out.total()
+
+
+async def test_a_binary_events_attachments_are_charged_to_that_event():
+    sio, store, sockets, sids = await seated_server(3)
+    blob = b"\x11" * 300
+    await sio.emit("sync_strokes", (4, blob), room="r1")
+    await sio.emit("turn_started", {"seconds": 80}, room="r1")
+    await drain()
+    envelope = '451-["sync_strokes",4,{"_placeholder":true,"num":0}]'
+    assert bytes_by_event(store) == {
+        "sync_strokes": 3 * (len(envelope) + len(blob)),
+        "turn_started": 3 * len('42["turn_started",{"seconds":80}]'),
+    }
+
+
+async def test_acks_and_control_packets_are_labelled_so_the_series_sums_to_the_total():
+    sio, store, sockets, sids = await seated_server(1)
+    await sio._send_packet(
+        "eio0", sio.packet_class(socketio.packet.ACK, namespace="/", data=[{"ok": True}], id=7)
+    )
+    await sio.eio.send_packet("eio0", eio_packet.Packet(eio_packet.PING))
+    by_event = bytes_by_event(store)
+    assert by_event["<ack>"] == len('43' + '7[{"ok":true}]')
+    assert by_event["<control>"] == 1
+    assert sum(by_event.values()) == store.socket_bytes_out.total()
+
+
+def test_the_event_is_read_off_every_packet_shape():
+    assert socketio_packet_label('2["draw","AQID"]') == ("draw", 0)
+    assert socketio_packet_label('51-["sync_strokes",4,{"_placeholder":true,"num":0}]') == ("sync_strokes", 1)
+    assert socketio_packet_label('212["client_config",{}]') == ("client_config", 0)
+    assert socketio_packet_label('2/admin,["x",1]') == ("x", 0)
+    assert socketio_packet_label('37[{"ok":true}]') == ("<ack>", 0)
+    assert socketio_packet_label('61-7[{"_placeholder":true,"num":0}]') == ("<ack>", 1)
+    assert socketio_packet_label('0{"sid":"abc"}') == ("<control>", 0)
+    assert socketio_packet_label("1") == ("<control>", 0)
 
 
 async def test_skip_sid_and_a_direct_send_count_only_who_was_written_to():

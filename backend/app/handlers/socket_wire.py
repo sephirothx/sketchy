@@ -10,7 +10,8 @@ Three hooks, each at the narrowest place the library offers:
 * every Engine.IO message the server *receives* (`_handle_eio_message`) -
   exact packet bytes in, whatever the event turns out to be;
 * every Engine.IO packet the server *sends* (`eio.send_packet`) - exact
-  packet bytes out, once per recipient, which is what a fan-out costs. This
+  packet bytes out, once per recipient, which is what a fan-out costs, and
+  the same bytes by the event they carried (#874). This
   is the one boundary every outbound path shares: a room broadcast encodes
   its packet once and hands a copy per seat to `_send_eio_packet`, while an
   acknowledgement, a connect reply or an emit with a callback goes through
@@ -31,12 +32,29 @@ binary attachment); the base64 growth a polling transport adds is not
 modelled, nor is anything the transport does after this point: WebSocket
 frame headers, permessage-deflate, TLS. These are the right numbers for "is
 this room too chatty", not for a bandwidth bill.
+
+The event is read off the packet at the same boundary rather than counted
+at the emit: an emit knows its payload but not its recipients, and the one
+place that sees each recipient sees only an encoded packet. Reading the name
+from the packet's prefix (`2["name",…` or `51-["name",…`) is a slice and a
+`find`, and a broadcast hands the *same* packet object to every seat, so it
+is paid once per emit, not per recipient. A binary event goes out as a text
+header announcing N attachments followed by N bare-bytes packets to the same
+socket; the attachments are charged to the header's event through a small
+per-socket count, removed when the last one lands. What this cannot name -
+an acknowledgement, Socket.IO's connect and disconnect, a packet Engine.IO
+sends itself - is `<ack>` or `<control>`, so the labelled series sums to the
+unlabelled one.
 """
 from __future__ import annotations
 
 import socketio
+from engineio import packet as eio_packet
 
 from app.services.telemetry import Telemetry, payload_bytes, telemetry as default_telemetry
+
+ACK_LABEL = "<ack>"
+CONTROL_LABEL = "<control>"
 
 
 def _packet_size(data) -> int:
@@ -57,6 +75,29 @@ def engineio_packet_size(pkt) -> int:
     if pkt.data is None:
         return 1
     return 1 + _packet_size(pkt.data)
+
+
+def socketio_packet_label(data: str) -> tuple[str, int]:
+    """The event an encoded Socket.IO text packet carries, and how many binary
+    attachments follow it. Only the default namespace is served here, but a
+    namespace prefix is skipped anyway rather than misread as a name."""
+    kind = data[:1]
+    attachments = 0
+    start = 1
+    if kind in ("5", "6"):
+        dash = data.find("-")
+        if dash > 1 and data[1:dash].isdigit():
+            attachments = int(data[1:dash])
+            start = dash + 1
+    if kind in ("3", "6"):
+        return ACK_LABEL, attachments
+    if kind not in ("2", "5"):
+        return CONTROL_LABEL, 0
+    open_quote = data.find('["', start)
+    close_quote = data.find('"', open_quote + 2) if open_quote >= 0 else -1
+    if close_quote < 0:
+        return CONTROL_LABEL, attachments
+    return data[open_quote + 2:close_quote], attachments
 
 
 def instrument_socket_server(
@@ -83,8 +124,36 @@ def instrument_socket_server(
         target.note_socket_bytes_in(_packet_size(data))
         return await receive(eio_sid, data)
 
+    # The last text packet labelled, by identity: a broadcast sends one packet
+    # object to every recipient in turn, so the parse is paid once per emit.
+    last_labelled: list = [None, CONTROL_LABEL, 0]
+    # Attachments still owed to a binary header, per socket.
+    pending_attachments: dict[str, list] = {}
+
+    def label_of(sid, pkt) -> str:
+        if pkt.packet_type != eio_packet.MESSAGE:
+            return CONTROL_LABEL
+        if pkt.binary:
+            owed = pending_attachments.get(sid)
+            if owed is None:
+                return CONTROL_LABEL
+            owed[1] -= 1
+            if owed[1] <= 0:
+                del pending_attachments[sid]
+            return owed[0]
+        if pkt is last_labelled[0]:
+            label, attachments = last_labelled[1], last_labelled[2]
+        else:
+            label, attachments = (
+                socketio_packet_label(pkt.data) if isinstance(pkt.data, str) else (CONTROL_LABEL, 0)
+            )
+            last_labelled[:] = [pkt, label, attachments]
+        if attachments:
+            pending_attachments[sid] = [label, attachments]
+        return label
+
     async def counted_send_packet(sid, pkt):
-        target.note_socket_bytes_out(engineio_packet_size(pkt))
+        target.note_socket_bytes_out(engineio_packet_size(pkt), label_of(sid, pkt))
         return await send_packet(sid, pkt)
 
     async def counted_emit(event, data=None, *args, **kwargs):

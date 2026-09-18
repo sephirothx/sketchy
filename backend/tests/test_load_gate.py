@@ -29,6 +29,8 @@ sketchy_process_resident_memory_bytes 167000000
 sketchy_sockets_connected 420
 sketchy_socket_bytes_out_total 65000000
 sketchy_socket_bytes_in_total 1200000
+sketchy_socket_bytes_out_by_event_total{event="room_state"} 40000000
+sketchy_socket_bytes_out_by_event_total{event="<ack>"} 25000000
 sketchy_socket_packets_rejected_total{reason="flood"} 2
 sketchy_canvas_recovery_notices_total{reason="deferred"} 7
 sketchy_canvas_recovery_notices_total{reason="stale_generation"} 1
@@ -45,6 +47,7 @@ def test_the_metrics_the_gate_reads_are_parsed_by_name_with_or_without_labels():
     assert values["bytes_out"] == 65_000_000
     assert values["bytes_in"] == 1_200_000
     assert values["rejected"] == 2
+    assert values["out:room_state"] == 40_000_000 and values["out:<ack>"] == 25_000_000
     assert values["notice:deferred"] == 7 and values["notice:stale_generation"] == 1
     # Quantiles are the bucket bound the count crosses: an upper bound.
     assert values["lag_p99_ms"] == 50.0
