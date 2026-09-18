@@ -1798,6 +1798,20 @@ revision, bounded by `MAX_LIST_TAGS`. Paging is by offset with a ceiling
 (`MAX_COMMUNITY_OFFSET`): nobody reaches page four hundred by reading, so a request that
 deep is a scrape, and a filter is the better answer than a longer scroll.
 
+**The star order is cached; the stars are not** (#901). Ranking by stars has to count
+every published list's stars before it can return the first page — 35 ms a page at
+5,000 lists and 120,000 stars, linear in both, and repeated by every scroll. The
+repository keeps the **order** — the ranked list ids for each language and tag set, as
+deep as `MAX_COMMUNITY_OFFSET` reaches — for `CATALOGUE_RANKING_TTL_SECONDS` (60 s),
+the `GalleryShelfCache` pattern; one worker owns it, so it is exact to within the TTL.
+A page then fetches its own rows by id with their live counts, 2.5 ms at the same size,
+the same as `newest` (`benchmarks/catalogue_star_page.py`, PostgreSQL 17). The page read
+re-applies the catalogue predicate, so a takedown, retirement or unpublish leaves at
+once; a publish through this process resets the ranking; a star moves a list within the
+TTL while its count is right immediately. If even the minute's recompute starts to
+hurt, a disposable `star_count` projection with a rebuild command is the next step (the
+`reaction_count` precedent), not a counter.
+
 **`published_at` is the record of an act, not a derived date.** Publishing is
 gated, rate-limited and audited (R-LIST-11, R-LIST-12), so the schema refuses a
 public row that carries no moment it became public — the hole worth closing here
