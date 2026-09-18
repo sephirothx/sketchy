@@ -2582,6 +2582,9 @@ A seated client checks with the server every five seconds that it still holds th
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
   the rotation.
 - If everyone disconnects, the room is cleaned up.
+- A seat that comes back mid-turn - a reload, a reconnect, or just returning to the tab -
+  still sees who has guessed, in the order they did, and a player who had already guessed
+  keeps the answer, their points and a closed guess field.
 - The AFK check runs off what a seat has *done*, never off whether its tab is visible.
   Hiding a tab is not a reason to be marked and not a way to avoid it; a hidden tab is
   marked in the end only because it cannot answer the question. A seat's activity and

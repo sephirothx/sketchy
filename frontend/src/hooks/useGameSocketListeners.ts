@@ -16,6 +16,7 @@ import type {
   DrawingReaction,
   DrawingReactionEvent,
   GameEndedPayload,
+  GuessBreakdown,
   RoomStatePayload,
   TurnEndedPayload,
 } from "../types";
@@ -225,6 +226,8 @@ export function useGameSocketListeners() {
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
       maxHintSpend?: number;
+      correctGuessers?: [string, number][];
+      guessed?: (GuessBreakdown & { prompt: string }) | null;
     }) => {
       if (payload.phase === "choosing_prompt") {
         store.getState().startChoosing({
@@ -248,6 +251,8 @@ export function useGameSocketListeners() {
           letterPrices: payload.letterPrices,
           hintSpend: payload.hintSpend,
           maxHintSpend: payload.maxHintSpend,
+          correctGuessers: payload.correctGuessers,
+          guessed: payload.guessed,
         });
       }
     };

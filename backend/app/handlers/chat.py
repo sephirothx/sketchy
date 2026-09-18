@@ -13,6 +13,7 @@ from app.handlers.payloads import (
     WheelLetterPayload,
     parse_payload,
 )
+from app.presenters import guessed_receipt
 from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
 from app.services.telemetry import telemetry
@@ -256,18 +257,9 @@ async def guess(ctx: HandlerContext, sid, data):
         {"playerId": player.id, "nickname": player.nickname, "points": points},
         room=room.id,
     )
-    hint_spend = game.hint_spend.get(player.id, 0)
     await ctx.sio.emit(
         "you_guessed_correctly",
-        {
-            "prompt": game.prompt,
-            "points": points,
-            # `points` is already net of the hints this player bought, and the
-            # deduction clamps at zero, so the gross figure can't be recovered
-            # client-side. Send it so the round-end breakdown adds up.
-            "basePoints": points + hint_spend,
-            "hintSpend": hint_spend,
-        },
+        guessed_receipt(game, player.id),
         to=player.sid,
     )
     recipients = ctx.game_flow._privileged_sids(room, game)

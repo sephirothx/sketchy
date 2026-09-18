@@ -706,14 +706,18 @@ class Harness:
             } if after else {},
             "slowViewers": len(self.slow_viewers),
             # What each event costs before compression, summed over every
-            # recipient (#493): the room_state share is what a delta
-            # protocol could at most touch.
-            "emitBytesByEvent": {
-                key[len("emit:"):-len(":sum")]: {
+            # recipient (#493, #874): the room_state share is what a delta
+            # protocol could at most touch. Bytes are the per-recipient
+            # counter; `count` is emits, once each however many seats heard.
+            # Until #874 the bytes were the once-per-emit histogram's sum,
+            # which understated every broadcast by the room's size.
+            "bytesOutByEvent": {
+                key[len("out:"):]: {
                     "bytes": after.get(key, 0.0) - before.get(key, 0.0),
-                    "count": after.get(key[:-len(":sum")] + ":count", 0.0) - before.get(key[:-len(":sum")] + ":count", 0.0),
+                    "count": after.get("emit:" + key[len("out:"):] + ":count", 0.0)
+                    - before.get("emit:" + key[len("out:"):] + ":count", 0.0),
                 }
-                for key in sorted(after) if key.startswith("emit:") and key.endswith(":sum")
+                for key in sorted(after) if key.startswith("out:")
             } if after else {},
             "unexpectedBacklogClosures": max(0.0, sum(
                 after.get(key, 0.0) - before.get(key, 0.0)
@@ -834,6 +838,9 @@ def parse_metrics(text: str) -> dict[str, float]:
             values["wire_in"] = number
         elif name.startswith("sketchy_socket_packets_rejected_total"):
             values["rejected"] = values.get("rejected", 0.0) + number
+        elif name.startswith("sketchy_socket_bytes_out_by_event_total{"):
+            event = name.split('event="')[1].split('"')[0]
+            values[f"out:{event}"] = number
         elif name.startswith("sketchy_socket_emit_bytes_sum{") or name.startswith("sketchy_socket_emit_bytes_count{"):
             event = name.split('event="')[1].split('"')[0]
             kind = "sum" if "_sum{" in name else "count"
@@ -907,11 +914,11 @@ def print_report(report: dict) -> None:
           f"({100 * m['wireBytesOutMB'] / max(m['bytesOutMB'], 1e-9):.1f}%), in {m['wireBytesInMB']:.2f} MB of "
           f"{m['bytesInMB']:.2f} MB ({100 * m['wireBytesInMB'] / max(m['bytesInMB'], 1e-9):.1f}%); "
           f"sockets by compression {_by_label(m['transports'])}")
-    by_event = sorted(m["emitBytesByEvent"].items(), key=lambda item: -item[1]["bytes"])
-    total_emit = sum(item["bytes"] for _, item in by_event) or 1.0
-    print("  emitted bytes by event (before compression, per recipient):")
+    by_event = sorted(m["bytesOutByEvent"].items(), key=lambda item: -item[1]["bytes"])
+    total_out = sum(item["bytes"] for _, item in by_event) or 1.0
+    print("  bytes out by event (before compression, summed over every recipient):")
     for event, item in by_event[:8]:
-        print(f"    {event:<24}{item['count']:>8.0f} emits{item['bytes'] / 1e6:>9.2f} MB{100 * item['bytes'] / total_emit:>6.1f}%")
+        print(f"    {event:<24}{item['count']:>8.0f} emits{item['bytes'] / 1e6:>9.2f} MB{100 * item['bytes'] / total_out:>6.1f}%")
     print(f"  ack p50 {m['ackP50Ms']:.1f} ms; draw fan-out p50 {m['drawFanoutP50Ms']:.1f} ms; "
           f"timer overrun max {m['timerOverrunMaxMs']:.1f} ms; RSS idle {m['rssIdleMB']:.0f} MB, after warm-up {m['rssLoadedMB']:.0f} MB, "
           f"peak {m['rssPeakMB']:.0f} MB ({m['rssPerSeatKB']:.0f} KB per seat above idle); "

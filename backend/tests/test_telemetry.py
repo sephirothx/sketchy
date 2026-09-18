@@ -349,6 +349,19 @@ def test_payload_size_is_bytes_as_they_are_and_json_for_the_rest():
     assert payload_bytes(object()) > 0
 
 
+def test_payload_size_counts_bytes_inside_a_list_as_their_length():
+    """The canvas events carry a blob inside a tuple; JSON refuses it, and the
+    old `repr` fallback counted a 10 KB blob as ~28 KB (#874)."""
+    from app.services.telemetry import payload_bytes
+
+    blob = bytes(range(256)) * 40  # 10,240 B, the worst case for repr
+    assert payload_bytes((3, blob)) == len("[3,]") + len(blob)
+    assert payload_bytes([3, "héllo", None, blob]) == len('[3,"héllo",null,]'.encode()) + len(blob)
+    assert payload_bytes([[1, blob], {"a": 1}]) == len('[[1,],{"a":1}]') + len(blob)
+    # A list JSON can encode is still sized by the JSON itself.
+    assert payload_bytes(["a", 1]) == len('["a",1]')
+
+
 def test_socket_bytes_are_rated_per_minute_and_sized_per_event():
     telemetry, clock = store()
     # Half a minute in: the rate is over the one minute the process has lived.
@@ -377,6 +390,7 @@ def test_socket_bytes_are_rated_per_minute_and_sized_per_event():
     lines = telemetry.prometheus_lines()
     assert "sketchy_socket_bytes_in_total 3000" in lines
     assert "sketchy_socket_bytes_out_total 9000" in lines
+    assert 'sketchy_socket_bytes_out_by_event_total{event="<control>"} 9000' in lines
     assert 'sketchy_socket_command_bytes_bucket{event="draw",le="256.0"} 3' in lines
     assert 'sketchy_socket_emit_bytes_count{event="room_state"} 1' in lines
 
