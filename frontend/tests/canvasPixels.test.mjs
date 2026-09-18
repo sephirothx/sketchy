@@ -263,24 +263,48 @@ test("a stroke painted segment by segment is the stroke painted as one polyline 
   assert.deepEqual(Array.from(bySegment), Array.from(asPolyline));
 });
 
-test("a pixel exactly on a stroke's edge is inked however its coordinates were rounded", () => {
-  // The live painters reach a wire coordinate as packed / 3200 * 800, which
-  // is one ulp off packed / 4 for about one coordinate in eight; the replay
-  // decodes packed / 4 exactly. Row 302's centre is exactly 2.5 below a line
-  // at y = 300, a radius-2.5 tie: whether it was inked depended on which way
-  // the ulp went, and a late joiner's replay differed from the live canvas
-  // by that one pixel (the pen-pressure E2E flake).
-  const exact = 300;
-  const below = 299.99999999999994;
-  const above = 300.00000000000006;
-  const rasters = [exact, below, above].map((y) => {
-    const data = solidPixels(40, 40 + 300);
-    rasterizePath(data, 40, 340, [{ x: 10, y }, { x: 30, y }], 2.5, BLACK, false);
+test("a stroke of width w covers w pixels across wherever on the quarter-pixel grid its centre sits", () => {
+  // Half-open on the edge (#940): a closed rule made a line centred on a half
+  // pixel w + 1 thick, and float dust on the drawer's canvas used to decide
+  // which edge rows it kept - so a late joiner's replay and the room parted.
+  for (const width of [1, 2, 5, 6, 32]) {
+    for (const offset of [0, 0.25, 0.5, 0.75]) {
+      const across = 80;
+      const horizontal = solidPixels(across, across);
+      rasterizePath(horizontal, across, across, [{ x: 10, y: 40 + offset }, { x: 70, y: 40 + offset }], width / 2, BLACK, false);
+      const vertical = solidPixels(across, across);
+      rasterizePath(vertical, across, across, [{ x: 40 + offset, y: 10 }, { x: 40 + offset, y: 70 }], width / 2, BLACK, false);
+      let rows = 0;
+      let columns = 0;
+      for (let k = 0; k < across; k += 1) {
+        if (horizontal[(k * across + 40) * 4] === 0) rows += 1;
+        if (vertical[(40 * across + k) * 4] === 0) columns += 1;
+      }
+      assert.equal(rows, width, `horizontal, width ${width}, centre +${offset}`);
+      assert.equal(columns, width, `vertical, width ${width}, centre +${offset}`);
+    }
+  }
+});
+
+test("every painter reaches a wire coordinate as the same float, across the whole accepted range", async () => {
+  const { toPixels } = await import("../src/lib/canvasGeometry.ts");
+  // The live route: the decoder's normalized packed / 3200, then toPixels.
+  // The replay route: packed / 4. They must be the same number, or an ulp
+  // decides pixels on an edge (and no fixed tie margin fixes that: far off
+  // the canvas, distinct exact distances are closer than any margin).
+  for (let packed = -32768; packed <= 32767; packed += 1) {
+    const live = toPixels({ x: packed / 3200, y: packed / 2400 });
+    assert.equal(live.x, packed / 4, `x ${packed}`);
+    assert.equal(live.y, packed / 4, `y ${packed}`);
+  }
+  // The review's case: a width-60 segment far off the canvas, pixel (0, 0).
+  const [ax, ay, bx, by] = [7745, 11931, -9222, -14698];
+  const live = [toPixels({ x: ax / 3200, y: ay / 2400 }), toPixels({ x: bx / 3200, y: by / 2400 })];
+  const replay = [{ x: ax / 4, y: ay / 4 }, { x: bx / 4, y: by / 4 }];
+  const paint = (points) => {
+    const data = solidPixels(4, 4);
+    rasterizePath(data, 4, 4, points, 30, BLACK, false);
     return data;
-  });
-  assert.deepEqual(rasters[1], rasters[0]);
-  assert.deepEqual(rasters[2], rasters[0]);
-  // And the tie is ink: the replay's exact answer is the one kept.
-  const row302 = (302 * 40 + 20) * 4;
-  assert.deepEqual([...rasters[0].slice(row302, row302 + 4)], BLACK);
+  };
+  assert.deepEqual(paint(live), paint(replay));
 });

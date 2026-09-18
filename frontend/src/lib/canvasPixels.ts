@@ -1,4 +1,4 @@
-import { distanceToSegmentSquared } from "./canvasGeometry.ts";
+import { capsuleCovers } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
 
 export type Rgba = [number, number, number, number];
@@ -51,22 +51,6 @@ export function fillWhitePixels(data: Uint8ClampedArray): void {
   data.fill(255);
 }
 
-/** How much a pixel may be past a stroke's edge and still be ink: a tie.
-
-Every painter - the drawer's own canvas, a viewer's live playback, a late
-joiner's replay, the timelapse - rasterizes through here, and they have to
-agree to the pixel (R-DRAW-14). They reach the same point by different float
-routes: the live ones as `packed / 3200 * 800`, which is one ulp off
-`packed / 4` for about one coordinate in eight, the replay as `packed / 4`.
-With quarter-pixel coordinates, half-pixel centres and radii in halves, a
-centre exactly on the edge is common, and a strict `<=` let the ulp decide it:
-a late joiner's canvas came out a pixel apart from the room's.
-
-So an exact tie is ink everywhere. The margin sits between the two scales
-that matter: float dust in a squared distance is ~1e-11, while two distinct
-exact values of one on this grid differ by at least (1/256) / length², about
-4e-9 for the longest segment the canvas holds. */
-const EDGE_TIE = 1e-9;
 
 export function rasterizePath(
   data: Uint8ClampedArray,
@@ -78,7 +62,10 @@ export function rasterizePath(
   closed: boolean,
 ): void {
   if (points.length === 0) return;
-  const radiusSquared = radius * radius + EDGE_TIE;
+  // Painters agree to the pixel because they are handed the same numbers:
+  // every wire coordinate arrives as `wireToPixel` makes it (#940). What
+  // happens exactly on the edge is `capsuleCovers`'s half-open rule.
+  const radiusSquared = radius * radius;
   const segmentCount = closed ? points.length : points.length - 1;
 
   for (let segment = 0; segment < segmentCount; segment++) {
@@ -90,10 +77,7 @@ export function rasterizePath(
     const maxY = Math.min(height - 1, Math.ceil(Math.max(a.y, b.y) + radius));
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (
-          distanceToSegmentSquared(x + 0.5, y + 0.5, a.x, a.y, b.x, b.y)
-          <= radiusSquared
-        ) {
+        if (capsuleCovers(x + 0.5, y + 0.5, a.x, a.y, b.x, b.y, radiusSquared)) {
           const index = (y * width + x) * 4;
           data[index] = color[0];
           data[index + 1] = color[1];

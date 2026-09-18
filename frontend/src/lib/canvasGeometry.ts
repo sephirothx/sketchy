@@ -1,4 +1,4 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
+import { CANVAS_HEIGHT, CANVAS_WIDTH, wireToPixel } from "./canvasHistory.ts";
 import type { ShapeType, StrokePoint } from "../types.ts";
 
 export interface Point {
@@ -13,10 +13,12 @@ export interface Bounds {
   maxY: number;
 }
 
+/** A normalized point as canvas pixels, on the wire's quarter-pixel grid:
+the same floats the history decoder produces (`wireToPixel`). */
 export function toPixels(point: StrokePoint): Point {
   return {
-    x: point.x * CANVAS_WIDTH,
-    y: point.y * CANVAS_HEIGHT,
+    x: wireToPixel(point.x, CANVAS_WIDTH),
+    y: wireToPixel(point.y, CANVAS_HEIGHT),
   };
 }
 
@@ -63,6 +65,34 @@ export function distanceToSegmentSquared(
   const ex = px - cx;
   const ey = py - cy;
   return ex * ex + ey * ey;
+}
+
+/** Whether pixel centre (px, py) is ink for a capsule of `radiusSquared`
+around segment a-b. Inside is ink; exactly on the edge is ink on one side
+only - below the segment, or right of it where it runs vertical - the
+half-open rule a GPU applies to a pixel on a triangle's edge. So a stroke of
+width w covers w pixels across wherever its centre sits: with a closed rule a
+line centred on a half pixel was w + 1 thick, and on the drawer's canvas
+float dust used to decide which edge rows it kept (#940). */
+export function capsuleCovers(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  radiusSquared: number,
+): boolean {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  let t = lengthSquared === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lengthSquared;
+  t = Math.max(0, Math.min(1, t));
+  const ex = px - (ax + t * dx);
+  const ey = py - (ay + t * dy);
+  const squared = ex * ex + ey * ey;
+  if (squared !== radiusSquared) return squared < radiusSquared;
+  return ey > 0 || (ey === 0 && ex > 0);
 }
 
 const ELLIPSE_OUTLINE_SEGMENTS = 96;
