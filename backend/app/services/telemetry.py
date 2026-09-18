@@ -217,6 +217,13 @@ def payload_bytes(*values: object) -> int:
     traffic - arrive as bytes, so the JSON pass is paid only by the small
     conversational payloads. This is the size *before* framing and
     compression: the wire carries less, and the page says so.
+
+    A list or tuple is measured element by element, because the canvas
+    events carry bytes *inside* one (`[generation, blob]`): JSON refuses the
+    bytes, and the old `repr` fallback counted a 10 KB blob as ~28 KB (#874).
+    A binary attachment goes out as its own bare bytes, so its length is
+    what it costs; the brackets and commas around the elements are counted
+    as the JSON would write them.
     """
     total = 0
     for value in values:
@@ -227,13 +234,22 @@ def payload_bytes(*values: object) -> int:
         elif isinstance(value, str):
             total += len(value.encode("utf-8"))
         else:
-            try:
-                total += len(
-                    json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-                )
-            except (TypeError, ValueError):
-                total += len(repr(value))
+            total += _encoded_size(value)
     return total
+
+
+def _encoded_size(value: object) -> int:
+    """Compact-JSON size, with any bytes inside a list counted as their length."""
+    try:
+        return len(json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return len(value)
+    if isinstance(value, (list, tuple)):
+        # "[" + elements joined by "," + "]"
+        return 2 + max(len(value) - 1, 0) + sum(_encoded_size(element) for element in value)
+    return len(repr(value))
 
 
 # --- rings -------------------------------------------------------------------
@@ -767,6 +783,18 @@ class Telemetry:
             SIZE_BUCKETS,
             ("event",),
         )
+        # The per-recipient share of `socket_bytes_out`, by what was sent
+        # (#874): an event name, `<ack>`, or `<control>` for Socket.IO's own
+        # connect and disconnect packets and anything Engine.IO sends. The
+        # emit histogram below is once per emit, so it understates every
+        # broadcast by the room's size; this is what the room actually cost.
+        # It sums to `socket_bytes_out`, because both are incremented by the
+        # same call.
+        self.socket_bytes_out_by_event = LabelledCounter(
+            "sketchy_socket_bytes_out_by_event_total",
+            "Socket.IO packet bytes sent, per recipient, before compression, by event.",
+            ("event",),
+        )
         self.socket_emit_bytes = Histogram(
             "sketchy_socket_emit_bytes",
             "Payload size of an event emitted by the server, once per emit.",
@@ -966,8 +994,9 @@ class Telemetry:
         self.socket_bytes_in.inc(by=size)
         self.socket_minutes.bump(self._clock(), field=4, by=size)
 
-    def note_socket_bytes_out(self, size: int) -> None:
+    def note_socket_bytes_out(self, size: int, event: str = "<control>") -> None:
         self.socket_bytes_out.inc(by=size)
+        self.socket_bytes_out_by_event.inc((event,), by=size)
         self.socket_minutes.bump(self._clock(), field=5, by=size)
 
     def socket_command_payload(self, event: str, size: int) -> None:
@@ -1258,6 +1287,7 @@ class Telemetry:
         lines += self.socket_handshake_transports.lines()
         lines += self.socket_bytes_in.lines()
         lines += self.socket_bytes_out.lines()
+        lines += self.socket_bytes_out_by_event.lines()
         lines += self.socket_command_bytes.lines()
         lines += self.socket_emit_bytes.lines()
         lines += gauge_lines(
