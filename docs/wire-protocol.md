@@ -761,7 +761,8 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's `you_guessed_correctly` payload, or `null` (R-CONN-13) | one socket |
 | `turn_ended` | `TurnEndedPayload` | room |
 | `game_ended` | `{scores, highlights, drawings}` — each drawing carrying `turnId` and its `reactions[]` | room |
-| `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing | room, the drawer included |
+| `last_game` | the same `{scores, highlights, drawings}`, for a socket that joined or rejoined the waiting room after `game_ended` (#871) — the recap without the end-of-game moment | one socket |
+| `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing; on a finished game's recap also `highlight`, the refreshed most-reacted card or `null` (#871). No `room_state` follows it | room, the drawer included |
 | `chat_message` | `ChatMessage` | room or a filtered recipient list |
 | `correct_guess` | `{playerId, nickname, points}` | room |
 | `you_guessed_correctly` | `{prompt, points, basePoints, hintSpend}` | guesser only |
@@ -895,18 +896,33 @@ when retention withheld it, and absent means the line cannot be cited. Room chat
 lines are retained under the same rule but never carry the id (#869).
 
 
-**`room_state`** ([`backend/app/rooms.py:511`](../backend/app/rooms.py) →
+**`room_state`** ([`backend/app/rooms.py:706`](../backend/app/rooms.py) →
 `RoomStatePayload` in [`frontend/src/types.ts`](../frontend/src/types.ts)) carries the
 room identity (`id`, `code`, `name`, `isPublic`), every setting listed
 in §4, `state` (`waiting | playing`), `customPromptCount` (a count, never the prompts),
 `promptLanguage`, `moderation` (`{eligibleVoterIds, requiredVotes}`), `restartVote`,
-`restartVoteCooldownUntil` (epoch ms), the previous game's `lastGameScores`,
-`lastGameHighlights`, `lastGameDrawings`, and `players[]`:
+`restartVoteCooldownUntil` (epoch ms), and `players[]`:
 
 ```ts
 { playerId, nickname, nameColor?, isAnonymous?, score,
   connected, isHost, isSpectator, isAfk, kickVotes?[], afkVotes?[] }
 ```
+
+**The finished game's recap is not in `room_state` (#871).** Scores, highlights and every
+drawing's metadata with its reactions are immutable once a game ends, and a 16-seat recap
+pushed each waiting-room snapshot past the 32 KB deflate window, so a broadcast that should
+be a back-reference cost kilobytes per seat — the case N-14 names for reopening. The
+snapshot stays whole; it stops carrying the recap. It travels in `game_ended`, and to a
+socket arriving in the waiting room afterwards as **`last_game`** (the same shape, sent to
+that socket on any join or rejoin, [`GameFlow.send_last_game`](../backend/app/services/game_flow.py));
+a recap reaction's refreshed card rides `drawing_reaction.highlight`. Measured with
+[`benchmarks/room_payloads.py`](../benchmarks/room_payloads.py), per seat on the wire:
+
+| finished game | `room_state` raw | each waiting-room broadcast | each recap reaction |
+| --- | ---: | ---: | ---: |
+| 8 × 3 | 17.7 → 2.5 KB | 207 → 40 B | 269 B (2 messages) → 51 B (1) |
+| 16 × 3 | 46.8 → 4.5 KB | 1,971 → 56 B | 2,050 B → 56 B |
+| 16 × 10 | 138 → 4.5 KB | 4,268 → 56 B | 4,365 B → 57 B |
 
 The two vote lists are **present only where somebody has voted**; absent means no
 votes. Every seat receives every other seat's entry on every broadcast, so two empty
@@ -973,7 +989,7 @@ The reactor is a seat token with its presentation, like every other room payload
 the tally is the full count rather than a delta so a client that missed an earlier
 event still converges. State payloads carry the **list** rather than the tally —
 `reactions: [{playerId, emoji}]` on `turn_started`, `sync_game`, `turn_ended`, and on
-every recap entry in `game_ended.drawings` and `room_state.lastGameDrawings` — because a
+every recap entry in `game_ended.drawings` and `last_game.drawings` — because a
 reconnecting client has to find its own pick in it, and a list of seats is how the room
 names anybody. The client reduces the list to a tally itself
 ([`lib/reactions.ts`](../frontend/src/lib/reactions.ts)). `emoji` is a stable code, never a
@@ -2073,7 +2089,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (26) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (27) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

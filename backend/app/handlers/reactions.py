@@ -20,7 +20,7 @@ from app.services.drawing_reactions import (
     recap_reaction_refusal,
 )
 from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
-from app.services.game_highlights import refresh_reaction_highlight
+from app.services.game_highlights import MOST_REACTED_KIND, refresh_reaction_highlight
 from app.handlers.refusals import ErrorCode
 
 logger = logging.getLogger(__name__)
@@ -108,16 +108,18 @@ async def react_to_drawing(ctx: HandlerContext, sid, data):
     if result is None:
         return {"ok": False, "errorCode": ErrorCode.REACTION_NOT_ACCEPTED, "error": NOT_ACCEPTED}
     room.set_drawing_reaction(payload.turn_id, player.id, payload.emoji)
-    # The most-reacted highlight is derived from these counts, and the room
-    # state is what carries both to the waiting room; broadcast the reaction
-    # first so the tally moves before the card does.
+    # The most-reacted highlight is derived from these counts. It rides the
+    # reaction itself, only on the recap (#871): the room state used to be
+    # re-broadcast to carry it, which with the recap inside was kilobytes per
+    # seat per reaction. Nothing else in the room state depends on a reaction.
     refresh_reaction_highlight(room)
-    await ctx.sio.emit(
-        "drawing_reaction",
-        reaction_broadcast(room, player, payload.turn_id, payload.emoji),
-        room=room.id,
-    )
-    await ctx.game_flow._emit_room_state(room)
+    broadcast = reaction_broadcast(room, player, payload.turn_id, payload.emoji)
+    if room.state == "waiting":
+        broadcast["highlight"] = next(
+            (card for card in room.last_game_highlights if card.get("kind") == MOST_REACTED_KIND),
+            None,
+        )
+    await ctx.sio.emit("drawing_reaction", broadcast, room=room.id)
     return _accepted(room, payload.turn_id, payload.emoji)
 
 

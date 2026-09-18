@@ -325,9 +325,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // who was disconnected while the rematch began and is synced into it.
   // Nothing can legitimately open either panel while playing: the buttons live
   // on the game over screen and the waiting room, and both leave the room in
-  // "waiting". Highlights matter most - room state drops `lastGameHighlights`
-  // once the room is playing, so the panel would sit there telling the player
-  // the game underway was too short to say anything about.
+  // "waiting". Highlights matter most - the store drops the recap once the
+  // room is playing, so the panel would sit there telling the player the game
+  // underway was too short to say anything about.
   if (roomState === "playing" && (recapOpen || highlightsOpen)) {
     setRecapOpen(false);
     setHighlightsOpen(false);

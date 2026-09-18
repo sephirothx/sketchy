@@ -539,6 +539,18 @@ class Room:
             entry = replace(entry, canvas_history=None)
         self.last_game_drawings.append(entry)
 
+    def last_game_payload(self) -> dict | None:
+        """The finished game's recap, as `game_ended` and `last_game` carry it,
+        or None while there is none to show (a game is running, or none has
+        finished in this room)."""
+        if self.state != "waiting" or not self.last_game_scores:
+            return None
+        return {
+            "scores": self.last_game_scores,
+            "highlights": self.last_game_highlights,
+            "drawings": self.drawing_recap_metadata(),
+        }
+
     def drawing_recap_metadata(self) -> list[dict]:
         return [
             {
@@ -711,15 +723,12 @@ class Room:
             "promptLanguage": self.prompt_language,
             "promptListSlugs": list(self.prompt_list_slugs),
             "state": self.state,
-            "lastGameScores": self.last_game_scores,
-            "lastGameHighlights": (
-                self.last_game_highlights if self.state == "waiting" else []
-            ),
-            "lastGameDrawings": (
-                self.drawing_recap_metadata()
-                if self.state == "waiting"
-                else []
-            ),
+            # The finished game's recap is not here (#871): it is immutable
+            # once the game ends, and a 16-seat recap pushed every waiting-room
+            # snapshot past the 32 KB deflate window, so each broadcast cost
+            # kilobytes per seat instead of a back-reference. It travels once,
+            # in `game_ended`, and to a socket arriving afterwards as
+            # `last_game` (`last_game_payload` below).
             "moderation": self.moderation_state_payload(),
             "restartVote": (
                 self.restart_vote.payload() if self.restart_vote else None

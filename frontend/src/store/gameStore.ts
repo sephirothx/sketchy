@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
-import { applyReactionEvent } from "../lib/reactions";
+import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules.ts";
+import { applyReactionEvent } from "../lib/reactions.ts";
 import type {
   ChatMessage,
   ColorblindSafeSuggestion,
@@ -11,6 +11,7 @@ import type {
   DrawingRecapMetadata,
   GameEndedPayload,
   GameHighlight,
+  LastGamePayload,
   GamePhase,
   HintMode,
   ModerationState,
@@ -21,7 +22,7 @@ import type {
   GuessBreakdown,
   TurnEndedPayload,
   ScoringMode,
-} from "../types";
+} from "../types.ts";
 
 interface GameStore {
   playerId: string | null;
@@ -148,11 +149,23 @@ interface GameStore {
   }) => void;
   endTurn: (payload: TurnEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
+  /** The recap for a socket that arrived after the game ended (#871). */
+  applyLastGame: (payload: LastGamePayload) => void;
   applyDrawingReaction: (event: DrawingReactionEvent) => void;
   clearDrawingReactions: () => void;
   dismissGameEnd: () => void;
   setError: (error: string | null) => void;
   reset: () => void;
+}
+
+/** The highlights with the "most reacted" card replaced where it stands,
+    appended when it first appears, or removed - the server's
+    `refresh_reaction_highlight`, applied to the card it sent (#871). */
+function withMostReacted(highlights: GameHighlight[], card: GameHighlight | null): GameHighlight[] {
+  const position = highlights.findIndex((item) => item.kind === "most_reacted_drawing");
+  if (card === null) return position < 0 ? highlights : highlights.filter((_, index) => index !== position);
+  if (position < 0) return [...highlights, card];
+  return highlights.map((item, index) => (index === position ? card : item));
 }
 
 /** The recap's per-entry reactions, re-keyed by turn id for the store. */
@@ -250,14 +263,21 @@ export const useGameStore = create<GameStore>((set) => ({
       promptLanguage: payload.promptLanguage ?? "en",
       promptListSlugs: payload.promptListSlugs?.length ? payload.promptListSlugs : ["english_standard"],
       roomState: payload.state,
-      finalScores: payload.lastGameScores?.length
-        ? payload.lastGameScores
-        : payload.state === "playing" ? null : state.finalScores,
-      drawingRecap: payload.lastGameDrawings ?? state.drawingRecap,
-      drawingReactions: payload.lastGameDrawings
-        ? { ...state.drawingReactions, ...reactionsByTurn(payload.lastGameDrawings) }
-        : state.drawingReactions,
-      gameHighlights: payload.lastGameHighlights ?? state.gameHighlights,
+      // The recap is not in the room state (#871); it arrives with
+      // `game_ended` or `last_game` and stays until a game starts - or until
+      // this is a different room: a friend's invite moves the socket straight
+      // from one room to another, and the new one sends `last_game` only if
+      // it has a finished game of its own.
+      ...(payload.state === "playing" || payload.id !== state.roomId
+        ? {
+            finalScores: null,
+            drawingRecap: [],
+            gameHighlights: [],
+            // A different room also leaves the last one's screen: its game-over
+            // moment must not open over a recap this room sends afterwards.
+            ...(payload.id !== state.roomId ? { drawingReactions: {}, phase: "idle" as const } : {}),
+          }
+        : {}),
       moderation: payload.moderation,
       restartVote: payload.restartVote ?? null,
       restartVoteCooldownUntil: payload.restartVoteCooldownUntil ?? 0,
@@ -386,6 +406,17 @@ export const useGameStore = create<GameStore>((set) => ({
         return updated ? { ...p, score: updated.score } : p;
       }),
     })),
+  applyLastGame: (payload) => set((s) => ({
+    // Only a waiting room sends it, so it is also the word that the game is
+    // over: a tab that missed `game_ended` - still showing play - is put in
+    // the waiting room with the recap, without replaying the game's end.
+    roomState: "waiting",
+    phase: s.phase === "game_end" ? s.phase : "idle",
+    finalScores: payload.scores,
+    drawingRecap: payload.drawings ?? [],
+    drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
+    gameHighlights: payload.highlights ?? [],
+  })),
   endGame: (payload) => set((s) => ({
     phase: "game_end",
     finalScores: payload.scores,
@@ -401,6 +432,9 @@ export const useGameStore = create<GameStore>((set) => ({
         [event.turnId]: applyReactionEvent(s.drawingReactions[event.turnId] ?? [], event),
       },
       lastReactionEvent: { ...event, seq: (s.lastReactionEvent?.seq ?? 0) + 1 },
+      ...(event.highlight !== undefined
+        ? { gameHighlights: withMostReacted(s.gameHighlights, event.highlight) }
+        : {}),
     })),
   clearDrawingReactions: () =>
     set({ drawingReactions: {}, currentTurnId: null, lastReactionEvent: null }),

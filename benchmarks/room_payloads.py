@@ -16,6 +16,13 @@ Each connection gets its own compressor, and a broadcast is compressed
 separately per socket, so a single warm stream is the right model for one
 viewer's experience of a sequence of room events.
 
+A second report (#871) measures the waiting room after a finished game, where
+the snapshot used to carry the whole recap - scores, highlights and every
+drawing's metadata with its reactions. Past the 32 KB window the previous copy
+has been evicted, so a repeat stops being a back-reference and costs kilobytes;
+the report shows what a waiting-room broadcast and a recap reaction cost per
+seat for a range of games, against whatever `Room.to_state_payload` builds.
+
 Usage:
   backend/.venv/bin/python benchmarks/room_payloads.py
   backend/.venv/bin/python benchmarks/room_payloads.py --players 16
@@ -35,7 +42,11 @@ BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.rooms import RoomManager
+from app.rooms import DrawingRecapEntry, RoomManager
+from app.services.drawing_reactions import reaction_broadcast
+from app.services.game_highlights import MOST_REACTED_KIND, refresh_reaction_highlight
+
+EMOJI = ("heart", "laugh", "wow", "clap", "fire")
 
 
 def json_bytes(value) -> bytes:
@@ -93,6 +104,84 @@ def changed_keys(previous: dict, current: dict) -> dict:
     return delta
 
 
+def finished_game_room(seats: int, rounds: int):
+    """A waiting room just after a `seats` x `rounds` game: every turn in the
+    recap, a realistic spread of reactions (each seat on about half the
+    drawings), final scores and a full set of highlight cards."""
+    manager, room = build_room(seats)
+    players = room.player_list()
+    turn = 0
+    for round_number in range(1, rounds + 1):
+        for drawer in players:
+            turn += 1
+            turn_id = f"0192f3a0-0000-7000-8000-{turn:012d}"
+            room.last_game_drawings.append(DrawingRecapEntry(
+                turn_id=turn_id, round_number=round_number, turn_number=turn,
+                drawer_id=drawer.id, drawer_nickname=drawer.nickname,
+                drawer_name_color=drawer.name_color, prompt=f"prompt number {turn}",
+                action_count=40, canvas_history=b"\x00" * 4000,
+            ))
+            for index, seat in enumerate(players):
+                if seat is not drawer and (index + turn) % 2 == 0:
+                    room.set_drawing_reaction(turn_id, seat.id, EMOJI[(index + turn) % len(EMOJI)])
+    room.last_game_scores = [
+        {"playerId": p.id, "nickname": p.nickname, "nameColor": p.name_color,
+         "avatarUrl": None, "isAnonymous": True, "score": p.score}
+        for p in sorted(players, key=lambda p: -p.score)
+    ]
+    room.last_game_highlights = [
+        {"kind": kind, "playerId": players[0].id, "nickname": players[0].nickname,
+         "nameColor": players[0].name_color, "isAnonymous": True, "value": 12, "prompt": "prompt number 3"}
+        for kind in ("fastest_guess", "hardest_prompt", "best_drawer", "sharpest_guesser")
+    ]
+    refresh_reaction_highlight(room)
+    room.state = "waiting"
+    return room
+
+
+def finished_game_report(seats: int, rounds: int) -> dict:
+    """Per seat, on the wire: a waiting-room broadcast after the first, and a
+    recap reaction - `drawing_reaction`, plus the `room_state` that followed
+    it for as long as the snapshot carried the recap."""
+    room = finished_game_room(seats, rounds)
+    players = room.player_list()
+    carries_recap = "lastGameDrawings" in room.to_state_payload()
+    messages = [event_message("room_state", room.to_state_payload())]
+    kinds = ["first"]
+    for step in range(12):
+        seat = players[step % len(players)]
+        if step % 2 == 0:
+            seat.is_afk = not seat.is_afk
+            messages.append(event_message("room_state", room.to_state_payload()))
+            kinds.append("churn")
+            continue
+        turn_id = room.last_game_drawings[step].turn_id
+        room.set_drawing_reaction(turn_id, seat.id, "fire")
+        refresh_reaction_highlight(room)
+        reaction = reaction_broadcast(room, seat, turn_id, "fire")
+        if not carries_recap:
+            reaction["highlight"] = next(
+                (h for h in room.last_game_highlights if h.get("kind") == MOST_REACTED_KIND), None
+            )
+        messages.append(event_message("drawing_reaction", reaction))
+        kinds.append("reaction")
+        if carries_recap:
+            messages.append(event_message("room_state", room.to_state_payload()))
+            kinds.append("reaction")
+    wire = deflated_stream_bytes(messages)
+    raw = [len(m) for m in messages]
+    churn = [w for w, k in zip(wire, kinds) if k == "churn"]
+    reaction = [w for w, k in zip(wire, kinds) if k == "reaction"]
+    reactions = sum(1 for step in range(12) if step % 2 == 1)
+    return {
+        "seats": seats, "rounds": rounds, "carriesRecap": carries_recap,
+        "stateRaw": raw[0], "stateFirstWire": wire[0],
+        "churnWire": sum(churn) / len(churn),
+        "reactionWire": sum(reaction) / max(reactions, 1),
+        "reactionMessages": 2 if carries_recap else 1,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--players", type=int, default=12)
@@ -147,8 +236,16 @@ def main() -> None:
     print(f"  full state on the wire : {full_steady * audience:>8,.0f} B")
     print(f"  delta on the wire      : {delta_steady * audience:>8,.0f} B")
 
+    print("\nwaiting room after a finished game (#871), per seat on the wire:")
+    print(f"{'game':<10}{'room_state raw':>16}{'first':>9}{'each broadcast':>16}{'per reaction':>14}{'msgs':>6}")
+    finished = [finished_game_report(seats, rounds) for seats, rounds in ((8, 3), (12, 4), (16, 3), (8, 10), (16, 10))]
+    for row in finished:
+        print(f"{row['seats']:>2} x {row['rounds']:<5}{row['stateRaw']:>15,}B{row['stateFirstWire']:>8,}B"
+              f"{row['churnWire']:>15,.0f}B{row['reactionWire']:>13,.0f}B{row['reactionMessages']:>6}")
+
     if args.json_output:
         args.json_output.write_text(json.dumps({
+            "finishedGame": finished,
             "players": args.players,
             "full_raw": full_raw, "full_wire": full_wire,
             "delta_raw": delta_raw, "delta_wire": delta_wire,
