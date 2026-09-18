@@ -51,4 +51,14 @@ if psql -d sketchy -U sketchy_monitor -c "CREATE TABLE t (i int)" >/dev/null 2>&
   fail "sketchy_monitor can create a table"
 fi
 
-echo "ok: checksums on, lz4 WAL and TOAST, slow statement logged with app name, pg_stat_statements readable by sketchy_monitor"
+# The application role can connect and cannot create anything (#896).
+psql -d sketchy -U sketchy_app -Atc "SELECT 1" >/dev/null || fail "sketchy_app cannot connect"
+if psql -d sketchy -U sketchy_app -c "CREATE TABLE t (i int)" >/dev/null 2>&1; then
+  fail "sketchy_app can create a table"
+fi
+[[ "$(psql -d sketchy -Atc "SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'public'")" == sketchy_owner ]] \
+  || fail "the schema is not owned by sketchy_owner"
+psql -d sketchy -U sketchy_owner -c "CREATE TABLE owned_probe (i int); DROP TABLE owned_probe" >/dev/null \
+  || fail "sketchy_owner cannot create in its schema"
+
+echo "ok: checksums on, lz4 WAL and TOAST, slow statement logged with app name, pg_stat_statements readable by sketchy_monitor, roles in place"

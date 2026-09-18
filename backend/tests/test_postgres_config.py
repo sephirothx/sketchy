@@ -78,3 +78,14 @@ def test_the_extension_and_the_monitor_role_are_created_idempotently():
     assert "GRANT pg_monitor TO sketchy_monitor" in script
     # No secret is tracked: the password is set by hand, never in the file.
     assert not re.search(r"PASSWORD\s+'", script, re.IGNORECASE)
+
+
+def test_the_owner_and_application_roles_are_created_and_the_schema_is_the_owners():
+    """#896: the grants in app/db/roles.py name these roles; the script makes them."""
+    from app.db.roles import APP_ROLE, OWNER_ROLE
+
+    script = (OPS / "init.sql").read_text(encoding="utf-8")
+    assert f"CREATE ROLE {OWNER_ROLE} LOGIN" in script
+    assert f"CREATE ROLE {APP_ROLE} LOGIN" in script
+    assert f"ALTER SCHEMA public OWNER TO {OWNER_ROLE}" in script
+    assert "REVOKE CREATE ON SCHEMA public FROM PUBLIC" in script

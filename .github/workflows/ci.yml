@@ -232,7 +232,14 @@ jobs:
       # module-level engine would otherwise point
       # at PostgreSQL for every test, and an asyncpg connection shared across
       # pytest's per-test event loops fails from wherever it is next used.
-      TEST_DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
+      #
+      # The suite runs as the application role against a schema the owner
+      # migrated (#896), so a table the application cannot read, or a write
+      # it is not granted, fails here and not in production. The owner URL
+      # is for what only the owner may do: cloning the template, emptying the
+      # append-only ledgers between tests, ANALYZE, the benchmarks' TRUNCATE.
+      TEST_DATABASE_URL: postgresql+asyncpg://sketchy_app:sketchy_app@localhost:5432/sketchy_test
+      TEST_OWNER_DATABASE_URL: postgresql+asyncpg://sketchy_owner:sketchy_owner@localhost:5432/sketchy_test
     defaults:
       run:
         working-directory: backend
@@ -274,13 +281,45 @@ jobs:
           asyncio.run(main())
           EOF
 
+      # The deployment's own one-time script (ops/postgres/init.sql) creates
+      # the owner and application roles; CI gives them passwords, lets the
+      # owner clone the template for pytest's workers, and hands it the
+      # template, as a deployment hands it the database.
+      - name: Create the owner and application roles
+        run: |
+          .venv/bin/python - <<'EOF'
+          import asyncio, asyncpg, pathlib
+          async def main():
+              conn = await asyncpg.connect("postgresql://sketchy:sketchy@localhost:5432/sketchy_test")
+              await conn.execute(pathlib.Path("../ops/postgres/init.sql").read_text())
+              await conn.execute("ALTER ROLE sketchy_owner PASSWORD 'sketchy_owner' CREATEDB")
+              await conn.execute("ALTER ROLE sketchy_app PASSWORD 'sketchy_app'")
+              await conn.execute("ALTER DATABASE sketchy_test OWNER TO sketchy_owner")
+              await conn.close()
+          asyncio.run(main())
+          EOF
+
       - name: Upgrade a fresh PostgreSQL database
         run: .venv/bin/python -m app.db.migrate
         env:
-          DATABASE_URL: postgresql+asyncpg://sketchy:sketchy@localhost:5432/sketchy_test
+          DATABASE_URL: postgresql+asyncpg://sketchy_app:sketchy_app@localhost:5432/sketchy_test
+          MIGRATION_DATABASE_URL: postgresql+asyncpg://sketchy_owner:sketchy_owner@localhost:5432/sketchy_test
 
+      # As the owner: the replay drops and recreates every table.
       - name: Replay migrations in both directions and check schema drift
         run: .venv/bin/pytest -q tests/test_migrations.py --durations=50 --junitxml=test-results/migrations.xml
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://sketchy_owner:sketchy_owner@localhost:5432/sketchy_test
+          TEST_OWNER_DATABASE_URL: ""
+
+      # The replay's tables were created by Alembic directly, not through the
+      # migration command that grants the application role its privileges;
+      # running it again at head does exactly that and nothing else.
+      - name: Grant the application role its privileges on the replayed schema
+        run: .venv/bin/python -m app.db.migrate
+        env:
+          DATABASE_URL: postgresql+asyncpg://sketchy_app:sketchy_app@localhost:5432/sketchy_test
+          MIGRATION_DATABASE_URL: postgresql+asyncpg://sketchy_owner:sketchy_owner@localhost:5432/sketchy_test
 
       # Every database-backed test runs here. The shared persistence fixture in
       # tests/dbfixtures.py follows the worker's TEST_DATABASE_URL, so this is the one

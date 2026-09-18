@@ -32,7 +32,10 @@ async def test_worker_clones_keep_migrations_and_isolate_rows_and_cleanup():
     # Empty the source with the usual fixture, then release it for cloning.
     _, engine = await create_test_db()
     await engine.dispose()
-    manager = WorkerDatabases(os.environ["TEST_DATABASE_URL"])
+    # The owner clones; the application role may not create databases (#896).
+    manager = WorkerDatabases(
+        os.environ.get("TEST_OWNER_DATABASE_URL") or os.environ["TEST_DATABASE_URL"]
+    )
     connections = []
     admin = await asyncpg.connect(manager.admin_url.render_as_string(hide_password=False))
     try:

@@ -18,11 +18,15 @@ _DATABASES = pytest.StashKey[WorkerDatabases]()
 
 
 def pytest_configure(config):
-    worker_url = getattr(config, "workerinput", {}).get("test_database_url")
+    workerinput = getattr(config, "workerinput", {})
+    worker_url = workerinput.get("test_database_url")
     if worker_url:
         # Several tests capture this URL at import, and open additional
         # engines to prove row locking. Changing only dbfixtures is too late.
         os.environ["TEST_DATABASE_URL"] = worker_url
+    owner_url = workerinput.get("test_owner_database_url")
+    if owner_url:
+        os.environ["TEST_OWNER_DATABASE_URL"] = owner_url
 
 
 @pytest.hookimpl(optionalhook=True)
@@ -30,11 +34,19 @@ def pytest_configure_node(node):
     template_url = os.environ.get("TEST_DATABASE_URL")
     if not template_url:
         return
+    # With an owner URL the suite runs as the application role against a
+    # schema the owner migrated (#896): the owner clones the template - it
+    # owns it - and every test connects as the application, so a missing
+    # grant fails here rather than in production.
+    owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
     if _DATABASES not in node.config.stash:
-        node.config.stash[_DATABASES] = WorkerDatabases(template_url)
-    node.workerinput["test_database_url"] = asyncio.run(
-        node.config.stash[_DATABASES].create()
-    )
+        node.config.stash[_DATABASES] = WorkerDatabases(owner_url or template_url)
+    clone_url = asyncio.run(node.config.stash[_DATABASES].create())
+    if owner_url:
+        node.workerinput["test_owner_database_url"] = clone_url
+        node.workerinput["test_database_url"] = WorkerDatabases.as_role(clone_url, template_url)
+    else:
+        node.workerinput["test_database_url"] = clone_url
 
 
 def pytest_unconfigure(config):
