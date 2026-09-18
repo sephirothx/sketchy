@@ -2142,7 +2142,7 @@ so one rule holds every table to its own policy), `sketchy_retention_backlog_row
 `sketchy_retention_sweep_failures_total`. The alerts are `SketchyRetentionBehind`,
 `SketchyRetentionSweepFailing` and `SketchyRetentionSweepStarved`, all naming the table
 — because fault isolation means nothing else will: one sweep failing every hour leaves
-the other eleven succeeding and the loop looking merely intermittent
+the other twelve succeeding and the loop looking merely intermittent
 ([`slo.md`](slo.md) SLO-10).
 
 Deletion evidence in `audit_events` is deliberately **aggregate and sparse**: the guest
