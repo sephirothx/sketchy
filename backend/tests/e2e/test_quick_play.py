@@ -184,3 +184,54 @@ async def test_a_friend_s_invitation_waits_while_quick_play_is_in_flight():
             await host_context.close()
             await guest_context.close()
             await browser.close()
+
+
+async def test_an_invite_link_waits_while_another_way_in_is_in_flight():
+    """The invite page took the lock only after its own screen had moved to
+    "joining", and a busy lock came back as a refusal the room never gave -
+    "Could not join this room" - while its buttons stayed live."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        friend_context = await browser.new_context()
+        guest_context = await browser.new_context()
+        other_context = await browser.new_context()
+        friend, guest = await friend_context.new_page(), await guest_context.new_page()
+        other = await other_context.new_page()
+        friend_name, guest_name = unique("QlHost"), unique("QlPal")
+        try:
+            await sign_up(friend, friend_name)
+            await sign_up(guest, guest_name)
+            await make_friends(friend, guest, friend_name, guest_name)
+
+            # Somebody else's room, whose invite link the guest is looking at.
+            other_code, _ = await open_public_room(other, unique("QlOther"))
+            await guest.goto(f"{BASE_URL}/room/{other_code}")
+            await guest.wait_for_selector(".invite-primary-button:not([disabled])")
+
+            # The friend's invitation arrives on top of that page.
+            await friend.click(".lobby-rooms-actions .btn-primary")
+            await friend.click(".create-room-submit")
+            await friend.wait_for_selector('[data-testid="waiting-room"]')
+            invite = friend.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+            notice = guest.locator('[data-testid="friend-invite"]')
+            await expect(notice).to_be_visible(timeout=SETTLE_MS)
+
+            await guest.evaluate(HOLD_ROOM_ENTRIES)
+            await notice.get_by_role("button", name="Join").click()
+            # While it is in flight the invite page waits: nothing to press, and
+            # no refusal the room never gave.
+            await expect(guest.locator(".invite-primary-button")).to_be_disabled()
+            await expect(guest.locator(".invite-secondary-button")).to_be_disabled()
+            assert await guest.locator("#invite-entry-error").count() == 0
+
+            await guest.wait_for_selector('[data-testid="waiting-room"]', timeout=SETTLE_MS)
+            assert await guest.locator("#invite-entry-error").count() == 0
+        finally:
+            await friend_context.close()
+            await guest_context.close()
+            await other_context.close()
+            await browser.close()

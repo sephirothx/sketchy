@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRoomEntry } from "../hooks/useRoomEntry";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { AppHeader } from "./AppHeader";
 import { RoomFacts } from "./RoomFacts";
 import { AuthDialog } from "./AccountMenu";
@@ -33,6 +34,9 @@ function DelayedInviteLoader() {
 export function InviteEntryPage({ code }: { code: string }) {
   const navigate = useNavigate();
   const { state, join, setNicknameInput } = useRoomEntry(code);
+  // Another way into a room already in flight - a friend's invitation, say -
+  // holds the app's entry lock; this page waits for it (R-UX-14).
+  const entryPending = useRoomEntryStore((state) => state.pending !== null);
   const user = useAuthStore((store) => store.user);
   const hasResolved = useAuthStore((store) => store.hasResolved);
   const nameDraft = useAuthStore((store) => store.nameDraft);
@@ -124,7 +128,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                     setNicknameInput(event.target.value);
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && !busy && !room.isFull) {
+                    if (event.key === "Enter" && !busy && !entryPending && !room.isFull) {
                       event.preventDefault();
                       void join("player");
                     }
@@ -146,7 +150,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               <button
                 type="button"
                 className="invite-primary-button"
-                disabled={busy || room.isFull || !hasResolved}
+                disabled={busy || entryPending || room.isFull || !hasResolved}
                 onClick={() => void join("player")}
               >
                 {room.isFull ? ui.inviteEntryPage.roomFull : busy ? ui.inviteEntryPage.joining : room.state === "playing" ? ui.inviteEntryPage.joinGameInProgress : ui.inviteEntryPage.joinGame}
@@ -154,7 +158,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               <button
                 type="button"
                 className={room.isFull ? "invite-primary-button" : "invite-secondary-button"}
-                disabled={busy || !hasResolved}
+                disabled={busy || entryPending || !hasResolved}
                 onClick={() => void join("spectator")}
               >
                 <EyeIcon size={16} />

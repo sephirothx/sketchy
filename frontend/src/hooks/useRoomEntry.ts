@@ -37,29 +37,19 @@ export function useRoomEntry(code: string) {
         }),
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),
-      join: async ({ code: roomCode, nickname: playerNickname, mode }) => {
-        // The app's one-entry-at-a-time lock (store/roomEntryStore.ts). Held
-        // by something else - a Quick play still answering, a friend's
-        // invitation - this join is refused rather than raced against it.
-        const entry = useRoomEntryStore.getState();
-        const token = entry.begin("invite-link", mode === "spectator" ? "spectate" : "join");
-        if (token === null) return { ok: false };
-        try {
-          const response = await emitWithAck<AckResponse>("join_room", {
-            code: roomCode,
-            nickname: playerNickname,
-            nameColor,
-            colorblindSafeColors,
-            asSpectator: mode === "spectator",
-          });
+      join: ({ code: roomCode, nickname: playerNickname, mode }) =>
+        emitWithAck<AckResponse>("join_room", {
+          code: roomCode,
+          nickname: playerNickname,
+          nameColor,
+          colorblindSafeColors,
+          asSpectator: mode === "spectator",
+        }).then((response) => {
           // Somebody who arrived first holds this guest's name (R-ACCT-09):
           // the refusal says so, and the name field it asks for appears.
           if (response.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
           return response;
-        } finally {
-          useRoomEntryStore.getState().end(token);
-        }
-      },
+        }),
       acceptSession: setSession,
       requestErrorMessage: socketRequestErrorMessage,
     });
@@ -89,6 +79,24 @@ export function useRoomEntry(code: string) {
   async function join(mode: RoomJoinMode) {
     const machine = machineRef.current;
     if (!machine) return;
+    // The app's one-entry-at-a-time lock (store/roomEntryStore.ts), taken
+    // before the machine moves to "joining": while something else holds it -
+    // a Quick play still answering, a friend's invitation - the press does
+    // nothing at all, rather than turning into a refusal the room never gave.
+    // The page disables its controls on the same state, so this is the guard
+    // behind them.
+    const token = useRoomEntryStore
+      .getState()
+      .begin("invite-link", mode === "spectator" ? "spectate" : "join");
+    if (token === null) return;
+    try {
+      await joinHoldingTheLock(machine, mode);
+    } finally {
+      useRoomEntryStore.getState().end(token);
+    }
+  }
+
+  async function joinHoldingTheLock(machine: RoomEntryMachine, mode: RoomJoinMode) {
     // The machine checks the nickname before it calls anything, and a
     // first-time visitor's is empty: the invite screen's name field writes
     // the shared draft, not the machine, so the name they typed is there. Becoming
