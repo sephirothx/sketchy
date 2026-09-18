@@ -158,6 +158,16 @@ DISCONNECT_REASONS = {
     "transport error": "transport_error",
 }
 
+# Points one draw frame carries, and width keyframes riding it (#882). A frame
+# is at most MAX_FRAME_BYTES, a few hundred points; most carry a handful. The
+# zero bucket is the mouse: a frame with no width change.
+POINT_BUCKETS = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0)
+KEYFRAME_BUCKETS = (0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)
+# One socket's outbound backlog, sampled every sweep (#882): most sockets hold
+# nothing, so zero is a bucket, and the top is the 4 MiB / 10 s budget.
+BACKLOG_BYTE_BUCKETS = (0.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0, 4194304.0)
+BACKLOG_AGE_BUCKETS = (0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
+
 SIZE_BUCKETS = (64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0)
 # How many commands and events the admin payload names by size; the rest
 # are still in the scrape.
@@ -617,6 +627,8 @@ class Sources:
     sockets_connected: Callable[[], int] | None = None
     # Each open socket's current transport, `polling` or `websocket` (#881).
     socket_transports: Callable[[], dict[str, str]] | None = None
+    # Sockets watching the lobby channel right now (#882).
+    lobby_watchers: Callable[[], int] | None = None
     pool: Callable[[], PoolGauges | None] | None = None
 
 
@@ -822,6 +834,55 @@ class Telemetry:
         )
         # High-water marks since start (#602): the most any one socket has had
         # queued, in bytes, and the oldest a queued packet has been.
+        # Each open backlog sampled on the 1 s sweep (#882): the high-water
+        # marks below say one socket once got bad; these say where most sit,
+        # which is what the budget should be sized against.
+        self.socket_backlog_bytes = Histogram(
+            "sketchy_socket_backlog_bytes",
+            "One socket's queued outbound bytes, sampled every backlog sweep.",
+            BACKLOG_BYTE_BUCKETS,
+        )
+        self.socket_backlog_age = Histogram(
+            "sketchy_socket_backlog_age_seconds",
+            "Age of one socket's oldest queued outbound packet, sampled every backlog sweep.",
+            BACKLOG_AGE_BUCKETS,
+        )
+        # The questions protocol work is waiting on (#882), one family each.
+        self.socket_refusals = LabelledCounter(
+            "sketchy_socket_refusals_total",
+            "Commands refused, by command and errorCode (too_fast for a throttled one).",
+            ("event", "code"),
+        )
+        self.canvas_tail_claims = LabelledCounter(
+            "sketchy_canvas_tail_claims_total",
+            "Canvas syncs by what the client's prefix claim came to: none, hit, or why it missed.",
+            ("result",),
+        )
+        self.draw_frames = LabelledCounter(
+            "sketchy_draw_frames_total",
+            "Draw frames received, by frame kind, wire shape (binary, base64, int) and result.",
+            ("kind", "shape", "result"),
+        )
+        self.draw_frame_points = Histogram(
+            "sketchy_draw_frame_points",
+            "Points carried by one accepted draw frame.",
+            POINT_BUCKETS,
+        )
+        self.draw_frame_keyframes = Histogram(
+            "sketchy_draw_frame_width_keyframes",
+            "Width keyframes carried by one accepted point frame; zero is a mouse or a steady pen.",
+            KEYFRAME_BUCKETS,
+        )
+        self.lobby_ticks = LabelledCounter(
+            "sketchy_lobby_ticks_total",
+            "Lobby channel ticks, by feed (rooms, presence) and whether anything was emitted.",
+            ("feed", "result"),
+        )
+        self.lobby_baseline_bytes = Histogram(
+            "sketchy_lobby_baseline_bytes",
+            "Size of one watch_lobby acknowledgement: every baseline a joining watcher is handed.",
+            SIZE_BUCKETS,
+        )
         self.socket_backlog_bytes_max = 0
         self.socket_backlog_age_max = 0.0
         self.socket_bytes_in = LabelledCounter(
@@ -1086,6 +1147,33 @@ class Telemetry:
             self.socket_backlog_bytes_max = queued_bytes
         if oldest_age > self.socket_backlog_age_max:
             self.socket_backlog_age_max = oldest_age
+
+    def sample_socket_backlog(self, queued_bytes: int, oldest_age: float) -> None:
+        now = self._clock()
+        self.socket_backlog_bytes.observe(float(queued_bytes), now=now)
+        self.socket_backlog_age.observe(oldest_age, now=now)
+
+    def note_refusal(self, event: str, code: str) -> None:
+        self.socket_refusals.inc((event, code))
+
+    def note_tail_claim(self, result: str) -> None:
+        self.canvas_tail_claims.inc((result,))
+
+    def note_draw_frame(
+        self, kind: str, shape: str, result: str, points: int | None = None, keyframes: int | None = None
+    ) -> None:
+        self.draw_frames.inc((kind, shape, result))
+        if points is not None:
+            now = self._clock()
+            self.draw_frame_points.observe(float(points), now=now)
+            if keyframes is not None:
+                self.draw_frame_keyframes.observe(float(keyframes), now=now)
+
+    def note_lobby_tick(self, feed: str, emitted: bool) -> None:
+        self.lobby_ticks.inc((feed, "emitted" if emitted else "skipped"))
+
+    def note_lobby_baseline(self, size: int) -> None:
+        self.lobby_baseline_bytes.observe(float(size), now=self._clock())
 
     def note_socket_backlog_closed(self, reason: str) -> None:
         self.socket_backlog_closures.inc((reason,))
@@ -1384,6 +1472,21 @@ class Telemetry:
         lines += self.socket_transports.lines()
         lines += self.socket_packets_rejected.lines()
         lines += self.socket_backlog_closures.lines()
+        lines += self.socket_backlog_bytes.lines()
+        lines += self.socket_backlog_age.lines()
+        lines += self.socket_refusals.lines()
+        lines += self.canvas_tail_claims.lines()
+        lines += self.draw_frames.lines()
+        lines += self.draw_frame_points.lines()
+        lines += self.draw_frame_keyframes.lines()
+        lines += self.lobby_ticks.lines()
+        lines += self.lobby_baseline_bytes.lines()
+        if self.sources.lobby_watchers is not None:
+            lines += gauge_lines(
+                "sketchy_lobby_watchers",
+                "Sockets watching the lobby channel now.",
+                self.sources.lobby_watchers(),
+            )
         lines += gauge_lines(
             "sketchy_socket_backlog_bytes_max",
             "The most bytes any one socket has had queued for it since start (#602).",

@@ -46,6 +46,8 @@ if TYPE_CHECKING:
     from app.services.shutdown import ShutdownCoordinator
 
 
+_ERROR_CODES = frozenset(code.value for code in ErrorCode)
+
 logger = logging.getLogger("sketchy.handlers.context")
 
 
@@ -220,8 +222,18 @@ class HandlerContext:
                 telemetry.socket_event(
                     command, "refused" if refused else "ok", perf_counter() - started
                 )
+                if refused:
+                    # Which refusal (#882): `errorCode` is a closed enum, but
+                    # it is read off a dict, so anything outside it is `other`
+                    # rather than a new series.
+                    code = result.get("errorCode")
+                    telemetry.note_refusal(
+                        command,
+                        str(code) if isinstance(code, str) and code in _ERROR_CODES else "other",
+                    )
                 return result
             telemetry.socket_event(command, "throttled", None)
+            telemetry.note_refusal(command, ErrorCode.TOO_FAST.value)
             if self._command_windows.should_report(key, budget):
                 logger.warning("throttled %s from %s", command, sid)
                 metrics.record(

@@ -13,12 +13,21 @@ from app.handlers.payloads import (
     parse_undo_payload,
 )
 from app.handlers.refusals import ErrorCode, refuse
-from app.live_drawing import encode_live_drawing, ends_path, is_relative, resolve_relative_points
+from app.live_drawing import (
+    encode_live_drawing,
+    ends_path,
+    frame_kind,
+    is_relative,
+    resolve_relative_points,
+)
+from app.services.telemetry import telemetry
+
 
 async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     try:
         payload = parse_draw_payload(data, action_identity)
     except PayloadError as error:
+        telemetry.note_draw_frame(*frame_kind(data), "invalid")
         # Nobody awaits a `draw`, so the acknowledgement never leaves the
         # server; what does is one coalesced notice that this client's canvas
         # and the server's have parted (#562).
@@ -26,13 +35,30 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         if current and current[0].game:
             await ctx.game_flow._emit_canvas_stale(current[0], sid, "invalid_frame")
         return error.acknowledgement()
+    result = await _draw(ctx, sid, payload)
+    # The frame mix (#882): which kinds and wire shapes drawers send, what
+    # became of each, and for an accepted point frame how many points and
+    # width keyframes it carried - the pen and the mouse apart, on real input
+    # rather than the synthetic curve `benchmarks/path_widths.py` sized it on.
+    kind, shape = frame_kind(payload.wire_data)
+    points = keyframes = None
+    if result == "accepted" and payload.packet.event == "draw_move":
+        frame = payload.packet.payload
+        points = len(frame.get("points") or frame.get("relative") or ())
+        keyframes = len(frame.get("widths") or ())
+    telemetry.note_draw_frame(kind, shape, result, points, keyframes)
+    return None
+
+
+async def _draw(ctx: HandlerContext, sid, payload) -> str:
+    """Apply one parsed frame; say what became of it, as a bounded label."""
     packet = payload.packet
     current = await ctx.game_flow.require_current_player(sid)
     if not current or not current[0].game:
-        return
+        return "not_drawing"
     room, player = current
     if player.id != room.game.current_drawer or room.game.phase != Phase.DRAWING:
-        return
+        return "not_drawing"
     if sid in ctx.dropped_draw_frames:
         # A frame of this socket's was dropped at the door, and nobody was
         # told: the drawer painted it, the server never recorded it. Whatever
@@ -43,7 +69,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         ctx.dropped_draw_frames.discard(sid)
         await _close_torn_path(ctx, room, sid)
         if packet.event in {"draw_move", "draw_end"}:
-            return
+            return "discarded"
     if not packet_allowed(
         packet.event, packet.payload, room.allowed_tools, room.color_mode
     ):
@@ -59,9 +85,9 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         if packet.event == "draw_start":
             room.game.canvas.discarding_draw_sequence = True
         elif packet.event not in {"draw_shape", "draw_fill"}:
-            return
+            return "discarded"
         await ctx.game_flow._emit_canvas_stale(room, sid, "refused_tool")
-        return
+        return "refused"
     starts_action = packet.event in {
         "draw_start",
         "draw_shape",
@@ -72,12 +98,12 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
     generation, sequence = identity if identity else (None, None)
     if starts_action:
         if generation is None or sequence is None:
-            return
+            return "invalid"
         if generation != room.game.canvas.generation:
             if packet.event == "draw_start":
                 room.game.canvas.discarding_draw_sequence = True
             await ctx.game_flow._emit_canvas_stale(room, sid, "stale_generation", sequence=sequence)
-            return
+            return "refused"
         if room.game.canvas.active_draw_sequence is not None:
             if (
                 packet.event == "draw_start"
@@ -92,7 +118,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
                     expected_sequence,
                     sequence,
                 )
-                return
+                return "out_of_order"
         if sequence <= room.game.canvas.sequence:
             if packet.event == "draw_start":
                 room.game.canvas.discarding_draw_sequence = True
@@ -101,7 +127,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
                 await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
             else:
                 await ctx.game_flow._emit_canvas_stale(room, sid, "unknown_sequence", sequence=sequence)
-            return
+            return "duplicate"
         expected_sequence = room.game.canvas.sequence + 1
         if sequence != expected_sequence:
             if packet.event == "draw_start":
@@ -112,31 +138,31 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
                 expected_sequence,
                 sequence,
             )
-            return
+            return "out_of_order"
     elif room.game.canvas.discarding_draw_sequence:
         if ends_path(packet):
             room.game.canvas.discarding_draw_sequence = False
-        return
+        return "discarded"
     if packet.event == "clear_canvas":
         if not room.game.canvas.clear_canvas_stroke():
-            return
+            return "discarded"
         room.game.canvas.commit_sequence(sequence)
         await _rebroadcast(ctx, room, sid, payload.wire_data, committed=sequence)
-        return
+        return "accepted"
     if is_relative(packet):
         # Offsets from the open path's last point (#559). No open path means
         # nothing to be relative to, which is the silent drop an absolute
         # `draw_move` with no open path gets from `record_stroke` below.
         previous = room.game.canvas.active_path_last_point()
         if previous is None:
-            return
+            return "discarded"
         try:
             packet = resolve_relative_points(packet, previous)
         except ValueError:
             await ctx.game_flow._emit_canvas_stale(room, sid, "invalid_frame")
-            return
+            return "refused"
     if not room.game.canvas.record_stroke(packet.event, packet.payload):
-        return
+        return "discarded"
     if packet.event == "draw_move" and packet.payload.get("ends"):
         # The final batch closes the path it just extended (#603). Nothing
         # between the two can fail: the path is open, since the points were
@@ -160,6 +186,7 @@ async def draw(ctx: HandlerContext, sid, data, action_identity=None):
         room.game.canvas.commit_sequence(sequence)
         committed = sequence
     await _rebroadcast(ctx, room, sid, payload.wire_data, committed=committed)
+    return "accepted"
 
 
 async def _close_torn_path(ctx: HandlerContext, room, sid: str) -> None:

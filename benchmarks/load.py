@@ -711,6 +711,9 @@ class Harness:
             # counter; `count` is emits, once each however many seats heard.
             # Until #874 the bytes were the once-per-emit histogram's sum,
             # which understated every broadcast by the room's size.
+            "decisions": decisions(before, after) if after else {"counts": {}, "quantiles": {}},
+            # The peak over the run: by the final scrape the watchers are gone.
+            "lobbyWatchers": max((m.get("lobby_watchers", 0.0) for m in during if m), default=0.0),
             "bytesOutByEvent": {
                 key[len("out:"):]: {
                     "bytes": after.get(key, 0.0) - before.get(key, 0.0),
@@ -855,10 +858,72 @@ def parse_metrics(text: str) -> dict[str, float]:
         elif name.startswith("sketchy_canvas_recovery_notices_total{"):
             reason = name.split('reason="')[1].split('"')[0]
             values[f"notice:{reason}"] = number
+        elif name.startswith(DECISION_COUNTERS):
+            # The #882 families, kept by their full label set: `family{labels}`.
+            values[f"decision:{name}"] = number
+        elif name.startswith(DECISION_HISTOGRAM_BUCKETS):
+            family = name.split("_bucket{")[0]
+            le = name.split('le="')[1].split('"')[0]
+            values[f"bucket:{family}:{le}"] = number
+        elif name == "sketchy_lobby_watchers":
+            values["lobby_watchers"] = number
     values["lag_p99_ms"] = histogram_quantile(buckets, 0.99) * 1000
     values["lag_max_ms"] = histogram_upper_bound(buckets) * 1000
     values["db_p99_ms"] = histogram_quantile(db_buckets, 0.99) * 1000
     return values
+
+
+# What the gate reports about the decisions #882 feeds: counters kept whole by
+# label set, histograms by bucket, both differenced over the run like the rest.
+DECISION_COUNTERS = (
+    "sketchy_socket_refusals_total{",
+    "sketchy_canvas_tail_claims_total{",
+    "sketchy_draw_frames_total{",
+    "sketchy_lobby_ticks_total{",
+)
+DECISION_HISTOGRAMS = (
+    "sketchy_draw_frame_points",
+    "sketchy_draw_frame_width_keyframes",
+    "sketchy_lobby_baseline_bytes",
+    "sketchy_socket_backlog_bytes",
+    "sketchy_socket_backlog_age_seconds",
+)
+DECISION_HISTOGRAM_BUCKETS = tuple(f"{name}_bucket{{" for name in DECISION_HISTOGRAMS)
+
+
+def _labels(series: str) -> dict[str, str]:
+    body = series.split("{", 1)[1].rstrip("}")
+    return dict(
+        (part.split("=", 1)[0], part.split("=", 1)[1].strip('"')) for part in body.split('",') if "=" in part
+    )
+
+
+def decisions(before: dict[str, float], after: dict[str, float]) -> dict:
+    """The #882 families over the run: counters by label, histogram quantiles."""
+    counts: dict[str, list[tuple[dict[str, str], float]]] = {}
+    for key, value in after.items():
+        if not key.startswith("decision:"):
+            continue
+        series = key[len("decision:"):]
+        delta = value - before.get(key, 0.0)
+        if delta:
+            counts.setdefault(series.split("{")[0], []).append((_labels(series), delta))
+    quantiles: dict[str, dict[str, float]] = {}
+    for family in DECISION_HISTOGRAMS:
+        buckets = [
+            (float("inf") if key.rsplit(":", 1)[1] == "+Inf" else float(key.rsplit(":", 1)[1]),
+             after[key] - before.get(key, 0.0))
+            for key in after if key.startswith(f"bucket:{family}:")
+        ]
+        if buckets and max(count for _, count in buckets) > 0:
+            buckets.sort()
+            quantiles[family] = {
+                "count": buckets[-1][1],
+                "p50": histogram_quantile(buckets, 0.5),
+                "p95": histogram_quantile(buckets, 0.95),
+                "atZero": next((count for bound, count in buckets if bound == 0.0), 0.0),
+            }
+    return {"counts": counts, "quantiles": quantiles}
 
 
 def histogram_quantile(buckets: list[tuple[float, float]], fraction: float) -> float:
@@ -885,6 +950,36 @@ def histogram_upper_bound(buckets: list[tuple[float, float]]) -> float:
         if count >= total:
             return bound if bound != float("inf") else buckets[-2][0]
     return buckets[-1][0]
+
+
+def print_decisions(d: dict, lobby_watchers: float) -> None:
+    """One line per #882 family: what the pending protocol decisions read."""
+    counts, q = d["counts"], d["quantiles"]
+
+    def top(family: str, key, limit: int = 6) -> str:
+        rows: dict[str, float] = {}
+        for labels, value in counts.get(family, []):
+            rows[key(labels)] = rows.get(key(labels), 0.0) + value
+        ordered = sorted(rows.items(), key=lambda item: -item[1])[:limit]
+        return ", ".join(f"{label} {value:.0f}" for label, value in ordered) or "none"
+
+    print("  decisions (#882):")
+    print(f"    refusals by command/code: {top('sketchy_socket_refusals_total', lambda l: l['event'] + '/' + l['code'])}")
+    print(f"    tail claims: {top('sketchy_canvas_tail_claims_total', lambda l: l['result'], 8)}")
+    print(f"    draw frames by kind/shape/result: {top('sketchy_draw_frames_total', lambda l: l['kind'] + '/' + l['shape'] + '/' + l['result'], 8)}")
+    points, keyframes = q.get("sketchy_draw_frame_points"), q.get("sketchy_draw_frame_width_keyframes")
+    if points:
+        print(f"    points per accepted frame: p50 {points['p50']:.0f}, p95 {points['p95']:.0f} (bucket bounds)")
+    if keyframes:
+        print(f"    frames with no width keyframe: {100 * keyframes['atZero'] / max(keyframes['count'], 1):.0f}% of {keyframes['count']:.0f}")
+    print(f"    lobby: {lobby_watchers:.0f} watching at peak; ticks {top('sketchy_lobby_ticks_total', lambda l: l['feed'] + '/' + l['result'])}")
+    baseline = q.get("sketchy_lobby_baseline_bytes")
+    if baseline:
+        print(f"    watch_lobby answer: p50 {baseline['p50']:.0f} B, p95 {baseline['p95']:.0f} B (bucket bounds), {baseline['count']:.0f} served")
+    backlog_bytes, backlog_age = q.get("sketchy_socket_backlog_bytes"), q.get("sketchy_socket_backlog_age_seconds")
+    if backlog_bytes and backlog_age:
+        print(f"    backlog samples: {100 * backlog_bytes['atZero'] / max(backlog_bytes['count'], 1):.0f}% empty; "
+              f"p95 {backlog_bytes['p95']:.0f} B, age p95 {backlog_age['p95'] * 1000:.0f} ms (bucket bounds)")
 
 
 def print_report(report: dict) -> None:
@@ -919,6 +1014,7 @@ def print_report(report: dict) -> None:
     print("  bytes out by event (before compression, summed over every recipient):")
     for event, item in by_event[:8]:
         print(f"    {event:<24}{item['count']:>8.0f} emits{item['bytes'] / 1e6:>9.2f} MB{100 * item['bytes'] / total_out:>6.1f}%")
+    print_decisions(m["decisions"], m["lobbyWatchers"])
     print(f"  ack p50 {m['ackP50Ms']:.1f} ms; draw fan-out p50 {m['drawFanoutP50Ms']:.1f} ms; "
           f"timer overrun max {m['timerOverrunMaxMs']:.1f} ms; RSS idle {m['rssIdleMB']:.0f} MB, after warm-up {m['rssLoadedMB']:.0f} MB, "
           f"peak {m['rssPeakMB']:.0f} MB ({m['rssPerSeatKB']:.0f} KB per seat above idle); "

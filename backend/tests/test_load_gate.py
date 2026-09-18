@@ -89,3 +89,28 @@ def test_the_delta_replay_reads_captured_packets_and_builds_the_patch_the_issue_
     assert room_state_of('2["room_state",{"id":"r","players":[]}]') == {"id": "r", "players": []}
     assert room_state_of('2["chat_message",{"text":"hi"}]') is None
     assert changed_keys({"a": 1, "b": 2, "gone": 3}, {"a": 1, "b": 3}) == {"stateVersion": 1, "b": 3, "gone": None}
+
+
+def test_the_decision_families_are_differenced_over_the_run():
+    """#882: counters by full label set, histograms to bucket-bound quantiles."""
+    from benchmarks.load import decisions
+
+    before = parse_metrics(
+        'sketchy_socket_refusals_total{event="draw",code="too_fast"} 2\n'
+        'sketchy_draw_frame_width_keyframes_bucket{le="0.0"} 1\n'
+        'sketchy_draw_frame_width_keyframes_bucket{le="+Inf"} 1\n'
+    )
+    after = parse_metrics(
+        'sketchy_socket_refusals_total{event="draw",code="too_fast"} 7\n'
+        'sketchy_canvas_tail_claims_total{result="hit"} 4\n'
+        'sketchy_draw_frame_width_keyframes_bucket{le="0.0"} 7\n'
+        'sketchy_draw_frame_width_keyframes_bucket{le="2.0"} 9\n'
+        'sketchy_draw_frame_width_keyframes_bucket{le="+Inf"} 11\n'
+        "sketchy_lobby_watchers 20\n"
+    )
+    result = decisions(before, after)
+    assert result["counts"]["sketchy_socket_refusals_total"] == [({"event": "draw", "code": "too_fast"}, 5.0)]
+    assert result["counts"]["sketchy_canvas_tail_claims_total"] == [({"result": "hit"}, 4.0)]
+    keyframes = result["quantiles"]["sketchy_draw_frame_width_keyframes"]
+    assert keyframes["count"] == 10 and keyframes["atZero"] == 6
+    assert after["lobby_watchers"] == 20

@@ -346,6 +346,10 @@ class BoundedSocketServer(socketio.AsyncServer):
             if eio_sid in self._closing_backlogs:
                 continue
             self._judge(eio_sid, socket, backlog, now)
+            if eio_sid in self._backlogs:
+                # Where backlogs sit, not only the worst one ever (#882):
+                # one sample per socket per sweep, after `_judge` trimmed it.
+                telemetry.sample_socket_backlog(backlog.bytes, backlog.age(now))
 
     async def _sweep_backlogs(self) -> None:
         while True:

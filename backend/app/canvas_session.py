@@ -182,6 +182,26 @@ class CanvasSession:
         expected = HISTORY_HASH_INITIAL if count == 0 else self.hashes[count - 1]
         return expected == history_hash
 
+    def prefix_claim_result(self, generation: int, count: int, history_hash: int) -> str:
+        """What a client's claim to hold a prefix comes to (#882): `hit`, or
+        why it missed. The same checks `committed_prefix_matches` and its
+        caller make, in the same order, so the label is the reason the claim
+        was refused and not merely one that also applies.
+
+        `open_path` is a claim to the whole history while a path is being
+        drawn - the one miss the docstring above calls by design - and
+        `ahead` any other count past what is finalized (after an undo shrank
+        the history, say)."""
+        if generation != self.generation:
+            return "generation"
+        if count <= 0:
+            return "empty"
+        if count > len(self.hashes):
+            if count == len(self.history) and len(self.history) == len(self.hashes) + 1:
+                return "open_path"
+            return "ahead"
+        return "hit" if self.committed_prefix_matches(count, history_hash) else "hash"
+
     @property
     def hash(self) -> int:
         if len(self.hashes) == len(self.history):

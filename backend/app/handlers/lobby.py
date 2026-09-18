@@ -43,6 +43,7 @@ from app.services.presence import LOBBY_CHANNEL, PresenceIdentity
 from app.handlers.refusals import ErrorCode
 from app.handlers.identity import NAME_IN_USE_MESSAGE
 from app.services.guest_names import online_guest_holding
+from app.services.telemetry import payload_bytes, telemetry
 
 NAME_REQUIRED = "Choose a name to chat."
 NOT_WATCHING = "Open the lobby to chat."
@@ -116,7 +117,7 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     # both the backlog and a delta that beat this answer; the client's
     # sequence numbers make that a duplicate it ignores, not a line it shows
     # twice. Nothing here depends on the order of the two.
-    return {
+    answer = {
         "ok": True,
         **feed.snapshot_for_watcher().payload(),
         # The room list rides the same acknowledgement rather than a first
@@ -132,6 +133,10 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
         ],
         "chatSeq": ctx.lobby_chat.last_seq,
     }
+    # Every baseline in one acknowledgement is the lobby's largest message and
+    # is paid again on every resync (#882, #885): sized here, where it is built.
+    telemetry.note_lobby_baseline(payload_bytes(answer))
+    return answer
 
 
 async def unwatch_lobby(ctx: HandlerContext, sid, data=None):

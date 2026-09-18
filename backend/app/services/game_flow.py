@@ -667,11 +667,9 @@ class GameFlowService:
             return
         if holds is not None:
             generation, count, history_hash = holds
-            if (
-                generation == canvas.generation
-                and count > 0
-                and canvas.committed_prefix_matches(count, history_hash)
-            ):
+            claim = canvas.prefix_claim_result(generation, count, history_hash)
+            telemetry.note_tail_claim(claim)
+            if claim == "hit":
                 await self._sio.emit(
                     "sync_strokes_tail",
                     (
@@ -686,6 +684,8 @@ class GameFlowService:
                     to=sid,
                 )
                 return
+        if holds is None:
+            telemetry.note_tail_claim("none")
         await self._sio.emit(
             "sync_strokes",
             (
