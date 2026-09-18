@@ -195,6 +195,35 @@ async def _assert_payload_storage(engine: AsyncEngine, expected: str) -> None:
     }
 
 
+async def _assert_fillfactor(engine: AsyncEngine, *, declared: bool) -> None:
+    """The models declare which tables leave room for heap-only updates
+    (`UPDATED_IN_PLACE`, #890) and the migration sets it; Alembic compares
+    neither, so the chain test holds them together. With `declared` false
+    (below the revision) no table carries a fillfactor at all."""
+    if engine.dialect.name != "postgresql":
+        return
+    from app.db.models import FILLFACTOR_INFO_KEY, Base
+
+    expected = {
+        table.name: table.info[FILLFACTOR_INFO_KEY]
+        for table in Base.metadata.sorted_tables
+        if declared and FILLFACTOR_INFO_KEY in table.info
+    }
+    async with engine.connect() as connection:
+        rows = (
+            await connection.execute(
+                text(
+                    "SELECT c.relname, option FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "CROSS JOIN LATERAL unnest(c.reloptions) AS option "
+                    "WHERE n.nspname = current_schema() AND c.relkind = 'r' "
+                    "AND option LIKE 'fillfactor=%'"
+                )
+            )
+        ).all()
+    assert {table: int(option.split("=", 1)[1]) for table, option in rows} == expected
+
+
 async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     """The baseline (#557) and what came after it: build to head, prove it
     matches the models, run the newest revision backward and forward, remove
@@ -202,6 +231,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "a1c2e3f4b5d6",
         "f4a5b6c7d8e9",
         "e3f4a5b6c7d8",
         "d2e3f4a5b6c7",
@@ -248,15 +278,18 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     await _assert_hand_written_indexes(engine)
     await _assert_pending_role_is_checked(engine)
     await _assert_payload_storage(engine, "e")
+    await _assert_fillfactor(engine, declared=True)
 
     # Run the newest revisions backward and replay them.
     await _migrate(engine, alembic_command.downgrade, foundation)
     assert await _current_revisions(engine) == {foundation}
     await _assert_payload_storage(engine, "x")
+    await _assert_fillfactor(engine, declared=False)
     await _migrate(engine, alembic_command.upgrade, "head")
     assert await _current_revisions(engine) == {head}
     assert await _schema_differences(engine) == []
     await _assert_payload_storage(engine, "e")
+    await _assert_fillfactor(engine, declared=True)
 
     # Prove the whole schema can be removed, then rebuilt from an empty database.
     await _migrate(engine, alembic_command.downgrade, "base")

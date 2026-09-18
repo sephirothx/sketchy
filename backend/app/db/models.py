@@ -127,6 +127,18 @@ PortableJSON = JSON(none_as_null=True).with_variant(
 )
 
 
+# Table options for rows updated in place far more often than inserted (#890):
+# sessions, rate-limit buckets, login lockouts and the two daily roll-ups.
+# At the default fillfactor of 100 an update finds its page full and has to
+# put the new version elsewhere, so it cannot be heap-only even when no
+# indexed column changed; leaving 15% free lets it land beside the old one,
+# skip every index, and be reclaimed page by page. SQLAlchemy has no
+# table-level storage parameters, so the value is declared here as table info,
+# set by the migration, and tests/test_migrations.py holds the two together.
+FILLFACTOR_INFO_KEY = "postgresql_fillfactor"
+UPDATED_IN_PLACE = {"info": {FILLFACTOR_INFO_KEY: 85}}
+
+
 def _values_check(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
     allowed = ", ".join(repr(value) for value in values)
     return CheckConstraint(f"{column} IN ({allowed})", name=name)
@@ -261,6 +273,7 @@ class AuthRateLimitBucket(Base):
     """Shared fixed-window bucket for security-sensitive authentication limits."""
 
     __tablename__ = "auth_rate_limit_buckets"
+    __table_args__ = (UPDATED_IN_PLACE,)
 
     scope: Mapped[str] = mapped_column(String(32), primary_key=True)
     key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -440,6 +453,7 @@ class UserStatsDaily(Base):
             name="ck_user_stats_daily_nonnegative",
         ),
         Index("ix_user_stats_daily_stat_date", "stat_date"),
+        UPDATED_IN_PLACE,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -662,6 +676,7 @@ class RuntimeStatsDaily(Base):
         CheckConstraint(
             "occurrences >= 0 AND value_sum >= 0", name="ck_runtime_stats_nonnegative"
         ),
+        UPDATED_IN_PLACE,
     )
 
     stat_date: Mapped[date] = mapped_column(Date(), primary_key=True)
@@ -1084,7 +1099,9 @@ class RoomMessage(Base):
             name="ck_room_messages_lobby_is_chat",
         ),
         Index("ix_room_messages_expires_at", "expires_at"),
-        Index("ix_room_messages_game_turn_created", "game_id", "turn_id", "created_at"),
+        # No index on (game_id, turn_id): no read filters messages by game or
+        # turn, and neither is a foreign key a delete would walk. It was the
+        # largest index on the table with the most rows (#890).
         Index("ix_room_messages_sender_created", "sender_user_id", "created_at"),
         # The lobby restore at startup: newest 50 lobby lines. One row in
         # forty is a lobby line, so a partial index over just those makes the
@@ -1879,19 +1896,11 @@ class Friendship(Base):
         ),
         Index("ix_friendships_user_high_id", "user_high_id"),
         Index("ix_friendships_requested_by_id", "requested_by_id"),
-        # The asker's question on every read - "anything of mine accepted that
-        # I have not been told about?" - over exactly the rows that can still
-        # answer yes.
-        Index(
-            "ix_friendships_acceptance_unannounced",
-            "requested_by_id",
-            postgresql_where=text(
-                "status = 'accepted' AND acceptance_announced_at IS NULL"
-            ),
-            sqlite_where=text(
-                "status = 'accepted' AND acceptance_announced_at IS NULL"
-            ),
-        ),
+        # No index for unannounced acceptances (#890): the listing reads an
+        # account's friendships by their key and filters in Python, and the
+        # one statement with that predicate - the announcement UPDATE - names
+        # primary-key pairs. The partial index was written on every accept
+        # and every announce, and read by nothing.
     )
 
     user_low_id: Mapped[uuid.UUID] = mapped_column(
@@ -2046,6 +2055,7 @@ class AuthSession(Base):
             "(anomaly_at IS NULL) = (anomaly_count = 0)",
             name="ck_auth_sessions_anomaly_pair",
         ),
+        UPDATED_IN_PLACE,
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -2088,9 +2098,12 @@ class AuthSession(Base):
     # token stays the single-row lookup it has always been - working the window
     # out per request would mean joining `users` on the hottest read this
     # server has, on every request and every socket handshake (#468).
-    idle_expires_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(), nullable=False, index=True
-    )
+    # Not indexed (#890): it moves with every throttled touch, and an update
+    # that changes an indexed column cannot be heap-only - it would write a
+    # new entry into every index of the table on the row this server updates
+    # most often outside play. Nothing needs it indexed: `list_sessions`
+    # filters by `user_id` first and the retention sweep keys on `expires_at`.
+    idle_expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # When this session was last used from a browser or - for staff - a
@@ -2315,6 +2328,7 @@ class AuthLoginLockout(Base):
             name="ck_auth_login_lockouts_failures",
         ),
         Index("ix_auth_login_lockouts_locked_until", "locked_until"),
+        UPDATED_IN_PLACE,
     )
 
     key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -2690,8 +2704,9 @@ class PlannedShutdownAbandonment(Base):
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False, unique=True, index=True
     )
+    # Correlation only; nothing looks an abandonment up by room (#890).
     room_instance_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     contract_version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
@@ -2848,9 +2863,11 @@ class TurnRecord(Base):
     )
     # The factual game seat is authoritative; account linkage may be null,
     # the seat itself never is. Referenced together with game_id by the
-    # same-game constraint in __table_args__.
+    # same-game constraint in __table_args__. Not indexed: that constraint's
+    # parent is only ever deleted with its whole game (FK_INDEX_EXEMPTIONS in
+    # tests/test_db_models.py, #890).
     drawer_participant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     drawer_display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
@@ -3145,8 +3162,10 @@ class ScoreEvent(Base):
     participant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True), nullable=False, index=True
     )
+    # Not indexed: its turn is only ever deleted with its whole game, and
+    # no read looks the ledger up by turn (FK_INDEX_EXEMPTIONS, #890).
     turn_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), nullable=True, index=True
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
     points_delta: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -3346,7 +3365,9 @@ class TurnDrawingReaction(Base):
         CheckConstraint(
             "set_version >= 1", name="ck_turn_drawing_reactions_set_version"
         ),
-        Index("ix_turn_drawing_reactions_game_id", "game_id"),
+        # No index on game_id alone (#890): both same-game foreign keys are
+        # served by their selective column (turn_id through the unique pair,
+        # participant_id by its own index), and no read goes by game.
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
