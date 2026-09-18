@@ -625,6 +625,17 @@ resolves through `identity_aliases`, so a cache keyed by the answer would
 never satisfy the question - and the per-tick repair above would ask again
 every second, for as long as that socket stayed open, and never stop.
 
+The same cache answers the **guest-name check** (R-ACCT-09, #900). Every guest
+lobby line, seat join and rename asks whether an online guest already holds the
+name, and that used to send every online id to the database each time — 7 ms at
+3,000 online, on the event loop every room shares, with a statement whose text
+changed with the list length so asyncpg never reused its plan.
+`online_guest_holding` now reads the names it can from this cache and queries only
+the ids it cannot answer, with one array parameter; at 3,000 online a warm cache
+answers in 0.5 ms and sends nothing (`benchmarks/guest_name_check.py`). Trusting it
+rests on the invalidation above: every path that writes a name, claims a guest or
+merges one forgets the row.
+
 Delivery is a Socket.IO channel a client opts into with `watch_lobby`, never a
 second poll. Membership is asked for rather than derived from seat state, which
 keeps it out from under the seating gate and correct for a player seated in one
