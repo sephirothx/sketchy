@@ -932,3 +932,57 @@ async def test_an_exclusive_barrier_refuses_to_lock_a_target_found_under_its_loc
                 assert await erased_identity_ids(session, (UUID(guest),)) == set()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="row locks are only real on PostgreSQL")
+async def test_a_reaction_waits_for_the_drawers_deletion_in_flight_then_refuses(monkeypatch):
+    """The reaction writer locks the drawer's account (for the stats rebuild,
+    #930) after reading the turn and its drawing unlocked. Waiting behind a
+    deletion, it must refuse on what the lock says - not on the drawing it
+    loaded before, which the deletion has since erased along with its
+    reactions (R-REACT-10)."""
+    import app.auth.account_data as account_data
+
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        drawer_guest = await users.create_anonymous("Drawer")
+        drawer = await users.claim_account(drawer_guest.id, "drawer", "hash")
+        reactor_guest = await users.create_anonymous("Reactor")
+        reactor = await users.claim_account(reactor_guest.id, "reactor", "hash")
+        history = SqlAlchemyGameHistoryRepository(factory)
+        game_id, drawers_turn, _ = await _public_game_between(factory, history, reactor.id, drawer.id)
+
+        real = account_data.delete_avatars_for
+        deletion_holds_the_row = asyncio.Event()
+        let_the_deletion_commit = asyncio.Event()
+
+        async def paused(session, identity_ids):
+            deletion_holds_the_row.set()
+            await let_the_deletion_commit.wait()
+            return await real(session, identity_ids)
+
+        monkeypatch.setattr(account_data, "delete_avatars_for", paused)
+        erase = asyncio.create_task(anonymize_account(factory, user_id=drawer.id))
+        await deletion_holds_the_row.wait()
+        react = asyncio.create_task(
+            history.set_drawing_reaction(
+                game_id, str(drawers_turn), requesting_user_id=reactor.id, emoji=REACTION_EMOJI_CODES[0]
+            )
+        )
+        await asyncio.sleep(0.3)
+        assert not react.done(), "the reaction must wait for the deletion's lock"
+        let_the_deletion_commit.set()
+        _, result = await asyncio.gather(erase, react)
+
+        assert result is None
+        async with factory() as session:
+            left = (
+                await session.scalars(
+                    select(TurnDrawingReaction).where(TurnDrawingReaction.turn_id == drawers_turn)
+                )
+            ).all()
+            drawing = await session.get(TurnDrawing, drawers_turn)
+        assert left == [] and drawing.reaction_count == 0
+    finally:
+        await engine.dispose()

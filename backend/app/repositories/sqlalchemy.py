@@ -2294,9 +2294,14 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # wait on each other; before the drawing row, because every
                 # writer that holds both (erasure, the pin write) takes the
                 # account first. The whole identity, ascending, in one
-                # statement - the erasure barrier's rule.
-                if turn.drawer_user_id is not None:
-                    await erased_identity_ids(session, (turn.drawer_user_id,))
+                # statement - the erasure barrier's rule. The turn and its
+                # drawing were read before this lock: a deletion it waited
+                # behind has since erased the drawing and its reactions, so
+                # what the lock says decides, not what was loaded (R-REACT-10).
+                if turn.drawer_user_id is not None and await erased_identity_ids(
+                    session, (turn.drawer_user_id,)
+                ):
+                    return None
                 # The drawing row, locked: the count and the Hot score kept
                 # on it are set from the rows after this write, and two
                 # reactions landing together must not both count their own.
