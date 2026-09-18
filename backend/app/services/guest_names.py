@@ -21,8 +21,9 @@ one.
 """
 from __future__ import annotations
 
+from app.auth.names import fold_guest_name
 from app.repositories.interfaces import UserRepository
-from app.services.presence import PresenceRegistry
+from app.services.presence import PresenceIdentityCache, PresenceRegistry
 
 
 async def online_guest_holding(
@@ -32,6 +33,7 @@ async def online_guest_holding(
     registry: PresenceRegistry | None,
     user_repo: UserRepository | None,
     choosing: bool,
+    identities: PresenceIdentityCache | None = None,
 ) -> str | None:
     """The online guest who holds `name` against `claimant_id`, if any.
 
@@ -40,6 +42,13 @@ async def online_guest_holding(
     unless somebody else online under it arrived first. A guest with no
     arrival - offline for longer than a reload - arrives after everybody
     already here.
+
+    Answered from `identities` - the lobby list's cache of every online
+    account's name, warmed at the handshake and invalidated by every path
+    that writes a name or turns a guest into an account - and from the
+    database only for the ids it cannot answer (#900). Sending every online
+    id to the database on each guest chat line cost 6-10 ms at a thousand
+    online, on the one event loop every room runs on.
     """
     if registry is None or user_repo is None:
         return None
@@ -55,4 +64,19 @@ async def online_guest_holding(
     among = [user_id for user_id in online if user_id != claimant_id]
     if not among:
         return None
-    return await user_repo.find_guest_named(name, among)
+    unknown = among
+    if identities is not None:
+        folded = fold_guest_name(name.strip())
+        known = identities.cached(among)
+        for user_id in among:
+            identity = known.get(user_id)
+            if (
+                identity is not None
+                and identity.is_anonymous
+                and fold_guest_name(identity.display_name) == folded
+            ):
+                return user_id
+        unknown = [user_id for user_id in among if user_id not in known]
+        if not unknown:
+            return None
+    return await user_repo.find_guest_named(name, unknown)

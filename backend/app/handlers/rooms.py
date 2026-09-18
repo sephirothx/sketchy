@@ -964,6 +964,7 @@ async def rename_player(ctx: HandlerContext, sid, data):
         registry=ctx.presence,
         user_repo=ctx.user_repo,
         choosing=nickname.lower() != player.nickname.lower(),
+        identities=ctx.presence_identities,
     ):
         return {
             "ok": False, "errorCode": ErrorCode.NAME_IN_USE,

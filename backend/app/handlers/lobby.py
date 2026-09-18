@@ -219,6 +219,7 @@ async def send_lobby_chat(ctx: HandlerContext, sid, data):
         registry=ctx.presence,
         user_repo=ctx.user_repo,
         choosing=False,
+        identities=ctx.presence_identities,
     ):
         return {"ok": False, "errorCode": ErrorCode.NAME_IN_USE, "error": NAME_IN_USE_MESSAGE}
     # One instant for the wire and for the retained row, so the time a
