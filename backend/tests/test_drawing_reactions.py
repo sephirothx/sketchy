@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -792,3 +793,127 @@ async def test_a_participant_holds_one_row_whichever_door_they_use(repos):
         assert rows[0].user_id == UUID(bob.id)
         assert rows[0].participant_id == UUID(recorded.reactor_seat)
     assert (await users.get_stats(ann.id)).reactions_received == 1
+
+
+async def _gallery_fans(factory, recorded, count: int, offset: int = 0) -> None:
+    """`count` reactions from the Gallery by accounts nobody seated."""
+    async with factory() as session, session.begin():
+        fans = [generate_uuid() for _ in range(count)]
+        session.add_all(
+            [
+                User(
+                    id=fan,
+                    display_name=f"Fan{offset + index}",
+                    username=f"fan{offset + index}",
+                    password_hash="hash",
+                    state="registered",
+                )
+                for index, fan in enumerate(fans)
+            ]
+        )
+        await session.flush()
+        session.add_all(
+            [
+                TurnDrawingReaction(
+                    game_id=UUID(recorded.game_id),
+                    turn_id=UUID(recorded.turn_id),
+                    user_id=fan,
+                    participant_id=None,
+                    emoji="wow",
+                    set_version=REACTION_SET_VERSION,
+                )
+                for fan in fans
+            ]
+        )
+        await session.flush()
+        await session.execute(
+            update(TurnDrawing)
+            .where(TurnDrawing.turn_id == UUID(recorded.turn_id))
+            .values(reaction_count=TurnDrawing.reaction_count + count)
+        )
+
+
+async def test_a_reaction_write_costs_the_same_on_a_popular_drawing(repos):
+    """The drawing's row is locked for the whole write, so its cost is what
+    every other reaction to that drawing waits for. It used to load every
+    reaction into Python under that lock (#897); now the statements and the
+    rows it hydrates are the same at three reactions as at a hundred."""
+    from sqlalchemy import event
+
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    recorded = await record_game(
+        history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public"
+    )
+    engine = factory.kw["bind"]
+
+    async def one_write(name: str) -> tuple[int, int]:
+        reactor = await registered(users, name)
+        statements: list[str] = []
+        loaded: list[object] = []
+
+        def statement(conn, cursor, text, parameters, context, executemany):
+            statements.append(text)
+
+        def load(target, context):
+            loaded.append(target)
+
+        event.listen(engine.sync_engine, "before_cursor_execute", statement)
+        event.listen(TurnDrawingReaction, "load", load)
+        try:
+            result = await history.set_drawing_reaction(
+                None, recorded.turn_id, requesting_user_id=reactor.id, emoji="fire", from_gallery=True
+            )
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", statement)
+            event.remove(TurnDrawingReaction, "load", load)
+        assert result is not None
+        return len(statements), len(loaded)
+
+    await _gallery_fans(factory, recorded, 2)
+    few = await one_write("Early")
+    await _gallery_fans(factory, recorded, 100, offset=2)
+    many = await one_write("Late")
+    assert few == many, (few, many)
+    # The seated reaction is the only row a write hydrates: a room's seats,
+    # never the Gallery's crowd.
+    assert many[1] <= 1
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, UUID(recorded.turn_id))
+        rows = await session.scalar(
+            select(func.count()).where(TurnDrawingReaction.turn_id == UUID(recorded.turn_id))
+        )
+    assert drawing.reaction_count == rows == 105
+
+
+@pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="row locks are only real on PostgreSQL")
+async def test_concurrent_reactions_leave_the_count_equal_to_the_rows(repos):
+    """The count moves by each write's delta now rather than being recounted,
+    which is exact only because the drawing's row is locked: twenty reactions
+    landing together must still end with the projection equal to the rows."""
+    import asyncio
+
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    recorded = await record_game(
+        history, drawer=ann.id, reactor=bob.id, reactions="default", visibility="public"
+    )
+    fans = [await registered(users, f"Crowd{index}") for index in range(20)]
+
+    results = await asyncio.gather(
+        *(
+            history.set_drawing_reaction(
+                None, recorded.turn_id, requesting_user_id=fan.id, emoji="heart", from_gallery=True
+            )
+            for fan in fans
+        )
+    )
+    assert all(result is not None for result in results)
+    async with factory() as session:
+        drawing = await session.get(TurnDrawing, UUID(recorded.turn_id))
+        rows = await session.scalar(
+            select(func.count()).where(TurnDrawingReaction.turn_id == UUID(recorded.turn_id))
+        )
+    assert drawing.reaction_count == rows == 21

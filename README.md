@@ -1916,6 +1916,9 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/index_write_cost.py --sessions 20000 --messages 100000
 
+# How long one reaction holds a popular drawing's row lock (#897; SQLite unless TEST_DATABASE_URL is set)
+backend/.venv/bin/python benchmarks/reaction_write.py --reactions 300 5000
+
 # The score-event ledger's bytes, write time and read cost per game (#552)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200

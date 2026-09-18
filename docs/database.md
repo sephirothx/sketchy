@@ -1333,7 +1333,10 @@ orders by a column rather than counting on read, and Hot orders by a score that 
 changes for one row except when its count does — the decay is the newer rows' larger
 second term. Every reaction write sets both from the rows **under the row's lock**
 (`SELECT … FOR UPDATE`), so two reactions landing together cannot each count only their
-own; the finished-game write sets them with the row; erasure zeroes them with the bytes.
+own — from one grouped count by code, hydrating only the seated rows the room names,
+never a row per reaction: every other reaction to a popular drawing waits on that lock,
+and loading 5,000 rows under it held it for 22 ms median, 44 ms p95, against 2.6 and
+2.8 ms now, flat in the number of reactions (#897, `benchmarks/reaction_write.py`, PostgreSQL 17); the finished-game write sets them with the row; erasure zeroes them with the bytes.
 They are never the source of truth: `app.services.gallery_ranking` rebuilds both from the
 reaction rows, one transaction per batch of rows locked before they are counted, so a
 reaction landing mid-rebuild waits for its batch and then sets the row itself; a rebuild

@@ -530,24 +530,6 @@ async def apply_gallery_decision(
     return turn_id, drawer
 
 
-def _reaction_state(
-    rows: Sequence[TurnDrawingReaction],
-) -> tuple[tuple[TurnDrawingReactionDetail, ...], dict[str, int]]:
-    """How a drawing's reactions are shown (R-REACT-05): the rows with a seat
-    as a list, in the order they were given, and every row as a count by
-    code - the ones given from outside the room count and are named nowhere."""
-    ordered = sorted(rows, key=lambda row: (row.created_at, row.id))
-    details = tuple(
-        TurnDrawingReactionDetail(
-            seat_id=_public_id(row.participant_id), emoji=row.emoji
-        )
-        for row in ordered
-        if row.participant_id is not None
-    )
-    counts = dict(Counter(row.emoji for row in rows))
-    return details, counts
-
-
 def _prompt_usage_hash(revision_ids: Sequence[UUID], usage: PromptUsage) -> str:
     """Canonical digest of one usage batch, to tell a retry from a conflict."""
     payload = {
@@ -2284,23 +2266,24 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         finished_at=turn.game.finished_at,
                         delta=delta,
                     )
-                rows = (
-                    await session.scalars(
-                        select(TurnDrawingReaction).where(
-                            TurnDrawingReaction.turn_id == db_turn_id
-                        )
-                    )
-                ).all()
-                details, counts = _reaction_state(rows)
+                # Nothing here hydrates a row per reaction (#897). Anyone
+                # signed in may react from the Gallery, so the rows behind one
+                # drawing are bounded by nothing, and every other reaction to
+                # it waits on this lock: the counts come grouped by code, the
+                # named list is the seated rows, and the projection is still
+                # set from the rows (R-GAL-05) - their grouped total, not an
+                # increment of what the column said.
+                summary = (await _reaction_summaries(session, (db_turn_id,)))[db_turn_id]
                 if drawing_row is not None:
-                    drawing_row.reaction_count = len(rows)
-                    drawing_row.hot_score = hot_score(len(rows), turn.game.finished_at)
+                    total = sum(summary.counts.values())
+                    drawing_row.reaction_count = total
+                    drawing_row.hot_score = hot_score(total, turn.game.finished_at)
                 return DrawingReactionResult(
                     turn_id=_public_id(db_turn_id),
                     seat_id=_public_id(seat.id) if seat is not None else None,
                     emoji=emoji,
-                    reactions=details,
-                    reaction_counts=counts,
+                    reactions=summary.details,
+                    reaction_counts=summary.counts,
                 )
 
     async def list_gallery(
