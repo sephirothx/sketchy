@@ -38,10 +38,11 @@ groups:
         expr: >
           sketchy_db_pool_checked_out / clamp_min(sketchy_db_pool_capacity, 1)
       # The volume the data is on: the application's own on SQLite, the
-      # database host's (node_exporter, job postgres-host) on PostgreSQL,
-      # where the application does not emit its gauge.
+      # database host's on PostgreSQL, where the application does not emit
+      # its gauge - node_exporter's series for the one mount the scrape
+      # labels volume="database", not every filesystem on the host.
       - record: sketchy:disk_free_ratio
         expr: >
           sketchy_data_disk_free_bytes / clamp_min(sketchy_data_disk_total_bytes, 1)
-          or node_filesystem_avail_bytes{job="postgres-host"}
-            / clamp_min(node_filesystem_size_bytes{job="postgres-host"}, 1)
+          or node_filesystem_avail_bytes{job="postgres-host", volume="database"}
+            / clamp_min(node_filesystem_size_bytes{job="postgres-host", volume="database"}, 1)

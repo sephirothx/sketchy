@@ -7,9 +7,11 @@ writer for as long as the build takes; a constraint added in one step scans the
 whole table under that lock; a column rewrite does both. So this reads every
 revision newer than `LINT_FROM` and refuses, on the tables in `LARGE_TABLES`:
 
-- `create_index` without `postgresql_concurrently=True` (which also needs the
-  operation inside `op.get_context().autocommit_block()`, since `CONCURRENTLY`
-  cannot run in a transaction);
+- `create_index` without `postgresql_concurrently=True`;
+- any `create_index` or `drop_index` with `postgresql_concurrently=True`, on
+  any table, outside `op.get_context().autocommit_block()`: `CONCURRENTLY`
+  cannot run inside a transaction block, so PostgreSQL refuses it at deploy
+  time, which is exactly what this exists to move earlier;
 - `create_check_constraint` / `create_foreign_key` without
   `postgresql_not_valid=True`, followed by a separate
   `ALTER TABLE ... VALIDATE CONSTRAINT`, which takes a lock that lets writes
@@ -121,27 +123,34 @@ def lint_revision(source: str, name: str = "<revision>") -> list[str]:
     }
     large = LARGE_TABLES - created
 
-    def visit(node: ast.AST, batch_table: str | None) -> None:
-        if isinstance(node, ast.With):
+    def visit(node: ast.AST, batch_table: str | None, autocommit: bool) -> None:
+        if isinstance(node, (ast.With, ast.AsyncWith)):
             table = batch_table
+            inside = autocommit
             for item in node.items:
                 call = item.context_expr
-                if (
-                    isinstance(call, ast.Call)
-                    and isinstance(call.func, ast.Attribute)
-                    and call.func.attr == "batch_alter_table"
-                ):
-                    table = _string(call.args[0]) if call.args else _string(_keyword(call, "table_name"))
+                if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
+                    if call.func.attr == "batch_alter_table":
+                        table = _string(call.args[0]) if call.args else _string(_keyword(call, "table_name"))
+                    elif call.func.attr == "autocommit_block":
+                        inside = True
+                visit(item.context_expr, batch_table, autocommit)
             for child in node.body:
-                visit(child, table)
+                visit(child, table, inside)
             return
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and not escaped(node):
-            check(node, node.func.attr, batch_table)
+            check(node, node.func.attr, batch_table, autocommit)
         for child in ast.iter_child_nodes(node):
-            visit(child, batch_table)
+            visit(child, batch_table, autocommit)
 
-    def check(call: ast.Call, operation: str, batch_table: str | None) -> None:
+    def check(call: ast.Call, operation: str, batch_table: str | None, autocommit: bool) -> None:
         where = f"{name}:{call.lineno}"
+        if (
+            operation in ("create_index", "drop_index")
+            and _is_true(_keyword(call, "postgresql_concurrently"))
+            and not autocommit
+        ):
+            problems.append(f"{where}: {operation} CONCURRENTLY outside op.get_context().autocommit_block()")
         if operation == "create_index":
             table = _table(call, 1, "table_name", batch_table)
             if table in large and not _is_true(_keyword(call, "postgresql_concurrently")):
@@ -176,7 +185,7 @@ def lint_revision(source: str, name: str = "<revision>") -> list[str]:
                     problems.append(f"{where}: unbatched write to {table} in op.execute")
 
     for statement in upgrade.body:
-        visit(statement, None)
+        visit(statement, None, False)
     return problems
 
 
@@ -228,6 +237,8 @@ def upgrade():
     op.execute("UPDATE runtime_events SET value = 0")
     with op.batch_alter_table("audit_events") as batch:
         batch.create_index("ix_audit_x", ["x"])
+    op.create_index("ix_turn_records_x", "turn_records", ["x"], postgresql_concurrently=True)
+    op.drop_index("ix_app_config_y", table_name="app_config", postgresql_concurrently=True)
 
 def downgrade():
     op.drop_index("ix_room_messages_x", table_name="room_messages")
@@ -240,6 +251,7 @@ import sqlalchemy as sa
 def upgrade():
     with op.get_context().autocommit_block():
         op.create_index("ix_room_messages_x", "room_messages", ["x"], postgresql_concurrently=True)
+        op.drop_index("ix_room_messages_old", table_name="room_messages", postgresql_concurrently=True)
     op.create_check_constraint("ck_users_x", "users", "x > 0", postgresql_not_valid=True)
     op.execute("ALTER TABLE users VALIDATE CONSTRAINT ck_users_x")
     op.add_column("score_events", sa.Column("x", sa.Integer(), nullable=False, server_default="0"))
@@ -262,6 +274,8 @@ def test_each_rule_refuses_its_unsafe_operation():
         "add_column NOT NULL without server_default on score_events",
         "unbatched write to runtime_events",
         "create_index on audit_events",
+        "create_index CONCURRENTLY outside",
+        "drop_index CONCURRENTLY outside",
     ]
     assert len(problems) == len(expected), problems
     for fragment in expected:

@@ -43,12 +43,20 @@ scrape_configs:
   # The database volume's free space. `sketchy_data_disk_*` measures the
   # application's own volume and is only emitted on SQLite, where that is
   # where the data is; on PostgreSQL the data is on the database host, so
-  # node_exporter there is the source. Restrict it to the data directory's
-  # mount point.
+  # node_exporter there is the source. node_exporter reports every mount on
+  # the host - root, /boot, a backup disk - and a full one of those is not a
+  # full database, so the filesystem series of the mount holding the data
+  # directory (`SHOW data_directory`; set the regex to its mount point) are
+  # labelled volume="database", and the rules read only those.
   - job_name: postgres-host
     scrape_interval: 60s
     static_configs:
       - targets: ["db.example:9100"]
+    metric_relabel_configs:
+      - source_labels: [__name__, mountpoint]
+        regex: "node_filesystem_[a-z_]+;/var/lib/postgresql"
+        target_label: volume
+        replacement: database
 
 rule_files:
   - rules/sketchy-recording.yml

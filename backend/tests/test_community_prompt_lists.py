@@ -638,3 +638,26 @@ async def test_publishing_through_the_repository_resets_the_ranking(env):
         )
     await cached.set_owned_publication(owner.id, fresh.id, published=True)
     assert (await _names(cached))[0] == ["Fresh", "List1"]
+
+
+async def test_a_cached_page_holds_to_its_tag_filter_when_a_list_is_retagged(env):
+    """The ranking is kept per filter, but tags live on the revision: a save
+    that drops a tag must take the list off that tag's page, and one that adds
+    it must put the list on, without waiting out the TTL."""
+    _, users, prompts, factory = env
+    owner = await account(users, "Tagger")
+    nature = await published(prompts, factory, owner.id, "Coast", tags=("nature",), users=users)
+    other = await published(prompts, factory, owner.id, "Town", tags=("places",), users=users)
+    cached = _cached(factory, [0.0])
+    assert (await _names(cached, tags=("nature",)))[0] == ["Coast"]
+
+    for made, tags in ((nature, ("places",)), (other, ("nature",))):
+        current = await cached.get_owned(owner.id, made.id)
+        await cached.update_owned(
+            owner.id, made.id, expected_version=current.version, name=current.name,
+            description=current.description,
+            prompts=tuple(PromptListEntryInput(answer=entry.answer) for entry in current.prompts),
+            tags=tags,
+        )
+    page = await cached.list_community(tags=("nature",))
+    assert [(row.name, row.tags) for row in page.lists] == [("Town", ("nature",))]
