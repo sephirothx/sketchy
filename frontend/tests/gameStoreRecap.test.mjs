@@ -38,6 +38,25 @@ test("a different room's waiting state does not inherit the last room's recap", 
   assert.deepEqual(after.drawingReactions, {});
 });
 
+test("a room switched to from a game-over screen opens waiting, not on that screen", () => {
+  const store = useGameStore.getState();
+  store.reset();
+  store.setRoomState(roomState("first", "waiting"));
+  store.endGame(recap);
+  assert.equal(useGameStore.getState().phase, "game_end");
+
+  store.setRoomState(roomState("second", "waiting"));
+  store.applyLastGame(recap);
+  const after = useGameStore.getState();
+  assert.equal(after.phase, "idle", "the second room's recap, without its end-of-game moment");
+  assert.deepEqual(after.finalScores, recap.scores);
+
+  // The same room's own updates keep a game-over screen that is up.
+  store.endGame(recap);
+  store.setRoomState(roomState("second", "waiting"));
+  assert.equal(useGameStore.getState().phase, "game_end");
+});
+
 test("last_game moves a tab that missed the game's end into the waiting room", () => {
   const store = useGameStore.getState();
   store.reset();

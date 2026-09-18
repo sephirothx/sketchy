@@ -273,7 +273,9 @@ export const useGameStore = create<GameStore>((set) => ({
             finalScores: null,
             drawingRecap: [],
             gameHighlights: [],
-            ...(payload.id !== state.roomId ? { drawingReactions: {} } : {}),
+            // A different room also leaves the last one's screen: its game-over
+            // moment must not open over a recap this room sends afterwards.
+            ...(payload.id !== state.roomId ? { drawingReactions: {}, phase: "idle" as const } : {}),
           }
         : {}),
       moderation: payload.moderation,
