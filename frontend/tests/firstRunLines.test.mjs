@@ -36,3 +36,12 @@ test("every language has its own pool, and every line fits the block", () => {
     }
   }
 });
+
+test("the visit keeps its place in the pool, not the words: a new language reads its own", () => {
+  const english = catalogueFor("en").firstRunIdentity.lines;
+  const italian = catalogueFor("it").firstRunIdentity.lines;
+  for (const roll of [0, 0.2, 0.45, 0.8, 0.99]) {
+    const at = english.indexOf(pickLine(english, roll));
+    assert.equal(pickLine(italian, roll), italian[at], `roll ${roll} landed elsewhere`);
+  }
+});

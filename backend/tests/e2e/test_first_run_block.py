@@ -1,6 +1,9 @@
 """The lobby's first landing (#588, #590): a name tag, a line from the pool, and
 a button that only names you."""
 
+import random
+import re
+
 from playwright.async_api import async_playwright
 
 
@@ -14,6 +17,13 @@ LINES = {
     "Is that you, Michelangelo?",
     "Wow, it looks like a Pollock!",
 }
+ITALIAN_LINES = {
+    "\u00c8 uno spazzolino? Credevo fosse una scopa.",
+    "Sfoggia le doti artistiche che non sapevi di avere.",
+    "Cubismo, per sbaglio.",
+    "Sei proprio tu, Michelangelo?",
+    "Bello, sembra un Pollock!",
+}
 SUBTITLE = (
     "One player draws, everybody else tries to guess. "
     "No account, no install, no talent required."
@@ -21,6 +31,9 @@ SUBTITLE = (
 
 
 async def test_the_first_landing_names_you_and_says_what_the_game_is():
+    # A guest name is held while somebody online has it (R-ACCT-09), so a rerun
+    # against a warm server cannot reuse the last one.
+    tag = random.randint(1000, 9999)
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         try:
@@ -43,7 +56,7 @@ async def test_the_first_landing_names_you_and_says_what_the_game_is():
                 assert await page.evaluate("document.documentElement.scrollWidth") <= width
 
                 # The tag's button names the player. It must not put them in a game.
-                await page.fill(".first-run-guest-row input", f"Tag{width}")
+                await page.fill(".first-run-guest-row input", f"Tag{tag}w{width}")
                 await page.click(".first-run-guest-submit")
                 await page.wait_for_selector(".identity-chip")
                 assert await page.locator(".first-run").count() == 0
@@ -51,4 +64,31 @@ async def test_the_first_landing_names_you_and_says_what_the_game_is():
                 assert await page.locator(".lobby-page").count() == 1
                 await context.close()
         finally:
+            await browser.close()
+
+
+async def test_the_line_changes_language_with_the_page():
+    """The line was held as a string, so switching language left the previous
+    language's joke on screen until the page was reloaded."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 800}, locale="en-US")
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            heading = page.locator(".first-run-heading")
+            await heading.wait_for()
+            assert (await heading.inner_text()).strip() in LINES
+
+            await page.click(".lobby-header .language-picker-trigger")
+            await page.get_by_role("option", name=re.compile("italiano", re.IGNORECASE)).click()
+            await page.wait_for_function("() => document.documentElement.lang === 'it'")
+
+            line = (await heading.inner_text()).strip()
+            assert line not in LINES, f"still the English pool: {line}"
+            assert line in ITALIAN_LINES, line
+            # And the subtitle is Italian too, without a reload.
+            assert "Nessun account" in await page.locator(".first-run-copy").inner_text()
+        finally:
+            await context.close()
             await browser.close()

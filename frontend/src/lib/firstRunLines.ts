@@ -12,6 +12,11 @@
  * *that* language, and a joke that does not land is worse than a plain
  * sentence. The subtitle under it never moves - it is the one place the game
  * is actually explained.
+ *
+ * What is held for the visit is therefore the *roll*, not the line it picked:
+ * a reader who switches language gets that language's pool read at the same
+ * place, on the next render. Holding the string left the old language's joke
+ * on screen until the page was reloaded.
  */
 
 import { ui } from "../content/ui/index.ts";
@@ -23,10 +28,10 @@ export function pickLine(pool: readonly string[], random: number): string {
   return pool[index];
 }
 
-let chosen: string | null = null;
+let roll: number | null = null;
 
-/** This visit's line. The same string for the life of the tab. */
+/** This visit's line, in the language being read now. */
 export function firstRunLine(): string {
-  chosen ??= pickLine(ui.firstRunIdentity.lines, Math.random());
-  return chosen;
+  roll ??= Math.random();
+  return pickLine(ui.firstRunIdentity.lines, roll);
 }
