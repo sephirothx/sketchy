@@ -33,16 +33,17 @@ result is recorded here so the target is a measurement rather than a sentence:
 
 | Signal | Measured | Threshold |
 | --- | --- | --- |
-| Acknowledgement latency p50 / p95 / p99 | 1.9 / 12.2 / 30.6 ms | p95 ≤ 100, p99 ≤ 250 ms |
-| Draw fan-out latency p50 / p95 | 0.8 / 2.4 ms | p95 ≤ 150 ms |
-| Timer overrun p95 / max | 18.3 / 21.6 ms | p95 ≤ 250 ms |
-| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 5 / ≤ 10 ms | ≤ 100 / ≤ 250 ms |
-| Resident memory idle → after warm-up → peak | 168 → 193 → 193 MB (61 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 0.0 %) |
-| Database query p99 (bucket bound) | ≤ 50 ms | ≤ 50 ms |
-| Unexpected disconnects / failed reconnects | 0 / 0 (of 506 reconnects) | 0 / 0 |
-| Outbound backlog high-water (bytes / oldest) and closures | 26438 B / 434 ms; closures none with 4 slow viewers | closures = slow viewers; budget 10 s / 4 MiB |
+| Acknowledgement latency p50 / p95 / p99 | 1.9 / 11.1 / 70.9 ms | p95 ≤ 100, p99 ≤ 250 ms |
+| Draw fan-out latency p50 / p95 | 1.0 / 3.0 ms | p95 ≤ 150 ms |
+| Timer overrun p95 / max | 39.0 / 45.3 ms | p95 ≤ 250 ms |
+| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 5 / ≤ 5 ms | ≤ 100 / ≤ 250 ms |
+| Resident memory idle → after warm-up → peak | 198 → 355 → 395 MB (468 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 11.2 %) |
+| Database query p99 (bucket bound) | ≤ 25 ms | ≤ 50 ms |
+| Unexpected disconnects / failed reconnects | 0 / 0 (of 500 reconnects) | 0 / 0 |
+| Outbound backlog high-water (bytes / oldest) and closures | 26438 B / 40 ms; closures none with 4 slow viewers | closures = slow viewers; budget 10 s / 4 MiB |
 | Packets rejected / fault notices (all notices by reason) | 0 / 0 (none) | 0 / 0 |
-| Traffic | 65.9 MB out, 2.1 MB in; 22973 frames sent, 159254 received; 14920 guesses, 917 chats | — |
+| Traffic | 58.3 MB out, 1.9 MB in; 22430 frames sent, 155510 received; 14868 guesses, 985 chats | — |
+| On the wire (after permessage-deflate) | 7.1 MB out (12.2% of packet bytes), 1.3 MB in; sockets by compression deflate-15 × 924 | — |
 <!-- load-gate-result:end -->
 
 ---

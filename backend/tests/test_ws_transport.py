@@ -16,7 +16,7 @@ from pathlib import Path
 import uvicorn
 import wsproto
 from wsproto.connection import ConnectionType
-from wsproto.events import AcceptConnection, Request
+from wsproto.events import AcceptConnection, Request, TextMessage
 from wsproto.extensions import PerMessageDeflate
 
 from app import ws_transport
@@ -113,6 +113,34 @@ def test_the_compressor_really_uses_the_stated_window(monkeypatch):
     # holds a fifth of it, so the repeat is mostly literal bytes again.
     assert repeat_cost(15) < 200
     assert repeat_cost(12) > 10_000
+
+
+def test_wire_bytes_are_the_frames_after_compression_and_not_the_handshake(monkeypatch):
+    """The one counter that says what deflate produced (#875): exactly the bytes
+    each side hands the transport once open, and a repeated payload costing a
+    fraction of its size the second time, which the packet counters cannot show."""
+    store = Telemetry()
+    monkeypatch.setattr(ws_transport, "telemetry", store)
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    server = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+    server.receive_data(client.send(Request(host="h", target="/socket.io/", extensions=[BrowserOffer()])))
+    list(server.events())
+    client.receive_data(server.send(AcceptConnection(extensions=[PerMessageDeflate()])))
+    list(client.events())
+    assert store.ws_wire_bytes_out.total() == 0 and store.ws_wire_bytes_in.total() == 0
+
+    state = '42["room_state",' + '{"nickname":"Player","score":120,"connected":true},' * 16 + "{}]"
+    first = server.send(TextMessage(data=state))
+    second = server.send(TextMessage(data=state))
+    assert store.ws_wire_bytes_out.total() == len(first) + len(second)
+    assert len(first) < len(state) and len(second) < len(first) // 4
+
+    guess = client.send(TextMessage(data='42["guess",{"text":"cat"}]'))
+    server.receive_data(guess)
+    assert store.ws_wire_bytes_in.total() == len(guess)
+    lines = store.prometheus_lines()
+    assert f"sketchy_ws_wire_bytes_out_total {len(first) + len(second)}" in lines
+    assert f"sketchy_ws_wire_bytes_in_total {len(guess)}" in lines
 
 
 def test_server_names_the_protocol_and_requirements_pin_the_library():

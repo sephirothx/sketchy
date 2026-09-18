@@ -16,7 +16,8 @@ Two things this class does that stock uvicorn cannot be configured to do:
   the compressor's memory of what it has already sent: a ``room_state`` is ~4.6 KB
   for 16 seats, so a 4 KB window forgets the last one before the next arrives and a
   broadcast that should cost tens of bytes costs hundreds; a 32 KB window keeps
-  ~256 KB of zlib state per connection, 100 MB at 400 seats. The values here come
+  zlib state per connection - measured under the release gate at ~340 KB with
+  the decompressor and wsproto's buffers, ~140 MB at 420 sockets. The values here come
   from ``benchmarks/deflate_windows.py`` over recorded traffic, and the reasoning is
   written next to them.
 * **Say what was negotiated.** wsproto echoes only the parameters the client
@@ -28,6 +29,15 @@ Two things this class does that stock uvicorn cannot be configured to do:
   something other than the configured target is logged, so a proxy or a client
   that strips the extension is visible instead of a mystery in the byte counters.
 
+And one thing it measures (#875): the bytes the WebSocket connection actually
+hands to and takes from the TCP transport once the handshake is done - frames
+after permessage-deflate, headers included - as ``sketchy_ws_wire_bytes_{out,in}``.
+Every other byte counter is an Engine.IO packet *before* compression, so this is
+the only one that says what deflate produced, and set against those it is the
+compression ratio of real traffic rather than of an offline model. It is what
+this process wrote: a TLS-terminating proxy in front can recompress, and a
+long-polling socket never reaches this class, so neither is in it.
+
 Nothing about the wire format changes: the same frames, compressed with the same
 zlib level (6, wsproto's ``Z_DEFAULT_COMPRESSION``) and memLevel (zlib's default 8).
 """
@@ -38,7 +48,7 @@ import logging
 
 import wsproto
 from uvicorn.protocols.websockets.wsproto_impl import WSProtocol
-from wsproto.connection import ConnectionType
+from wsproto.connection import ConnectionState, ConnectionType
 from wsproto.events import AcceptConnection
 from wsproto.extensions import PerMessageDeflate
 
@@ -118,7 +128,16 @@ class NegotiatingConnection(wsproto.WSConnection):
         output = super().send(event)
         if isinstance(event, AcceptConnection):
             self._record("none")
+        elif output:
+            telemetry.note_ws_wire_bytes_out(len(output))
         return output
+
+    def receive_data(self, data: bytes | None) -> None:
+        # The upgrade request arrives before the connection is open; only
+        # frames count, so the ratio compares like with like.
+        if data and self.state is ConnectionState.OPEN:
+            telemetry.note_ws_wire_bytes_in(len(data))
+        super().receive_data(data)
 
     @staticmethod
     def _record(label: str) -> None:
