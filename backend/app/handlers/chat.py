@@ -39,11 +39,16 @@ async def _emit_player_chat(
     audience: str = "room",
     near_miss_kind: str | None = None,
     additional_audience_sids: list[str] | None = None,
-) -> dict:
+) -> None:
     """Emit ordinary player-authored chat minus recipients who blocked them.
 
     Blocking is intentionally a presentation filter. Correct-guess events,
     scores, turns, votes, and room state keep their normal room-wide delivery.
+
+    The line is retained for moderation, but its retained id stays on the
+    server: nothing in a room cites a line (`report_player` selects its own
+    evidence), and a UUIDv7's random half was 39% of a viewer's wire bytes
+    (#869). Only lobby lines carry one, because a lobby report cites the line.
     """
     blockers = (
         await ctx.block_service.blockers_of(player.user_id)
@@ -76,9 +81,8 @@ async def _emit_player_chat(
     retention_recipients = list(
         dict.fromkeys([*visible_to, *(additional_audience_sids or [])])
     )
-    retained_id = None
     if retention_recipients and ctx.message_retention is not None:
-        retained_id = await ctx.message_retention.record(
+        await ctx.message_retention.record(
             room=room,
             player=player,
             text=payload["text"],
@@ -87,13 +91,10 @@ async def _emit_player_chat(
             recipient_sids=retention_recipients,
             near_miss_kind=near_miss_kind,
         )
-    if retained_id is not None:
-        payload = {**payload, "retainedMessageId": retained_id}
     if recipients is None and not blockers:
         await ctx.sio.emit("chat_message", payload, room=room.id)
     elif visible_to:
         await ctx.sio.emit("chat_message", payload, to=visible_to)
-    return payload
 
 
 async def send_chat(ctx: HandlerContext, sid, data):
@@ -213,11 +214,12 @@ async def guess(ctx: HandlerContext, sid, data):
             # The guesser should always see their own guess, even when it's
             # not broadcast to the rest of the room.
             recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
-            retained_payload = await _emit_player_chat(
+            line = _chat_line(player, text)
+            await _emit_player_chat(
                 ctx,
                 room,
                 player,
-                _chat_line(player, text),
+                line,
                 recipients=recipients,
                 message_kind="wrong_guess",
                 audience="prompt_aware",
@@ -226,7 +228,7 @@ async def guess(ctx: HandlerContext, sid, data):
             )
             await ctx.sio.emit(
                 "chat_message",
-                retained_payload,
+                line,
                 to=sid,
             )
             await ctx.game_flow.announce(

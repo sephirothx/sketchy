@@ -90,7 +90,9 @@ async def test_wrong_guess_is_retained_with_runtime_ids_and_actual_audience():
             for call in sio.emit.await_args_list
             if call.args[0] == "chat_message"
         )
-        assert emitted.args[1]["retainedMessageId"] == str(message.id)
+        # Retained, but not cited on the wire: nothing in a room reports a
+        # line by id, and the UUID was most of a viewer's chat bytes (#869).
+        assert "retainedMessageId" not in emitted.args[1]
         assert emitted.kwargs["room"] == room.id
         await context.timers.close()
     finally:
@@ -319,10 +321,6 @@ async def test_a_hung_database_does_not_delay_the_message_it_retains(monkeypatch
         call for call in sio.emit.await_args_list if call.args[0] == "chat_message"
     )
     assert emitted.args[1]["text"] == "anyone there?"
-    # Handed out before the write lands: it is what lets the line be selected
-    # as report evidence, and the moderation API already answers "unavailable"
-    # for a message it cannot find.
-    assert UUID(emitted.args[1]["retainedMessageId"]).version == 7
     await context.timers.close()
     await close_hanging_service(context.message_retention, monkeypatch)
 

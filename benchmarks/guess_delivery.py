@@ -91,7 +91,6 @@ def chat_line(message_index: int, nickname: str, text: str) -> dict:
         "nickname": nickname,
         "text": text,
         "correct": False,
-        "retainedMessageId": stable_uuid(message_index * 2 + 1),
     }
 
 

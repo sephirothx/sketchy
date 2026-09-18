@@ -922,9 +922,10 @@ guest's lines keep the guest's id after a merge, and resolve through
 
 **Flow.** Ordinary chat and guesses use the Room audience; near misses, correct
 guesses, spectator chat during play, and other restricted text use the Prompt-aware
-audience. Retention is **best-effort and never delays live availability**: a successful
-write adds `retainedMessageId` to the `chat_message` payload. Expired rows are removed
-at startup and by bounded hourly cleanup during new writes.
+audience. Retention is **best-effort and never delays live availability**: the row's id
+is issued before the write lands, and a lobby line carries it as `retainedMessageId`; a
+room `chat_message` does not, because nothing in a room cites a line (#869). Expired rows
+are removed at startup and by bounded hourly cleanup during new writes.
 
 **There is intentionally no transcript or profile-history endpoint.** After 30 days the
 raw strings cannot be replayed through a new matcher; durable per-seat and per-turn

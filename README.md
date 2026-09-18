@@ -361,7 +361,8 @@ text use the Prompt-aware audience. There is intentionally no transcript or
 profile-history endpoint.
 
 Retention is best-effort and does not delay live availability when storage
-fails; successful writes add `retainedMessageId` to the `chat_message` payload.
+fails. Room chat lines never carry their retained id on the wire; lobby lines do,
+as `retainedMessageId`, because a lobby report cites the line.
 Expired rows are removed at startup and by bounded hourly cleanup during new
 writes. A report may select up to 20 unexpired `messageIds`, but only when the
 reported player authored them and the reporter was in each stored audience.
@@ -1982,7 +1983,7 @@ backend/.venv/bin/python benchmarks/path_widths.py --brush 6 12 32 --tolerance 0
 
 # Would room-state deltas pay? Replayed on a real viewer's stream captured under the gate (#493)
 backend/.venv/bin/python benchmarks/room_state_deltas.py
-./benchmarks/run_load.sh --duration 180 --slow-viewers 0 --capture-seat fixtures/viewer_streams/gate-viewer-180s.jsonl   # re-capture
+./benchmarks/run_load.sh --duration 180 --slow-viewers 0 --capture-seat fixtures/viewer_streams/gate-viewer-180s-<change>.jsonl   # re-capture; keep the old one
 
 # A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
@@ -2179,7 +2180,7 @@ half; the trace is what fixed that.
 in order under the gate's full population (`fixtures/viewer_streams/`), replayed
 through one deflate context at the server's settings as captured and with every
 `room_state` after the first replaced by the patch the issue describes. It saves
-1.5% on the wire, so `room_state` stays whole (N-14); the same replay gives the
+1.5–2.6% on the wire, so `room_state` stays whole (N-14); the same replay gives the
 per-event wire shares wire-protocol.md §1 records. A capture is raw input like a
 stroke trace: re-capture with the command above, name it for what it is, and keep
 the old one.
