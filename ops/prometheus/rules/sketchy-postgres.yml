@@ -1,0 +1,157 @@
+# PostgreSQL's view of itself, from postgres_exporter (#889). The application's
+# own database series (pool, statement latency, errors) are in the other two
+# files; these read the server's statistics views, so they see what the
+# application cannot: dead tuples, vacuum, cache, transaction age, checkpoints.
+#
+# The churn tables are the ones whose rows are deleted by a sweep or updated in
+# place far more often than inserted - the tables autovacuum has to keep up
+# with. Per-table autovacuum parameters are deliberately not set yet; these
+# alerts and the log_autovacuum_min_duration lines are what the first review
+# with real numbers will set them from (docs/database.md §13).
+#
+# Series names are checked by backend/tests/test_alert_rules.py against the
+# list of postgres_exporter series the scrape example's collectors produce.
+groups:
+  - name: sketchy-postgres-recording
+    interval: 60s
+    rules:
+      - record: sketchy:pg_dead_tuple_ratio
+        expr: >
+          pg_stat_user_tables_n_dead_tup{relname=~"room_messages|runtime_events|auth_rate_limit_buckets|finished_game_envelopes|auth_sessions|auth_login_lockouts"}
+          / clamp_min(
+              pg_stat_user_tables_n_live_tup{relname=~"room_messages|runtime_events|auth_rate_limit_buckets|finished_game_envelopes|auth_sessions|auth_login_lockouts"}
+              + pg_stat_user_tables_n_dead_tup{relname=~"room_messages|runtime_events|auth_rate_limit_buckets|finished_game_envelopes|auth_sessions|auth_login_lockouts"},
+              1)
+      - record: sketchy:pg_cache_hit_ratio:1h
+        expr: >
+          sum by (instance, datname) (rate(pg_stat_database_blks_hit{datname!~"postgres|template0|template1"}[1h]))
+          / clamp_min(
+              sum by (instance, datname) (rate(pg_stat_database_blks_hit{datname!~"postgres|template0|template1"}[1h]))
+              + sum by (instance, datname) (rate(pg_stat_database_blks_read{datname!~"postgres|template0|template1"}[1h])),
+              1e-9)
+      - record: sketchy:pg_database_growth_bytes:7d
+        expr: >
+          delta(pg_database_size_bytes{datname!~"postgres|template0|template1"}[7d])
+      - record: sketchy:pg_connection_ratio
+        expr: >
+          max by (instance) (sum by (instance) (pg_stat_activity_count))
+          / on (instance) max by (instance) (pg_settings_max_connections)
+
+  - name: sketchy-postgres-alerts
+    rules:
+      - alert: SketchyPostgresExporterDown
+        expr: up{job="postgres"} == 0 or pg_up == 0
+        for: 5m
+        labels: {severity: warn}
+        annotations:
+          summary: "postgres_exporter is not reporting the database's statistics"
+          description: "Every other rule in this file goes silent with it. The application's own SketchyDatabaseUnreachable says whether the database itself is down."
+          runbook: "README.md#on-call"
+
+      # A fifth of a churn table dead, and enough rows for it to matter:
+      # autovacuum is not keeping up with the sweep, and the table and its
+      # indexes are growing with rows nobody can see.
+      - alert: SketchyPostgresDeadTuples
+        expr: >
+          sketchy:pg_dead_tuple_ratio > 0.2
+          and pg_stat_user_tables_n_dead_tup > 10000
+        for: 2h
+        labels: {severity: warn}
+        annotations:
+          summary: "{{ $labels.relname }} is {{ $value | humanizePercentage }} dead tuples"
+          description: "Check the autovacuum lines for this table in the server log (log_autovacuum_min_duration = 0) and whether a long transaction is holding the horizon back; the per-table autovacuum parameters are what this alert exists to set."
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      - alert: SketchyPostgresAutovacuumStale
+        expr: >
+          (time() - pg_stat_user_tables_last_autovacuum{relname=~"room_messages|runtime_events|auth_rate_limit_buckets|finished_game_envelopes|auth_sessions|auth_login_lockouts"}) > 3 * 86400
+          and pg_stat_user_tables_n_dead_tup > 10000
+        for: 1h
+        labels: {severity: warn}
+        annotations:
+          summary: "{{ $labels.relname }} has not been autovacuumed for three days and has dead rows waiting"
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      - alert: SketchyPostgresCacheMisses
+        expr: >
+          sketchy:pg_cache_hit_ratio:1h < 0.95
+          and sum by (instance, datname) (rate(pg_stat_database_blks_read[1h])) > 10
+        for: 6h
+        labels: {severity: warn}
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of {{ $labels.datname }}'s block reads hit shared buffers"
+          description: "The working set has outgrown shared_buffers (ops/postgres/sketchy.conf), or a statement is scanning a large table; the top statements by shared_blks_read in pg_stat_statements say which."
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      # The application's budgets end every statement at 30 s (600 s for
+      # migration and operator commands) and every idle transaction at 60 s
+      # (120 s), so a transaction open for fifteen minutes is something no
+      # budget covers - an ad-hoc psql session, most likely - and it holds
+      # back vacuum on every table for as long as it lives.
+      - alert: SketchyPostgresLongTransaction
+        expr: pg_stat_activity_max_tx_duration{datname!~"postgres|template0|template1"} > 900
+        for: 5m
+        labels: {severity: warn}
+        annotations:
+          summary: "A transaction in {{ $labels.datname }} has been open for {{ $value | humanizeDuration }}"
+          description: "Find it in pg_stat_activity by application_name; sketchy-web cannot hold one this long, so it is an operator session or a stuck command."
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      - alert: SketchyPostgresConnectionsHigh
+        expr: sketchy:pg_connection_ratio > 0.8
+        for: 10m
+        labels: {severity: warn}
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of max_connections are in use"
+          description: "The web process holds at most ten; the rest is operator sessions and the exporter. max_connections is 40 in ops/postgres/sketchy.conf."
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      # autovacuum_freeze_max_age is 200 million; past it an aggressive vacuum
+      # is forced. Five hundred million means those vacuums are not finishing,
+      # with 1.5 billion of headroom left before the server stops accepting
+      # writes to protect itself.
+      - alert: SketchyPostgresWraparound
+        expr: pg_database_wraparound_age_datfrozenxid_seconds > 500000000
+        for: 1h
+        labels: {severity: warn}
+        annotations:
+          summary: "{{ $labels.datname }}'s oldest unfrozen transaction id is {{ $value | humanize }} transactions old"
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      # A requested checkpoint is one max_wal_size forced before
+      # checkpoint_timeout: more of them than timed ones means WAL volume has
+      # outgrown the setting, and every extra checkpoint costs full-page
+      # images.
+      - alert: SketchyPostgresCheckpointsRequested
+        expr: >
+          increase(pg_stat_checkpointer_num_requested_total[1d])
+          > increase(pg_stat_checkpointer_num_timed_total[1d])
+          and increase(pg_stat_checkpointer_num_requested_total[1d]) > 4
+        for: 1h
+        labels: {severity: warn}
+        annotations:
+          summary: "Most checkpoints in the last day were forced by WAL volume, not by time"
+          description: "Raise max_wal_size in ops/postgres/sketchy.conf; log_checkpoints says how much WAL each one wrote."
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      # Growth, not size: the static SketchyDrawingStoreLarge threshold says
+      # when a decision is due, this says when the rate changed - a new
+      # feature writing more than it should, or a sweep that stopped.
+      - alert: SketchyDatabaseGrowthDoubled
+        expr: >
+          sketchy:pg_database_growth_bytes:7d > 2 * (sketchy:pg_database_growth_bytes:7d offset 7d)
+          and sketchy:pg_database_growth_bytes:7d > 1e9
+        for: 6h
+        labels: {severity: warn}
+        annotations:
+          summary: "{{ $labels.datname }} grew {{ $value | humanize1024 }}B this week, over twice last week's growth"
+          description: "Compare python -m app.services.storage_report with last week's; sketchy_retention_backlog_rows says whether a sweep stopped."
+          runbook: "docs/database.md#reading-the-database-from-the-inside"
+
+      - alert: SketchyDatabaseVolumeFillsSoon
+        expr: predict_linear(node_filesystem_avail_bytes{job="postgres-host"}[7d], 30 * 86400) < 0
+        for: 6h
+        labels: {severity: warn}
+        annotations:
+          summary: "At the last week's rate the database volume is full within 30 days"
+          runbook: "docs/database.md#reading-the-database-from-the-inside"

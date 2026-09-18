@@ -532,7 +532,9 @@ def _resident_bytes() -> tuple[int | None, bool]:
 class ProcessState:
     started_wall: float
     started_mono: float
-    data_path: str = field(default_factory=os.getcwd)
+    # None when the data is not on this host (PostgreSQL); the disk gauges
+    # are then left out rather than reporting an unrelated volume.
+    data_path: str | None = field(default_factory=os.getcwd)
     cpu_percent: float | None = None
     rss_bytes: int | None = None
     rss_is_peak: bool = False
@@ -559,6 +561,8 @@ class ProcessState:
             if self.rss_bytes is not None:
                 telemetry.rss_samples.add(now, float(self.rss_bytes))
             try:
+                if self.data_path is None:
+                    raise FileNotFoundError
                 usage = shutil.disk_usage(self.data_path)
             except OSError:
                 self.disk_free = self.disk_total = None

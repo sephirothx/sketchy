@@ -2367,6 +2367,99 @@ terminated, and the pool's pre-ping replaces it on the next checkout. Override w
 `DB_*_TIMEOUT_SECONDS` variables (README → Database & Configuration); raising one is
 not a fix for unbounded work, which the sweeps' own budgets bound.
 
+### Server configuration
+
+The server side is tracked too (#889), in [`ops/postgres/`](../ops/postgres/): the
+`initdb` flags ([`initdb.args`](../ops/postgres/initdb.args)), a `postgresql.conf`
+include ([`sketchy.conf`](../ops/postgres/sketchy.conf)) and a one-time superuser
+script ([`init.sql`](../ops/postgres/init.sql)) that creates `pg_stat_statements` and
+the `sketchy_monitor` role the exporter connects as. Every setting carries its reason
+in the file; `tests/test_postgres_config.py` refuses one without, and
+[`check-config.sh`](../ops/postgres/check-config.sh) proves the three against a
+throwaway cluster (checksums on, lz4 WAL and TOAST, a slow statement logged with its
+duration and application name, `pg_stat_statements` readable by the monitor role).
+
+- **Data checksums are an `initdb` decision.** `pg_checksums` can add them only to a
+  stopped cluster, in time proportional to its size, so a cluster created without them
+  stays without them in practice. With them, a damaged page is an error on read instead
+  of data that is served, backed up and restored.
+- **What is logged**: every statement over 250 ms with its duration and
+  `application_name` (so it names `sketchy-web`, `-migration` or `-maintenance`), every
+  lock wait over `deadlock_timeout`, every autovacuum run, every temporary file, every
+  checkpoint. These lines are the evidence for everything below; the application's own
+  statement histogram says *that* something is slow, not *what*.
+- **Memory** is sized for a database container given 2 GB and SSD storage. None of
+  those five settings is a correctness setting; re-derive them from the host (#408).
+- `default_toast_compression = lz4` does not touch the two `STORAGE EXTERNAL` drawing
+  payloads, which are never compressed by the server.
+
+The Compose file of #405/#408 consumes these files; until it exists, a cluster built by
+hand should be built with them.
+
+### Reading the database from the inside
+
+postgres_exporter (scrape job and collector flags in
+[`scrape-example.yml`](../ops/prometheus/scrape-example.yml)) exports the statistics
+views, and [`sketchy-postgres.yml`](../ops/prometheus/rules/sketchy-postgres.yml) holds
+the rules over them: dead-tuple ratio and autovacuum age on the churn tables
+(`room_messages`, `runtime_events`, `auth_rate_limit_buckets`,
+`finished_game_envelopes`, `auth_sessions`, `auth_login_lockouts`), cache hit ratio,
+transaction age, connections, wraparound, requested checkpoints, and weekly growth.
+[`docs/slo.md`](slo.md) lists them. Everything here is readable as `sketchy_monitor`.
+
+**Who is connected, doing what.** Each process names itself:
+
+```sql
+SELECT application_name, state, count(*),
+       max(now() - xact_start) AS oldest_transaction,
+       max(now() - query_start) FILTER (WHERE state = 'active') AS longest_statement
+FROM pg_stat_activity
+WHERE datname = current_database()
+GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
+`sketchy-web` never holds a statement past 30 s or an idle transaction past 60 s, so
+anything older under that name is a bug; anything older under no name is an operator.
+
+**Around a release**, snapshot and reset the statement statistics, so the next review
+compares one release with the last instead of the sum of all of them:
+
+```sql
+CREATE TABLE IF NOT EXISTS stat_statements_snapshots AS
+  SELECT now() AS taken_at, * FROM pg_stat_statements WITH NO DATA;  -- once, as owner
+INSERT INTO stat_statements_snapshots SELECT now(), * FROM pg_stat_statements;
+SELECT pg_stat_statements_reset();
+```
+
+The snapshot table belongs to the operator, not the schema: no migration creates it.
+
+**The monthly review** reads four things and writes down what it found:
+
+```sql
+-- 1. Where the time goes, and where the WAL does.
+SELECT calls, round(total_exec_time) AS ms, round(mean_exec_time::numeric, 2) AS mean_ms,
+       rows, wal_bytes, left(query, 80)
+FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 15;   -- then BY wal_bytes
+
+-- 2. Indexes nothing reads (since the statistics were last reset).
+SELECT relname, indexrelname, idx_scan, pg_size_pretty(pg_relation_size(indexrelid))
+FROM pg_stat_user_indexes ui JOIN pg_index i USING (indexrelid)
+WHERE idx_scan = 0 AND NOT i.indisunique ORDER BY pg_relation_size(indexrelid) DESC;
+
+-- 3. Tables autovacuum is not holding, and whether updates are heap-only.
+SELECT relname, n_live_tup, n_dead_tup, last_autovacuum, n_tup_upd, n_tup_hot_upd
+FROM pg_stat_user_tables ORDER BY n_dead_tup DESC LIMIT 15;
+
+-- 4. Growth, per table, against last month's numbers.
+SELECT relname, pg_size_pretty(pg_total_relation_size(relid))
+FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 15;
+```
+
+An index with `idx_scan = 0` after a month of beta is a candidate for removal only if
+no statement in `backend/app` names its leading column (#890 applied that rule by
+hand); a table whose dead tuples autovacuum is not holding gets its own
+`autovacuum_vacuum_scale_factor`, set from these numbers rather than guessed.
+
 ### Production deploy order
 
 ```bash
