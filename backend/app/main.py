@@ -677,6 +677,7 @@ api.include_router(
         on_email_state_changed=push_email_state_changed,
         on_export_requested=export_worker.wake,
         presence=handler_context.presence,
+        presence_identities=handler_context.presence_identities,
     )
 )
 api.include_router(

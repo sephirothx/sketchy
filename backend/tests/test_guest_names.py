@@ -205,3 +205,119 @@ def test_a_reload_keeps_a_guests_place_in_the_arrival_order():
     assert registry.arrival_of("first") is None
     registry.note_socket_opened("sid-first-later", "first")
     assert registry.online_user_ids() == ["second", "first"]
+
+
+# --- from the presence cache (#900) -------------------------------------------
+
+
+@contextlib.asynccontextmanager
+async def counted_site():
+    """`build_site`, plus the identity cache the lobby list keeps and a count
+    of the statements the database is sent."""
+    from sqlalchemy import event
+
+    from app.services.presence import PresenceIdentityCache
+
+    factory, engine = await create_test_db()
+    now = [0.0]
+    presence = PresenceRegistry(clock=lambda: now[0])
+    presence.test_now = now
+    repo = SqlAlchemyUserRepository(factory)
+    identities = PresenceIdentityCache(repo)
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(
+        create_auth_router(
+            repo,
+            factory,
+            presence=presence,
+            presence_identities=identities,
+            # As app.main wires it: every name write forgets the cached row.
+            on_profile_changed=identities.invalidate,
+        )
+    )
+    statements: list[str] = []
+
+    def count(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", count)
+    try:
+        yield ASGITransport(app=app), presence, repo, identities, statements
+    finally:
+        await engine.dispose()
+
+
+async def test_a_guest_line_with_a_warm_cache_sends_the_database_nothing():
+    """The lobby chat path asks this on every guest line. Every online id is
+    in the cache the lobby list already keeps, so the answer - held or not -
+    costs no statement at all."""
+    async with counted_site() as (transport, presence, repo, identities, statements):
+        holder, holder_id = await guest(transport, presence, "asd")
+        speaker, speaker_id = await guest(transport, presence, "qwe")
+        for index in range(50):
+            _, other = await guest(transport, presence, f"crowd{index}")
+            await identities.warm(other)
+        await identities.warm(holder_id)
+        await identities.warm(speaker_id)
+
+        statements.clear()
+        assert await online_guest_holding(
+            "qwe", claimant_id=speaker_id, registry=presence, user_repo=repo,
+            choosing=False, identities=identities,
+        ) is None
+        assert await online_guest_holding(
+            "ASD", claimant_id=None, registry=presence, user_repo=repo,
+            choosing=True, identities=identities,
+        ) == holder_id
+        assert statements == []
+
+
+async def test_an_id_the_cache_cannot_answer_is_asked_of_the_database():
+    """A miss is not an answer: an account online but not yet warmed, or
+    evicted, is still checked - by a statement naming only the misses."""
+    async with counted_site() as (transport, presence, repo, identities, statements):
+        _, holder_id = await guest(transport, presence, "asd")
+        _, other_id = await guest(transport, presence, "qwe")
+        await identities.warm(other_id)
+
+        statements.clear()
+        assert await online_guest_holding(
+            "asd", claimant_id=None, registry=presence, user_repo=repo,
+            choosing=True, identities=identities,
+        ) == holder_id
+        assert len(statements) == 1
+
+
+async def test_a_departed_holder_keeps_the_name_through_the_grace_from_the_cache():
+    """R-ACCT-09's reload allowance holds when the answer comes from memory."""
+    async with counted_site() as (transport, presence, repo, identities, statements):
+        _, holder_id = await guest(transport, presence, "asd")
+        await identities.warm(holder_id)
+        presence.note_socket_closed(f"sid-{holder_id}")
+        statements.clear()
+
+        async def held():
+            return await online_guest_holding(
+                "asd", claimant_id=None, registry=presence, user_repo=repo,
+                choosing=True, identities=identities,
+            )
+
+        assert await held() == holder_id
+        presence.test_now[0] += 60
+        assert await held() is None
+        assert statements == []
+
+
+async def test_a_renamed_guest_is_read_again_rather_than_answered_from_the_cache():
+    """The cache is only as good as its invalidation: the display-name route
+    forgets the renamed account, so the old name comes free at once."""
+    async with counted_site() as (transport, presence, repo, identities, _):
+        client, holder_id = await guest(transport, presence, "asd")
+        await identities.warm(holder_id)
+        renamed = await client.post("/api/auth/display-name", json={"displayName": "zxc"})
+        assert renamed.status_code == 200
+        assert await online_guest_holding(
+            "asd", claimant_id=None, registry=presence, user_repo=repo,
+            choosing=True, identities=identities,
+        ) is None

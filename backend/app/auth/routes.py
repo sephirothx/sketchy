@@ -76,7 +76,7 @@ from app.auth.recovery import (
 )
 from app.api.serializers import user_payload
 from app.services.guest_names import online_guest_holding
-from app.services.presence import PresenceRegistry
+from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.rate_limit import PersistentRateLimiter, client_key
 from app.auth.login_guard import LoginGuard
@@ -315,6 +315,7 @@ def create_auth_router(
     # (R-ACCT-09). None where there are no sockets to be online on - the
     # rule then has nobody to hold a name against.
     presence: PresenceRegistry | None = None,
+    presence_identities: PresenceIdentityCache | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/auth")
     # Shared database buckets keep the configured protection honest across
@@ -610,6 +611,7 @@ def create_auth_router(
             claimant_id=claimant_id,
             registry=presence,
             user_repo=user_repo,
+            identities=presence_identities,
             choosing=choosing,
         )
         if holder is not None:
@@ -690,6 +692,7 @@ def create_auth_router(
                     claimant_id=user.id,
                     registry=presence,
                     user_repo=user_repo,
+                    identities=presence_identities,
                     choosing=False,
                 )
                 is not None
@@ -715,6 +718,7 @@ def create_auth_router(
             claimant_id=getattr(request.state, "user_id", None),
             registry=presence,
             user_repo=user_repo,
+            identities=presence_identities,
             choosing=True,
         )
         if holder is not None:

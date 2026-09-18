@@ -9,7 +9,8 @@ import hashlib
 import json
 from uuid import UUID
 
-from sqlalchemy import and_, delete, desc, exists, func, or_, select, update
+from sqlalchemy import Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
@@ -823,10 +824,19 @@ class SqlAlchemyUserRepository(UserRepository):
         if not clean or not ids:
             return None
         async with self._session_factory() as session:
+            # One array parameter on PostgreSQL rather than an IN list, so the
+            # statement text is the same however many ids there are and
+            # asyncpg's prepared-statement cache can answer it (#900).
+            if session.get_bind().dialect.name == "postgresql":
+                listed = User.id == any_(
+                    bindparam("ids", ids, type_=postgresql.ARRAY(Uuid(as_uuid=True)))
+                )
+            else:
+                listed = User.id.in_(ids)
             found = await session.scalar(
                 select(User.id)
                 .where(
-                    User.id.in_(ids),
+                    listed,
                     User.state == AccountState.ANONYMOUS.value,
                     func.lower(User.display_name) == clean.lower(),
                 )

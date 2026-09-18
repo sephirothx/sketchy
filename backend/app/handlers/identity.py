@@ -95,6 +95,7 @@ async def resolve_identity(
             claimant_id=user.id,
             registry=getattr(ctx, "presence", None),
             user_repo=ctx.user_repo,
+            identities=getattr(ctx, "presence_identities", None),
             choosing=False,
         ):
             raise IdentityError(NAME_IN_USE_MESSAGE, ErrorCode.NAME_IN_USE)
@@ -121,6 +122,7 @@ async def resolve_identity(
             claimant_id=None,
             registry=getattr(ctx, "presence", None),
             user_repo=ctx.user_repo,
+            identities=getattr(ctx, "presence_identities", None),
             choosing=True,
         ):
             raise IdentityError(NAME_IN_USE_MESSAGE, ErrorCode.NAME_IN_USE)
