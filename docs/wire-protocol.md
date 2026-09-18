@@ -749,12 +749,11 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 
 | Event | Payload | Scope |
 | --- | --- | --- |
-| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5–2.6% on the wire (§1, *Measured, combined*; N-14) | room |
+| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5–2.6% on the wire (§1, *Measured, combined*; N-14). **At most one per room per action** (#880): a command, a connect or disconnect, or a timer firing marks the room and one snapshot goes out when the action is done, after the action's other events, as the room ended up. Two exceptions go at once, because the events after them depend on it: a socket taking a seat gets the room before its own `sync_game` / `last_game` (a client's first snapshot of a room resets what belonged to the one before), and a room turning to play is sent before its first `turn_starting` (that snapshot mounts the canvas the turn resets) | room |
 | `player_joined` / `player_reconnected` | `{playerId, nickname}` | room |
 | `player_left` | `{playerId}` | room |
 | `player_disconnected` | `{playerId, nickname}` | room |
-| `game_started` | `{}`, or `{restarted: true}` after a restart vote | room |
-| `turn_starting` | `{drawerId, drawerNickname, drawerNameColor, roundNumber, totalRounds, seconds}` | room |
+| `turn_starting` | `{drawerId, drawerNickname, drawerNameColor, roundNumber, totalRounds, seconds, canvas: [revision, generation, sequence, historyHash], gameStarted?: true}` — the turn's new canvas identity, and on a game's first turn the fact that it started: one message where `canvas_reset` and `game_started` used to precede it (#880). A restart says so in its own announcement | room |
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
 | `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend}` | **per socket** |
@@ -767,7 +766,6 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `correct_guess` | `{playerId, nickname, points}` | room |
 | `you_guessed_correctly` | `{prompt, points, basePoints, hintSpend}` | guesser only |
 | `hint_revealed` | `buy_hint`: `{maskedPrompt, hintCost, hintSpend}`. `buy_wheel_letter`: `{maskedPrompt, letterPrices, hintSpend}` | buyer only |
-| `canvas_reset` | `[revision, generation, sequence, historyHash]` | room |
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
@@ -778,7 +776,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `afk_check` | `{seconds}` — this seat has sent nothing a person sent for the inactivity window, and is being asked whether anybody is there. Answered with `toggle_afk {afk: false}`, which is what the client sends by itself when it has seen a pointer or a key inside `afkInputWindowMs`, and otherwise what the **AFK check** dialog sends. Unanswered for `seconds`, the seat is marked AFK. Never sent to a spectator, a seat already AFK, or an unseated socket | one socket |
 | `voted_afk` | `{message}` — English, for a log; the client says it from the event itself (R-I18N-01) | the player who was voted AFK |
 | `kicked` | `{code, reason}` — `code` is `kicked_by_vote`, `room_closed` or `removed_by_admin`, and is what the client says; `reason` is English, for a log (R-I18N-01) | one socket |
-| `colorblind_safe_suggestion` | `{active}` | **host only**, unattributed |
+| `colorblind_safe_suggestion` | `{active}` — sent only when the value changes or the host's socket does (#880), not beside every `room_state` | **host only**, unattributed |
 | `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted` or `account_suspended`, said by the client from the code; `reason` is English, for a log — then the socket is disconnected | the superseded socket |
 | `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
@@ -2093,7 +2091,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (27) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (28) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
@@ -2121,7 +2119,7 @@ committed (#567):
   `request_sync_strokes`, `undo_stroke`), a declared positional layout; the rate class
   it spends; whether it answers;
 - every server event, with a declared positional layout for the tuple-shaped ones
-  (`draw`, `canvas_commit`, `canvas_reset`, `canvas_undo`, `sync_strokes`,
+  (`draw`, `canvas_commit`, `canvas_undo`, `sync_strokes`,
   `sync_strokes_tail`, `request_canvas_actions`) and, for object payloads, the camelCase
   keys each payload-building function writes — attributed to the function, so a key
   moving between builders is a difference;

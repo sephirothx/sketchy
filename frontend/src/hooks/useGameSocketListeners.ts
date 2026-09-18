@@ -75,6 +75,7 @@ export function useGameSocketListeners() {
       // room_state is re-emitted by the server right after, so no local patch needed here.
     };
 
+    // Said by the game's first `turn_starting` (#880), before its own line.
     const onGameStarted = () => {
       // The last game's recap tallies belong to the last game.
       store.getState().clearDrawingReactions();
@@ -93,7 +94,9 @@ export function useGameSocketListeners() {
       roundNumber: number;
       totalRounds: number;
       seconds: number;
+      gameStarted?: boolean;
     }) => {
+      if (payload.gameStarted) onGameStarted();
       playRoundStartSound();
       store.getState().startChoosing(payload);
       store.getState().addMessage({
@@ -268,7 +271,6 @@ export function useGameSocketListeners() {
     socket.on("player_reconnected", onPlayerReconnected);
     socket.on("player_disconnected", onPlayerDisconnected);
     socket.on("player_left", onPlayerLeft);
-    socket.on("game_started", onGameStarted);
     socket.on("turn_starting", onTurnStarting);
     socket.on("your_prompt_choices", onYourPromptChoices);
     socket.on("you_are_drawing", onYouAreDrawing);
@@ -290,7 +292,6 @@ export function useGameSocketListeners() {
       socket.off("player_reconnected", onPlayerReconnected);
       socket.off("player_disconnected", onPlayerDisconnected);
       socket.off("player_left", onPlayerLeft);
-      socket.off("game_started", onGameStarted);
       socket.off("turn_starting", onTurnStarting);
       socket.off("your_prompt_choices", onYourPromptChoices);
       socket.off("you_are_drawing", onYouAreDrawing);

@@ -199,11 +199,14 @@ class Seat:
         async def on_choices(payload):
             self.harness.spawn(self.choose_and_draw(payload["choices"]))
 
-        @sio.on("canvas_reset")
-        async def on_reset(payload):
-            self.canvas = list(payload)
+        # A turn's canvas identity rides its `turn_starting` (#880); one
+        # handler per event, so this one also notes it as authoritative.
+        @sio.on("turn_starting")
+        async def on_turn_starting(payload):
+            self.canvas = list(payload["canvas"])
+            await self._note_authoritative(payload)
 
-        for authoritative in ("turn_starting", "turn_started", "turn_ended", "sync_game", "room_state"):
+        for authoritative in ("turn_started", "turn_ended", "sync_game", "room_state"):
             sio.on(authoritative, self._note_authoritative)
 
         @sio.on("turn_started")
@@ -309,7 +312,7 @@ class Seat:
             return
         self.room.prompt = choices[0]
         self.room._drawer = self
-        # The canvas identity arrives on `canvas_reset` before or right after.
+        # The canvas identity arrives on `turn_starting`, before or right after.
         for _ in range(50):
             if self.canvas is not None:
                 break

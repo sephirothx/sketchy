@@ -6,7 +6,8 @@ fake `sio`, which is enough: what it does is emit one event or set one flag.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+import contextlib
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -166,9 +167,16 @@ def test_seats_the_check_leaves_alone(kwargs, why):
 # --------------------------------------------------------------------------
 
 
+def _flow():
+    """A stand-in game flow whose room_state batch is a real no-op scope."""
+    flow = AsyncMock()
+    flow.room_state_batch = MagicMock(side_effect=lambda: contextlib.nullcontext())
+    return flow
+
+
 def _watch(manager, clock, *, game_flow=None):
     sio = AsyncMock()
-    flow = game_flow if game_flow is not None else AsyncMock()
+    flow = game_flow if game_flow is not None else _flow()
     activity = ActivityLedger(clock=clock)
     watch = AfkWatch(sio, manager, activity, flow, timing=TIMING, clock=clock)
     return sio, watch, activity
@@ -259,7 +267,7 @@ async def test_marking_a_drawer_forfeits_the_turn_wherever_it_lands():
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.phase = Phase.DRAWING
 
-    flow = AsyncMock()
+    flow = _flow()
     sio, watch, activity = _watch(manager, clock, game_flow=flow)
     activity.note(player.sid)
     activity.note(other.sid)
@@ -286,7 +294,7 @@ async def test_a_seat_that_goes_while_the_pass_is_out_is_not_marked():
     second = manager.add_player(room, "Bob")
     second.sid = "sid-bob"
 
-    flow = AsyncMock()
+    flow = _flow()
     sio, watch, activity = _watch(manager, clock, game_flow=flow)
     activity.note(first.sid)
     activity.note(second.sid)

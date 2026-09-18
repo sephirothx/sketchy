@@ -291,9 +291,10 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
         and call.args[1][2] == "stale_generation"
         for call in sio.emit.await_args_list
     )
+    # The restart's first turn says the game started (#880); the vote's own
+    # announcement says it was a restart.
     assert any(
-        call.args[0] == "game_started"
-        and call.args[1] == {"restarted": True}
+        call.args[0] == "turn_starting" and call.args[1].get("gameStarted") is True
         for call in sio.emit.await_args_list
     )
 
@@ -360,8 +361,7 @@ async def test_approved_restart_is_cancelled_if_too_few_players_remain():
     restarted_events = [
         call
         for call in sio.emit.await_args_list
-        if call.args[0] == "game_started"
-        and call.args[1] == {"restarted": True}
+        if call.args[0] == "turn_starting" and call.args[1].get("gameStarted")
     ]
     assert restarted_events == []
 

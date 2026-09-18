@@ -362,8 +362,9 @@ class PollingSocket:
 
     def _deliver(self, kind: str, ack_id: int | None, data: list) -> None:
         if kind in ("2", "5"):
-            if data and data[0] == "canvas_reset" and len(data) > 1:
-                self.canvas_reset = list(data[1])
+            # A turn's canvas identity rides its `turn_starting` (#880).
+            if data and data[0] == "turn_starting" and len(data) > 1 and isinstance(data[1], dict):
+                self.canvas_reset = list(data[1].get("canvas") or [])
             self._events.put_nowait(Event(str(data[0]), list(data[1:]), ack_id))
         elif kind in ("3", "6") and ack_id is not None:
             future = self._acks.pop(ack_id, None)

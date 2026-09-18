@@ -60,15 +60,16 @@ def _schedule_expiry(ctx: HandlerContext, room: Room, vote: RestartVote) -> None
             await asyncio.sleep(timing.restart_vote_seconds)
         except asyncio.CancelledError:
             return
-        if room.restart_vote is not vote or vote.status != "voting":
-            return
-        await _reject_vote(
-            ctx,
-            room,
-            vote,
-            Announcement.RESTART_VOTE_EXPIRED,
-            cancel_timer=False,
-        )
+        async with ctx.game_flow.room_state_batch():
+            if room.restart_vote is not vote or vote.status != "voting":
+                return
+            await _reject_vote(
+                ctx,
+                room,
+                vote,
+                Announcement.RESTART_VOTE_EXPIRED,
+                cancel_timer=False,
+            )
 
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_expire()))
 
@@ -100,38 +101,39 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
             await asyncio.sleep(timing.restart_delay_seconds)
         except asyncio.CancelledError:
             return
-        if room.restart_vote is not vote or vote.status != "approved":
-            return
+        async with ctx.game_flow.room_state_batch():
+            if room.restart_vote is not vote or vote.status != "approved":
+                return
 
-        if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
-            ctx.shutdown.notify_game_state_changed()
-            await _cancel_restart(ctx, room, RestartCancelReason.SERVER_UPDATE)
-            return
+            if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
+                ctx.shutdown.notify_game_state_changed()
+                await _cancel_restart(ctx, room, RestartCancelReason.SERVER_UPDATE)
+                return
 
-        active_players = room.active_players()
-        seated_before = set(room.players)
-        if len(active_players) < 2:
-            await _cancel_restart(ctx, room, RestartCancelReason.TOO_FEW_PLAYERS)
-            return
+            active_players = room.active_players()
+            seated_before = set(room.players)
+            if len(active_players) < 2:
+                await _cancel_restart(ctx, room, RestartCancelReason.TOO_FEW_PLAYERS)
+                return
 
-        try:
-            await ctx.game_flow._start_fresh_game(
-                room,
-                active_players,
-                restarted=True,
-                seated_before=seated_before,
-            )
-        except RoomPromptResolutionError:
-            # Nothing here can answer a socket, and an exception raised in this
-            # task would simply be dropped - leaving players watching a game
-            # that was already torn down, waiting for a restart that never
-            # arrives and never being told why.
-            logger.exception("Restart could not draw prompts for room %s", room.id)
-            await _cancel_restart(
-                ctx, room, RestartCancelReason.PROMPT_LISTS_UNAVAILABLE
-            )
-        except RoomNoLongerStartableError:
-            await _cancel_restart(ctx, room, RestartCancelReason.EVERYBODY_LEFT)
+            try:
+                await ctx.game_flow._start_fresh_game(
+                    room,
+                    active_players,
+                    restarted=True,
+                    seated_before=seated_before,
+                )
+            except RoomPromptResolutionError:
+                # Nothing here can answer a socket, and an exception raised in this
+                # task would simply be dropped - leaving players watching a game
+                # that was already torn down, waiting for a restart that never
+                # arrives and never being told why.
+                logger.exception("Restart could not draw prompts for room %s", room.id)
+                await _cancel_restart(
+                    ctx, room, RestartCancelReason.PROMPT_LISTS_UNAVAILABLE
+                )
+            except RoomNoLongerStartableError:
+                await _cancel_restart(ctx, room, RestartCancelReason.EVERYBODY_LEFT)
 
     ctx.timers.replace_restart_timer(room.id, asyncio.create_task(_restart()))
 
