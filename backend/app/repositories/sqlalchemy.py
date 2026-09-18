@@ -1,15 +1,17 @@
 """SQLAlchemy implementations of domain repository interfaces."""
 from __future__ import annotations
 
-from collections import Counter, defaultdict
-from collections.abc import Collection, Sequence
+import asyncio
+from collections import Counter, OrderedDict, defaultdict
+from collections.abc import Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import time
 from uuid import UUID
 
-from sqlalchemy import Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -3123,11 +3125,88 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             )
 
 
+# How many ranked ids the catalogue's star order keeps per filter: every
+# page a reader can reach (`MAX_COMMUNITY_OFFSET`), one full page past it,
+# and one more to say whether there is a next page.
+CATALOGUE_RANKING_DEPTH = MAX_COMMUNITY_OFFSET + MAX_COMMUNITY_PAGE + 1
+# How long one ranking serves the star order, when the application asks for
+# a cache at all (`CATALOGUE_RANKING_TTL_SECONDS`).
+CATALOGUE_RANKING_TTL_SECONDS = 60.0
+# Distinct filters (language and tag set) whose ranking is kept at once. Tag
+# sets are chosen by the reader, so the number of keys is theirs too; past
+# this the least recently read goes.
+CATALOGUE_RANKING_KEYS = 256
+
+
+class _CatalogueRanking:
+    """The community catalogue's star order, computed at most once per TTL
+    per filter and shared by every reader (#901).
+
+    Stars stay facts (R-LIST-16): what is cached is only the *order*, a
+    tuple of list ids. Ranking needs every published list's count before it
+    can return the first 25, which cost 14 ms per page at 5,000 lists and
+    grew with every list published; a page read from the cached order fetches
+    its 25 rows by id, with their counts, in under a millisecond. One worker
+    owns it, so it is exact to within its TTL. A list taken down, retired or
+    unpublished leaves the page at once - the page's own read re-applies the
+    catalogue predicate - and a publish through this process resets it.
+    """
+
+    def __init__(self, ttl_seconds: float, clock: Callable[[], float] = time.monotonic) -> None:
+        self.ttl_seconds = ttl_seconds
+        self._clock = clock
+        self._entries: OrderedDict[tuple, tuple[float, tuple[UUID, ...]]] = OrderedDict()
+        self._lock = asyncio.Lock()
+        self._generation = 0
+
+    def _fresh(self, key: tuple) -> tuple[UUID, ...] | None:
+        entry = self._entries.get(key)
+        if entry is None or self._clock() - entry[0] >= self.ttl_seconds:
+            return None
+        self._entries.move_to_end(key)
+        return entry[1]
+
+    async def get(
+        self, key: tuple, read: Callable[[], Awaitable[tuple[UUID, ...]]]
+    ) -> tuple[UUID, ...]:
+        found = self._fresh(key)
+        if found is not None:
+            return found
+        async with self._lock:
+            # Whoever waited finds what the first arrival read.
+            found = self._fresh(key)
+            if found is not None:
+                return found
+            while True:
+                generation = self._generation
+                ranked = await read()
+                if generation == self._generation:
+                    break
+            self._entries[key] = (self._clock(), ranked)
+            self._entries.move_to_end(key)
+            while len(self._entries) > CATALOGUE_RANKING_KEYS:
+                self._entries.popitem(last=False)
+            return ranked
+
+    def invalidate(self) -> None:
+        self._generation += 1
+        self._entries.clear()
+
+
 class SqlAlchemyPromptListRepository(PromptListRepository):
     """SQLAlchemy-backed implementation of PromptListRepository."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        catalogue_ranking_ttl_seconds: float = 0.0,
+    ) -> None:
         self._session_factory = session_factory
+        # Off unless asked for: the application sets it (60 s by default,
+        # `CATALOGUE_RANKING_TTL_SECONDS`); a test that writes and reads back
+        # at once gets the uncached order it expects.
+        self._ranking = _CatalogueRanking(catalogue_ranking_ttl_seconds)
 
     @staticmethod
     def _star_count():
@@ -3385,23 +3464,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         requester_id = _optional_entity_id(requesting_user_id)
         limit = max(1, min(int(limit), MAX_COMMUNITY_PAGE))
         star_count = self._star_count().label("star_count")
-        stmt = (
-            select(
-                PromptList,
-                self._prompt_count(),
-                star_count,
-                User.display_name,
-                self._copy_count(),
-            )
-            .join(User, User.id == PromptList.owner_user_id)
-            .where(*_published_by_a_player())
-        )
+        filters: list[ColumnElement[bool]] = list(_published_by_a_player())
         if starred_only:
             if requester_id is None:
                 # Nobody's shortlist. The route refuses this first; the guard
                 # is here so the query can never mean "everyone's stars".
                 return CommunityPromptListPage(lists=(), next_cursor=None)
-            stmt = stmt.where(
+            filters.append(
                 select(PromptListStar.prompt_list_id)
                 .where(
                     PromptListStar.prompt_list_id == PromptList.id,
@@ -3410,13 +3479,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 .exists()
             )
         if language is not None:
-            stmt = stmt.where(PromptList.language == language)
+            filters.append(PromptList.language == language)
         for slug in tags:
             # One EXISTS per tag rather than an IN over all of them: a list
             # must carry *every* tag asked for, and an IN would match a list
             # carrying any one. Filters are capped at MAX_LIST_TAGS, so this
             # cannot grow without bound.
-            stmt = stmt.where(
+            filters.append(
                 select(PromptListRevisionTag.revision_id)
                 .join(PromptTag, PromptTag.id == PromptListRevisionTag.tag_id)
                 .join(
@@ -3442,7 +3511,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 PromptList.published_at.desc(),
                 PromptList.id.desc(),
             )
-        stmt = stmt.order_by(*order)
         offset = _decode_catalogue_cursor(cursor)
         # Offset paging, deliberately: the catalogue is browsed a few pages
         # deep at most, and a keyset cursor over a derived count would have to
@@ -3454,11 +3522,59 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # ceiling would drop the rest without a word.
         if offset >= MAX_COMMUNITY_OFFSET and not starred_only:
             return CommunityPromptListPage(lists=(), next_cursor=None)
-        stmt = stmt.offset(offset).limit(limit + 1)
+        columns = (
+            PromptList,
+            self._prompt_count(),
+            star_count,
+            User.display_name,
+            self._copy_count(),
+        )
+        ranked_page: list[UUID] | None = None
+        if sort != "newest" and not starred_only and self._ranking.ttl_seconds > 0:
+            # The star order is the one that has to count every published
+            # list before it can return one; read it from the shared ranking
+            # and fetch only this page's rows (#901).
+            async def rank() -> tuple[UUID, ...]:
+                async with self._session_factory() as session:
+                    return tuple(
+                        (
+                            await session.scalars(
+                                select(PromptList.id)
+                                .where(*filters)
+                                .order_by(*order)
+                                .limit(CATALOGUE_RANKING_DEPTH)
+                            )
+                        ).all()
+                    )
+
+            ranked = await self._ranking.get((language, tuple(sorted(tags))), rank)
+            ranked_page = list(ranked[offset : offset + limit + 1])
+            stmt = (
+                select(*columns)
+                .join(User, User.id == PromptList.owner_user_id)
+                .where(PromptList.id.in_(ranked_page), *_published_by_a_player())
+            )
+        else:
+            stmt = (
+                select(*columns)
+                .join(User, User.id == PromptList.owner_user_id)
+                .where(*filters)
+                .order_by(*order)
+                .offset(offset)
+                .limit(limit + 1)
+            )
         async with self._session_factory() as session:
             rows = (await session.execute(stmt)).all()
-            has_more = len(rows) > limit
-            rows = rows[:limit]
+            if ranked_page is not None:
+                # In the ranking's order; a list that has left the catalogue
+                # since the ranking was read is simply not on the page.
+                position = {list_id: index for index, list_id in enumerate(ranked_page)}
+                rows.sort(key=lambda row: position[row[0].id])
+                has_more = len(ranked_page) > limit
+                rows = [row for row in rows if position[row[0].id] < limit]
+            else:
+                has_more = len(rows) > limit
+                rows = rows[:limit]
             list_ids = [row[0].id for row in rows]
             tags_by_list = await self._current_revision_tags(session, list_ids)
             mine: set[UUID] = set()
@@ -4272,6 +4388,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                             created_at=datetime.now(timezone.utc),
                         )
                     )
+            # Committed: a list just published is in the catalogue for its
+            # author's next read, not a minute later (#901).
+            self._ranking.invalidate()
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result

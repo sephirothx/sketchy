@@ -92,6 +92,7 @@ from app.services.readiness import LoopHealth, ReadinessProbe
 from app.socket_server import BoundedSocketServer
 from app.services.telemetry import start_lag_sampler, stop_lag_sampler, telemetry
 from app.repositories.sqlalchemy import (
+    CATALOGUE_RANKING_TTL_SECONDS,
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
     SqlAlchemyPromptListRepository,
@@ -167,7 +168,21 @@ def configure_frontend(app: FastAPI, directory: Path) -> None:
 
 user_repo = SqlAlchemyUserRepository(async_session_factory)
 game_history_repo = SqlAlchemyGameHistoryRepository(async_session_factory)
-prompt_list_repo = SqlAlchemyPromptListRepository(async_session_factory)
+def _catalogue_ranking_ttl_seconds() -> float:
+    """How long the community catalogue's star order is served from one
+    ranking (#901). Tunable so the end-to-end runner sees a star move a list
+    at once; a deployment keeps the default."""
+    raw = os.environ.get("CATALOGUE_RANKING_TTL_SECONDS", "").strip()
+    try:
+        value = float(raw) if raw else CATALOGUE_RANKING_TTL_SECONDS
+    except ValueError:
+        return CATALOGUE_RANKING_TTL_SECONDS
+    return value if value >= 0 else CATALOGUE_RANKING_TTL_SECONDS
+
+
+prompt_list_repo = SqlAlchemyPromptListRepository(
+    async_session_factory, catalogue_ranking_ttl_seconds=_catalogue_ranking_ttl_seconds()
+)
 block_service = BlockService(async_session_factory)
 async def push_friends_changed(user_id: str) -> None:
     """Tell an account its friend lists moved, wherever it is.
