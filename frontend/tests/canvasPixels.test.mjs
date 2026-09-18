@@ -262,3 +262,84 @@ test("a stroke painted segment by segment is the stroke painted as one polyline 
   rasterizePath(asPolyline, width, height, points, 2.5, BLACK, false);
   assert.deepEqual(Array.from(bySegment), Array.from(asPolyline));
 });
+
+test("a stroke of width w covers w pixels across wherever on the quarter-pixel grid its centre sits", () => {
+  // Half-open on the edge (#940): a closed rule made a line centred on a half
+  // pixel w + 1 thick, and float dust on the drawer's canvas used to decide
+  // which edge rows it kept - so a late joiner's replay and the room parted.
+  for (const width of [1, 2, 5, 6, 32]) {
+    for (const offset of [0, 0.25, 0.5, 0.75]) {
+      const across = 80;
+      const horizontal = solidPixels(across, across);
+      rasterizePath(horizontal, across, across, [{ x: 10, y: 40 + offset }, { x: 70, y: 40 + offset }], width / 2, BLACK, false);
+      const vertical = solidPixels(across, across);
+      rasterizePath(vertical, across, across, [{ x: 40 + offset, y: 10 }, { x: 40 + offset, y: 70 }], width / 2, BLACK, false);
+      let rows = 0;
+      let columns = 0;
+      for (let k = 0; k < across; k += 1) {
+        if (horizontal[(k * across + 40) * 4] === 0) rows += 1;
+        if (vertical[(40 * across + k) * 4] === 0) columns += 1;
+      }
+      assert.equal(rows, width, `horizontal, width ${width}, centre +${offset}`);
+      assert.equal(columns, width, `vertical, width ${width}, centre +${offset}`);
+    }
+  }
+});
+
+test("every painter reaches a wire coordinate as the same float, across the whole accepted range", async () => {
+  const { toPixels } = await import("../src/lib/canvasGeometry.ts");
+  // The live route: the decoder's normalized packed / 3200, then toPixels.
+  // The replay route: packed / 4. They must be the same number, or an ulp
+  // decides pixels on an edge (and no fixed tie margin fixes that: far off
+  // the canvas, distinct exact distances are closer than any margin).
+  for (let packed = -32768; packed <= 32767; packed += 1) {
+    const live = toPixels({ x: packed / 3200, y: packed / 2400 });
+    assert.equal(live.x, packed / 4, `x ${packed}`);
+    assert.equal(live.y, packed / 4, `y ${packed}`);
+  }
+  // The review's case: a width-60 segment far off the canvas, pixel (0, 0).
+  const [ax, ay, bx, by] = [7745, 11931, -9222, -14698];
+  const live = [toPixels({ x: ax / 3200, y: ay / 2400 }), toPixels({ x: bx / 3200, y: by / 2400 })];
+  const replay = [{ x: ax / 4, y: ay / 4 }, { x: bx / 4, y: by / 4 }];
+  const paint = (points) => {
+    const data = solidPixels(4, 4);
+    rasterizePath(data, 4, 4, points, 30, BLACK, false);
+    return data;
+  };
+  assert.deepEqual(paint(live), paint(replay));
+});
+
+test("a dot of width w is w pixels across when its edge falls on pixel centres, and never wider", () => {
+  // A tap is a zero-length segment: no direction to take an edge's side from,
+  // so a closed rule made it w + 1 wide and a directional one w - 1. Centred
+  // on a pixel centre its whole edge is ties; elsewhere a disc covers what
+  // its geometry covers - a width-1 dot on a pixel corner reaches no pixel
+  // centre under any rule - but no offset may make it wider than the brush.
+  for (let width = 1; width <= 32; width += 1) {
+    for (const dx of [0, 0.25, 0.5, 0.75]) {
+      for (const dy of [0, 0.25, 0.5, 0.75]) {
+        const size = 64;
+        const centre = { x: 30 + dx, y: 30 + dy };
+        const data = solidPixels(size, size);
+        rasterizePath(data, size, size, [centre, centre], width / 2, BLACK, false);
+        let [minX, maxX, minY, maxY] = [size, -1, size, -1];
+        for (let y = 0; y < size; y += 1) {
+          for (let x = 0; x < size; x += 1) {
+            if (data[(y * size + x) * 4] !== 0) continue;
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+          }
+        }
+        const [across, down] = [Math.max(0, maxX - minX + 1), Math.max(0, maxY - minY + 1)];
+        const where = `width ${width} at +${dx},+${dy}`;
+        assert.ok(across <= width && down <= width, `${where}: ${across}x${down}`);
+        if (dx === 0.5 && dy === 0.5) {
+          assert.equal(across, width, where);
+          assert.equal(down, width, where);
+        }
+      }
+    }
+  }
+});

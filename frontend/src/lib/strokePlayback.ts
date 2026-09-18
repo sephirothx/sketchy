@@ -10,10 +10,15 @@ takes to come - and every animation frame paints the part that has come due,
 down to a fraction of a segment, so the viewer sees ink advance at the
 screen's rate rather than the wire's.
 
-Painting a segment in parts is exact: the rasterizer paints a capsule around
-each segment, and a capsule split at a point on its own segment is the union
-of the two halves, pixel for pixel. So the final raster is the raster of the
-whole polyline, whatever the frame boundaries fell on.
+Painting a segment in parts is exact: each part is handed to the painter as a
+*span* of its original segment (`SegmentSpan`, t0..t1), and a pixel belongs to
+the span its nearest point on the whole segment falls in, decided as the whole
+segment decides it. Spans that tile a segment paint its pixels and no others,
+so the final raster is the raster of the whole polyline, whatever the frame
+boundaries fell on. (Painting a part as a segment of its own, between
+interpolated points, was exact only in exact arithmetic: a split point a
+float's width off the line moved a pixel on the edge, #940.) The polyline
+points are passed too, for whatever only needs the shape.
 
 Order is everything else. Only path points are spread over time; a path
 start, a path end, a shape, a fill and a clear are *barriers*, applied when
@@ -28,7 +33,7 @@ repaints from history.
 Pure: `now` and the interval are injected, the painting is a callback, and
 the tests drive it with a fake clock. */
 
-import type { Point } from "./canvasGeometry";
+import type { Point, SegmentSpan } from "./canvasGeometry";
 
 /** How far behind the wire the presentation may fall before it catches up. */
 export const MAX_LAG_MS = 250;
@@ -81,7 +86,9 @@ function interpolate(a: Point, b: Point, t: number): Point {
 
 export function createStrokePlayback(options: {
   intervalMs: () => number;
-  paint: (points: Point[], style: SegmentStyle) => void;
+  /** `spans[k]` is the stretch of the original segment `points[k]` to
+  `points[k + 1]` lies on; paint those for pixels that match the whole. */
+  paint: (points: Point[], style: SegmentStyle, spans: SegmentSpan[]) => void;
   maxLagMs?: number;
 }): StrokePlayback {
   const maxLag = options.maxLagMs ?? MAX_LAG_MS;
@@ -113,9 +120,21 @@ export function createStrokePlayback(options: {
     if (target > endIndex && endIndex < segmentCount) {
       points.push(interpolate(item.points[endIndex], item.points[endIndex + 1], target - endIndex));
     }
+    // `points[k]` to `points[k + 1]` lies on segment `startIndex + k`: the
+    // first from where the last frame stopped, the last to where this one does.
+    const spans: SegmentSpan[] = [];
+    for (let k = 0; k < points.length - 1; k += 1) {
+      const segment = startIndex + k;
+      spans.push({
+        a: item.points[segment],
+        b: item.points[segment + 1],
+        t0: k === 0 ? from - startIndex : 0,
+        t1: k === points.length - 2 && target > endIndex ? target - endIndex : 1,
+      });
+    }
     if (points.length > 1) {
       if (!item.radii) {
-        options.paint(points, item.style);
+        options.paint(points, item.style, spans);
       } else {
         // `points[k]` to `points[k + 1]` lies on segment `startIndex + k`.
         // Consecutive segments at one radius are painted as one polyline, so
@@ -126,7 +145,7 @@ export function createStrokePlayback(options: {
         for (let k = 1; k <= points.length - 1; k += 1) {
           const radius = item.radii[startIndex + k - 1];
           if (k === points.length - 1 || item.radii[startIndex + k] !== radius) {
-            options.paint(points.slice(runStart, k + 1), { ...item.style, radius });
+            options.paint(points.slice(runStart, k + 1), { ...item.style, radius }, spans.slice(runStart, k));
             runStart = k;
           }
         }

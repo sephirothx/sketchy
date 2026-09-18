@@ -1,7 +1,7 @@
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
-import type { Point } from "./canvasGeometry.ts";
+import type { Point, SegmentSpan } from "./canvasGeometry.ts";
 import { replayStroke } from "./replay.ts";
 import type { ReplayStroke } from "./replay.ts";
 import { rampedRuns, widthRuns } from "./pathWidths.ts";
@@ -9,6 +9,7 @@ import {
   fillWhitePixels,
   floodFillPixels,
   hexToRgba,
+  rasterizeSpans,
   rasterizePath as rasterizePixelPath,
 } from "./canvasPixels.ts";
 import type {
@@ -97,6 +98,39 @@ export function rasterizePath(
     color,
     closed,
   );
+  context.putImageData(imageData, x, y);
+}
+
+/** Paint stretches of segments onto the canvas, as live playback hands them
+over (`rasterizeSpans`): the pixels the whole segments would have, a frame at
+a time. */
+export function rasterizeSegmentSpans(
+  context: CanvasRenderingContext2D,
+  spans: readonly SegmentSpan[],
+  radius: number,
+  color: [number, number, number, number],
+): void {
+  if (spans.length === 0) return;
+  const ends = spans.flatMap(({ a, b, t0, t1 }) => [
+    { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 },
+    { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 },
+  ]);
+  const bounds = boundsFromPath(ends, radius + 1);
+  const x = Math.max(0, Math.floor(bounds.minX));
+  const y = Math.max(0, Math.floor(bounds.minY));
+  const right = Math.min(CANVAS_WIDTH, Math.ceil(bounds.maxX));
+  const bottom = Math.min(CANVAS_HEIGHT, Math.ceil(bounds.maxY));
+  if (right - x <= 0 || bottom - y <= 0) return;
+  const imageData = context.getImageData(x, y, right - x, bottom - y);
+  // Moved by whole pixels, which is exact for quarter-pixel coordinates, so
+  // each decision is the one the whole canvas would make.
+  const local = spans.map(({ a, b, t0, t1 }) => ({
+    a: { x: a.x - x, y: a.y - y },
+    b: { x: b.x - x, y: b.y - y },
+    t0,
+    t1,
+  }));
+  rasterizeSpans(imageData.data, right - x, bottom - y, local, radius, color);
   context.putImageData(imageData, x, y);
 }
 
@@ -236,27 +270,23 @@ export function applyCanvasStrokeSpan(
   const points = stroke.points;
   const last = points.length - 1;
   if (last < 1 || to <= from) return;
-  const at = (position: number) => {
-    const index = Math.min(last - 1, Math.max(0, Math.floor(position)));
-    const t = Math.min(1, Math.max(0, position - index));
-    const a = points[index];
-    const b = points[index + 1];
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-  };
-  const stretch = [at(from)];
-  for (let index = Math.floor(from) + 1; index <= Math.min(last, Math.floor(to)); index++) {
-    if (index > from && index < to) stretch.push(points[index]);
+  // As live playback paints (#940): the stretch as spans of the stroke's own
+  // segments, each pixel decided against its whole segment, so stretches that
+  // meet paint the whole stroke's pixels - a replay played to the end, or
+  // scrubbed there in any steps, is the whole history's raster, and a fill
+  // after it sees the same boundary. Stretches cut at interpolated points and
+  // painted as segments of their own were a float's width off a diagonal.
+  const start = Math.max(0, from);
+  const end = Math.min(last, to);
+  const spans: SegmentSpan[] = [];
+  for (let index = Math.floor(start); index < end && index < last; index += 1) {
+    const t0 = Math.max(0, start - index);
+    const t1 = Math.min(1, end - index);
+    if (t1 > t0) {
+      spans.push({ a: points[index], b: points[index + 1], t0, t1 });
+    }
   }
-  stretch.push(at(to));
-  rasterizePixelPath(
-    pixels,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
-    stretch.length === 1 ? [stretch[0], stretch[0]] : stretch,
-    stroke.width / 2,
-    hexToRgba(stroke.color),
-    false,
-  );
+  rasterizeSpans(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, spans, stroke.width / 2, hexToRgba(stroke.color));
 }
 
 /** Replay a whole history onto a blank canvas.

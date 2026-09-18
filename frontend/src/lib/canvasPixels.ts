@@ -1,4 +1,4 @@
-import { distanceToSegmentSquared } from "./canvasGeometry.ts";
+import { capsuleCovers, type SegmentSpan } from "./canvasGeometry.ts";
 import type { Point } from "./canvasGeometry.ts";
 
 export type Rgba = [number, number, number, number];
@@ -51,6 +51,7 @@ export function fillWhitePixels(data: Uint8ClampedArray): void {
   data.fill(255);
 }
 
+
 export function rasterizePath(
   data: Uint8ClampedArray,
   width: number,
@@ -61,6 +62,9 @@ export function rasterizePath(
   closed: boolean,
 ): void {
   if (points.length === 0) return;
+  // Painters agree to the pixel because they are handed the same numbers:
+  // every wire coordinate arrives as `wireToPixel` makes it (#940). What
+  // happens exactly on the edge is `capsuleCovers`'s half-open rule.
   const radiusSquared = radius * radius;
   const segmentCount = closed ? points.length : points.length - 1;
 
@@ -73,10 +77,7 @@ export function rasterizePath(
     const maxY = Math.min(height - 1, Math.ceil(Math.max(a.y, b.y) + radius));
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (
-          distanceToSegmentSquared(x + 0.5, y + 0.5, a.x, a.y, b.x, b.y)
-          <= radiusSquared
-        ) {
+        if (capsuleCovers(x + 0.5, y + 0.5, a.x, a.y, b.x, b.y, radiusSquared)) {
           const index = (y * width + x) * 4;
           data[index] = color[0];
           data[index + 1] = color[1];
@@ -177,4 +178,41 @@ export function floodFillPixels(
     queueAdjacentRuns(y + 1, left, right);
   }
   return true;
+}
+
+/** Paint stretches of segments (`SegmentSpan`), each pixel decided against
+its whole segment, so stretches that tile a segment paint exactly what the
+segment painted whole would (R-DRAW-01). */
+export function rasterizeSpans(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  spans: readonly SegmentSpan[],
+  radius: number,
+  color: Rgba,
+): void {
+  const radiusSquared = radius * radius;
+  for (const { a, b, t0, t1 } of spans) {
+    const fromX = a.x + (b.x - a.x) * t0;
+    const fromY = a.y + (b.y - a.y) * t0;
+    const toX = a.x + (b.x - a.x) * t1;
+    const toY = a.y + (b.y - a.y) * t1;
+    // One pixel of slack on the box: its corners are interpolated, and a
+    // pixel the span owns must not be clipped by a float's width.
+    const minX = Math.max(0, Math.floor(Math.min(fromX, toX) - radius) - 1);
+    const minY = Math.max(0, Math.floor(Math.min(fromY, toY) - radius) - 1);
+    const maxX = Math.min(width - 1, Math.ceil(Math.max(fromX, toX) + radius) + 1);
+    const maxY = Math.min(height - 1, Math.ceil(Math.max(fromY, toY) + radius) + 1);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (capsuleCovers(x + 0.5, y + 0.5, a.x, a.y, b.x, b.y, radiusSquared, t0, t1)) {
+          const index = (y * width + x) * 4;
+          data[index] = color[0];
+          data[index + 1] = color[1];
+          data[index + 2] = color[2];
+          data[index + 3] = color[3];
+        }
+      }
+    }
+  }
 }

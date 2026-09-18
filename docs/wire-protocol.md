@@ -1296,8 +1296,12 @@ A viewer does not paint a batch the moment it lands (#559). Each `draw_move` is
 scheduled to be painted over the flush interval that follows its arrival — the time
 the next batch takes to come — and every animation frame paints the part that has come
 due, down to a fraction of a segment ([`frontend/src/lib/strokePlayback.ts`](../frontend/src/lib/strokePlayback.ts)).
-Painting a segment in parts is exact: the rasterizer paints a capsule around each
-segment, and a capsule split at a point on its own segment is the union of the halves.
+Painting a segment in parts is exact: each part is painted as a *span* of its original
+segment, a pixel belonging to the span its nearest point on the whole segment falls in
+and decided exactly as the whole segment decides it, so the spans paint the whole
+segment's pixels and no others. (Splitting at an interpolated point and painting each
+half as its own capsule was exact only in exact arithmetic: a split point a float's
+width off a diagonal moved an edge pixel in about one segment in five hundred, #940.)
 The history and the commit on the frame are still applied synchronously, before
 anything is queued; only presentation is delayed. Everything that is not a run of points
 — a path start or end, a shape, a fill, a clear — is a barrier in the same queue, so a

@@ -5,6 +5,19 @@ export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
 export const CANVAS_COORDINATE_SCALE = 4;
 
+/** A normalized wire coordinate as canvas pixels, on the quarter-pixel grid
+the wire carries it on. Every painter has to reach a point as the same float:
+the history decoder has `packed / 4` exactly, while `value * size` from the
+normalized `packed / 3200` is one ulp off for about one coordinate in eight,
+and an ulp decides a pixel exactly on a stroke's edge or a ramp cut exactly
+half-way between two grid positions - a late joiner's replay came out a pixel
+apart from the room's. Rounding back to the grid is exact for every wire
+coordinate (an ulp never reaches the next position), so this is `packed / 4`
+whichever route the value took. */
+export function wireToPixel(value: number, size: number): number {
+  return Math.round(value * size * CANVAS_COORDINATE_SCALE) / CANVAS_COORDINATE_SCALE;
+}
+
 const CANVAS_HISTORY_VERSION = 1;
 const MAX_BRUSH_WIDTH = 64;
 const MAX_CANVAS_ACTIONS = 20_000;
@@ -316,8 +329,8 @@ export class ClientCanvasHistory {
       }
       this.activePath.points.push(
         ...packet.payload.points.map((point) => ({
-          x: point.x * CANVAS_WIDTH,
-          y: point.y * CANVAS_HEIGHT,
+          x: wireToPixel(point.x, CANVAS_WIDTH),
+          y: wireToPixel(point.y, CANVAS_HEIGHT),
         })),
       );
       if (packet.payload.ends) {
@@ -366,8 +379,8 @@ export class ClientCanvasHistory {
         color: packet.payload.color,
         width: packet.payload.width,
         points: [{
-          x: packet.payload.x * CANVAS_WIDTH,
-          y: packet.payload.y * CANVAS_HEIGHT,
+          x: wireToPixel(packet.payload.x, CANVAS_WIDTH),
+          y: wireToPixel(packet.payload.y, CANVAS_HEIGHT),
         }],
       };
       this.actions.push(action);

@@ -510,3 +510,31 @@ test("a frame that goes out part way through a change says how far it got", () =
   stroke.frameRefused();
   assert.equal(stroke.width, 9);
 });
+
+test("the ramp is the same whichever float route a client reached the points by", () => {
+  // A live painter holds a wire coordinate as packed / 3200 * 800, one ulp off
+  // the replay's packed / 4 for about one in eight. A cut landing exactly
+  // half-way between two quarter-pixel positions used to round either way on
+  // that ulp, and a late joiner's ramp came out a quarter pixel from the
+  // room's (the pen-pressure E2E flake). Seeded, so a failure reproduces.
+  let seed = 828;
+  const next = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const live = (value, size) => ((value * 4) / (size * 4)) * size;
+  for (let trial = 0; trial < 3000; trial += 1) {
+    const count = 3 + Math.floor(next() * 12);
+    let x = 100 + Math.floor(next() * 400) / 4;
+    const y = 200 + Math.floor(next() * 800) / 4;
+    const points = [];
+    for (let index = 0; index < count; index += 1) {
+      points.push({ x, y: y + Math.floor(next() * 3) / 4 });
+      x += 1 + Math.floor(next() * 40) / 4;
+    }
+    const widths = [];
+    for (let index = 1; index < count; index += 1 + Math.floor(next() * 3)) {
+      widths.push([index, 2 + Math.floor(next() * 30)]);
+    }
+    const exact = expandWidthRamps(points, 4, widths);
+    const dusted = expandWidthRamps(points.map((p) => ({ x: live(p.x, 800), y: live(p.y, 600) })), 4, widths);
+    assert.deepEqual(dusted, exact, `trial ${trial}`);
+  }
+});

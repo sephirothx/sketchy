@@ -112,3 +112,45 @@ test("a replayed fill stops at a replayed stroke", () => {
   assert.deepEqual(pixelAt(context, wall, 10), BLACK);
   assert.deepEqual(pixelAt(context, wall + 5, 10), WHITE);
 });
+
+test("a saved drawing played out in stretches ends as its whole-history raster (#940)", async () => {
+  const { applyCanvasStrokeSpan, applyCanvasAction } = await import("../src/lib/canvasRenderer.ts");
+  const { replayStroke } = await import("../src/lib/replay.ts");
+  const blank = () => new Uint8ClampedArray(800 * 600 * 4).fill(255);
+  const paintedAlike = (a, b) => a.every((value, index) => value === b[index]);
+  // The review's case: width 8, a diagonal, split at 0.51. Cut there and
+  // painted as two segments of their own, pixel (36, 23) went missing.
+  const stroke = { points: [{ x: 25.5, y: 17.75 }, { x: 55.5, y: 49.25 }], width: 8, color: "#000000" };
+  const whole = blank();
+  applyCanvasAction(whole, { kind: "path", color: stroke.color, width: stroke.width, points: stroke.points });
+  const played = blank();
+  applyCanvasStrokeSpan(played, stroke, 0, 0.51);
+  applyCanvasStrokeSpan(played, stroke, 0.51, 1);
+  assert.equal(whole[(23 * 800 + 36) * 4], 0);
+  assert.ok(paintedAlike(played, whole));
+
+  // And any polyline, played in random stretches, pen widths included.
+  let seed = 940;
+  const next = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let trial = 0; trial < 150; trial += 1) {
+    const points = [];
+    for (let index = 0; index < 4; index += 1) {
+      points.push({ x: 40 + Math.floor(next() * 600) / 4, y: 40 + Math.floor(next() * 600) / 4 });
+    }
+    const widths = trial % 2 ? [[2, 4 + Math.floor(next() * 12)]] : undefined;
+    const action = { kind: "path", color: "#000000", width: 2 + Math.floor(next() * 14), points, widths };
+    const reference = blank();
+    applyCanvasAction(reference, action);
+    // What ReplayCanvas grows: the stroke with its ramps expanded.
+    const path = replayStroke(action);
+    const grown = blank();
+    const end = path.points.length - 1;
+    let at = 0;
+    while (at < end) {
+      const next_at = Math.min(end, at + next() * 0.9 + 0.05);
+      applyCanvasStrokeSpan(grown, path, at, next_at);
+      at = next_at;
+    }
+    assert.ok(paintedAlike(grown, reference), `trial ${trial}`);
+  }
+});
