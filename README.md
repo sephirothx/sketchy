@@ -732,6 +732,7 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `120` | The same three for every operator command (`sketchy-maintenance`): retention, projection rebuilds, drawing verification, exports, mail, metrics, the admin bootstrap and the operator reset |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
 | `GALLERY_SHELF_TTL_SECONDS` | `60` | How long the gallery's This week is served from one snapshot before it is recomputed; `0` recomputes on every open, which only the end-to-end runner wants |
+| `CATALOGUE_RANKING_TTL_SECONDS` | `60` | How long the community catalogue's star order is served from one ranking before it is recomputed; star counts shown are always live, and `0` ranks on every page, which only the end-to-end runner wants |
 | `AFK_INACTIVITY_SECONDS` | `300` | How long a seat may send nothing a person sent before the room asks whether anybody is there. Only somebody who has touched nothing at all reaches it: a browser that has seen input answers the check by itself |
 | `AFK_CHECK_SECONDS` | `25` | How long that question stays open before the seat is marked AFK |
 | `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent — which production refuses to start without, since that would put live reset links in the log and send nothing (#466) |
@@ -1921,6 +1922,9 @@ backend/.venv/bin/python benchmarks/reaction_write.py --reactions 300 5000
 
 # The guest-name check per chat line, database versus the presence cache (#900)
 backend/.venv/bin/python benchmarks/guest_name_check.py --online 200 1000 3000
+
+# One page of the community catalogue's star order, ranked per page versus cached (#901)
+backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 120000
 
 # The score-event ledger's bytes, write time and read cost per game (#552)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \

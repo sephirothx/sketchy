@@ -518,3 +518,123 @@ async def test_a_shortlist_is_read_whole_past_the_browsing_depth(env, monkeypatc
 
     assert len(browsing) == 2, "browsing still stops at the depth ceiling"
     assert shortlist == [f"List {index}" for index in (4, 3, 2, 1, 0)]
+
+
+# --- the cached star order (#901) --------------------------------------------
+
+
+async def _ranked_catalogue(users, prompts, factory, count: int = 5):
+    """`count` published lists whose stars rank them Five > Four > ... > One."""
+    owner = await account(users, "Ranker")
+    made = {}
+    for stars in range(1, count + 1):
+        name = f"List{stars}"
+        made[name] = await published(
+            prompts, factory, owner.id, name, stars=stars, users=users,
+            at=PUBLISHED_AT + timedelta(minutes=stars),
+        )
+    return owner, made
+
+
+def _cached(factory, now):
+    repo = SqlAlchemyPromptListRepository(factory, catalogue_ranking_ttl_seconds=60)
+    repo._ranking._clock = lambda: now[0]
+    return repo
+
+
+async def _names(repo, **kwargs):
+    page = await repo.list_community(**kwargs)
+    return [row.name for row in page.lists], page.next_cursor
+
+
+async def test_the_cached_order_is_the_uncached_order_page_for_page(env):
+    _, users, prompts, factory = env
+    await _ranked_catalogue(users, prompts, factory)
+    cached = _cached(factory, [0.0])
+    for repo in (prompts, cached):
+        first, cursor = await _names(repo, limit=2)
+        second, cursor = await _names(repo, limit=2, cursor=cursor)
+        third, cursor = await _names(repo, limit=2, cursor=cursor)
+        assert (first, second, third, cursor) == (
+            ["List5", "List4"], ["List3", "List2"], ["List1"], None
+        )
+
+
+async def test_a_second_page_within_the_ttl_ranks_nothing(env):
+    """The star order has to count every published list's stars before it can
+    return one; within the TTL a page reads the shared ranking and fetches
+    only its own rows (#901)."""
+    from sqlalchemy import event
+
+    _, users, prompts, factory = env
+    await _ranked_catalogue(users, prompts, factory)
+    cached = _cached(factory, [0.0])
+    engine = factory.kw["bind"]
+    first, cursor = await _names(cached, limit=2)
+    statements: list[str] = []
+
+    def record(conn, cursor_, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+    try:
+        second, _ = await _names(cached, limit=2, cursor=cursor)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+    assert second == ["List3", "List2"]
+    ranking = [
+        statement for statement in statements
+        if "prompt_list_stars" in statement and "ORDER BY" in statement
+    ]
+    assert ranking == []
+
+
+async def test_a_star_moves_a_list_within_the_ttl_and_not_before(env):
+    """R-LIST-16 unchanged: the count shown is live, the order is the
+    ranking's until it is read again."""
+    _, users, prompts, factory = env
+    _, made = await _ranked_catalogue(users, prompts, factory, count=2)
+    now = [0.0]
+    cached = _cached(factory, now)
+    assert (await _names(cached))[0] == ["List2", "List1"]
+    async with factory() as session, session.begin():
+        for index in range(3):
+            fan = await users.create_anonymous(f"Late fan {index}")
+            session.add(PromptListStar(user_id=UUID(fan.id), prompt_list_id=UUID(made["List1"].id)))
+
+    page = await cached.list_community()
+    assert [row.name for row in page.lists] == ["List2", "List1"]
+    assert {row.name: row.star_count for row in page.lists} == {"List2": 2, "List1": 4}
+    now[0] += 61
+    assert (await _names(cached))[0] == ["List1", "List2"]
+
+
+async def test_a_list_leaving_the_catalogue_leaves_the_cached_page_at_once(env):
+    _, users, prompts, factory = env
+    _, made = await _ranked_catalogue(users, prompts, factory, count=3)
+    cached = _cached(factory, [0.0])
+    assert (await _names(cached))[0] == ["List3", "List2", "List1"]
+    async with factory() as session, session.begin():
+        (await session.get(PromptList, UUID(made["List2"].id))).moderation_state = "hidden"
+        (await session.get(PromptList, UUID(made["List1"].id))).visibility = "private"
+    assert (await _names(cached))[0] == ["List3"]
+
+
+async def test_publishing_through_the_repository_resets_the_ranking(env):
+    """An author who publishes and opens the catalogue finds the list there,
+    not a minute later."""
+    _, users, prompts, factory = env
+    owner, _ = await _ranked_catalogue(users, prompts, factory, count=1)
+    cached = _cached(factory, [0.0])
+    assert (await _names(cached))[0] == ["List1"]
+    fresh = await cached.create_owned(
+        owner.id, name="Fresh", description="", language="en",
+        prompts=(PromptListEntryInput(answer="badger"),),
+    )
+    async with factory() as session, session.begin():
+        stars = [await users.create_anonymous(f"Fresh fan {index}") for index in range(3)]
+        session.add_all(
+            PromptListStar(user_id=UUID(fan.id), prompt_list_id=UUID(fresh.id)) for fan in stars
+        )
+    await cached.set_owned_publication(owner.id, fresh.id, published=True)
+    assert (await _names(cached))[0] == ["Fresh", "List1"]
