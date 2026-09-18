@@ -613,10 +613,16 @@ shared by its factual identities. Ratios and averages are derived on read, never
 
 **Synchronization.** Every writer of an account's rows locks that account's `users`
 row first, in ascending id order: the finished-game write holds every seat's account
-`FOR UPDATE` (it also writes `last_active_at`), a merge holds source and target, and a
-rebuild holds every identity of the accounts it replaces. So a game that commits while a
-rebuild runs either committed before the rebuild read its facts, or waits and increments
-the rows the rebuild wrote — never the lost increment a read-then-replace allowed (#609).
+`FOR UPDATE` (it also writes `last_active_at`), a merge holds source and target, a
+rebuild holds every identity of the accounts it replaces, and a reaction holds the
+drawer's identity (the guest and the account it merged into) shared, before the drawing
+row. So a game or a reaction that commits while a rebuild runs either committed before
+the rebuild read its facts, or waits and increments the rows the rebuild wrote — never
+the lost increment a read-then-replace allowed (#609; the reaction writer took no
+account lock until a +1 landing between the rebuild's read and its replacement was
+reproduced on PostgreSQL). Shared, so reactions to one drawer's drawings do not wait on
+each other; before the drawing row, because erasure and the pin write take the account
+first too, and one order is what keeps them out of a cycle.
 The incremental upsert lists its rows in ascending account id for the same reason: two
 games sharing accounts in opposite seat order take the projection rows in one order.
 
@@ -1335,7 +1341,8 @@ rows `turn_drawing_reactions` holds for the turn, and reddit's
 orders by a column rather than counting on read, and Hot orders by a score that never
 changes for one row except when its count does — the decay is the newer rows' larger
 second term. Every reaction write sets both from the rows **under the row's lock**
-(`SELECT … FOR UPDATE`), so two reactions landing together cannot each count only their
+(`SELECT … FOR UPDATE`, taken after the drawer's account lock — *Synchronization* under
+`user_stats_daily`), so two reactions landing together cannot each count only their
 own — from one grouped count by code, hydrating only the seated rows the room names,
 never a row per reaction: every other reaction to a popular drawing waits on that lock,
 and loading 5,000 rows under it held it for 22 ms median, 44 ms p95, against 2.6 and
@@ -2345,6 +2352,7 @@ What each writer then does with an erased identity:
 | Finished-game write (`save_game`) | Writes the game, the seats, the scores and the turns; the identity's snapshots carry the **Deleted player** tombstone, its drawings are written as `deleted` rows with no payload, reactions *on* those drawings are dropped and reactions it *gave* stay. The payload hash is taken from the input, so a retry of the same game is the same game, not a conflict |
 | Avatar upload, owned-list create/update, bug, player and content reports | Refused (`AccountErasedError`, 401 over HTTP): authentication before the deletion is not authorization after it |
 | Export request | Already locks the account row `FOR UPDATE` and refuses a deleted account |
+| Reaction (`set_drawing_reaction`) | Locks the **drawer's** identity, shared, before the drawing row (for the stats rebuild, §`user_stats_daily` *Synchronization*). The turn and drawing are read before that lock, so a reaction that waited behind the drawer's deletion refuses on the erased identity the lock reports rather than on the drawing it loaded — the deletion took the drawing and its reactions (R-REACT-10) |
 | Pin write (`set_profile_pins`) | Locks the pinner **and every drawer** named by the list, ascending, **`FOR UPDATE`** rather than shared — the one writer that must also serialize with its own kind, since two whole-shelf replacements for one account under shared locks both pass the barrier and collide on the shelf's unique positions. An erased pinner is refused (the uniform 404); an erased drawer's drawing reads `deleted` under the lock and refuses the list, so a pin can neither put a shelf back on a tombstoned profile nor outlive the drawing it names (#811 review) |
 
 SQLite renders neither lock and has one writer at a time, so there the re-read alone

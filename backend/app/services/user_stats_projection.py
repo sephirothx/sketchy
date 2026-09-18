@@ -324,10 +324,11 @@ async def _rebuild_accounts(
     counts games rather than seats and a shared game must be counted once.
 
     The identities' `users` rows are locked `FOR UPDATE` in ascending id
-    order first - the same order the finished-game write locks them in - so
-    a game that commits while this runs either commits before the facts are
-    read here, or waits and increments the rows this writes. Without the
-    lock a game could commit between the read and the delete below and its
+    order first - the same order the finished-game write locks them in, and
+    the rows a reaction locks shared for its drawer - so a game or a
+    reaction that commits while this runs either commits before the facts
+    are read here, or waits and increments the rows this writes. Without the
+    lock either could commit between the read and the delete below and its
     increment would be replaced by the older total.
 
     Every query is keyed by the batch's identity ids; the games those
