@@ -355,3 +355,71 @@ async def test_an_operator_engine_leaves_one_summary_line_when_disposed(caplog):
     assert fields["statements"] == 2 and fields["rows"] == 3 and fields["errors"] == 1
     assert fields["seconds"] >= 0
     assert "INSERT" not in record.getMessage()
+
+
+async def test_a_checkout_that_fails_to_connect_is_still_timed(tmp_path, monkeypatch):
+    """A checkout that could not open its connection waited too; it is timed,
+    and it is not a pool timeout."""
+    from sqlalchemy.pool import AsyncAdaptedQueuePool
+
+    from app.db import TimedQueuePool
+
+    store = Telemetry()
+    monkeypatch.setattr(TimedQueuePool, "store", store)
+
+    def refuse(self):
+        raise ConnectionRefusedError("database is down")
+
+    monkeypatch.setattr(AsyncAdaptedQueuePool, "_do_get", refuse)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'down.db'}", poolclass=TimedQueuePool)
+    try:
+        with pytest.raises(ConnectionRefusedError):
+            async with engine.connect():
+                pass
+        assert store.db_pool_wait.count() == 1
+        assert store.db_pool_timeouts.total() == 0
+    finally:
+        await engine.dispose()
+
+
+def test_sqlite_busy_and_other_failures_are_told_apart():
+    from app.db import classify_database_error
+
+    class OperationalError(Exception):
+        pass
+
+    assert classify_database_error(OperationalError("database is locked")) == "lock_timeout"
+    assert classify_database_error(OperationalError("disk I/O error")) == "other"
+
+
+async def test_the_summary_names_the_module_and_configures_logging_when_nothing_has(monkeypatch):
+    """An operator command that never configured logging still leaves its line."""
+    import logging
+    import sys
+    import types
+
+    import app.db as db
+    import app.logging_config as logging_config
+
+    configured: list[bool] = []
+    monkeypatch.setattr(logging_config, "configure_logging", lambda *a, **k: configured.append(True))
+    monkeypatch.setattr(db.command_logger, "hasHandlers", lambda: False)
+    fake_main = types.ModuleType("__main__")
+    fake_main.__spec__ = types.SimpleNamespace(name="app.services.example")  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "__main__", fake_main)
+    assert db._command_name() == "app.services.example"
+
+    engine, _factory = db.maintenance_engine()
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append  # type: ignore[method-assign]
+    db.command_logger.addHandler(handler)
+    level = db.command_logger.level
+    db.command_logger.setLevel(logging.INFO)
+    try:
+        await engine.dispose()
+    finally:
+        db.command_logger.removeHandler(handler)
+        db.command_logger.setLevel(level)
+    assert configured == [True]
+    assert records and records[0].fields["command"] == "app.services.example"
