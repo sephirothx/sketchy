@@ -322,15 +322,19 @@ async def test_a_recap_reaction_is_written_to_the_finished_game_then_shown():
         "wow",
     )
     assert room.drawing_reactions == {entry.turn_id: {reactor.id: "wow"}}
+    # One message per seat (#871): the reaction carries the refreshed
+    # most-reacted card, and no room state follows it.
     events = [call.args[0] for call in ctx.sio.emit.await_args_list]
-    assert events.index("drawing_reaction") < events.index("room_state")
-    state = emitted(ctx, "room_state")[0]
-    assert state["lastGameDrawings"][0]["reactions"] == [
-        {"playerId": reactor.id, "emoji": "wow"}
-    ]
-    most = next(h for h in state["lastGameHighlights"] if h["kind"] == "most_reacted_drawing")
+    assert events == ["drawing_reaction"]
+    reaction = emitted(ctx, "drawing_reaction")[0]
+    assert reaction["tally"] == {"wow": 1}
+    most = reaction["highlight"]
+    assert most["kind"] == "most_reacted_drawing"
     assert most["reactionCount"] == 1 and most["drawingIndex"] == 0
     assert most["turnId"] == entry.turn_id
+    assert room.last_game_payload()["drawings"][0]["reactions"] == [
+        {"playerId": reactor.id, "emoji": "wow"}
+    ]
 
 
 async def test_a_recap_reaction_the_database_refuses_leaves_no_trace():

@@ -1130,6 +1130,9 @@
   "kicked": {
    "shape": "object"
   },
+  "last_game": {
+   "shape": "object"
+  },
   "lobby_chat_message": {
    "shape": "object"
   },
@@ -2449,9 +2452,6 @@
    "hideMaskedPrompt",
    "hintMode",
    "isPublic",
-   "lastGameDrawings",
-   "lastGameHighlights",
-   "lastGameScores",
    "maxPlayers",
    "promptLanguage",
    "promptListSlugs",
@@ -2633,7 +2633,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 26,
+ "protocolVersion": 27,
  "refusal": {
   "codes": [
    "invalid_payload",

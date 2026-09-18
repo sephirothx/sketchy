@@ -915,6 +915,20 @@ class GameFlowService:
             room=room.id,
         )
         await self._sync_player_view(sid, room, player)
+        await self.send_last_game(sid, room)
+
+    async def send_last_game(self, sid: str, room: Room) -> None:
+        """Hand a socket arriving in a waiting room the finished game's recap.
+
+        `room_state` no longer carries it (#871), and `game_ended` went out
+        before this socket was here - a late joiner, a reconnect after the
+        game ended while it was away, a tab that slept through it. Same shape
+        as `game_ended`, under its own name so the client shows the recap
+        without replaying the end of a game it did not watch.
+        """
+        payload = room.last_game_payload()
+        if payload is not None:
+            await self._sio.emit("last_game", payload, to=sid)
 
     def _turn_payload(
         self,
@@ -1310,15 +1324,7 @@ class GameFlowService:
             # No await between the snapshot above and this emit, so a
             # `start_game` cannot land in between and blank the scores the
             # room is about to be shown.
-            await self._sio.emit(
-                "game_ended",
-                {
-                    "scores": room.last_game_scores,
-                    "highlights": room.last_game_highlights,
-                    "drawings": room.drawing_recap_metadata(),
-                },
-                room=room.id,
-            )
+            await self._sio.emit("game_ended", room.last_game_payload(), room=room.id)
             await self._emit_room_state(room)
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.

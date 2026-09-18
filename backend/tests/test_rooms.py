@@ -242,7 +242,7 @@ def test_create_room_with_hide_masked_prompt_forces_hints_off():
     assert room.to_state_payload()["hideMaskedPrompt"] is True
 
 
-def test_room_payload_exposes_only_recap_metadata_while_waiting():
+def test_the_recap_is_metadata_only_and_offered_only_while_waiting():
     rm = RoomManager()
     room = rm.create_room(name="Room")
     drawer = rm.add_player(room, "Drawer")
@@ -260,8 +260,11 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
         )
     )
 
-    payload = room.to_state_payload()
-    assert payload["lastGameDrawings"] == [{
+    room.last_game_scores = [{"playerId": drawer.id, "nickname": "Drawer", "score": 0}]
+    # Not in the snapshot any more (#871): `game_ended` and `last_game` carry it.
+    assert not any(key.startswith("lastGame") for key in room.to_state_payload())
+    payload = room.last_game_payload()
+    assert payload["drawings"] == [{
         "index": 0,
         "turnId": room.last_game_drawings[0].turn_id,
         "reactions": [],
@@ -274,10 +277,10 @@ def test_room_payload_exposes_only_recap_metadata_while_waiting():
         "actionCount": 0,
         "available": True,
     }]
-    assert "canvas" not in payload["lastGameDrawings"][0]
+    assert "canvas" not in payload["drawings"][0]
 
     room.state = "playing"
-    assert room.to_state_payload()["lastGameDrawings"] == []
+    assert room.last_game_payload() is None
 
 
 def recap_entry(turn: int, canvas: bytes) -> DrawingRecapEntry:

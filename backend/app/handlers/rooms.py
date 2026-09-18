@@ -633,6 +633,10 @@ async def _seat_in_room(
             already_joined,
             sync_canvas=not soft,
         )
+        # A client only rechecks its seat in a waiting room when it thinks it
+        # is still playing - it missed `game_ended` - so this is when it needs
+        # the recap, and it is not paid on an ordinary waiting-room tab.
+        await ctx.game_flow.send_last_game(sid, room)
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, already_joined)
         seated.append(already_joined)

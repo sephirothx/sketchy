@@ -17,6 +17,7 @@ import type {
   DrawingReactionEvent,
   GameEndedPayload,
   GuessBreakdown,
+  LastGamePayload,
   RoomStatePayload,
   TurnEndedPayload,
 } from "../types";
@@ -209,6 +210,10 @@ export function useGameSocketListeners() {
       store.getState().endGame(payload);
     };
 
+    const onLastGame = (payload: LastGamePayload) => {
+      store.getState().applyLastGame(payload);
+    };
+
     const onDrawingReaction = (payload: DrawingReactionEvent) => {
       store.getState().applyDrawingReaction(payload);
     };
@@ -274,6 +279,7 @@ export function useGameSocketListeners() {
     socket.on("hint_revealed", onHintRevealed);
     socket.on("turn_ended", onTurnEnded);
     socket.on("game_ended", onGameEnded);
+    socket.on("last_game", onLastGame);
     socket.on("sync_game", onSyncGame);
     socket.on("drawing_reaction", onDrawingReaction);
 
@@ -295,6 +301,7 @@ export function useGameSocketListeners() {
       socket.off("hint_revealed", onHintRevealed);
       socket.off("turn_ended", onTurnEnded);
       socket.off("game_ended", onGameEnded);
+      socket.off("last_game", onLastGame);
       socket.off("sync_game", onSyncGame);
       socket.off("drawing_reaction", onDrawingReaction);
     };

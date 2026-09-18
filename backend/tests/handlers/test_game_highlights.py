@@ -72,8 +72,11 @@ async def test_the_waiting_room_still_reports_the_last_game_highlights():
     await play_to_completion(ctx, room, players)
 
     assert room.state == "waiting"
-    assert room.to_state_payload()["lastGameHighlights"] == room.last_game_highlights
+    # By `last_game`, which a socket arriving now is sent; not by every
+    # waiting-room snapshot, which no longer carries the recap (#871).
+    assert room.last_game_payload()["highlights"] == room.last_game_highlights
     assert room.last_game_highlights
+    assert "lastGameHighlights" not in room.to_state_payload()
 
 
 async def test_a_new_game_clears_the_previous_highlights():
@@ -86,5 +89,52 @@ async def test_a_new_game_clears_the_previous_highlights():
     await ctx.game_flow._start_fresh_game(room, list(room.player_list()))
 
     assert room.last_game_highlights == []
-    # And a room mid-game does not report stale highlights to a late joiner.
-    assert room.to_state_payload()["lastGameHighlights"] == []
+    # And a room mid-game hands a late joiner no stale recap.
+    assert room.last_game_payload() is None
+
+
+def last_game_sent_to(ctx, sid: str) -> list[dict]:
+    return [
+        call.args[1]
+        for call in ctx.sio.emit.await_args_list
+        if call.args[0] == "last_game" and call.kwargs.get("to") == sid
+    ]
+
+
+async def test_the_recap_travels_once_and_reaches_whoever_arrives_after_it(monkeypatch):
+    """#871: `game_ended` carries the recap and the room state after it does
+    not; a seat reconnecting, a new player joining and a tab rechecking its
+    seat in the waiting room are each handed it as `last_game`."""
+    from unittest.mock import AsyncMock
+
+    room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    await play_to_completion(ctx, room, players)
+    assert room.state == "waiting"
+    states = [c.args[1] for c in ctx.sio.emit.await_args_list if c.args[0] == "room_state"]
+    assert states and not any(key.startswith("lastGame") for key in states[-1])
+    recap = room.last_game_payload()
+    assert recap == game_ended_payload(ctx)
+
+    ctx.sio.emit.reset_mock()
+    ctx.sio.save_session = AsyncMock()
+    ctx.sio.enter_room = AsyncMock()
+    join = ctx.sio.handlers["/"]["join_room"]
+
+    # Ann's tab reconnects on a new socket: her seat, taken back.
+    ctx.sio.get_session = AsyncMock(return_value={"user_id": "user-ann"})
+    players["Ann"].connected = False
+    assert (await join("ann-new", {"code": room.code, "nickname": "Ann"}))["ok"]
+    assert last_game_sent_to(ctx, "ann-new") == [recap]
+
+    # Carol arrives for the first time.
+    ctx.sio.get_session = AsyncMock(return_value={"user_id": "user-carol"})
+    assert (await join("carol", {"code": room.code, "nickname": "Carol"}))["ok"]
+    assert last_game_sent_to(ctx, "carol") == [recap]
+
+    # Ann's tab thought it was still playing and rechecks its seat.
+    ctx.sio.get_session = AsyncMock(
+        return_value={"user_id": "user-ann", "room_id": room.id, "player_id": players["Ann"].id}
+    )
+    assert (await join("ann-new", {"code": room.code, "nickname": "Ann", "soft": True}))["ok"]
+    assert len(last_game_sent_to(ctx, "ann-new")) == 2

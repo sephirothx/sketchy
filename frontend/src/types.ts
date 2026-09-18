@@ -243,9 +243,6 @@ export interface RoomStatePayload {
   promptLanguage: PromptLanguage;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
-  lastGameScores?: ScoreEntry[];
-  lastGameHighlights?: GameHighlight[];
-  lastGameDrawings?: DrawingRecapMetadata[];
   moderation: ModerationState;
   restartVote?: RestartVoteState | null;
   restartVoteCooldownUntil?: number;
@@ -335,6 +332,9 @@ export interface DrawingReactionEvent {
   isAnonymous?: boolean;
   emoji: string | null;
   tally: ReactionTally;
+  /** On a finished game's recap only: the refreshed "most reacted" card, or
+      null once the last reaction is taken back (#871). Absent during play. */
+  highlight?: GameHighlight | null;
 }
 
 export interface ReactToDrawingResponse extends AckResponse {
@@ -414,6 +414,10 @@ export interface GameEndedPayload {
   highlights?: GameHighlight[];
   drawings: DrawingRecapMetadata[];
 }
+
+/** The finished game's recap for a socket that arrived after `game_ended`
+    (#871): the same shape, without the end-of-game moment. */
+export type LastGamePayload = GameEndedPayload;
 
 export interface DrawingRecapMetadata {
   index: number;
