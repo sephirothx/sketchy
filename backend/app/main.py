@@ -93,7 +93,7 @@ from app.services.friends import FriendService
 from app.services.lobby_chat import restore_lobby_backlog
 from app.services.presence import start_presence_loop, stop_presence_loop
 from app.services.readiness import LoopHealth, ReadinessProbe
-from app.socket_server import BoundedSocketServer
+from app.socket_server import BoundedSocketServer, socket_transports
 from app.services.telemetry import start_lag_sampler, stop_lag_sampler, telemetry
 from app.repositories.sqlalchemy import (
     CATALOGUE_RANKING_TTL_SECONDS,
@@ -291,6 +291,7 @@ finished_game_worker.bind_outcome(handler_context.game_flow.note_history_outcome
 # The socket ledger already knows exactly how many are open; the gauge reads
 # it rather than keeping a second count that could drift from it.
 telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open_sockets
+telemetry.sources.socket_transports = lambda: socket_transports(sio)
 # Built here rather than at import so it can reach the live policy objects the
 # handlers consult: a change has to move the value the next command reads, not
 # a copy of it.

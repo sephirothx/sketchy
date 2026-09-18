@@ -141,6 +141,23 @@ def current_database_operation() -> str:
     return _db_operation.get()
 # Payload sizes in bytes: a guess is tens of bytes, a draw frame hundreds, a
 # canvas snapshot or a recap tens of kilobytes.
+# How long a socket lived, from a reload's second to an evening's hours (#881).
+SESSION_BUCKETS = (1.0, 5.0, 30.0, 60.0, 300.0, 900.0, 1800.0, 3600.0, 7200.0, 14400.0)
+# How long a seat stood empty before its account came back, against the 30 s
+# reconnect grace (R-CONN-01): the buckets are dense below it on purpose.
+REBIND_BUCKETS = (0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0, 15.0, 20.0, 25.0, 30.0)
+# Engine.IO ping to pong, which is network round trip plus both event loops.
+RTT_BUCKETS = (0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0)
+# Why a socket went, as python-socketio names it, and a bucket for anything a
+# later version adds so the label set stays closed (#881).
+DISCONNECT_REASONS = {
+    "server disconnect": "server_disconnect",
+    "client disconnect": "client_disconnect",
+    "ping timeout": "ping_timeout",
+    "transport close": "transport_close",
+    "transport error": "transport_error",
+}
+
 SIZE_BUCKETS = (64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0)
 # How many commands and events the admin payload names by size; the rest
 # are still in the scrape.
@@ -598,6 +615,8 @@ class Sources:
     """
 
     sockets_connected: Callable[[], int] | None = None
+    # Each open socket's current transport, `polling` or `websocket` (#881).
+    socket_transports: Callable[[], dict[str, str]] | None = None
     pool: Callable[[], PoolGauges | None] | None = None
 
 
@@ -745,6 +764,42 @@ class Telemetry:
             "Socket.IO handshakes accepted, by the transport they opened on (polling or websocket).",
             ("transport",),
         )
+        # The life of a connection (#881): why it ended, how long it lasted,
+        # how long its seat waited for it to come back, and what the network
+        # between here and the browser costs a round trip. Nothing here is
+        # labelled by anything a client chose.
+        self.socket_disconnects = LabelledCounter(
+            "sketchy_socket_disconnects_total",
+            "Sockets closed, by why: server_disconnect, client_disconnect, ping_timeout, transport_close, transport_error, other.",
+            ("reason",),
+        )
+        self.socket_sessions = Histogram(
+            "sketchy_socket_session_seconds",
+            "How long an accepted socket stayed open.",
+            SESSION_BUCKETS,
+        )
+        self.seat_rebinds = Histogram(
+            "sketchy_seat_rebind_seconds",
+            "How long a disconnected seat waited before its account took it back.",
+            REBIND_BUCKETS,
+        )
+        self.socket_ping_rtt = Histogram(
+            "sketchy_socket_ping_rtt_seconds",
+            "Engine.IO ping to pong: network round trip plus both event loops.",
+            RTT_BUCKETS,
+        )
+        self.socket_upgrades = LabelledCounter(
+            "sketchy_socket_upgrades_total",
+            "Sockets that opened on long-polling and later upgraded to WebSocket.",
+        )
+        self.stale_clients = LabelledCounter(
+            "sketchy_stale_clients_total",
+            "Sockets told to upgrade, by the version they spoke (older, newer, absent) and how they went (reloaded, closed).",
+            ("received", "outcome"),
+        )
+        # sid -> (opened at, still on polling): what a close needs to size a
+        # session and notice an upgrade. Bounded by the socket ceiling.
+        self._open_sockets: dict[str, list] = {}
         self.guesses_out_of_scope = LabelledCounter(
             "sketchy_guesses_out_of_scope_total",
             "Guesses that named a room or turn the seat had already left, ignored.",
@@ -978,6 +1033,47 @@ class Telemetry:
 
     def note_handshake_transport(self, transport: str) -> None:
         self.socket_handshake_transports.inc((transport,))
+
+    def note_socket_opened(self, sid: str, transport: str) -> None:
+        self._open_sockets[sid] = [self._monotonic(), transport == "polling"]
+
+    def note_socket_closed(self, sid: str, reason: str | None, transport: str | None) -> None:
+        """Count one accepted socket's close. `transport` is where it ended."""
+        self.socket_disconnects.inc((DISCONNECT_REASONS.get(reason or "", "other"),))
+        opened = self._open_sockets.pop(sid, None)
+        if opened is None:
+            return
+        self.socket_sessions.observe(self._monotonic() - opened[0], now=self._clock())
+        if opened[1] and transport == "websocket":
+            self.socket_upgrades.inc()
+
+    def note_socket_forgotten(self, sid: str) -> None:
+        """A handshake refused after it was noted never reaches a close."""
+        self._open_sockets.pop(sid, None)
+
+    def note_seat_rebind(self, seconds: float) -> None:
+        self.seat_rebinds.observe(seconds, now=self._clock())
+
+    def note_ping_rtt(self, seconds: float) -> None:
+        self.socket_ping_rtt.observe(seconds, now=self._clock())
+
+    def note_stale_client(self, received: str, outcome: str) -> None:
+        self.stale_clients.inc((received, outcome))
+
+    def _socket_transport_rows(self) -> list[tuple[tuple[str], int]] | None:
+        """Sockets by current transport, read at scrape; upgrades noticed here
+        too, so a long-lived upgraded socket is counted before it closes."""
+        if self.sources.socket_transports is None:
+            return None
+        transports = self.sources.socket_transports()
+        counts = {"polling": 0, "websocket": 0}
+        for sid, transport in transports.items():
+            counts[transport] = counts.get(transport, 0) + 1
+            opened = self._open_sockets.get(sid)
+            if opened is not None and opened[1] and transport == "websocket":
+                opened[1] = False
+                self.socket_upgrades.inc()
+        return [((transport,), count) for transport, count in sorted(counts.items())]
 
     def note_guess_out_of_scope(self, scope: str) -> None:
         self.guesses_out_of_scope.inc((scope,))
@@ -1311,6 +1407,20 @@ class Telemetry:
         lines += gauge_lines(
             "sketchy_sockets_connected", "Sockets currently open on this worker.", self._sockets()
         )
+        transport_rows = self._socket_transport_rows()
+        if transport_rows is not None:
+            lines += labelled_gauge_lines(
+                "sketchy_sockets_by_transport",
+                "Sockets currently open, by the transport they are on now.",
+                ("transport",),
+                transport_rows,
+            )
+        lines += self.socket_disconnects.lines()
+        lines += self.socket_sessions.lines()
+        lines += self.seat_rebinds.lines()
+        lines += self.socket_ping_rtt.lines()
+        lines += self.socket_upgrades.lines()
+        lines += self.stale_clients.lines()
         lines += self.loop_lag.lines()
         lines += gauge_lines(
             "sketchy_event_loop_lag_last_seconds",

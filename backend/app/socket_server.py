@@ -64,6 +64,20 @@ from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.socket_server")
 
+
+def socket_transports(sio: socketio.AsyncServer) -> dict[str, str]:
+    """Each open Socket.IO sid on the default namespace, by the transport its
+    Engine.IO socket is on now (#881). Read at scrape, so it is what is true,
+    not what the handshake said."""
+    transports: dict[str, str] = {}
+    for eio_sid, engine_socket in list(getattr(sio.eio, "sockets", {}).items()):
+        if getattr(engine_socket, "closed", False):
+            continue
+        sid = sio.manager.sid_from_eio_sid(eio_sid, "/")
+        if sid is not None:
+            transports[sid] = "websocket" if engine_socket.upgraded else "polling"
+    return transports
+
 #: Commands allowed to arrive as a binary event, with the most arguments each takes
 #: (the frame's placeholder plus, for `draw`, the optional action identity).
 BINARY_COMMANDS: dict[str, int] = {"draw": 2}

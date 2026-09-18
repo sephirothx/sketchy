@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from functools import partial
 
 from app.announcements import Announcement
 from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.services.runtime_metrics import metrics
+from app.services.telemetry import telemetry
 from app.handlers.payloads import (
     CreateRoomPayload,
     JoinRoomPayload,
@@ -662,6 +664,15 @@ async def _seat_in_room(
             }
         # _join_socket_room notifies and disconnects any socket that was
         # holding this seat before handing it to the new one.
+        # A seat inside its reconnect grace: how long it stood empty is what
+        # the 30 s grace has to cover (#881). Measured now, recorded only once
+        # the seat is really taken back below. A second tab taking over a live
+        # seat is not a rebind.
+        empty_for = (
+            time.monotonic() - player.disconnected_at
+            if not player.connected and player.disconnected_at is not None
+            else None
+        )
         metrics.record(
             RuntimeEventType.PLAYER_RECONNECTED,
             room_id=room.id,
@@ -672,6 +683,8 @@ async def _seat_in_room(
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, player)
+        if empty_for is not None:
+            telemetry.note_seat_rebind(empty_for)
         seated.append(player)
         return session_payload(room, player)
 

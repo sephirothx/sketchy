@@ -48,6 +48,14 @@ STALE_SOCKET_CLOSE_SECONDS = 5.0
 PROTOCOL_HEADER = "x-sketchy-protocol"
 
 
+def stale_client_bucket(received: int) -> str:
+    """The version a stale client spoke, as a bounded label (#881): the raw
+    integer is whatever a client claims and must never become a series."""
+    if received <= 0:
+        return "absent"
+    return "older" if received < PROTOCOL_VERSION else "newer"
+
+
 def client_protocol_version(auth) -> int:
     """Read the protocol version a connecting client claims.
 

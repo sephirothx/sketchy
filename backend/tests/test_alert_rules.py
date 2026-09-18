@@ -67,6 +67,7 @@ def exposed_names() -> set[str]:
     """Every family the scrape can carry, with the suffixes a histogram adds."""
     store = Telemetry()
     store.sources.sockets_connected = lambda: 1
+    store.sources.socket_transports = lambda: {"s1": "websocket"}
     store.sources.pool = lambda: PoolGauges(5, 1, 4, 0, 10)
     store.http_request("GET", "/api/rooms", 200, 0.01)
     store.socket_event("draw", "ok", 0.001)

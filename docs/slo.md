@@ -44,6 +44,19 @@ warnings, because each one is a cause the objectives above would show the effect
 `SketchyPoolSaturated`, `SketchySlowQueries`, `SketchyDiskLow` (page: a full disk is
 data loss), `SketchyMemoryHigh`.
 
+The connection has four of those warnings (#881), each a network or proxy problem a
+player feels as lag or a stuck canvas before any objective moves:
+`SketchyPollingShareHigh` (over a fifth of open sockets on long-polling for 30 m — an
+upgrade the network is not passing), `SketchyCompressionMissing` (over a tenth of new
+WebSockets without permessage-deflate in 30 m — a proxy stripping the extension, at ~8×
+the bytes), `SketchyBacklogClosures` (any socket closed for its outbound backlog), and
+`SketchyCanvasRecoveries` (non-deferred canvas recovery notices above one per two open
+sockets per 15 m). Each has a floor on the population so a quiet night with a handful of
+sockets does not fire it. The series that explain them — disconnects by reason, session
+length, seat rebind time against the 30 s grace, Engine.IO ping round trip, polling
+upgrades, stale clients — are listed in wire §9; they have no alert of their own until
+beta traffic says what normal looks like.
+
 The database's application-side signals name a cause as well as an effect (#892).
 `sketchy_db_query_duration_seconds` is labelled by `operation` (session resolve, save
 game, prompt usage, message batch, event flush, gallery page, community catalogue,
