@@ -216,6 +216,36 @@ groups:
           summary: "The {{ $labels.table }} retention sweep has spent its whole budget on every pass for six hours"
           runbook: "README.md#on-call"
 
+      # --- integrity (#894) ----------------------------------------------------
+      # A stored drawing that no longer reads back is data lost until a
+      # restore, and the restore that fixes it ages out with backup
+      # retention: that one pages. The audit row names the drawing.
+      - alert: SketchyDrawingCorrupt
+        expr: increase(sketchy_integrity_mismatches_total{check="drawings"}[1h]) > 0
+        labels: {severity: page}
+        annotations:
+          summary: "The integrity audit found a stored drawing that does not read back"
+          description: "audit_events rows of type integrity.mismatch name the turn; restore it from the newest backup that still has it before that backup ages out."
+          runbook: "docs/database.md#the-integrity-audit"
+
+      - alert: SketchyIntegrityDrift
+        expr: increase(sketchy_integrity_mismatches_total{check!="drawings"}[1h]) > 0
+        labels: {severity: warn}
+        annotations:
+          summary: "The integrity audit found {{ $labels.check }} rows that disagree with their facts"
+          description: "Nothing was repaired. The audit rows name each row; the rebuild commands in docs/database.md §13 repair projections."
+          runbook: "docs/database.md#the-integrity-audit"
+
+      # An audit that never finishes a pass bounds nothing.
+      - alert: SketchyIntegrityCycleOverdue
+        expr: sketchy_integrity_cycle_age_seconds > 2 * sketchy_integrity_cycle_target_seconds
+        for: 1h
+        labels: {severity: warn}
+        annotations:
+          summary: "The {{ $labels.check }} integrity check has not completed a pass in twice its target"
+          description: "Raise INTEGRITY_AUDIT_BYTE_BUDGET_MIB or INTEGRITY_AUDIT_PASS_SECONDS, or look for sketchy_integrity_check_failed."
+          runbook: "docs/database.md#the-integrity-audit"
+
       - alert: SketchyMailBacklog
         expr: sketchy_mail_outbox_oldest_seconds > 600
         for: 10m

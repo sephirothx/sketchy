@@ -750,6 +750,10 @@ process. These deployment settings can be tuned without code changes:
 | `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, login lockouts, room codes, runtime events, bug-report screenshots, retired lists, guests |
 | `RETENTION_SWEEP_ROW_BUDGET` | `5000` | Rows one sweep may delete per run; a run that spends it comes back after 5 s rather than an hour |
 | `RETENTION_SWEEP_BATCH_ROWS` | `500` | Rows per committed delete batch inside a sweep |
+| `INTEGRITY_AUDIT_SECONDS` | `300` | How often the integrity audit runs a pass over its checks (#894) |
+| `INTEGRITY_AUDIT_PASS_SECONDS` | `10` | Seconds one pass may spend, shared equally between the checks |
+| `INTEGRITY_AUDIT_BYTE_BUDGET_MIB` | `16` | Drawing bytes one pass may read and verify |
+| `INTEGRITY_AUDIT_CYCLE_TARGET_SECONDS` | `86400` | How long a whole pass over each check's table is expected to take; twice this alerts |
 | `RETENTION_SWEEP_SECONDS_BUDGET` | `30` | Seconds one sweep may spend per run |
 | `EXPORT_SWEEP_SECONDS` | `60` | How often the export worker looks for jobs nobody woke it for, and reclaims ones a crash left behind |
 | `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
@@ -1663,6 +1667,7 @@ backend/
       afk.py       When a person stopped answering: the activity ledger and the AFK check sweep
       bug_report_retention.py A ceiling on how long an undecided bug report keeps its screenshot
       storage_report.py What each table of the live database occupies, from the catalogue
+      integrity_audit.py Stored drawings, projections and ledgers re-checked on a schedule; reported, never repaired
     presenters.py Pure construction of room, turn, round, and session payloads
     refusals.py   The one refusal vocabulary (`ErrorCode`), shared by REST and the socket
     auth/mail_copy.py The five outgoing messages, in each of the seven languages

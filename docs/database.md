@@ -2544,6 +2544,47 @@ no statement in `backend/app` names its leading column (#890 applied that rule b
 hand); a table whose dead tuples autovacuum is not holding gets its own
 `autovacuum_vacuum_scale_factor`, set from these numbers rather than guessed.
 
+### The integrity audit
+
+The database holds three kinds of value nothing re-checked unless somebody thought to:
+the stored drawings, the projections derived from facts, and the invariants only the
+writers prove. A supervised loop checks all of them (#894,
+[`services/integrity_audit.py`](../backend/app/services/integrity_audit.py)), a bounded
+slice per pass, off the request path, and **reports without repairing**:
+
+| Check | What it compares | On a mismatch |
+| --- | --- | --- |
+| `drawings` | every ready drawing: declared size and format, checksum, decodability — the #610 walk | **pages** (`SketchyDrawingCorrupt`): the bytes are lost until a restore |
+| `drawing_projections` | `reaction_count` and `hot_score` against the reaction rows | warns; `python -m app.services.gallery_ranking` rebuilds |
+| `user_stats` | each account's `user_stats_daily` rows against a rebuild from facts, run in a transaction that is **rolled back** | warns; `python -m app.services.user_stats_projection` rebuilds |
+| `games` | each seat's ledger sum against `final_score` (ledgered games), each turn's `guesser_count` against its eligible outcome rows | warns; a writer bug, investigate |
+| `alias_chains` | no merged identity points at another merged identity | warns |
+
+Every check walks its table by keyset and keeps its place in `app_config`
+(`integrity_audit.<check>`, one JSON value with the cursor and the cycle's timings), so
+a restart resumes and a **cycle is a whole pass over every row** — not a sample that may
+never reach the bad one. Each pass gives every check an equal share of
+`INTEGRITY_AUDIT_PASS_SECONDS` (10 s), and the drawing walk a byte budget
+(`INTEGRITY_AUDIT_BYTE_BUDGET_MIB`, 16) on top; passes run every
+`INTEGRITY_AUDIT_SECONDS` (300). At those defaults a day reads 4.5 GiB of drawings,
+about 150,000 at the sizes measured so far — the **detection bound**: corruption or drift
+exists for at most one cycle, which is kept shorter than backup retention so the restore
+that repairs a drawing still exists when the audit finds the damage (#458). A check
+fails alone: one that raises is marked failed and the others run.
+
+A mismatch is logged, counted (`sketchy_integrity_mismatches_total{check}`) and written as
+one `audit_events` row of type `integrity.mismatch` naming the check, the kind and the
+row id — never the row's content. `sketchy_integrity_rows_verified_total`,
+`sketchy_integrity_cycle_age_seconds` against `sketchy_integrity_cycle_target_seconds`
+(`INTEGRITY_AUDIT_CYCLE_TARGET_SECONDS`, a day; `SketchyIntegrityCycleOverdue` at twice
+it), `sketchy_integrity_last_cycle_seconds`,
+`sketchy_integrity_last_completed_timestamp_seconds` and `sketchy_integrity_check_failed`
+say how far along each check is. To run passes now, as the loop would:
+
+```bash
+cd backend && .venv/bin/python -m app.services.integrity_audit --passes 10
+```
+
 ### Production deploy order
 
 ```bash
