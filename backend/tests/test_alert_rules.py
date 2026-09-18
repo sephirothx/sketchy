@@ -212,3 +212,23 @@ def test_the_scrape_example_loads_every_rule_file_and_enables_every_collector_us
             assert f"--collector.{collector}" in scrape, metric
     for job in re.findall(r'job="([a-z-]+)"', " ".join(rule["expr"] for rule in all_rules())):
         assert job in jobs, job
+
+
+def test_the_disk_rules_read_only_the_database_volume():
+    """node_exporter reports every mount; a full /boot is not a full database."""
+    selectors = [
+        selector
+        for rule in all_rules()
+        for selector in re.findall(r"node_filesystem_[a-z_]+(\{[^}]*\})?", rule["expr"])
+    ]
+    assert selectors
+    assert all('volume="database"' in selector for selector in selectors), selectors
+    config = yaml.safe_load(SCRAPE.read_text(encoding="utf-8"))
+    host = next(job for job in config["scrape_configs"] if job["job_name"] == "postgres-host")
+    relabels = host.get("metric_relabel_configs", [])
+    assert any(
+        relabel.get("target_label") == "volume"
+        and relabel.get("replacement") == "database"
+        and "mountpoint" in relabel.get("source_labels", [])
+        for relabel in relabels
+    ), relabels

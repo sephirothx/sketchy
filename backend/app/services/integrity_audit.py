@@ -27,6 +27,16 @@ bad one:
 A check reports and does not repair: a mismatch is counted, logged, and
 written as one `audit_events` row naming the check and the row id - never its
 content - for an operator to read and act on with the rebuild commands.
+
+Every comparison reads both sides from one snapshot. Under PostgreSQL's
+default READ COMMITTED each statement sees what committed before it, so a
+reaction landing between the read of `reaction_count` and the count of the
+rows - both written by one transaction - would be reported as drift that
+never existed. So each slice runs REPEATABLE READ. The `user_stats` slice
+also writes (the rebuild it rolls back), and a writer that changed one of its
+rows after the snapshot makes that write fail with a serialization error:
+the slice then steps back and is retried on the next pass, since a
+comparison it could not finish proves nothing either way.
 """
 from __future__ import annotations
 
@@ -44,9 +54,11 @@ from typing import Awaitable, Callable
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
+from app.db import classify_database_error
 from app.db.models import (
     AppConfig,
     AuditEvent,
@@ -173,6 +185,9 @@ class SliceResult:
     cursor: str | None = None
     complete: bool = False
     bytes: int = 0
+    # The slice could not hold its snapshot against a writer: nothing was
+    # verified, the cursor stays where it was, and the next pass retries.
+    contended: bool = False
 
 
 @dataclass
@@ -182,6 +197,16 @@ class CheckTotals:
 
 
 # --- the checks ---------------------------------------------------------------
+
+
+async def _one_snapshot(session: AsyncSession) -> None:
+    """Pin every statement of the slice's transaction to one snapshot.
+
+    Called before the slice's first statement, which is when PostgreSQL takes
+    a REPEATABLE READ snapshot. SQLite is left as it is: it is not deployed.
+    """
+    if session.get_bind().dialect.name == "postgresql":
+        await session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
 
 
 async def _drawings_slice(
@@ -209,6 +234,7 @@ async def _drawings_slice(
 
 
 async def _drawing_projections_slice(session: AsyncSession, cursor: str | None) -> SliceResult:
+    await _one_snapshot(session)
     statement = (
         select(
             TurnDrawing.turn_id,
@@ -276,8 +302,12 @@ async def _user_stats_slice(
     with the repair it would recommend; the transaction is rolled back
     whatever it finds, so the check repairs nothing. It locks the batch's
     `users` rows for the rebuild's duration, as the rebuild command does.
+    The stored copy and the rebuild's facts come from one snapshot; a writer
+    that touched the batch's rows since makes the rebuild's own write fail,
+    and the slice is then retried rather than reported.
     """
     async with session_factory() as session:
+        await _one_snapshot(session)
         statement = (
             select(User.id)
             .where(User.state != AccountState.MERGED.value)
@@ -290,16 +320,22 @@ async def _user_stats_slice(
         if not accounts:
             return SliceResult(complete=True)
         try:
-            stored = _daily_rows(
-                (await session.scalars(select(UserStatsDaily).where(UserStatsDaily.user_id.in_(accounts)))).all()
-            )
-            await _rebuild_accounts(session, accounts)
-            rebuilt = _daily_rows(
-                (await session.scalars(select(UserStatsDaily).where(UserStatsDaily.user_id.in_(accounts)))).all()
-            )
-        finally:
-            # Whatever it found: the rebuild is the yardstick, never a repair.
-            await session.rollback()
+            try:
+                stored = _daily_rows(
+                    (await session.scalars(select(UserStatsDaily).where(UserStatsDaily.user_id.in_(accounts)))).all()
+                )
+                await _rebuild_accounts(session, accounts)
+                rebuilt = _daily_rows(
+                    (await session.scalars(select(UserStatsDaily).where(UserStatsDaily.user_id.in_(accounts)))).all()
+                )
+            finally:
+                # Whatever it found: the rebuild is the yardstick, never a repair.
+                await session.rollback()
+        except DBAPIError as error:
+            if classify_database_error(error) != "serialization":
+                raise
+            logger.info("integrity check user_stats: batch after %s changed under the slice; retrying next pass", cursor)
+            return SliceResult(cursor=cursor, contended=True)
     drifted = sorted(
         {key[0] for key in set(stored) | set(rebuilt) if stored.get(key) != rebuilt.get(key)}
     )
@@ -315,6 +351,7 @@ async def _user_stats_slice(
 
 
 async def _games_slice(session: AsyncSession, cursor: str | None) -> SliceResult:
+    await _one_snapshot(session)
     statement = select(GameRecord.id, GameRecord.score_ledger_version).order_by(GameRecord.id).limit(GAME_SLICE_ROWS)
     if cursor:
         statement = statement.where(GameRecord.id > UUID(cursor))
@@ -374,6 +411,7 @@ async def _games_slice(session: AsyncSession, cursor: str | None) -> SliceResult
 
 
 async def _alias_chains_slice(session: AsyncSession, cursor: str | None) -> SliceResult:
+    await _one_snapshot(session)
     """No alias targets an identity that is itself merged away. Whole table
     each pass: it holds one row per guest ever merged, and the join is on
     its primary key."""
@@ -469,6 +507,8 @@ class IntegrityAudit:
         bytes_left = self.budget.byte_budget
         while True:
             result = await run(state.cursor, bytes_left)
+            if result.contended:
+                return
             bytes_left -= result.bytes
             totals = self.totals[check]
             totals.rows_verified += result.rows

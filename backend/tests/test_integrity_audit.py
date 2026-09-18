@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import os
 from uuid import UUID
 
 import pytest
@@ -184,3 +185,108 @@ async def test_one_check_failing_does_not_stop_the_others(world, monkeypatch):
     assert report["games"]["failed"] is True
     assert report["alias_chains"]["failed"] is False and report["alias_chains"]["last_completed_at"] is not None
     assert health.consecutive_failures == 1
+
+
+# --- a writer committing mid-slice (PostgreSQL's READ COMMITTED) --------------
+
+ON_POSTGRESQL = os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql")
+
+
+class _Interleaved:
+    """A session that lets a writer commit before its `nth` statement.
+
+    Under READ COMMITTED each statement sees whatever committed before it, so
+    a slice that reads a projection and then its facts in two statements can
+    compare one moment with the next - the window this opens on purpose.
+    """
+
+    def __init__(self, session, nth: int, writer) -> None:
+        self._session = session
+        self._nth = nth
+        self._writer = writer
+        self._calls = 0
+
+    async def _before(self) -> None:
+        self._calls += 1
+        if self._calls == self._nth:
+            await self._writer()
+
+    async def execute(self, *args, **kwargs):
+        await self._before()
+        return await self._session.execute(*args, **kwargs)
+
+    async def scalars(self, *args, **kwargs):
+        await self._before()
+        return await self._session.scalars(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    async def __aenter__(self):
+        await self._session.__aenter__()
+        return self
+
+    async def __aexit__(self, *exc):
+        return await self._session.__aexit__(*exc)
+
+
+async def _a_fan_reacts(factory, recorded, name: str) -> None:
+    users = SqlAlchemyUserRepository(factory)
+    fan = await registered(users, name)
+    await SqlAlchemyGameHistoryRepository(factory).set_drawing_reaction(
+        None, recorded.turn_id, requesting_user_id=fan.id, emoji="wow", from_gallery=True
+    )
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="the interleaving is PostgreSQL's READ COMMITTED")
+async def test_a_reaction_committing_mid_slice_is_not_drift_in_the_drawing_projection(world):
+    """The writer sets the count and the row in one transaction; the check
+    must read both from one moment, or it reports its own race as damage."""
+    factory, recorded = world
+
+    async def slice_with_a_reaction_between_its_reads():
+        async with factory() as session:
+            interleaved = _Interleaved(session, 2, lambda: _a_fan_reacts(factory, recorded, "Midslice"))
+            return await integrity._drawing_projections_slice(interleaved, None)
+
+    result = await slice_with_a_reaction_between_its_reads()
+    assert result.rows == 1 and result.mismatches == []
+    # And the reaction did land: the next slice counts it, still consistent.
+    async with factory() as session:
+        assert (await integrity._drawing_projections_slice(session, None)).mismatches == []
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="the interleaving is PostgreSQL's READ COMMITTED")
+async def test_a_reaction_committing_between_the_stored_copy_and_the_rebuild_is_not_drift(world):
+    """The stored rows and the rebuild's facts must be one moment's: a
+    reaction landing between them is not a projection that drifted. A slice
+    that cannot hold its snapshot against a writer steps back and is retried,
+    rather than reported."""
+    factory, recorded = world
+
+    def interleaving_factory():
+        # Statements: the batch of accounts, the stored copy, then the
+        # rebuild; the writer commits just before the rebuild's first read.
+        return _Interleaved(factory(), 3, lambda: _a_fan_reacts(factory, recorded, "Rebuildrace"))
+
+    result = await integrity._user_stats_slice(interleaving_factory, None)
+    # The reaction moved the drawer's row after the snapshot, so the rebuild
+    # could not replace it: stepped back, nothing reported, cursor unmoved.
+    assert (result.contended, result.mismatches, result.cursor) == (True, [], None)
+    # Retried with nobody writing, the slice completes and still finds nothing.
+    again = await integrity._user_stats_slice(factory, None)
+    assert again.rows >= 2 and again.mismatches == []
+
+
+async def test_a_contended_slice_is_retried_next_pass_not_counted(world, monkeypatch):
+    factory, _ = world
+
+    async def contended(session_factory, cursor):
+        return integrity.SliceResult(cursor=cursor, contended=True)
+
+    monkeypatch.setattr(integrity, "_user_stats_slice", contended)
+    report = await IntegrityAudit(factory, budget=GENEROUS).run_pass()
+    assert report["user_stats"]["rows_verified_total"] == 0
+    assert report["user_stats"]["failed"] is False
+    assert report["user_stats"]["last_completed_at"] is None
+    assert report["games"]["last_completed_at"] is not None

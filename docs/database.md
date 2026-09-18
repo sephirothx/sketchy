@@ -1809,8 +1809,9 @@ deep as `MAX_COMMUNITY_OFFSET` reaches — for `CATALOGUE_RANKING_TTL_SECONDS` (
 the `GalleryShelfCache` pattern; one worker owns it, so it is exact to within the TTL.
 A page then fetches its own rows by id with their live counts, 2.5 ms at the same size,
 the same as `newest` (`benchmarks/catalogue_star_page.py`, PostgreSQL 17). The page read
-re-applies the catalogue predicate, so a takedown, retirement or unpublish leaves at
-once; a publish through this process resets the ranking; a star moves a list within the
+re-applies the catalogue predicate and the language and tag filters, so a takedown,
+retirement, unpublish or dropped tag leaves at once; a publish, or a save that changes
+a published list's tags, through this process resets the ranking; a star moves a list within the
 TTL while its count is right immediately. If even the minute's recompute starts to
 hurt, a disposable `star_count` projection with a rebuild command is the next step (the
 `reaction_count` precedent), not a counter.
@@ -2575,6 +2576,14 @@ exists for at most one cycle, which is kept shorter than backup retention so the
 that repairs a drawing still exists when the audit finds the damage (#458). A check
 fails alone: one that raises is marked failed and the others run.
 
+Each slice reads both sides of its comparison from **one snapshot** (REPEATABLE READ).
+Under the default READ COMMITTED a reaction committing between the read of
+`reaction_count` and the count of the rows — both written by one transaction — would be
+reported as drift that never existed. The `user_stats` rebuild writes before it rolls
+back, so a writer that changed one of the batch's rows after the snapshot makes that
+write fail with a serialization error; the slice then steps back, cursor unmoved, and
+is retried next pass rather than reported.
+
 A mismatch is logged, counted (`sketchy_integrity_mismatches_total{check}`) and written as
 one `audit_events` row of type `integrity.mismatch` naming the check, the kind and the
 row id — never the row's content. `sketchy_integrity_rows_verified_total`,
@@ -2602,8 +2611,10 @@ HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
 In a deployment the migration step is
 [`ops/postgres/migrate-with-snapshot.sh`](../ops/postgres/migrate-with-snapshot.sh)
 (#893): it takes a custom-format `pg_dump` named for the time and the revision it holds
-into `SNAPSHOT_DIR`, prints the `pg_restore` command that puts it back, and only then
-migrates — a failed dump stops the deploy. Recovery from a bad release is restore and
+into `SNAPSHOT_DIR` (mode 0600: it is the whole database), prints the `pg_restore`
+command that puts it back, and only then migrates — a failed dump stops the deploy. The
+owner's password reaches `psql` and `pg_dump` through a temporary 0600 passfile, never
+their command lines, which any local user can read for as long as the dump runs. Recovery from a bad release is restore and
 fix forward (#458); nothing trusts a migration to run backwards over live rows, and a
 restore wants the state from immediately before the change rather than last night's
 backup plus a day of games.
@@ -2655,7 +2666,9 @@ create a table, rewrite either ledger or disable the trigger.
    which refuses each of these in any revision after the lint's starting point:
    - an index is built `postgresql_concurrently=True` inside
      `op.get_context().autocommit_block()` — a plain build blocks every writer for as
-     long as it takes, and `CONCURRENTLY` cannot run in a transaction;
+     long as it takes, and `CONCURRENTLY` cannot run in a transaction (the lint refuses
+     a concurrent build or drop outside the block on any table, since PostgreSQL would
+     refuse it at deploy);
    - a check or foreign key is added `postgresql_not_valid=True` and validated in a
      separate `ALTER TABLE … VALIDATE CONSTRAINT` — adding it valid scans the table
      under a lock writers wait behind, and validating takes one they do not;

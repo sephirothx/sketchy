@@ -3225,8 +3225,9 @@ class _CatalogueRanking:
     grew with every list published; a page read from the cached order fetches
     its 25 rows by id, with their counts, in under a millisecond. One worker
     owns it, so it is exact to within its TTL. A list taken down, retired or
-    unpublished leaves the page at once - the page's own read re-applies the
-    catalogue predicate - and a publish through this process resets it.
+    unpublished leaves the page at once - the page's own read re-applies
+    every filter - and a publish, or a save that changes a published list's
+    tags, through this process resets it.
     """
 
     def __init__(self, ttl_seconds: float, clock: Callable[[], float] = time.monotonic) -> None:
@@ -3630,7 +3631,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             stmt = (
                 select(*columns)
                 .join(User, User.id == PromptList.owner_user_id)
-                .where(PromptList.id.in_(ranked_page), *_published_by_a_player())
+                # Every filter again, not only the catalogue predicate: the
+                # ranking is an order, and a list retagged or taken down
+                # since it was read must not be served under a filter it no
+                # longer meets.
+                .where(PromptList.id.in_(ranked_page), *filters)
             )
         else:
             stmt = (
@@ -4084,6 +4089,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 prompt_list.description = description
                 prompt_list.version = next_version
                 prompt_list.updated_at = datetime.now(timezone.utc)
+                retagged_in_catalogue = (
+                    current.tags != tag_slugs
+                    and prompt_list.visibility == PromptListVisibility.PUBLIC.value
+                )
+            if retagged_in_catalogue:
+                # A tag filter's ranking was read over the old tags: a list
+                # newly carrying one belongs on that page now (#901).
+                self._ranking.invalidate()
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result
