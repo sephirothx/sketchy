@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from functools import partial
 
 from socketio.exceptions import ConnectionRefusedError
@@ -23,6 +24,20 @@ from app.services.runtime_metrics import metrics
 from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.handlers.connection")
+
+
+def _opened_on(environ) -> str | None:
+    """The transport the Engine.IO handshake request itself used.
+
+    Not `sio.transport(sid)` at connect time: a client may upgrade before its
+    Socket.IO CONNECT is handled, and then a socket that opened on polling
+    reads as a WebSocket and its upgrade is never seen (#881)."""
+    query = (environ or {}).get("QUERY_STRING", "")
+    for part in query.split("&"):
+        key, _, value = part.partition("=")
+        if key == "transport" and value in ("polling", "websocket"):
+            return value
+    return None
 
 
 def _transport_of(ctx: HandlerContext, sid) -> str:
@@ -172,7 +187,9 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         # connecting, and that fallback should be visible here rather than
         # inferred from a byte counter that looks oddly uncompressed.
         if outcome == "accepted":
-            telemetry.note_handshake_transport(_transport_of(ctx, sid))
+            transport = _opened_on(environ) or _transport_of(ctx, sid)
+            telemetry.note_handshake_transport(transport)
+            telemetry.note_socket_opened(sid, transport)
         if not accepted:
             ctx.room_capacity.note_socket_closed(sid)
             ctx.presence.note_socket_closed(sid)
@@ -184,9 +201,13 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             ctx.activity.forget(sid)
 
 
-async def disconnect(ctx: HandlerContext, sid):
+async def disconnect(ctx: HandlerContext, sid, reason: str | None = None):
     if not sid:
         return
+    # Why it went and how long it lived (#881), before anything below can
+    # return early: a socket closed from inside a seat transition is still a
+    # socket that closed.
+    telemetry.note_socket_closed(sid, reason, _transport_of(ctx, sid))
     ctx.room_capacity.note_socket_closed(sid)
     # Above the `is_closing` branch below, so a socket this server closed
     # from inside a seat transition drains too. Presence is released the
@@ -267,6 +288,7 @@ async def _begin_reconnect_grace(
 ) -> None:
     token = player.id
     player.connected = False
+    player.disconnected_at = time.monotonic()
     player.sid = None
     metrics.record(
         RuntimeEventType.PLAYER_DISCONNECTED,
@@ -316,4 +338,14 @@ async def _begin_reconnect_grace(
 
 def register(ctx: HandlerContext) -> None:
     ctx.sio.on("connect", handler=partial(connect, ctx))
-    ctx.sio.on("disconnect", handler=partial(disconnect, ctx))
+    async def on_disconnect(sid, reason=None):
+        # python-socketio passes the reason by calling with it and, on a
+        # TypeError, calling again without it (its support for one-argument
+        # handlers). A TypeError raised *inside* this handler would therefore
+        # run the whole disconnect twice; it is logged here instead.
+        try:
+            await disconnect(ctx, sid, reason)
+        except TypeError:
+            logger.exception("disconnect handler failed for %s", sid)
+
+    ctx.sio.on("disconnect", handler=on_disconnect)

@@ -279,6 +279,53 @@ groups:
           description: "Sized for a single worker on a small host; adjust to the deployment. A steady climb with no load is a leak."
           runbook: "README.md#on-call"
 
+      # --- the connection (#881) ------------------------------------------------------
+      # Each is a cause a player feels as lag or a stuck canvas before any
+      # objective moves: a network or proxy the deployment did not plan for.
+      # The floors keep a quiet night with a handful of sockets from firing.
+      - alert: SketchyPollingShareHigh
+        expr: >
+          sum(sketchy_sockets_by_transport{transport="polling"})
+            / clamp_min(sum(sketchy_sockets_by_transport), 1) > 0.2
+          and sum(sketchy_sockets_by_transport) >= 20
+        for: 30m
+        labels: {severity: warn}
+        annotations:
+          summary: "Over a fifth of open sockets are on long-polling ({{ $value | humanizePercentage }})"
+          description: "Polling is the fallback for a WebSocket upgrade the network blocks or drops (#601). A share this high is usually a proxy or load balancer not passing the upgrade; each polling drawer costs several times the requests of a WebSocket one."
+          runbook: "README.md#on-call"
+
+      - alert: SketchyCompressionMissing
+        expr: >
+          sum(increase(sketchy_socket_transport_total{compression="none"}[30m]))
+            / clamp_min(sum(increase(sketchy_socket_transport_total[30m])), 1) > 0.1
+          and sum(increase(sketchy_socket_transport_total[30m])) >= 20
+        labels: {severity: warn}
+        annotations:
+          summary: "Over a tenth of new WebSockets negotiated no compression ({{ $value | humanizePercentage }})"
+          description: "Every current browser offers permessage-deflate, so connections without it are almost always a proxy stripping the extension. Uncompressed traffic is ~8x the bytes (wire §1); compare sketchy_ws_wire_bytes_out_total with sketchy_socket_bytes_out_total."
+          runbook: "README.md#on-call"
+
+      - alert: SketchyBacklogClosures
+        expr: increase(sketchy_socket_backlog_closures_total[15m]) > 0
+        labels: {severity: warn}
+        annotations:
+          summary: "A socket was closed for an outbound backlog (reason={{ $labels.reason }})"
+          description: "A viewer that could not keep up with what its room sends was closed and resynced (R-RATE-11). One is a slow phone; several at once is the server's egress or a room sending too much."
+          runbook: "README.md#on-call"
+
+      - alert: SketchyCanvasRecoveries
+        expr: >
+          sum(increase(sketchy_canvas_recovery_notices_total{reason!="deferred"}[15m]))
+            / clamp_min(sum(sketchy_sockets_connected), 1) > 0.5
+          and sum(increase(sketchy_canvas_recovery_notices_total{reason!="deferred"}[15m])) >= 10
+        for: 15m
+        labels: {severity: warn}
+        annotations:
+          summary: "Canvases are being recovered at over one per two sockets per 15 minutes"
+          description: "Each notice is a socket whose canvas went wrong and was repaired (wire §7). `deferred` is the resync bound working and is excluded. A sustained rate is a client or protocol bug, or a network dropping frames."
+          runbook: "README.md#on-call"
+
       - alert: SketchyDrawingStoreLarge
         expr: sketchy_drawing_store_bytes > 50e9
         for: 1h

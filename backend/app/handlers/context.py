@@ -19,7 +19,7 @@ from app.repositories.interfaces import (
 )
 from app.domain_values import RuntimeEventType
 from app.handlers.refusals import ErrorCode, refuse
-from app.protocol import PROTOCOL_VERSION
+from app.protocol import PROTOCOL_VERSION, stale_client_bucket
 from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
 from app.rooms import RoomManager
 from app.services.afk import INACTIVITY_EXEMPT_COMMANDS, ActivityLedger
@@ -252,15 +252,21 @@ class HandlerContext:
         answers at once and the reload the notice asked for is not waiting
         on it.
         """
-        self.release_stale(sid)
+        previous = self._stale_sockets.pop(sid, None)
+        if previous is not None and previous[1] is not None:
+            previous[1].cancel()
 
         async def close_later() -> None:
             try:
                 await asyncio.sleep(close_after)
             except asyncio.CancelledError:
                 return
-            if sid not in self._stale_sockets:
+            stale = self._stale_sockets.pop(sid, None)
+            if stale is None:
                 return
+            # Popped before the close, so the disconnect it causes does not
+            # count this socket a second time as one that reloaded.
+            telemetry.note_stale_client(stale_client_bucket(stale[0]), "closed")
             logger.warning(
                 "closing stale socket %s: told to upgrade %.0fs ago and still here",
                 sid, close_after,
@@ -276,7 +282,11 @@ class HandlerContext:
     def release_stale(self, sid: str) -> None:
         """Forget a stale socket, cancelling its close: it has gone."""
         stale = self._stale_sockets.pop(sid, None)
-        if stale is not None and stale[1] is not None:
+        if stale is None:
+            return
+        # Gone before the close came due: the reload the notice asked for.
+        telemetry.note_stale_client(stale_client_bucket(stale[0]), "reloaded")
+        if stale[1] is not None:
             stale[1].cancel()
 
     def spend_canvas_push(self, sid: str) -> bool:

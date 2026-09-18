@@ -75,6 +75,7 @@ def fake_server():
     sent = AsyncMock(return_value=None)
     emitted = AsyncMock(return_value="emitted")
     server = SimpleNamespace(
+        _handle_eio_connect=AsyncMock(return_value=None),
         _handle_eio_message=received,
         eio=SimpleNamespace(send_packet=sent),
         manager=SimpleNamespace(emit=emitted),

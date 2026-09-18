@@ -254,6 +254,9 @@ class Player:
     sid: Optional[str] = None
     score: int = 0
     connected: bool = True
+    # Monotonic seconds when the seat lost its socket, so a return can say how
+    # long it took (#881). Meaningless while connected.
+    disconnected_at: Optional[float] = None
     is_host: bool = False
     is_spectator: bool = False
     is_afk: bool = False

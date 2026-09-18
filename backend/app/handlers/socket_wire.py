@@ -45,8 +45,19 @@ per-socket count, removed when the last one lands. What this cannot name -
 an acknowledgement, Socket.IO's connect and disconnect, a packet Engine.IO
 sends itself - is `<ack>` or `<control>`, so the labelled series sums to the
 unlabelled one.
+
+One more thing is timed at this layer (#881): Engine.IO's own ping. The
+server pings every socket on an interval and the client answers with a pong,
+so ping-to-pong is the network round trip plus both event loops, measured on
+every connection without asking the client for anything. Engine.IO keeps the
+ping's send time on the socket (`last_ping`) and clears it when the pong
+arrives; the socket's `receive` is wrapped per instance when Engine.IO
+reports the connection, which is after the socket exists and before any
+packet reaches it.
 """
 from __future__ import annotations
+
+import time
 
 import socketio
 from engineio import packet as eio_packet
@@ -115,6 +126,8 @@ def instrument_socket_server(
         raise AttributeError("engineio server has no send_packet; wire counting needs it")
     if not hasattr(sio.manager, "emit"):
         raise AttributeError("socketio manager has no emit; wire counting needs it")
+    if not hasattr(sio, "_handle_eio_connect"):
+        raise AttributeError("socketio.AsyncServer has no _handle_eio_connect; ping timing needs it")
 
     receive = sio._handle_eio_message
     send_packet = sio.eio.send_packet
@@ -156,6 +169,25 @@ def instrument_socket_server(
         target.note_socket_bytes_out(engineio_packet_size(pkt), label_of(sid, pkt))
         return await send_packet(sid, pkt)
 
+    handle_connect = sio._handle_eio_connect
+
+    def time_pongs(eio_sid) -> None:
+        engine_socket = getattr(sio.eio, "sockets", {}).get(eio_sid)
+        if engine_socket is None or not hasattr(engine_socket, "last_ping"):
+            return
+        receive_packet = engine_socket.receive
+
+        async def timed_receive(pkt):
+            if pkt.packet_type == eio_packet.PONG and engine_socket.last_ping:
+                target.note_ping_rtt(time.time() - engine_socket.last_ping)
+            return await receive_packet(pkt)
+
+        engine_socket.receive = timed_receive
+
+    async def timed_connect(eio_sid, environ):
+        time_pongs(eio_sid)
+        return await handle_connect(eio_sid, environ)
+
     async def counted_emit(event, data=None, *args, **kwargs):
         target.socket_emit_payload(str(event), payload_bytes(data))
         return await emit(event, data, *args, **kwargs)
@@ -170,5 +202,8 @@ def instrument_socket_server(
     handlers = getattr(sio.eio, "handlers", None)
     if isinstance(handlers, dict) and "message" in handlers:
         handlers["message"] = counted_receive
+    sio._handle_eio_connect = timed_connect
+    if isinstance(handlers, dict) and "connect" in handlers:
+        handlers["connect"] = timed_connect
     sio.eio.send_packet = counted_send_packet
     sio.manager.emit = counted_emit
