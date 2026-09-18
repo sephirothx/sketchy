@@ -308,3 +308,38 @@ test("every painter reaches a wire coordinate as the same float, across the whol
   };
   assert.deepEqual(paint(live), paint(replay));
 });
+
+test("a dot of width w is w pixels across when its edge falls on pixel centres, and never wider", () => {
+  // A tap is a zero-length segment: no direction to take an edge's side from,
+  // so a closed rule made it w + 1 wide and a directional one w - 1. Centred
+  // on a pixel centre its whole edge is ties; elsewhere a disc covers what
+  // its geometry covers - a width-1 dot on a pixel corner reaches no pixel
+  // centre under any rule - but no offset may make it wider than the brush.
+  for (let width = 1; width <= 32; width += 1) {
+    for (const dx of [0, 0.25, 0.5, 0.75]) {
+      for (const dy of [0, 0.25, 0.5, 0.75]) {
+        const size = 64;
+        const centre = { x: 30 + dx, y: 30 + dy };
+        const data = solidPixels(size, size);
+        rasterizePath(data, size, size, [centre, centre], width / 2, BLACK, false);
+        let [minX, maxX, minY, maxY] = [size, -1, size, -1];
+        for (let y = 0; y < size; y += 1) {
+          for (let x = 0; x < size; x += 1) {
+            if (data[(y * size + x) * 4] !== 0) continue;
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+          }
+        }
+        const [across, down] = [Math.max(0, maxX - minX + 1), Math.max(0, maxY - minY + 1)];
+        const where = `width ${width} at +${dx},+${dy}`;
+        assert.ok(across <= width && down <= width, `${where}: ${across}x${down}`);
+        if (dx === 0.5 && dy === 0.5) {
+          assert.equal(across, width, where);
+          assert.equal(down, width, where);
+        }
+      }
+    }
+  }
+});

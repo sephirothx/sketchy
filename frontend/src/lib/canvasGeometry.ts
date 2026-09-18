@@ -119,6 +119,12 @@ export function capsuleCovers(
   const ey = py - (ay + t * dy);
   const squared = ex * ex + ey * ey;
   if (squared !== radiusSquared) return squared < radiusSquared;
+  // A dot - a tap, a single-point stroke - has no direction to take a side
+  // from: its edge is ink below the centre, or right of it on the centre's
+  // row, the same half as a line's, so a dot of width w spans w pixels
+  // each way. (Both tests below are zero for it, which dropped every edge
+  // pixel and made even widths a pixel narrow.)
+  if (lengthSquared === 0) return ey > 0 || (ey === 0 && ex > 0);
   // One orientation for the direction, so a segment and its reverse agree:
   // pointing left, or straight down where it is vertical.
   const flip = dx > 0 || (dx === 0 && dy < 0) ? -1 : 1;
