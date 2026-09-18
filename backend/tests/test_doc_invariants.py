@@ -199,3 +199,30 @@ def test_arithmetic_is_not_a_citation():
         "N-16",
         "R-AUTH-19",
     ]
+
+
+# --- the schema's own numbers (#893) -----------------------------------------
+
+DATABASE_DOC = REPO_ROOT / "docs" / "database.md"
+
+
+def test_the_database_document_names_the_current_head_and_every_table():
+    """The document said 52 tables and an old head while the models had 62
+    and eighteen revisions more: numbers nobody re-derives go stale."""
+    from alembic.script import ScriptDirectory
+
+    from app.db import get_alembic_config
+    from app.db.models import Base
+
+    document = DATABASE_DOC.read_text(encoding="utf-8")
+    head = ScriptDirectory.from_config(get_alembic_config()).get_current_head()
+    match = re.search(r"Current head:\s*`([0-9a-f]{12})_[a-z0-9_]+\.py`", document)
+    assert match, "database.md must name the current head revision"
+    assert match.group(1) == head
+
+    tables = set(Base.metadata.tables)
+    count = re.search(r"^(\d+) tables in ", document, re.MULTILINE)
+    assert count and int(count.group(1)) == len(tables)
+    start = document.index("| Domain | Tables |")
+    mapped = set(re.findall(r"`([a-z_]+)`", document[start : document.index("\n\n", start)]))
+    assert mapped == tables

@@ -10,7 +10,9 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a4b5c6d7e8f9_interface_locale.py` (#763).
+`c3e4f5a6b7d8_drawing_encoded_event.py` (#895). Both this line and the table
+count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
+by ten tables and eighteen revisions before anybody noticed (#893).
 
 To regenerate an authoritative dump of this schema:
 
@@ -87,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-52 tables in eight domains.
+62 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -138,12 +140,12 @@ erDiagram
 | Domain | Tables |
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
-| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox` |
+| **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges` |
 | **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
-| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts` |
+| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
 | **Bug reports** | `bug_reports` |
 
@@ -2597,6 +2599,15 @@ export MIGRATION_DATABASE_URL=postgresql+asyncpg://sketchy_owner:password@localh
 HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
 ```
 
+In a deployment the migration step is
+[`ops/postgres/migrate-with-snapshot.sh`](../ops/postgres/migrate-with-snapshot.sh)
+(#893): it takes a custom-format `pg_dump` named for the time and the revision it holds
+into `SNAPSHOT_DIR`, prints the `pg_restore` command that puts it back, and only then
+migrates — a failed dump stops the deploy. Recovery from a bad release is restore and
+fix forward (#458); nothing trusts a migration to run backwards over live rows, and a
+restore wants the state from immediately before the change rather than last night's
+backup plus a day of games.
+
 ### Roles
 
 Three roles, created once by a superuser with [`ops/postgres/init.sql`](../ops/postgres/init.sql)
@@ -2634,9 +2645,37 @@ create a table, rewrite either ledger or disable the trigger.
    where a table is rebuilt.
 3. Add or extend the `CHECK` constraint if the column is an enum, and declare the enum in
    [`domain_values.py`](../backend/app/domain_values.py).
-4. Run `pytest tests/test_migrations.py tests/test_db_models.py` — locally on SQLite and,
-   for anything non-trivial, against PostgreSQL.
-5. **Update this document**, plus [`architecture.md`](architecture.md) if the state
+4. Run `pytest tests/test_migrations.py tests/test_db_models.py tests/test_online_ddl.py
+   tests/test_populated_upgrade.py` — locally on SQLite and, for anything non-trivial,
+   against PostgreSQL.
+5. **Write it to run over live rows** (#893). The migration role's five-second lock
+   budget turns an unsafe revision into a failed deploy rather than a stalled game, but
+   it still fails, halfway, on the biggest tables. On the tables that grow with play
+   (`LARGE_TABLES` in [`tests/test_online_ddl.py`](../backend/tests/test_online_ddl.py)),
+   which refuses each of these in any revision after the lint's starting point:
+   - an index is built `postgresql_concurrently=True` inside
+     `op.get_context().autocommit_block()` — a plain build blocks every writer for as
+     long as it takes, and `CONCURRENTLY` cannot run in a transaction;
+   - a check or foreign key is added `postgresql_not_valid=True` and validated in a
+     separate `ALTER TABLE … VALIDATE CONSTRAINT` — adding it valid scans the table
+     under a lock writers wait behind, and validating takes one they do not;
+   - a type change or a `NOT NULL` is preceded by a validated
+     `CHECK (column IS NOT NULL)` or done as add-copy-swap — both are a scan or a
+     rewrite under an exclusive lock;
+   - a new `NOT NULL` column has a `server_default` — without one it fails outright on a
+     table with rows;
+   - a backfill `UPDATE` or `DELETE` is batched, like the retention sweeps.
+
+   A call that is safe for a reason the lint cannot see says so on its line or the one
+   above: `# online-ddl: <why>`. Every revision then runs over rows in CI:
+   [`fixtures/populated_upgrade.sql`](../fixtures/populated_upgrade.sql) holds a database
+   seeded through the application's own writers at one revision
+   ([`tests/populated_upgrade.py`](../backend/tests/populated_upgrade.py) wrote it), and
+   `tests/test_populated_upgrade.py` builds the schema to that revision, loads the rows,
+   upgrades to head, reads every history surface back and runs the integrity audit over
+   the result. A pre-squash revision once ran an `UPDATE … SET NULL` before its column
+   became nullable and passed the empty replay; this is the test that would have failed.
+6. **Update this document**, plus [`architecture.md`](architecture.md) if the state
    ownership changed and [`requirements.md`](requirements.md) if a stated guarantee moved.
 
 ### Pre-v1 note

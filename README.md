@@ -2106,6 +2106,14 @@ rows, room evidence, the export queue, player search) were left alone, as was
 over registered players is a third of a millisecond, and the extension needs
 installation rights the deployment may not have.
 
+A revision is also run over rows (#893): `tests/test_populated_upgrade.py` builds the
+schema to the revision `fixtures/populated_upgrade.sql` was written at, loads its rows
+(seeded through the application's writers), upgrades to head and reads every history
+surface back; `tests/test_online_ddl.py` refuses a plain index build, a constraint added
+valid, a type change or `NOT NULL` without its safe form, and an unbatched backfill on
+the tables that grow with play. The fixture is regenerated only when a fold moves the
+baseline: `TEST_DATABASE_URL=… backend/.venv/bin/python -m tests.populated_upgrade --write`.
+
 Every benchmark that touches the database also runs in CI at its smallest size, on the
 PostgreSQL job (`tests/test_benchmark_smoke.py`): two had stopped running unnoticed
 (`history_row_footprint.py` after #815 removed a keyword it passed, `index_plans.py`
