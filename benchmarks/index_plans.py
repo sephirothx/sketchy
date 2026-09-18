@@ -44,8 +44,8 @@ def _chunks(rows: list, size: int = 5000):
         yield rows[start : start + size]
 
 
-async def _seed(session, scale: int) -> dict:
-    users = [generate_uuid() for _ in range(20_000 * scale)]
+async def _seed(session, scale: float) -> dict:
+    users = [generate_uuid() for _ in range(max(1, int(20_000 * scale)))]
     await session.execute(
         insert(User),
         [
@@ -60,7 +60,7 @@ async def _seed(session, scale: int) -> dict:
     room = generate_uuid()
     reported = users[0]
     messages = []
-    for i in range(200_000 * scale):
+    for i in range(max(1, int(200_000 * scale))):
         lobby = i % 40 == 0
         messages.append(
             {
@@ -86,18 +86,22 @@ async def _seed(session, scale: int) -> dict:
             "target_type": "user", "target_id": str(users[i % len(users)]),
             "details": {}, "created_at": NOW - timedelta(seconds=i * 7),
         }
-        for i in range(100_000 * scale)
+        for i in range(max(1, int(100_000 * scale)))
     ]
     for chunk in _chunks(events):
         await session.execute(insert(AuditEvent), chunk)
     bans = [
         {
             "id": generate_uuid(), "user_id": users[i % len(users)], "banned_by_user_id": users[1],
-            "reason": "spam", "is_active": i % 20 == 0,
+            "reason": "spam",
+            # One in twenty still standing; the rest lifted by a moderator.
+            "revoked_at": None if i % 20 == 0 else NOW - timedelta(minutes=i // 2),
+            "revoked_by_user_id": None if i % 20 == 0 else users[1],
+            "revoke_reason": None if i % 20 == 0 else "lifted",
             "expires_at": None if i % 2 else NOW + timedelta(days=1),
             "created_at": NOW - timedelta(minutes=i),
         }
-        for i in range(20_000 * scale)
+        for i in range(max(1, int(20_000 * scale)))
     ]
     for chunk in _chunks(bans):
         await session.execute(insert(UserBan), chunk)
@@ -109,7 +113,7 @@ async def _seed(session, scale: int) -> dict:
             "sent_at": None if i % 200 == 0 else NOW - timedelta(days=i % 60),
             "created_at": NOW - timedelta(days=i % 60, minutes=i % 100),
         }
-        for i in range(50_000 * scale)
+        for i in range(max(1, int(50_000 * scale)))
     ]
     for chunk in _chunks(outbox):
         await session.execute(insert(EmailOutboxEntry), chunk)
@@ -118,9 +122,11 @@ async def _seed(session, scale: int) -> dict:
             "id": generate_uuid(), "user_id": users[i], "status": "pending" if i < 5 else "ready",
             "schema_version": 1, "artifact": None if i < 5 else b"x", "artifact_encoding": None if i < 5 else "gzip+json",
             "created_at": NOW - timedelta(hours=i), "expires_at": NOW + timedelta(days=7),
+            # A ready export has been started (ck_data_exports_started, #553).
+            "started_at": None if i < 5 else NOW - timedelta(minutes=1),
             "completed_at": None if i < 5 else NOW,
         }
-        for i in range(2_000 * scale)
+        for i in range(max(1, int(2_000 * scale)))
     ]
     for chunk in _chunks(exports):
         await session.execute(insert(DataExport), chunk)
@@ -146,7 +152,7 @@ QUERIES = {
         "ORDER BY created_at, id LIMIT 500"
     ),
     "ban_queue_active_newest": (
-        "SELECT id FROM user_bans WHERE is_active AND (expires_at IS NULL OR expires_at > :now) "
+        "SELECT id FROM user_bans WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > :now) "
         "ORDER BY created_at DESC LIMIT 50"
     ),
     "outbox_due": (
@@ -195,7 +201,7 @@ def _summarise(plan: dict) -> dict:
     }
 
 
-async def run(scale: int, reseed: bool) -> dict:
+async def run(scale: float, reseed: bool) -> dict:
     engine = create_async_engine(os.environ["TEST_DATABASE_URL"])
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
@@ -227,7 +233,7 @@ async def run(scale: int, reseed: bool) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scale", type=int, default=1)
+    parser.add_argument("--scale", type=float, default=1, help="Population multiplier; fractions give a smoke run.")
     parser.add_argument("--no-reseed", action="store_true", help="Explain against what is already seeded.")
     parser.add_argument("--json-output")
     args = parser.parse_args()

@@ -583,6 +583,7 @@ class SqlEnvelopeStore(EnvelopeStore):
                         created_at=now,
                     )
                 )
+        telemetry.envelope_staged(len(staged.payload))
         return StageOutcome.STAGED
 
     async def claim_next(

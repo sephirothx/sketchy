@@ -4,11 +4,12 @@ from __future__ import annotations
 import asyncio
 from collections import Counter, OrderedDict, defaultdict
 from collections.abc import Awaitable, Callable, Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import time
+from time import perf_counter
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
@@ -17,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
+from app.services.runtime_metrics import metrics
 from app.services.telemetry import database_operation_of, telemetry
 from app.db.models import (
     GalleryShelfReview,
@@ -53,6 +55,7 @@ from app.db.models import (
     UserStatsDaily,
     generate_uuid,
 )
+from app.canvas_history import binary_action_count
 from app.canvas_storage import prepare_stored_drawing
 from app.services.gallery_ranking import (
     HOT_HORIZON,
@@ -62,6 +65,7 @@ from app.services.gallery_ranking import (
     hot_score,
 )
 from app.domain_values import (
+    RuntimeEventType,
     AccountState,
     AuditTargetType,
     DRAWING_UNAVAILABLE_RECAP_BUDGET,
@@ -259,8 +263,54 @@ def _public_id(value: UUID) -> str:
     return str(value)
 
 
+@dataclass
+class _GameSizing:
+    """What one finished game wrote, measured as it is written (#895) and
+    reported only once the transaction has committed, so a retried or
+    refused write is never counted."""
+
+    drawings: list[tuple[str, int, int, int, float]] = field(default_factory=list)
+    offer_sources: int = 0
+
+    def record(
+        self,
+        *,
+        participants: int,
+        turns: Sequence[TurnRecordInput],
+        score_events: int,
+        drawings: int,
+        reactions: int,
+        prompt_sources: int,
+    ) -> None:
+        for magic, raw_bytes, stored_bytes, actions, seconds in self.drawings:
+            telemetry.drawing_stored(
+                magic, raw_bytes=raw_bytes, stored_bytes=stored_bytes, actions=actions, seconds=seconds
+            )
+            # The long view: the raw event is kept thirty days, its daily
+            # roll-up for ever, and it carries the stored size beside
+            # `drawing.stored`'s wire size so the ratio survives too.
+            metrics.record(RuntimeEventType.DRAWING_ENCODED, value=stored_bytes)
+        telemetry.game_rows_written(
+            {
+                "game_records": 1,
+                "game_participants": participants,
+                "turn_records": len(turns),
+                "turn_participant_outcomes": sum(len(turn.participant_outcomes) for turn in turns),
+                "turn_prompt_offers": sum(len(turn.prompt_offers) for turn in turns),
+                "turn_prompt_offer_sources": self.offer_sources,
+                "game_prompt_sources": prompt_sources,
+                "score_events": score_events,
+                "turn_drawings": drawings,
+                "turn_drawing_reactions": reactions,
+            }
+        )
+
+
 def _turn_drawing(
-    drawing: TurnDrawingInput, turn_id: UUID, game_id: UUID
+    drawing: TurnDrawingInput,
+    turn_id: UUID,
+    game_id: UUID,
+    sizing: _GameSizing | None = None,
 ) -> TurnDrawing:
     """Build the row for one turn's drawing, stored or explained.
 
@@ -278,7 +328,18 @@ def _turn_drawing(
                 drawing.unavailable_reason or DRAWING_UNAVAILABLE_RECAP_BUDGET
             ),
         )
+    started = perf_counter()
     blob, magic, version, checksum = prepare_stored_drawing(drawing.payload)
+    if sizing is not None:
+        sizing.drawings.append(
+            (
+                magic.decode("ascii"),
+                len(drawing.payload),
+                len(blob),
+                binary_action_count(drawing.payload),
+                perf_counter() - started,
+            )
+        )
     return TurnDrawing(
         turn_id=turn_id,
         game_id=game_id,
@@ -1358,6 +1419,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         payload_hash = self._payload_hash(
             game_record, participants, turns, score_events, reactions, drawings
         )
+        sizing = _GameSizing()
         try:
             async with self._session_factory() as session:
                 existing = await session.get(GameRecord, record_id)
@@ -1682,6 +1744,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             )
                             for revision_id in offer_source_ids
                         )
+                        sizing.offer_sources += len(offer_source_ids)
 
                     if r.participant_outcomes:
                         if r.guesser_count != sum(
@@ -1805,7 +1868,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             _erased_turn_drawing(drawing_turn_id, record_id)
                         )
                         continue
-                    drawing_row = _turn_drawing(drawing, drawing_turn_id, record_id)
+                    drawing_row = _turn_drawing(drawing, drawing_turn_id, record_id, sizing)
                     drawing_rows[drawing_turn_id] = drawing_row
                     session.add(drawing_row)
 
@@ -2060,6 +2123,14 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         .values(last_active_at=datetime.now(timezone.utc))
                     )
                 await session.commit()
+            sizing.record(
+                participants=len(participants),
+                turns=turns,
+                score_events=len(score_events),
+                drawings=len(drawings or ()),
+                reactions=len(reactions),
+                prompt_sources=len(game_source_ids),
+            )
         except IntegrityError as error:
             # A concurrent writer may have committed the same stable ID after
             # our preflight read. Re-read outside the rolled-back transaction.

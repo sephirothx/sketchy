@@ -1755,6 +1755,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/runtime_metrics.py`](../backend/app/services/runtime_metrics.py) | What the server records about its own behaviour. |
 | [`app/services/telemetry.py`](../backend/app/services/telemetry.py) | Process signals — request, command, query and loop-lag RED/USE — kept in memory for `/metrics` and the operations page. |
 | [`app/services/queue_depths.py`](../backend/app/services/queue_depths.py) | Depth and oldest age of the mail outbox and pending exports, cached. |
+| [`app/services/storage_report.py`](../backend/app/services/storage_report.py) | What each table occupies in the live database, safe to paste into an issue (#895). |
 | [`app/services/sweeps.py`](../backend/app/services/sweeps.py) | Bounded, batched deletion for every retention sweep. |
 | [`app/services/bug_report_retention.py`](../backend/app/services/bug_report_retention.py) | A ceiling on how long an undecided bug report keeps its screenshot. |
 | [`app/services/shutdown.py`](../backend/app/services/shutdown.py) | Bounded planned-shutdown drain for process-owned live rooms. |

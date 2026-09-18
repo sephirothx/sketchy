@@ -31,7 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
 
-from app.services.telemetry import database_operation_of
+from app.services.telemetry import database_operation_of, telemetry
 from app.auth.erasure import DELETED_DISPLAY_NAME as _DELETED_DISPLAY_NAME
 from app.db import init_db, maintenance_engine
 from app.db.models import (
@@ -1269,6 +1269,7 @@ async def process_data_export(
                 job.status = DataExportStatus.READY.value
                 job.completed_at = completed_at
                 job.failure_code = None
+        telemetry.export_written(len(artifact))
         return True
     except asyncio.CancelledError:
         # A planned shutdown, not a failure: hand the job back so the next
