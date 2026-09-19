@@ -3,7 +3,9 @@ import { useMemo, useState } from "react";
 import { emitWithAck } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { useFriendsStore } from "../store/friendsStore";
-import { usePresenceStore } from "../store/presenceStore";
+import { useFriendPresenceStore } from "../store/friendPresenceStore";
+import { invitableFriends } from "../lib/friendPresence";
+import { useFriendPresence } from "../hooks/useFriendPresence";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { ui } from "../content/ui/index.ts";
@@ -22,17 +24,15 @@ or not they are looking at the lobby, because the notice reaches an account
 wherever it is. */
 export function InviteFriendsList() {
   const lists = useFriendsStore((state) => state.lists);
-  const presence = usePresenceStore((state) => state.presence);
+  // Asked for by this account alone rather than read off the lobby's public
+  // list, which is capped and would need the whole lobby channel (#873, #878).
+  useFriendPresence();
+  const online = useFriendPresenceStore((state) => state.online);
   const { notify } = useToast();
   const [invited, setInvited] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState<string | null>(null);
 
-  const invitable = useMemo(() => {
-    const online = new Map(presence.players.map((p) => [p.userId, p]));
-    return lists.friends
-      .map((friend) => ({ friend, presence: online.get(friend.userId) }))
-      .filter(({ presence: p }) => p !== undefined && p.status === "lobby");
-  }, [lists.friends, presence.players]);
+  const invitable = useMemo(() => invitableFriends(lists, online), [lists, online]);
 
   if (invitable.length === 0) return null;
 
@@ -61,7 +61,7 @@ export function InviteFriendsList() {
     <div className="waiting-invite-friends">
       <p className="waiting-invite-friends-label">{ui.inviteFriendsList.friendsLobby}</p>
       <ul className="waiting-invite-friends-list" data-testid="invite-friends">
-        {invitable.map(({ friend }) => (
+        {invitable.map((friend) => (
           <li key={friend.userId}>
             <Avatar
               name={friend.displayName}

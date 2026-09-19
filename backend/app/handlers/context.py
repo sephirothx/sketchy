@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from app.services.friends import FriendService
     from app.services.lobby_chat import LobbyChatLog
     from app.services.message_retention import MessageRetentionService
+    from app.services.friend_presence import FriendPresence
     from app.services.presence import (
         LobbyBroadcaster,
         PresenceIdentityCache,
@@ -109,6 +110,7 @@ class HandlerContext:
     presence: PresenceRegistry = field(init=False)
     presence_identities: PresenceIdentityCache = field(init=False)
     presence_broadcaster: LobbyBroadcaster = field(init=False)
+    friend_presence: "FriendPresence" = field(init=False)
     # The last few lobby lines, for an arrival; an event stream rather than a
     # feed of the broadcaster's, so it lives beside it rather than inside it.
     lobby_chat: LobbyChatLog = field(init=False)

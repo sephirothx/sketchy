@@ -592,3 +592,38 @@ async def test_a_change_during_the_subscription_s_lookups_is_in_the_baseline_not
     assert all(answer["roomsRevision"] >= delta["revision"] for delta in deltas), (
         "a delta this socket may have received is not newer than its baseline"
     )
+
+
+async def test_an_account_going_offline_drops_its_cached_friends(monkeypatch):
+    """`friends_online` caches a friend list while its account is online; the
+    last socket closing is what lets it go, or the cache grows for good."""
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    await connect_as(ctx, sio, "sid-b", "tok-ada")
+    ctx.friend_presence._friends["user-ada"] = frozenset()
+
+    await sio.handlers["/"]["disconnect"]("sid-a")
+    assert "user-ada" in ctx.friend_presence._friends
+    await sio.handlers["/"]["disconnect"]("sid-b")
+    assert "user-ada" not in ctx.friend_presence._friends
+
+
+async def test_a_guest_merge_drops_the_friends_cached_under_the_guest(monkeypatch):
+    """The guest id never disconnects again once its sockets moved, so the
+    merge is the only thing that can let its entry go."""
+    from app import main
+
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-guest": "user-guest"})
+    await connect_as(ctx, sio, "sid-a", "tok-guest")
+    ctx.friend_presence._friends["user-guest"] = frozenset()
+    monkeypatch.setattr(main, "handler_context", ctx)
+
+    main.forget_merged_identities("user-guest", "user-ada")
+
+    assert "user-guest" not in ctx.friend_presence._friends
+    await sio.handlers["/"]["disconnect"]("sid-a")
+    assert ctx.friend_presence._friends == {}

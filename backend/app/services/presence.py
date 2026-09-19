@@ -158,9 +158,13 @@ def sort_key(entry: PresenceEntry) -> tuple[bool, str, str]:
     Explicitly not recency: a list sorted by when people arrived reorders
     under the reader's cursor on every tick.
 
-    #529 puts friends above everyone else, which is a term in front of this
-    one rather than a change to it - the rest of the order still decides
-    among friends, and among everybody else.
+    Friends are not ordered here. The client puts them first over the rows it
+    holds (`withFriendsFirst`), a term in front of this order rather than a
+    change to it - but it can only reorder rows it was sent, and this order is
+    the same for everyone and cut at the cap, so a friend past the cut was
+    never among them (#878). An account asks for its own friends apart from
+    this list, through `friend_presence.py`, and the client adds any the cut
+    left out.
 
     The client re-sorts by the same rule after applying a delta
     (`frontend/src/lib/lobbyPresence.ts`), and `fixtures/lobby_presence_v1.json`

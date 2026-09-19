@@ -194,6 +194,8 @@ async def push_friends_changed(user_id: str) -> None:
     The same per-account room a suspension and a moderator warning use, so a
     player idling in the lobby hears it as immediately as one in a game.
     """
+    # Its friends are read again the next time its presence moves or it asks.
+    handler_context.friend_presence.forget(user_id)
     await sio.emit("friends_changed", {}, room=f"user:{user_id}")
 
 
@@ -399,6 +401,10 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
     # a ban or a deletion does, and closing here would drop a player out of a
     # game they are in on another tab because they signed in on this one.
     handler_context.presence.rekey(source_user_id, target_user_id)
+    # The guest's id never closes a socket again - they moved to the target -
+    # so nothing else would drop a friend set cached under it.
+    handler_context.friend_presence.forget(source_user_id)
+    handler_context.friend_presence.forget(target_user_id)
     forget_presence_identity(source_user_id)
     forget_presence_identity(target_user_id)
 

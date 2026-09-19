@@ -262,6 +262,15 @@
    },
    "silent": false
   },
+  "friends_online": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
   "get_custom_prompts": {
    "commandClass": "action",
    "payload": {
@@ -2598,7 +2607,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 30,
+ "protocolVersion": 31,
  "refusal": {
   "codes": [
    "invalid_payload",
