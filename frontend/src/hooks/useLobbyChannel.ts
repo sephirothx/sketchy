@@ -75,7 +75,12 @@ export function useLobbyChannel(): void {
         wanted = true;
         return;
       }
-      stopRetrying();
+      // A retry already scheduled is the next ask, whatever wanted this one:
+      // after a refusal it waits out the `retryAfterMs` the server named, and
+      // asking sooner - a resync coalesced during the refused request, a gap
+      // noticed meanwhile - would only be refused again (#885). A new socket
+      // clears it first (`onConnect`), since its budget starts afresh.
+      if (retry !== null) return;
       asking = true;
       wanted = false;
       const mine = generation;
