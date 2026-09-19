@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
+
 from app.rooms import RoomManager
-from app.services.friend_presence import FriendPresence
+from app.services.friend_presence import FriendPresence, FriendsUnavailable
 from app.services.presence import (
     PresenceIdentity,
     PresenceIdentityCache,
@@ -60,6 +62,9 @@ async def test_a_friend_past_the_public_cap_is_still_online_and_invitable():
     registry.note_socket_opened("sid-bob", BOB)
     names[ADA] = PresenceIdentity(ADA, "Ada", "#4f9", False)
     names[BOB] = PresenceIdentity(BOB, "zzz", "#4f9", False)
+    # 152 arrivals at 25 reads a tick.
+    for _ in range(7):
+        await service.flush()
 
     public = build_snapshot(registry, room_manager, names, revision=1)
     assert BOB not in {entry.user_id for entry in public.entries}
@@ -114,6 +119,7 @@ async def test_friends_are_read_once_while_online_and_again_after_a_change():
     friendships.pairs.add(frozenset((ADA, CAT)))
     service.forget(ADA)
     registry.note_socket_opened("sid-cat", CAT)
+    await service.flush()
     assert await service.online_friends(ADA) == [[CAT, "lobby"]]
 
     registry.note_socket_closed("sid-ada")
@@ -121,15 +127,48 @@ async def test_friends_are_read_once_while_online_and_again_after_a_change():
     assert ADA not in service._friends
 
 
-async def test_an_unreadable_friend_list_is_not_remembered():
-    service, registry, _, friendships, _ = stack((ADA, BOB))
+async def test_an_unreadable_friend_list_is_retried_rather_than_told_as_empty():
+    """A failed read is neither an empty answer nor a change marked told."""
+    service, registry, _, friendships, sio = stack((ADA, BOB))
+    registry.note_socket_opened("sid-ada", ADA)
+    await service.flush()
+    friendships.fail = True
+    registry.note_socket_opened("sid-bob", BOB)
+    await service.flush()
+    assert pushes(sio) == []
+    with pytest.raises(FriendsUnavailable):
+        await service.online_friends(BOB)
+
+    friendships.fail = False
+    await service.flush()
+    assert pushes(sio) == [([BOB, "lobby"], f"user:{ADA}")]
+    assert await service.online_friends(ADA) == [[BOB, "lobby"]]
+
+
+async def test_the_answer_is_what_was_told_so_later_pushes_apply_on_top():
+    """A client replaces its map with the answer and applies pushes after it.
+    That is only sound if the answer is never newer than a push still to
+    come: Bob leaving after the last tick is told by the next one, not by the
+    answer, and Cat arriving is told by push rather than lost."""
+    service, registry, _, friendships, sio = stack((ADA, BOB), (ADA, CAT))
     registry.note_socket_opened("sid-ada", ADA)
     registry.note_socket_opened("sid-bob", BOB)
-    friendships.fail = True
     await service.flush()
-    assert await service.online_friends(ADA) == []
-    friendships.fail = False
-    assert await service.online_friends(ADA) == [[BOB, "lobby"]]
+    sio.emitted.clear()
+
+    registry.note_socket_closed("sid-bob")
+    registry.note_socket_opened("sid-cat", CAT)
+    online = {friend: status for friend, status in await service.online_friends(ADA)}
+    assert online == {BOB: "lobby"}
+
+    await service.flush()
+    for (friend, status), room in pushes(sio):
+        assert room == f"user:{ADA}"
+        if status is None:
+            online.pop(friend, None)
+        else:
+            online[friend] = status
+    assert online == {CAT: "lobby"}
 
 
 async def test_a_push_names_a_status_and_never_a_room():

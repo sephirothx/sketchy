@@ -45,6 +45,7 @@ from app.handlers.rooms import (
     _bounded,
     _seat_in_room,
 )
+from app.services.friend_presence import FriendsUnavailable
 from app.services.friends import (
     REGISTER_FIRST,
     FriendshipOutcome,
@@ -409,7 +410,8 @@ async def friends_online(ctx: HandlerContext, sid, data):
         friends = await _bounded(
             ctx.friend_presence.online_friends(account), "reading friendships"
         )
-    except EntryTimedOut:
+    except (EntryTimedOut, FriendsUnavailable):
+        # A refusal, never an empty list: the client keeps what it had.
         return BUSY_ACKNOWLEDGEMENT
     return {"ok": True, "friends": friends}
 

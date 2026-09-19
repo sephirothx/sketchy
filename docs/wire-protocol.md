@@ -820,7 +820,15 @@ accepted friends who are online, and `lobby` or `playing` for each (#873,
 list is cut at a hundred and ordered by name for everyone, so a friend past the
 cut was neither shown online nor invitable; and a waiting room had to join the
 whole `lobby` channel — every row and every chat line — to read the few rows
-its invite list needed. `friend_presence` keeps the answer current. The status
+its invite list needed. `friend_presence` keeps the answer current, and the two
+need no sequence number between them: the answer is what the presence tick has
+already **told**, never live state, so every push sent before it is included in
+it and every push after it moves on from it — a client replaces its map with
+the answer and applies later pushes on top. A friend who arrived since the last
+tick therefore reaches the client by push, a second later. A friend list that
+cannot be read is refused with `database_busy` rather than answered empty, so
+the client keeps what it had; the tick likewise leaves such an account's change
+untold and tries again. The status
 is exactly what `LobbyPlayer.status` tells any stranger, and never the room
 (R-ROOM-07). A guest, or an account with no friends online, gets an empty list;
 the client does not ask for an account with no friends at all.

@@ -8,8 +8,12 @@ import { useFriendPresenceStore } from "../store/friendPresenceStore";
 /** Keep the online-friends map current, app-wide (#873, #878).
 
 Asks `friends_online` whenever the socket connects or the set of friends
-changes, and applies `friend_presence` pushes in between. Pushes are live and
-have no backlog, so a reconnect asks again rather than trusting the map.
+changes, and applies `friend_presence` pushes in between. The answer replaces
+the map outright with no sequence number to compare: the server answers from
+the state its pushes have already told, so a push arriving after the answer is
+always newer than it (`friend_presence.py`). Pushes are live and have no
+backlog, so a disconnect empties the map - who is reachable is unknown until
+the next answer - and the reconnect asks again.
 
 An account with no friends - a guest always - asks nothing: the answer could
 only be empty, and the server pushes nothing to it either. */
@@ -33,10 +37,19 @@ export function useFriendPresence(): void {
   useEffect(() => {
     if (!ownerId || !friendKey) return;
     let current = true;
+    // Bumped on every disconnect, so an answer from a connection that has
+    // since closed never lands on the next one's map.
+    let connection = 0;
     const ask = () => {
+      const askedOn = connection;
       void emitWithAck<unknown>("friends_online", {})
         .then((answer) => {
-          if (current && (answer as { ok?: unknown } | null)?.ok === true) {
+          // A refusal keeps the map: it says nothing about who is online.
+          if (
+            current &&
+            askedOn === connection &&
+            (answer as { ok?: unknown } | null)?.ok === true
+          ) {
             replace(parseFriendsOnline(answer));
           }
         })
@@ -44,13 +57,19 @@ export function useFriendPresence(): void {
           // The next connect asks again; pushes keep what is already known.
         });
     };
+    const lost = () => {
+      connection += 1;
+      reset();
+    };
     socket.on("friend_presence", receive);
     socket.on("connect", ask);
+    socket.on("disconnect", lost);
     if (socket.connected) ask();
     return () => {
       current = false;
       socket.off("friend_presence", receive);
       socket.off("connect", ask);
+      socket.off("disconnect", lost);
     };
-  }, [ownerId, friendKey, replace, receive]);
+  }, [ownerId, friendKey, replace, receive, reset]);
 }

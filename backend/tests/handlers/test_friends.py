@@ -989,6 +989,7 @@ async def test_friends_online_answers_from_the_lobby_without_a_seat():
     ctx.presence.note_socket_opened("sid-cat", CAT)
     room = room_manager.create_room(name="Studio", is_public=True)
     room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
+    await ctx.friend_presence.flush()
 
     answer = await sio.handlers["/"]["friends_online"]("sid-ada", {})
 
@@ -1024,6 +1025,7 @@ async def test_a_friends_change_is_read_on_the_next_ask(monkeypatch):
     await sessions.save("sid-ada", {"user_id": ADA})
     for sid, user in (("sid-ada", ADA), ("sid-bob", BOB), ("sid-cat", CAT)):
         ctx.presence.note_socket_opened(sid, user)
+    await ctx.friend_presence.flush()
     ask = sio.handlers["/"]["friends_online"]
     assert (await ask("sid-ada", {}))["friends"] == [[BOB, "lobby"]]
 
@@ -1033,3 +1035,19 @@ async def test_a_friends_change_is_read_on_the_next_ask(monkeypatch):
     await main.push_friends_changed(ADA)
 
     assert (await ask("sid-ada", {}))["friends"] == [[BOB, "lobby"], [CAT, "lobby"]]
+
+
+async def test_friends_online_refuses_rather_than_answering_nobody_when_unreadable():
+    """An empty list would erase the friends the client already shows."""
+    room_manager = RoomManager()
+    service = StubFriendService(friends=[(ADA, BOB)])
+
+    async def unreadable(user_id):
+        raise RuntimeError("database down")
+
+    service.accepted_ids = unreadable
+    ctx, sio, sessions = build_stack(room_manager, friend_service=service)
+    await sessions.save("sid-ada", {"user_id": ADA})
+    ctx.presence.note_socket_opened("sid-ada", ADA)
+    answer = await sio.handlers["/"]["friends_online"]("sid-ada", {})
+    assert answer["ok"] is False and answer["errorCode"] == "database_busy"
