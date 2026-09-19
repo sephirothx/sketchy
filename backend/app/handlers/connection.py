@@ -300,6 +300,10 @@ async def _begin_reconnect_grace(
         p.afk_votes.discard(token)
     await ctx.game_flow.note_presence(room, "disconnected", player)
     await ctx.game_flow._emit_room_state(room)
+    # Sent now, before anything below can yield: ending the turn awaits, and
+    # a reconnect landing in that gap would otherwise be followed by this
+    # disconnect, on a snapshot showing the seat back (#880).
+    await ctx.game_flow._flush_room_state(room)
     await ctx.game_flow._end_turn_if_all_guessed(room)
 
     async def _evict_after_grace() -> None:

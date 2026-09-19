@@ -411,6 +411,11 @@ class GameFlowService:
 
     async def _send_room_state(self, room: Room, causes: list[dict] | None = None) -> None:
         await self._emit_colorblind_suggestion(room)
+        causes = [
+            {key: value for key, value in cause.items() if key != "account"}
+            for cause in causes or []
+            if self._cause_still_true(room, cause)
+        ]
         payload = room_state_payload(room)
         if causes:
             payload = {**payload, "causes": causes}
@@ -430,10 +435,33 @@ class GameFlowService:
 
     async def note_presence(self, room: Room, event: str, player) -> None:
         """A seat `joined`, `reconnected`, `disconnected` or `left`: what the
-        four presence events used to say, now said by the room's snapshot."""
+        four presence events used to say, now said by the room's snapshot.
+        `account` stays on the server: it is what `_cause_still_true` checks
+        a departure against, and is stripped before anything is sent."""
         await self.note_cause(
-            room, {"presence": event, "playerId": player.id, "nickname": player.nickname}
+            room,
+            {
+                "presence": event,
+                "playerId": player.id,
+                "nickname": player.nickname,
+                "account": player.user_id,
+            },
         )
+
+    @staticmethod
+    def _cause_still_true(room: Room, cause: dict) -> bool:
+        """Whether a queued departure still describes the room it is about to
+        ride (#880). An action queues it and may then await - ending a turn,
+        say - and a reconnect or rejoin landing in that gap has already been
+        sent with its own cause; a snapshot showing the seat back must not
+        then say it went. Everything else is true when it is queued."""
+        presence = cause.get("presence")
+        if presence == "disconnected":
+            seat = room.players.get(cause["playerId"])
+            return seat is None or not seat.connected
+        if presence == "left" and cause.get("account") is not None:
+            return not any(seat.user_id == cause["account"] for seat in room.players.values())
+        return True
 
     @asynccontextmanager
     async def room_state_batch(self):

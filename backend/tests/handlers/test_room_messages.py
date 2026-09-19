@@ -227,3 +227,68 @@ async def test_a_joining_socket_gets_the_room_before_its_own_catch_up():
     assert events.index("room_state") < events.index("sync_game")
     assert events.count("room_state") == 1
     await context.timers.close()
+
+
+def presence_sequence(sio) -> list[tuple[str, str]]:
+    """Every presence cause the room was told, in order, with the snapshot's
+    view of that seat when it was sent: (event, seat state)."""
+    seen = []
+    for call in sio.emit.await_args_list:
+        if call.args[0] != "room_state":
+            continue
+        seats = {p["playerId"]: p for p in call.args[1]["players"]}
+        for cause in call.args[1].get("causes", []):
+            if "presence" in cause:
+                assert "account" not in cause, "the account id never leaves the server"
+                seat = seats.get(cause["playerId"])
+                seen.append((cause["presence"], "absent" if seat is None else ("connected" if seat["connected"] else "away")))
+    return seen
+
+
+async def test_a_reconnect_inside_the_disconnect_is_not_followed_by_the_disconnect(monkeypatch):
+    """The review's race: the disconnect awaits while ending the turn, the
+    seat reconnects in that gap, and the disconnect's snapshot used to follow
+    with its stale cause."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host", user_id="host-user")
+    guest = room_manager.add_player(room, "Guest", user_id="guest-user")
+    host.sid, guest.sid = "host-sid", "guest-sid"
+    sio, context = server(room_manager, {"user_id": "guest-user"})
+    join = sio.handlers["/"]["join_room"]
+
+    async def reconnect_meanwhile(_room):
+        assert (await join("guest-new", {"code": room.code, "nickname": "Guest"}))["ok"]
+
+    monkeypatch.setattr(context.game_flow, "_end_turn_if_all_guessed", reconnect_meanwhile)
+    await sio._trigger_event("disconnect", "/", "guest-sid", sio.reason.TRANSPORT_CLOSE)
+
+    assert presence_sequence(sio) == [("disconnected", "away"), ("reconnected", "connected")]
+    await context.timers.close()
+
+
+async def test_a_rejoin_inside_an_eviction_is_not_answered_by_the_departure(monkeypatch):
+    from app.flow_timing import timing
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    players = [room_manager.add_player(room, name, user_id=f"{name}-user") for name in ("Ann", "Bob", "Cydney")]
+    for player in players:
+        player.sid = f"{player.nickname}-sid"
+    gone = players[2]
+    sio, context = server(room_manager, {"user_id": gone.user_id})
+    join = sio.handlers["/"]["join_room"]
+    monkeypatch.setattr(timing, "reconnect_grace_seconds", 0.01)
+
+    async def rejoin_meanwhile(_room, _token):
+        assert (await join("cyd-new", {"code": room.code, "nickname": "Cydney"}))["ok"]
+
+    await disconnect(context, gone.sid, sio.reason.TRANSPORT_CLOSE)
+    monkeypatch.setattr(context.game_flow, "_remove_player_from_game", rejoin_meanwhile)
+    sio.emit.reset_mock()
+    await asyncio.sleep(0.05)
+
+    sequence = presence_sequence(sio)
+    assert sequence[0] == ("joined", "connected")
+    assert ("left", "absent") not in sequence[1:], sequence
+    await context.timers.close()
