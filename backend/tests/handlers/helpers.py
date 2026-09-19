@@ -295,3 +295,17 @@ class StubPromptListRepo:
 
     async def record_prompt_usage(self, revision_ids, usage):
         return None
+
+
+def room_lines(emit) -> list[dict]:
+    """Every line the room said, however it travelled: a `chat_message`, or a
+    cause riding a `room_state` (#880) - the client writes both the same way."""
+    lines: list[dict] = []
+    for call in emit.await_args_list:
+        if not call.args:
+            continue
+        if call.args[0] == "chat_message":
+            lines.append(call.args[1])
+        elif call.args[0] == "room_state":
+            lines.extend(c for c in call.args[1].get("causes", []) if "presence" not in c)
+    return lines

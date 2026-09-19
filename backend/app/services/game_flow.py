@@ -73,6 +73,10 @@ class _RoomStateBatch:
 
     def __init__(self) -> None:
         self.rooms: dict[str, Room] = {}
+        # What happened, per room, in order: the snapshot says *what* the room
+        # is and these say *why*, so a client can play a sound or write a
+        # line (#880, `causes`). Held with the snapshot they explain.
+        self.causes: dict[str, list[dict]] = {}
         self.open = True
 
 
@@ -403,11 +407,33 @@ class GameFlowService:
         """
         batch = _room_state_batch.get()
         if batch is not None and batch.open and batch.rooms.pop(room.id, None) is not None:
-            await self._send_room_state(room)
+            await self._send_room_state(room, batch.causes.pop(room.id, None))
 
-    async def _send_room_state(self, room: Room) -> None:
+    async def _send_room_state(self, room: Room, causes: list[dict] | None = None) -> None:
         await self._emit_colorblind_suggestion(room)
-        await self._sio.emit("room_state", room_state_payload(room), room=room.id)
+        payload = room_state_payload(room)
+        if causes:
+            payload = {**payload, "causes": causes}
+        await self._sio.emit("room_state", payload, room=room.id)
+
+    async def note_cause(self, room: Room, cause: dict) -> None:
+        """Say why the room's next snapshot changed: a seat came or went, or a
+        line the room says about itself (#880). It rides that snapshot rather
+        than being a message of its own - one action, one message per seat.
+        Outside an action it goes at once, with a snapshot of its own."""
+        batch = _room_state_batch.get()
+        if batch is not None and batch.open:
+            batch.rooms[room.id] = room
+            batch.causes.setdefault(room.id, []).append(cause)
+            return
+        await self._send_room_state(room, [cause])
+
+    async def note_presence(self, room: Room, event: str, player) -> None:
+        """A seat `joined`, `reconnected`, `disconnected` or `left`: what the
+        four presence events used to say, now said by the room's snapshot."""
+        await self.note_cause(
+            room, {"presence": event, "playerId": player.id, "nickname": player.nickname}
+        )
 
     @asynccontextmanager
     async def room_state_batch(self):
@@ -427,7 +453,7 @@ class GameFlowService:
             for room in batch.rooms.values():
                 # A room the action closed has nobody left to tell.
                 if self._ctx.room_manager.get_room(room.id) is room:
-                    await self._send_room_state(room)
+                    await self._send_room_state(room, batch.causes.get(room.id))
 
     async def _emit_colorblind_suggestion(self, room: Room) -> None:
         """Send only the host an unattributed accessibility suggestion.
@@ -482,9 +508,18 @@ class GameFlowService:
         One payload reaches every seat, and each client writes the sentence in
         its own reader's language (R-I18N-03). Nothing here composes prose.
         """
+        line = system_chat_message(code, params, **flags)
+        if to is None:
+            # Said to the whole room, it is why the room changed: it rides
+            # the action's snapshot as a cause, the line the client writes
+            # exactly as it writes a chat_message announcement (#880).
+            batch = _room_state_batch.get()
+            if batch is not None and batch.open:
+                await self.note_cause(room, line)
+                return
         await self._sio.emit(
             "chat_message",
-            system_chat_message(code, params, **flags),
+            line,
             **({"to": to} if to else {"room": room.id}),
         )
 
@@ -692,12 +727,12 @@ class GameFlowService:
             custom_prompt_keys=room.custom_prompt_match_keys(),
         )
         await self._emit_room_state(room)
+        if restarted:
+            await self.announce(room, Announcement.GAME_RESTARTED_BY_VOTE)
         # The room turning to play is what mounts every client's game view,
         # canvas included, so it goes before the first turn does: a
         # `turn_starting` that arrived first found no canvas to reset.
         await self._flush_room_state(room)
-        if restarted:
-            await self.announce(room, Announcement.GAME_RESTARTED_BY_VOTE)
         # No `game_started` of its own (#880): the first `turn_starting` says so.
         await self._start_turn(room, game_started=True)
 
@@ -919,7 +954,7 @@ class GameFlowService:
             await self._ctx.remove_room_if_empty(room.id)
             return
         await self._remove_player_from_game(room, player.id)
-        await self._sio.emit("player_left", {"playerId": player.id}, room=room.id)
+        await self.note_presence(room, "left", player)
         await self._emit_room_state(room)
 
     async def release_other_seats(self, sid: str, *, keep: tuple[str, str]) -> None:
@@ -981,13 +1016,10 @@ class GameFlowService:
                 await self._sio.disconnect(superseded_sid)
         self._timers.cancel_disconnect_timer(player.id)
         await self._emit_room_state(room)
+        # Why, before the snapshot goes: it is sent at once, for the joining
+        # socket's catch-up to land on (below), and the cause rides it.
+        await self.note_presence(room, "reconnected" if is_reconnect else "joined", player)
         await self._flush_room_state(room)
-        event_name = "player_reconnected" if is_reconnect else "player_joined"
-        await self._sio.emit(
-            event_name,
-            {"playerId": player.id, "nickname": player.nickname},
-            room=room.id,
-        )
         await self._sync_player_view(sid, room, player)
         await self.send_last_game(sid, room)
 

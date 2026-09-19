@@ -78,6 +78,10 @@ async def test_a_join_is_one_room_state_however_many_times_the_join_changed_the_
     assert (await sio.handlers["/"]["join_room"]("new-sid", {"code": room.code, "nickname": "New"}))["ok"]
 
     assert emitted(sio)["room_state"] == 1
+    # The arrival rides the snapshot (#880): no player_joined of its own.
+    assert emitted(sio)["player_joined"] == 0
+    state = next(c.args[1] for c in sio.emit.await_args_list if c.args[0] == "room_state")
+    assert [cause["presence"] for cause in state["causes"]] == ["joined"]
     await context.timers.close()
 
 
@@ -90,10 +94,35 @@ async def test_a_flap_is_one_room_state_each_way():
     sio, context = server(room_manager, {"user_id": "guest-user"})
 
     await sio._trigger_event("disconnect", "/", "guest-sid", sio.reason.TRANSPORT_CLOSE)
-    assert emitted(sio)["room_state"] == 1
+    # One room message each way, the flap its cause (the host's first
+    # colorblind suggestion aside, which goes once and to them alone).
+    counts = emitted(sio)
+    counts.pop("colorblind_safe_suggestion", None)
+    assert dict(counts) == {"room_state": 1}
     sio.emit.reset_mock()
     assert (await sio.handlers["/"]["join_room"]("guest-new", {"code": room.code, "nickname": "Guest"}))["ok"]
     assert emitted(sio)["room_state"] == 1
+    assert emitted(sio)["player_reconnected"] == 0
+    await context.timers.close()
+
+
+async def test_a_rename_is_one_message_that_carries_its_line():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio, context = server(room_manager, {"room_id": room.id, "player_id": host.id})
+
+    answer = await sio.handlers["/"]["rename_player"](host.sid, {"nickname": "Hosted"})
+    assert answer["ok"] is True
+    counts = emitted(sio)
+    assert counts["room_state"] == 1 and counts["chat_message"] == 0
+    state = next(c.args[1] for c in sio.emit.await_args_list if c.args[0] == "room_state")
+    # The same payload a chat_message announcement carries, so the client
+    # writes it the same way.
+    [line] = state["causes"]
+    assert line["system"] is True and line["code"] == "nickname_changed"
+    assert line["params"] == {"previous": "Host", "nickname": "Hosted"}
     await context.timers.close()
 
 

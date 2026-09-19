@@ -79,9 +79,14 @@ async def test_joining_another_room_leaves_the_previous_one_running():
     assert old is not None, "the room still holding Bob was torn down"
     assert [p.nickname for p in old.player_list()] == ["Bob"]
     assert next(iter(old.player_list())).is_host is True
-    assert ("player_left", {"playerId": first["playerId"]}) in [
-        (args[0], args[1]) for args in emitted(sio, "player_left")
+    # Said by the old room's snapshot (#880), not an event of its own.
+    left = [
+        cause
+        for args in emitted(sio, "room_state")
+        if args[1]["id"] == old.id
+        for cause in args[1].get("causes", [])
     ]
+    assert {"presence": "left", "playerId": first["playerId"], "nickname": "Ann"} in left
     new = room_manager.get_room(second["roomId"])
     assert new is not None
     assert sorted(p.nickname for p in new.player_list()) == ["Ann", "Cal"]
