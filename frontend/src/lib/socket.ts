@@ -132,14 +132,20 @@ socket.on("disconnect", (reason) => {
   socket.io.reconnectionDelayMax(hold);
   socket.io.randomizationFactor(0);
 });
-// Back to the ordinary backoff for every attempt after the held one.
-socket.io.on("reconnect_attempt", () => {
+// Back to the ordinary backoff once the held attempt has been spent - by the
+// manager's own retry, by a `connect()` that waited the hold out (a named
+// visitor's re-handshake cancels the manager's retry, so no
+// `reconnect_attempt` ever comes), or by a connection landing. Left behind,
+// the hold would become every later retry's fixed delay, up to two minutes.
+function restoreOrdinaryBackoff(): void {
   socket.io.reconnectionDelay(RECONNECTION_DELAY_MS);
   socket.io.reconnectionDelayMax(RECONNECTION_DELAY_MAX_MS);
   socket.io.randomizationFactor(RECONNECTION_RANDOMIZATION);
-});
+}
+socket.io.on("reconnect_attempt", restoreOrdinaryBackoff);
 socket.on("connect", () => {
   restart.noteConnect();
+  restoreOrdinaryBackoff();
 });
 
 /** Whether the server said it was restarting and has not come back yet. A
@@ -346,7 +352,10 @@ let heldConnect: number | null = null;
 socket.connect = (() => {
   if (isUpdateRequired()) return socket;
   const wait = restart.holdRemainingMs(Date.now());
-  if (wait <= 0) return rawConnect();
+  if (wait <= 0) {
+    restoreOrdinaryBackoff();
+    return rawConnect();
+  }
   if (heldConnect === null) {
     heldConnect = window.setTimeout(() => {
       heldConnect = null;
