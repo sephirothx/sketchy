@@ -1526,7 +1526,7 @@ the mount's own request loaded the drawing a second time, and on a rebind it was
 dump to a client holding a verified prefix. Neither is sent any more (#877): the canvas
 asks when it mounts, and again once a new socket has rebound its seat, claiming what it
 holds (below). From up to 100 dumps
-per window to 1: a 50× bound on the abusive draw path, and no path around it.
+per window to 1: a 100× bound on the abusive draw path, and no path around it.
 `sketchy_canvas_recovery_notices_total{reason}` (§9) counts every occurrence, not only
 the notices sent.
 
