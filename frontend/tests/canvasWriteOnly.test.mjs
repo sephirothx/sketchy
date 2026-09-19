@@ -15,6 +15,8 @@ const DRAWING_CODE = [
   "src/hooks/useCanvasPointerInput.ts",
   "src/hooks/useCanvasProtocol.ts",
   "src/hooks/useScratchPadProtocol.ts",
+  // The replay benchmark paints with the real renderer, so it holds the drawing the same way.
+  "benchmarks/canvas-history.html",
   ...readdirSync("src/lib").filter((file) => /^(canvas(?!Readback)|strokePlayback|replay|pngEncode|pathWidths|penStroke)/.test(file)).map((file) => `src/lib/${file}`),
 ];
 
