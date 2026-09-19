@@ -17,8 +17,16 @@ a commit that would show them. Nothing here can be read back, because the
 renderers never read the canvas. */
 function fakeSurface(fill = WHITE) {
   const data = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
-  for (let index = 0; index < data.length; index += 4) data.set(fill, index);
+  // White in one call: the sweep below makes hundreds of these, and a set()
+  // per pixel took it past CI's 30 s test timeout.
+  if (fill.every((channel) => channel === 255)) data.fill(255);
+  else for (let index = 0; index < data.length; index += 4) data.set(fill, index);
   return { pixels: data, commit() {} };
+}
+
+/** Byte-for-byte equality of two pixel buffers, in one native comparison. */
+function samePixels(a, b) {
+  return Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(Buffer.from(b.buffer, b.byteOffset, b.byteLength));
 }
 
 function pixelAt(context, x, y) {
@@ -90,7 +98,7 @@ test("a saved drawing played out in stretches ends as its whole-history raster (
   const { applyCanvasStrokeSpan, applyCanvasAction } = await import("../src/lib/canvasRenderer.ts");
   const { replayStroke } = await import("../src/lib/replay.ts");
   const blank = () => new Uint8ClampedArray(800 * 600 * 4).fill(255);
-  const paintedAlike = (a, b) => a.every((value, index) => value === b[index]);
+  const paintedAlike = samePixels;
   // The review's case: width 8, a diagonal, split at 0.51. Cut there and
   // painted as two segments of their own, pixel (36, 23) went missing. It is
   // exactly the radius from the line, on the side the half-open rule leaves
@@ -145,7 +153,7 @@ test("the drawer's ink, painted into a crop of the canvas, is the replay's raste
   const joiner = fakeSurface();
   renderCanvasActions(joiner, [{ kind: "path", color: "#000000", width: 6, points: segment }]);
   assert.deepEqual(pixelAt(drawer, 510, 351), pixelAt(joiner, 510, 351));
-  assert.ok(drawer.pixels.every((value, index) => value === joiner.pixels[index]));
+  assert.ok(samePixels(drawer.pixels, joiner.pixels));
 
   // And any segment on the wire's grid, at any width.
   let seed = 949;
@@ -161,7 +169,7 @@ test("the drawer's ink, painted into a crop of the canvas, is the replay's raste
     const replay = fakeSurface();
     renderCanvasActions(replay, [{ kind: "path", color: "#000000", width, points: [a, b] }]);
     assert.ok(
-      live.pixels.every((value, index) => value === replay.pixels[index]),
+      samePixels(live.pixels, replay.pixels),
       `${JSON.stringify([a, b])} at width ${width}`,
     );
   }
