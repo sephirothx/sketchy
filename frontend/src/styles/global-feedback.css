@@ -96,6 +96,47 @@
   background: var(--primary-edge-soft);
 }
 
+/* The browser answers canvas reads with other pixels (R-UX-15): a warning,
+   with the fix in the same sentence and a way to look again once it is done. */
+.server-shutdown-banner.is-canvas-blocked {
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+
+.server-shutdown-banner.is-canvas-blocked p {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.server-shutdown-banner.is-canvas-blocked strong {
+  font-weight: 800;
+}
+
+.server-shutdown-banner .canvas-blocked-check {
+  background: var(--warm-ink);
+  border: 0;
+  border-radius: 6px;
+  color: var(--warm-soft);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 4px 12px;
+}
+
+.server-shutdown-banner .canvas-blocked-dismiss {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.server-shutdown-banner .canvas-blocked-dismiss:hover {
+  color: var(--warm-edge);
+}
+
 .toast-viewport {
   bottom: 20px;
   display: flex;

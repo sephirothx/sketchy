@@ -688,6 +688,11 @@ export const EN = {
     newRoomsArePausedMaintenanceGames: "New rooms are paused for maintenance. Games already running carry on\n          as normal.",
     serverWasUpdatedBackAnyGame: "The server was updated and is back. Any game in progress ended.",
     dismiss: "Dismiss",
+    canvasBlocked:
+      "Your browser's privacy protection is scrambling the drawing canvas, so drawings will look broken.",
+    canvasBlockedFix:
+      "If your browser asks whether this site may use canvas image data, allow it and check again. Otherwise, turn off privacy.resistFingerprinting in about:config.",
+    checkAgain: "Check again",
   },
 
   appHeader: {
@@ -1869,6 +1874,7 @@ export const EN = {
     reconnecting: "Reconnecting",
     disconnected: "Disconnected",
     rejoinFailed: "Rejoin failed",
+    canvasBlocked: "Canvas blocked",
     serverUpdateStarted: "Server update in progress. This game will end soon.",
   },
 

@@ -37,6 +37,19 @@ test("an out-of-date tab keeps its banner in a room, and is not also told it is 
   assert.deepEqual(placeNotices(facts), { banners: ["update-required"], chips: [] });
 });
 
+test("a blocked canvas is a banner in the lobby and a chip in a room (R-UX-15)", () => {
+  assert.deepEqual(placeNotices({ ...QUIET, canvasBlocked: true }), { banners: ["canvas-blocked"], chips: [] });
+  assert.deepEqual(placeNotices({ ...QUIET, inRoom: true, canvasBlocked: true }), { banners: [], chips: ["canvas-blocked"] });
+  // Closing the banner is not closing the chip: in a room it is about the canvas in front of them.
+  assert.deepEqual(placeNotices({ ...QUIET, canvasBlocked: true, canvasBannerDismissed: true }), { banners: [], chips: [] });
+  assert.deepEqual(
+    placeNotices({ ...QUIET, inRoom: true, canvasBlocked: true, canvasBannerDismissed: true }).chips,
+    ["canvas-blocked"],
+  );
+  // An out-of-date tab cannot play at all; its banner is the one thing to say.
+  assert.deepEqual(placeNotices({ ...QUIET, updateRequired: true, canvasBlocked: true }).banners, ["update-required"]);
+});
+
 test("a pause is not a game's business, and a drain outranks it anywhere", () => {
   assert.deepEqual(placeNotices({ ...QUIET, paused: true }).banners, ["paused"]);
   assert.deepEqual(placeNotices({ ...QUIET, paused: true, inRoom: true }), { banners: [], chips: [] });

@@ -43,6 +43,7 @@ import { useFriendsStore } from "./store/friendsStore";
 import { friendListOwner } from "./lib/friends";
 import { useSettingsStore } from "./store/settingsStore";
 import { socket } from "./lib/socket";
+import { useCanvasReadbackStore } from "./store/canvasReadbackStore";
 
 /* The router keeps the window scroll across navigations, so submitting a form
    at the bottom of one page would open the next one part-way down. The overlay
@@ -141,6 +142,11 @@ function App() {
   }, [refreshFriends, myAccountId]);
   useEmailStateSync();
   useServerNotices();
+  // Whether this browser reads back what the canvas painted (R-UX-15): once
+  // on arrival, before anybody draws, so the lobby can say so.
+  useEffect(() => {
+    useCanvasReadbackStore.getState().check();
+  }, []);
 
   // The only call that provisions a guest, so it runs once on arrival and
   // gives every visitor a durable identity before they create or join a room.

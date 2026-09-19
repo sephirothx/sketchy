@@ -8,9 +8,10 @@ export type BannerNotice =
   | "paused"
   | "drain"
   | "restarted"
-  | "connection";
+  | "connection"
+  | "canvas-blocked";
 
-export type ChipNotice = "drain" | "connection";
+export type ChipNotice = "drain" | "connection" | "canvas-blocked";
 
 export interface NoticeFacts {
   inRoom: boolean;
@@ -20,6 +21,10 @@ export interface NoticeFacts {
   draining: boolean;
   restarted: boolean;
   connection: ConnectionStatus;
+  /** This browser does not read back what the canvas painted (`canvasReadback.ts`). */
+  canvasBlocked?: boolean;
+  /** The player closed the lobby banner that says so. */
+  canvasBannerDismissed?: boolean;
 }
 
 export interface NoticePlacement {
@@ -47,6 +52,11 @@ export interface NoticePlacement {
  * never be the right home for either. **Paused** stops new rooms only; a game already running carries on,
  * so a player in a room is not told about it at all.
  *
+ * **Canvas blocked** (R-UX-15) is a banner in the lobby, where a player sees it
+ * before sitting down to draw, and a chip in a room, where the canvas it is
+ * about is and where a banner would take its height. Closing the banner does
+ * not close the chip: in a room the notice is about the thing in front of them.
+ *
  * A drain supersedes the pause, as it always has: the server is going away,
  * which is the more urgent of the two. An update-required tab has stopped
  * reconnecting on purpose, so the connection notice would only contradict the
@@ -64,6 +74,11 @@ export function placeNotices(facts: NoticeFacts): NoticePlacement {
   // Inside a room the end screen says it (roomStage), and says it better.
   if (facts.restarted && !facts.inRoom) banners.push("restarted");
   if (connectionTrouble) (facts.inRoom ? chips : banners).push("connection");
+  // An out-of-date tab cannot play at all; its banner is the one thing to say.
+  if (facts.canvasBlocked && !facts.updateRequired) {
+    if (facts.inRoom) chips.push("canvas-blocked");
+    else if (!facts.canvasBannerDismissed) banners.push("canvas-blocked");
+  }
 
   return { banners, chips };
 }

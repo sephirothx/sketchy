@@ -37,6 +37,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { recordRender, type RenderRegion } from "../lib/renderDiagnostics";
+import { useCanvasReadbackStore } from "../store/canvasReadbackStore";
 
 interface CanvasProps {
   isDrawer: boolean;
@@ -281,6 +282,17 @@ function createCanvas(
       previewContextRef,
       { isDrawer, color, brushWidth, tool, brushCursor, penPressure, unbudgeted },
     );
+
+    // A canvas painted while the browser scrambled its reads holds that
+    // static (R-UX-15). Once a check says reads are true again - the player
+    // allowed the site, or changed the setting - repaint it from the history,
+    // which never went through a read.
+    const readback = useCanvasReadbackStore((state) => state.status);
+    const lastReadback = useRef(readback);
+    useEffect(() => {
+      if (lastReadback.current === "tampered" && readback === "ok") protocol.repaintFromHistory();
+      lastReadback.current = readback;
+    }, [readback, protocol]);
 
     useImperativeHandle(ref, () => ({
       saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),

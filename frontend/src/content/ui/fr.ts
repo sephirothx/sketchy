@@ -678,6 +678,11 @@ export const FR: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Les nouveaux salons sont en pause pour maintenance. Les parties déjà lancées\n          continuent normalement.",
     serverWasUpdatedBackAnyGame: "Le serveur a été mis à jour et est de retour. Les parties en cours sont terminées.",
     dismiss: "Masquer",
+    canvasBlocked:
+      "La protection de la vie privée de votre navigateur brouille le tableau de dessin : les dessins s'afficheront abîmés.",
+    canvasBlockedFix:
+      "Si votre navigateur demande si ce site peut utiliser les données d'image du canevas, autorisez-le puis vérifiez de nouveau. Sinon, désactivez privacy.resistFingerprinting dans about:config.",
+    checkAgain: "Vérifier de nouveau",
   },
 
   appHeader: {
@@ -1867,6 +1872,7 @@ export const FR: Catalogue = {
     reconnecting: "Reconnexion",
     disconnected: "Déconnecté",
     rejoinFailed: "Retour impossible",
+    canvasBlocked: "Tableau bloqué",
     serverUpdateStarted: "Mise à jour du serveur en cours. Cette partie se terminera bientôt.",
   },
 

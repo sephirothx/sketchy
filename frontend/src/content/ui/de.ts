@@ -678,6 +678,11 @@ export const DE: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Neue Räume pausieren wegen Wartung. Bereits laufende Runden gehen ganz\n          normal weiter.",
     serverWasUpdatedBackAnyGame: "Der Server wurde aktualisiert und ist zurück. Laufende Runden wurden beendet.",
     dismiss: "Ausblenden",
+    canvasBlocked:
+      "Der Datenschutz deines Browsers verfälscht die Leinwand, deshalb sehen Zeichnungen kaputt aus.",
+    canvasBlockedFix:
+      "Wenn dein Browser fragt, ob diese Seite Canvas-Bilddaten verwenden darf, erlaube es und prüfe erneut. Andernfalls schalte privacy.resistFingerprinting in about:config aus.",
+    checkAgain: "Erneut prüfen",
   },
 
   appHeader: {
@@ -1865,6 +1870,7 @@ export const DE: Catalogue = {
     reconnecting: "Verbinde neu",
     disconnected: "Getrennt",
     rejoinFailed: "Rückkehr fehlgeschlagen",
+    canvasBlocked: "Leinwand blockiert",
     serverUpdateStarted: "Server-Update läuft. Diese Runde endet bald.",
   },
 

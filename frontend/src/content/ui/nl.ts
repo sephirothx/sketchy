@@ -678,6 +678,11 @@ export const NL: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Nieuwe kamers zijn gepauzeerd voor onderhoud. Spellen die al lopen gaan\n          gewoon door.",
     serverWasUpdatedBackAnyGame: "De server is bijgewerkt en is terug. Lopende spellen zijn beëindigd.",
     dismiss: "Sluiten",
+    canvasBlocked:
+      "De privacybescherming van je browser verstoort het canvas, waardoor tekeningen er kapot uitzien.",
+    canvasBlockedFix:
+      "Vraagt je browser of deze site canvas-afbeeldingsgegevens mag gebruiken, sta het dan toe en controleer opnieuw. Zet anders privacy.resistFingerprinting uit in about:config.",
+    checkAgain: "Opnieuw controleren",
   },
 
   appHeader: {
@@ -1865,6 +1870,7 @@ export const NL: Catalogue = {
     reconnecting: "Opnieuw verbinden",
     disconnected: "Verbroken",
     rejoinFailed: "Terugkeren mislukt",
+    canvasBlocked: "Canvas geblokkeerd",
     serverUpdateStarted: "Serverupdate bezig. Dit spel eindigt binnenkort.",
   },
 

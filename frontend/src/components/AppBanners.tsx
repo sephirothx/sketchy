@@ -8,6 +8,7 @@ import { reloadForUpdate } from "../lib/protocol";
 import { useDrainSecondsLeft } from "../hooks/useServerNotices";
 import { useGameStore } from "../store/gameStore";
 import { useServerNoticesStore } from "../store/serverNoticesStore";
+import { useCanvasReadbackStore } from "../store/canvasReadbackStore";
 import { ui } from "../content/ui/index.ts";
 
 /** Every banner at the top of the page, in one stack that reserves its own height.
@@ -33,6 +34,10 @@ export function AppBanners() {
   const connection = useServerNoticesStore((state) => state.connection);
   const setNotices = useServerNoticesStore((state) => state.set);
   const secondsLeft = useDrainSecondsLeft();
+  const canvasBlocked = useCanvasReadbackStore((state) => state.status === "tampered");
+  const canvasBannerDismissed = useCanvasReadbackStore((state) => state.bannerDismissed);
+  const checkCanvas = useCanvasReadbackStore((state) => state.check);
+  const dismissCanvasBanner = useCanvasReadbackStore((state) => state.dismissBanner);
 
   useLayoutEffect(() => {
     const stack = stackRef.current;
@@ -59,6 +64,8 @@ export function AppBanners() {
     draining: shutdownNotice !== null,
     restarted,
     connection,
+    canvasBlocked,
+    canvasBannerDismissed,
   });
 
   return (
@@ -108,6 +115,25 @@ export function AppBanners() {
                   type="button"
                   aria-label={ui.app.dismiss}
                   onClick={() => setNotices({ restarted: false })}
+                >
+                  <XIcon size={14} />
+                </button>
+              </div>
+            );
+          case "canvas-blocked":
+            return (
+              <div key={notice} className="server-shutdown-banner is-canvas-blocked" role="alert">
+                <p>
+                  <strong>{ui.app.canvasBlocked}</strong> {ui.app.canvasBlockedFix}
+                </p>
+                <button type="button" className="canvas-blocked-check" onClick={() => checkCanvas()}>
+                  {ui.app.checkAgain}
+                </button>
+                <button
+                  type="button"
+                  className="canvas-blocked-dismiss"
+                  aria-label={ui.app.dismiss}
+                  onClick={dismissCanvasBanner}
                 >
                   <XIcon size={14} />
                 </button>

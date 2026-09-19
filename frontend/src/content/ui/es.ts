@@ -678,6 +678,11 @@ export const ES: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Las salas nuevas están pausadas por mantenimiento. Las partidas en curso\n          siguen con normalidad.",
     serverWasUpdatedBackAnyGame: "El servidor se actualizó y ya está de vuelta. Las partidas en curso terminaron.",
     dismiss: "Descartar",
+    canvasBlocked:
+      "La protección de privacidad de tu navegador está alterando el lienzo de dibujo, así que los dibujos se verán rotos.",
+    canvasBlockedFix:
+      "Si tu navegador pregunta si este sitio puede usar los datos de imagen del lienzo, permítelo y vuelve a comprobar. Si no, desactiva privacy.resistFingerprinting en about:config.",
+    checkAgain: "Volver a comprobar",
   },
 
   appHeader: {
@@ -1864,6 +1869,7 @@ export const ES: Catalogue = {
     reconnecting: "Reconectando",
     disconnected: "Desconectado",
     rejoinFailed: "Fallo al volver",
+    canvasBlocked: "Lienzo bloqueado",
     serverUpdateStarted: "Actualización del servidor en curso. Esta partida terminará pronto.",
   },
 
