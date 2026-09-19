@@ -15,7 +15,12 @@ import {
   requestSessionRebind,
   staleNoticeAction,
 } from "../lib/canvasRecovery";
-import { CANVAS_SYNC_TIMEOUT_MS, createCanvasSyncRequester } from "../lib/canvasSyncRequests";
+import {
+  CANVAS_SYNC_TIMEOUT_MS,
+  createCanvasSyncRequester,
+  createRebindSyncTrigger,
+} from "../lib/canvasSyncRequests";
+import { subscribeRoomBinding } from "../lib/roomSessionBinding";
 import { currentClientConfig } from "../lib/clientConfig";
 import type { CanvasSyncRequester, PrefixClaim } from "../lib/canvasSyncRequests";
 import { decodeLiveDrawing, endsPath, encodeClear, toWireFrame  } from "../lib/liveDrawing";
@@ -682,6 +687,20 @@ export function useCanvasProtocol(
     socket.on("turn_starting", onTurnStarting);
     socket.on("canvas_stale", onCanvasStale);
     socket.on("disconnect", onDisconnect);
+    // And again once a new socket has rebound the seat (#877). The server no
+    // longer pushes the history on a rebind; asked for, it is a tail cut at
+    // the prefix this canvas can verify, not a full dump. Whatever was
+    // outstanding went with the old socket, so it is abandoned rather than
+    // waited out.
+    const rebindTrigger = createRebindSyncTrigger();
+    const onConnectForSync = () => rebindTrigger.noteConnect();
+    socket.on("connect", onConnectForSync);
+    const stopRebindWatch = subscribeRoomBinding((status) => {
+      if (!rebindTrigger.noteBinding(status)) return;
+      const requester = ensureSyncRequester();
+      requester.reset();
+      requester.request();
+    });
     // Through the requester rather than a bare emit: this one is the most
     // likely of all to go unanswered, since the canvas can mount before the
     // socket has finished binding itself to a seat in the room.
@@ -697,6 +716,8 @@ export function useCanvasProtocol(
       socket.off("turn_starting", onTurnStarting);
       socket.off("canvas_stale", onCanvasStale);
       socket.off("disconnect", onDisconnect);
+      socket.off("connect", onConnectForSync);
+      stopRebindWatch();
       if (staleTimer !== null) window.clearTimeout(staleTimer);
       stopSequenceWatch();
       sender.cancel();

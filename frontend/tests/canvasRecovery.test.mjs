@@ -222,8 +222,6 @@ test("the heartbeat's canvas sequence reaches whoever listens, and junk does not
 test("a stale notice discards pending work, except a deferral which only waits", () => {
   assert.deepEqual(staleNoticeAction([3, 7, "stale_generation", 2000], 2), { discardPending: true, delayMs: 0 });
   assert.deepEqual(staleNoticeAction([3, 0, "refused_tool", 2000], 3), { discardPending: true, delayMs: 0 });
-  assert.deepEqual(staleNoticeAction([3, 0, "deferred", 2000], 3), { discardPending: false, delayMs: 2000 });
-  assert.deepEqual(staleNoticeAction([3, 0, "deferred", 0], 3), { discardPending: false, delayMs: 0 });
   assert.equal(staleNoticeAction([3, 0], 3), null);
   assert.equal(staleNoticeAction("nope", 3), null);
   assert.equal(staleNoticeAction([3, 0, 5, 2000], 3), null);

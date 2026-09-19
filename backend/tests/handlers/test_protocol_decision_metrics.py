@@ -84,15 +84,15 @@ async def test_every_tail_claim_is_counted_by_what_it_came_to(monkeypatch):
     good = (canvas.generation, 1, canvas.hashes[0])
     sync = context.game_flow._emit_canvas_sync
 
-    await sync(room, "viewer", None, budgeted=False)
-    await sync(room, "viewer", good, budgeted=False)
-    await sync(room, "viewer", (canvas.generation + 1, 1, canvas.hashes[0]), budgeted=False)
-    await sync(room, "viewer", (canvas.generation, 0, 0), budgeted=False)
-    await sync(room, "viewer", (canvas.generation, 1, canvas.hashes[0] ^ 1), budgeted=False)
-    await sync(room, "viewer", (canvas.generation, 5, 0), budgeted=False)
+    await sync(room, "viewer", None)
+    await sync(room, "viewer", good)
+    await sync(room, "viewer", (canvas.generation + 1, 1, canvas.hashes[0]))
+    await sync(room, "viewer", (canvas.generation, 0, 0))
+    await sync(room, "viewer", (canvas.generation, 1, canvas.hashes[0] ^ 1))
+    await sync(room, "viewer", (canvas.generation, 5, 0))
     # A pen held down: the history is one longer than what is finalized.
     await draw("drawer-sid", encode_live_drawing("draw_start", {"x": 0.5, "y": 0.5, "color": "#112233", "width": 5}), canvas_action(room.game, 2))
-    await sync(room, "viewer", (canvas.generation, len(canvas.history), 0), budgeted=False)
+    await sync(room, "viewer", (canvas.generation, len(canvas.history), 0))
 
     assert dict(store.canvas_tail_claims.items()) == {
         ("none",): 1, ("hit",): 1, ("generation",): 1, ("empty",): 1,

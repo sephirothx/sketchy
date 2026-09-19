@@ -14,8 +14,8 @@ A transaction carries an id the server echoes on its reply, the prefix it
 claimed (so a tail can be checked against what it was cut for), and a retry
 plan: a request the server refuses says when to try again (`retryAfterMs`); one
 it never answers is retried with backoff; and after the attempts run out the
-owner is told to hand the session over to a rebind, which pushes a fresh
-snapshot and resets everything here. Triggers that arrive while a transaction
+owner is told to hand the session over to a rebind, after which the canvas asks
+again from scratch (`createRebindSyncTrigger`). Triggers that arrive while a transaction
 is outstanding are satisfied by its reply when the reply converges; only a
 reply that failed to converge issues the follow-up. */
 
@@ -168,6 +168,36 @@ export function createCanvasSyncRequester(
     },
     get outstanding(): number | null {
       return outstanding && outstanding.id !== 0 ? outstanding.id : null;
+    },
+  };
+}
+
+
+/** When a mounted canvas asks for a sync after its seat was rebound (#877).
+
+The server no longer pushes the history on a join or a rebind - on a fresh join
+the push left before the canvas had mounted and was thrown away, and on a
+rebind it was a full dump to a client holding a verified prefix. So the canvas
+asks itself: once on mount, and once each time a **new socket** has rebound the
+seat, claiming its prefix so the answer is a tail. A soft rebind (a heartbeat,
+a tab returning) keeps its socket, never had a push, and asks for nothing. */
+export interface RebindSyncTrigger {
+  /** A socket connected: the next rebind is on a new socket. */
+  noteConnect(): void;
+  /** The seat binding moved; true when a sync should be asked for now. */
+  noteBinding(status: "ready" | "reconnecting" | "failed"): boolean;
+}
+
+export function createRebindSyncTrigger(): RebindSyncTrigger {
+  let newSocket = false;
+  return {
+    noteConnect() {
+      newSocket = true;
+    },
+    noteBinding(status) {
+      if (status !== "ready" || !newSocket) return false;
+      newSocket = false;
+      return true;
     },
   };
 }

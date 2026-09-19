@@ -5,6 +5,7 @@ import {
   CANVAS_SYNC_RETRIES_MS,
   CANVAS_SYNC_TIMEOUT_MS,
   createCanvasSyncRequester,
+  createRebindSyncTrigger,
 } from "../src/lib/canvasSyncRequests.ts";
 
 function harness({ claim = null, answer = () => ({ ok: true }) } = {}) {
@@ -156,4 +157,20 @@ test("reset drops an outstanding transaction, its retries and anything queued", 
   await advance(60_000);
   assert.equal(state.sent.length, 1);
   assert.equal(state.exhausted, 0);
+});
+
+test("a mounted canvas asks once after a new socket rebinds its seat, and not after a soft rebind (#877)", () => {
+  const trigger = createRebindSyncTrigger();
+  // A soft rebind (heartbeat, tab returning) keeps its socket.
+  assert.equal(trigger.noteBinding("reconnecting"), false);
+  assert.equal(trigger.noteBinding("ready"), false);
+  // The connection drops and a new socket rebinds the seat.
+  trigger.noteConnect();
+  assert.equal(trigger.noteBinding("reconnecting"), false);
+  assert.equal(trigger.noteBinding("ready"), true);
+  assert.equal(trigger.noteBinding("ready"), false, "once per new socket");
+  // A rebind that failed asks nothing until one succeeds.
+  trigger.noteConnect();
+  assert.equal(trigger.noteBinding("failed"), false);
+  assert.equal(trigger.noteBinding("ready"), true);
 });

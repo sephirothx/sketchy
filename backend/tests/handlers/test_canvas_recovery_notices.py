@@ -90,34 +90,29 @@ async def test_each_former_dump_path_is_a_notice_and_undo_answers_only_its_ackno
     assert _events(sio, "sync_strokes") == []
 
 
-async def test_a_join_snapshot_spends_the_resync_window_and_a_rejoin_inside_it_is_deferred():
+async def test_a_join_pushes_no_canvas_and_the_clients_request_is_the_one_sync():
+    """#877: the join used to push the whole history before its
+    acknowledgement - before a fresh client's canvas had mounted to receive it
+    - and the mount's own request loaded the drawing again. Now a join sends
+    none, however often it repeats, and the request is answered."""
     room, drawer, sio, ctx = _game()
     flow = ctx.game_flow
-    await flow._sync_player_view("drawer-sid", room, drawer)
-    assert len(_events(sio, "sync_strokes")) == 1, "the first join gets its snapshot at once"
-    assert _events(sio, "sync_strokes")[0].args[1][-1] == 0, "server-initiated: request id 0"
-    await flow._sync_player_view("drawer-sid", room, drawer)
-    await flow._sync_player_view("drawer-sid", room, drawer)
-    assert len(_events(sio, "sync_strokes")) == 1, "a rejoin inside the window is not a second dump"
-    deferred = _events(sio, "canvas_stale")
-    assert len(deferred) == 1 and deferred[0].args[1][2] == "deferred"
-    assert deferred[0].args[1][3] == int(RESYNC.default.window_seconds * 1000)
-    # The client's own request inside the same window is answered: on a fresh
-    # join the push leaves before the canvas has mounted, and this request is
-    # what loads the drawing. Pushes and requests are accounted apart.
+    for _ in range(3):
+        await flow._sync_player_view("drawer-sid", room, drawer)
+    assert _events(sio, "sync_strokes") == [] and _events(sio, "canvas_stale") == []
     request = sio.handlers["/"]["request_sync_strokes"]
     assert await request("drawer-sid", [1]) == {"ok": True}
-    assert len(_events(sio, "sync_strokes")) == 2
+    assert len(_events(sio, "sync_strokes")) == 1
     # A second request inside the window is what the request floor refuses.
     refused = await request("drawer-sid", [2])
     assert refused["errorCode"] == "too_fast" and refused["retryAfterMs"] == int(RESYNC.default.window_seconds * 1000)
-    assert len(_events(sio, "sync_strokes")) == 2
+    assert len(_events(sio, "sync_strokes")) == 1
 
 
 async def test_the_amplification_is_bounded_per_window_across_every_path():
     """The number the issue asked for: how many full dumps one socket can
-    make the server send per resync window, whatever it sends - one pushed
-    (a join) and one requested."""
+    make the server send per resync window, whatever it sends - one, the
+    requested one, since a join pushes none any more (#877)."""
     room, drawer, sio, ctx = _game()
     draw = sio.handlers["/"]["draw"]
     request = sio.handlers["/"]["request_sync_strokes"]
@@ -128,6 +123,6 @@ async def test_the_amplification_is_bounded_per_window_across_every_path():
         await ctx.game_flow._sync_player_view("drawer-sid", room, drawer)
     for _ in range(5):
         await request("drawer-sid", [9])
-    # One pushed and one requested reply per window, whatever else is sent.
-    assert len(_events(sio, "sync_strokes")) == 2 * RESYNC.default.limit
+    # One requested reply per window, whatever else is sent.
+    assert len(_events(sio, "sync_strokes")) == RESYNC.default.limit
     assert len(_events(sio, "canvas_stale")) == 1

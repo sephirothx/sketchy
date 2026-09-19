@@ -626,12 +626,13 @@ async def _seat_in_room(
         await ctx.game_flow.release_other_seats(
             sid, keep=(room.id, already_joined.id)
         )
-        # Soft checks (heartbeat/visibility) must not dump full canvas history.
+        # The canvas is the client's to ask for (#877); a soft check
+        # (heartbeat, visibility) also leaves the drawer's prompt alone.
         await ctx.game_flow._sync_player_view(
             sid,
             room,
             already_joined,
-            sync_canvas=not soft,
+            full=not soft,
         )
         # A client only rechecks its seat in a waiting room when it thinks it
         # is still playing - it missed `game_ended` - so this is when it needs

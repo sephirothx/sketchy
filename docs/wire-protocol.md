@@ -805,10 +805,10 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
-| `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash, requestId)` — `requestId` names the request it answers, `0` for a sync the server decided to send | one socket |
+| `sync_strokes` | `(binaryHistory, revision, generation, sequence, historyHash, requestId)` — only ever the answer to a `request_sync_strokes`, whose id it echoes; a join or a rebind pushes none (#877) | one socket |
 | `sync_strokes_tail` | `(binaryTail, baseActionCount, revision, generation, sequence, historyHash, requestId)` — only the actions after a verified prefix (§7); always answers a request, never unsolicited | one socket |
 | `request_canvas_actions` | `[generation, expectedSequence, receivedSequence]` | one socket |
-| `canvas_stale` | `[generation, sequence, reason, retryAfterMs]` — this socket's canvas needs recovering: `stale_generation`, `refused_tool`, `unknown_sequence`, `invalid_frame`, `dropped_frame` (a frame of this socket's was throttled at the door and the open path was closed where the server's copy ends, §6), or `deferred` (a snapshot the server would have pushed is held until the resync window opens). At most one per socket per window; the client answers through its sync transaction (§7) | one socket |
+| `canvas_stale` | `[generation, sequence, reason, retryAfterMs]` — this socket's canvas needs recovering: `stale_generation`, `refused_tool`, `unknown_sequence`, `invalid_frame`, `dropped_frame` (a frame of this socket's was throttled at the door and the open path was closed where the server's copy ends, §6). At most one per socket per window; the client answers through its sync transaction (§7) | one socket |
 | `afk_check` | `{seconds}` — this seat has sent nothing a person sent for the inactivity window, and is being asked whether anybody is there. Answered with `toggle_afk {afk: false}`, which is what the client sends by itself when it has seen a pointer or a key inside `afkInputWindowMs`, and otherwise what the **AFK check** dialog sends. Unanswered for `seconds`, the seat is marked AFK. Never sent to a spectator, a seat already AFK, or an unseated socket | one socket |
 | `voted_afk` | `{message}` — English, for a log; the client says it from the event itself (R-I18N-01) | the player who was voted AFK |
 | `kicked` | `{code, reason}` — `code` is `kicked_by_vote`, `room_closed` or `removed_by_admin`, and is what the client says; `reason` is English, for a log (R-I18N-01) | one socket |
@@ -1508,10 +1508,9 @@ drawer                                     server                       everyone
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
 | A final batch (tag 8) past the point budget | dropped whole, nothing committed, the path stays open; the drawer's one-byte `draw_end` that follows closes it, and its completion watch covers the case where nothing does |
-| The socket's outbound backlog passed the budget (§3) | the socket is closed, its queue discarded whole; the client reconnects, rebinds its seat inside the grace and takes a full sync, so recovery is a verified canvas rather than a partial stream |
+| The socket's outbound backlog passed the budget (§3) | the socket is closed, its queue discarded whole; the client reconnects, rebinds its seat inside the grace and asks for a sync — a tail when the prefix it holds verifies, a full one otherwise — so recovery is a verified canvas rather than a partial stream |
 | A frame throttled at the door (§2), noticed at the next frame | the open path is closed for the room with a `draw_end` carrying its commit; `canvas_stale … dropped_frame` to the drawer; the rest of that path discarded (§6) |
 | `undo_stroke` whose generation, revision or `historyHash` disagree | the acknowledgement alone: `canvas_stale_generation` or `canvas_out_of_sync` — the client resyncs through its transaction |
-| A snapshot the server would push (a join) inside a spent resync window | `canvas_stale … deferred` with `retryAfterMs` |
 
 **Why a notice and not the history (#562).** Every one of these used to push the whole
 canvas to that socket, and nothing but the drawing budget bounded it: a hundred refused
@@ -1520,14 +1519,14 @@ openings in a window were a hundred full dumps, each up to 460 KB on a full canv
 *that* the canvas needs recovering, once per socket per resync window (further refusals
 inside the window are counted but not repeated), and the client asks through its
 transaction — which is budgeted, carries a verified prefix when it can, and knows when
-to ask again. The floor is **one pushed and one requested** full reply per socket per
-window, accounted apart: a snapshot the server pushes on a join is one per window, so a
-rejoin inside it is deferred with a notice rather than answered with a dump; a request is
-one per window through its budget. Apart, because on a fresh join the push leaves before
-the join acknowledgement — before the canvas has mounted to receive it — and the mount's
-own request is what actually loads the drawing; charging both to one allowance made every
-entry into a running game wait out the window (4 s measured, #654). From up to 100 dumps
-per window to 2: a 50× bound on the abusive draw path, and no path around it.
+to ask again. The floor is **one requested** full reply per socket per window, through
+its budget. A join used to push a snapshot as well, on its own window: on a fresh join
+it left before the acknowledgement — before the canvas had mounted to receive it — so
+the mount's own request loaded the drawing a second time, and on a rebind it was a full
+dump to a client holding a verified prefix. Neither is sent any more (#877): the canvas
+asks when it mounts, and again once a new socket has rebound its seat, claiming what it
+holds (below). From up to 100 dumps
+per window to 1: a 50× bound on the abusive draw path, and no path around it.
 `sketchy_canvas_recovery_notices_total{reason}` (§9) counts every occurrence, not only
 the notices sent.
 
@@ -1548,9 +1547,8 @@ only if something else had asked meanwhile — a lost or refused request on a qu
 canvas had no next trigger.
 
 - **Identity.** `request_sync_strokes` carries an id, and the reply echoes it last. A
-  reply whose id is not the outstanding request's is **stale** and ignored; a
-  `sync_strokes` with id `0` is a sync the server decided to send (a join, a refused
-  frame) and is always applied. A tail must additionally be cut for the prefix the
+  reply whose id is not the outstanding request's is **stale** and ignored. The server
+  sends no sync it was not asked for (#877), so every reply names a request. A tail must additionally be cut for the prefix the
   request *claimed* — the claim is captured when the request goes out, not when the
   reply arrives — so strokes drawn in between are pending mutations, reconciled like
   after a full reply, not history to be overwritten.
@@ -1636,7 +1634,15 @@ to the full `sync_strokes` dump:
 | the hash disagrees | The client's prefix is not the server's |
 | `actionCount` exceeds what is finalized | Includes the client being *ahead*, which undo can cause |
 | `actionCount` lands inside an open path | `hashes` holds one entry per finalized action; the record under the pen is a moving target |
-| no claim at all (`null`) | What every client sent before this existed |
+| no claim at all (`null`) | A canvas that holds nothing yet (a mount), or pending strokes the server has not confirmed |
+
+**When a client asks (#877).** Once when its canvas mounts - which on a mid-turn entry
+is what loads the drawing - and once each time a **new socket** has rebound its seat,
+claiming its prefix, so a reconnect is answered with a tail: 90 B instead of 1 KB for a
+20-stroke drawing, and up to hundreds of kilobytes for a full canvas
+(`benchmarks/join_to_drawing.py`). A soft rebind (a heartbeat, a tab returning) keeps
+its socket and asks for nothing. The server used to push a full history on every join
+and rebind as well; a mid-turn entry received the canvas twice.
 
 A client only claims a prefix when it has **nothing pending**. Unacknowledged mutations
 mean it has optimistically applied actions the server may never have accepted, so its
@@ -2164,7 +2170,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (33) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (34) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

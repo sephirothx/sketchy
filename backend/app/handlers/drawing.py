@@ -318,7 +318,7 @@ async def request_sync_strokes(ctx: HandlerContext, sid, data=None):
         )
     room, _ = current
     # The command guard spent the resync window; the reply does not spend it twice.
-    await ctx.game_flow._emit_canvas_sync(room, sid, request.holds, request_id=request.request_id, budgeted=False)
+    await ctx.game_flow._emit_canvas_sync(room, sid, request.holds, request_id=request.request_id)
     return {"ok": True}
 
 
