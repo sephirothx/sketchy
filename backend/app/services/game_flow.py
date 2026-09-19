@@ -770,20 +770,21 @@ class GameFlowService:
         sid: str,
         holds: tuple[int, int, int] | None = None,
         request_id: int = 0,
-        *,
-        budgeted: bool = True,
     ) -> None:
-        """Send the canvas history, or only the part the client is missing.
+        """Answer a `request_sync_strokes`: the canvas history, or only the part
+        the client is missing.
 
-        `budgeted` spends the socket's *push* window first (#562): a snapshot
-        the server pushes on a join is one per resync window, and inside a
-        spent window the socket gets a `canvas_stale` notice saying when to
-        ask instead of a dump. Requests have their own window, spent by the
-        command guard, so the request path passes `budgeted=False`.
+        Only ever asked for (#877). A join used to push the whole history as
+        well, before its acknowledgement - on a fresh join, before the canvas
+        had mounted to receive it, so the mount's own request was what loaded
+        the drawing and the push was a full canvas thrown away; and on a
+        rebind, a full dump to a client that already held a verified prefix.
+        The client now asks when its canvas mounts and when a new socket has
+        rebound its seat, claiming what it holds, so a reconnect is a tail.
+        The request's own budget is the only window.
 
         `request_id` is echoed last on the reply: the id the client gave the
-        request it is answering, or 0 for a sync the server decided to send
-        (a join, a refused frame). The client accepts a tail only for the
+        request it is answering. The client accepts a tail only for the
         request it has outstanding, and ignores a full reply to a request it
         has abandoned (#598).
 
@@ -798,9 +799,6 @@ class GameFlowService:
         if not room.game:
             return
         canvas = room.game.canvas
-        if budgeted and not self._ctx.spend_canvas_push(sid):
-            await self._emit_canvas_stale(room, sid, "deferred")
-            return
         if holds is not None:
             generation, count, history_hash = holds
             claim = canvas.prefix_claim_result(generation, count, history_hash)
@@ -922,8 +920,14 @@ class GameFlowService:
             to=sid,
         )
 
-    async def _sync_player_view(self, sid: str, room: Room, player, *, sync_canvas: bool = True) -> None:
-        """Push authoritative game/canvas state to one socket (join or soft resync)."""
+    async def _sync_player_view(self, sid: str, room: Room, player, *, full: bool = True) -> None:
+        """Push authoritative game state to one socket (a join, or a soft resync).
+
+        Never the canvas (#877): the client asks for that itself, when its
+        canvas mounts and when a new socket has rebound the seat, so it can
+        claim the prefix it already holds. `full` is a join rather than a
+        heartbeat's soft check, which is what re-sends the drawer's prompt.
+        """
         game = room.game
         if not game:
             return
@@ -938,8 +942,6 @@ class GameFlowService:
                 ),
                 to=sid,
             )
-            if sync_canvas:
-                await self._emit_canvas_sync(room, sid)
             if player.id == game.current_drawer:
                 if game.phase == Phase.CHOOSING_PROMPT:
                     await self._sio.emit(
@@ -950,7 +952,7 @@ class GameFlowService:
                         },
                         to=sid,
                     )
-                elif sync_canvas:
+                elif full:
                     await self._sio.emit("you_are_drawing", {"prompt": game.prompt}, to=sid)
         elif game.phase == Phase.TURN_RESULTS:
             await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
