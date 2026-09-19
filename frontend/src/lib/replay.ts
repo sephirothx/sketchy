@@ -10,6 +10,9 @@ export interface ReplayStroke {
   width: number;
   color: string;
   widths?: WidthChange[];
+  /** A path opens with a dot at its first point, at the width it opened
+  with: every live screen paints one at `draw_start`, before any segment. */
+  opensWithDot?: boolean;
 }
 
 /** How long a replay takes, whatever the drawing: a doodle is not over in a
@@ -49,7 +52,7 @@ export function replayStroke(
     // Ramped (`pathWidths.ts`), so the stroke the replay grows is the one
     // every other painter paints; a path at one width comes back unchanged.
     const ramped = expandWidthRamps(action.points, action.width, action.widths);
-    return { points: ramped.points, width: ramped.width, color: action.color, widths: ramped.widths };
+    return { points: ramped.points, width: ramped.width, color: action.color, widths: ramped.widths, opensWithDot: true };
   }
   if (action.kind === "shape") {
     const outline = shapeOutlinePoints(action.payload.from, action.payload.to, action.payload.shape);

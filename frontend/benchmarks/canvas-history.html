@@ -10,9 +10,11 @@
     <script type="module">
       import { decodeCanvasHistory } from "/src/lib/canvasHistory.ts";
       import { renderCanvasActions } from "/src/lib/canvasRenderer.ts";
+      import { createCanvasSurface } from "/src/lib/canvasSurface.ts";
 
       const canvas = document.querySelector("#benchmark-canvas");
-      const context = canvas.getContext("2d", { willReadFrequently: true });
+      // As the game's canvas is: the drawing in pixels it owns, never read back.
+      const surface = createCanvasSurface(canvas.getContext("2d"));
 
       function bytesFromBase64(encoded) {
         const binary = atob(encoded);
@@ -41,7 +43,7 @@
 
         const replayActions = evenlySample(actions, replayLimit);
         const replayStarted = performance.now();
-        renderCanvasActions(context, replayActions);
+        renderCanvasActions(surface, replayActions);
         const replayMs = performance.now() - replayStarted;
         await new Promise((resolve) => setTimeout(resolve, 0));
 

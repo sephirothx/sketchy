@@ -13,11 +13,15 @@ if lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 
-(cd "$FRONTEND_DIR" && npm run dev --silent -- --host 127.0.0.1 --port "$PORT") &
+# Vite itself, `exec`ed so the subshell *becomes* it: through `npm run dev`
+# the PID below was npm's, killing it left Vite's node process holding the
+# port, and the next run refused to start.
+(cd "$FRONTEND_DIR" && exec ./node_modules/.bin/vite --host 127.0.0.1 --port "$PORT" --strictPort) &
 SERVER_PID=$!
 
 cleanup() {
   kill "$SERVER_PID" 2>/dev/null || true
+  wait "$SERVER_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 

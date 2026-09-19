@@ -147,7 +147,13 @@ export function expandWidthRamps(
     const lengths: number[] = [];
     let total = 0;
     for (let index = fromIndex; index < toIndex; index += 1) {
-      const length = Math.hypot(points[index + 1].x - points[index].x, points[index + 1].y - points[index].y);
+      // Not `Math.hypot`, which the language leaves approximate - two
+      // engines may differ in its last bit, and a cut on a tie then rounds
+      // to another quarter pixel. On the grid the squares and their sum are
+      // exact, and `Math.sqrt` is correctly rounded everywhere.
+      const dx = points[index + 1].x - points[index].x;
+      const dy = points[index + 1].y - points[index].y;
+      const length = Math.sqrt(dx * dx + dy * dy);
       lengths.push(length);
       total += length;
     }
