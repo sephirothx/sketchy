@@ -745,6 +745,7 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MIGRATION_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `60` | The same three for `python -m app.db.migrate` (`sketchy-migration`); the lock budget covers the deploy advisory lock |
 | `DB_MAINTENANCE_STATEMENT_TIMEOUT_SECONDS` / `_LOCK_` / `_IDLE_TRANSACTION_` | `600` / `5` / `120` | The same three for every operator command (`sketchy-maintenance`): retention, projection rebuilds, drawing verification, exports, mail, metrics, the admin bootstrap and the operator reset |
 | `SHUTDOWN_DRAIN_SECONDS` | `30` | Planned-deploy game drain window, 0-300 seconds |
+| `SHUTDOWN_RECONNECT_SPREAD_SECONDS` | `10` | How widely clients spread their return after a planned restart, 0-120 seconds; each waits a random part of it. Widen it for a busy server |
 | `GALLERY_SHELF_TTL_SECONDS` | `60` | How long the gallery's This week is served from one snapshot before it is recomputed; `0` recomputes on every open, which only the end-to-end runner wants |
 | `CATALOGUE_RANKING_TTL_SECONDS` | `60` | How long the community catalogue's star order is served from one ranking before it is recomputed; star counts shown are always live, and `0` ranks on every page, which only the end-to-end runner wants |
 | `AFK_INACTIVITY_SECONDS` | `300` | How long a seat may send nothing a person sent before the room asks whether anybody is there. Only somebody who has touched nothing at all reaches it: a browser that has seen input answers the check by itself |
@@ -1952,6 +1953,11 @@ backend/.venv/bin/python benchmarks/reaction_write.py --reactions 300 5000
 # The guest-name check per chat line, database versus the presence cache (#900)
 backend/.venv/bin/python benchmarks/guest_name_check.py --online 200 1000 3000
 
+# Every client returning at once after a restart, before and after the reconnect spread (#872; PostgreSQL)
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench_herd METRICS_TOKEN=x \
+  GUEST_PROVISION_LIMIT=100000 GUEST_PROVISION_DAILY_LIMIT=100000 AUTH_REGISTER_LIMIT=100000 \
+  AUTH_LOOKUP_LIMIT=100000 ./benchmarks/with_server.sh benchmarks/reconnect_herd.py --clients 400 --metrics-token x
+
 # The watch_lobby answer: first time, resumed with chatSince, and a herd of 400 between ticks (#885)
 backend/.venv/bin/python benchmarks/lobby_baseline.py --online 100 400
 
@@ -2582,6 +2588,11 @@ cd backend
 A drawer who reconnects, or whose frames the server asked for again, replays what the server has not confirmed at a pace under the drawing allowance the server advertises, with each saved stroke repacked into the fewest frames its points fit in, so a long stroke converges instead of being cut off by the very budget that protects live drawing. A finished stroke the server never confirms is resent a few times with backoff and then replaced by the server's canvas.
 A seated client checks with the server every five seconds that it still holds the seat, phase and round it thinks it does, skipping a check only when a phase event has just told it the same thing and never going more than fifteen seconds without one. A viewer that cannot keep up with what the room sends it is closed once the oldest packet queued for it is ten seconds old or the queue holds 4 MiB, and comes back through the ordinary reconnect: its seat is kept for the grace and it takes a fresh, verified canvas rather than a partial stream. A tab left open across a deploy is told to reload and, until it does, has every command refused and its socket closed after five seconds; every REST response carries the server's version too, so a tab that is not on a socket is caught by its next request. The client reloads at most once per server version, and if the reload did not fetch a newer bundle it stops reconnecting and shows an "out of date" banner with a Reload button rather than looping. A browser whose WebSocket upgrades are blocked or silently dropped plays over long-polling instead of never connecting: the client moves on when the upgrade errors, and puts polling first when an attempt has produced nothing after six seconds, then keeps probing for an upgrade from there. A guess that goes unacknowledged is resent once, but only on the same connection, in the same room and turn it was typed in; otherwise it is reported as lost rather than replayed into a turn that has moved on, and the server ignores a guess that names a room or turn its seat has left. The server never pushes a whole canvas at a refused frame any more: it sends one small notice per socket per window and the client fetches through that transaction, and a rejoin inside a spent window waits for it too, so no path can make the server re-encode a full canvas more than twice every two seconds per socket (one pushed, one requested). A request for the server's canvas is a transaction: its reply names it, a reply to a request the client has since abandoned is ignored, a request the server cannot answer says when to ask again, and one that goes unanswered is retried a few times before the client restarts its connection rather than staying quietly wrong.
 
+- Clients do not all come back at once. After a planned restart each waits a random part of
+  a window the server names (10 seconds by default), and an ordinary drop retries after one
+  second, doubling to ten, each with jitter. A server that is only slow - still keeping the
+  connection alive, just answering late - gets a light re-check of the seat rather than a
+  torn-down connection and a full canvas download, and those re-checks back off to a minute.
 - On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
   their score and place in the turn order. A successful reconnect replaces the player's active
   socket, so the superseded socket can no longer issue commands.

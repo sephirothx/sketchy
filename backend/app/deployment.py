@@ -12,6 +12,13 @@ SUPPORTED_APP_WORKERS = 1
 WORKER_COUNT_ENVIRONMENTS = ("WEB_CONCURRENCY", "UVICORN_WORKERS")
 DEFAULT_SHUTDOWN_DRAIN_SECONDS = 30.0
 MAX_SHUTDOWN_DRAIN_SECONDS = 300.0
+# How widely clients spread their reconnects after a planned restart (#872).
+# Every client used to retry 0.5-1.5 s after the close, so a restart was one
+# second of every handshake, lobby baseline and REST refetch at once against
+# a pool of ten connections. Rooms die with the process, so the wait costs a
+# client only a slightly later "your room ended".
+DEFAULT_RECONNECT_SPREAD_SECONDS = 10.0
+MAX_RECONNECT_SPREAD_SECONDS = 120.0
 ENVIRONMENT_VARIABLE = "SKETCHY_ENV"
 DEVELOPMENT = "development"
 TEST = "test"
@@ -259,5 +266,24 @@ def shutdown_drain_seconds(environ: Mapping[str, str] | None = None) -> float:
         raise RuntimeError(
             "SHUTDOWN_DRAIN_SECONDS must be between 0 and "
             f"{int(MAX_SHUTDOWN_DRAIN_SECONDS)}"
+        )
+    return seconds
+
+
+def reconnect_spread_seconds(environ: Mapping[str, str] | None = None) -> float:
+    """Parse the window clients spread their reconnects over after a drain."""
+
+    values = os.environ if environ is None else environ
+    raw_value = values.get("SHUTDOWN_RECONNECT_SPREAD_SECONDS")
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_RECONNECT_SPREAD_SECONDS
+    try:
+        seconds = float(raw_value)
+    except ValueError as exc:
+        raise RuntimeError("SHUTDOWN_RECONNECT_SPREAD_SECONDS must be a number") from exc
+    if not 0 <= seconds <= MAX_RECONNECT_SPREAD_SECONDS:
+        raise RuntimeError(
+            "SHUTDOWN_RECONNECT_SPREAD_SECONDS must be between 0 and "
+            f"{int(MAX_RECONNECT_SPREAD_SECONDS)}"
         )
     return seconds

@@ -72,6 +72,7 @@ class ShutdownCoordinator:
         # The window this drain is actually running on, fixed when it starts.
         self._drain_in_force: float | None = None
         self._drain_seconds = 0.0
+        self._reconnect_spread_seconds = 0.0
         self._started_at: datetime | None = None
         self._game_state_changed = asyncio.Event()
 
@@ -176,9 +177,12 @@ class ShutdownCoordinator:
         """
         self._drain_seconds = seconds
 
-    def begin_startup(self, *, drain_seconds: float) -> None:
+    def begin_startup(
+        self, *, drain_seconds: float, reconnect_spread_seconds: float = 0.0
+    ) -> None:
         self._state = "starting"
         self._drain_seconds = drain_seconds
+        self._reconnect_spread_seconds = reconnect_spread_seconds
         self._started_at = None
         self._game_state_changed = asyncio.Event()
 
@@ -234,6 +238,10 @@ class ShutdownCoordinator:
             # whatever draws the countdown, not for the contract.
             "drainSeconds": drain,
             "startedAt": self._started_at.isoformat(),
+            # How widely to spread the reconnect once this process is gone
+            # (#872): each client waits a random part of it before its first
+            # attempt, so the replacement is not met by every client at once.
+            "reconnectSpreadMs": round(self._reconnect_spread_seconds * 1000),
         }
 
     def _active_games(self) -> list[tuple[Room, object]]:

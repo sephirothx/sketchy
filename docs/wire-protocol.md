@@ -184,6 +184,36 @@ the cookie to a session record and stores `{"user_id": …}` on the Socket.IO se
   need it for. There is no acknowledgement on a handshake to put these in, and
   `room_state` is per-room so it never reaches a client sitting in the lobby.
 
+### Reconnection
+
+How a client comes back ([`lib/reconnectPolicy.ts`](../frontend/src/lib/reconnectPolicy.ts),
+#872). Every (re)connect costs the server a session resolve, presence and block
+warm-ups, a lobby baseline or a seat rebind, and two REST refetches; socket.io's
+defaults put every client's first retry 0.5–1.5 s after the close, so a restart
+used to be all of that from every client inside a second, against a pool of ten.
+
+- **An ordinary drop** retries on the manager's backoff, written down rather
+  than left to the library: 1 s, doubling, capped at 10 s, each ±50%.
+- **After `server_shutdown`**, the first attempt waits a uniform random part of
+  the notice's `reconnectSpreadMs`. A `connect()` asked for meanwhile (a room
+  rebinding) waits on that pending attempt instead of opening its own. A room
+  then waits up to 60 s for the server rather than 8 s twice, because a deploy
+  is its drain plus a boot. Measured at 400 registered clients on PostgreSQL
+  (`benchmarks/reconnect_herd.py`): summed pool wait over the herd 600–650 s →
+  under 0.1 s, REST p95 1.6 s → 17 ms, and every client back in 9.9 s instead
+  of 2.6 s — the spread, as intended.
+- **The REST refetches** a reconnect triggers (friends, recovery address) run
+  a random 0–3 s behind it, so they queue behind the seat rebind rather than
+  beside it. A first connection does not wait.
+- **Missed `session_ping`s** (three in a row) no longer tear the transport
+  down by default. While Engine.IO's own pings keep arriving the connection is
+  alive and the server is only slow, so the seat gets a soft `join_room`, which
+  repairs the binding without a teardown or a canvas dump. Only a silent
+  transport is restarted. Each escalation pushes the next one out, doubling
+  from 5 s to a minute with ±50% jitter, and a successful probe resets it.
+  Every seat misses together when the server is the slow one, so the old rule
+  answered overload with the most expensive request a client can make.
+
 ### Origin
 
 A browser sends `Origin` on every WebSocket handshake, and a WebSocket is not subject to
@@ -1040,8 +1070,14 @@ the recorded standings so the final screen and the history row can never disagre
 **`server_shutdown`**:
 
 ```ts
-{ contractVersion: 1, reason: "deployment", drainSeconds: number, startedAt: string }
+{ contractVersion: 1, reason: "deployment", drainSeconds: number, startedAt: string,
+  reconnectSpreadMs: number }
 ```
+
+`reconnectSpreadMs` (#872) is how widely clients should spread their return
+once this process is gone: each holds its first attempt a uniform random part
+of it (`SHUTDOWN_RECONNECT_SPREAD_SECONDS`, default 10 s, at most 120 s). See
+[Reconnection](#reconnection).
 
 `drainSeconds` is **exactly** what the server will wait, fractions included — it
 used to be rounded up, which promised a client two seconds while the server
@@ -2128,7 +2164,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (32) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (33) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

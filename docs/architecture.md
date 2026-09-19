@@ -435,6 +435,12 @@ finished: one privacy-safe `planned_shutdown_abandonments` row is written instea
 canvas contents). A second termination signal abandons the rest of the window and
 skips even that diagnostic. A hard crash cannot run this hook at all.
 
+The notice also names `reconnectSpreadMs` (`SHUTDOWN_RECONNECT_SPREAD_SECONDS`, default
+10 s): each client holds its first attempt a random part of it, so the replacement
+process meets its clients as a trickle rather than all of them inside a second (#872).
+The number lives on the server because only the server knows how many clients it has.
+The client's side of it is in [wire §1 Reconnection](wire-protocol.md#reconnection).
+
 ---
 
 ## 7. Cross-cutting concerns

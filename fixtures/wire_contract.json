@@ -2575,6 +2575,7 @@
   "services.shutdown:notice_payload": [
    "contractVersion",
    "drainSeconds",
+   "reconnectSpreadMs",
    "startedAt"
   ],
   "services.shutdown:pause_payload": [
@@ -2640,7 +2641,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 32,
+ "protocolVersion": 33,
  "refusal": {
   "codes": [
    "invalid_payload",

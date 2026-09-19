@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { observeServerCanvasSequence, onSessionRebindRequested } from "../lib/canvasRecovery";
 import { createHeartbeatSchedule, HEARTBEAT_MS, replyIsCurrent } from "../lib/heartbeatSchedule";
-import { emitWithAck, socket } from "../lib/socket";
+import { emitWithAck, restartExpected, socket, transportIsAlive } from "../lib/socket";
+import { RESTART_PATIENCE_MS, escalateHeartbeat } from "../lib/reconnectPolicy";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -12,6 +13,13 @@ import { refusalCode, refusalText } from "../lib/refusals.ts";
 import { useServerNoticesStore } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
 
+/** How long a rebind waits for the socket. Longer when the server said it was
+restarting (#872): a deploy is its drain plus a boot, and the ordinary 8 s
+twice over showed the failed card before the replacement was listening. */
+function connectPatienceMs(): number {
+  return restartExpected() ? RESTART_PATIENCE_MS : 8000;
+}
+
 const STALL_GRACE_MS = 2500;
 const STALL_CHECK_MS = 1000;
 const HEARTBEAT_TIMEOUT_MS = 5000;
@@ -21,7 +29,7 @@ const AUTHORITATIVE_EVENTS = ["turn_starting", "turn_started", "turn_ended", "sy
 const ACTIVE_PHASES = new Set(["choosing_prompt", "drawing", "turn_results"]);
 const PHASE_BY_CODE = ["idle", "choosing_prompt", "drawing", "turn_results", "game_end"] as const;
 
-function waitForConnect(timeoutMs = 8000): Promise<void> {
+function waitForConnect(timeoutMs = connectPatienceMs()): Promise<void> {
   if (socket.connected) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {
@@ -49,6 +57,10 @@ export function useRoomSessionReconnect() {
     let lastStallRecoveryAt = 0;
     let heartbeatInFlight = false;
     let consecutiveHeartbeatFailures = 0;
+    // How far this run of missed probes has escalated, and when it may next
+    // (#872): each escalation pushes the next one out.
+    let heartbeatEscalations = 0;
+    let nextEscalationAt = 0;
     // Skips a probe when an authoritative event inside the last interval
     // already said what the probe would, forces one at the cap (#564).
     const schedule = createHeartbeatSchedule();
@@ -216,6 +228,8 @@ export function useRoomSessionReconnect() {
         }
 
         consecutiveHeartbeatFailures = 0;
+        heartbeatEscalations = 0;
+        nextEscalationAt = 0;
         // The canvas protocol compares this with what it still holds pending
         // (#597); the two hooks share nothing else.
         observeServerCanvasSequence(response[4], response[5]);
@@ -249,11 +263,28 @@ export function useRoomSessionReconnect() {
       } catch {
         if (cancelled) return;
         consecutiveHeartbeatFailures += 1;
-        // Only escalate after repeated failures so a busy canvas under throttle
-        // does not hard-reconnect (and re-dump history) on every missed ping.
-        if (consecutiveHeartbeatFailures >= 3) {
-          queueRebind({ forceTransportRestart: true });
+        // A missed probe is a slow server at least as often as a dead
+        // connection, and every seat misses together when the server is the
+        // slow one - so tearing each transport down and asking for the whole
+        // canvas was the most expensive answer at the worst moment (#872).
+        // While Engine.IO's own pings still arrive, the connection is fine and
+        // a soft rebind repairs the binding; only a silent one is restarted.
+        // Either way the next escalation is pushed further out.
+        const now = Date.now();
+        const next = escalateHeartbeat({
+          failures: consecutiveHeartbeatFailures,
+          escalations: heartbeatEscalations,
+          notBefore: nextEscalationAt,
+          now,
+          transportAlive: transportIsAlive(now),
+          random: Math.random(),
+        });
+        if (next.action !== "none") {
+          heartbeatEscalations = next.escalations;
+          nextEscalationAt = next.notBefore;
           consecutiveHeartbeatFailures = 0;
+          if (next.action === "restart") queueRebind({ forceTransportRestart: true });
+          else queueRebind({ soft: true });
         }
       } finally {
         heartbeatInFlight = false;

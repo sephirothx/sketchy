@@ -7,6 +7,15 @@ import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { applyPrivateResult } from "./privateResults.ts";
+import {
+  RECONNECTION_DELAY_MAX_MS,
+  RECONNECTION_DELAY_MS,
+  RECONNECTION_RANDOMIZATION,
+  pingWindowMs,
+  postReconnectDelayMs,
+  shutdownHoldMs,
+  transportAlive,
+} from "./reconnectPolicy.ts";
 
 // No URL: connect to the origin that served the page. The backend serves the
 // frontend in production and E2E, and the Vite dev server proxies /socket.io,
@@ -67,6 +76,11 @@ export const socket: Socket = io({
   transports: ["websocket", "polling"],
   tryAllTransports: true,
   timeout: CONNECT_TIMEOUT_MS,
+  // An ordinary drop's backoff, written down rather than left to the
+  // library's defaults (#872, `reconnectPolicy.ts`).
+  reconnectionDelay: RECONNECTION_DELAY_MS,
+  reconnectionDelayMax: RECONNECTION_DELAY_MAX_MS,
+  randomizationFactor: RECONNECTION_RANDOMIZATION,
   // Settled at the handshake, where there is somewhere to put the answer. A
   // frame refused by the codec is refused inside a handler with no
   // acknowledgement, so a stale build is never told and diverges in silence.
@@ -93,6 +107,98 @@ socket.on("connect", () => {
 /** True once this page load has completed at least one handshake. */
 export function hasEverConnected(): boolean {
   return everConnected;
+}
+
+// --- after a planned restart (#872) ---------------------------------------
+//
+// The spread the last `server_shutdown` named, until the connection it came
+// on closes. A socket arriving mid-drain is told at its handshake, before
+// `connect`, so this is cleared on the way out rather than on the way in.
+let announcedSpreadMs: number | null = null;
+// Set from that close until the next connection lands: the server said it was
+// going, so a room waits longer for it to come back (`restartExpected`).
+let restartPending = false;
+socket.on("server_shutdown", (payload: unknown) => {
+  const spread = (payload as { reconnectSpreadMs?: unknown } | null)?.reconnectSpreadMs;
+  announcedSpreadMs = typeof spread === "number" ? spread : 0;
+});
+socket.on("disconnect", (reason) => {
+  const spread = announcedSpreadMs;
+  announcedSpreadMs = null;
+  // Our own disconnect is not the server going away.
+  if (spread === null || reason === "io client disconnect") return;
+  restartPending = true;
+  const hold = shutdownHoldMs(spread, Math.random());
+  if (hold <= 0) return;
+  // The manager schedules its first retry right after this event, from its
+  // backoff - so for that one attempt the backoff *is* the hold: a random
+  // point in the window the server named, exactly. A `connect()` called
+  // meanwhile (a room rebinding) waits on that pending retry rather than
+  // opening one of its own, so nothing jumps the queue.
+  socket.io.reconnectionDelay(hold);
+  socket.io.reconnectionDelayMax(hold);
+  socket.io.randomizationFactor(0);
+});
+// Back to the ordinary backoff for every attempt after the held one.
+socket.io.on("reconnect_attempt", () => {
+  socket.io.reconnectionDelay(RECONNECTION_DELAY_MS);
+  socket.io.reconnectionDelayMax(RECONNECTION_DELAY_MAX_MS);
+  socket.io.randomizationFactor(RECONNECTION_RANDOMIZATION);
+});
+socket.on("connect", () => {
+  restartPending = false;
+});
+
+/** Whether the connection closed after the server said it was restarting,
+and has not come back yet. A room then waits out a deploy before giving up. */
+export function restartExpected(): boolean {
+  return restartPending;
+}
+
+/** Run *handler* on every connection, spread behind a reconnect (#872).
+
+For the REST refetches a reconnect triggers - friends, the recovery address -
+which would otherwise land beside the seat rebind, from every client at once.
+The first connection runs it immediately. Returns the unsubscribe. */
+export function onConnectSpread(handler: () => void): () => void {
+  let timer: number | null = null;
+  const run = () => {
+    if (timer !== null) window.clearTimeout(timer);
+    const delay = postReconnectDelayMs(telemetry.reconnects > 0, Math.random());
+    if (delay === 0) {
+      timer = null;
+      handler();
+      return;
+    }
+    timer = window.setTimeout(() => {
+      timer = null;
+      handler();
+    }, delay);
+  };
+  socket.on("connect", run);
+  return () => {
+    socket.off("connect", run);
+    if (timer !== null) window.clearTimeout(timer);
+  };
+}
+
+// When the server last kept the transport alive with Engine.IO's own ping.
+let lastTransportPingAt: number | null = null;
+socket.io.on("ping", () => {
+  lastTransportPingAt = Date.now();
+});
+socket.io.on("open", () => {
+  lastTransportPingAt = Date.now();
+});
+
+/** Whether the server is still reading this connection, however slowly it is
+answering commands: missed `session_ping`s then mean slow, not dead (#872). */
+export function transportIsAlive(now = Date.now()): boolean {
+  const engine = socket.io.engine as unknown as
+    | { _pingInterval?: number; _pingTimeout?: number }
+    | undefined;
+  const window = pingWindowMs(engine?._pingInterval, engine?._pingTimeout);
+  return socket.connected && transportAlive(lastTransportPingAt, now, window);
 }
 
 /** What this page load's connection has actually been through.
