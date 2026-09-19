@@ -36,6 +36,7 @@ import {
   renderCanvasActionsUpTo,
 } from "../src/lib/canvasRenderer.ts";
 import { hexToRgba } from "../src/lib/canvasPixels.ts";
+import { createCanvasSurface } from "../src/lib/canvasSurface.ts";
 import {
   decodeLiveDrawing,
   encodeClear,
@@ -55,33 +56,29 @@ const COLORS = ["#000000", "#e03131", "#1971c2", "#2f9e44", "#ffffff"];
 const SHAPES = ["rectangle", "ellipse", "triangle"];
 const FLUSH_MS = 80;
 
-/** A 2D context over a pixel buffer: what the renderers read and write. */
+/** A drawing canvas as `Canvas.tsx` makes one: a surface over a 2D context.
+The context only takes writes - a read throws - so a painter that went back
+to reading the canvas fails here (`canvasSurface.ts`). What it shows is kept
+apart from the surface's pixels, and checked against them at the end. */
 function fakeContext() {
-  const data = new Uint8ClampedArray(W * H * 4).fill(255);
-  return {
-    pixels: data,
-    fillStyle: "",
-    save() {},
-    restore() {},
-    fillRect() { data.fill(255); },
-    clearRect() { data.fill(0); },
+  const screen = new Uint8ClampedArray(W * H * 4);
+  const context = {
     createImageData(width, height) {
       return { width, height, data: new Uint8ClampedArray(width * height * 4) };
     },
-    getImageData(x, y, width, height) {
-      const out = new Uint8ClampedArray(width * height * 4);
-      for (let row = 0; row < height; row++) {
-        const from = ((y + row) * W + x) * 4;
-        out.set(data.subarray(from, from + width * 4), row * width * 4);
-      }
-      return { width, height, data: out };
+    getImageData() {
+      throw new Error("the drawing canvas was read");
     },
-    putImageData(image, x, y) {
-      for (let row = 0; row < image.height; row++) {
-        data.set(image.data.subarray(row * image.width * 4, (row + 1) * image.width * 4), ((y + row) * W + x) * 4);
+    putImageData(image, x, y, dirtyX = 0, dirtyY = 0, dirtyWidth = image.width, dirtyHeight = image.height) {
+      for (let row = dirtyY; row < dirtyY + dirtyHeight; row++) {
+        const from = (row * image.width + dirtyX) * 4;
+        screen.set(image.data.subarray(from, from + dirtyWidth * 4), ((y + row) * W + x + dirtyX) * 4);
       }
     },
   };
+  const surface = createCanvasSurface(context);
+  surface.screen = screen;
+  return surface;
 }
 
 function random(seed) {
@@ -204,11 +201,11 @@ function drawSession(rng, gestures) {
       const payload = { ...gridPoint(rng.int(0, W * 4 - 1) / 4, rng.int(0, H * 4 - 1) / 4), color };
       if (applyFillAction(canvas, payload)) frames.push(encodeFill(payload));
     } else {
-      fillWhite(canvas, W, H);
+      fillWhite(canvas);
       frames.push(encodeClear());
     }
   }
-  return { pixels: canvas.pixels, frames };
+  return { pixels: canvas.pixels, canvas, frames };
 }
 
 /** A viewer's canvas, as `Canvas.tsx`'s protocol renderer paints it, fed as
@@ -252,7 +249,7 @@ function createViewer(rng) {
       playback.enqueueBarrier(() => applyFillAction(canvas, payload), now);
     } else if (packet.event === "clear_canvas") {
       playback.cancel();
-      fillWhite(canvas, W, H);
+      fillWhite(canvas);
       queued.last = null;
     }
   };
@@ -276,9 +273,7 @@ function createViewer(rng) {
     on left open for the live batches that follow. */
     replay(actions) {
       playback.cancel();
-      const scratch = fakeContext();
-      renderCanvasActions(scratch, actions);
-      canvas.pixels.set(scratch.pixels);
+      renderCanvasActions(canvas, actions);
       const last = actions.at(-1);
       const end = last?.kind === "path" ? last.points.at(-1) : undefined;
       if (last?.kind === "path" && end) {
@@ -421,6 +416,10 @@ test("every route to a canvas paints the drawer's pixels", () => {
       "whole replay": replayed.pixels,
       "played replay": playedReplay(rng, actions),
     };
+    // What each live canvas shows is what it holds: every change was committed.
+    for (const [route, canvas] of [["drawer", drawer.canvas], ["live viewer", viewer.canvas], ["late joiner", joiner.canvas]]) {
+      assert.equal(firstDifference(canvas.pixels, canvas.screen), null, `session ${session}: the ${route}'s screen lags its pixels`);
+    }
     for (const [route, pixels] of Object.entries(routes)) {
       const difference = firstDifference(drawer.pixels, pixels);
       assert.equal(difference, null, `session ${session}: the ${route} differs from the drawer at ${difference}`);

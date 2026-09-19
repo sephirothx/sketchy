@@ -9,6 +9,7 @@ import {
 import { toPixels } from "../lib/canvasGeometry";
 import { registerCanvasCommandHandlers } from "../lib/canvasCommands";
 import { hexToRgba } from "../lib/canvasPixels";
+import type { CanvasSurface, LayerSurface } from "../lib/canvasSurface";
 import {
   applyFillAction,
   drawShapeOutline,
@@ -65,8 +66,8 @@ interface CanvasPointerInput {
 export function useCanvasPointerInput(
   protocol: CanvasProtocol,
   canvasRef: RefObject<HTMLCanvasElement | null>,
-  contextRef: RefObject<CanvasRenderingContext2D | null>,
-  previewCanvasRef: RefObject<HTMLCanvasElement | null>,
+  surfaceRef: RefObject<CanvasSurface | null>,
+  previewSurfaceRef: RefObject<LayerSurface | null>,
   previewContextRef: RefObject<CanvasRenderingContext2D | null>,
   settings: DrawingSettings,
 ): CanvasPointerInput {
@@ -117,12 +118,8 @@ export function useCanvasPointerInput(
     && (tool === "eraser" || (tool === "brush" && brushCursor === "circle"));
 
   const clearPreview = useCallback(() => {
-    const preview = previewCanvasRef.current;
-    const previewContext = previewContextRef.current;
-    if (preview && previewContext) {
-      previewContext.clearRect(0, 0, preview.width, preview.height);
-    }
-  }, [previewCanvasRef, previewContextRef]);
+    previewSurfaceRef.current?.erase();
+  }, [previewSurfaceRef]);
 
   const drawCircleCursorPreview = useCallback((point: StrokePoint, width: number) => {
     const previewContext = previewContextRef.current;
@@ -160,31 +157,37 @@ export function useCanvasPointerInput(
     };
   }
 
-  function paintRuns(context: CanvasRenderingContext2D | null, runs: PaintRun[]) {
-    if (!context || runs.length === 0) return;
+  function paintRuns(surface: CanvasSurface | null, runs: PaintRun[]) {
+    if (!surface || runs.length === 0) return;
     const activeColor = hexToRgba(tool === "eraser" ? "#ffffff" : color);
-    for (const run of runs) rasterizePath(context, run.points, run.width / 2, activeColor, false);
+    for (const run of runs) rasterizePath(surface, run.points, run.width / 2, activeColor, false);
   }
 
   function drawLocalSegment(from: StrokePoint, to: StrokePoint, width: number) {
-    paintRuns(contextRef.current, [{ points: [toPixels(from), toPixels(to)], width }]);
+    paintRuns(surfaceRef.current, [{ points: [toPixels(from), toPixels(to)], width }]);
   }
 
   // The preview layer, repainted as one picture: the circle cursor if there
   // is one, and the segment from the last kept sample to the one still
   // pending in the thinner, so the ink under the pen never lags a sample
-  // behind what the drawer's hand did. Both go when the stroke ends.
+  // behind what the drawer's hand did. Both go when the stroke ends. The
+  // cursor goes on last: the ink is written to the layer as rectangles of its
+  // own pixels, which do not hold the cursor, so ink after it would cut it.
   function repaintPreview(pointer: StrokePoint | null) {
     clearPreview();
+    paintPreviewInk();
     if (showCircleCursor && pointer) drawCircleCursorPreview(pointer, brushWidth);
+  }
+
+  function paintPreviewInk() {
     const thinner = thinnerRef.current;
     const pending = thinner?.pending();
-    const previewContext = previewContextRef.current;
-    if (!thinner || !previewContext) return;
+    const preview = previewSurfaceRef.current;
+    if (!thinner || !preview) return;
     if (!pending) {
       // A pen's kept points wait for the keyframe that decides their width.
       const penOnly = penStrokeRef.current;
-      if (penOnly) paintRuns(previewContext, penOnly.provisional(null, wholeWidth(penRef.current.target, brushWidth)));
+      if (penOnly) paintRuns(preview, penOnly.provisional(null, wholeWidth(penRef.current.target, brushWidth)));
       return;
     }
     const penStroke = penStrokeRef.current;
@@ -192,12 +195,12 @@ export function useCanvasPointerInput(
       // Everything since the last keyframe, heading for the width the pen is
       // asking for now: what the next keyframe or flush will make ink of.
       paintRuns(
-        previewContext,
+        preview,
         penStroke.provisional(toPixels(pending), wholeWidth(penRef.current.target, brushWidth)),
       );
       return;
     }
-    paintRuns(previewContext, [{ points: [toPixels(thinner.anchor()), toPixels(pending)], width: brushWidth }]);
+    paintRuns(preview, [{ points: [toPixels(thinner.anchor()), toPixels(pending)], width: brushWidth }]);
   }
 
   // Samples the thinner kept: queued for the frame and painted from the last
@@ -210,7 +213,7 @@ export function useCanvasPointerInput(
     for (const point of points) {
       if (penStroke) {
         const { runs, held } = penStroke.accept(toPixels(point), point.key);
-        paintRuns(contextRef.current, runs);
+        paintRuns(surfaceRef.current, runs);
         // The keyframe had to stand in as a hold: the width asked for was
         // not placed, so the search for the next keyframe starts from here.
         if (held) widthThinnerRef.current?.anchorAt({ at: penRef.current.previousArc, width: penStroke.width });
@@ -235,7 +238,7 @@ export function useCanvasPointerInput(
     const moved = final
       || Math.abs(target - penStroke.width) > widthTolerance(target, widthRange(brushWidth)) * QUIET_FRAME_SHARE;
     const { runs, placed } = penStroke.flush(moved ? wholeWidth(target, brushWidth) : penStroke.width);
-    paintRuns(contextRef.current, runs);
+    paintRuns(surfaceRef.current, runs);
     if (placed) widthThinnerRef.current?.anchorAt({ at: arc, width: penStroke.width });
   }
 
@@ -360,9 +363,9 @@ export function useCanvasPointerInput(
     const end = lastPointRef.current;
     clearPreview();
     if (start && end && (tool === "rectangle" || tool === "ellipse" || tool === "triangle")) {
-      const context = contextRef.current;
-      if (context) {
-        drawShapeOutlinePixels(context, start, end, tool, color, brushWidth);
+      const surface = surfaceRef.current;
+      if (surface) {
+        drawShapeOutlinePixels(surface, start, end, tool, color, brushWidth);
       }
       protocol.beginDrawAction(encodeShape({
         shape: tool,
@@ -428,9 +431,9 @@ export function useCanvasPointerInput(
         width: startWidth,
       }), true);
     } else if (tool === "fill") {
-      const context = contextRef.current;
+      const surface = surfaceRef.current;
       const payload: StrokeFillPayload = { x: point.x, y: point.y, color };
-      if (context && applyFillAction(context, payload)) {
+      if (surface && applyFillAction(surface, payload)) {
         protocol.beginDrawAction(encodeFill(payload));
       }
     } else {
@@ -476,7 +479,7 @@ export function useCanvasPointerInput(
     }
     const keyed = penStroke.keyLast(key);
     if (!keyed) return;
-    paintRuns(contextRef.current, keyed.runs);
+    paintRuns(surfaceRef.current, keyed.runs);
     if (keyed.held) widthThinner.anchorAt({ at: pen.previousArc, width: penStroke.width });
   }
 

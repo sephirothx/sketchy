@@ -12,41 +12,13 @@ const WHITE = [255, 255, 255, 255];
 const BLACK = [0, 0, 0, 255];
 const RED = [255, 0, 0, 255];
 
-/** The smallest 2D context these renderers need: a pixel buffer they can
- * read back from and write to, plus the fillRect that paints it white. */
-function fakeContext(fill = WHITE) {
+/** The drawing as the renderers hold it (`canvasSurface.ts`): its pixels, and
+a commit that would show them. Nothing here can be read back, because the
+renderers never read the canvas. */
+function fakeSurface(fill = WHITE) {
   const data = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
   for (let index = 0; index < data.length; index += 4) data.set(fill, index);
-  return {
-    pixels: data,
-    fillStyle: "",
-    save() {},
-    restore() {},
-    fillRect() {
-      for (let index = 0; index < data.length; index += 4) data.set(WHITE, index);
-    },
-    createImageData(width, height) {
-      return { width, height, data: new Uint8ClampedArray(width * height * 4) };
-    },
-    getImageData(x, y, width, height) {
-      const out = new Uint8ClampedArray(width * height * 4);
-      for (let row = 0; row < height; row++) {
-        const from = ((y + row) * CANVAS_WIDTH + x) * 4;
-        out.set(data.subarray(from, from + width * 4), row * width * 4);
-      }
-      return { width, height, data: out };
-    },
-    putImageData(imageData, x, y) {
-      const { width, height } = imageData;
-      for (let row = 0; row < height; row++) {
-        const to = ((y + row) * CANVAS_WIDTH + x) * 4;
-        data.set(
-          imageData.data.subarray(row * width * 4, (row + 1) * width * 4),
-          to,
-        );
-      }
-    },
-  };
+  return { pixels: data, commit() {} };
 }
 
 function pixelAt(context, x, y) {
@@ -61,7 +33,7 @@ function paintBlackColumn(context, x) {
 }
 
 test("a live fill spreads through the strokes already on the canvas", () => {
-  const context = fakeContext();
+  const context = fakeSurface();
   // A black wall down the middle: a fill on the left must stop at it.
   const wall = Math.floor(CANVAS_WIDTH / 2);
   paintBlackColumn(context, wall);
@@ -78,13 +50,13 @@ test("a live fill spreads through the strokes already on the canvas", () => {
 });
 
 test("a live fill reports no change when the region is already that colour", () => {
-  const context = fakeContext();
+  const context = fakeSurface();
   assert.equal(applyFillAtPixel(context, 10, 10, "#ffffff"), false);
   assert.deepEqual(pixelAt(context, 10, 10), WHITE);
 });
 
 test("a replay starts from white regardless of what the canvas held", () => {
-  const context = fakeContext(RED);
+  const context = fakeSurface(RED);
   paintBlackColumn(context, 4);
 
   renderCanvasActions(context, []);
@@ -94,7 +66,7 @@ test("a replay starts from white regardless of what the canvas held", () => {
 });
 
 test("a replayed fill stops at a replayed stroke", () => {
-  const context = fakeContext();
+  const context = fakeSurface();
   const wall = Math.floor(CANVAS_WIDTH / 2);
   renderCanvasActions(context, [
     {
@@ -166,11 +138,11 @@ test("the drawer's ink, painted into a crop of the canvas, is the replay's raste
   // exactly the radius from this segment, and the two routes rounded that
   // distance to opposite sides of it - a late joiner had one pixel more.
   const segment = [{ x: 504.75, y: 342.5 }, { x: 518.5, y: 354.5 }];
-  const drawer = fakeContext();
+  const drawer = fakeSurface();
   // The dot at `draw_start`, then the segment, as the pointer hook paints them.
   rasterizePath(drawer, [segment[0], segment[0]], 3, BLACK, false);
   rasterizePath(drawer, segment, 3, BLACK, false);
-  const joiner = fakeContext();
+  const joiner = fakeSurface();
   renderCanvasActions(joiner, [{ kind: "path", color: "#000000", width: 6, points: segment }]);
   assert.deepEqual(pixelAt(drawer, 510, 351), pixelAt(joiner, 510, 351));
   assert.ok(drawer.pixels.every((value, index) => value === joiner.pixels[index]));
@@ -183,10 +155,10 @@ test("the drawer's ink, painted into a crop of the canvas, is the replay's raste
     const a = { x: quarter(760), y: quarter(560) };
     const b = { x: a.x + Math.floor((next() - 0.5) * 120) / 4, y: a.y + Math.floor((next() - 0.5) * 120) / 4 };
     const width = 1 + Math.floor(next() * 24);
-    const live = fakeContext();
+    const live = fakeSurface();
     rasterizePath(live, [a, a], width / 2, BLACK, false);
     rasterizePath(live, [a, b], width / 2, BLACK, false);
-    const replay = fakeContext();
+    const replay = fakeSurface();
     renderCanvasActions(replay, [{ kind: "path", color: "#000000", width, points: [a, b] }]);
     assert.ok(
       live.pixels.every((value, index) => value === replay.pixels[index]),

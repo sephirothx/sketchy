@@ -36,6 +36,7 @@ import { createStrokePlayback } from "../lib/strokePlayback";
 import { useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
+import { createCanvasSurface, createLayerSurface, type CanvasSurface, type LayerSurface } from "../lib/canvasSurface";
 import { recordRender, type RenderRegion } from "../lib/renderDiagnostics";
 
 interface CanvasProps {
@@ -53,15 +54,8 @@ export interface CanvasRef {
 }
 
 function createProtocolRenderer(
-  canvasRef: RefObject<HTMLCanvasElement | null>,
-  contextRef: RefObject<CanvasRenderingContext2D | null>,
+  surfaceRef: RefObject<CanvasSurface | null>,
 ): CanvasProtocolRenderer {
-  let replayGeneration = 0;
-  // One scratch canvas for the lifetime of the renderer. A replay used to
-  // allocate a fresh 800x600 backing store (~1.9 MB) on every undo and sync;
-  // renderCanvasActions overwrites every pixel, so nothing stale carries over.
-  let scratch: HTMLCanvasElement | null = null;
-  let scratchContext: CanvasRenderingContext2D | null = null;
   // Where the open path ends *as queued*, in canvas pixels, and the style
   // it is drawn in. Updated the moment a frame is queued, never inside a
   // deferred barrier: a batch joins the point queued before it, and reading
@@ -85,8 +79,8 @@ function createProtocolRenderer(
     // so a stroke played out a frame at a time ends as the pixels the drawer
     // and every replay have (#940).
     paint: (_points, style, spans) => {
-      const context = contextRef.current;
-      if (context) rasterizeSegmentSpans(context, spans, style.radius, style.color);
+      const surface = surfaceRef.current;
+      if (surface) rasterizeSegmentSpans(surface, spans, style.radius, style.color);
     },
   });
   let frame: number | null = null;
@@ -110,17 +104,15 @@ function createProtocolRenderer(
   }
 
   const clear = () => {
-    replayGeneration += 1;
     playback.cancel();
     stopTicking();
-    const canvas = canvasRef.current;
-    const context = contextRef.current;
-    if (canvas && context) fillWhite(context, canvas.width, canvas.height);
+    const surface = surfaceRef.current;
+    if (surface) fillWhite(surface);
     queued.last = null;
   };
 
   const apply = (packet: LiveDrawingPacket) => {
-    const context = contextRef.current;
+    const context = surfaceRef.current;
     if (!context) return;
     const now = performance.now();
     if (packet.event === "draw_start") {
@@ -182,25 +174,14 @@ function createProtocolRenderer(
   };
 
   const replay = (actions: DecodedCanvasAction[]) => {
-    const currentReplay = ++replayGeneration;
     // What was queued is inside the history being repainted, or superseded
     // by it; either way it must not land on top afterwards.
     playback.cancel();
     stopTicking();
-    if (!scratch) {
-      scratch = document.createElement("canvas");
-      scratch.width = CANVAS_WIDTH;
-      scratch.height = CANVAS_HEIGHT;
-      scratchContext = scratch.getContext("2d", { willReadFrequently: true });
-    }
-    if (!scratchContext) return;
-    renderCanvasActions(scratchContext, actions);
-    const canvas = canvasRef.current;
-    const context = contextRef.current;
-    if (currentReplay === replayGeneration && canvas && context) {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(scratch, 0, 0);
-    }
+    // Straight into the drawing, shown once at the end: it overwrites every
+    // pixel, so nothing stale carries over, and it never reads the canvas.
+    const surface = surfaceRef.current;
+    if (surface) renderCanvasActions(surface, actions);
     // A replay that ends on a path may have landed mid-stroke: the live
     // batches that follow join that path's last point. If the path was in
     // fact closed, the next frame is a start and resets this anyway.
@@ -247,7 +228,9 @@ function createCanvas(
     recordRender(region);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const contextRef = useRef<CanvasRenderingContext2D | null>(null);
+    // The drawing's own pixels, and the stroke preview's (`canvasSurface.ts`).
+    const surfaceRef = useRef<CanvasSurface | null>(null);
+    const previewSurfaceRef = useRef<LayerSurface | null>(null);
     const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
     const brushCursor = useSettingsStore((state) => state.brushCursor);
     const penPressure = useSettingsStore((state) => state.penPressure);
@@ -256,34 +239,34 @@ function createCanvas(
       const canvas = canvasRef.current;
       const previewCanvas = previewCanvasRef.current;
       if (!canvas || !previewCanvas) return;
-      const context = canvas.getContext("2d", { willReadFrequently: true });
+      // Never read (`canvasSurface.ts`), so no `willReadFrequently`: the
+      // browser may keep the canvas on the GPU, and only writes reach it.
+      const context = canvas.getContext("2d");
       const previewContext = previewCanvas.getContext("2d");
       if (!context || !previewContext) return;
-      context.lineCap = "round";
-      context.lineJoin = "round";
       previewContext.lineCap = "round";
       previewContext.lineJoin = "round";
-      fillWhite(context, canvas.width, canvas.height);
-      contextRef.current = context;
+      surfaceRef.current = createCanvasSurface(context);
+      previewSurfaceRef.current = createLayerSurface(previewContext);
       previewContextRef.current = previewContext;
     }, []);
 
     const renderer = useMemo(
-      () => createProtocolRenderer(canvasRef, contextRef),
+      () => createProtocolRenderer(surfaceRef),
       [],
     );
     const protocol = useProtocol(renderer);
     const pointer = useCanvasPointerInput(
       protocol,
       canvasRef,
-      contextRef,
-      previewCanvasRef,
+      surfaceRef,
+      previewSurfaceRef,
       previewContextRef,
       { isDrawer, color, brushWidth, tool, brushCursor, penPressure, unbudgeted },
     );
 
     useImperativeHandle(ref, () => ({
-      saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),
+      saveImage: () => void saveCanvasImage(surfaceRef.current?.pixels ?? null, downloadPrompt),
     }), [downloadPrompt]);
 
     return (

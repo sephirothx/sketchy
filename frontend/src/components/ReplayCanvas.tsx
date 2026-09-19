@@ -6,7 +6,6 @@ import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import {
   applyCanvasAction,
   applyCanvasStrokeSpan,
-  renderCanvasActions,
   renderCanvasActionsUpTo,
 } from "../lib/canvasRenderer";
 import { replayPlan, stepReplay, type ReplayPlan } from "../lib/replay";
@@ -50,7 +49,7 @@ export const ReplayCanvas = forwardRef<CanvasRef, ReplayCanvasProps>(function Re
   const callbacks = useRef({ onFraction, onDone });
   callbacks.current = { onFraction, onDone };
 
-  const context = () => canvasRef.current?.getContext("2d", { willReadFrequently: true }) ?? null;
+  const context = () => canvasRef.current?.getContext("2d") ?? null;
 
   // First paint, and a new drawing: the picture at the fraction given.
   useEffect(() => {
@@ -126,13 +125,10 @@ export const ReplayCanvas = forwardRef<CanvasRef, ReplayCanvasProps>(function Re
   useImperativeHandle(ref, () => ({
     saveImage: () => {
       // Whatever is on screen mid-replay is not the drawing; the file is.
-      const canvas = canvasRef.current;
-      const ctx = context();
-      if (!canvas || !ctx) return;
-      const shown = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      renderCanvasActions(ctx, actions);
-      saveCanvasImage(canvas, downloadPrompt);
-      ctx.putImageData(shown, 0, 0);
+      // Rendered to pixels of its own, so the screen is never read or touched.
+      const pixels = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
+      renderCanvasActionsUpTo(pixels, actions, { action: actions.length, point: 0 });
+      void saveCanvasImage(pixels, downloadPrompt);
     },
   }), [actions, downloadPrompt]);
 

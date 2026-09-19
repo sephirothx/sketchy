@@ -7,6 +7,7 @@ import {
 } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { renderCanvasActions } from "../lib/canvasRenderer";
+import { createCanvasSurface, type CanvasSurface } from "../lib/canvasSurface";
 import { ui } from "../content/ui/index.ts";
 
 interface CanvasSnapshotProps {
@@ -18,16 +19,17 @@ interface CanvasSnapshotProps {
 export const CanvasSnapshot = forwardRef<CanvasRef, CanvasSnapshotProps>(
   function CanvasSnapshot({ actions, downloadPrompt = null, label }, ref) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const surfaceRef = useRef<CanvasSurface | null>(null);
 
     useEffect(() => {
-      const canvas = canvasRef.current;
-      const context = canvas?.getContext("2d", { willReadFrequently: true });
-      if (!canvas || !context) return;
-      renderCanvasActions(context, actions);
+      const context = canvasRef.current?.getContext("2d");
+      if (!context) return;
+      surfaceRef.current ??= createCanvasSurface(context);
+      renderCanvasActions(surfaceRef.current, actions);
     }, [actions]);
 
     useImperativeHandle(ref, () => ({
-      saveImage: () => saveCanvasImage(canvasRef.current, downloadPrompt),
+      saveImage: () => void saveCanvasImage(surfaceRef.current?.pixels ?? null, downloadPrompt),
     }), [downloadPrompt]);
 
     return (
