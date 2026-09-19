@@ -36,6 +36,7 @@ from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     PayloadError,
     TextPayload,
+    WatchLobbyPayload,
     parse_empty_payload,
     parse_payload,
 )
@@ -90,9 +91,22 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     shape, and nothing in the app asks it any more.
     """
     try:
-        parse_empty_payload(data)
+        payload = parse_payload(WatchLobbyPayload, data, allow_none=True)
     except PayloadError as error:
         return error.acknowledgement()
+    chat = ctx.lobby_chat
+    # Lines this client already holds are not sent again (#885): on a resync,
+    # a reconnect, or the re-handshake of a visitor who has just been named,
+    # the backlog was most of what was resent. Only within one epoch - a
+    # number from another process's numbering says nothing here, and that
+    # client is handed everything to replace its lines with.
+    after = (
+        payload.chat_since
+        if payload.chat_since is not None
+        and payload.chat_epoch == chat.epoch
+        and payload.chat_since <= chat.last_seq
+        else 0
+    )
     # The join comes first, the lookups next, and the baselines are read last,
     # with nothing that can yield between them and the answer. Each order
     # has been wrong once. The baselines used to be read before the lookups
@@ -109,29 +123,28 @@ async def watch_lobby(ctx: HandlerContext, sid, data=None):
     # client holds and then drops as older than the baseline.
     await ctx.sio.enter_room(sid, LOBBY_CHANNEL)
     hidden = await _hidden_authors_for(
-        ctx, await _user_of(ctx, sid), ctx.lobby_chat.authors()
+        ctx, await _user_of(ctx, sid), chat.authors(after=after)
     )
     feed = ctx.presence_broadcaster
-    rooms = feed.rooms_for_watcher()
     # A line said between joining the channel and reading the backlog is in
     # both the backlog and a delta that beat this answer; the client's
     # sequence numbers make that a duplicate it ignores, not a line it shows
     # twice. Nothing here depends on the order of the two.
     answer = {
         "ok": True,
-        **feed.snapshot_for_watcher().payload(),
-        # The room list rides the same acknowledgement rather than a first
-        # delta, for the reason presence does: there must be no window in
-        # which the socket is in the channel and receiving changes against a
-        # list it has not been given. Its own revision, because the two feeds
-        # move independently.
-        "rooms": rooms.payload()["rooms"],
-        "roomsRevision": rooms.revision,
+        # Presence and the room list as last broadcast, built once per tick
+        # and shared by every watcher who asks before the next (#885). The
+        # room list rides the same acknowledgement rather than a first delta,
+        # for the reason presence does: there must be no window in which the
+        # socket is in the channel and receiving changes against a list it
+        # has not been given. Its own revision, because the two feeds move
+        # independently.
+        **feed.baseline_for_watcher(),
         "chat": [
-            line.payload()
-            for line in ctx.lobby_chat.backlog_for(hidden_authors=hidden)
+            line.payload() for line in chat.backlog_for(hidden_authors=hidden, after=after)
         ],
-        "chatSeq": ctx.lobby_chat.last_seq,
+        "chatSeq": chat.last_seq,
+        "chatEpoch": chat.epoch,
     }
     # Every baseline in one acknowledgement is the lobby's largest message and
     # is paid again on every resync (#882, #885): sized here, where it is built.

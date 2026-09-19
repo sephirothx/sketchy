@@ -33,9 +33,20 @@ export interface LobbyChatState {
   /** The highest sequence number seen, held or not. Zero before any. */
   lastSeq: number;
   lines: LobbyChatLine[];
+  /** Which server process numbered these lines (`chatEpoch`), so a later
+  `watch_lobby` can ask only for newer ones - and only of the same process. */
+  epoch: string | null;
+  /** The account these lines were filtered for. Another account's blocks
+  differ, so its lobby asks for everything and replaces them. */
+  owner: string | null;
 }
 
-export const EMPTY_LOBBY_CHAT: LobbyChatState = { lastSeq: 0, lines: [] };
+export const EMPTY_LOBBY_CHAT: LobbyChatState = {
+  lastSeq: 0,
+  lines: [],
+  epoch: null,
+  owner: null,
+};
 
 /** More than the server hands an arrival, so a long-open lobby keeps some of
 what it watched go by; bounded so it never grows with the evening. */
@@ -49,9 +60,9 @@ export function parseLine(value: unknown): LobbyChatLine | null {
   if (typeof row.userId !== "string" || !row.userId) return null;
   if (typeof row.displayName !== "string") return null;
   if (typeof row.text !== "string") return null;
-  if (typeof row.sentAt !== "string") return null;
-  const sentAt = Date.parse(row.sentAt);
-  if (!Number.isFinite(sentAt)) return null;
+  // Whole seconds since the epoch (#885).
+  if (typeof row.sentAt !== "number" || !Number.isFinite(row.sentAt)) return null;
+  const sentAt = row.sentAt * 1000;
   const line: LobbyChatLine = {
     seq: row.seq,
     userId: row.userId,
@@ -81,11 +92,15 @@ export function applyChatLine(state: LobbyChatState, payload: unknown): LobbyCha
 
 function append(state: LobbyChatState, line: LobbyChatLine | null): LobbyChatState {
   if (!line || line.seq <= state.lastSeq) return state;
-  return { lastSeq: line.seq, lines: capped([...state.lines, line]) };
+  return { ...state, lastSeq: line.seq, lines: capped([...state.lines, line]) };
 }
 
-function parseBacklog(payload: unknown): { lines: LobbyChatLine[]; chatSeq: number } {
-  if (!payload || typeof payload !== "object") return { lines: [], chatSeq: 0 };
+function parseBacklog(payload: unknown): {
+  lines: LobbyChatLine[];
+  chatSeq: number;
+  epoch: string | null;
+} {
+  if (!payload || typeof payload !== "object") return { lines: [], chatSeq: 0, epoch: null };
   const answer = payload as Record<string, unknown>;
   const lines = Array.isArray(answer.chat)
     ? answer.chat.map(parseLine).filter((line): line is LobbyChatLine => line !== null)
@@ -95,30 +110,45 @@ function parseBacklog(payload: unknown): { lines: LobbyChatLine[]; chatSeq: numb
     typeof answer.chatSeq === "number" && Number.isInteger(answer.chatSeq) && answer.chatSeq >= 0
       ? answer.chatSeq
       : 0;
-  return { lines, chatSeq };
+  const epoch = typeof answer.chatEpoch === "string" && answer.chatEpoch ? answer.chatEpoch : null;
+  return { lines, chatSeq, epoch };
 }
 
-/** Take the backlog a `watch_lobby` acknowledgement carries.
+/** What a `watch_lobby` sends about the chat it already holds (#885).
 
-`replace` is for a new connection: the numbers we hold belong to a sequence
-that no longer exists, so what the server hands over is all there is.
-Otherwise this is a resync the *other* feeds asked for on a socket that
-stayed up, and the backlog is merged - every line we already hold stays, the
-ones we missed are added, and nothing we watched go by is thrown away for
-being older than the fifty the server keeps. */
+The last number seen and the numbering it belongs to, so the server sends only
+newer lines - on a resync, on a reconnect to the same process, and when a
+visitor naming themselves re-handshakes the socket. Nothing when there is
+nothing to resume, or when the lines were filtered for another account. */
+export function chatResumeRequest(
+  state: LobbyChatState,
+  owner: string | null,
+): { chatSince: number; chatEpoch: string } | Record<string, never> {
+  if (!state.epoch || state.lastSeq === 0 || state.owner !== owner) return {};
+  return { chatSince: state.lastSeq, chatEpoch: state.epoch };
+}
+
+/** Take the backlog a `watch_lobby` acknowledgement carries, for *owner*.
+
+Merged when it continues what is held - the same process, and lines filtered
+for the same account - so a lobby left open all evening keeps what it watched
+go by rather than being cut back to the fifty the server keeps, and a resumed
+answer, which holds only the newer lines, adds to them. Replaced otherwise: the
+numbers held belong to a sequence that no longer exists, or to somebody else's
+blocks, and what the server hands over is all there is. */
 export function applyChatBacklog(
   state: LobbyChatState,
   payload: unknown,
-  replace: boolean,
+  owner: string | null,
 ): LobbyChatState {
-  const { lines, chatSeq } = parseBacklog(payload);
-  if (replace) {
+  const { lines, chatSeq, epoch } = parseBacklog(payload);
+  if (!epoch || epoch !== state.epoch || owner !== state.owner) {
     const last = lines.length ? lines[lines.length - 1].seq : 0;
-    return { lastSeq: Math.max(chatSeq, last), lines: capped(lines) };
+    return { lastSeq: Math.max(chatSeq, last), lines: capped(lines), epoch, owner };
   }
   let next = state;
   for (const line of lines) next = append(next, line);
-  if (chatSeq > next.lastSeq) next = { lastSeq: chatSeq, lines: next.lines };
+  if (chatSeq > next.lastSeq) next = { ...next, lastSeq: chatSeq };
   return next;
 }
 

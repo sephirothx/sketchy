@@ -667,9 +667,15 @@ somebody signing in must not re-send the rooms.
 
 **Join first, look up next, read the baselines last.** The handler joins the
 channel, then awaits its lookups (the session, the blocked authors), then reads
-its baselines with nothing that can yield between them and the answer, so the
-baselines are at or past every delta the socket can have been sent (#600). Each
-other order has been wrong once. Reading the room list before the lookups let a
+its baselines with nothing that can yield between them and the answer (#600).
+Presence and rooms are the **last completed broadcast** (#885), built once per
+tick and shared by every arrival until the next, so a herd re-asking after a
+restart costs one build and the next delta is diffed against exactly what they
+were handed. Building one fresh per arrival leaned on every delta being an
+idempotent upsert to stay in step, and made a restart four hundred builds. A
+delta already on its way when the answer is built reaches the socket first;
+the client holds it and replays it, below. Each other order has been wrong
+once. Reading the room list before the lookups let a
 room that opened during the await go out as a delta the client discarded for
 having no baseline yet, followed by the older baseline, and on a quiet server
 no later delta ever repaired the list. Joining after the lookups made a line
@@ -908,7 +914,9 @@ follow the client's own cadence rather than the size of the host: the drawer's f
 timer fires every 80 ms, so drawing is allowed four times the 12.5 frames a second that
 produces (room for the interval being moved back to 40, and for bunching after a stall), while `request_sync_strokes` — a cheap request with a full canvas re-encode
 for an answer — gets one per window, which is a minimum spacing rather than an
-allowance a burst can spend at once. Windows live in memory and are dropped when the
+allowance a burst can spend at once. `watch_lobby` answers to `lobby_baseline`, three
+per ten seconds (#885): it is the lobby's largest message, and under `action` one
+socket could ask for thirty of them. Windows live in memory and are dropped when the
 socket goes.
 
 They are grouped into five classes rather than set per command, and held in a policy

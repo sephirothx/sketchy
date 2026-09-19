@@ -12,8 +12,12 @@ module keeps only what a new arrival is shown.
 `seq` numbers lines within one process so a client can put the backlog it was
 handed and the lines that beat it into one order without a duplicate. It is
 not a revision: a client never asks for a resync because of a gap in it, and
-it starts again from nothing with the process, which is fine because every
-socket starts again with the process too.
+it starts again from nothing with the process. So each process also has an
+`epoch`, handed out with the backlog: a client that already holds lines from
+this epoch asks only for those after its last one (#885), across a resync, a
+reconnect, or the re-handshake of a visitor who just chose a name - and one
+that holds lines from another epoch is handed the whole backlog to replace
+them with, because its numbers mean nothing here.
 
 The lines themselves do not start again from nothing. Every accepted line is
 also retained for thirty days (`message_retention.py`), so a restart re-seeds
@@ -26,6 +30,7 @@ because chat is not the thing a deploy waits on.
 from __future__ import annotations
 
 import asyncio
+import secrets
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -70,7 +75,10 @@ class LobbyChatLine:
             "nameColor": self.name_color,
             "isAnonymous": self.is_anonymous,
             "text": self.text,
-            "sentAt": self.sent_at.isoformat(),
+            # Whole seconds since the epoch: the clock beside a line shows
+            # minutes, and an ISO string with microseconds was a fifth of a
+            # line's weight on the wire (#885).
+            "sentAt": int(self.sent_at.timestamp()),
         }
         if self.retained_message_id is not None:
             payload["retainedMessageId"] = self.retained_message_id
@@ -83,6 +91,9 @@ class LobbyChatLog:
     def __init__(self, *, backlog: int = LOBBY_CHAT_BACKLOG) -> None:
         self._lines: deque[LobbyChatLine] = deque(maxlen=backlog)
         self._seq = 0
+        # Which numbering `seq` belongs to. Random rather than a start time:
+        # two processes started in the same second must not look like one.
+        self.epoch = secrets.token_hex(6)
 
     @property
     def last_seq(self) -> int:
@@ -147,14 +158,22 @@ class LobbyChatLog:
             count += 1
         return count
 
-    def backlog_for(self, *, hidden_authors: Iterable[str] = ()) -> list[LobbyChatLine]:
-        """What one arriving watcher is shown, minus the authors they blocked."""
+    def backlog_for(
+        self, *, hidden_authors: Iterable[str] = (), after: int = 0
+    ) -> list[LobbyChatLine]:
+        """What one arriving watcher is shown, minus the authors they blocked,
+        and only past `after` for a watcher already holding lines up to it."""
         hidden = frozenset(hidden_authors)
-        return [line for line in self._lines if line.user_id not in hidden]
+        return [
+            line
+            for line in self._lines
+            if line.seq > after and line.user_id not in hidden
+        ]
 
-    def authors(self) -> set[str]:
-        """Who wrote what is held, for the block lookups an arrival needs."""
-        return {line.user_id for line in self._lines}
+    def authors(self, *, after: int = 0) -> set[str]:
+        """Who wrote what is held past `after`, for the block lookups an
+        arrival needs - only for the lines it will actually be sent."""
+        return {line.user_id for line in self._lines if line.seq > after}
 
     def drop_author(self, user_id: str) -> None:
         """Forget every line by one account.

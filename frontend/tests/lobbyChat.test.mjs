@@ -6,12 +6,14 @@ import {
   MAX_HELD_LINES,
   applyChatBacklog,
   applyChatLine,
+  chatResumeRequest,
   chatTimeLabel,
   parseLine,
   reportableLine,
 } from "../src/lib/lobbyChat.ts";
 
-const SAID_AT = "2026-09-02T12:00:00+00:00";
+// Whole seconds since the epoch, as the server sends it (#885).
+const SAID_AT = Date.parse("2026-09-02T12:00:00+00:00") / 1000;
 
 function line(seq, overrides = {}) {
   return {
@@ -34,12 +36,13 @@ test("a line this build cannot read is dropped rather than shown blank", () => {
   assert.equal(parseLine(line(1, { userId: "" })), null);
   assert.equal(parseLine(line(1, { text: undefined })), null);
   assert.equal(parseLine(line(1, { sentAt: undefined })), null);
-  assert.equal(parseLine(line(1, { sentAt: "yesterday-ish" })), null);
+  assert.equal(parseLine(line(1, { sentAt: "2026-09-02T12:00:00+00:00" })), null);
+  assert.equal(parseLine(line(1, { sentAt: Number.NaN })), null);
 });
 
 test("the instant is parsed once and the retained id survives only when present", () => {
   const parsed = parseLine(line(3, { retainedMessageId: "0192-abc" }));
-  assert.equal(parsed.sentAt, Date.parse(SAID_AT));
+  assert.equal(parsed.sentAt, SAID_AT * 1000);
   assert.equal(parsed.retainedMessageId, "0192-abc");
   assert.equal("retainedMessageId" in parseLine(line(3)), false);
   assert.equal(parseLine(line(3, { nameColor: null })).nameColor, null);
@@ -71,9 +74,17 @@ test("the client keeps the newest lines and no more", () => {
   assert.equal(state.lastSeq, MAX_HELD_LINES + 5);
 });
 
-test("a new socket's backlog replaces what was held", () => {
-  const held = applyChatLine(EMPTY_LOBBY_CHAT, line(90, { text: "from before" }));
-  const replaced = applyChatBacklog(held, { chat: [line(2), line(1)], chatSeq: 3 }, true);
+test("a backlog from another process, or for another account, replaces what was held", () => {
+  const held = applyChatBacklog(
+    EMPTY_LOBBY_CHAT,
+    { chat: [line(90, { text: "from before" })], chatSeq: 90, chatEpoch: "old" },
+    "user-ada",
+  );
+  const replaced = applyChatBacklog(
+    held,
+    { chat: [line(2), line(1)], chatSeq: 3, chatEpoch: "new" },
+    "user-ada",
+  );
   assert.deepEqual(
     replaced.lines.map((item) => item.seq),
     [1, 2],
@@ -82,21 +93,45 @@ test("a new socket's backlog replaces what was held", () => {
   // The last line said was one this watcher is not shown (a blocked
   // author); its number is still the one the next line must follow.
   assert.equal(replaced.lastSeq, 3);
-  assert.deepEqual(applyChatBacklog(held, { chat: [], chatSeq: 0 }, true), EMPTY_LOBBY_CHAT);
-  assert.deepEqual(applyChatBacklog(held, undefined, true), EMPTY_LOBBY_CHAT);
+  assert.equal(replaced.epoch, "new");
+
+  // Same process, but filtered for somebody else's blocks.
+  const otherAccount = applyChatBacklog(
+    held,
+    { chat: [line(91)], chatSeq: 91, chatEpoch: "old" },
+    "user-bob",
+  );
+  assert.deepEqual(otherAccount.lines.map((item) => item.seq), [91]);
+  assert.equal(otherAccount.owner, "user-bob");
 });
 
-test("a resync on a live socket merges the backlog rather than cutting the history back", () => {
-  let held = EMPTY_LOBBY_CHAT;
+test("a backlog continuing what is held merges rather than cutting the history back", () => {
+  let held = applyChatBacklog(EMPTY_LOBBY_CHAT, { chat: [], chatSeq: 0, chatEpoch: "e" }, "u");
   for (let seq = 1; seq <= 4; seq += 1) held = applyChatLine(held, line(seq));
-  const merged = applyChatBacklog(held, { chat: [line(3), line(4), line(6)], chatSeq: 7 }, false);
+  const merged = applyChatBacklog(
+    held,
+    { chat: [line(3), line(4), line(6)], chatSeq: 7, chatEpoch: "e" },
+    "u",
+  );
   assert.deepEqual(
     merged.lines.map((item) => item.seq),
     [1, 2, 3, 4, 6],
   );
   assert.equal(merged.lastSeq, 7);
-  const unchanged = applyChatBacklog(merged, { chat: [line(6)], chatSeq: 7 }, false);
+  const unchanged = applyChatBacklog(merged, { chat: [line(6)], chatSeq: 7, chatEpoch: "e" }, "u");
   assert.equal(unchanged, merged, "nothing new should return the identical state");
+});
+
+test("only lines from a known process and the same account are resumed (#885)", () => {
+  assert.deepEqual(chatResumeRequest(EMPTY_LOBBY_CHAT, "u"), {});
+  const held = applyChatBacklog(
+    EMPTY_LOBBY_CHAT,
+    { chat: [line(1), line(2)], chatSeq: 5, chatEpoch: "e" },
+    "u",
+  );
+  assert.deepEqual(chatResumeRequest(held, "u"), { chatSince: 5, chatEpoch: "e" });
+  assert.deepEqual(chatResumeRequest(held, "someone-else"), {});
+  assert.deepEqual(chatResumeRequest(held, null), {});
 });
 
 test("the label says how fresh a line is, and no more than that", () => {

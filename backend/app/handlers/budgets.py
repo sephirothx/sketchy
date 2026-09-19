@@ -126,6 +126,20 @@ LOBBY_CHAT = BudgetClass(
     description="Lobby chat lines per ten seconds.",
 )
 
+LOBBY_BASELINE = BudgetClass(
+    name="lobby_baseline",
+    # Its own kind rather than `action` (#885): the answer is the lobby's
+    # largest message, and at thirty per ten seconds one socket could pull
+    # well over a hundred kilobytes a second of them. Three covers opening
+    # the lobby, the re-handshake of a visitor who has just been named, and a
+    # resync after a missed delta; a client stuck resyncing is held to one
+    # every few seconds, and is told when to ask again.
+    default=Budget(limit=3, window_seconds=10.0),
+    minimum=1,
+    maximum=30,
+    description="Lobby baselines (watch_lobby) per ten seconds.",
+)
+
 BUDGET_CLASSES: tuple[BudgetClass, ...] = (
     DRAWING,
     CONVERSATION,
@@ -133,6 +147,7 @@ BUDGET_CLASSES: tuple[BudgetClass, ...] = (
     HEARTBEAT,
     ACTION,
     LOBBY_CHAT,
+    LOBBY_BASELINE,
 )
 
 # Commands not named here answer to `action`, so a command added without a
@@ -143,6 +158,7 @@ COMMAND_CLASSES: Mapping[str, str] = {
     "send_chat": CONVERSATION.name,
     "guess": CONVERSATION.name,
     "send_lobby_chat": LOBBY_CHAT.name,
+    "watch_lobby": LOBBY_BASELINE.name,
     "request_sync_strokes": RESYNC.name,
     "session_ping": HEARTBEAT.name,
 }

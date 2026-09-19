@@ -85,7 +85,7 @@ def test_the_wire_shape_names_the_account_and_the_instant():
         "nameColor": "#4f9",
         "isAnonymous": False,
         "text": "hello",
-        "sentAt": "2026-09-02T12:00:00+00:00",
+        "sentAt": int(NOON.timestamp()),
         "retainedMessageId": "0192-abc",
     }
 

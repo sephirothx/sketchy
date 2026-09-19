@@ -291,11 +291,13 @@ async def test_watching_the_lobby_answers_with_a_baseline_to_apply_to(monkeypatc
     ctx.presence_identities.remember(_identity("user-bob", "Bob"))
     await connect_as(ctx, sio, "sid-a", "tok-ada")
     await connect_as(ctx, sio, "sid-b", "tok-bob")
+    # The baseline is the list as last broadcast (#885).
+    await ctx.presence_broadcaster.flush()
 
     answer = await sio.handlers["/"]["watch_lobby"]("sid-a", None)
 
     assert answer["ok"] is True
-    assert answer["revision"] == 0
+    assert answer["revision"] == 1
     assert answer["onlineCount"] == 2
     assert [row["displayName"] for row in answer["players"]] == ["Ada", "Bob"]
     sio.enter_room.assert_awaited_with("sid-a", LOBBY_CHANNEL)
@@ -316,13 +318,14 @@ async def test_one_acknowledgement_carries_both_baselines(monkeypatch):
     await connect_as(ctx, sio, "sid-a", "tok-ada")
     public = room_manager.create_room(name="Open", is_public=True)
     room_manager.create_room(name="Hidden", is_public=False)
+    await ctx.presence_broadcaster.flush()
 
     answer = await sio.handlers["/"]["watch_lobby"]("sid-a", None)
 
     assert answer["ok"] is True
     # Named separately from the presence revision, because they move
     # separately - a room filling up must not look like presence news.
-    assert answer["roomsRevision"] == 0
+    assert answer["roomsRevision"] == 1
     assert [room["id"] for room in answer["rooms"]] == [public.id]
     assert "revision" in answer and "players" in answer
 
@@ -400,6 +403,7 @@ async def test_a_seated_account_reads_playing_and_a_second_tab_does_not_change_i
     seat.sid = "sid-a"
     await connect_as(ctx, sio, "sid-a", "tok-ada")
     await connect_as(ctx, sio, "sid-b", "tok-ada")
+    await ctx.presence_broadcaster.flush()
 
     answer = await sio.handlers["/"]["watch_lobby"]("sid-b", None)
 
@@ -494,6 +498,7 @@ async def test_a_merged_guest_is_one_person_in_the_list(monkeypatch):
     assert ctx.presence.online_accounts == 2
 
     ctx.presence.rekey("guest", "account")
+    await ctx.presence_broadcaster.flush()
 
     answer = await sio.handlers["/"]["watch_lobby"]("account-tab", None)
     assert answer["onlineCount"] == 1

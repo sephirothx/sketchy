@@ -385,6 +385,7 @@ legitimate drawer produces and the budget decides how many are accepted.
 | `drawing` | `draw`, `undo_stroke` | 100 per 2 s |
 | `conversation` | `send_chat`, `guess` | 20 per 10 s |
 | `lobby_chat` | `send_lobby_chat` | 6 per 10 s — its own kind, because a lobby line reaches every open lobby rather than one room's seats |
+| `lobby_baseline` | `watch_lobby` | 3 per 10 s — the lobby's largest answer (#885). Covers opening the lobby, the re-handshake of a visitor who has just been named, and one resync; a client stuck resyncing is held to one every few seconds and waits out `retryAfterMs` |
 | `resync` | `request_sync_strokes` | 1 per 2 s |
 | `heartbeat` | `session_ping` | 20 per 10 s |
 | `action` | everything else, `react_to_drawing` included | 30 per 10 s |
@@ -592,7 +593,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `report_player` | `ReportPlayerPayload` | ✓ | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
-| `watch_lobby` | `EmptyPayload` | ✓ — joins the channel first, so a `send_lobby_chat` queued behind it is from a watcher; the acknowledgement carries every baseline (presence, rooms, chat), read after the handler's lookups with nothing yielding before the answer, so it is at or past any delta the socket can have been sent (#600), and a delta sent during the lookups precedes it | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `watch_lobby` | `WatchLobbyPayload` `{chatSince?, chatEpoch?}` — the last chat line held and the process that numbered it, so only newer lines are sent (#885) | ✓ — joins the channel first, so a `send_lobby_chat` queued behind it is from a watcher; the acknowledgement carries every baseline (presence, rooms, chat), read after the handler's lookups with nothing yielding before the answer. Presence and rooms are the **last completed broadcast**, built once per tick and shared by every asker (#885), so the next delta follows them exactly; a delta already on its way when the answer is built reaches the socket first, and the client holds it and replays it (#600) | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
@@ -846,7 +847,7 @@ crosses the wire inside a room (R-ROOM-07).
 { "ok": true,
   "revision": 41, "players": [LobbyPlayer], "onlineCount": 412,
   "roomsRevision": 17, "rooms": [RoomSummary],
-  "chatSeq": 1207, "chat": [LobbyChatMessage] }
+  "chatSeq": 1207, "chatEpoch": "3f9c…", "chat": [LobbyChatMessage] }
 ```
 
 Baselines, not events, so there is no window in which a socket is in the
@@ -882,7 +883,8 @@ drawn, because those rooms are public and were true a moment ago, but patched
 by nothing until a fresh acknowledgement replaces it. The rooms in
 `lobby_rooms_changed` are the same `RoomSummary` shape `GET /api/rooms`
 returns, from the same serializer. The chat is left exactly as it is: those
-lines were said, and the next acknowledgement's backlog replaces them.
+lines were said, and the next acknowledgement adds to them when it comes from
+the same process, or replaces them when it does not.
 
 **`LobbyChatMessage`** — one line of the lobby's chat, delivered by
 `lobby_chat_message` the moment it is accepted and handed to an arrival in
@@ -892,7 +894,7 @@ holds (re-read from the retained rows after a restart):
 ```jsonc
 { "seq": 1208, "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
   "isAnonymous": false, "text": "anyone up for a round?",
-  "sentAt": "2026-09-02T15:04:05.123456+00:00",
+  "sentAt": 1788361445,
   "retainedMessageId": "0192…" }   // present only when retention took the row
 ```
 
@@ -905,13 +907,22 @@ for one thing: putting the backlog and the lines that beat the
 acknowledgement into one order without a duplicate (a line numbered at or
 below what it holds is one it has). `chatSeq` is the number of the last line
 said, shown to this watcher or not, so the next line is never taken for an
-old one. On a reconnect the backlog *replaces* what the client holds, since
-the numbers belong to the old process; on a resync the other feeds asked for
-on a live socket it is *merged*, so a lobby left open all evening keeps what
-it watched go by. It carries an account id for the reason `LobbyPlayer` does
+old one. `chatEpoch` names the process that numbered them. A client holding
+lines from this epoch, filtered for the same account, sends `chatSince` (the
+last number it holds) and `chatEpoch` with `watch_lobby`, and is sent only
+the lines after it (#885) — on a resync, on a reconnect to the same process,
+and on the re-handshake of a visitor who has just been named, where the
+backlog was most of what was resent. The answer is *merged* into what it
+holds, so a lobby left open all evening keeps what it watched go by. From any
+other epoch, or for another account (whose blocks differ), the whole backlog
+is sent and *replaces* what the client holds, since the numbers mean nothing
+here. It carries an account id for the reason `LobbyPlayer` does
 — there is no seat to resolve, and a report needs a stable target — and never
-a room. `sentAt` is the server's instant, the same one written to the
-retained row, and the client renders it as an age rather than sorting by it.
+a room. `sentAt` is the server's instant in whole seconds since the epoch, the same
+one written to the retained row, and the client renders it as an age or a
+clock rather than sorting by it. Seconds because the clock shows minutes: the
+ISO string with microseconds it replaced was about a sixth of a line's weight
+(#885).
 `retainedMessageId` follows R-MOD-08a: issued before the row is written, absent
 when retention withheld it, and absent means the line cannot be cited. Room chat
 lines are retained under the same rule but never carry the id (#869).
@@ -2117,7 +2128,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (31) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (32) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

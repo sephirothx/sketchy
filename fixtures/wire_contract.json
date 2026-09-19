@@ -4,6 +4,7 @@
   "conversation",
   "drawing",
   "heartbeat",
+  "lobby_baseline",
   "lobby_chat",
   "resync"
  ],
@@ -1048,10 +1049,39 @@
    "silent": false
   },
   "watch_lobby": {
-   "commandClass": "action",
+   "commandClass": "lobby_baseline",
    "payload": {
     "additionalProperties": false,
-    "properties": {},
+    "description": "What chat a lobby already holds, so only newer lines are sent (#885).\n\nBoth or neither: a number means nothing without the numbering it belongs\nto, and a client that holds no lines sends neither.",
+    "properties": {
+     "chatEpoch": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Chatepoch"
+     },
+     "chatSince": {
+      "anyOf": [
+       {
+        "minimum": 0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Chatsince"
+     }
+    },
     "type": "object"
    },
    "silent": false
@@ -2236,8 +2266,8 @@
    "errorCode"
   ],
   "handlers.lobby:watch_lobby": [
-   "chatSeq",
-   "roomsRevision"
+   "chatEpoch",
+   "chatSeq"
   ],
   "handlers.moderation:report_player": [
    "drawingAttached",
@@ -2515,6 +2545,9 @@
   "services.player_reports:record_player_report": [
    "schemaVersion"
   ],
+  "services.presence:baseline_for_watcher": [
+   "roomsRevision"
+  ],
   "services.presence:payload": [
    "avatarUrl",
    "displayName",
@@ -2607,7 +2640,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 31,
+ "protocolVersion": 32,
  "refusal": {
   "codes": [
    "invalid_payload",

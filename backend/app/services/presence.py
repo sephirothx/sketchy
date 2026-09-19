@@ -39,7 +39,6 @@ from app.services.telemetry import telemetry
 from app.services.lobby_rooms import (
     EMPTY_ROOMS,
     RoomsDelta,
-    RoomsSnapshot,
     build_rooms_snapshot,
     diff_rooms,
 )
@@ -691,6 +690,8 @@ class LobbyBroadcaster:
         self._last = EMPTY_SNAPSHOT
         self._rooms_revision = 0
         self._last_rooms = EMPTY_ROOMS
+        self._baseline: dict = {}
+        self._baseline_key: tuple[int, int] | None = None
 
     @property
     def revision(self) -> int:
@@ -710,32 +711,31 @@ class LobbyBroadcaster:
             limit=self.list_limit,
         )
 
-    def snapshot_for_watcher(self) -> PresenceSnapshot:
-        """The baseline a socket joining the channel is handed.
+    def baseline_for_watcher(self) -> dict:
+        """What a socket joining the channel is handed: presence and the room
+        list **as last broadcast**, with the revisions they were broadcast at.
 
-        Built fresh rather than handing over the last broadcast, so a new
-        watcher sees the current list immediately instead of whatever was
-        true up to a tick ago - and stamped with the revision already
-        broadcast rather than a new one, so it stays in the same sequence as
-        everybody else.
-
-        Safe because the delta stream is idempotent: `joined` and `changed`
-        are upserts and `left` is a delete, so a row this snapshot already
-        carried being announced again, or one it had already dropped being
-        dropped again, changes nothing. That is what lets a watcher be given
-        a fresher view than the channel without falling out of step with it.
+        Built once per broadcast and shared by every watcher who asks before
+        the next (#885), so a herd of lobbies re-asking after a restart - or a
+        visitor asking again when their name re-handshakes the socket - costs
+        one build a tick rather than one per ask. It used to be built fresh
+        for each watcher, a second fresher than the channel, which leaned on
+        every delta being idempotent to stay in step. The last broadcast is in
+        step by construction: the next delta is diffed against exactly it.
+        What it gives up is that second - a change since the last tick
+        reaches the new watcher as the next tick's delta, like everyone else.
         """
-        return self._build(self._revision)
-
-    def rooms_for_watcher(self) -> RoomsSnapshot:
-        """The room list a socket joining the channel is handed.
-
-        Fresh, and stamped with the revision already broadcast - the same
-        bargain the presence snapshot strikes, and safe for the same reason:
-        `opened` and `changed` are upserts and `closed` is a delete, so a room
-        this snapshot already carried being announced again changes nothing.
-        """
-        return build_rooms_snapshot(self._room_manager, revision=self._rooms_revision)
+        key = (self._revision, self._rooms_revision)
+        if self._baseline_key != key:
+            presence = self._last.payload()
+            rooms = self._last_rooms
+            self._baseline = {
+                **presence,
+                "rooms": rooms.payload()["rooms"],
+                "roomsRevision": rooms.revision,
+            }
+            self._baseline_key = key
+        return self._baseline
 
     async def _flush_rooms(self) -> RoomsDelta | None:
         """Broadcast what moved in the room list, if anything did."""

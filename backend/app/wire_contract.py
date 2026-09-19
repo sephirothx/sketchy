@@ -94,7 +94,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "update_player_settings": payloads.PlayerSettingsPayload,
     "update_room_settings": payloads.UpdateRoomSettingsPayload,
     "vote_player": payloads.VotePayload,
-    "watch_lobby": payloads.EmptyPayload,
+    "watch_lobby": payloads.WatchLobbyPayload,
 }
 
 #: Layouts a schema cannot express: positional arrays and the binary frame.
