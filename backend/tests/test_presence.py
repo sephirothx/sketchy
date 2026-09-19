@@ -453,8 +453,9 @@ async def test_the_count_moving_alone_is_still_worth_broadcasting():
     assert len(caster._sio.emitted) == before + 1
 
 
-async def test_a_new_watcher_is_handed_the_revision_already_broadcast():
-    """So its first delta is the next one in the same sequence, not a gap."""
+async def test_a_new_watcher_is_handed_the_last_broadcast_and_its_revision():
+    """So its first delta is the next one in the same sequence, diffed against
+    exactly what it holds (#885)."""
     registry = PresenceRegistry()
     cache = PresenceIdentityCache(None)
     cache.remember(identity("user-1", "Ada"))
@@ -462,18 +463,35 @@ async def test_a_new_watcher_is_handed_the_revision_already_broadcast():
     caster = broadcaster_for(registry, RoomManager(), cache)
     await caster.flush()
 
-    # Somebody arrives between ticks: the watcher sees them immediately, but
-    # is still stamped with the revision the channel is on.
+    # Somebody arrives between ticks: the watcher is handed the list as last
+    # broadcast, and hears about the arrival in the next delta like everyone.
     cache.remember(identity("user-2", "Bob"))
     registry.note_socket_opened("sid-b", "user-2")
-    snapshot = caster.snapshot_for_watcher()
-    assert snapshot.revision == caster.revision == 1
-    assert {entry.user_id for entry in snapshot.entries} == {"user-1", "user-2"}
+    baseline = caster.baseline_for_watcher()
+    assert baseline["revision"] == caster.revision == 1
+    assert {row["userId"] for row in baseline["players"]} == {"user-1"}
 
-    # And the delta that follows is idempotent against what it already had.
     delta = await caster.flush()
     assert delta.revision == 2
-    assert apply_delta(snapshot.entries, delta) == caster._last.entries
+    assert [entry.user_id for entry in delta.joined] == ["user-2"]
+
+
+async def test_the_baseline_is_built_once_per_broadcast(monkeypatch):
+    """A herd of watchers between two ticks shares one build (#885)."""
+    registry = PresenceRegistry()
+    cache = PresenceIdentityCache(None)
+    cache.remember(identity("user-1", "Ada"))
+    registry.note_socket_opened("sid-a", "user-1")
+    caster = broadcaster_for(registry, RoomManager(), cache)
+    await caster.flush()
+    first = caster.baseline_for_watcher()
+    assert all(caster.baseline_for_watcher() is first for _ in range(50))
+
+    cache.remember(identity("user-2", "Bob"))
+    registry.note_socket_opened("sid-b", "user-2")
+    await caster.flush()
+    assert caster.baseline_for_watcher() is not first
+    assert caster.baseline_for_watcher()["revision"] == 2
 
 
 async def test_the_loop_records_a_healthy_tick_and_survives_a_broken_one():

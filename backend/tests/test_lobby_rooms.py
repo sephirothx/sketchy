@@ -188,22 +188,25 @@ async def test_the_two_feeds_do_not_move_each_other():
 
 
 async def test_a_watcher_is_handed_the_revision_already_broadcast():
-    """The acknowledgement is fresh, but stamped with what the channel is at.
+    """The acknowledgement is the list as last broadcast, stamped with the
+    revision the channel is at, so the next delta follows it exactly (#885).
 
     A snapshot stamped one ahead would make the *next* delta look like a gap
-    to this client and to nobody else; stamped behind, an upsert it already
-    holds arrives again, which changes nothing.
+    to this client and to nobody else.
     """
     manager = RoomManager()
     caster = broadcaster_for(manager)
-    manager.create_room(name="Open", is_public=True)
+    first = manager.create_room(name="Open", is_public=True)
     await caster.flush()
 
     later = manager.create_room(name="Second", is_public=True)
-    handed = caster.rooms_for_watcher()
-    assert handed.revision == caster.rooms_revision == 1
-    # Fresh: the room created after the last tick is already in it.
-    assert later.id in {room["id"] for room in handed.rooms}
+    handed = caster.baseline_for_watcher()
+    assert handed["roomsRevision"] == caster.rooms_revision == 1
+    assert {room["id"] for room in handed["rooms"]} == {first.id}
+    # The room created after the last tick reaches it as the next delta.
+    await caster.flush()
+    opened = rooms_frames(caster)[-1][1]["opened"]
+    assert [room["id"] for room in opened] == [later.id]
 
 
 async def test_a_room_going_private_leaves_the_feed_as_a_close():

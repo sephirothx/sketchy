@@ -136,7 +136,8 @@ async def test_a_line_reaches_the_channel_and_nowhere_else(monkeypatch):
         "text": "hello",
         "sentAt": payload["sentAt"],
     }
-    assert payload["sentAt"].endswith("+00:00")
+    # Whole seconds since the epoch (#885).
+    assert isinstance(payload["sentAt"], int)
 
 
 async def test_the_acknowledgement_hands_an_arrival_the_recent_lines(monkeypatch):
@@ -348,7 +349,7 @@ async def test_a_retained_line_carries_its_identifier_and_an_unretained_one_does
     assert recorded["user_id"] == "user-ada"
     assert recorded["display_name"] == "Ada"
     assert recorded["text"] == "hello"
-    assert recorded["sent_at"].isoformat() == call.args[1]["sentAt"]
+    assert int(recorded["sent_at"].timestamp()) == call.args[1]["sentAt"]
 
     ctx.message_retention.record_lobby.return_value = None
     sio.emit.reset_mock()
@@ -433,3 +434,87 @@ async def test_a_line_said_while_the_subscription_is_looking_things_up_is_heard(
     assert answer["ok"] is True
     assert [line["text"] for line in answer["chat"]] == ["hello"]
     assert answer["chatSeq"] == 1
+
+
+# --- resuming the backlog (#885) -------------------------------------------
+
+
+async def test_a_lobby_holding_lines_is_sent_only_the_newer_ones(monkeypatch):
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    first = await arrive(ctx, sio, "sid-a", "tok-a")
+    await say(sio, "sid-a", "one")
+    await say(sio, "sid-a", "two")
+    held = await sio.handlers["/"]["watch_lobby"](
+        "sid-a", {"chatSince": 0, "chatEpoch": first["chatEpoch"]}
+    )
+    assert [line["seq"] for line in held["chat"]] == [1, 2]
+    await say(sio, "sid-a", "three")
+
+    # A reconnect - a new socket - to the same process resumes too.
+    resumed = await arrive(ctx, sio, "sid-a2", "tok-a", watch=False)
+    resumed = await sio.handlers["/"]["watch_lobby"](
+        "sid-a2", {"chatSince": 2, "chatEpoch": held["chatEpoch"]}
+    )
+    assert [line["text"] for line in resumed["chat"]] == ["three"]
+    assert resumed["chatSeq"] == 3 and resumed["chatEpoch"] == first["chatEpoch"]
+
+
+async def test_lines_from_another_process_are_answered_with_the_whole_backlog(
+    monkeypatch,
+):
+    """A restart numbers lines afresh: a number from before it means nothing,
+    so the client is handed everything to replace its lines with."""
+    from app.services.lobby_chat import LobbyChatLog
+
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    before = await arrive(ctx, sio, "sid-a", "tok-a")
+    await say(sio, "sid-a", "said before the restart")
+
+    ctx.lobby_chat = LobbyChatLog()  # the new process
+    await say(sio, "sid-a", "said after")
+    answer = await sio.handlers["/"]["watch_lobby"](
+        "sid-a", {"chatSince": 1, "chatEpoch": before["chatEpoch"]}
+    )
+    assert answer["chatEpoch"] != before["chatEpoch"]
+    assert [line["text"] for line in answer["chat"]] == ["said after"]
+
+    # And a number past the end of this numbering is not trusted either.
+    ahead = await sio.handlers["/"]["watch_lobby"](
+        "sid-b", {"chatSince": 99, "chatEpoch": answer["chatEpoch"]}
+    )
+    assert [line["seq"] for line in ahead["chat"]] == [1]
+
+
+async def test_a_resumed_backlog_still_leaves_out_muted_authors_and_asks_only_for_its_own(
+    monkeypatch,
+):
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    ctx.block_service = muted({"user-ada": {"user-bob"}})
+    first = await arrive(ctx, sio, "sid-a", "tok-a")
+    await arrive(ctx, sio, "sid-c", "tok-c")
+    await say(sio, "sid-c", "old, from Carol")
+    await say(sio, "sid-a", "new, from Ada")
+    await say(sio, "sid-c", "new, from Carol")
+    await arrive(ctx, sio, "sid-b", "tok-b", watch=False)
+    ctx.block_service.blockers_of.reset_mock()
+
+    answer = await sio.handlers["/"]["watch_lobby"](
+        "sid-b", {"chatSince": 1, "chatEpoch": first["chatEpoch"]}
+    )
+    assert [line["text"] for line in answer["chat"]] == ["new, from Carol"]
+    looked_up = {call.args[0] for call in ctx.block_service.blockers_of.await_args_list}
+    assert looked_up == {"user-ada", "user-carol"}
+
+
+async def test_the_baseline_has_a_budget_of_its_own(monkeypatch):
+    """Three per ten seconds, then refused with when to ask again (#885)."""
+    ctx, sio, _ = lobby_stack(monkeypatch)
+    await arrive(ctx, sio, "sid-a", "tok-a")
+    watch = sio.handlers["/"]["watch_lobby"]
+    assert (await watch("sid-a", None))["ok"] is True
+    assert (await watch("sid-a", None))["ok"] is True
+    refused = await watch("sid-a", None)
+    assert refused["ok"] is False and refused["errorCode"] == "too_fast"
+    assert refused["retryAfterMs"] > 0
+    # Lobby chat is not spent by it.
+    assert (await say(sio, "sid-a", "still here"))["ok"] is True

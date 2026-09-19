@@ -1952,6 +1952,9 @@ backend/.venv/bin/python benchmarks/reaction_write.py --reactions 300 5000
 # The guest-name check per chat line, database versus the presence cache (#900)
 backend/.venv/bin/python benchmarks/guest_name_check.py --online 200 1000 3000
 
+# The watch_lobby answer: first time, resumed with chatSince, and a herd of 400 between ticks (#885)
+backend/.venv/bin/python benchmarks/lobby_baseline.py --online 100 400
+
 # One page of the community catalogue's star order, ranked per page versus cached (#901)
 backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 120000
 

@@ -2,7 +2,9 @@ import { useEffect } from "react";
 
 import { resubscribeDelayMs } from "../lib/lobbyChannel";
 import { createPendingDeltas } from "../lib/lobbyChannel";
+import { chatResumeRequest } from "../lib/lobbyChat";
 import { emitWithAck, socket } from "../lib/socket";
+import { useAuthStore } from "../store/authStore";
 import { useLobbyChatStore } from "../store/lobbyChatStore";
 import { usePresenceStore } from "../store/presenceStore";
 import { useRoomsStore } from "../store/roomsStore";
@@ -20,16 +22,15 @@ a gap in its numbering is expected rather than a reason to resync — a line is
 deliberately not delivered to somebody who blocked its author. The
 acknowledgement hands over the recent lines for the same reason it hands over
 the other two baselines, so a line that beats it has something to be placed
-against.
+against — and only the ones this client does not already hold, when it holds
+lines from the same server process and account (#885).
 
 Membership is asked for rather than derived from anything the server knows,
 which is what bounds the broadcast to the clients actually showing it.
 
-Mounted in two places, and not in a third. The lobby shows both lists; the
-*waiting* room needs presence to offer an invitation to a friend who is around,
-and pays for the room feed it does not read — a few hundred bytes a change,
-against a second subscription to keep in step. Nowhere else: a player mid-game
-is not reading any of this. */
+Mounted by the lobby alone. The waiting room used to mount it too, to offer an
+invitation to a friend who was around; it now polls its own friends instead
+(`useFriendPresence`, #873), and a player mid-game is not reading any of this. */
 export function useLobbyChannel(): void {
   useEffect(() => {
     let cancelled = false;
@@ -54,12 +55,8 @@ export function useLobbyChannel(): void {
     // them does arrive here first; its baselines are read after, so such a
     // delta is never newer than them.
     const pending = createPendingDeltas();
-    // Whether the next backlog replaces the chat or merges into it. Replaced
-    // on a new socket, whose numbering is new; merged on a resync the other
-    // feeds asked for, so a lobby left open all evening keeps what it watched
-    // go by rather than being cut back to the fifty lines the server holds.
-    let replaceChat = true;
     let attempt = 0;
+    let retryAfterMs = 0;
     let retry: number | null = null;
 
     function stopRetrying() {
@@ -78,18 +75,32 @@ export function useLobbyChannel(): void {
         wanted = true;
         return;
       }
-      stopRetrying();
+      // A retry already scheduled is the next ask, whatever wanted this one:
+      // after a refusal it waits out the `retryAfterMs` the server named, and
+      // asking sooner - a resync coalesced during the refused request, a gap
+      // noticed meanwhile - would only be refused again (#885). A new socket
+      // clears it first (`onConnect`), since its budget starts afresh.
+      if (retry !== null) return;
       asking = true;
       wanted = false;
       const mine = generation;
+      // Whether the backlog merges or replaces is the chat store's decision,
+      // from the epoch and account (`applyChatBacklog`); this only says what
+      // it holds, so the server can leave out the lines already here.
+      const owner = useAuthStore.getState().user?.id ?? null;
+      const chatHeld = chatResumeRequest(useLobbyChatStore.getState().chat, owner);
       try {
-        const answer = await emitWithAck<Record<string, unknown>>("watch_lobby", {});
+        const answer = await emitWithAck<Record<string, unknown>>("watch_lobby", chatHeld);
         if (cancelled || mine !== generation) return;
-        if (!answer?.ok) throw new Error("watch_lobby was refused");
+        if (!answer?.ok) {
+          // The baseline has a budget of its own (#885); a refusal says when
+          // to ask again, and asking sooner would only be refused again.
+          if (typeof answer?.retryAfterMs === "number") retryAfterMs = answer.retryAfterMs;
+          throw new Error("watch_lobby was refused");
+        }
         usePresenceStore.getState().receiveSnapshot(answer);
         useRoomsStore.getState().receiveSnapshot(answer.rooms, answer.roomsRevision);
-        useLobbyChatStore.getState().receiveBacklog(answer, replaceChat);
-        replaceChat = false;
+        useLobbyChatStore.getState().receiveBacklog(answer, owner);
         baseline = true;
         attempt = 0;
         const revisionOf = (value: unknown) => (typeof value === "number" ? value : 0);
@@ -116,10 +127,12 @@ export function useLobbyChannel(): void {
         // gap with.
         if (cancelled || mine !== generation || !socket.connected) return;
         attempt += 1;
+        const delay = Math.max(resubscribeDelayMs(attempt), retryAfterMs);
+        retryAfterMs = 0;
         retry = window.setTimeout(() => {
           retry = null;
           void subscribe();
-        }, resubscribeDelayMs(attempt));
+        }, delay);
       } finally {
         if (mine === generation) {
           asking = false;
@@ -178,7 +191,6 @@ export function useLobbyChannel(): void {
       asking = false;
       wanted = false;
       baseline = false;
-      replaceChat = true;
       attempt = 0;
       pending.clear();
       stopRetrying();

@@ -9,8 +9,9 @@ import {
 
 interface LobbyChatStore {
   chat: LobbyChatState;
-  /** Take the backlog from a `watch_lobby` answer; `replace` on a new socket. */
-  receiveBacklog: (payload: unknown, replace: boolean) => void;
+  /** Take the backlog from a `watch_lobby` answer, for the account it was
+  asked as; merged or replaced as `applyChatBacklog` decides. */
+  receiveBacklog: (payload: unknown, owner: string | null) => void;
   /** Append one line the channel delivered, unless it is one we hold. */
   receiveLine: (payload: unknown) => void;
   /** Back to nothing, on leaving the lobby. Not on losing the socket: the
@@ -20,9 +21,9 @@ interface LobbyChatStore {
 
 export const useLobbyChatStore = create<LobbyChatStore>((set) => ({
   chat: EMPTY_LOBBY_CHAT,
-  receiveBacklog: (payload, replace) =>
+  receiveBacklog: (payload, owner) =>
     set((state) => {
-      const next = applyChatBacklog(state.chat, payload, replace);
+      const next = applyChatBacklog(state.chat, payload, owner);
       return next === state.chat ? state : { chat: next };
     }),
   // `applyChatLine` returns the state it was given for a duplicate or an

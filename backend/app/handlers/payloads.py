@@ -418,6 +418,18 @@ class RenamePlayerPayload(RequestModel):
             raise ValueError(str(error) or NAME_RULE_MESSAGE) from error
 
 
+class WatchLobbyPayload(RequestModel):
+    """What chat a lobby already holds, so only newer lines are sent (#885).
+
+    Both or neither: a number means nothing without the numbering it belongs
+    to, and a client that holds no lines sends neither."""
+
+    chat_since: int | None = Field(default=None, alias="chatSince", ge=0)
+    chat_epoch: str | None = Field(
+        default=None, alias="chatEpoch", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
+    )
+
+
 class RecapDrawingPayload(RequestModel):
     index: int = Field(ge=0, le=MAX_CANVAS_SEQUENCE)
 
