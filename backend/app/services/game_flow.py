@@ -987,21 +987,25 @@ class GameFlowService:
         await self.note_presence(room, "left", player)
         await self._emit_room_state(room)
 
-    async def release_other_seats(self, sid: str, *, keep: tuple[str, str]) -> None:
+    async def release_other_seats(self, sid: str, *, keep: tuple[str, str] | None = None) -> None:
         """Vacate every seat this socket holds apart from the one it is taking.
 
         Keyed on the socket, never on the account: two tabs of one account
         sitting in two different rooms is ordinary, and only the connection
-        that is moving may be moved.
+        that is moving may be moved. With no `keep`, every seat: an entry
+        releases what it held *before* it makes a new room or seat (#879), so
+        the old room's teardown - which can write an abandoned game and retire
+        a code - is spent inside the entry's deadline rather than after a room
+        already exists.
         """
         for room, player in self._ctx.room_manager.seats_for_sid(sid):
-            if (room.id, player.id) == keep:
+            if keep is not None and (room.id, player.id) == keep:
                 continue
             logger.info(
-                "socket %s gave up its seat in room %s to enter room %s",
+                "socket %s gave up its seat in room %s to enter %s",
                 sid,
                 room.id,
-                keep[0],
+                f"room {keep[0]}" if keep is not None else "another room",
             )
             await self.release_seat(sid, room, player)
 

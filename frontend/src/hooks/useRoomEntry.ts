@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RoomEntryMachine, type RoomEntrySnapshot, type RoomJoinMode } from "../lib/roomEntryState";
-import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { emitEntry, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -38,7 +38,7 @@ export function useRoomEntry(code: string) {
       preview: (roomCode) =>
         emitWithAck<RoomPreviewResponse>("get_room_preview", { code: roomCode }),
       join: ({ code: roomCode, nickname: playerNickname, mode }) =>
-        emitWithAck<AckResponse>("join_room", {
+        emitEntry<AckResponse>("join_room", {
           code: roomCode,
           nickname: playerNickname,
           nameColor,

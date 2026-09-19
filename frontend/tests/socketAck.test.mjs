@@ -97,3 +97,26 @@ test("a silent server still times out", async () => {
   assert.equal(error.code, "timeout");
   assert.equal(socket.listenerCount("disconnect"), 0);
 });
+
+test("an answer after the request gave up is handed to onLate, not dropped (#879)", async () => {
+  const socket = fakeSocket();
+  const late = [];
+
+  const error = await emitWithAckOn(socket, "create_room", { name: "Room" }, {
+    timeoutMs: 1,
+    onLate: (answer) => late.push(answer),
+  }).catch((e) => e);
+  assert.equal(error.code, "timeout");
+
+  socket.emitted[0].ack({ ok: true, roomId: "r1" });
+  assert.deepEqual(late, [{ ok: true, roomId: "r1" }]);
+});
+
+test("an answer in time never reaches onLate", async () => {
+  const socket = fakeSocket();
+  const late = [];
+  const pending = emitWithAckOn(socket, "create_room", {}, { onLate: (answer) => late.push(answer) });
+  socket.emitted[0].ack({ ok: true });
+  await pending;
+  assert.deepEqual(late, []);
+});

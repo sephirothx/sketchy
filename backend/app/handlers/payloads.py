@@ -215,8 +215,24 @@ class RoomSettingsFields(RequestModel):
         return check_color_mode(value)
 
 
+class LeaveRoomPayload(RequestModel):
+    """`roomId`, when given, is the only room this leaves (#879): a client
+    giving back a seat it learned of late must not take the player out of a
+    room they have entered since."""
+
+    room_id: str | None = Field(
+        default=None, alias="roomId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
+    )
+
+
 class CreateRoomPayload(RoomSettingsFields):
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
+    # One per press, kept by the client across its retries of that press, so
+    # a repeat of a creation whose answer was lost seats the socket in the room
+    # already made rather than making a second (#879).
+    request_id: str | None = Field(
+        default=None, alias="requestId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
+    )
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
     colorblind_safe_colors: bool = Field(
         default=False, alias="colorblindSafeColors"
