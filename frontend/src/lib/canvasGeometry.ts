@@ -154,6 +154,38 @@ export function capsuleCovers(
 
 const ELLIPSE_OUTLINE_SEGMENTS = 96;
 
+/** cos(i * 2π / 96) for the first quarter turn, i = 0..24, as literals.
+
+Every painter has to place an ellipse's outline on the same floats, and
+`Math.cos` and `Math.sin` cannot promise that: the language leaves them
+approximate, so two browser engines may differ in the last bit, and even one
+engine's `sin(θ)` and `cos(π/2 - θ)` do. Written out, the numbers are the same
+wherever they are parsed; the other three quarters are the same numbers with
+their signs and roles swapped, so the outline is exactly symmetric too. */
+const QUARTER_COSINES = [
+  1, 0.99785892323860348, 0.99144486137381038, 0.98078528040323043,
+  0.96592582628906831, 0.94693012949510569, 0.92387953251128674, 0.89687274153268837,
+  0.86602540378443871, 0.83146961230254524, 0.79335334029123517, 0.75183980747897738,
+  0.70710678118654757, 0.65934581510006884, 0.60876142900872066, 0.5555702330196024,
+  0.5, 0.44228869021900125, 0.38268343236508984, 0.3214394653031617,
+  0.25881904510252074, 0.19509032201612833, 0.13052619222005171, 0.06540312923014327,
+  0,
+];
+const QUARTER = ELLIPSE_OUTLINE_SEGMENTS / 4;
+
+/** The cosine and sine of step `index` of the ellipse's outline. */
+function outlineDirection(index: number): [number, number] {
+  const step = index % QUARTER;
+  const along = QUARTER_COSINES[step];
+  const across = QUARTER_COSINES[QUARTER - step];
+  switch (Math.floor(index / QUARTER)) {
+    case 0: return [along, across];
+    case 1: return [-across, along];
+    case 2: return [-along, -across];
+    default: return [across, -along];
+  }
+}
+
 export function shapeOutlinePoints(
   from: StrokePoint,
   to: StrokePoint,
@@ -181,10 +213,10 @@ export function shapeOutlinePoints(
     const radiusY = height / 2;
     const points: Point[] = [];
     for (let index = 0; index < ELLIPSE_OUTLINE_SEGMENTS; index++) {
-      const angle = (index / ELLIPSE_OUTLINE_SEGMENTS) * Math.PI * 2;
+      const [cos, sin] = outlineDirection(index);
       points.push({
-        x: centerX + radiusX * Math.cos(angle),
-        y: centerY + radiusY * Math.sin(angle),
+        x: centerX + radiusX * cos,
+        y: centerY + radiusY * sin,
       });
     }
     return points;
